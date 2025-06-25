@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bioamla"
+version = "0.0.1"
+authors = [
+  { name="John McMeen", email="johnmcmeen@gmail.com" },
+]
+description = "Bioacoustics & Machine Learning Applications"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "novus-pytils"
+]
+
+[project.urls]
+Homepage = "https://github.com/jmcmeen/bioamla"
