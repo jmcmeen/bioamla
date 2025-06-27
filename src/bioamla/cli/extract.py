@@ -126,7 +126,7 @@ def get_output_path(input_file, input_dir, output_dir):
 @click.argument('input_dir')
 @click.argument('output_dir')
 @click.option('-r', '--sample-rate', type=int, default=44100, help='Output sample rate in Hz (default: 44100)')
-@click.option('-c', '--channels', type=int, choices=[1, 2], default=1, help='Number of output channels: 1 (mono) or 2 (stereo) (default: 1)')
+@click.option('-c', '--channels', type=int, default=1, help='Number of output channels: 1 (mono) or 2 (stereo) (default: 1)')
 @click.option('-v', '--verbose', is_flag=True, help='Enable verbose output')
 def main(input_dir, output_dir, sample_rate, channels, verbose):
     try:
