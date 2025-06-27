@@ -31,7 +31,8 @@ dependencies = [
 ]
 
 [project.scripts]
-wave = "bioamla.cli.wave:main" 
+wave = "bioamla.cli.wave:main"
+waves = "bioamla.cli.waves:main" 
 audio = "bioamla.cli.audio:main"
 ast = "bioamla.cli.ast:main"
 ast-predict = "bioamla.cli.ast_predict:main"
