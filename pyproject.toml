@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.0.9"
+version = "0.0.10"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -17,12 +17,23 @@ classifiers = [
 ]
 dependencies = [
   "novus-pytils",
-  "click"
+  "click",
+  "torch",
+  "torchvision", 
+  "torchaudio",
+  "transformers[torch]", 
+  "datasets[audio]",
+  "audiomentations", 
+  "evaluate", 
+  "tensorboardX",
+  "fastapi[standard]",
+  "pydub[mp3]",
 ]
 
 [project.scripts]
 wave = "bioamla.cli.wave:main" 
 audio = "bioamla.cli.audio:main"
+ast = "bioamla.cli.ast:main"
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
