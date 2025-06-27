@@ -1,6 +1,5 @@
 import click
-from bioamla.files import download_file, extract_zip_file
-from novus_pytils.files import delete_file
+from novus_pytils.files import delete_file, download_file, extract_zip_file
  
 # test_data_url = "https://www.bioamla.org/datasets/scp_small.zip"
 
