@@ -22,6 +22,7 @@ dependencies = [
 
 [project.scripts]
 wave = "bioamla.cli.wave:main" 
+audio = "bioamla.cli.audio:main"
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
