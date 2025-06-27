@@ -5,6 +5,7 @@ from audiomentations import Compose, AddGaussianSNR, GainTransition, Gain, Clipp
 import torch
 import evaluate
 import numpy as np
+from novus_pytils.files import create_directory
 from novus_pytils.config.yaml import load_yaml
 import sys
 
@@ -152,6 +153,10 @@ def main(config_filepath : str):
 
     # start a training
     trainer.train()
+
+    create_directory(train_args["best_model_path"])
+    torch.save(model.state_dict(), train_args["best_model_path"] + "/pytorch_model.bin")
+    # model.save_pretrained(model_dir)
 
 if __name__ == "__main__":
     main()
