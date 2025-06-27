@@ -1,6 +1,6 @@
 # bioamla/batch.py
 import pandas as pd
-from novus_pytils.wave import get_wav_files_metadatam, get_wav_files
+from novus_pytils.wave import get_wav_files_metadata, get_wav_files
 
 def get_wav_file_frame(dir: str) -> pd.DataFrame:
 
