@@ -22,7 +22,7 @@ def main(config_filepath : str):
 
     # cast target and audio column
     dataset = dataset.cast_column("target", ClassLabel(names=class_names))
-    dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
+    dataset = dataset.cast_column("audio", Audio(sampling_rate=16000)) #TODO bad
 
     # rename the target feature
     dataset = dataset.rename_column("target", "labels")
