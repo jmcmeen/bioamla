@@ -14,19 +14,19 @@ def main(config_filepath : str):
     train_args = load_yaml(config_filepath)
     
     # Load a pre-existing dataset from the HuggingFace Hub
-    esc50 = load_dataset(train_args["train_dataset"], split=train_args["split"])
+    dataset = load_dataset(train_args["train_dataset"], split=train_args["split"])
 
     # get target value - class name mappings
-    df = esc50.select_columns(["target", "category"]).to_pandas()
+    df = dataset.select_columns(["target", "category"]).to_pandas()
     class_names = df.iloc[np.unique(df["target"], return_index=True)[1]]["category"].to_list()
 
     # cast target and audio column
-    esc50 = esc50.cast_column("target", ClassLabel(names=class_names))
-    esc50 = esc50.cast_column("audio", Audio(sampling_rate=16000))
+    dataset = dataset.cast_column("target", ClassLabel(names=class_names))
+    dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
 
     # rename the target feature
-    esc50 = esc50.rename_column("target", "labels")
-    num_labels = len(np.unique(esc50["labels"]))
+    dataset = dataset.rename_column("target", "labels")
+    num_labels = len(np.unique(dataset["labels"]))
 
     # Define the pretrained model and instantiate the feature extractor
     pretrained_model = train_args["base_model"]
@@ -41,7 +41,6 @@ def main(config_filepath : str):
         return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
     # we use the esc50 train split
-    dataset = esc50
     label2id = dataset.features["labels"]._str2int  # we add the mapping from INTs to STRINGs
 
     # split training data
