@@ -3,6 +3,8 @@ test.py
 dist.sh
 increment_version.sh
 pyproject.toml.backup
+dvenv.sh
+install.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -198,5 +200,4 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
-dvenv.sh
-install.sh
+
