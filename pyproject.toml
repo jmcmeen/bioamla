@@ -36,6 +36,7 @@ audio = "bioamla.cli.audio:main"
 ast = "bioamla.cli.ast:main"
 ast-predict = "bioamla.cli.ast_predict:main"
 ast-finetune = "bioamla.cli.ast_finetune:main"
+ast-batch-inference = "bioamla.cli.ast_batch_inference:main"
 test = "bioamla.cli.test:main"
 
 [project.urls]
