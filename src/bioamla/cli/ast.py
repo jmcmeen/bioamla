@@ -1,5 +1,6 @@
 import click
-from novus_pytils.files import directory_exists, create_directory, copy_directory
+from novus_pytils.files import directory_exists, create_directory, copy_files
+from novus_pytils.config.yaml import get_yaml_files
 from pathlib import Path
 
 module_dir = Path(__file__).parent
@@ -12,8 +13,10 @@ def main(filepath):
         raise ValueError("Existing directory")
 
     create_directory(filepath)
-    # click.echo(module_dir)
-    copy_directory(config_dir, filepath)
+
+    config_files = get_yaml_files(filepath)
+    copy_files(config_files, filepath)
+
 
     click.echo(f"AST project created at {filepath}")
 
