@@ -1,0 +1,19 @@
+base_model: 'MIT/ast-finetuned-audioset-10-10-0.4593'
+train_dataset: '/media/john/vault/repos/scp-datasets/audio'
+split: 'train'
+
+output_dir: './runs/scp_frog_classifier'
+logging_dir: './logs/scp_frog_classifier'
+report_to: 'tensorboard'
+learning_rate: 5.0e-5
+push_to_hub: False
+num_train_epochs: 100
+per_device_train_batch_size: 1
+eval_strategy: 'epoch'
+save_strategy: 'epoch'
+eval_steps: 1
+save_steps: 1
+load_best_model_at_end: True
+metric_for_best_model: 'accuracy'
+logging_strategy: 'steps'
+logging_steps: 100
