@@ -155,16 +155,16 @@ def main(input_dir, verbose, output):
     file_infos = []
     
     for i, wav_file in enumerate(wav_files, 1):
-        if not args.verbose:
-            print(f"Analyzing: {i}/{len(wav_files)} - {wav_file.name}", end='\r')
+        if not verbose:
+            print(f"Analyzing: {i}/{len(wav_files)} - {wav_file}", end='\r')
         
         file_info = analyze_wav_file(wav_file, input_dir)
         file_infos.append(file_info)
         
-        if args.verbose:
+        if verbose:
             print_file_info(file_info, i, len(wav_files))
     
-    if not args.verbose:
+    if not verbose:
         print()  # New line after progress indicator
     
     # Generate summary
@@ -185,8 +185,8 @@ def main(input_dir, verbose, output):
         print(f"🔊 Channel Configurations: {', '.join(f'{ch} ch' for ch in summary['unique_channel_counts'])}")
     
     # Save to CSV
-    if args.output:
-        output_filename = args.output
+    if output:
+        output_filename = output
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_filename = f"wav_analysis_{timestamp}.csv"
