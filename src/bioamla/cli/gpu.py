@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import click
 import torch
 
@@ -7,8 +8,8 @@ def main():
     current_device = torch.cuda.current_device()
     device_count = torch.cuda.device_count()
     device_name = torch.cuda.get_device_name(0)
+    
     click.echo(f"GPU system info:")
-
     click.echo(f'CUDA available: {cuda_available}')
     click.echo(f'Current device: {current_device}')
     click.echo(f'Device count: {device_count}')
