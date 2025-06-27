@@ -29,7 +29,7 @@ def main(config_filepath : str):
     num_labels = len(np.unique(esc50["labels"]))
 
     # Define the pretrained model and instantiate the feature extractor
-    pretrained_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
+    pretrained_model = train_args["base_model"]
     feature_extractor = ASTFeatureExtractor.from_pretrained(pretrained_model)
     model_input_name = feature_extractor.model_input_names[0]
     SAMPLING_RATE = feature_extractor.sampling_rate
