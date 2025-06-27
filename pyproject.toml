@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.0.3"
+version = "0.0.4"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -16,8 +16,12 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "novus-pytils"
+  "novus-pytils",
+  "click"
 ]
+
+[project.scripts]
+metadata = "bioamla.metadata:main" 
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
