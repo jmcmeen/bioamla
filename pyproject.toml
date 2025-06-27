@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.0.18"
+version = "0.0.19"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -35,6 +35,8 @@ wave = "bioamla.cli.wave:main"
 audio = "bioamla.cli.audio:main"
 ast = "bioamla.cli.ast:main"
 ast-predict = "bioamla.cli.ast_predict:main"
+ast-finetune = "bioamla.cli.ast_finetune:main"
+test = "bioamla.cli.test:main"
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
