@@ -1,7 +1,7 @@
+import wave
 from novus_pytils.files import get_files_by_extension
 
 def get_wav_metadata(wav_filepath : str) -> dict:
-    import wave
     with wave.open(wav_filepath, 'rb') as wav_file:
         return {
             "filepath": wav_filepath,
