@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.0.31"
+version = "0.0.32"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -42,6 +42,7 @@ extract = "bioamla.cli.extract:main"
 diag = "bioamla.cli.diag:main"
 gpu = "bioamla.cli.gpu:main"
 test = "bioamla.cli.test:main"
+zip = "bioamla.cli.zip:main"
 
 
 [project.urls]
