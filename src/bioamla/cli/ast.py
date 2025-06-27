@@ -14,7 +14,7 @@ def main(filepath):
 
     create_directory(filepath)
 
-    config_files = get_yaml_files(filepath)
+    config_files = get_yaml_files(config_dir)
     copy_files(config_files, filepath)
 
 
