@@ -11,7 +11,10 @@ def main():
     click.echo(f'cuda available: {cuda_available}')
     click.echo(f'current device: {current_device}')
     click.echo(f'device count: {device_count}')
-    click.echo(f'device name: {device_name}')
+    
+    for i in range(device_count):
+        device_name = torch.cuda.get_device_name(i)
+        click.echo(f'device name: {device_name}')
 
 if __name__ == '__main__':
     main()
