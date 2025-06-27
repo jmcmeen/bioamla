@@ -1,7 +1,10 @@
 import wave
-from novus_pytils.files import get_files_by_extension
+from novus_pytils.files import get_files_by_extension, directory_exists, file_exists
 
 def get_wav_metadata(wav_filepath : str) -> dict:
+    if not file_exists(wav_filepath):
+        raise FileNotFoundError(wav_filepath)
+
     with wave.open(wav_filepath, 'rb') as wav_file:
         return {
             "filepath": wav_filepath,
@@ -13,8 +16,11 @@ def get_wav_metadata(wav_filepath : str) -> dict:
             "duration": wav_file.getnframes() / wav_file.getframerate()
         }
     
-def get_wav_files_metadata(wav_files : list) -> list:
-    return [get_wav_metadata(wav_file) for wav_file in wav_files]
+def get_wav_files_metadata(wav_filepaths : list) -> list:
+    return [get_wav_metadata(wav_file) for wav_file in wav_filepaths]
 
 def get_wav_files(directory : str) -> list:
+    if not directory_exists(directory):
+        raise NotADirectoryError(directory)
+    
     return get_files_by_extension(directory, ['.wav'])
