@@ -17,8 +17,8 @@ def main(config_filepath : str):
     dataset = load_dataset(train_args["train_dataset"], split=train_args["split"])
 
     # get target value - class name mappings
-    df = dataset.select_columns(["target", "category"]).to_pandas()
-    class_names = df.iloc[np.unique(df["target"], return_index=True)[1]]["category"].to_list()
+    df = dataset.select_columns([train_args["category_id_column"], train_args["category_label_column"]]).to_pandas()
+    class_names = df.iloc[np.unique(df[train_args["category_id_column"]], return_index=True)[1]][train_args["category_label_column"]].to_list()
 
     # cast target and audio column
     dataset = dataset.cast_column("target", ClassLabel(names=class_names))
