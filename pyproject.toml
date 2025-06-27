@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.0.7"
+version = "0.0.8"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
-metadata = "bioamla.metadata:print_metadata" 
+wave = "bioamla.cli.wave:main" 
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
