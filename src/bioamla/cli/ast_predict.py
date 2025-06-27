@@ -1,5 +1,5 @@
 import click
-from bioamla.core.ast_inference import wav_ast_inference
+from bioamla.core.ast import wav_ast_inference
 
 
 @click.command()
