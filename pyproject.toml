@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.0.29"
+version = "0.0.30"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -38,6 +38,7 @@ ast = "bioamla.cli.ast:main"
 ast-predict = "bioamla.cli.ast_predict:main"
 ast-finetune = "bioamla.cli.ast_finetune:main"
 ast-batch-inference = "bioamla.cli.ast_batch_inference:main"
+extract = "bioamla.cli.extract:main"
 diag = "bioamla.cli.diag:main"
 gpu = "bioamla.cli.gpu:main"
 test = "bioamla.cli.test:main"
