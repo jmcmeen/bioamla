@@ -13,10 +13,8 @@ def main(filepath):
         raise ValueError("Existing directory")
 
     create_directory(filepath)
-
     config_files = get_yaml_files(config_dir)
     copy_files(config_files, filepath)
-
 
     click.echo(f"AST project created at {filepath}")
 
