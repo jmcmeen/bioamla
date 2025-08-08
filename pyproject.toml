@@ -44,6 +44,9 @@ gpu = "bioamla.cli.gpu:main"
 test = "bioamla.cli.test:main"
 zip = "bioamla.cli.zip:main"
 
+server = "bioamla.server.api:main"
+client = "bioamla.server.client:main"
+
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
