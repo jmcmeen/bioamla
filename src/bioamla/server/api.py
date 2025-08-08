@@ -314,6 +314,7 @@ async def classify_audio(
 
 @app.post("/classify-base64", response_model=AudioClassificationResponse)
 async def classify_audio_base64(request: Base64AudioRequest):
+    # TODO Test this endpoint with a valid base64 audio string
     """Classify base64 encoded audio."""
     import time
     start_time = time.time()
@@ -437,17 +438,12 @@ def main():
     parser.add_argument("--generate-client", action="store_true", help="Generate client example code")
     
     args = parser.parse_args()
-    
-    if args.generate_client:
-        client_code = create_client_example()
-        with open("client_example.py", "w") as f:
-            f.write(client_code)
-        print("Client example code generated: client_example.py")
-        return
-    
+        
     logger.info(f"Starting server on {args.host}:{args.port}")
     logger.info(f"Device: {device}")
     logger.info(f"Workers: {args.workers}")
+    logger.info(f"Reload: {args.reload}")
+    logger.info(f"Log Level: {args.log_level}")
     
     uvicorn.run(
         "api:app",
