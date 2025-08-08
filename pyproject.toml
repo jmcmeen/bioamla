@@ -27,13 +27,13 @@ dependencies = [
   "evaluate", 
   "tensorboardX",
   "fastapi[standard]",
-  "pydub[mp3]",
+  "pydub",
   "textual",
   "matplotlib",
   "scipy",
   "librosa",
   "soundfile",
-  "simpleaudio",
+  # "simpleaudio",
 ]
 
 [project.scripts]
