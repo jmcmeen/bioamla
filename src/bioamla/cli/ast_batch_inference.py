@@ -11,10 +11,8 @@ import os
 @click.command()
 @click.argument('config_filepath')
 def main(config_filepath : str):
-    
     print ("Loading config file: " + config_filepath)
     config = load_yaml(config_filepath)
-
 
     output_csv = os.path.join(config['directory'], config['output_csv'])
     print("Output csv: " + output_csv)
