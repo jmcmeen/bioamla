@@ -28,6 +28,12 @@ dependencies = [
   "tensorboardX",
   "fastapi[standard]",
   "pydub[mp3]",
+  "textual",
+  "matplotlib",
+  "scipy",
+  "librosa",
+  "soundfile",
+  "simpleaudio",
 ]
 
 [project.scripts]
@@ -47,6 +53,7 @@ zip = "bioamla.cli.zip:main"
 server = "bioamla.server.api:main"
 client = "bioamla.server.client:main"
 
+audioeditor = "bioamla.cli.audioeditor:main"
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
