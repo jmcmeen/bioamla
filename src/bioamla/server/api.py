@@ -36,6 +36,7 @@ from bioamla.core.models.responses import (
 
 from bioamla.core.models.config import DefaultConfig
 
+from bioamla.core.contollers.controllers import classify_audio
 from bioamla.core.exceptions import (
     UnsupportedAudioFormatError,
     NoModelLoadedError
@@ -193,7 +194,7 @@ async def classify_audio(
     file: UploadFile = File(..., description="Audio file to classify"),
     top_k: Optional[int] = Form(default=5, description="Number of top predictions")
 ):
-    from bioamla.core.contollers.controllers import classify_audio
+    """Classify an audio file."""
     try:
         return await classify_audio(model, file, top_k)
         
