@@ -196,7 +196,8 @@ async def classify(
 ):
     """Classify an audio file."""
     try:
-        return await classify_audio(model, audio_pipeline, file, top_k)
+        with file.file as f:
+            return await classify_audio(model, audio_pipeline, f, top_k)
         
     except UnsupportAudioFormatError as e:
         raise HTTPException(status_code=400, detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}")
