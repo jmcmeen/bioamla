@@ -1,9 +1,15 @@
+import io
+from pathlib import Path  
 from bioamla.core.exceptions import (
     NoModelLoadedError,
     UnsupportAudioFormatError
     )
+from bioamla.core.models.responses import AudioClassificationResponse
+from bioamla.core.models.config import DefaultConfig
+from bioamla.core.helpers.wav_torch import load_audio_from_bytes
+from bioamla.core.helpers.transformers import process_audio_with_pipeline
 
-async def classify_audio(model, file, top_k = 5):
+async def classify_audio(model, audio_pipeline,file, top_k = 5):
     """Classify an uploaded audio file."""
     import time
     start_time = time.time()
