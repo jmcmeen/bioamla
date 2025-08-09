@@ -190,13 +190,13 @@ async def model_info():
     }
 
 @app.post("/classify", response_model=AudioClassificationResponse)
-async def classify_audio(
+async def classify(
     file: UploadFile = File(..., description="Audio file to classify"),
     top_k: Optional[int] = Form(default=5, description="Number of top predictions")
 ):
     """Classify an audio file."""
     try:
-        return await classify_audio(model, file, top_k)
+        return await classify_audio(model, audio_pipeline, file, top_k)
         
     except UnsupportAudioFormatError as e:
         raise HTTPException(status_code=400, detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}")
