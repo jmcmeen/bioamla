@@ -7,13 +7,11 @@ Audio Spectrogram Transformer (AST) models from Hugging Face.
 
 import argparse
 import uvicorn
-
 import base64
 import logging
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 import tempfile
-
 import torch
 import torchaudio
 import numpy as np
@@ -41,6 +39,8 @@ from bioamla.core.exceptions import (
     UnsupportAudioFormatError,
     NoModelLoadedError
 )
+
+allowed_extensions = ['.wav', '.mp3', '.flac', '.ogg', '.m4a']
 
 # Configure logging
 logging.basicConfig(
