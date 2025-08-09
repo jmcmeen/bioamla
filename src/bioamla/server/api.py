@@ -34,7 +34,7 @@ from bioamla.core.models.responses import (
     ErrorResponse
 )
 
-from bioamla.core.config import DefaultConfig
+from bioamla.core.models.config import DefaultConfig
 
 # Configure logging
 logging.basicConfig(
