@@ -3,7 +3,7 @@ from bioamla.core.exceptions import (
     UnsupportAudioFormatError
     )
 
-def classify_audio(model, file, top_k = 5):
+def async classify_audio(model, file, top_k = 5):
     """Classify an uploaded audio file."""
     import time
     start_time = time.time()
