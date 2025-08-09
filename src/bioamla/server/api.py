@@ -36,6 +36,11 @@ from bioamla.core.models.responses import (
 
 from bioamla.core.models.config import DefaultConfig
 
+from bioamla.core.exceptions import (
+    UnsupportedAudioFormatError,
+    NoModelLoadedError
+)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
