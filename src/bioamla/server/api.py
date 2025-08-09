@@ -38,7 +38,7 @@ from bioamla.core.models.config import DefaultConfig
 
 from bioamla.core.contollers.controllers import classify_audio
 from bioamla.core.exceptions import (
-    UnsupportedAudioFormatError,
+    UnsupportAudioFormatError,
     NoModelLoadedError
 )
 
