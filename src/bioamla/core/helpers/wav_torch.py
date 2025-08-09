@@ -5,8 +5,7 @@ from torchaudio.transforms import Resample
 from bioamla.core.models.config import DefaultConfig
 from novus_pytils.files import get_files_by_extension
 import io
-import numpy as np
-from bioamla.core.models.responses import PredictionResult
+
 
 def get_wav_info(filepath : str):
     return torchaudio.info(filepath)
