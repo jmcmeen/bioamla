@@ -27,8 +27,18 @@ from transformers import (
     pipeline
 )
 
+from bioamla.core.models.responses import (
+    PredictionResult,
+    AudioClassificationResponse,
+    Base64AudioRequest,
+    ErrorResponse
+)
+
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
@@ -54,38 +64,15 @@ audio_pipeline = None
 device = None
 
 # Configuration
-class Config:
+class DefaultConfig:
     MODEL_NAME = "MIT/ast-finetuned-audioset-10-10-0.4593"
     SAMPLE_RATE = 16000
     MAX_AUDIO_LENGTH = 30  # seconds
     MIN_CONFIDENCE = 0.01
     TOP_K = 5
 
-# Response models
-class PredictionResult(BaseModel):
-    label: str
-    score: float
-    rank: int
-
-class AudioClassificationResponse(BaseModel):
-    success: bool
-    predictions: List[PredictionResult]
-    audio_duration: Optional[float] = None
-    sample_rate: int
-    model_used: str
-    processing_time: Optional[float] = None
-
-class Base64AudioRequest(BaseModel):
-    audio_base64: str = Field(..., description="Base64 encoded audio data")
-    top_k: Optional[int] = Field(default=5, description="Number of top predictions to return")
-
-class ErrorResponse(BaseModel):
-    success: bool = False
-    error: str
-    detail: Optional[str] = None
-
 # Helper functions
-def load_audio_from_bytes(audio_bytes: bytes, target_sr: int = Config.SAMPLE_RATE):
+def load_audio_from_bytes(audio_bytes: bytes, target_sr: int = DefaultConfig.SAMPLE_RATE):
     """Load audio from bytes and resample if necessary."""
     try:
         # Create a file-like object from bytes
@@ -195,15 +182,15 @@ async def startup_event():
         logger.info(f"Using device: {device}")
         
         # Load feature extractor and model
-        feature_extractor = AutoFeatureExtractor.from_pretrained(Config.MODEL_NAME)
-        model = ASTForAudioClassification.from_pretrained(Config.MODEL_NAME)
+        feature_extractor = AutoFeatureExtractor.from_pretrained(DefaultConfig.MODEL_NAME)
+        model = ASTForAudioClassification.from_pretrained(DefaultConfig.MODEL_NAME)
         model.to(device)
         model.eval()
         
         # Create pipeline for easier inference
         audio_pipeline = pipeline(
             "audio-classification",
-            model=Config.MODEL_NAME,
+            model=DefaultConfig.MODEL_NAME,
             device=0 if torch.cuda.is_available() else -1
         )
         
@@ -219,7 +206,7 @@ async def root():
     return {
         "name": "Audio Spectrogram Transformer API",
         "version": "1.0.0",
-        "model": Config.MODEL_NAME,
+        "model": DefaultConfig.MODEL_NAME,
         "device": str(device),
         "endpoints": {
             "/classify": "POST - Classify audio file",
@@ -245,10 +232,10 @@ async def model_info():
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     return {
-        "model_name": Config.MODEL_NAME,
+        "model_name": DefaultConfig.MODEL_NAME,
         "num_labels": model.config.num_labels,
-        "sample_rate": Config.SAMPLE_RATE,
-        "max_audio_length": Config.MAX_AUDIO_LENGTH,
+        "sample_rate": DefaultConfig.SAMPLE_RATE,
+        "max_audio_length": DefaultConfig.MAX_AUDIO_LENGTH,
         "device": str(device),
         "labels_sample": list(model.config.id2label.values())[:10]
     }
@@ -258,56 +245,14 @@ async def classify_audio(
     file: UploadFile = File(..., description="Audio file to classify"),
     top_k: Optional[int] = Form(default=5, description="Number of top predictions")
 ):
-    """Classify an uploaded audio file."""
-    import time
-    start_time = time.time()
-    
-    if model is None or audio_pipeline is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    
-    # Validate file type
-    allowed_extensions = ['.wav', '.mp3', '.flac', '.ogg', '.m4a']
-    file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in allowed_extensions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
-        )
-    
+    from bioamla.core.contollers.controllers import classify_audio
     try:
-        # Read audio file
-        audio_bytes = await file.read()
+        return await classify_audio(file, top_k, model)
         
-        # Load and preprocess audio
-        audio_array, sample_rate = load_audio_from_bytes(audio_bytes)
-        
-        # Calculate duration
-        duration = len(audio_array) / sample_rate
-        
-        # Check audio length
-        if duration > Config.MAX_AUDIO_LENGTH:
-            # Trim audio to max length
-            max_samples = int(Config.MAX_AUDIO_LENGTH * sample_rate)
-            audio_array = audio_array[:max_samples]
-            duration = Config.MAX_AUDIO_LENGTH
-        
-        # Process audio
-        predictions = process_audio_with_pipeline(audio_array, sample_rate, top_k)
-        
-        # Calculate processing time
-        processing_time = time.time() - start_time
-        
-        return AudioClassificationResponse(
-            success=True,
-            predictions=predictions,
-            audio_duration=duration,
-            sample_rate=sample_rate,
-            model_used=Config.MODEL_NAME,
-            processing_time=processing_time
-        )
-        
-    except HTTPException:
-        raise
+    except UnsupportedAudioFormatError as e:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}")
+    except NoModelLoadedError:
+        raise HTTPException(status_code=503, detail="Model not loaded")
     except Exception as e:
         logger.error(f"Error processing audio: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing audio: {str(e)}")
@@ -333,11 +278,11 @@ async def classify_audio_base64(request: Base64AudioRequest):
         duration = len(audio_array) / sample_rate
         
         # Check audio length
-        if duration > Config.MAX_AUDIO_LENGTH:
+        if duration > DefaultConfig.MAX_AUDIO_LENGTH:
             # Trim audio to max length
-            max_samples = int(Config.MAX_AUDIO_LENGTH * sample_rate)
+            max_samples = int(DefaultConfig.MAX_AUDIO_LENGTH * sample_rate)
             audio_array = audio_array[:max_samples]
-            duration = Config.MAX_AUDIO_LENGTH
+            duration = DefaultConfig.MAX_AUDIO_LENGTH
         
         # Process audio
         predictions = process_audio_with_pipeline(audio_array, sample_rate, request.top_k)
@@ -350,7 +295,7 @@ async def classify_audio_base64(request: Base64AudioRequest):
             predictions=predictions,
             audio_duration=duration,
             sample_rate=sample_rate,
-            model_used=Config.MODEL_NAME,
+            model_used=DefaultConfig.MODEL_NAME,
             processing_time=processing_time
         )
         
