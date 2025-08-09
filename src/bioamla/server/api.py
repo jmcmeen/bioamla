@@ -7,7 +7,7 @@ Audio Spectrogram Transformer (AST) models from Hugging Face.
 
 import argparse
 import uvicorn
-import io
+
 import base64
 import logging
 from typing import Optional, List, Dict, Any
@@ -63,69 +63,10 @@ feature_extractor = None
 audio_pipeline = None
 device = None
 
-# Configuration
-class DefaultConfig:
-    MODEL_NAME = "MIT/ast-finetuned-audioset-10-10-0.4593"
-    SAMPLE_RATE = 16000
-    MAX_AUDIO_LENGTH = 30  # seconds
-    MIN_CONFIDENCE = 0.01
-    TOP_K = 5
+
 
 # Helper functions
-def load_audio_from_bytes(audio_bytes: bytes, target_sr: int = DefaultConfig.SAMPLE_RATE):
-    """Load audio from bytes and resample if necessary."""
-    try:
-        # Create a file-like object from bytes
-        audio_io = io.BytesIO(audio_bytes)
-        
-        # Load audio with torchaudio
-        waveform, sample_rate = torchaudio.load(audio_io)
-        
-        # Convert to mono if stereo
-        if waveform.shape[0] > 1:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
-        
-        # Resample if necessary
-        if sample_rate != target_sr:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=sample_rate,
-                new_freq=target_sr
-            )
-            waveform = resampler(waveform)
-        
-        # Flatten to 1D array
-        audio_array = waveform.squeeze().numpy()
-        
-        return audio_array, target_sr
-    except Exception as e:
-        logger.error(f"Error loading audio: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"Failed to load audio: {str(e)}")
 
-def process_audio_with_pipeline(audio_array: np.ndarray, sample_rate: int, top_k: int = 5):
-    """Process audio using the transformer pipeline."""
-    try:
-        # Run inference
-        results = audio_pipeline(
-            audio_array,
-            sampling_rate=sample_rate,
-            top_k=top_k
-        )
-        
-        # Format results
-        predictions = []
-        for i, pred in enumerate(results):
-            predictions.append(
-                PredictionResult(
-                    label=pred['label'],
-                    score=float(pred['score']),
-                    rank=i + 1
-                )
-            )
-        
-        return predictions
-    except Exception as e:
-        logger.error(f"Error during inference: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
 
 def process_audio_manual(audio_array: np.ndarray, sample_rate: int, top_k: int = 5):
     """Process audio manually using model and feature extractor."""
