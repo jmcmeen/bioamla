@@ -247,7 +247,7 @@ async def classify_audio(
 ):
     from bioamla.core.contollers.controllers import classify_audio
     try:
-        return await classify_audio(model, file, top_k)
+        return classify_audio(model, file, top_k)
         
     except UnsupportedAudioFormatError as e:
         raise HTTPException(status_code=400, detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}")
