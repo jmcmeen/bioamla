@@ -1,0 +1,7 @@
+directory: 'data/scp_small'
+output_csv: 'output.csv'
+model: 'bioamla/scp-frogs'
+resample_freq: 16000
+clip_seconds: 1
+overlap_seconds: 0
+restart: False
