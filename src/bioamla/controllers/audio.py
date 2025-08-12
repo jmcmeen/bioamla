@@ -1,5 +1,5 @@
 from novus_pytils.audio.files import get_audio_files
-from bioamla.core.globalsglobals import SUPPORTED_AUDIO_EXTENSIONS
+from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
 
 def get_audio_files_from_directory(directory: str) -> list:
     """
@@ -11,4 +11,4 @@ def get_audio_files_from_directory(directory: str) -> list:
     Returns:
         list: A list of audio file paths.
     """
-    return get_audio_files(directory)
+    return get_audio_files(directory, SUPPORTED_AUDIO_EXTENSIONS)
