@@ -13,7 +13,6 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 import tempfile
 import torch
-import torchaudio
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse
