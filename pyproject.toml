@@ -17,7 +17,7 @@ classifiers = [
 ]
 dependencies = [
   "novus-pytils",
-  # "click",
+  "click",
   # "torch",
   # "torchvision", 
   # "torchaudio",
@@ -37,6 +37,7 @@ dependencies = [
 ]
 
 [project.scripts]
+version = "bioamla.commands.version:main"
 # wave = "bioamla.cli.wave:main"
 # waves = "bioamla.cli.waves:main" 
 # audio = "bioamla.cli.audio:main"
