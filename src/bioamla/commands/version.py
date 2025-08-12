@@ -6,7 +6,7 @@ import click
 
 @click.command()
 def main():
-    from bioamla.controllers.version import get_bioamla_version
+    from src.bioamla.controllers.diagnostics import get_bioamla_version
     click.echo(f"bioamla v{get_bioamla_version()}")
 
 if __name__ == '__main__':
