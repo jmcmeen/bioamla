@@ -44,6 +44,7 @@ download = "bioamla.commands.download:main"
 unzip = "bioamla.commands.unzip:main"
 version = "bioamla.commands.version:main"
 
+# Currently untested
 # wave = "bioamla.cli.wave:main"
 # waves = "bioamla.cli.waves:main" 
 # audio = "bioamla.cli.audio:main"
