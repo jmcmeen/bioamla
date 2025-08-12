@@ -1,3 +1,19 @@
+"""
+Audio Files Discovery Command
+============================
+
+Command-line tool for discovering and listing audio files in a directory.
+This utility searches for supported audio file formats and provides a
+simple interface for file discovery operations.
+
+Usage:
+    audio [FILEPATH]
+
+Examples:
+    audio                    # List audio files in current directory
+    audio /path/to/files     # List audio files in specified directory
+"""
+
 import click
 from bioamla.controllers.audio import get_audio_files_from_directory
 

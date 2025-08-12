@@ -1,3 +1,29 @@
+"""
+AST Batch Inference Command
+===========================
+
+Command-line tool for running batch inference with Audio Spectrogram Transformer (AST) models
+on directories containing WAV files. This utility processes multiple audio files efficiently,
+supporting resumable operations and configurable audio processing parameters.
+
+Usage:
+    ast-batch-inference CONFIG_FILEPATH
+
+Examples:
+    ast-batch-inference ./config.yml          # Run batch inference with config file
+    ast-batch-inference /path/to/config.yml   # Run with absolute config path
+
+Configuration File Format:
+    The YAML configuration file should include:
+    - directory: Path to directory containing WAV files
+    - model: Path to the AST model
+    - output_csv: Name of the output CSV file for results
+    - restart: Boolean flag to resume from previous run
+    - resample_freq: Target sample rate for audio processing
+    - clip_seconds: Duration of audio clips for processing
+    - overlap_seconds: Overlap between consecutive clips
+"""
+
 import click
 from novus_pytils.files import get_files_by_extension, file_exists
 from novus_pytils.config.yaml import load_yaml
@@ -9,7 +35,26 @@ import os
 
 @click.command()
 @click.argument('config_filepath')
-def main(config_filepath : str):
+def main(config_filepath: str):
+    """
+    Run batch AST inference on a directory of WAV files using a YAML configuration.
+    
+    Loads an AST model and processes all WAV files in the specified directory,
+    generating predictions and saving results to a CSV file. Supports resumable
+    operations by checking for existing results and skipping already processed files.
+    
+    Args:
+        config_filepath (str): Path to the YAML configuration file containing
+                             all necessary parameters for batch inference.
+    
+    The function performs the following operations:
+    1. Loads configuration from YAML file
+    2. Discovers WAV files in the target directory
+    3. Handles resumable operations (if restart=True in config)
+    4. Loads the specified AST model
+    5. Runs batch inference with timing information
+    6. Saves results to CSV file with predictions for each audio segment
+    """
     print ("Loading config file: " + config_filepath)
     config = load_yaml(config_filepath)
 
