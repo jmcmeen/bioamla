@@ -18,7 +18,7 @@ classifiers = [
 dependencies = [
   "novus-pytils",
   "click",
-  # "torch",
+  "torch",
   # "torchvision", 
   # "torchaudio",
   # "transformers[torch]", 
@@ -37,6 +37,7 @@ dependencies = [
 ]
 
 [project.scripts]
+devices = "bioamla.commands.devices:main"
 version = "bioamla.commands.version:main"
 # wave = "bioamla.cli.wave:main"
 # waves = "bioamla.cli.waves:main" 
@@ -47,7 +48,6 @@ version = "bioamla.commands.version:main"
 # ast-batch-inference = "bioamla.cli.ast_batch_inference:main"
 # extract = "bioamla.cli.extract:main"
 # diag = "bioamla.cli.diag:main"
-# gpu = "bioamla.cli.gpu:main"
 # test = "bioamla.cli.test:main"
 # zip = "bioamla.cli.zip:main"
 
