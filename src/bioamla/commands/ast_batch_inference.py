@@ -3,7 +3,6 @@ from novus_pytils.files import get_files_by_extension, file_exists
 from novus_pytils.config.yaml import load_yaml
 from bioamla.core.ast import load_pretrained_ast_model, wave_file_batch_inference
 import torch
-import sys
 import time
 import pandas as pd
 import os

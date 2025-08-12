@@ -6,12 +6,8 @@ including metadata, file properties, and MD5 hash.
 """
 
 import click
-import os
 import sys
 import csv
-import wave
-import hashlib
-import argparse
 from pathlib import Path
 from datetime import datetime
 from novus_pytils.wave import analyze_wav_file, get_wav_files
@@ -37,12 +33,12 @@ def print_file_info(file_info, index, total):
     
     print(f"📁 Relative Path: {file_info['relative_path']}")
     print(f"📊 File Size: {file_info['file_size_bytes']:,} bytes ({file_info['file_size_mb']:.2f} MB)")
-    print(f"🎵 Audio Properties:")
+    print("🎵 Audio Properties:")
     print(f"   Sample Rate: {file_info['sample_rate']:,} Hz")
     print(f"   Channels: {file_info['num_channels']} ({'Mono' if file_info['num_channels'] == 1 else 'Stereo' if file_info['num_channels'] == 2 else 'Multi-channel'})")
     print(f"   Sample Width: {file_info['sample_width_bits']} bits ({file_info['sample_width_bytes']} bytes)")
     print(f"   Total Frames: {file_info['num_frames']:,}")
-    print(f"⏱️  Duration:")
+    print("⏱️  Duration:")
     print(f"   Length: {file_info['length_formatted']}")
     print(f"   Seconds: {file_info['length_seconds']:.3f}")
     print(f"   Milliseconds: {file_info['length_milliseconds']:,}")
@@ -149,7 +145,7 @@ def main(input_dir, verbose, output):
         return
     
     print(f"Found {len(wav_files)} WAV files")
-    print(f"Starting analysis...")
+    print("Starting analysis...")
     
     # Analyze files
     file_infos = []

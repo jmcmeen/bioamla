@@ -4,11 +4,9 @@ Audio Editor CLI - Both interactive UI and command-line scripting modes.
 import click
 import sys
 from pathlib import Path
-from typing import Optional, List
-import json
 
 from ..core.audio_editor import (
-    AudioData, AudioProcessor, AudioFilters, 
+    AudioProcessor, AudioFilters, 
     AnnotationManager, SpectrogramGenerator
 )
 from ..ui.main_app import run_audio_editor_ui
@@ -262,7 +260,7 @@ def analyze(input_file, output, type, show_info):
         
         # Show basic info
         if show_info:
-            click.echo(f"\nAudio File Information:")
+            click.echo("\nAudio File Information:")
             click.echo(f"File: {input_file}")
             click.echo(f"Duration: {audio_data.duration:.2f} seconds")
             click.echo(f"Sample Rate: {audio_data.sample_rate} Hz")

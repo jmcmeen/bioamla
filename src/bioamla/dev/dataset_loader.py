@@ -7,14 +7,13 @@ with support for public/private datasets, organizations, and various configurati
 
 import argparse
 import sys
-import os
 import json
 from pathlib import Path
 from typing import Optional, Dict, Any
 
 try:
     from datasets import load_dataset, DatasetDict, Dataset
-    from huggingface_hub import HfApi, login, logout
+    from huggingface_hub import HfApi, login
     from huggingface_hub.utils import HfHubHTTPError
 except ImportError as e:
     print("Error: Required packages not installed.")
@@ -142,7 +141,7 @@ class HuggingFaceDatasetLoader:
             if split:
                 print(f"  Split: {split}")
             if streaming:
-                print(f"  Streaming mode: enabled")
+                print("  Streaming mode: enabled")
             
             # Load the dataset
             self.dataset = load_dataset(**load_args)
@@ -179,7 +178,7 @@ class HuggingFaceDatasetLoader:
         print(f"{'='*60}")
         
         if isinstance(dataset, DatasetDict):
-            print(f"Dataset type: DatasetDict")
+            print("Dataset type: DatasetDict")
             print(f"Available splits: {list(dataset.keys())}")
             
             for split_name, split_dataset in dataset.items():
@@ -194,7 +193,7 @@ class HuggingFaceDatasetLoader:
                         print(f"    Example {i+1}: {split_dataset[i]}")
         
         elif isinstance(dataset, Dataset):
-            print(f"Dataset type: Dataset")
+            print("Dataset type: Dataset")
             print(f"Number of rows: {len(dataset):,}")
             print(f"Number of columns: {len(dataset.column_names)}")
             print(f"Column names: {dataset.column_names}")
@@ -449,7 +448,7 @@ Examples:
         print(f"\nExporting dataset to: {args.export_dir}")
         loader.export_dataset(dataset, args.export_dir, args.export_format)
     
-    print(f"\n✅ Dataset loading completed successfully!")
+    print("\n✅ Dataset loading completed successfully!")
 
 if __name__ == "__main__":
     main()

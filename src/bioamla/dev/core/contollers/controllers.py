@@ -1,4 +1,3 @@
-import io
 from pathlib import Path  
 from bioamla.core.exceptions import (
     NoModelLoadedError,
@@ -58,7 +57,7 @@ async def classify_audio(model, audio_pipeline,file, top_k = 5):
             model_used=DefaultConfig.MODEL_NAME,
             processing_time=processing_time
         )
-    except Exception as e:
+    except Exception:
         # TODO Catch specific exceptions
         raise
     

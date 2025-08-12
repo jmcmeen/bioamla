@@ -9,14 +9,12 @@ import argparse
 import uvicorn
 import base64
 import logging
-from typing import Optional, List, Dict, Any
-from pathlib import Path
+from typing import Optional, List
 import torch
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from transformers import (
     AutoFeatureExtractor,
     ASTForAudioClassification,
@@ -31,6 +29,8 @@ from bioamla.core.models.responses import (
 )
 
 from bioamla.core.models.config import DefaultConfig
+from bioamla.core.torchaudio import load_audio_from_bytes
+from bioamla.dev.core.helpers.transformers import process_audio_with_pipeline
 
 from bioamla.core.contollers.controllers import classify_audio
 from bioamla.core.exceptions import (
@@ -192,7 +192,7 @@ async def classify(
     try:
         return classify_audio(model, audio_pipeline, file, top_k)
         
-    except UnsupportAudioFormatError as e:
+    except UnsupportAudioFormatError:
         raise HTTPException(status_code=400, detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}")
     except NoModelLoadedError:
         raise HTTPException(status_code=503, detail="Model not loaded")

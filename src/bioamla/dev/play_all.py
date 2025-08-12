@@ -5,14 +5,11 @@ Plays WAV files from a directory with options for verbose output
 and recursive directory searching.
 """
 
-import os
 import sys
 import wave
 import time
 import argparse
-import threading
 from pathlib import Path
-from queue import Queue
 
 try:
     import pygame

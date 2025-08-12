@@ -19,12 +19,11 @@ Usage:
 """
 
 import argparse
-import asyncio
 import logging
 import time
 import traceback
 from contextlib import asynccontextmanager
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 
 import torch
 import uvicorn
@@ -33,11 +32,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 from transformers import (
-    pipeline,
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    AutoModelForQuestionAnswering,
-    AutoModelForTokenClassification
+    pipeline
 )
 
 # Configure logging

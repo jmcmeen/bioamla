@@ -1,7 +1,6 @@
 
 import numpy as np
 from bioamla.core.models.responses import PredictionResult
-from transformers import pipeline
 
 def process_audio_with_pipeline(audio_pipeline, audio_array: np.ndarray, sample_rate: int, top_k: int = 5):
     """Process audio using the transformer pipeline."""

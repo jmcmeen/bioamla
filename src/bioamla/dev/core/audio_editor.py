@@ -6,9 +6,6 @@ import librosa
 import soundfile as sf
 from scipy import signal
 from typing import Dict, List, Tuple, Optional, Any
-import tempfile
-import os
-from pathlib import Path
 
 
 class AudioData:
