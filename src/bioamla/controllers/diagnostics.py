@@ -1,25 +1,112 @@
-# src/bioamla/controllers/diagnostics.py
-# This module provides functions to retrieve diagnostic information about the bioamla package.
+"""
+Diagnostic information controller for the bioamla package.
+
+This module provides comprehensive diagnostic functionality to retrieve
+information about the bioamla package environment, installed dependencies,
+and hardware configuration. It serves as a centralized location for
+system introspection and troubleshooting support.
+
+The module offers tools to examine package versions, CUDA device availability,
+and other runtime environment details that are crucial for debugging and
+ensuring proper bioamla functionality across different deployment scenarios.
+"""
+
+from typing import Dict, List, Optional, Any
+import importlib.metadata
+import torch
+
 
 def get_bioamla_version() -> str:
     """
-    Returns the current version of the bioamla package.
+    Get the current version of the bioamla package.
+    
+    Retrieves the version information from the package metadata using
+    importlib.metadata. This provides the exact version string as defined
+    in the package's setup configuration.
+    
+    Returns:
+        str: The version string of the currently installed bioamla package
+             (e.g., "0.0.38").
+             
+    Raises:
+        importlib.metadata.PackageNotFoundError: If the bioamla package
+                                                 is not properly installed
+                                                 or not found in the Python
+                                                 environment.
+    
+    Example:
+        >>> version = get_bioamla_version()
+        >>> print(f"bioamla version: {version}")
+        bioamla version: 0.0.38
     """
-    import importlib.metadata
     return importlib.metadata.version('bioamla')
 
-def get_package_versions() -> dict:
+def get_package_versions() -> Dict[str, str]:
     """
-    Returns a dictionary of all installed packages and their versions.
+    Get a comprehensive dictionary of all installed packages and their versions.
+    
+    Scans the current Python environment to retrieve version information for
+    all installed packages. This is useful for debugging dependency issues,
+    creating reproducible environments, or generating system reports.
+    
+    Returns:
+        Dict[str, str]: A dictionary mapping package names to their version
+                       strings. Keys are package names (e.g., "numpy") and
+                       values are version strings (e.g., "1.21.0").
+                       
+    Example:
+        >>> packages = get_package_versions()
+        >>> print(f"NumPy version: {packages.get('numpy', 'Not installed')}")
+        NumPy version: 1.21.0
+        >>> print(f"Total packages: {len(packages)}")
+        Total packages: 245
+    
+    Note:
+        The returned dictionary includes all packages in the current Python
+        environment, not just bioamla dependencies. For large environments,
+        this may return hundreds of packages.
     """
-    import importlib.metadata
     return {dist.metadata['Name']: dist.version for dist in importlib.metadata.distributions()}
 
-def get_device_info() -> dict:
+def get_device_info() -> Dict[str, Any]:
     """
-    Returns information about the available CUDA devices.
+    Get comprehensive information about available CUDA devices and GPU configuration.
+    
+    Examines the current system's GPU configuration through PyTorch's CUDA
+    interface. This includes CUDA availability status, device count, current
+    active device, and detailed information about each available GPU.
+    
+    The function is essential for verifying that bioamla can leverage GPU
+    acceleration for audio processing tasks and machine learning operations.
+    
+    Returns:
+        Dict[str, Any]: A dictionary containing comprehensive device information:
+            - cuda_available (bool): Whether CUDA is available on the system
+            - current_device (Optional[int]): Index of the current active device,
+                                            None if CUDA is not available
+            - device_count (int): Total number of available CUDA devices
+            - devices (List[Dict[str, Any]]): List of device information dicts,
+                                            each containing:
+                - index (int): Device index number
+                - name (str): GPU device name/model
+    
+    Example:
+        >>> info = get_device_info()
+        >>> if info['cuda_available']:
+        ...     print(f"Found {info['device_count']} CUDA device(s):")
+        ...     for device in info['devices']:
+        ...         print(f"  Device {device['index']}: {device['name']}")
+        ... else:
+        ...     print("CUDA is not available")
+        Found 2 CUDA device(s):
+          Device 0: NVIDIA GeForce RTX 3080
+          Device 1: NVIDIA GeForce RTX 3090
+    
+    Note:
+        This function requires PyTorch to be installed with CUDA support.
+        If PyTorch was installed with CPU-only support, cuda_available
+        will be False even if CUDA devices are physically present.
     """
-    import torch
     device_info = {
         'cuda_available': torch.cuda.is_available(),
         'current_device': torch.cuda.current_device() if torch.cuda.is_available() else None,
