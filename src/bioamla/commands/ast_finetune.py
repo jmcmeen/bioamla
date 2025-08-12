@@ -1,3 +1,31 @@
+"""
+AST Model Fine-tuning Command
+=============================
+
+Command-line tool for fine-tuning Audio Spectrogram Transformer (AST) models on custom datasets.
+This utility supports loading datasets from HuggingFace Hub, applying audio augmentations,
+and training with comprehensive evaluation metrics.
+
+Usage:
+    ast-finetune CONFIG_FILEPATH
+
+Examples:
+    ast-finetune ./training_config.yml        # Fine-tune with local config
+    ast-finetune /path/to/config.yml          # Fine-tune with absolute config path
+
+Configuration File Format:
+    The YAML configuration file should include:
+    - train_dataset: HuggingFace dataset identifier
+    - split: Dataset split to use for training
+    - category_id_column: Column name for category IDs
+    - category_label_column: Column name for category labels
+    - base_model: Pre-trained model to fine-tune from
+    - output_dir: Directory for training outputs
+    - logging_dir: Directory for training logs
+    - best_model_path: Path to save the best model
+    - Training hyperparameters (learning_rate, num_train_epochs, etc.)
+"""
+
 import click
 from datasets import Audio, ClassLabel, load_dataset
 from transformers import ASTFeatureExtractor, ASTConfig, ASTForAudioClassification, TrainingArguments, Trainer
@@ -10,7 +38,27 @@ from novus_pytils.config.yaml import load_yaml
 
 @click.command()
 @click.argument('config_filepath')
-def main(config_filepath : str):
+def main(config_filepath: str):
+    """
+    Fine-tune an Audio Spectrogram Transformer (AST) model using a YAML configuration.
+    
+    Performs complete fine-tuning workflow including data loading, preprocessing,
+    augmentation, model configuration, training, and evaluation. The process includes
+    automatic dataset normalization calculation and comprehensive metrics tracking.
+    
+    Args:
+        config_filepath (str): Path to the YAML configuration file containing
+                             training parameters, dataset information, and model settings.
+    
+    The function performs the following operations:
+    1. Loads dataset from HuggingFace Hub
+    2. Prepares class labels and mappings
+    3. Configures audio preprocessing and augmentations
+    4. Calculates dataset normalization parameters
+    5. Sets up model configuration and training arguments
+    6. Trains the model with evaluation metrics
+    7. Saves the fine-tuned model
+    """
     train_args = load_yaml(config_filepath)
     
     # Load a pre-existing dataset from the HuggingFace Hub
@@ -36,6 +84,15 @@ def main(config_filepath : str):
 
     # Preprocessing function
     def preprocess_audio(batch):
+        """
+        Preprocess audio batch for AST model input without augmentations.
+        
+        Args:
+            batch: Batch containing audio data and labels
+            
+        Returns:
+            dict: Processed batch with feature-extracted audio and labels
+        """
         wavs = [audio["array"] for audio in batch["input_values"]]
         inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
         return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
@@ -60,6 +117,15 @@ def main(config_filepath : str):
 
     # Preprocessing with augmentations
     def preprocess_audio_with_transforms(batch):
+        """
+        Preprocess audio batch for AST model input with applied augmentations.
+        
+        Args:
+            batch: Batch containing audio data and labels
+            
+        Returns:
+            dict: Processed batch with augmented, feature-extracted audio and labels
+        """
         wavs = [audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE) for audio in batch["input_values"]]
         inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
         return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
@@ -129,6 +195,15 @@ def main(config_filepath : str):
 
     # setup metrics function
     def compute_metrics(eval_pred):
+        """
+        Compute evaluation metrics for the AST model training.
+        
+        Args:
+            eval_pred: Evaluation prediction object containing predictions and labels
+            
+        Returns:
+            dict: Dictionary containing accuracy, precision, recall, and F1 metrics
+        """
         # get predictions and scores
         logits = eval_pred.predictions
         predictions = np.argmax(logits, axis=1)

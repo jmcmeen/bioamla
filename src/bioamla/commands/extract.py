@@ -1,8 +1,27 @@
 #!/usr/bin/env python3
 """
-Audio File Converter to WAV
-Converts audio files (wav, ogg, flac, mp3, mp4) to WAV format
-while preserving directory structure.
+Audio File Extraction and Conversion Command
+============================================
+
+Comprehensive command-line tool for converting audio files to WAV format.
+This utility supports multiple input formats (WAV, OGG, FLAC, MP3, MP4) and
+provides configurable output parameters while preserving directory structure.
+
+Usage:
+    extract INPUT_DIR OUTPUT_DIR [-r SAMPLE_RATE] [-c CHANNELS] [-v]
+
+Examples:
+    extract ./audio ./wav_output                    # Convert with defaults (44.1kHz, mono)
+    extract ./music ./converted -r 16000 -c 2      # Convert to 16kHz stereo  
+    extract /input /output -r 44100 -c 1 -v        # Verbose conversion to 44.1kHz mono
+
+Features:
+    - Multi-format support: WAV, OGG, FLAC, MP3, MP4
+    - Configurable sample rate and channel conversion
+    - Directory structure preservation
+    - Batch processing with progress indication
+    - Comprehensive error handling and reporting
+    - Verbose mode for detailed operation logs
 """
 
 import click
@@ -126,7 +145,17 @@ def get_output_path(input_file, input_dir, output_dir):
 @click.option('-r', '--sample-rate', type=int, default=44100, help='Output sample rate in Hz (default: 44100)')
 @click.option('-c', '--channels', type=int, default=1, help='Number of output channels: 1 (mono) or 2 (stereo) (default: 1)')
 @click.option('-v', '--verbose', is_flag=True, help='Enable verbose output')
-def main(input_dir, output_dir, sample_rate, channels, verbose):
+def main(input_dir: str, output_dir: str, sample_rate: int, channels: int, verbose: bool):
+    """
+    Convert audio files from input directory to WAV format in output directory.
+    
+    Args:
+        input_dir (str): Path to directory containing source audio files
+        output_dir (str): Path to directory where converted WAV files will be saved
+        sample_rate (int): Target sample rate in Hz for output WAV files
+        channels (int): Number of output channels (1 for mono, 2 for stereo)
+        verbose (bool): Enable detailed console output during conversion
+    """
     try:
         # Setup directories
         input_dir, output_dir = setup_directories(input_dir, output_dir)

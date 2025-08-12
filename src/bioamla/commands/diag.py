@@ -1,8 +1,28 @@
 #!/usr/bin/env python3
 """
-WAV File Analyzer
-Analyzes WAV files in a directory and extracts detailed information
-including metadata, file properties, and MD5 hash.
+WAV File Diagnostic Analysis Command
+===================================
+
+Comprehensive command-line tool for analyzing WAV audio files in directories.
+This utility performs detailed analysis of audio files, extracting metadata,
+file properties, duration information, and generating MD5 hashes for verification.
+
+Usage:
+    diag INPUT_DIR [-v] [-o OUTPUT_FILE]
+
+Examples:
+    diag ./audio_files                    # Analyze files in ./audio_files
+    diag /path/to/wav/files -v            # Verbose analysis with detailed output  
+    diag ./files -o analysis_results.csv  # Save results to custom CSV file
+
+Features:
+    - Recursive WAV file discovery
+    - Detailed audio property extraction (sample rate, channels, duration, etc.)
+    - File integrity verification with MD5 hashing
+    - Comprehensive error handling and reporting
+    - CSV output for further analysis
+    - Summary statistics generation
+    - Support for various WAV formats and compression types
 """
 
 import click
@@ -124,7 +144,15 @@ def format_summary_stats(file_infos):
 @click.argument('input_dir')
 @click.option('-v', '--verbose', is_flag=True, help='Enable verbose output')
 @click.option('-o', '--output', help='Output CSV filename')
-def main(input_dir, verbose, output):
+def main(input_dir: str, verbose: bool, output: str):
+    """
+    Analyze WAV files in a directory and generate comprehensive diagnostic report.
+    
+    Args:
+        input_dir (str): Path to the directory containing WAV files to analyze
+        verbose (bool): Enable detailed console output during analysis
+        output (str): Custom filename for the CSV output file (optional)
+    """
     
     # Validate input directory
     input_dir = Path(input_dir)
