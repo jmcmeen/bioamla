@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.0.37"
+version = "0.0.38"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -16,44 +16,44 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "novus-pytils",
-  "click",
-  "torch",
-  "torchvision", 
-  "torchaudio",
-  "transformers[torch]", 
-  "datasets[audio]",
-  "audiomentations", 
-  "evaluate", 
-  "tensorboardX",
-  "fastapi[standard]",
-  "pydub",
-  "textual",
-  "matplotlib",
-  "scipy",
-  "librosa",
-  "soundfile",
+  # "novus-pytils",
+  # "click",
+  # "torch",
+  # "torchvision", 
+  # "torchaudio",
+  # "transformers[torch]", 
+  # "datasets[audio]",
+  # "audiomentations", 
+  # "evaluate", 
+  # "tensorboardX",
+  # "fastapi[standard]",
+  # "pydub",
+  # "textual",
+  # "matplotlib",
+  # "scipy",
+  # "librosa",
+  # "soundfile",
   # "simpleaudio",
 ]
 
 [project.scripts]
-wave = "bioamla.cli.wave:main"
-waves = "bioamla.cli.waves:main" 
-audio = "bioamla.cli.audio:main"
-ast = "bioamla.cli.ast:main"
-ast-predict = "bioamla.cli.ast_predict:main"
-ast-finetune = "bioamla.cli.ast_finetune:main"
-ast-batch-inference = "bioamla.cli.ast_batch_inference:main"
-extract = "bioamla.cli.extract:main"
-diag = "bioamla.cli.diag:main"
-gpu = "bioamla.cli.gpu:main"
-test = "bioamla.cli.test:main"
-zip = "bioamla.cli.zip:main"
+# wave = "bioamla.cli.wave:main"
+# waves = "bioamla.cli.waves:main" 
+# audio = "bioamla.cli.audio:main"
+# ast = "bioamla.cli.ast:main"
+# ast-predict = "bioamla.cli.ast_predict:main"
+# ast-finetune = "bioamla.cli.ast_finetune:main"
+# ast-batch-inference = "bioamla.cli.ast_batch_inference:main"
+# extract = "bioamla.cli.extract:main"
+# diag = "bioamla.cli.diag:main"
+# gpu = "bioamla.cli.gpu:main"
+# test = "bioamla.cli.test:main"
+# zip = "bioamla.cli.zip:main"
 
-server = "bioamla.server.api:main"
-client = "bioamla.server.client:main"
+# server = "bioamla.server.api:main"
+# client = "bioamla.server.client:main"
 
-audioeditor = "bioamla.cli.audioeditor:main"
+# audioeditor = "bioamla.cli.audioeditor:main"
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
