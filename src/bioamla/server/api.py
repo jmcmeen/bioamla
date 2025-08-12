@@ -11,7 +11,6 @@ import base64
 import logging
 from typing import Optional, List, Dict, Any
 from pathlib import Path
-import tempfile
 import torch
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
@@ -70,11 +69,7 @@ feature_extractor = None
 audio_pipeline = None
 device = None
 
-
-
 # Helper functions
-
-
 def process_audio_manual(audio_array: np.ndarray, sample_rate: int, top_k: int = 5):
     """Process audio manually using model and feature extractor."""
     try:
