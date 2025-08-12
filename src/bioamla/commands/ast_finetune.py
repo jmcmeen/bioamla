@@ -7,7 +7,6 @@ import evaluate
 import numpy as np
 from novus_pytils.files import create_directory
 from novus_pytils.config.yaml import load_yaml
-import sys
 
 @click.command()
 @click.argument('config_filepath')

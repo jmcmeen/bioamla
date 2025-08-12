@@ -7,16 +7,12 @@ from textual.app import ComposeResult
 from textual.reactive import reactive
 from textual.message import Message
 from textual import events
-from textual.coordinate import Coordinate
 from rich.text import Text
 from rich.console import RenderableType
 import numpy as np
-from typing import Optional, List, Dict, Any, Tuple
-import matplotlib.pyplot as plt
+from typing import Optional, List, Dict, Any
 import matplotlib
 matplotlib.use('Agg')  # Use non-GUI backend
-import io
-import base64
 from ..core.audio_editor import AudioData, SpectrogramGenerator
 
 
@@ -87,7 +83,6 @@ class WaveformDisplay(Static):
             lines.append(line)
         
         # Add time markers
-        duration_shown = self.zoom_end - self.zoom_start
         lines.append("-" * display_width)
         time_line = f"{self.zoom_start:.2f}s"
         time_line += " " * (display_width - len(time_line) - len(f"{self.zoom_end:.2f}s"))

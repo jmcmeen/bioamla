@@ -5,7 +5,7 @@ from bioamla.controllers.diagnostics import get_device_info
 def main():
     device_info = get_device_info()
     
-    click.echo(f"Devices:")
+    click.echo("Devices:")
     click.echo(f'CUDA available: {device_info["cuda_available"]}')
     click.echo(f'Current device: {device_info["current_device"]}')
     click.echo(f'Device count: {device_info["device_count"]}')

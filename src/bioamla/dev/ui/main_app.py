@@ -2,24 +2,22 @@
 Main Textual application for the audio editor.
 """
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, Grid
-from textual.widgets import Header, Footer, TabbedContent, TabPane, Static
+from textual.containers import Container, Vertical
+from textual.widgets import Header, Footer, TabbedContent, TabPane
 from textual.binding import Binding
 from textual.reactive import reactive
-from textual.message import Message
-from textual import events
 from typing import Optional
 import asyncio
 from pathlib import Path
 
 from ..core.audio_editor import (
     AudioData, AudioProcessor, AudioFilters, 
-    AnnotationManager, AudioPlayback, SpectrogramGenerator
+    AnnotationManager, AudioPlayback
 )
 from .audio_widgets import (
     WaveformDisplay, SpectrogramDisplay, AudioInfoPanel,
     TransportControls, FilterPanel, AnnotationPanel,
-    FileOperationsPanel, StatusBar, ProgressDisplay
+    FileOperationsPanel, StatusBar
 )
 
 

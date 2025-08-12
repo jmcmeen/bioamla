@@ -6,9 +6,7 @@ while preserving directory structure.
 """
 
 import click
-import os
 import sys
-import argparse
 from pathlib import Path
 from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
@@ -169,7 +167,7 @@ def main(input_dir, output_dir, sample_rate, channels, verbose):
                 failed_count += 1
         
         # Final summary
-        print(f"\nConversion complete!")
+        print("\nConversion complete!")
         print(f"Successfully converted: {converted_count} files")
         if failed_count > 0:
             print(f"Failed conversions: {failed_count} files")
