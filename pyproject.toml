@@ -39,7 +39,9 @@ dependencies = [
 [project.scripts]
 devices = "bioamla.commands.devices:main"
 download = "bioamla.commands.download:main"
+unzip = "bioamla.commands.unzip:main"
 version = "bioamla.commands.version:main"
+
 # wave = "bioamla.cli.wave:main"
 # waves = "bioamla.cli.waves:main" 
 # audio = "bioamla.cli.audio:main"
@@ -51,7 +53,6 @@ version = "bioamla.commands.version:main"
 # diag = "bioamla.cli.diag:main"
 # test = "bioamla.cli.test:main"
 # zip = "bioamla.cli.zip:main"
-
 # server = "bioamla.server.api:main"
 # client = "bioamla.server.client:main"
 
