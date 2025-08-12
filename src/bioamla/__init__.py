@@ -15,7 +15,4 @@ Key Features:
 
 Version: 0.0.38
 """
-
 __version__ = "0.0.38"
-__author__ = "John McMeen"
-__email__ = "johnmcmeen@gmail.com"
