@@ -38,6 +38,7 @@ dependencies = [
 
 [project.scripts]
 devices = "bioamla.commands.devices:main"
+download = "bioamla.commands.download:main"
 version = "bioamla.commands.version:main"
 # wave = "bioamla.cli.wave:main"
 # waves = "bioamla.cli.waves:main" 
