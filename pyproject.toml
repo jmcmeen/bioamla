@@ -26,14 +26,14 @@ dependencies = [
   "audiomentations", 
   "evaluate", 
   "tensorboardX",
-  # "fastapi[standard]",
-  # "pydub",
-  # "textual",
-  # "matplotlib",
-  # "scipy",
-  # "librosa",
-  # "soundfile",
-  # "simpleaudio",
+  "fastapi[standard]",
+  "pydub",
+  "textual",
+  "matplotlib",
+  "scipy",
+  "librosa",
+  "soundfile",
+  "simpleaudio",
 ]
 
 [project.scripts]
@@ -45,17 +45,15 @@ unzip = "bioamla.commands.unzip:main"
 version = "bioamla.commands.version:main"
 
 # Currently untested
-# wave = "bioamla.cli.wave:main"
-# waves = "bioamla.cli.waves:main" 
-# audio = "bioamla.cli.audio:main"
-# ast = "bioamla.cli.ast:main"
-# ast-finetune = "bioamla.cli.ast_finetune:main"
-# ast-batch-inference = "bioamla.cli.ast_batch_inference:main"
-# extract = "bioamla.cli.extract:main"
-# diag = "bioamla.cli.diag:main"
-# server = "bioamla.server.api:main"
-# client = "bioamla.server.client:main"
-# audioeditor = "bioamla.cli.audioeditor:main"
+wave = "bioamla.commands.wave:main"
+waves = "bioamla.commands.waves:main" 
+ast = "bioamla.commands.ast:main"
+ast-finetune = "bioamla.commands.ast_finetune:main"
+ast-batch-inference = "bioamla.commands.ast_batch_inference:main"
+extract = "bioamla.commands.extract:main"
+diag = "bioamla.commands.diag:main"
+server = "bioamla.server.api:main"
+audioeditor = "bioamla.cli.audioeditor:main"
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
