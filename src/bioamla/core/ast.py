@@ -1,4 +1,4 @@
-from bioamla.core.helpers.wav_torch import load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
+from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
 from transformers import ASTFeatureExtractor,AutoModelForAudioClassification
 import torch
 import pandas as pd

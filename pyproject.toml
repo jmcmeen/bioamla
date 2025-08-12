@@ -19,13 +19,13 @@ dependencies = [
   "novus-pytils",
   "click",
   "torch",
-  # "torchvision", 
-  # "torchaudio",
-  # "transformers[torch]", 
-  # "datasets[audio]",
-  # "audiomentations", 
-  # "evaluate", 
-  # "tensorboardX",
+  "torchvision", 
+  "torchaudio",
+  "transformers[torch]", 
+  "datasets[audio]",
+  "audiomentations", 
+  "evaluate", 
+  "tensorboardX",
   # "fastapi[standard]",
   # "pydub",
   # "textual",
@@ -38,6 +38,7 @@ dependencies = [
 
 [project.scripts]
 audio = "bioamla.commands.audio:main"
+ast-predict = "bioamla.commands.ast_predict:main"
 devices = "bioamla.commands.devices:main"
 download = "bioamla.commands.download:main"
 unzip = "bioamla.commands.unzip:main"
@@ -47,16 +48,12 @@ version = "bioamla.commands.version:main"
 # waves = "bioamla.cli.waves:main" 
 # audio = "bioamla.cli.audio:main"
 # ast = "bioamla.cli.ast:main"
-# ast-predict = "bioamla.cli.ast_predict:main"
 # ast-finetune = "bioamla.cli.ast_finetune:main"
 # ast-batch-inference = "bioamla.cli.ast_batch_inference:main"
 # extract = "bioamla.cli.extract:main"
 # diag = "bioamla.cli.diag:main"
-
-
 # server = "bioamla.server.api:main"
 # client = "bioamla.server.client:main"
-
 # audioeditor = "bioamla.cli.audioeditor:main"
 
 [project.urls]
