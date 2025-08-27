@@ -20,7 +20,7 @@ Output includes:
 """
 
 import click
-from bioamla.controllers.diagnostics import get_device_info
+from bioamla.core.diagnostics import get_device_info
 
 @click.command()
 def main():
