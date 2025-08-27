@@ -25,7 +25,7 @@ def main():
     This command retrieves and displays the version information
     for the installed bioamla package.
     """
-    from bioamla.controllers.diagnostics import get_bioamla_version
+    from bioamla.core.diagnostics import get_bioamla_version
     click.echo(f"bioamla v{get_bioamla_version()}")
 
 if __name__ == '__main__':
