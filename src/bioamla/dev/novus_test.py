@@ -15,7 +15,7 @@ The script performs the following operations in sequence:
 
 import os
 from typing import Optional
-from novus_pytils.files import copy_dataset
+from novus_pytils.files.core import copy_dataset
 from novus_pytils.audio.wave import resample_wave_files, bandpass_wave_files, split_wave_files
 from novus_pytils.files.core import extract_partitioned_dataset
 
