@@ -13,7 +13,7 @@ in bioacoustic machine learning projects.
 
 import pandas as pd
 import os
-from novus_pytils.audio.files import get_audio_files
+from novus_pytils.audio import get_audio_files
 from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
 
 

@@ -34,7 +34,7 @@ import torch
 import evaluate
 import numpy as np
 from novus_pytils.files import create_directory
-from novus_pytils.config.yaml import load_yaml
+from novus_pytils.text.yaml import load_yaml
 
 @click.command()
 @click.argument('config_filepath')

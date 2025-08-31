@@ -13,7 +13,7 @@ and processing workflows.
 import pandas as pd
 from typing import List, Dict, Any, Union
 from pathlib import Path
-from novus_pytils.wave import get_wav_files_metadata, get_wav_files
+from novus_pytils.audio.wave import get_wav_files_metadata, get_wav_files
 
 def get_wav_file_frame(dir: Union[str, Path]) -> pd.DataFrame:
     """
