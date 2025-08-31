@@ -208,3 +208,5 @@ cython_debug/
 /runs
 /logs
 /model
+/src/bioamla/local_dev
+/logs
