@@ -67,7 +67,6 @@ def audio(filepath: str):
             filepath = os.getcwd()
         audio_files = get_audio_files(filepath)
         if audio_files:
-            click.echo("Audio files found:")
             for file in audio_files:
                 click.echo(file)
         else:
