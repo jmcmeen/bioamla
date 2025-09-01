@@ -345,6 +345,22 @@ def ast_finetune(config_filepath: str):
     torch.save(model.state_dict(), train_args["best_model_path"] + "/pytorch_model.bin")
     # model.save_pretrained(model_dir)
 
+@cli.command()
+@click.argument('filepath')
+@click.argument('model_path')
+@click.argument('sample_rate')
+def ast_predict(filepath, model_path, sample_rate):
+    """
+    Perform AST model prediction on a single audio file.
+    
+    Args:
+        filepath: Path to the audio file to classify
+        model_path: Path to the pre-trained AST model
+        sample_rate: Target sample rate for audio preprocessing
+    """
+    from bioamla.core.ast import wav_ast_inference
+    prediction = wav_ast_inference(filepath, model_path, int(sample_rate))
+    click.echo(f"{prediction}")
         
 if __name__ == '__main__':
     cli()
