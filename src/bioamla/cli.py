@@ -108,45 +108,48 @@ def version():
     from bioamla.core.diagnostics import get_bioamla_version
     click.echo(f"bioamla v{get_bioamla_version()}")  
      
+   
 @cli.command()
-@click.argument('filepath')
-def ast(filepath: str):
-    """
-    Create a new AST project directory with configuration templates.
-    
-    Creates a new directory at the specified path and copies default AST
-    configuration files (YAML templates) into it. These configuration files
-    can be customized for specific training and inference tasks.
-    
-    Args:
-        filepath (str): Path where the new AST project directory should be created.
-                       Must not already exist as a directory.
-    
-    Raises:
-        ValueError: If the specified directory already exists.
-    """
-    from novus_pytils.files import directory_exists, create_directory, copy_files
-    from novus_pytils.text.yaml import get_yaml_files
-    from pathlib import Path
-    
-    # TODO handle existing directory logic
-    
-    module_dir = Path(__file__).parent
-    config_dir = module_dir.joinpath("config")
-
-    if directory_exists(filepath):
-        raise ValueError("Existing directory")
-
-    create_directory(filepath)
-    config_files = get_yaml_files(str(config_dir))
-    
-    copy_files(config_files, filepath)
-
-    click.echo(f"AST project created at {filepath}")
-    
-@cli.command()
-@click.argument('config_filepath')
-def ast_finetune(config_filepath: str):
+@click.argument('training_dir')
+@click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
+@click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub')
+@click.option('--split', default='train', help='Dataset split to use')
+@click.option('--category-id-column', default='target', help='Column name for category IDs')
+@click.option('--category-label-column', default='category', help='Column name for category labels')
+@click.option('--report-to', default='tensorboard', help='Where to report metrics')
+@click.option('--learning-rate', default=5.0e-5, type=float, help='Learning rate for training')
+@click.option('--push-to-hub/--no-push-to-hub', default=False, help='Whether to push model to HuggingFace Hub')
+@click.option('--num-train-epochs', default=1, type=int, help='Number of training epochs')
+@click.option('--per-device-train-batch-size', default=1, type=int, help='Training batch size per device')
+@click.option('--eval-strategy', default='epoch', help='Evaluation strategy')
+@click.option('--save-strategy', default='epoch', help='Model save strategy')
+@click.option('--eval-steps', default=1, type=int, help='Number of steps between evaluations')
+@click.option('--save-steps', default=1, type=int, help='Number of steps between saves')
+@click.option('--load-best-model-at-end/--no-load-best-model-at-end', default=True, help='Load best model at end of training')
+@click.option('--metric-for-best-model', default='accuracy', help='Metric to use for best model selection')
+@click.option('--logging-strategy', default='steps', help='Logging strategy')
+@click.option('--logging-steps', default=100, type=int, help='Number of steps between logging')
+def ast_finetune(
+    training_dir: str,
+    base_model: str,
+    train_dataset: str,
+    split: str,
+    category_id_column: str,
+    category_label_column: str,
+    report_to: str,
+    learning_rate: float,
+    push_to_hub: bool,
+    num_train_epochs: int,
+    per_device_train_batch_size: int,
+    eval_strategy: str,
+    save_strategy: str,
+    eval_steps: int,
+    save_steps: int,
+    load_best_model_at_end: bool,
+    metric_for_best_model: str,
+    logging_strategy: str,
+    logging_steps: int
+):
     """
     Fine-tune an Audio Spectrogram Transformer (AST) model using a YAML configuration.
     
@@ -164,16 +167,36 @@ def ast_finetune(config_filepath: str):
     import torch
     import evaluate
     import numpy as np
-    from novus_pytils.files import create_directory, get_file_directory
-    from novus_pytils.text.yaml import load_yaml
+    from novus_pytils.files import create_directory, directory_exists
+
+    output_dir = training_dir + "/runs"
+    logging_dir = training_dir + "/logs"
+    best_model_path = training_dir + "/best_model"
     
-    config_dir = get_file_directory(config_filepath)
-    output_dir = config_dir + "/runs"
-    logging_dir = config_dir + "/logs"
-    best_model_path = config_dir + "/best_model"
+    # Load config file for any additional settings
+    # config_from_file = load_yaml(config_filepath)
     
-    
-    train_args = load_yaml(config_filepath)
+    # Create train_args dict using CLI arguments as primary source, with config file as fallback
+    train_args = {
+        "base_model": base_model,
+        "train_dataset": train_dataset,
+        "split": split,
+        "category_id_column": category_id_column,
+        "category_label_column": category_label_column,
+        "report_to": report_to,
+        "learning_rate": learning_rate,
+        "push_to_hub": push_to_hub,
+        "num_train_epochs": num_train_epochs,
+        "per_device_train_batch_size": per_device_train_batch_size,
+        "eval_strategy": eval_strategy,
+        "save_strategy": save_strategy,
+        "eval_steps": eval_steps,
+        "save_steps": save_steps,
+        "load_best_model_at_end": load_best_model_at_end,
+        "metric_for_best_model": metric_for_best_model,
+        "logging_strategy": logging_strategy,
+        "logging_steps": logging_steps,
+    }
     
     # Load a pre-existing dataset from the HuggingFace Hub
     dataset = load_dataset(train_args["train_dataset"], split=train_args["split"])
