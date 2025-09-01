@@ -110,7 +110,7 @@ def version():
      
    
 @cli.command()
-@click.argument('training_dir')
+@click.option('--training-dir', default='.', help='Directory to save training outputs')
 @click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
 @click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub')
 @click.option('--split', default='train', help='Dataset split to use')
