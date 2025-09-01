@@ -465,7 +465,21 @@ def ast_batch_inference(config_filepath: str):
     print("End batch inference at " + time_string)
     print("Elapsed time: " + str(end_time - start_time))
     
-
+@cli.command()
+@click.argument('filepath')
+def wave(filepath: str):
+    """
+    Extract and display metadata from a WAV audio file.
+    
+    Analyzes the specified WAV file and extracts comprehensive metadata
+    including audio properties, file characteristics, and technical details.
+    
+    Args:
+        filepath (str): Path to the WAV file to analyze
+    """
+    from novus_pytils.audio.wave import get_wav_metadata
+    metadata = get_wav_metadata(filepath)
+    click.echo(f"{metadata}")
 
 if __name__ == '__main__':
     cli()
