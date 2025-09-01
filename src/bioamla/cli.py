@@ -1,4 +1,5 @@
 import click
+from typing import Dict
 
 
 @click.group()
@@ -128,6 +129,8 @@ def ast(filepath: str):
     from novus_pytils.text.yaml import get_yaml_files
     from pathlib import Path
     
+    # TODO handle existing directory logic
+    
     module_dir = Path(__file__).parent
     config_dir = module_dir.joinpath("config")
 
@@ -164,7 +167,7 @@ def ast_finetune(config_filepath: str):
     6. Trains the model with evaluation metrics
     7. Saves the fine-tuned model
     """
-    from datasets import Audio, ClassLabel, load_dataset
+    from datasets import Audio, ClassLabel, load_dataset, Dataset, DatasetDict
     from transformers import ASTFeatureExtractor, ASTConfig, ASTForAudioClassification, TrainingArguments, Trainer
     from audiomentations import Compose, AddGaussianSNR, GainTransition, Gain, ClippingDistortion, TimeStretch, PitchShift
     import torch
@@ -178,8 +181,22 @@ def ast_finetune(config_filepath: str):
     dataset = load_dataset(train_args["train_dataset"], split=train_args["split"])
 
     # get target value - class name mappings
-    df = dataset.select_columns([train_args["category_id_column"], train_args["category_label_column"]]).to_pandas()
-    class_names = df.iloc[np.unique(df[train_args["category_id_column"]], return_index=True)[1]][train_args["category_label_column"]].to_list()
+    import pandas as pd
+    if isinstance(dataset, Dataset):
+        selected_data = dataset.select_columns([train_args["category_id_column"], train_args["category_label_column"]])
+        df = pd.DataFrame(selected_data.to_dict())
+        unique_indices = np.unique(df[train_args["category_id_column"]], return_index=True)[1]
+        class_names = df.iloc[unique_indices][train_args["category_label_column"]].to_list()
+    elif isinstance(dataset, DatasetDict):
+        # For DatasetDict, use the first available split to get class names
+        first_split_name = list(dataset.keys())[0]
+        first_split = dataset[first_split_name]
+        selected_data = first_split.select_columns([train_args["category_id_column"], train_args["category_label_column"]])
+        df = pd.DataFrame(selected_data.to_dict())
+        unique_indices = np.unique(df[train_args["category_id_column"]], return_index=True)[1]
+        class_names = df.iloc[unique_indices][train_args["category_label_column"]].to_list()
+    else:
+        raise TypeError("Dataset must be a Dataset or DatasetDict instance")
 
     # cast target and audio column
     dataset = dataset.cast_column("target", ClassLabel(names=class_names))
@@ -187,7 +204,12 @@ def ast_finetune(config_filepath: str):
 
     # rename the target feature
     dataset = dataset.rename_column("target", "labels")
-    num_labels = len(np.unique(dataset["labels"]))
+    if isinstance(dataset, Dataset):
+        num_labels = len(np.unique([item for item in dataset["labels"]]))
+    elif isinstance(dataset, DatasetDict) and "train" in dataset:
+        num_labels = len(np.unique([item for item in dataset["train"]["labels"]]))
+    else:
+        raise TypeError("Unable to determine number of labels from dataset")
 
     # Define the pretrained model and instantiate the feature extractor
     pretrained_model = train_args["base_model"]
@@ -211,11 +233,23 @@ def ast_finetune(config_filepath: str):
         return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
     # we use the esc50 train split
-    label2id = dataset.features["labels"]._str2int  # we add the mapping from INTs to STRINGs
+    if isinstance(dataset, DatasetDict):
+        first_split = list(dataset.keys())[0]
+        features = dataset[first_split].features
+    else:
+        features = dataset.features
+    
+    if features and "labels" in features:
+        label2id = features["labels"]._str2int  # we add the mapping from INTs to STRINGs
+    else:
+        raise ValueError("Labels feature not found in dataset")
 
     # split training data
-    if "test" not in dataset:
+    if isinstance(dataset, Dataset):
         dataset = dataset.train_test_split(
+            test_size=0.2, shuffle=True, seed=0, stratify_by_column="labels")
+    elif isinstance(dataset, DatasetDict) and "test" not in dataset:
+        dataset = dataset["train"].train_test_split(
             test_size=0.2, shuffle=True, seed=0, stratify_by_column="labels")
 
     # Define audio augmentations
@@ -252,22 +286,32 @@ def ast_finetune(config_filepath: str):
     std = []
 
     # we use the transformation w/o augmentation on the training dataset to calculate the mean + std
-    dataset["train"].set_transform(preprocess_audio, output_all_columns=False)
-    for i, (audio_input, labels) in enumerate(dataset["train"]):
-        cur_mean = torch.mean(dataset["train"][i][audio_input])
-        cur_std = torch.std(dataset["train"][i][audio_input])
-        mean.append(cur_mean)
-        std.append(cur_std)
+    if isinstance(dataset, DatasetDict) and "train" in dataset:
+        train_dataset = dataset["train"]
+        train_dataset.set_transform(preprocess_audio, output_all_columns=False)
+        for sample in train_dataset:
+            if isinstance(sample, dict) and model_input_name in sample:
+                cur_mean = torch.mean(sample[model_input_name])
+                cur_std = torch.std(sample[model_input_name])
+                mean.append(cur_mean)
+                std.append(cur_std)
+    else:
+        raise ValueError("Expected DatasetDict with 'train' split")
 
-    feature_extractor.mean = np.mean(mean)
-    feature_extractor.std = np.mean(std)
+    feature_extractor.mean = float(np.mean(mean))
+    feature_extractor.std = float(np.mean(std))
     feature_extractor.do_normalize = True
 
     print("Calculated mean and std:", feature_extractor.mean, feature_extractor.std)
 
     # Apply transforms
-    dataset["train"].set_transform(preprocess_audio_with_transforms, output_all_columns=False)
-    dataset["test"].set_transform(preprocess_audio, output_all_columns=False)
+    if isinstance(dataset, DatasetDict):
+        if "train" in dataset:
+            dataset["train"].set_transform(preprocess_audio_with_transforms, output_all_columns=False)
+        if "test" in dataset:
+            dataset["test"].set_transform(preprocess_audio, output_all_columns=False)
+    else:
+        raise ValueError("Expected DatasetDict for transform application")
 
     # Load configuration from the pretrained model
     config = ASTConfig.from_pretrained(pretrained_model)
@@ -307,7 +351,7 @@ def ast_finetune(config_filepath: str):
     AVERAGE = "macro" if config.num_labels > 2 else "binary"
 
     # setup metrics function
-    def compute_metrics(eval_pred):
+    def compute_metrics(eval_pred) -> Dict[str, float]:
         """
         Compute evaluation metrics for the AST model training.
         
@@ -322,19 +366,35 @@ def ast_finetune(config_filepath: str):
         predictions = np.argmax(logits, axis=1)
 
         # compute metrics
-        metrics = accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
-        metrics.update(precision.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE))
-        metrics.update(recall.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE))
-        metrics.update(f1.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE))
+        accuracy_result = accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
+        metrics: Dict[str, float] = accuracy_result if accuracy_result is not None else {}
+        
+        precision_result = precision.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
+        if precision_result is not None:
+            metrics.update(precision_result)
+        
+        recall_result = recall.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
+        if recall_result is not None:
+            metrics.update(recall_result)
+        
+        f1_result = f1.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
+        if f1_result is not None:
+            metrics.update(f1_result)
 
         return metrics
 
     # setup trainer
+    if isinstance(dataset, DatasetDict):
+        train_data = dataset.get("train")
+        eval_data = dataset.get("test")
+    else:
+        raise ValueError("Expected DatasetDict for trainer setup")
+    
     trainer = Trainer(
         model=model,
         args=training_args,  # we use our configured training arguments
-        train_dataset=dataset["train"],
-        eval_dataset=dataset["test"],
+        train_dataset=train_data,
+        eval_dataset=eval_data,
         compute_metrics=compute_metrics,  # we the metrics function from above
     )
 
@@ -440,10 +500,15 @@ def ast_batch_inference(config_filepath: str):
 
     print("Loading model: " + config["model"])
     model = load_pretrained_ast_model(config["model"])
+    
+    # Type cast to indicate this is a PyTorch module with eval() and to() methods
+    from torch.nn import Module
+    if not isinstance(model, Module):
+        raise TypeError("Model must be a PyTorch Module")
+    
     model.eval()
-
+    
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
     print("Using device: " + device)
     model.to(device)
 
