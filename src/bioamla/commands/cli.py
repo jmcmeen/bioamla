@@ -143,7 +143,7 @@ def ast(filepath: str):
     
 @cli.command()
 @click.argument('config_filepath')
-def ast_fintetune(config_filepath: str):
+def ast_finetune(config_filepath: str):
     """
     Fine-tune an Audio Spectrogram Transformer (AST) model using a YAML configuration.
     
