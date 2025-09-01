@@ -129,7 +129,7 @@ def ast(filepath: str):
     from pathlib import Path
     
     module_dir = Path(__file__).parent
-    config_dir = module_dir.joinpath("../config")
+    config_dir = module_dir.joinpath("config")
 
     if directory_exists(filepath):
         raise ValueError("Existing directory")
