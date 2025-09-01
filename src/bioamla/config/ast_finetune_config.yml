@@ -3,9 +3,6 @@ train_dataset: 'bioamla/scp-frogs'
 split: 'train'
 category_id_column: 'target'
 category_label_column: 'category'
-best_model_path: "./model"
-output_dir: './runs/scp_frog_classifier'
-logging_dir: './logs/scp_frog_classifier'
 report_to: 'tensorboard'
 learning_rate: 5.0e-5
 push_to_hub: False
