@@ -96,7 +96,17 @@ def unzip(file_path: str, output_path: str):
         output_path = os.getcwd()
   
     extract_zip_file(file_path, output_path)   
-     
+
+@cli.command()
+def version():
+    """
+    Display the current version of the bioamla package.
+    
+    This command retrieves and displays the version information
+    for the installed bioamla package.
+    """
+    from bioamla.core.diagnostics import get_bioamla_version
+    click.echo(f"bioamla v{get_bioamla_version()}")  
      
 
         
