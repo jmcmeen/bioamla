@@ -36,23 +36,7 @@ dependencies = [
 ]
 
 [project.scripts]
-audio = "bioamla.commands.audio:main"
-ast-predict = "bioamla.commands.ast_predict:main"
-devices = "bioamla.commands.devices:main"
-download = "bioamla.commands.download:main"
-unzip = "bioamla.commands.unzip:main"
-version = "bioamla.commands.version:main"
-
-# Currently untested
-wave = "bioamla.commands.wave:main"
-waves = "bioamla.commands.waves:main" 
-ast = "bioamla.commands.ast:main"
-ast-finetune = "bioamla.commands.ast_finetune:main"
-ast-batch-inference = "bioamla.commands.ast_batch_inference:main"
-extract = "bioamla.commands.extract:main"
-diag = "bioamla.commands.diag:main"
-server = "bioamla.server.api:main"
-audioeditor = "bioamla.cli.audioeditor:main"
+bio = "bioamla.commands.cli:cli"
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
