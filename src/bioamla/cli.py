@@ -108,7 +108,7 @@ def version():
     from bioamla.core.diagnostics import get_bioamla_version
     click.echo(f"bioamla v{get_bioamla_version()}")  
      
-   
+# TODO read defaults from a config file
 @cli.command()
 @click.option('--training-dir', default='.', help='Directory to save training outputs')
 @click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
