@@ -74,6 +74,31 @@ def audio(filepath: str):
             click.echo("No audio files found in the specified directory.")
     except Exception as e:
         click.echo(f"An error occurred: {e}")
+     
+@cli.command()
+@click.argument('file_path')
+@click.argument('output_path', required=False, default='.')
+def unzip(file_path: str, output_path: str):
+    """
+    Extract a ZIP archive to the specified output directory.
+    
+    Extracts the contents of a ZIP file to the target directory.
+    If no output path is specified, extracts to the current working directory.
+    
+    Args:
+        file_path (str): Path to the ZIP file to extract
+        output_path (str): Directory where the ZIP contents should be extracted.
+                          Defaults to current directory if not specified.
+    """
+    from novus_pytils.compression import extract_zip_file
+    if output_path == '.':
+        import os
+        output_path = os.getcwd()
+  
+    extract_zip_file(file_path, output_path)   
+     
+     
+
         
 if __name__ == '__main__':
     cli()
