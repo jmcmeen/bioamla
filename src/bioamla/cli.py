@@ -157,15 +157,6 @@ def ast_finetune(config_filepath: str):
     Args:
         config_filepath (str): Path to the YAML configuration file containing
                              training parameters, dataset information, and model settings.
-    
-    The function performs the following operations:
-    1. Loads dataset from HuggingFace Hub
-    2. Prepares class labels and mappings
-    3. Configures audio preprocessing and augmentations
-    4. Calculates dataset normalization parameters
-    5. Sets up model configuration and training arguments
-    6. Trains the model with evaluation metrics
-    7. Saves the fine-tuned model
     """
     from datasets import Audio, ClassLabel, load_dataset, Dataset, DatasetDict
     from transformers import ASTFeatureExtractor, ASTConfig, ASTForAudioClassification, TrainingArguments, Trainer
@@ -173,8 +164,15 @@ def ast_finetune(config_filepath: str):
     import torch
     import evaluate
     import numpy as np
-    from novus_pytils.files import create_directory
+    from novus_pytils.files import create_directory, get_file_directory
     from novus_pytils.text.yaml import load_yaml
+    
+    config_dir = get_file_directory(config_filepath)
+    output_dir = config_dir + "/runs"
+    logging_dir = config_dir + "/logs"
+    best_model_path = config_dir + "/best_model"
+    
+    
     train_args = load_yaml(config_filepath)
     
     # Load a pre-existing dataset from the HuggingFace Hub
@@ -325,8 +323,8 @@ def ast_finetune(config_filepath: str):
 
     # Configure training arguments
     training_args = TrainingArguments(
-        output_dir=train_args["output_dir"],
-        logging_dir=train_args["logging_dir"],
+        output_dir=output_dir,
+        logging_dir=logging_dir,
         report_to=train_args["report_to"],
         learning_rate=train_args["learning_rate"],
         push_to_hub=train_args["push_to_hub"],
@@ -392,17 +390,17 @@ def ast_finetune(config_filepath: str):
     
     trainer = Trainer(
         model=model,
-        args=training_args,  # we use our configured training arguments
+        args=training_args,
         train_dataset=train_data,
         eval_dataset=eval_data,
-        compute_metrics=compute_metrics,  # we the metrics function from above
+        compute_metrics=compute_metrics,
     )
 
     # start a training
     trainer.train()
 
-    create_directory(train_args["best_model_path"])
-    torch.save(model.state_dict(), train_args["best_model_path"] + "/pytorch_model.bin")
+    create_directory(best_model_path)
+    torch.save(model.state_dict(), best_model_path + "/pytorch_model.bin")
     # model.save_pretrained(model_dir)
 
 @cli.command()
