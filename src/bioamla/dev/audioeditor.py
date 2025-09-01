@@ -5,11 +5,11 @@ import click
 import sys
 from pathlib import Path
 
-from ..core.audio_editor import (
+from .core.audio_editor import (
     AudioProcessor, AudioFilters, 
     AnnotationManager, SpectrogramGenerator
 )
-from ..ui.main_app import run_audio_editor_ui
+from .ui.main_app import run_audio_editor_ui
 
 
 @click.group()

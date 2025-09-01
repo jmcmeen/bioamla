@@ -30,7 +30,7 @@ from bioamla.core.models.responses import (
 
 from bioamla.core.models.config import DefaultConfig
 from bioamla.core.torchaudio import load_audio_from_bytes
-from bioamla.dev.core.helpers.transformers import process_audio_with_pipeline
+from bioamla.dev.transformers import process_audio_with_pipeline
 
 from bioamla.core.contollers.controllers import classify_audio
 from bioamla.core.exceptions import (
