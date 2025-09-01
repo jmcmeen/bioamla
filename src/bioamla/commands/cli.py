@@ -25,6 +25,31 @@ def devices():
 
     for device in device_info['devices']:
         click.echo(f'  - Index: {device["index"]}, Name: {device["name"]}')
+
+@cli.command()
+@click.argument('url', required=True)
+@click.argument('output_dir', required=False, default='.')
+def download(url: str, output_dir: str):
+    """
+    Download a file from the specified URL to the target directory.
+    
+    Downloads a file from the given URL and saves it to the specified output
+    directory. If no output directory is provided, downloads to the current
+    working directory.
+    
+    Args:
+        url (str): The URL of the file to download
+        output_dir (str): Directory where the file should be saved.
+                         Defaults to current directory if not specified.
+    """
+    from novus_pytils.files import download_file
+    import os
+    
+    if output_dir == '.':
+        output_dir = os.getcwd()
+        
+    download_file(url, output_dir)
+
         
 if __name__ == '__main__':
     cli()
