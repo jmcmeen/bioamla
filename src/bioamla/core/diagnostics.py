@@ -26,18 +26,12 @@ def get_bioamla_version() -> str:
     
     Returns:
         str: The version string of the currently installed bioamla package
-             (e.g., "0.0.38").
              
     Raises:
         importlib.metadata.PackageNotFoundError: If the bioamla package
                                                  is not properly installed
                                                  or not found in the Python
                                                  environment.
-    
-    Example:
-        >>> version = get_bioamla_version()
-        >>> print(f"bioamla version: {version}")
-        bioamla version: 0.0.38
     """
     return importlib.metadata.version('bioamla')
 
