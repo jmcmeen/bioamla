@@ -43,6 +43,8 @@ def download(url: str, output_dir: str):
         output_dir (str): Directory where the file should be saved.
                          Defaults to current directory if not specified.
     """
+    #TODO update to filename for output
+    
     from novus_pytils.files import download_file
     import os
     
@@ -108,7 +110,6 @@ def version():
     from bioamla.core.diagnostics import get_bioamla_version
     click.echo(f"bioamla v{get_bioamla_version()}")  
      
-# TODO read defaults from a config file
 @cli.command()
 @click.option('--training-dir', default='.', help='Directory to save training outputs')
 @click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
@@ -463,7 +464,7 @@ def ast_batch_inference(
     output_csv = os.path.join(directory, output_csv)
     print("Output csv: " + output_csv)
 
-    wave_files = get_files_by_extension(directory, ['.wav'])
+    wave_files = get_files_by_extension(directory=directory, extensions=['.wav'], recursive=True)
 
     if(len(wave_files) == 0):
         print("No wave files found in directory: " + directory)
