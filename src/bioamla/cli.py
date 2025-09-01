@@ -167,55 +167,31 @@ def ast_finetune(
     import torch
     import evaluate
     import numpy as np
-    from novus_pytils.files import create_directory, directory_exists
+    from novus_pytils.files import create_directory
 
     output_dir = training_dir + "/runs"
     logging_dir = training_dir + "/logs"
     best_model_path = training_dir + "/best_model"
     
-    # Load config file for any additional settings
-    # config_from_file = load_yaml(config_filepath)
-    
-    # Create train_args dict using CLI arguments as primary source, with config file as fallback
-    train_args = {
-        "base_model": base_model,
-        "train_dataset": train_dataset,
-        "split": split,
-        "category_id_column": category_id_column,
-        "category_label_column": category_label_column,
-        "report_to": report_to,
-        "learning_rate": learning_rate,
-        "push_to_hub": push_to_hub,
-        "num_train_epochs": num_train_epochs,
-        "per_device_train_batch_size": per_device_train_batch_size,
-        "eval_strategy": eval_strategy,
-        "save_strategy": save_strategy,
-        "eval_steps": eval_steps,
-        "save_steps": save_steps,
-        "load_best_model_at_end": load_best_model_at_end,
-        "metric_for_best_model": metric_for_best_model,
-        "logging_strategy": logging_strategy,
-        "logging_steps": logging_steps,
-    }
     
     # Load a pre-existing dataset from the HuggingFace Hub
-    dataset = load_dataset(train_args["train_dataset"], split=train_args["split"])
+    dataset = load_dataset(train_dataset, split=split)
 
     # get target value - class name mappings
     import pandas as pd
     if isinstance(dataset, Dataset):
-        selected_data = dataset.select_columns([train_args["category_id_column"], train_args["category_label_column"]])
+        selected_data = dataset.select_columns([category_id_column, category_label_column])
         df = pd.DataFrame(selected_data.to_dict())
-        unique_indices = np.unique(df[train_args["category_id_column"]], return_index=True)[1]
-        class_names = df.iloc[unique_indices][train_args["category_label_column"]].to_list()
+        unique_indices = np.unique(df[category_id_column], return_index=True)[1]
+        class_names = df.iloc[unique_indices][category_label_column].to_list()
     elif isinstance(dataset, DatasetDict):
         # For DatasetDict, use the first available split to get class names
         first_split_name = list(dataset.keys())[0]
         first_split = dataset[first_split_name]
-        selected_data = first_split.select_columns([train_args["category_id_column"], train_args["category_label_column"]])
+        selected_data = first_split.select_columns([category_id_column, category_label_column])
         df = pd.DataFrame(selected_data.to_dict())
-        unique_indices = np.unique(df[train_args["category_id_column"]], return_index=True)[1]
-        class_names = df.iloc[unique_indices][train_args["category_label_column"]].to_list()
+        unique_indices = np.unique(df[category_id_column], return_index=True)[1]
+        class_names = df.iloc[unique_indices][category_label_column].to_list()
     else:
         raise TypeError("Dataset must be a Dataset or DatasetDict instance")
 
@@ -233,7 +209,7 @@ def ast_finetune(
         raise TypeError("Unable to determine number of labels from dataset")
 
     # Define the pretrained model and instantiate the feature extractor
-    pretrained_model = train_args["base_model"]
+    pretrained_model = base_model
     feature_extractor = ASTFeatureExtractor.from_pretrained(pretrained_model)
     model_input_name = feature_extractor.model_input_names[0]
     SAMPLING_RATE = feature_extractor.sampling_rate
@@ -348,19 +324,19 @@ def ast_finetune(
     training_args = TrainingArguments(
         output_dir=output_dir,
         logging_dir=logging_dir,
-        report_to=train_args["report_to"],
-        learning_rate=train_args["learning_rate"],
-        push_to_hub=train_args["push_to_hub"],
-        num_train_epochs=train_args["num_train_epochs"],
-        per_device_train_batch_size=train_args["per_device_train_batch_size"],
-        eval_strategy=train_args["eval_strategy"],
-        save_strategy=train_args["save_strategy"],
-        eval_steps=train_args["eval_steps"],
-        save_steps=train_args["save_steps"],
-        load_best_model_at_end=train_args["load_best_model_at_end"],
-        metric_for_best_model=train_args["metric_for_best_model"],
-        logging_strategy=train_args["logging_strategy"],
-        logging_steps=train_args["logging_steps"]
+        report_to=report_to,
+        learning_rate=learning_rate,
+        push_to_hub=push_to_hub,
+        num_train_epochs=num_train_epochs,
+        per_device_train_batch_size=per_device_train_batch_size,
+        eval_strategy=eval_strategy,
+        save_strategy=save_strategy,
+        eval_steps=eval_steps,
+        save_steps=save_steps,
+        load_best_model_at_end=load_best_model_at_end,
+        metric_for_best_model=metric_for_best_model,
+        logging_strategy=logging_strategy,
+        logging_steps=logging_steps
     )
 
     # Define evaluation metrics
@@ -445,52 +421,59 @@ def ast_predict(filepath, model_path, sample_rate):
 
 
 @cli.command()
-@click.argument('config_filepath')
-def ast_batch_inference(config_filepath: str):
+@click.argument('directory')
+@click.option('--output-csv', default='output.csv', help='Output CSV file name')
+@click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for inference')
+@click.option('--resample-freq', default=16000, type=int, help='Resampling frequency')
+@click.option('--clip-seconds', default=1, type=int, help='Duration of audio clips in seconds')
+@click.option('--overlap-seconds', default=0, type=int, help='Overlap between clips in seconds')
+@click.option('--restart/--no-restart', default=False, help='Whether to restart from existing results')
+def ast_batch_inference(
+    directory: str,
+    output_csv: str,
+    model_path: str,
+    resample_freq: int,
+    clip_seconds: int,
+    overlap_seconds: int,
+    restart: bool
+):
     """
-    Run batch AST inference on a directory of WAV files using a YAML configuration.
+    Run batch AST inference on a directory of WAV files.
     
     Loads an AST model and processes all WAV files in the specified directory,
     generating predictions and saving results to a CSV file. Supports resumable
     operations by checking for existing results and skipping already processed files.
     
     Args:
-        config_filepath (str): Path to the YAML configuration file containing
-                             all necessary parameters for batch inference.
-    
-    The function performs the following operations:
-    1. Loads configuration from YAML file
-    2. Discovers WAV files in the target directory
-    3. Handles resumable operations (if restart=True in config)
-    4. Loads the specified AST model
-    5. Runs batch inference with timing information
-    6. Saves results to CSV file with predictions for each audio segment
+        directory (str): Directory containing WAV files to process
+        output_csv (str): Output CSV file name
+        model (str): AST model to use for inference
+        resample_freq (int): Resampling frequency
+        clip_seconds (int): Duration of audio clips in seconds
+        overlap_seconds (int): Overlap between clips in seconds
+        restart (bool): Whether to restart from existing results
     """
     from novus_pytils.files import get_files_by_extension, file_exists
-    from novus_pytils.text.yaml import load_yaml
     from bioamla.core.ast import load_pretrained_ast_model, wave_file_batch_inference
     import torch
     import time
     import pandas as pd
     import os
-    print ("Loading config file: " + config_filepath)
-    config = load_yaml(config_filepath)
-
-    output_csv = os.path.join(config['directory'], config['output_csv'])
+    
+    output_csv = os.path.join(directory, output_csv)
     print("Output csv: " + output_csv)
 
-    wave_files = get_files_by_extension(config["directory"], ['.wav'])
+    wave_files = get_files_by_extension(directory, ['.wav'])
 
     if(len(wave_files) == 0):
-        print("No wave files found in directory: " + config["directory"])
+        print("No wave files found in directory: " + directory)
         return
     else:
-        print("Found " + str(len(wave_files)) + " wave files in directory: " + config["directory"])
+        print("Found " + str(len(wave_files)) + " wave files in directory: " + directory)
 
-    if config['restart']:
-        print("Restart: " + str(config['restart']))
-
-            #if file exists, read file names from file and remove from wave files
+    print("Restart: " + str(restart))
+    if restart:
+        #if file exists, read file names from file and remove from wave files
         if file_exists(output_csv):
             print("file exists: " + output_csv)
             df = pd.read_csv(output_csv)
@@ -519,8 +502,8 @@ def ast_batch_inference(config_filepath: str):
         results = pd.DataFrame(columns=['filepath', 'start', 'stop', 'prediction'])
         results.to_csv(output_csv, header=True, index=False)
 
-    print("Loading model: " + config["model"])
-    model = load_pretrained_ast_model(config["model"])
+    print("Loading model: " + model_path)
+    model = load_pretrained_ast_model(model_path)
     
     # Type cast to indicate this is a PyTorch module with eval() and to() methods
     from torch.nn import Module
@@ -540,9 +523,9 @@ def ast_batch_inference(config_filepath: str):
     print("Start batch inference at " + time_string)
     wave_file_batch_inference(wave_files=wave_files, 
                               model=model,
-                              freq=config["resample_freq"], 
-                              clip_seconds=config["clip_seconds"], 
-                              overlap_seconds=config["overlap_seconds"],
+                              freq=resample_freq, 
+                              clip_seconds=clip_seconds, 
+                              overlap_seconds=overlap_seconds,
                               output_csv=output_csv)
     
     # end timer
