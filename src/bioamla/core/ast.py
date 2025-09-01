@@ -44,9 +44,8 @@ def wave_file_batch_inference(wave_files: list, model: AutoModelForAudioClassifi
     """
     for filepath in wave_files:
         df = segmented_wave_file_inference(filepath, model, freq, clip_seconds, overlap_seconds)
-        # results = pd.concat([results, df]) #TODO this should just return a dict. pandaing should go somewhere else
+        # results = pd.concat([results, df]) # TODO this should just return a dict. pandaing should go somewhere else
         df.to_csv(output_csv, mode='a', header=False, index=False)
-
 
 def segmented_wave_file_inference(filepath: str, model: AutoModelForAudioClassification, 
                                   freq: int, clip_seconds: int, overlap_seconds: int) -> pd.DataFrame:
