@@ -43,6 +43,8 @@ def download(url: str, output_dir: str):
         output_dir (str): Directory where the file should be saved.
                          Defaults to current directory if not specified.
     """
+    #TODO update to filename for output
+    
     from novus_pytils.files import download_file
     import os
     
