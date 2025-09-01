@@ -54,7 +54,7 @@ def download(url: str, output_dir: str):
 @click.argument('filepath', required=False, default='.')
 def audio(filepath: str):
     """
-    Command-line interface to get audio files from a specified directory.
+    Display audio files from a specified directory.
 
     Args:
         filepath (str): The path to the directory to search for audio files.
@@ -107,7 +107,39 @@ def version():
     from bioamla.core.diagnostics import get_bioamla_version
     click.echo(f"bioamla v{get_bioamla_version()}")  
      
+@cli.command()
+@click.argument('filepath')
+def ast(filepath: str):
+    """
+    Create a new AST project directory with configuration templates.
+    
+    Creates a new directory at the specified path and copies default AST
+    configuration files (YAML templates) into it. These configuration files
+    can be customized for specific training and inference tasks.
+    
+    Args:
+        filepath (str): Path where the new AST project directory should be created.
+                       Must not already exist as a directory.
+    
+    Raises:
+        ValueError: If the specified directory already exists.
+    """
+    from novus_pytils.files import directory_exists, create_directory, copy_files
+    from novus_pytils.text.yaml import get_yaml_files
+    from pathlib import Path
+    
+    module_dir = Path(__file__).parent
+    config_dir = module_dir.joinpath("../config")
 
+    if directory_exists(filepath):
+        raise ValueError("Existing directory")
+
+    create_directory(filepath)
+    config_files = get_yaml_files(str(config_dir))
+    
+    copy_files(config_files, filepath)
+
+    click.echo(f"AST project created at {filepath}")
         
 if __name__ == '__main__':
     cli()
