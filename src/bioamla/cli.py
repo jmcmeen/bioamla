@@ -498,8 +498,6 @@ def ast_batch_inference(
             print("creating new file: " + output_csv)
             results = pd.DataFrame(columns=['filepath', 'start', 'stop', 'prediction'])
             results.to_csv(output_csv, header=True, index=False)
-
-            
     else:
         print("creating new file: " + output_csv)
         results = pd.DataFrame(columns=['filepath', 'start', 'stop', 'prediction'])
