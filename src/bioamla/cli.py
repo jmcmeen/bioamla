@@ -422,7 +422,6 @@ def ast_predict(filepath, model_path, sample_rate):
     prediction = wav_ast_inference(filepath, model_path, int(sample_rate))
     click.echo(f"{prediction}")
 
-
 @cli.command()
 @click.argument('directory')
 @click.option('--output-csv', default='output.csv', help='Output CSV file name')
