@@ -400,7 +400,9 @@ def ast_finetune(
     trainer.train()
 
     create_directory(best_model_path)
-    torch.save(model.state_dict(), best_model_path + "/pytorch_model.bin")
+    trainer.save_model(best_model_path)
+    
+    # torch.save(model.state_dict(), best_model_path + "/pytorch_model.bin")
     # model.save_pretrained(model_dir)
 
 @cli.command()
