@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.scripts]
-bio = "bioamla.cli:cli"
+bioamla = "bioamla.cli:cli"
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
