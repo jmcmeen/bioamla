@@ -145,11 +145,6 @@ def load_audio_from_bytes(audio_bytes: bytes, target_sr: int = DefaultConfig.SAM
             
     Raises:
         ValueError: If audio bytes cannot be processed
-        
-    Example:
-        >>> with open('audio.wav', 'rb') as f:
-        ...     audio_bytes = f.read()
-        >>> audio_array, sr = load_audio_from_bytes(audio_bytes)
     """
     try:
         # Create a file-like object from bytes
