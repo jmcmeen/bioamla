@@ -97,7 +97,7 @@ def unzip(file_path: str, output_path: str):
         import os
         output_path = os.getcwd()
   
-    extract_zip_file(file_path, output_path)   
+    extract_zip_file(file_path, output_path)
 
 @cli.command()
 def version():
@@ -400,7 +400,9 @@ def ast_finetune(
     trainer.train()
 
     create_directory(best_model_path)
-    torch.save(model.state_dict(), best_model_path + "/pytorch_model.bin")
+    trainer.save_model(best_model_path)
+    
+    # torch.save(model.state_dict(), best_model_path + "/pytorch_model.bin")
     # model.save_pretrained(model_dir)
 
 @cli.command()
@@ -419,7 +421,6 @@ def ast_predict(filepath, model_path, sample_rate):
     from bioamla.core.ast import wav_ast_inference
     prediction = wav_ast_inference(filepath, model_path, int(sample_rate))
     click.echo(f"{prediction}")
-
 
 @cli.command()
 @click.argument('directory')
@@ -496,8 +497,6 @@ def ast_batch_inference(
             print("creating new file: " + output_csv)
             results = pd.DataFrame(columns=['filepath', 'start', 'stop', 'prediction'])
             results.to_csv(output_csv, header=True, index=False)
-
-            
     else:
         print("creating new file: " + output_csv)
         results = pd.DataFrame(columns=['filepath', 'start', 'stop', 'prediction'])
