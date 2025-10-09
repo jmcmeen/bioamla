@@ -113,7 +113,7 @@ def version():
 @cli.command()
 @click.option('--training-dir', default='.', help='Directory to save training outputs')
 @click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
-@click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub')
+@click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub') #TODO lets make this something else
 @click.option('--split', default='train', help='Dataset split to use')
 @click.option('--category-id-column', default='target', help='Column name for category IDs')
 @click.option('--category-label-column', default='category', help='Column name for category labels')
