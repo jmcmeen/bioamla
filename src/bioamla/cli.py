@@ -97,7 +97,7 @@ def unzip(file_path: str, output_path: str):
         import os
         output_path = os.getcwd()
   
-    extract_zip_file(file_path, output_path)   
+    extract_zip_file(file_path, output_path)
 
 @cli.command()
 def version():
