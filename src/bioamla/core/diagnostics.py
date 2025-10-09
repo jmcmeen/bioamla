@@ -83,19 +83,6 @@ def get_device_info() -> Dict[str, Any]:
                                             each containing:
                 - index (int): Device index number
                 - name (str): GPU device name/model
-    
-    Example:
-        >>> info = get_device_info()
-        >>> if info['cuda_available']:
-        ...     print(f"Found {info['device_count']} CUDA device(s):")
-        ...     for device in info['devices']:
-        ...         print(f"  Device {device['index']}: {device['name']}")
-        ... else:
-        ...     print("CUDA is not available")
-        Found 2 CUDA device(s):
-          Device 0: NVIDIA GeForce RTX 3080
-          Device 1: NVIDIA GeForce RTX 3090
-    
     Note:
         This function requires PyTorch to be installed with CUDA support.
         If PyTorch was installed with CPU-only support, cuda_available

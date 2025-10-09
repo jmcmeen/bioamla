@@ -210,3 +210,4 @@ cython_debug/
 /model
 /src/bioamla/local_dev
 /logs
+/best_model

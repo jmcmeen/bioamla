@@ -29,10 +29,6 @@ def count_audio_files(audio_folder_path: str) -> int:
         
     Returns:
         int: Number of audio files found in the directory
-        
-    Example:
-        >>> count = count_audio_files('/path/to/audio/files')
-        >>> print(f"Found {count} audio files")
     """
     audio_files = get_audio_files(audio_folder_path, SUPPORTED_AUDIO_EXTENSIONS)
     return len(audio_files)
@@ -55,10 +51,6 @@ def validate_metadata(audio_folder_path: str, metadata_csv_filename: str = 'meta
         
     Raises:
         ValueError: If validation fails (file count mismatch or missing references)
-        
-    Example:
-        >>> validate_metadata('/path/to/audio', 'annotations.csv')
-        True
     """
     metadata_df = pd.read_csv(os.path.join(audio_folder_path, metadata_csv_filename))
 
@@ -92,10 +84,6 @@ def load_local_dataset(audio_folder_path: str):
         
     Raises:
         ValueError: If directory doesn't exist or contains no audio files
-        
-    Example:
-        >>> dataset = load_local_dataset('/path/to/audio/files')
-        >>> print(f"Loaded {len(dataset)} audio samples")
     """
     from datasets import load_dataset
     from novus_pytils.files import directory_exists
