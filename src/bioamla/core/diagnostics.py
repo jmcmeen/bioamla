@@ -103,4 +103,3 @@ def get_device_info() -> Dict[str, Any]:
             })
     
     return device_info
-
