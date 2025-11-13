@@ -8,6 +8,7 @@ and other package-wide settings.
 
 """
 
+from novus_pytils.globals import SUPPORTED_AUDIO_EXTENSIONS as PYUTILS_AUDIO_EXTS
+
 # List of audio file extensions supported by the bioamla package
-# These formats are recognized by audio processing functions throughout the codebase
-SUPPORTED_AUDIO_EXTENSIONS = [".wav", ".mp3", ".ogg", ".flac", ".mp4"]
+SUPPORTED_AUDIO_EXTENSIONS = PYUTILS_AUDIO_EXTS
