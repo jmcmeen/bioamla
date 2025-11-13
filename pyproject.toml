@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.0.42"
+version = "0.0.43"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
