@@ -3,25 +3,16 @@
 A Python package for audio analysis and machine learning-based audio classification, focusing on bioacoutic data. Bioamla specializes in wildlife sound analysis using Audio Spectrogram Transformer (AST) models.
 
 > **Prerelease Notice:** This is a prerelease version of bioamla. The package is functional and ready for use, but additional features, improvements, and documentation updates are planned for 2026.
+
 ## Description
 
-Bioamla provides a complete toolkit for researchers, biologists, and machine learning engineers working with environmental sound data and species identification. The package combines robust audio processing capabilities with deep learning models to enable:
+Bioamla provides a toolkit for researchers, biologists, and machine learning engineers working with environmental sound data and species identification. The package combines robust audio processing capabilities with deep learning models to enable:
 
 - **Audio Classification**: Classify wildlife sounds, species calls, and environmental audio using pre-trained or fine-tuned AST models
 - **Model Training**: Fine-tune Audio Spectrogram Transformer models on custom datasets from Hugging Face Hub
 - **Batch Processing**: Efficiently process directories of audio files with temporal segmentation
 - **Audio Processing**: Load, resample, split, and extract metadata from various audio formats
 - **System Diagnostics**: Monitor GPU/CUDA availability and package versions
-
-### Key Features
-
-- Pre-trained models for species classification (e.g., frog calls, bird songs)
-- Audio segmentation with overlapping windows for long recordings
-- Audio augmentation (Gaussian noise, pitch shifting, gain transitions)
-- CSV export of predictions with timestamps
-- TensorBoard integration for training visualization
-- FastAPI support for web service deployment
-- Command-line interface for all operations
 
 ## Setup
 
@@ -277,7 +268,7 @@ If you use bioamla in your research, please cite:
 @software{bioamla,
   author = {McMeen, John},
   title = {Bioamla: Bioacoustics and Machine Learning Applications},
-  year = {2024},
+  year = {2025},
   url = {https://github.com/jmcmeen/bioamla}
 }
 ```
