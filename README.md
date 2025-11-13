@@ -1,6 +1,6 @@
 # Bioacoustics and Machine Learning Applications (bioamla)
 
-A Python package for audio analysis and machine learning-based audio classification, focusing on bioacoutic data. Bioamla specializes in wildlife sound analysis using Audio Spectrogram Transformer (AST) models.
+A Python package for audio analysis and machine learning-based audio classification, focusing on bioacoustic data. Bioamla specializes in wildlife sound analysis using Audio Spectrogram Transformer (AST) models.
 
 > **Prerelease Notice:** This is a prerelease version of bioamla. The package is functional and ready for use, but additional features, improvements, and documentation updates are planned for 2026.
 
