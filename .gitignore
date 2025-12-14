@@ -211,3 +211,9 @@ cython_debug/
 /src/bioamla/local_dev
 /logs
 /best_model
+*.m4a
+*.wav
+/dev_data
+/examples/dev_data
+/scp-frogs
+scp_small.zip

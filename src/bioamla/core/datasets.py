@@ -1,4 +1,3 @@
-
 """
 Dataset Management and Validation
 =================================
@@ -11,22 +10,35 @@ These utilities are essential for ensuring data quality and consistency
 in bioacoustic machine learning projects.
 """
 
-import pandas as pd
 import os
+import shutil
+from pathlib import Path
+from typing import List, Optional, Set
+
+import pandas as pd
 from novus_pytils.audio import get_audio_files
+
+from bioamla.core.fileutils import find_species_name, sanitize_filename
 from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
+from bioamla.core.logging import get_logger
+from bioamla.core.metadata import (
+    read_metadata_csv,
+    write_metadata_csv,
+)
+
+logger = get_logger(__name__)
 
 
 def count_audio_files(audio_folder_path: str) -> int:
     """
     Count the number of audio files in a directory.
-    
+
     This function scans a directory and counts all files with supported
     audio extensions as defined in the global configuration.
-    
+
     Args:
         audio_folder_path (str): Path to the directory containing audio files
-        
+
     Returns:
         int: Number of audio files found in the directory
     """
@@ -36,19 +48,19 @@ def count_audio_files(audio_folder_path: str) -> int:
 def validate_metadata(audio_folder_path: str, metadata_csv_filename: str = 'metadata.csv') -> bool:
     """
     Validate that metadata CSV file matches the audio files in a directory.
-    
+
     This function performs several validation checks to ensure consistency
     between audio files and their corresponding metadata:
     1. Number of audio files matches number of metadata entries
     2. All audio files are referenced in the metadata
-    
+
     Args:
         audio_folder_path (str): Path to directory containing audio files
         metadata_csv_filename (str): Name of the metadata CSV file (default: 'metadata.csv')
-        
+
     Returns:
         bool: True if validation passes
-        
+
     Raises:
         ValueError: If validation fails (file count mismatch or missing references)
     """
@@ -71,28 +83,469 @@ def validate_metadata(audio_folder_path: str, metadata_csv_filename: str = 'meta
 def load_local_dataset(audio_folder_path: str):
     """
     Load a local audio dataset using Hugging Face datasets library.
-    
+
     This function loads audio files from a local directory into a Hugging Face
     Dataset object for use in machine learning workflows. It performs basic
     validation to ensure the directory exists and contains audio files.
-    
+
     Args:
         audio_folder_path (str): Path to directory containing audio files
-        
+
     Returns:
         Dataset: Hugging Face Dataset object containing the audio data
-        
+
     Raises:
         ValueError: If directory doesn't exist or contains no audio files
     """
     from datasets import load_dataset
     from novus_pytils.files import directory_exists
-    
+
     if not directory_exists(audio_folder_path):
         raise ValueError(f"The audio folder {audio_folder_path} does not exist")
     if count_audio_files(audio_folder_path) == 0:
         raise ValueError(f"The audio folder {audio_folder_path} is empty")
-    
+
     dataset = load_dataset(audio_folder_path)
-    
+
     return dataset
+
+
+def merge_datasets(
+    dataset_paths: List[str],
+    output_dir: str,
+    metadata_filename: str = "metadata.csv",
+    skip_existing: bool = True,
+    organize_by_category: bool = True,
+    target_format: Optional[str] = None,
+    verbose: bool = True
+) -> dict:
+    """
+    Merge multiple audio datasets into a single dataset.
+
+    This function combines audio files and metadata from multiple dataset
+    directories into a single output directory. It handles:
+    - Copying audio files into subdirectories based on category
+    - Merging metadata.csv files
+    - Detecting and handling duplicate files
+    - Handling metadata field mismatches between datasets
+    - Optional audio format conversion during merge
+
+    Args:
+        dataset_paths: List of paths to dataset directories to merge.
+            Each directory should contain a metadata.csv file and audio files.
+        output_dir: Path to the output directory for the merged dataset.
+            Will be created if it doesn't exist.
+        metadata_filename: Name of the metadata CSV file in each dataset
+            (default: 'metadata.csv')
+        skip_existing: If True, skip files that already exist in the output
+            directory (default: True). If False, existing files will be
+            overwritten.
+        organize_by_category: If True, organize files into subdirectories
+            based on the 'category' field in metadata (default: True).
+            Directory names are derived from the category using sanitization.
+        target_format: If specified, convert all audio files to this format
+            during merge (e.g., 'wav', 'mp3', 'flac'). Files already in the
+            target format are copied without conversion.
+        verbose: If True, print progress information (default: True)
+
+    Returns:
+        dict: Summary statistics including:
+            - total_files: Number of audio files in merged dataset
+            - files_copied: Number of new files copied
+            - files_skipped: Number of files skipped (already existed)
+            - files_converted: Number of files converted (if target_format specified)
+            - datasets_merged: Number of source datasets processed
+            - output_dir: Path to output directory
+            - metadata_file: Path to merged metadata CSV file
+
+    Raises:
+        ValueError: If no valid datasets are provided, output_dir is invalid,
+            or target_format is not supported
+        FileNotFoundError: If a dataset path doesn't exist
+
+    Example:
+        >>> stats = merge_datasets(
+        ...     dataset_paths=["./birds_v1", "./birds_v2", "./frogs"],
+        ...     output_dir="./merged_dataset",
+        ...     target_format="wav"
+        ... )
+        >>> print(f"Merged {stats['datasets_merged']} datasets")
+        >>> print(f"Total files: {stats['total_files']}")
+    """
+    if not dataset_paths:
+        raise ValueError("At least one dataset path must be provided")
+
+    # Validate target format if specified
+    if target_format:
+        target_format = target_format.lower().lstrip(".")
+        if target_format not in _SUPPORTED_FORMATS:
+            raise ValueError(
+                f"Unsupported target format: {target_format}. "
+                f"Supported formats: {', '.join(sorted(_SUPPORTED_FORMATS))}"
+            )
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    stats = {
+        "total_files": 0,
+        "files_copied": 0,
+        "files_skipped": 0,
+        "files_converted": 0,
+        "datasets_merged": 0,
+        "output_dir": str(output_path.absolute()),
+        "metadata_file": str(output_path / metadata_filename)
+    }
+
+    # Track all metadata rows and existing files
+    all_metadata_rows: List[dict] = []
+    existing_filenames: Set[str] = set()
+    all_fieldnames: Set[str] = set()
+
+    # Set of all known category names (used to find species for subspecies)
+    all_categories: Set[str] = set()
+
+    # Load existing metadata from output directory if it exists
+    output_metadata_path = output_path / metadata_filename
+    if output_metadata_path.exists():
+        existing_rows, existing_fieldnames = read_metadata_csv(output_metadata_path)
+        all_metadata_rows.extend(existing_rows)
+        all_fieldnames.update(existing_fieldnames)
+        existing_filenames.update(row.get("filename", "") for row in existing_rows)
+        # Collect all category names
+        for row in existing_rows:
+            category = row.get("category", "")
+            if category:
+                all_categories.add(category)
+        if verbose:
+            print(f"Found {len(existing_rows)} existing entries in output metadata.")
+
+    # Process each source dataset
+    for dataset_path in dataset_paths:
+        source_path = Path(dataset_path)
+
+        if not source_path.exists():
+            raise FileNotFoundError(f"Dataset path does not exist: {dataset_path}")
+
+        source_metadata_path = source_path / metadata_filename
+        if not source_metadata_path.exists():
+            if verbose:
+                print(f"Warning: No {metadata_filename} found in {dataset_path}, skipping.")
+            continue
+
+        if verbose:
+            print(f"Processing dataset: {dataset_path}")
+
+        # Read source metadata
+        source_rows, source_fieldnames = read_metadata_csv(source_metadata_path)
+        all_fieldnames.update(source_fieldnames)
+
+        # Collect all category names from source
+        for row in source_rows:
+            category = row.get("category", "")
+            if category:
+                all_categories.add(category)
+
+        files_copied_from_source = 0
+        files_skipped_from_source = 0
+
+        files_converted_from_source = 0
+
+        for row in source_rows:
+            source_filename = row.get("filename", "")
+            if not source_filename:
+                continue
+
+            source_file_path = source_path / source_filename
+
+            # Determine destination path based on organize_by_category setting
+            if organize_by_category:
+                category = row.get("category", "")
+                # Check if this is a subspecies - find shortest matching species name
+                dir_category = find_species_name(category, all_categories)
+                if dir_category:
+                    category_dir = sanitize_filename(dir_category)
+                else:
+                    category_dir = "unknown"
+                # Use just the base filename, placed in category directory
+                base_filename = Path(source_filename).name
+                dest_filename = f"{category_dir}/{base_filename}"
+            else:
+                dest_filename = source_filename
+
+            # Handle format conversion if target_format is specified
+            source_ext = Path(dest_filename).suffix.lower().lstrip(".")
+            needs_conversion = target_format and source_ext != target_format
+
+            if needs_conversion:
+                # Change destination filename extension to target format
+                dest_filename = str(Path(dest_filename).with_suffix(f".{target_format}"))
+
+            dest_file_path = output_path / dest_filename
+
+            # Check if file already exists in output
+            if dest_filename in existing_filenames:
+                if skip_existing:
+                    files_skipped_from_source += 1
+                    continue
+                # If not skipping, we'll overwrite but not add duplicate metadata
+
+            # Create subdirectory if needed
+            dest_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Copy or convert the audio file
+            if source_file_path.exists():
+                if needs_conversion:
+                    # Convert the file
+                    converter = _get_converter(source_ext, target_format)
+                    if converter:
+                        try:
+                            converter(str(source_file_path), str(dest_file_path))
+                            files_converted_from_source += 1
+
+                            # Add to metadata with updated filename and attr_note
+                            if dest_filename not in existing_filenames:
+                                updated_row = row.copy()
+                                updated_row["filename"] = dest_filename
+                                updated_row["attr_note"] = "modified clip from original source"
+                                all_metadata_rows.append(updated_row)
+                                existing_filenames.add(dest_filename)
+
+                            if verbose:
+                                print(f"  Converted: {source_filename} -> {dest_filename}")
+                        except Exception as e:
+                            if verbose:
+                                print(f"  Error converting {source_filename}: {e}")
+                    else:
+                        if verbose:
+                            print(f"  Warning: No converter for {source_ext} -> {target_format}, copying instead: {source_filename}")
+                        shutil.copy2(source_file_path, dest_file_path)
+                        files_copied_from_source += 1
+                        if dest_filename not in existing_filenames:
+                            updated_row = row.copy()
+                            updated_row["filename"] = dest_filename
+                            all_metadata_rows.append(updated_row)
+                            existing_filenames.add(dest_filename)
+                else:
+                    # Just copy the file
+                    shutil.copy2(source_file_path, dest_file_path)
+                    files_copied_from_source += 1
+
+                    # Add to metadata with updated filename
+                    if dest_filename not in existing_filenames:
+                        updated_row = row.copy()
+                        updated_row["filename"] = dest_filename
+                        all_metadata_rows.append(updated_row)
+                        existing_filenames.add(dest_filename)
+            else:
+                if verbose:
+                    print(f"  Warning: Source file not found: {source_file_path}")
+
+        stats["files_copied"] += files_copied_from_source
+        stats["files_skipped"] += files_skipped_from_source
+        stats["files_converted"] += files_converted_from_source
+        stats["datasets_merged"] += 1
+
+        if verbose:
+            msg = f"  Copied: {files_copied_from_source}, Skipped: {files_skipped_from_source}"
+            if target_format:
+                msg += f", Converted: {files_converted_from_source}"
+            print(msg)
+
+    # Write merged metadata
+    if all_metadata_rows:
+        write_metadata_csv(
+            output_metadata_path,
+            all_metadata_rows,
+            all_fieldnames,
+            merge_existing=False  # Already merged above
+        )
+
+    stats["total_files"] = len(all_metadata_rows)
+
+    if verbose:
+        print("\nMerge complete!")
+        print(f"  Datasets merged: {stats['datasets_merged']}")
+        print(f"  Total files: {stats['total_files']}")
+        print(f"  Files copied: {stats['files_copied']}")
+        if target_format:
+            print(f"  Files converted: {stats['files_converted']}")
+        print(f"  Files skipped: {stats['files_skipped']}")
+        print(f"  Output directory: {stats['output_dir']}")
+        print(f"  Metadata file: {stats['metadata_file']}")
+
+    return stats
+
+
+# Supported audio formats for conversion
+_SUPPORTED_FORMATS = {"wav", "mp3", "m4a", "aac", "flac", "ogg", "wma"}
+
+
+def _get_converter(source_ext: str, target_format: str):
+    """
+    Get the appropriate converter function from novus_pytils.audio.
+
+    Args:
+        source_ext: Source file extension (without dot)
+        target_format: Target format (without dot)
+
+    Returns:
+        Converter function or None if not available
+    """
+    from novus_pytils import audio as audio_module
+
+    converter_name = f"{source_ext}_to_{target_format}"
+    return getattr(audio_module, converter_name, None)
+
+
+def convert_filetype(
+    dataset_path: str,
+    target_format: str,
+    metadata_filename: str = "metadata.csv",
+    keep_original: bool = False,
+    verbose: bool = True
+) -> dict:
+    """
+    Convert all audio files in a dataset to a specified format.
+
+    This function parses the dataset metadata, converts each audio file to
+    the target format using novus-pytils.audio conversion methods, and
+    updates the metadata.csv file with the new filenames. The attr_note
+    field is updated to indicate "modified clip from original source".
+
+    Args:
+        dataset_path: Path to the dataset directory containing audio files
+            and a metadata.csv file.
+        target_format: Target audio format (e.g., 'wav', 'mp3', 'flac', 'ogg',
+            'm4a', 'aac', 'wma').
+        metadata_filename: Name of the metadata CSV file (default: 'metadata.csv')
+        keep_original: If True, keep original files after conversion
+            (default: False). By default, original files are deleted.
+        verbose: If True, print progress information (default: True)
+
+    Returns:
+        dict: Summary statistics including:
+            - total_files: Total number of files in metadata
+            - files_converted: Number of files successfully converted
+            - files_skipped: Number of files skipped (already in target format)
+            - files_failed: Number of files that failed conversion
+            - target_format: The target format used
+
+    Raises:
+        ValueError: If dataset_path doesn't exist, target_format is invalid,
+            or metadata file is not found
+        FileNotFoundError: If the dataset path doesn't exist
+
+    Example:
+        >>> stats = convert_filetype(
+        ...     dataset_path="./my_dataset",
+        ...     target_format="mp3"
+        ... )
+        >>> print(f"Converted {stats['files_converted']} files to MP3")
+    """
+    target_format = target_format.lower().lstrip(".")
+
+    if target_format not in _SUPPORTED_FORMATS:
+        raise ValueError(
+            f"Unsupported target format: {target_format}. "
+            f"Supported formats: {', '.join(sorted(_SUPPORTED_FORMATS))}"
+        )
+
+    dataset_dir = Path(dataset_path)
+    if not dataset_dir.exists():
+        raise FileNotFoundError(f"Dataset path does not exist: {dataset_path}")
+
+    metadata_path = dataset_dir / metadata_filename
+    if not metadata_path.exists():
+        raise ValueError(f"Metadata file not found: {metadata_path}")
+
+    stats = {
+        "total_files": 0,
+        "files_converted": 0,
+        "files_skipped": 0,
+        "files_failed": 0,
+        "target_format": target_format
+    }
+
+    # Read metadata
+    rows, fieldnames = read_metadata_csv(metadata_path)
+    stats["total_files"] = len(rows)
+
+    if verbose:
+        print(f"Converting {len(rows)} files to {target_format} format...")
+
+    updated_rows = []
+    for row in rows:
+        filename = row.get("filename", "")
+        if not filename:
+            updated_rows.append(row)
+            continue
+
+        source_path = dataset_dir / filename
+        source_ext = source_path.suffix.lower().lstrip(".")
+
+        # Skip if already in target format
+        if source_ext == target_format:
+            stats["files_skipped"] += 1
+            updated_rows.append(row)
+            continue
+
+        # Build target filename
+        target_filename = str(Path(filename).with_suffix(f".{target_format}"))
+        target_path = dataset_dir / target_filename
+
+        # Get converter function
+        converter = _get_converter(source_ext, target_format)
+        if converter is None:
+            if verbose:
+                print(f"  Warning: No converter for {source_ext} -> {target_format}, skipping: {filename}")
+            stats["files_failed"] += 1
+            updated_rows.append(row)
+            continue
+
+        # Check if source file exists
+        if not source_path.exists():
+            if verbose:
+                print(f"  Warning: Source file not found: {source_path}")
+            stats["files_failed"] += 1
+            updated_rows.append(row)
+            continue
+
+        # Create target directory if needed
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Convert the file
+        try:
+            converter(str(source_path), str(target_path))
+            stats["files_converted"] += 1
+
+            # Update row with new filename and attr_note
+            updated_row = row.copy()
+            updated_row["filename"] = target_filename
+            updated_row["attr_note"] = "modified clip from original source"
+            updated_rows.append(updated_row)
+
+            # Delete original unless keep_original is True
+            if not keep_original and source_path.exists():
+                source_path.unlink()
+
+            if verbose:
+                print(f"  Converted: {filename} -> {target_filename}")
+
+        except Exception as e:
+            if verbose:
+                print(f"  Error converting {filename}: {e}")
+            stats["files_failed"] += 1
+            updated_rows.append(row)
+
+    # Write updated metadata
+    write_metadata_csv(metadata_path, updated_rows, fieldnames, merge_existing=False)
+
+    if verbose:
+        print("\nConversion complete!")
+        print(f"  Total files: {stats['total_files']}")
+        print(f"  Converted: {stats['files_converted']}")
+        print(f"  Skipped (already {target_format}): {stats['files_skipped']}")
+        print(f"  Failed: {stats['files_failed']}")
+
+    return stats

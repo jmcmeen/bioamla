@@ -11,22 +11,23 @@ and other runtime environment details that are crucial for debugging and
 ensuring proper bioamla functionality across different deployment scenarios.
 """
 
-from typing import Dict, Any
 import importlib.metadata
+from typing import Any, Dict
+
 import torch
 
 
 def get_bioamla_version() -> str:
     """
     Get the current version of the bioamla package.
-    
+
     Retrieves the version information from the package metadata using
     importlib.metadata. This provides the exact version string as defined
     in the package's setup configuration.
-    
+
     Returns:
         str: The version string of the currently installed bioamla package
-             
+
     Raises:
         importlib.metadata.PackageNotFoundError: If the bioamla package
                                                  is not properly installed
@@ -38,23 +39,23 @@ def get_bioamla_version() -> str:
 def get_package_versions() -> Dict[str, str]:
     """
     Get a comprehensive dictionary of all installed packages and their versions.
-    
+
     Scans the current Python environment to retrieve version information for
     all installed packages. This is useful for debugging dependency issues,
     creating reproducible environments, or generating system reports.
-    
+
     Returns:
         Dict[str, str]: A dictionary mapping package names to their version
                        strings. Keys are package names (e.g., "numpy") and
                        values are version strings (e.g., "1.21.0").
-                       
+
     Example:
         >>> packages = get_package_versions()
         >>> print(f"NumPy version: {packages.get('numpy', 'Not installed')}")
         NumPy version: 1.21.0
         >>> print(f"Total packages: {len(packages)}")
         Total packages: 245
-    
+
     Note:
         The returned dictionary includes all packages in the current Python
         environment, not just bioamla dependencies. For large environments,
@@ -65,14 +66,14 @@ def get_package_versions() -> Dict[str, str]:
 def get_device_info() -> Dict[str, Any]:
     """
     Get comprehensive information about available CUDA devices and GPU configuration.
-    
+
     Examines the current system's GPU configuration through PyTorch's CUDA
     interface. This includes CUDA availability status, device count, current
     active device, and detailed information about each available GPU.
-    
+
     The function is essential for verifying that bioamla can leverage GPU
     acceleration for audio processing tasks and machine learning operations.
-    
+
     Returns:
         Dict[str, Any]: A dictionary containing comprehensive device information:
             - cuda_available (bool): Whether CUDA is available on the system
@@ -94,12 +95,12 @@ def get_device_info() -> Dict[str, Any]:
         'device_count': torch.cuda.device_count() if torch.cuda.is_available() else 0,
         'devices': []
     }
-    
+
     if torch.cuda.is_available():
         for i in range(torch.cuda.device_count()):
             device_info['devices'].append({
                 'index': i,
                 'name': torch.cuda.get_device_name(i)
             })
-    
+
     return device_info

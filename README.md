@@ -234,17 +234,63 @@ for package, version in versions.items():
 
 ## CLI Commands Reference
 
+### System Commands
+
 | Command | Description |
 |---------|-------------|
 | `bioamla version` | Display bioamla version |
 | `bioamla devices` | Show CUDA/GPU information |
+
+### Audio Utilities
+
+| Command | Description |
+|---------|-------------|
 | `bioamla audio [DIR]` | List audio files in directory |
 | `bioamla wave <FILE>` | Display WAV file metadata |
 | `bioamla download <URL> [DIR]` | Download files from URL |
 | `bioamla unzip <FILE> [DIR]` | Extract ZIP archives |
+| `bioamla zip <SOURCE> <OUTPUT>` | Create ZIP archive from file or directory |
+
+### AST Model Commands
+
+| Command | Description |
+|---------|-------------|
 | `bioamla ast-predict <FILE> <MODEL> <SR>` | Single file inference |
-| `bioamla ast-batch-inference <DIR>` | Batch directory inference |
-| `bioamla ast-finetune` | Fine-tune AST model |
+| `bioamla ast-batch-inference <DIR>` | Batch directory inference with segmentation |
+| `bioamla ast-finetune` | Fine-tune AST model on custom datasets |
+
+### iNaturalist Integration
+
+| Command | Description |
+|---------|-------------|
+| `bioamla inat-audio <OUTPUT_DIR>` | Download audio observations from iNaturalist |
+| `bioamla inat-taxa-search` | Search for taxa with observations in a place or project |
+| `bioamla inat-project-stats <PROJECT_ID>` | Get statistics for an iNaturalist project |
+
+**Download audio from a CSV of taxon IDs:**
+
+```bash
+# First, search for taxa and export to CSV
+bioamla inat-taxa-search --project-id appalachia-bioacoustics --taxon-id 20979 -o taxa.csv
+
+# Then download audio for all taxa in the CSV
+bioamla inat-audio ./sounds --taxon-csv taxa.csv --obs-per-taxon 10
+```
+
+The CSV file should have a `taxon_id` column with integer taxon IDs:
+
+```csv
+taxon_id,name,common_name,observation_count
+65489,Lithobates catesbeianus,American Bullfrog,150
+23456,Anaxyrus americanus,American Toad,200
+```
+
+### Dataset Management
+
+| Command | Description |
+|---------|-------------|
+| `bioamla merge-datasets <OUTPUT_DIR> <PATHS...>` | Merge multiple audio datasets into one |
+| `bioamla convert-audio <DATASET_PATH> <FORMAT>` | Convert all audio files in a dataset to a specified format |
 
 ## Technologies
 

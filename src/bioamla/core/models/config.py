@@ -13,7 +13,7 @@ customization in different use cases.
 class DefaultConfig:
     """
     Default configuration parameters for bioamla audio processing.
-    
+
     Attributes:
         MODEL_NAME (str): Default Hugging Face model identifier for AST
         SAMPLE_RATE (int): Standard sample rate for audio processing (Hz)
