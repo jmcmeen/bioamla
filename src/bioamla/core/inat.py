@@ -111,7 +111,7 @@ def download_inat_audio(
     user_id: Optional[str] = None,
     project_id: Optional[str] = None,
     quality_grade: Optional[str] = "research",
-    sound_license: Optional[str] = None,
+    sound_license: Optional[List[str]] = None,
     d1: Optional[str] = None,
     d2: Optional[str] = None,
     obs_per_taxon: int = 100,
@@ -139,7 +139,7 @@ def download_inat_audio(
         user_id: Filter by observer username
         project_id: Filter by iNaturalist project ID or slug (e.g., "appalachia-bioacoustics")
         quality_grade: Filter by quality grade ("research", "needs_id", or "casual")
-        sound_license: Filter by sound license (e.g., "cc-by", "cc-by-nc", "cc0")
+        sound_license: Filter by sound license(s) (e.g., ["cc-by", "cc-by-nc", "cc0"])
         d1: Start date for observation date range (YYYY-MM-DD format)
         d2: End date for observation date range (YYYY-MM-DD format)
         obs_per_taxon: Number of observations to download per taxon ID
@@ -214,7 +214,9 @@ def download_inat_audio(
         print(f"Found {len(existing_files)} existing files in collection, will skip duplicates.")
 
     # Normalize sound_license to uppercase for pyinaturalist API compatibility
-    normalized_license = sound_license.upper() if sound_license else None
+    normalized_license = None
+    if sound_license:
+        normalized_license = [lic.upper() for lic in sound_license]
 
     # Normalize file extensions (ensure they start with a dot and are lowercase)
     normalized_extensions = None
