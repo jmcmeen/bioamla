@@ -220,3 +220,4 @@ scp_small.zip
 *.mp3
 /frogs_dataset
 /frogs_out
+scp_small/output.csv
