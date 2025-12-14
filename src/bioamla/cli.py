@@ -615,7 +615,7 @@ def wave(filepath: str):
 @click.option('--user-id', default=None, help='Filter by observer username')
 @click.option('--project-id', default=None, help='Filter by iNaturalist project ID or slug')
 @click.option('--quality-grade', default='research', help='Quality grade: research, needs_id, or casual')
-@click.option('--sound-license', default=None, help='Filter by sound license (e.g., cc-by, cc-by-nc, cc0)')
+@click.option('--sound-license', default=None, help='Comma-separated list of sound licenses (e.g., "cc-by, cc-by-nc, cc0")')
 @click.option('--start-date', default=None, help='Start date for observations (YYYY-MM-DD)')
 @click.option('--end-date', default=None, help='End date for observations (YYYY-MM-DD)')
 @click.option('--obs-per-taxon', type=int, default=100, help='Number of observations to download per taxon ID')
@@ -655,8 +655,8 @@ def inat_audio(
         Download bird sounds from the US:
         bioamla inat-audio ./birds --taxon-id 3 --place-id 1
 
-        Download frog sounds with specific license:
-        bioamla inat-audio ./frogs --taxon-name Anura --sound-license cc-by
+        Download frog sounds with specific licenses:
+        bioamla inat-audio ./frogs --taxon-name Anura --sound-license "cc-by, cc-by-nc, cc0"
 
         Download from a CSV file of taxon IDs:
         bioamla inat-audio ./sounds --taxon-csv taxa.csv --obs-per-taxon 10
@@ -676,6 +676,11 @@ def inat_audio(
     if file_extensions:
         extensions_list = [ext.strip() for ext in file_extensions.split(",")]
 
+    # Parse comma-separated sound licenses into a list
+    sound_license_list = None
+    if sound_license:
+        sound_license_list = [lic.strip() for lic in sound_license.split(",")]
+
     stats = download_inat_audio(
         output_dir=output_dir,
         taxon_ids=taxon_ids_list,
@@ -685,7 +690,7 @@ def inat_audio(
         user_id=user_id,
         project_id=project_id,
         quality_grade=quality_grade,
-        sound_license=sound_license,
+        sound_license=sound_license_list,
         d1=start_date,
         d2=end_date,
         obs_per_taxon=obs_per_taxon,
