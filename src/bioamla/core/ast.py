@@ -169,10 +169,11 @@ def load_pretrained_ast_model(model_path: str) -> AutoModelForAudioClassificatio
         The device_map="auto" parameter automatically distributes the model
         across available GPUs if present, otherwise uses CPU.
     """
-    import os
+    from pathlib import Path
 
-    # Check if model_path looks like a local path (contains path separators or starts with . or /)
-    is_local_path = os.path.sep in model_path or model_path.startswith(('.', '/'))
+    # Check if model_path is a local path by verifying it exists on the filesystem
+    # This correctly handles HuggingFace repo IDs like 'org/model' which contain '/'
+    is_local_path = Path(model_path).exists() or model_path.startswith(('./', '../'))
 
     if is_local_path:
         return AutoModelForAudioClassification.from_pretrained(model_path, device_map="auto", local_files_only=True)

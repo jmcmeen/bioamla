@@ -102,9 +102,19 @@ def write_metadata_csv(
         When merge_existing is True, rows are deduplicated by file_name.
         Required fields are ordered first, followed by optional fields.
     """
+    # Handle empty rows case
     if not rows:
-        logger.debug("No rows to write")
-        return 0
+        if merge_existing:
+            # When merging, no rows means nothing to add, keep existing
+            logger.debug("No rows to write")
+            return 0
+        else:
+            # When not merging, empty rows means clear the file
+            logger.debug("Writing empty metadata file (clearing existing)")
+            with open(filepath, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=REQUIRED_FIELDS)
+                writer.writeheader()
+            return 0
 
     # Derive fieldnames from rows if not provided
     if fieldnames is None:

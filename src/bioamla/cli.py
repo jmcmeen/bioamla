@@ -282,27 +282,24 @@ def ast_finetune(
         raise ValueError("Labels feature not found in dataset")
 
     # split training data
+    test_size = 0.2
     if isinstance(dataset, Dataset):
-        # Check if we have enough samples for stratified split
-        test_size = 0.2
-        min_test_samples = int(len(dataset) * test_size)
-        if min_test_samples >= num_labels:
+        # Try stratified split first, fall back to regular split if it fails
+        # (e.g., when some classes have too few samples)
+        try:
             dataset = dataset.train_test_split(
                 test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels")
-        else:
-            # Not enough samples for stratified split, use regular split
-            print(f"Warning: Not enough samples for stratified split ({min_test_samples} < {num_labels} classes). Using regular split.")
+        except ValueError as e:
+            print(f"Warning: Stratified split failed ({e}). Using regular split.")
             dataset = dataset.train_test_split(
                 test_size=test_size, shuffle=True, seed=0)
     elif isinstance(dataset, DatasetDict) and "test" not in dataset:
         train_data = dataset["train"]
-        test_size = 0.2
-        min_test_samples = int(len(train_data) * test_size)
-        if min_test_samples >= num_labels:
+        try:
             dataset = train_data.train_test_split(
                 test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels")
-        else:
-            print(f"Warning: Not enough samples for stratified split ({min_test_samples} < {num_labels} classes). Using regular split.")
+        except ValueError as e:
+            print(f"Warning: Stratified split failed ({e}). Using regular split.")
             dataset = train_data.train_test_split(
                 test_size=test_size, shuffle=True, seed=0)
 
