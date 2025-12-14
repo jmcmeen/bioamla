@@ -19,7 +19,23 @@ from bioamla.core.metadata import read_metadata_csv
 
 @dataclass
 class AudioFileInfo:
-    """Information about a single audio file."""
+    """
+    Information about a single audio file.
+
+    Attributes:
+        path: Full path to the audio file.
+        filename: Name of the file (without directory path).
+        size_bytes: File size in bytes.
+        sample_rate: Audio sample rate in Hz.
+        duration_seconds: Duration of the audio in seconds.
+        num_channels: Number of audio channels.
+        num_frames: Total number of audio frames/samples.
+        format: Audio file format (e.g., 'wav', 'mp3').
+        category: Category/class label from metadata CSV.
+        split: Dataset split (e.g., 'train', 'test') from metadata CSV.
+        target: Numeric target/label ID from metadata CSV.
+        attribution: Attribution identifier from metadata CSV.
+    """
 
     path: Path
     filename: str
@@ -29,7 +45,6 @@ class AudioFileInfo:
     num_channels: Optional[int] = None
     num_frames: Optional[int] = None
     format: Optional[str] = None
-    # Metadata from CSV if available
     category: Optional[str] = None
     split: Optional[str] = None
     target: Optional[int] = None
@@ -37,7 +52,7 @@ class AudioFileInfo:
 
     @property
     def size_human(self) -> str:
-        """Return human-readable file size."""
+        """Return human-readable file size (e.g., '1.5 MB')."""
         size = self.size_bytes
         for unit in ["B", "KB", "MB", "GB"]:
             if size < 1024:
@@ -47,7 +62,7 @@ class AudioFileInfo:
 
     @property
     def duration_human(self) -> str:
-        """Return human-readable duration."""
+        """Return human-readable duration (e.g., '2m 30.5s' or '15.3s')."""
         if self.duration_seconds is None:
             return "Unknown"
         minutes = int(self.duration_seconds // 60)
@@ -59,7 +74,20 @@ class AudioFileInfo:
 
 @dataclass
 class DatasetInfo:
-    """Information about an audio dataset directory."""
+    """
+    Information about an audio dataset directory.
+
+    Attributes:
+        path: Full path to the dataset directory.
+        name: Name of the dataset directory.
+        total_files: Total number of audio files in the dataset.
+        total_size_bytes: Total size of all audio files in bytes.
+        categories: Mapping of category names to file counts.
+        splits: Mapping of split names to file counts.
+        formats: Mapping of audio formats to file counts.
+        has_metadata: Whether a metadata.csv file was found.
+        metadata_path: Path to the metadata.csv file if it exists.
+    """
 
     path: Path
     name: str
@@ -73,7 +101,7 @@ class DatasetInfo:
 
     @property
     def total_size_human(self) -> str:
-        """Return human-readable total size."""
+        """Return human-readable total size (e.g., '1.5 GB')."""
         size = self.total_size_bytes
         for unit in ["B", "KB", "MB", "GB"]:
             if size < 1024:
@@ -131,16 +159,23 @@ def scan_directory(
     """
     Scan a directory for audio files and gather information.
 
+    Searches the specified directory for audio files with supported extensions,
+    optionally loading metadata from a metadata.csv file if present.
+
     Args:
-        directory: Path to the directory to scan
-        recursive: Whether to scan subdirectories
-        load_audio_metadata: Whether to load audio file metadata (slower but more detailed)
+        directory: Path to the directory to scan.
+        recursive: Whether to scan subdirectories recursively.
+        load_audio_metadata: Whether to load audio file metadata (sample rate,
+            duration, etc.). This is slower but provides more detailed info.
 
     Returns:
-        Tuple of (list of AudioFileInfo, DatasetInfo)
+        Tuple containing:
+            - List of AudioFileInfo objects for each audio file found.
+            - DatasetInfo object with aggregated statistics.
 
     Raises:
-        FileNotFoundError: If the directory does not exist
+        FileNotFoundError: If the directory does not exist.
+        ValueError: If the path is not a directory.
     """
     dir_path = Path(directory)
     if not dir_path.exists():
@@ -227,15 +262,22 @@ def scan_directory(
     return audio_files, dataset_info
 
 
-def get_category_summary(audio_files: List[AudioFileInfo]) -> Dict[str, Dict]:
+def get_category_summary(audio_files: List[AudioFileInfo]) -> Dict[str, Dict[str, any]]:
     """
     Get a summary of audio files grouped by category.
 
+    Groups audio files by their category label and computes aggregate
+    statistics for each category.
+
     Args:
-        audio_files: List of AudioFileInfo objects
+        audio_files: List of AudioFileInfo objects to summarize.
 
     Returns:
-        Dictionary mapping category names to summary statistics
+        Dictionary mapping category names to summary dictionaries containing:
+            - count: Number of files in the category.
+            - total_size: Total size in bytes.
+            - total_duration: Total duration in seconds.
+            - files: List of AudioFileInfo objects in the category.
     """
     categories: Dict[str, Dict] = {}
 
@@ -258,15 +300,21 @@ def get_category_summary(audio_files: List[AudioFileInfo]) -> Dict[str, Dict]:
     return categories
 
 
-def get_split_summary(audio_files: List[AudioFileInfo]) -> Dict[str, Dict]:
+def get_split_summary(audio_files: List[AudioFileInfo]) -> Dict[str, Dict[str, any]]:
     """
-    Get a summary of audio files grouped by split.
+    Get a summary of audio files grouped by dataset split.
+
+    Groups audio files by their split label (e.g., 'train', 'test', 'val')
+    and computes aggregate statistics for each split.
 
     Args:
-        audio_files: List of AudioFileInfo objects
+        audio_files: List of AudioFileInfo objects to summarize.
 
     Returns:
-        Dictionary mapping split names to summary statistics
+        Dictionary mapping split names to summary dictionaries containing:
+            - count: Number of files in the split.
+            - total_size: Total size in bytes.
+            - files: List of AudioFileInfo objects in the split.
     """
     splits: Dict[str, Dict] = {}
 
@@ -296,19 +344,22 @@ def filter_audio_files(
     search_term: Optional[str] = None,
 ) -> List[AudioFileInfo]:
     """
-    Filter audio files based on criteria.
+    Filter audio files based on specified criteria.
+
+    Applies one or more filters to a list of audio files. All specified
+    criteria must match (AND logic) for a file to be included in the result.
 
     Args:
-        audio_files: List of AudioFileInfo objects to filter
-        category: Filter by category name
-        split: Filter by split name
-        format: Filter by audio format (e.g., 'wav', 'mp3')
-        min_duration: Minimum duration in seconds
-        max_duration: Maximum duration in seconds
-        search_term: Search term for filename matching
+        audio_files: List of AudioFileInfo objects to filter.
+        category: Filter by exact category name match.
+        split: Filter by exact split name match.
+        format: Filter by audio format (e.g., 'wav', 'mp3'). Case-insensitive.
+        min_duration: Minimum duration in seconds (inclusive).
+        max_duration: Maximum duration in seconds (inclusive).
+        search_term: Case-insensitive substring search in filename.
 
     Returns:
-        Filtered list of AudioFileInfo objects
+        List of AudioFileInfo objects matching all specified criteria.
     """
     result = audio_files
 
@@ -347,15 +398,22 @@ def sort_audio_files(
     reverse: bool = False,
 ) -> List[AudioFileInfo]:
     """
-    Sort audio files by a given field.
+    Sort audio files by a specified field.
+
+    Returns a new sorted list without modifying the original.
 
     Args:
-        audio_files: List of AudioFileInfo objects to sort
-        sort_by: Field to sort by ('name', 'size', 'duration', 'category', 'format')
-        reverse: Whether to reverse the sort order
+        audio_files: List of AudioFileInfo objects to sort.
+        sort_by: Field to sort by. Valid options:
+            - 'name': Sort by filename (case-insensitive).
+            - 'size': Sort by file size in bytes.
+            - 'duration': Sort by audio duration.
+            - 'category': Sort by category label (case-insensitive).
+            - 'format': Sort by audio format (case-insensitive).
+        reverse: If True, sort in descending order.
 
     Returns:
-        Sorted list of AudioFileInfo objects
+        New list of AudioFileInfo objects in sorted order.
     """
     key_funcs = {
         "name": lambda f: f.filename.lower(),

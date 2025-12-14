@@ -2,9 +2,22 @@
 Terminal User Interface for Dataset Exploration
 ================================================
 
-This module provides a Textual-based TUI application for exploring audio datasets.
-It allows users to browse files, view metadata, and perform quick operations on
-audio datasets.
+This module provides a Textual-based TUI (Terminal User Interface) application
+for interactively exploring audio datasets. Features include:
+
+- File browser with sorting and filtering
+- Dataset statistics display
+- Category and split summaries
+- Audio playback (using system audio players)
+- Spectrogram generation and viewing
+- Search functionality
+
+The main entry point is the :func:`run_explorer` function, which launches the
+:class:`DatasetExplorer` application.
+
+Example:
+    >>> from bioamla.core.tui import run_explorer
+    >>> run_explorer("./my_dataset")
 """
 
 import subprocess
@@ -41,7 +54,16 @@ from bioamla.core.explore import (
 
 
 class FileDetailScreen(ModalScreen[None]):
-    """Modal screen showing detailed file information."""
+    """
+    Modal screen showing detailed file information.
+
+    Displays comprehensive metadata about a selected audio file including
+    path, size, format, sample rate, duration, channels, and any associated
+    metadata from the dataset CSV file.
+
+    Attributes:
+        file_info: The AudioFileInfo object containing file details.
+    """
 
     BINDINGS = [
         Binding("escape", "close", "Close"),
@@ -50,10 +72,17 @@ class FileDetailScreen(ModalScreen[None]):
     ]
 
     def __init__(self, file_info: AudioFileInfo) -> None:
+        """
+        Initialize the file detail screen.
+
+        Args:
+            file_info: AudioFileInfo object containing the file details to display.
+        """
         super().__init__()
         self.file_info = file_info
 
     def compose(self) -> ComposeResult:
+        """Compose the file detail screen layout."""
         f = self.file_info
         with Container(id="file-detail-container"):
             yield Label(f"[bold]{f.filename}[/bold]", id="detail-title")
@@ -85,28 +114,43 @@ class FileDetailScreen(ModalScreen[None]):
                 yield Button("Close", id="btn-close", variant="default")
 
     def action_close(self) -> None:
+        """Close the detail screen and return to the main view."""
         self.dismiss()
 
     def action_play(self) -> None:
+        """Handle the play audio action."""
         self._play_audio()
 
     def action_spectrogram(self) -> None:
+        """Handle the show spectrogram action."""
         self._show_spectrogram()
 
     @on(Button.Pressed, "#btn-close")
     def on_close_pressed(self) -> None:
+        """Handle close button press event."""
         self.dismiss()
 
     @on(Button.Pressed, "#btn-play")
     def on_play_pressed(self) -> None:
+        """Handle play button press event."""
         self._play_audio()
 
     @on(Button.Pressed, "#btn-spec")
     def on_spec_pressed(self) -> None:
+        """Handle spectrogram button press event."""
         self._show_spectrogram()
 
     def _play_audio(self) -> None:
-        """Attempt to play audio using system player."""
+        """
+        Attempt to play audio using the system audio player.
+
+        Uses platform-specific audio players:
+        - macOS: afplay
+        - Linux: paplay, aplay, or ffplay (tries in order)
+        - Windows: os.startfile (default system handler)
+
+        Displays a notification on success or error.
+        """
         try:
             if sys.platform == "darwin":
                 subprocess.Popen(["afplay", str(self.file_info.path)])
@@ -130,7 +174,20 @@ class FileDetailScreen(ModalScreen[None]):
             self.notify(f"Could not play audio: {e}", severity="error")
 
     def _show_spectrogram(self) -> None:
-        """Generate and display a spectrogram."""
+        """
+        Generate and display a spectrogram visualization.
+
+        Creates a mel spectrogram image of the audio file using the
+        bioamla.core.visualize module, saves it to a temporary file,
+        and opens it with the system's default image viewer.
+
+        Uses platform-specific image viewers:
+        - macOS: open
+        - Linux: xdg-open, feh, eog, or display (tries in order)
+        - Windows: os.startfile (default system handler)
+
+        Displays a notification on success or error.
+        """
         try:
             from bioamla.core.visualize import generate_spectrogram
 
@@ -163,7 +220,12 @@ class FileDetailScreen(ModalScreen[None]):
 
 
 class HelpScreen(ModalScreen[None]):
-    """Modal screen showing keyboard shortcuts and help."""
+    """
+    Modal screen showing keyboard shortcuts and help.
+
+    Displays a comprehensive list of keyboard shortcuts and actions
+    available in the Dataset Explorer application.
+    """
 
     BINDINGS = [
         Binding("escape", "close", "Close"),
@@ -171,6 +233,7 @@ class HelpScreen(ModalScreen[None]):
     ]
 
     def compose(self) -> ComposeResult:
+        """Compose the help screen layout."""
         with Container(id="help-container"):
             yield Label("[bold]Bioamla Dataset Explorer[/bold]", id="help-title")
             yield Rule()
@@ -192,15 +255,42 @@ class HelpScreen(ModalScreen[None]):
             yield Button("Close", id="btn-help-close", variant="primary")
 
     def action_close(self) -> None:
+        """Close the help screen and return to the main view."""
         self.dismiss()
 
     @on(Button.Pressed, "#btn-help-close")
     def on_close_pressed(self) -> None:
+        """Handle close button press event."""
         self.dismiss()
 
 
 class DatasetExplorer(App):
-    """Textual TUI application for exploring audio datasets."""
+    """
+    Textual TUI application for exploring audio datasets.
+
+    A full-featured terminal interface for browsing and analyzing audio files
+    in a directory. Features include:
+
+    - File browser with sorting and filtering by category
+    - Dataset statistics panel (file count, total size, formats)
+    - Category breakdown with quick filtering
+    - Search functionality
+    - Audio playback using system players
+    - Spectrogram generation and viewing
+
+    Attributes:
+        directory: Path to the dataset directory being explored.
+        audio_files: Currently displayed list of audio files (after filtering).
+        dataset_info: Aggregated dataset statistics.
+        selected_category: Currently selected category filter.
+        search_term: Current search filter string.
+        sort_by: Current sort field.
+        is_loading: Whether data is currently being loaded.
+
+    Example:
+        >>> app = DatasetExplorer("./my_audio_dataset")
+        >>> app.run()
+    """
 
     CSS = """
     Screen {
@@ -351,11 +441,18 @@ class DatasetExplorer(App):
     is_loading: reactive[bool] = reactive(False)
 
     def __init__(self, directory: str) -> None:
+        """
+        Initialize the dataset explorer application.
+
+        Args:
+            directory: Path to the directory containing audio files to explore.
+        """
         super().__init__()
         self.directory = directory
         self._all_audio_files: List[AudioFileInfo] = []
 
     def compose(self) -> ComposeResult:
+        """Compose the main application layout."""
         yield Header(show_clock=True)
         with Horizontal(id="main-container"):
             with Vertical(id="sidebar"):
@@ -401,7 +498,13 @@ class DatasetExplorer(App):
 
     @work(thread=True)
     def load_data(self) -> None:
-        """Load audio files from the directory in a background thread."""
+        """
+        Load audio files from the directory in a background thread.
+
+        Scans the directory recursively for audio files, loading metadata
+        and enriching with information from metadata.csv if present.
+        Updates the UI via call_from_thread when complete.
+        """
         self.is_loading = True
         try:
             files, info = scan_directory(
@@ -417,7 +520,13 @@ class DatasetExplorer(App):
             self.is_loading = False
 
     def _update_ui(self, files: List[AudioFileInfo], info: DatasetInfo) -> None:
-        """Update UI with loaded data."""
+        """
+        Update UI components with loaded data.
+
+        Args:
+            files: List of AudioFileInfo objects for all audio files found.
+            info: DatasetInfo object with aggregated statistics.
+        """
         self.dataset_info = info
         self.audio_files = files
         self._update_stats()
@@ -425,7 +534,7 @@ class DatasetExplorer(App):
         self._update_table()
 
     def _update_stats(self) -> None:
-        """Update the stats panel."""
+        """Update the stats panel with dataset information."""
         info = self.dataset_info
         if not info:
             return
@@ -450,7 +559,7 @@ class DatasetExplorer(App):
         stats_content.update("\n".join(lines))
 
     def _update_categories(self) -> None:
-        """Update the categories list."""
+        """Update the categories sidebar list with counts."""
         category_list = self.query_one("#category-list", OptionList)
         category_list.clear_options()
 
@@ -472,7 +581,7 @@ class DatasetExplorer(App):
             category_list.add_option(f"Uncategorized ({uncategorized})")
 
     def _update_table(self) -> None:
-        """Update the file table."""
+        """Update the file table with filtered and sorted audio files."""
         table = self.query_one("#files-table", DataTable)
         table.clear()
 
@@ -505,25 +614,45 @@ class DatasetExplorer(App):
 
     @on(Input.Submitted, "#search-input")
     def on_search_submitted(self, event: Input.Submitted) -> None:
-        """Handle search input submission."""
+        """
+        Handle search input submission (Enter key).
+
+        Args:
+            event: The input submission event containing the search value.
+        """
         self.search_term = event.value
         self._update_table()
 
     @on(Input.Changed, "#search-input")
     def on_search_changed(self, event: Input.Changed) -> None:
-        """Handle search input change."""
+        """
+        Handle search input change (live search).
+
+        Args:
+            event: The input change event containing the current search value.
+        """
         self.search_term = event.value
         self._update_table()
 
     @on(Select.Changed, "#sort-select")
     def on_sort_changed(self, event: Select.Changed) -> None:
-        """Handle sort selection change."""
+        """
+        Handle sort selection change.
+
+        Args:
+            event: The select change event containing the new sort field.
+        """
         self.sort_by = str(event.value)
         self._update_table()
 
     @on(OptionList.OptionSelected, "#category-list")
     def on_category_selected(self, event: OptionList.OptionSelected) -> None:
-        """Handle category selection."""
+        """
+        Handle category selection from the sidebar.
+
+        Args:
+            event: The option selected event containing the category choice.
+        """
         option_text = str(event.option.prompt)
         # Extract category name (remove count)
         cat_name = option_text.rsplit(" (", 1)[0]
@@ -537,7 +666,14 @@ class DatasetExplorer(App):
 
     @on(DataTable.RowSelected, "#files-table")
     def on_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Handle file selection."""
+        """
+        Handle file row selection (Enter key on table row).
+
+        Opens the file detail screen for the selected audio file.
+
+        Args:
+            event: The row selected event containing the row key.
+        """
         if event.row_key:
             file_path = str(event.row_key.value)
             # Find the file info
@@ -547,24 +683,24 @@ class DatasetExplorer(App):
                     break
 
     def action_quit(self) -> None:
-        """Quit the application."""
+        """Quit the application and return to the shell."""
         self.exit()
 
     def action_help(self) -> None:
-        """Show help screen."""
+        """Display the help screen with keyboard shortcuts."""
         self.push_screen(HelpScreen())
 
     def action_refresh(self) -> None:
-        """Refresh the file list."""
+        """Refresh the file list by rescanning the directory."""
         self.load_data()
         self.notify("Refreshing...", severity="information")
 
     def action_search(self) -> None:
-        """Focus on search input."""
+        """Focus the search input field."""
         self.query_one("#search-input", Input).focus()
 
     def action_clear_search(self) -> None:
-        """Clear search and category filter."""
+        """Clear the search term and category filter."""
         search_input = self.query_one("#search-input", Input)
         search_input.value = ""
         self.search_term = ""
@@ -572,7 +708,12 @@ class DatasetExplorer(App):
         self._update_table()
 
     def _get_selected_file(self) -> Optional[AudioFileInfo]:
-        """Get the currently selected file from the table."""
+        """
+        Get the currently selected file from the data table.
+
+        Returns:
+            The AudioFileInfo for the selected row, or None if no selection.
+        """
         table = self.query_one("#files-table", DataTable)
         if table.cursor_row is not None and table.row_count > 0:
             try:
@@ -588,14 +729,14 @@ class DatasetExplorer(App):
         return None
 
     def action_play(self) -> None:
-        """Play the selected audio file."""
+        """Play the currently selected audio file."""
         file_info = self._get_selected_file()
         if file_info:
             screen = FileDetailScreen(file_info)
             screen._play_audio()
 
     def action_spectrogram(self) -> None:
-        """Generate spectrogram for selected file."""
+        """Generate and display a spectrogram for the selected file."""
         file_info = self._get_selected_file()
         if file_info:
             screen = FileDetailScreen(file_info)
