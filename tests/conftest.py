@@ -24,7 +24,7 @@ def sample_metadata_rows():
     """Sample metadata rows for testing."""
     return [
         {
-            "filename": "audio1.wav",
+            "file_name": "audio1.wav",
             "split": "train",
             "target": "1",
             "category": "species_a",
@@ -34,7 +34,7 @@ def sample_metadata_rows():
             "attr_note": ""
         },
         {
-            "filename": "audio2.wav",
+            "file_name": "audio2.wav",
             "split": "train",
             "target": "2",
             "category": "species_b",
@@ -44,7 +44,7 @@ def sample_metadata_rows():
             "attr_note": ""
         },
         {
-            "filename": "audio3.wav",
+            "file_name": "audio3.wav",
             "split": "test",
             "target": "1",
             "category": "species_a",
@@ -61,7 +61,7 @@ def sample_metadata_with_inat():
     """Sample metadata with iNaturalist optional fields."""
     return [
         {
-            "filename": "inat_123_sound_456.mp3",
+            "file_name": "inat_123_sound_456.mp3",
             "split": "train",
             "target": "1",
             "category": "Lithobates catesbeianus",

@@ -169,4 +169,12 @@ def load_pretrained_ast_model(model_path: str) -> AutoModelForAudioClassificatio
         The device_map="auto" parameter automatically distributes the model
         across available GPUs if present, otherwise uses CPU.
     """
-    return AutoModelForAudioClassification.from_pretrained(model_path, device_map="auto")
+    import os
+
+    # Check if model_path looks like a local path (contains path separators or starts with . or /)
+    is_local_path = os.path.sep in model_path or model_path.startswith(('.', '/'))
+
+    if is_local_path:
+        return AutoModelForAudioClassification.from_pretrained(model_path, device_map="auto", local_files_only=True)
+    else:
+        return AutoModelForAudioClassification.from_pretrained(model_path, device_map="auto")
