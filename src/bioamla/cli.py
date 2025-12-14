@@ -180,6 +180,36 @@ def _format_size(size_bytes: int) -> str:
     return f"{size_bytes:.1f} PB"
 
 
+@cli.command()
+@click.argument('directory', required=True)
+def explore(directory: str):
+    """
+    Launch interactive TUI dashboard for exploring audio datasets.
+
+    Browse audio files, view metadata, play audio, and generate spectrograms
+    in an interactive terminal interface.
+
+    \b
+    Keyboard shortcuts:
+      ↑/↓, j/k    Navigate file list
+      Enter       View file details
+      p           Play selected audio
+      s           Generate spectrogram
+      r           Refresh file list
+      /           Search files
+      ?           Show help
+      q           Quit
+    """
+    import os
+
+    if not os.path.isdir(directory):
+        click.echo(f"Error: '{directory}' is not a valid directory", err=True)
+        raise SystemExit(1)
+
+    from bioamla.core.tui import run_explorer
+    run_explorer(directory)
+
+
 # =============================================================================
 # AST Command Group
 # =============================================================================

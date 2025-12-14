@@ -1,0 +1,614 @@
+"""
+Terminal User Interface for Dataset Exploration
+================================================
+
+This module provides a Textual-based TUI application for exploring audio datasets.
+It allows users to browse files, view metadata, and perform quick operations on
+audio datasets.
+"""
+
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import List, Optional
+
+from textual import on, work
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.reactive import reactive
+from textual.screen import ModalScreen
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ListItem,
+    ListView,
+    OptionList,
+    ProgressBar,
+    Rule,
+    Select,
+    Static,
+    TabbedContent,
+    TabPane,
+)
+
+from bioamla.core.explore import (
+    AudioFileInfo,
+    DatasetInfo,
+    filter_audio_files,
+    get_category_summary,
+    scan_directory,
+    sort_audio_files,
+)
+
+
+class FileDetailScreen(ModalScreen[None]):
+    """Modal screen showing detailed file information."""
+
+    BINDINGS = [
+        Binding("escape", "close", "Close"),
+        Binding("p", "play", "Play Audio"),
+        Binding("s", "spectrogram", "View Spectrogram"),
+    ]
+
+    def __init__(self, file_info: AudioFileInfo) -> None:
+        super().__init__()
+        self.file_info = file_info
+
+    def compose(self) -> ComposeResult:
+        f = self.file_info
+        with Container(id="file-detail-container"):
+            yield Label(f"[bold]{f.filename}[/bold]", id="detail-title")
+            yield Rule()
+            with VerticalScroll():
+                yield Static(f"[bold]Path:[/bold] {f.path}")
+                yield Static(f"[bold]Size:[/bold] {f.size_human}")
+                yield Static(f"[bold]Format:[/bold] {f.format or 'Unknown'}")
+                yield Rule()
+                yield Static(f"[bold]Sample Rate:[/bold] {f.sample_rate or 'Unknown'} Hz")
+                yield Static(f"[bold]Duration:[/bold] {f.duration_human}")
+                yield Static(f"[bold]Channels:[/bold] {f.num_channels or 'Unknown'}")
+                yield Static(f"[bold]Frames:[/bold] {f.num_frames or 'Unknown'}")
+                if f.category or f.split or f.attribution:
+                    yield Rule()
+                    yield Static("[bold]Metadata:[/bold]")
+                    if f.category:
+                        yield Static(f"  Category: {f.category}")
+                    if f.split:
+                        yield Static(f"  Split: {f.split}")
+                    if f.target is not None:
+                        yield Static(f"  Target: {f.target}")
+                    if f.attribution:
+                        yield Static(f"  Attribution: {f.attribution}")
+            yield Rule()
+            with Horizontal(id="detail-buttons"):
+                yield Button("Play", id="btn-play", variant="primary")
+                yield Button("Spectrogram", id="btn-spec", variant="default")
+                yield Button("Close", id="btn-close", variant="default")
+
+    def action_close(self) -> None:
+        self.dismiss()
+
+    def action_play(self) -> None:
+        self._play_audio()
+
+    def action_spectrogram(self) -> None:
+        self._show_spectrogram()
+
+    @on(Button.Pressed, "#btn-close")
+    def on_close_pressed(self) -> None:
+        self.dismiss()
+
+    @on(Button.Pressed, "#btn-play")
+    def on_play_pressed(self) -> None:
+        self._play_audio()
+
+    @on(Button.Pressed, "#btn-spec")
+    def on_spec_pressed(self) -> None:
+        self._show_spectrogram()
+
+    def _play_audio(self) -> None:
+        """Attempt to play audio using system player."""
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["afplay", str(self.file_info.path)])
+            elif sys.platform.startswith("linux"):
+                # Try various Linux audio players
+                for player in ["paplay", "aplay", "ffplay"]:
+                    try:
+                        subprocess.Popen(
+                            [player, str(self.file_info.path)],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        break
+                    except FileNotFoundError:
+                        continue
+            elif sys.platform == "win32":
+                import os
+                os.startfile(str(self.file_info.path))
+            self.notify("Playing audio...", severity="information")
+        except Exception as e:
+            self.notify(f"Could not play audio: {e}", severity="error")
+
+    def _show_spectrogram(self) -> None:
+        """Generate and display a spectrogram."""
+        try:
+            from bioamla.core.visualize import generate_spectrogram
+
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                output_path = tmp.name
+
+            generate_spectrogram(
+                str(self.file_info.path),
+                output_path,
+                viz_type="mel",
+            )
+
+            # Try to open the image
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", output_path])
+            elif sys.platform.startswith("linux"):
+                for viewer in ["xdg-open", "feh", "eog", "display"]:
+                    try:
+                        subprocess.Popen([viewer, output_path])
+                        break
+                    except FileNotFoundError:
+                        continue
+            elif sys.platform == "win32":
+                import os
+                os.startfile(output_path)
+
+            self.notify("Spectrogram generated", severity="information")
+        except Exception as e:
+            self.notify(f"Could not generate spectrogram: {e}", severity="error")
+
+
+class HelpScreen(ModalScreen[None]):
+    """Modal screen showing keyboard shortcuts and help."""
+
+    BINDINGS = [
+        Binding("escape", "close", "Close"),
+        Binding("q", "close", "Close"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        with Container(id="help-container"):
+            yield Label("[bold]Bioamla Dataset Explorer[/bold]", id="help-title")
+            yield Rule()
+            yield Static("[bold]Navigation:[/bold]")
+            yield Static("  ↑/↓, j/k    Navigate file list")
+            yield Static("  Enter       View file details")
+            yield Static("  Tab         Switch panels")
+            yield Rule()
+            yield Static("[bold]Actions:[/bold]")
+            yield Static("  p           Play selected audio")
+            yield Static("  s           Generate spectrogram")
+            yield Static("  r           Refresh file list")
+            yield Static("  /           Search files")
+            yield Rule()
+            yield Static("[bold]General:[/bold]")
+            yield Static("  ?           Show this help")
+            yield Static("  q           Quit application")
+            yield Rule()
+            yield Button("Close", id="btn-help-close", variant="primary")
+
+    def action_close(self) -> None:
+        self.dismiss()
+
+    @on(Button.Pressed, "#btn-help-close")
+    def on_close_pressed(self) -> None:
+        self.dismiss()
+
+
+class DatasetExplorer(App):
+    """Textual TUI application for exploring audio datasets."""
+
+    CSS = """
+    Screen {
+        background: $surface;
+    }
+
+    #main-container {
+        height: 100%;
+        width: 100%;
+    }
+
+    #sidebar {
+        width: 30;
+        min-width: 25;
+        max-width: 40;
+        border-right: solid $primary;
+        padding: 1;
+    }
+
+    #content {
+        width: 1fr;
+        padding: 1;
+    }
+
+    #stats-panel {
+        height: auto;
+        max-height: 12;
+        border: solid $primary;
+        padding: 1;
+        margin-bottom: 1;
+    }
+
+    #categories-panel {
+        height: 1fr;
+        border: solid $primary;
+        padding: 1;
+    }
+
+    #file-list {
+        height: 1fr;
+        border: solid $primary;
+    }
+
+    #search-bar {
+        height: 3;
+        margin-bottom: 1;
+    }
+
+    #search-input {
+        width: 1fr;
+    }
+
+    #filter-bar {
+        height: 3;
+        margin-bottom: 1;
+    }
+
+    #sort-select {
+        width: 20;
+    }
+
+    #category-filter {
+        width: 20;
+    }
+
+    DataTable {
+        height: 1fr;
+    }
+
+    #file-detail-container {
+        width: 60;
+        height: auto;
+        max-height: 80%;
+        background: $surface;
+        border: solid $primary;
+        padding: 1 2;
+        margin: 4 4;
+    }
+
+    #detail-title {
+        text-align: center;
+        padding: 1;
+    }
+
+    #detail-buttons {
+        height: 3;
+        align: center middle;
+    }
+
+    #detail-buttons Button {
+        margin: 0 1;
+    }
+
+    #help-container {
+        width: 50;
+        height: auto;
+        max-height: 80%;
+        background: $surface;
+        border: solid $primary;
+        padding: 1 2;
+        margin: 4 4;
+    }
+
+    #help-title {
+        text-align: center;
+        padding: 1;
+    }
+
+    .category-item {
+        padding: 0 1;
+    }
+
+    .stat-label {
+        color: $text-muted;
+    }
+
+    .stat-value {
+        color: $text;
+    }
+
+    ProgressBar {
+        margin: 1 0;
+    }
+
+    #loading-indicator {
+        width: 100%;
+        height: 100%;
+        content-align: center middle;
+    }
+    """
+
+    BINDINGS = [
+        Binding("q", "quit", "Quit"),
+        Binding("?", "help", "Help"),
+        Binding("r", "refresh", "Refresh"),
+        Binding("/", "search", "Search"),
+        Binding("p", "play", "Play"),
+        Binding("s", "spectrogram", "Spectrogram"),
+        Binding("escape", "clear_search", "Clear", show=False),
+    ]
+
+    directory: reactive[str] = reactive("")
+    audio_files: reactive[List[AudioFileInfo]] = reactive([])
+    dataset_info: reactive[Optional[DatasetInfo]] = reactive(None)
+    selected_category: reactive[Optional[str]] = reactive(None)
+    search_term: reactive[str] = reactive("")
+    sort_by: reactive[str] = reactive("name")
+    is_loading: reactive[bool] = reactive(False)
+
+    def __init__(self, directory: str) -> None:
+        super().__init__()
+        self.directory = directory
+        self._all_audio_files: List[AudioFileInfo] = []
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        with Horizontal(id="main-container"):
+            with Vertical(id="sidebar"):
+                yield Static("[bold]Dataset Info[/bold]", id="stats-title")
+                with Container(id="stats-panel"):
+                    yield Static("Loading...", id="stats-content")
+                yield Static("[bold]Categories[/bold]", id="categories-title")
+                with Container(id="categories-panel"):
+                    yield OptionList(id="category-list")
+            with Vertical(id="content"):
+                with Horizontal(id="search-bar"):
+                    yield Input(placeholder="Search files...", id="search-input")
+                with Horizontal(id="filter-bar"):
+                    yield Select(
+                        [
+                            ("Name", "name"),
+                            ("Size", "size"),
+                            ("Duration", "duration"),
+                            ("Category", "category"),
+                            ("Format", "format"),
+                        ],
+                        value="name",
+                        id="sort-select",
+                        prompt="Sort by",
+                    )
+                with Container(id="file-list"):
+                    yield DataTable(id="files-table")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        """Initialize the application after mounting."""
+        self.title = "Bioamla Dataset Explorer"
+        self.sub_title = self.directory
+
+        # Set up the data table
+        table = self.query_one("#files-table", DataTable)
+        table.cursor_type = "row"
+        table.zebra_stripes = True
+        table.add_columns("File", "Size", "Duration", "Format", "Category")
+
+        # Load data
+        self.load_data()
+
+    @work(thread=True)
+    def load_data(self) -> None:
+        """Load audio files from the directory in a background thread."""
+        self.is_loading = True
+        try:
+            files, info = scan_directory(
+                self.directory,
+                recursive=True,
+                load_audio_metadata=True,
+            )
+            self._all_audio_files = files
+            self.call_from_thread(self._update_ui, files, info)
+        except Exception as e:
+            self.call_from_thread(self.notify, f"Error loading data: {e}", severity="error")
+        finally:
+            self.is_loading = False
+
+    def _update_ui(self, files: List[AudioFileInfo], info: DatasetInfo) -> None:
+        """Update UI with loaded data."""
+        self.dataset_info = info
+        self.audio_files = files
+        self._update_stats()
+        self._update_categories()
+        self._update_table()
+
+    def _update_stats(self) -> None:
+        """Update the stats panel."""
+        info = self.dataset_info
+        if not info:
+            return
+
+        stats_content = self.query_one("#stats-content", Static)
+
+        lines = [
+            f"[bold]Path:[/bold] {info.path}",
+            f"[bold]Files:[/bold] {info.total_files}",
+            f"[bold]Size:[/bold] {info.total_size_human}",
+            f"[bold]Metadata:[/bold] {'Yes' if info.has_metadata else 'No'}",
+        ]
+
+        if info.formats:
+            fmt_str = ", ".join(f"{k}: {v}" for k, v in sorted(info.formats.items()))
+            lines.append(f"[bold]Formats:[/bold] {fmt_str}")
+
+        if info.splits:
+            split_str = ", ".join(f"{k}: {v}" for k, v in sorted(info.splits.items()))
+            lines.append(f"[bold]Splits:[/bold] {split_str}")
+
+        stats_content.update("\n".join(lines))
+
+    def _update_categories(self) -> None:
+        """Update the categories list."""
+        category_list = self.query_one("#category-list", OptionList)
+        category_list.clear_options()
+
+        if not self.dataset_info:
+            return
+
+        # Add "All" option
+        total = self.dataset_info.total_files
+        category_list.add_option(f"All ({total})")
+
+        # Add categories
+        for cat, count in sorted(self.dataset_info.categories.items()):
+            category_list.add_option(f"{cat} ({count})")
+
+        # Add uncategorized if there are files without category
+        categorized = sum(self.dataset_info.categories.values())
+        uncategorized = total - categorized
+        if uncategorized > 0:
+            category_list.add_option(f"Uncategorized ({uncategorized})")
+
+    def _update_table(self) -> None:
+        """Update the file table."""
+        table = self.query_one("#files-table", DataTable)
+        table.clear()
+
+        # Apply filters and sorting
+        files = self._all_audio_files
+
+        if self.selected_category:
+            if self.selected_category == "Uncategorized":
+                files = [f for f in files if not f.category]
+            else:
+                files = [f for f in files if f.category == self.selected_category]
+
+        if self.search_term:
+            files = filter_audio_files(files, search_term=self.search_term)
+
+        files = sort_audio_files(files, sort_by=self.sort_by)
+
+        # Add rows
+        for f in files:
+            table.add_row(
+                f.filename,
+                f.size_human,
+                f.duration_human,
+                f.format or "-",
+                f.category or "-",
+                key=str(f.path),
+            )
+
+        self.audio_files = files
+
+    @on(Input.Submitted, "#search-input")
+    def on_search_submitted(self, event: Input.Submitted) -> None:
+        """Handle search input submission."""
+        self.search_term = event.value
+        self._update_table()
+
+    @on(Input.Changed, "#search-input")
+    def on_search_changed(self, event: Input.Changed) -> None:
+        """Handle search input change."""
+        self.search_term = event.value
+        self._update_table()
+
+    @on(Select.Changed, "#sort-select")
+    def on_sort_changed(self, event: Select.Changed) -> None:
+        """Handle sort selection change."""
+        self.sort_by = str(event.value)
+        self._update_table()
+
+    @on(OptionList.OptionSelected, "#category-list")
+    def on_category_selected(self, event: OptionList.OptionSelected) -> None:
+        """Handle category selection."""
+        option_text = str(event.option.prompt)
+        # Extract category name (remove count)
+        cat_name = option_text.rsplit(" (", 1)[0]
+
+        if cat_name == "All":
+            self.selected_category = None
+        else:
+            self.selected_category = cat_name
+
+        self._update_table()
+
+    @on(DataTable.RowSelected, "#files-table")
+    def on_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle file selection."""
+        if event.row_key:
+            file_path = str(event.row_key.value)
+            # Find the file info
+            for f in self._all_audio_files:
+                if str(f.path) == file_path:
+                    self.push_screen(FileDetailScreen(f))
+                    break
+
+    def action_quit(self) -> None:
+        """Quit the application."""
+        self.exit()
+
+    def action_help(self) -> None:
+        """Show help screen."""
+        self.push_screen(HelpScreen())
+
+    def action_refresh(self) -> None:
+        """Refresh the file list."""
+        self.load_data()
+        self.notify("Refreshing...", severity="information")
+
+    def action_search(self) -> None:
+        """Focus on search input."""
+        self.query_one("#search-input", Input).focus()
+
+    def action_clear_search(self) -> None:
+        """Clear search and category filter."""
+        search_input = self.query_one("#search-input", Input)
+        search_input.value = ""
+        self.search_term = ""
+        self.selected_category = None
+        self._update_table()
+
+    def action_play(self) -> None:
+        """Play the selected audio file."""
+        table = self.query_one("#files-table", DataTable)
+        if table.cursor_row is not None:
+            row_key = table.get_row_at(table.cursor_row)
+            if row_key:
+                file_path = str(table.get_row_key_at(table.cursor_row))
+                for f in self._all_audio_files:
+                    if str(f.path) == file_path:
+                        screen = FileDetailScreen(f)
+                        screen._play_audio()
+                        break
+
+    def action_spectrogram(self) -> None:
+        """Generate spectrogram for selected file."""
+        table = self.query_one("#files-table", DataTable)
+        if table.cursor_row is not None:
+            file_path = str(table.get_row_key_at(table.cursor_row))
+            for f in self._all_audio_files:
+                if str(f.path) == file_path:
+                    screen = FileDetailScreen(f)
+                    screen._show_spectrogram()
+                    break
+
+
+def run_explorer(directory: str) -> None:
+    """
+    Run the dataset explorer TUI application.
+
+    Args:
+        directory: Path to the directory to explore
+    """
+    app = DatasetExplorer(directory)
+    app.run()

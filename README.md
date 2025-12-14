@@ -397,7 +397,24 @@ for package, version in versions.items():
     print(f"{package}: {version}")
 ```
 
-### 11. Experiment Tracking with MLflow
+### 11. Dataset Explorer
+
+Launch an interactive terminal dashboard to explore audio datasets:
+
+```bash
+bioamla explore ./my_dataset
+```
+
+The explorer provides:
+
+- File browser with sorting and filtering
+- Dataset statistics (total files, size, formats)
+- Category and split summaries (if metadata.csv present)
+- Audio playback (requires system audio player)
+- Spectrogram generation and viewing
+- Search functionality
+
+### 12. Experiment Tracking with MLflow
 
 bioamla integrates with MLflow for experiment tracking during model training:
 
@@ -437,7 +454,25 @@ MLflow tracks:
 |---------|-------------|
 | `bioamla version` | Display bioamla version |
 | `bioamla devices` | Show CUDA/GPU information |
+| `bioamla explore <DIR>` | Launch interactive TUI dashboard for exploring datasets |
 | `bioamla purge` | Purge cached HuggingFace Hub data (models/datasets) |
+
+**Explore datasets interactively:**
+
+```bash
+bioamla explore ./my_dataset
+```
+
+The explore command launches a terminal-based dashboard for browsing audio files, viewing metadata, playing audio, and generating spectrograms. Keyboard shortcuts:
+
+- `↑/↓`, `j/k` - Navigate file list
+- `Enter` - View file details
+- `p` - Play selected audio
+- `s` - Generate spectrogram
+- `r` - Refresh file list
+- `/` - Search files
+- `?` - Show help
+- `q` - Quit
 
 **Purge cached data:**
 
@@ -831,6 +866,7 @@ taxon_id,name,common_name,observation_count
 - **Librosa**: Audio analysis and feature extraction
 - **SciPy**: Signal processing and filtering
 - **Click**: Command-line interface framework
+- **Textual**: Terminal user interface for dataset exploration
 - **FastAPI**: Web service capability (optional)
 - **Pydantic**: Data validation and API schemas
 - **Audiomentations**: Audio data augmentation
