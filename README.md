@@ -240,6 +240,16 @@ for package, version in versions.items():
 |---------|-------------|
 | `bioamla version` | Display bioamla version |
 | `bioamla devices` | Show CUDA/GPU information |
+| `bioamla purge` | Purge cached HuggingFace Hub data (models/datasets) |
+
+**Purge cached data:**
+
+```bash
+bioamla purge --models          # Purge only cached models
+bioamla purge --datasets        # Purge only cached datasets
+bioamla purge --all             # Purge everything
+bioamla purge --all -y          # Purge everything without confirmation
+```
 
 ### Audio Utilities
 
@@ -259,6 +269,41 @@ for package, version in versions.items():
 | `bioamla ast-batch-inference <DIR>` | Batch directory inference with segmentation |
 | `bioamla ast-finetune` | Fine-tune AST model on custom datasets |
 
+**ast-batch-inference options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output-csv` | `output.csv` | Output CSV file name |
+| `--model-path` | `bioamla/scp-frogs` | AST model to use for inference |
+| `--resample-freq` | `16000` | Resampling frequency |
+| `--clip-seconds` | `1` | Duration of audio clips in seconds |
+| `--overlap-seconds` | `0` | Overlap between clips in seconds |
+| `--restart/--no-restart` | `--no-restart` | Resume from existing results |
+
+**ast-finetune options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--training-dir` | `.` | Directory to save training outputs |
+| `--base-model` | `MIT/ast-finetuned-audioset-10-10-0.4593` | Base model to fine-tune |
+| `--train-dataset` | `bioamla/scp-frogs` | Training dataset from HuggingFace Hub |
+| `--split` | `train` | Dataset split to use |
+| `--category-id-column` | `target` | Column name for category IDs |
+| `--category-label-column` | `category` | Column name for category labels |
+| `--report-to` | `tensorboard` | Where to report metrics |
+| `--learning-rate` | `5e-5` | Learning rate for training |
+| `--push-to-hub/--no-push-to-hub` | `--no-push-to-hub` | Push model to HuggingFace Hub |
+| `--num-train-epochs` | `1` | Number of training epochs |
+| `--per-device-train-batch-size` | `1` | Training batch size per device |
+| `--eval-strategy` | `epoch` | Evaluation strategy |
+| `--save-strategy` | `epoch` | Model save strategy |
+| `--eval-steps` | `1` | Steps between evaluations |
+| `--save-steps` | `1` | Steps between saves |
+| `--load-best-model-at-end/--no-load-best-model-at-end` | `--load-best-model-at-end` | Load best model at end |
+| `--metric-for-best-model` | `accuracy` | Metric for best model selection |
+| `--logging-strategy` | `steps` | Logging strategy |
+| `--logging-steps` | `100` | Steps between logging |
+
 ### iNaturalist Integration
 
 | Command | Description |
@@ -266,6 +311,45 @@ for package, version in versions.items():
 | `bioamla inat-audio <OUTPUT_DIR>` | Download audio observations from iNaturalist |
 | `bioamla inat-taxa-search` | Search for taxa with observations in a place or project |
 | `bioamla inat-project-stats <PROJECT_ID>` | Get statistics for an iNaturalist project |
+
+**inat-audio options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--taxon-ids` | | Comma-separated list of taxon IDs |
+| `--taxon-csv` | | Path to CSV file with taxon_id column |
+| `--taxon-name` | | Filter by taxon name (e.g., "Aves") |
+| `--place-id` | | Filter by place ID (e.g., 1 for US) |
+| `--user-id` | | Filter by observer username |
+| `--project-id` | | Filter by iNaturalist project ID or slug |
+| `--quality-grade` | `research` | Quality grade: research, needs_id, casual |
+| `--sound-license` | | Comma-separated list of licenses |
+| `--start-date` | | Start date (YYYY-MM-DD) |
+| `--end-date` | | End date (YYYY-MM-DD) |
+| `--obs-per-taxon` | `100` | Observations to download per taxon ID |
+| `--organize-by-taxon/--no-organize-by-taxon` | `--organize-by-taxon` | Organize into subdirectories by species |
+| `--include-inat-metadata` | | Include additional iNaturalist metadata |
+| `--file-extensions` | | Comma-separated list of extensions to filter |
+| `--delay` | `1.0` | Delay between downloads (rate limiting) |
+| `--quiet` | | Suppress progress output |
+
+**inat-taxa-search options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--place-id` | | Filter by place ID |
+| `--project-id` | | Filter by project ID or slug |
+| `--taxon-id` | | Filter by parent taxon ID |
+| `--quality-grade` | `research` | Quality grade filter |
+| `--output, -o` | | Output file path for CSV |
+| `--quiet` | | Suppress progress output |
+
+**inat-project-stats options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | | Output file path for JSON |
+| `--quiet` | | Suppress output, print only JSON |
 
 **Download audio from a CSV of taxon IDs:**
 
@@ -291,6 +375,26 @@ taxon_id,name,common_name,observation_count
 |---------|-------------|
 | `bioamla merge-datasets <OUTPUT_DIR> <PATHS...>` | Merge multiple audio datasets into one |
 | `bioamla convert-audio <DATASET_PATH> <FORMAT>` | Convert all audio files in a dataset to a specified format |
+
+**merge-datasets options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--metadata-filename` | `metadata.csv` | Name of metadata CSV file in each dataset |
+| `--overwrite` | | Overwrite existing files instead of skipping |
+| `--no-organize` | | Preserve original directory structure |
+| `--target-format` | | Convert all audio files to this format |
+| `--quiet` | | Suppress progress output |
+
+**convert-audio options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--metadata-filename` | `metadata.csv` | Name of metadata CSV file |
+| `--keep-original` | | Keep original files after conversion |
+| `--quiet` | | Suppress progress output |
+
+Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
 
 ## Technologies
 
