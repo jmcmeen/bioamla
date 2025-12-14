@@ -43,6 +43,7 @@ def download_inat_audio(
     per_page: int = 30,
     delay_between_downloads: float = 1.0,
     organize_by_taxon: bool = True,
+    include_inat_metadata: bool = False,
     verbose: bool = True
 ) -> dict:
     """
@@ -67,6 +68,9 @@ def download_inat_audio(
         per_page: Number of results per API request (max 200)
         delay_between_downloads: Seconds to wait between file downloads (rate limiting)
         organize_by_taxon: If True, organize files into subdirectories by species
+        include_inat_metadata: If True, include additional iNaturalist metadata fields
+            (observation_id, sound_id, common_name, taxon_id, observed_on, location,
+            place_guess, observer, quality_grade, observation_url)
         verbose: If True, print progress information
 
     Returns:
@@ -169,7 +173,6 @@ def download_inat_audio(
                 sound_id = sound.get("id")
                 file_url = sound.get("file_url")
                 license_code = sound.get("license_code", "")
-                attribution = sound.get("attribution", "")
 
                 if not file_url:
                     continue
@@ -184,25 +187,35 @@ def download_inat_audio(
                     stats["total_sounds"] += 1
 
                     relative_path = filepath.relative_to(output_path)
-                    metadata_rows.append({
-                        "filename": str(relative_path),
+
+                    # Default metadata headers
+                    row = {
+                        "file_name": str(relative_path),
                         "split": "train",
                         "target": taxon_id_val,
-                        "observation_id": obs_id,
-                        "sound_id": sound_id,
-                        "species": species_name,
-                        "common_name": common_name,
-                        "taxon_id": taxon_id_val,
-                        "observed_on": observed_on,
-                        "location": location,
-                        "place_guess": place_guess,
-                        "observer": user,
-                        "quality_grade": quality,
-                        "license": license_code,
-                        "attribution": attribution,
-                        "source_url": file_url,
-                        "observation_url": f"https://www.inaturalist.org/observations/{obs_id}"
-                    })
+                        "category": species_name,
+                        "attr_id": user,
+                        "attr_lic": license_code,
+                        "attr_url": file_url,
+                        "attr_note": ""
+                    }
+
+                    # Optional iNaturalist metadata
+                    if include_inat_metadata:
+                        row.update({
+                            "observation_id": obs_id,
+                            "sound_id": sound_id,
+                            "common_name": common_name,
+                            "taxon_id": taxon_id_val,
+                            "observed_on": observed_on,
+                            "location": location,
+                            "place_guess": place_guess,
+                            "observer": user,
+                            "quality_grade": quality,
+                            "observation_url": f"https://www.inaturalist.org/observations/{obs_id}"
+                        })
+
+                    metadata_rows.append(row)
                 else:
                     stats["failed_downloads"] += 1
 
