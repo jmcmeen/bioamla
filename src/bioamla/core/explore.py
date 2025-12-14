@@ -31,7 +31,7 @@ class AudioFileInfo:
         num_channels: Number of audio channels.
         num_frames: Total number of audio frames/samples.
         format: Audio file format (e.g., 'wav', 'mp3').
-        category: Category/class label from metadata CSV.
+        label: Label/class name from metadata CSV.
         split: Dataset split (e.g., 'train', 'test') from metadata CSV.
         target: Numeric target/label ID from metadata CSV.
         attribution: Attribution identifier from metadata CSV.
@@ -45,7 +45,7 @@ class AudioFileInfo:
     num_channels: Optional[int] = None
     num_frames: Optional[int] = None
     format: Optional[str] = None
-    category: Optional[str] = None
+    label: Optional[str] = None
     split: Optional[str] = None
     target: Optional[int] = None
     attribution: Optional[str] = None
@@ -82,7 +82,7 @@ class DatasetInfo:
         name: Name of the dataset directory.
         total_files: Total number of audio files in the dataset.
         total_size_bytes: Total size of all audio files in bytes.
-        categories: Mapping of category names to file counts.
+        labels: Mapping of label names to file counts.
         splits: Mapping of split names to file counts.
         formats: Mapping of audio formats to file counts.
         has_metadata: Whether a metadata.csv file was found.
@@ -93,7 +93,7 @@ class DatasetInfo:
     name: str
     total_files: int = 0
     total_size_bytes: int = 0
-    categories: Dict[str, int] = field(default_factory=dict)
+    labels: Dict[str, int] = field(default_factory=dict)
     splits: Dict[str, int] = field(default_factory=dict)
     formats: Dict[str, int] = field(default_factory=dict)
     has_metadata: bool = False
@@ -221,7 +221,7 @@ def scan_directory(
     for file_info in audio_files:
         if file_info.filename in metadata_dict:
             meta = metadata_dict[file_info.filename]
-            file_info.category = meta.get("category")
+            file_info.label = meta.get("label")
             file_info.split = meta.get("split")
             try:
                 file_info.target = int(meta.get("target", 0))
@@ -247,10 +247,10 @@ def scan_directory(
             fmt = file_info.format.upper()
             dataset_info.formats[fmt] = dataset_info.formats.get(fmt, 0) + 1
 
-        # Count by category
-        if file_info.category:
-            dataset_info.categories[file_info.category] = (
-                dataset_info.categories.get(file_info.category, 0) + 1
+        # Count by label
+        if file_info.label:
+            dataset_info.labels[file_info.label] = (
+                dataset_info.labels.get(file_info.label, 0) + 1
             )
 
         # Count by split
@@ -262,42 +262,42 @@ def scan_directory(
     return audio_files, dataset_info
 
 
-def get_category_summary(audio_files: List[AudioFileInfo]) -> Dict[str, Dict[str, any]]:
+def get_label_summary(audio_files: List[AudioFileInfo]) -> Dict[str, Dict[str, any]]:
     """
-    Get a summary of audio files grouped by category.
+    Get a summary of audio files grouped by label.
 
-    Groups audio files by their category label and computes aggregate
-    statistics for each category.
+    Groups audio files by their label and computes aggregate
+    statistics for each label.
 
     Args:
         audio_files: List of AudioFileInfo objects to summarize.
 
     Returns:
-        Dictionary mapping category names to summary dictionaries containing:
-            - count: Number of files in the category.
+        Dictionary mapping label names to summary dictionaries containing:
+            - count: Number of files with the label.
             - total_size: Total size in bytes.
             - total_duration: Total duration in seconds.
-            - files: List of AudioFileInfo objects in the category.
+            - files: List of AudioFileInfo objects with the label.
     """
-    categories: Dict[str, Dict] = {}
+    labels: Dict[str, Dict] = {}
 
     for file_info in audio_files:
-        cat = file_info.category or "Uncategorized"
-        if cat not in categories:
-            categories[cat] = {
+        lbl = file_info.label or "Unlabeled"
+        if lbl not in labels:
+            labels[lbl] = {
                 "count": 0,
                 "total_size": 0,
                 "total_duration": 0.0,
                 "files": [],
             }
 
-        categories[cat]["count"] += 1
-        categories[cat]["total_size"] += file_info.size_bytes
+        labels[lbl]["count"] += 1
+        labels[lbl]["total_size"] += file_info.size_bytes
         if file_info.duration_seconds:
-            categories[cat]["total_duration"] += file_info.duration_seconds
-        categories[cat]["files"].append(file_info)
+            labels[lbl]["total_duration"] += file_info.duration_seconds
+        labels[lbl]["files"].append(file_info)
 
-    return categories
+    return labels
 
 
 def get_split_summary(audio_files: List[AudioFileInfo]) -> Dict[str, Dict[str, any]]:
@@ -336,7 +336,7 @@ def get_split_summary(audio_files: List[AudioFileInfo]) -> Dict[str, Dict[str, a
 
 def filter_audio_files(
     audio_files: List[AudioFileInfo],
-    category: Optional[str] = None,
+    label: Optional[str] = None,
     split: Optional[str] = None,
     format: Optional[str] = None,
     min_duration: Optional[float] = None,
@@ -351,7 +351,7 @@ def filter_audio_files(
 
     Args:
         audio_files: List of AudioFileInfo objects to filter.
-        category: Filter by exact category name match.
+        label: Filter by exact label name match.
         split: Filter by exact split name match.
         format: Filter by audio format (e.g., 'wav', 'mp3'). Case-insensitive.
         min_duration: Minimum duration in seconds (inclusive).
@@ -363,8 +363,8 @@ def filter_audio_files(
     """
     result = audio_files
 
-    if category:
-        result = [f for f in result if f.category == category]
+    if label:
+        result = [f for f in result if f.label == label]
 
     if split:
         result = [f for f in result if f.split == split]
@@ -408,7 +408,7 @@ def sort_audio_files(
             - 'name': Sort by filename (case-insensitive).
             - 'size': Sort by file size in bytes.
             - 'duration': Sort by audio duration.
-            - 'category': Sort by category label (case-insensitive).
+            - 'label': Sort by label (case-insensitive).
             - 'format': Sort by audio format (case-insensitive).
         reverse: If True, sort in descending order.
 
@@ -419,7 +419,7 @@ def sort_audio_files(
         "name": lambda f: f.filename.lower(),
         "size": lambda f: f.size_bytes,
         "duration": lambda f: f.duration_seconds or 0,
-        "category": lambda f: (f.category or "").lower(),
+        "label": lambda f: (f.label or "").lower(),
         "format": lambda f: (f.format or "").lower(),
     }
 

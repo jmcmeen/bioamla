@@ -24,7 +24,7 @@ REQUIRED_FIELDS = [
     "file_name",    # Relative path to the audio file
     "split",        # Dataset split (train, test, val)
     "target",       # Numeric target/label ID
-    "category",     # Category/class name (e.g., species name)
+    "label",        # Label/class name (e.g., species name)
     "attr_id",      # Attribution identifier (e.g., observer username)
     "attr_lic",     # License code for the audio
     "attr_url",     # URL to the original source

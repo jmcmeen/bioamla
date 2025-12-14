@@ -352,7 +352,7 @@ def download_inat_audio(
                             "file_name": str(relative_path),
                             "split": "train",
                             "target": taxon_id_val,
-                            "category": safe_species,
+                            "label": safe_species,
                             "attr_id": user,
                             "attr_lic": license_code,
                             "attr_url": file_url,
