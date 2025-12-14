@@ -31,7 +31,7 @@ from pyinaturalist import get_observations
 
 # Required metadata fields that must always be present
 _REQUIRED_METADATA_FIELDS = [
-    "file_name", "split", "target", "category",
+    "filename", "split", "target", "category",
     "attr_id", "attr_lic", "attr_url", "attr_note"
 ]
 
@@ -222,7 +222,7 @@ def download_inat_audio(
 
                     # Default metadata headers
                     row = {
-                        "file_name": str(relative_path),
+                        "filename": str(relative_path),
                         "split": "train",
                         "target": taxon_id_val,
                         "category": species_name,
@@ -467,10 +467,15 @@ def _write_metadata_csv(filepath: Path, rows: list, verbose: bool = True) -> Non
             final_fieldnames = list(existing_fieldnames)
 
         # Get existing file names to avoid duplicates
-        existing_files = {row.get("file_name") for row in existing_rows}
+        seen_files = {row.get("filename") for row in existing_rows}
 
-        # Filter out duplicates from new rows
-        new_unique_rows = [row for row in rows if row.get("file_name") not in existing_files]
+        # Filter out duplicates from new rows (against existing and within new rows)
+        new_unique_rows = []
+        for row in rows:
+            filename = row.get("filename")
+            if filename not in seen_files:
+                seen_files.add(filename)
+                new_unique_rows.append(row)
 
         if verbose and len(new_unique_rows) < len(rows):
             skipped = len(rows) - len(new_unique_rows)
@@ -483,7 +488,14 @@ def _write_metadata_csv(filepath: Path, rows: list, verbose: bool = True) -> Non
         final_fieldnames = list(_REQUIRED_METADATA_FIELDS)
         optional_in_rows = [f for f in _OPTIONAL_METADATA_FIELDS if f in rows[0]]
         final_fieldnames.extend(optional_in_rows)
-        all_rows = rows
+        # Deduplicate rows by filename
+        seen_files: Set[str] = set()
+        all_rows = []
+        for row in rows:
+            filename = row.get("filename")
+            if filename not in seen_files:
+                seen_files.add(filename)
+                all_rows.append(row)
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=final_fieldnames)
