@@ -22,11 +22,11 @@ Example usage:
 import time
 import csv
 import warnings
-from typing import Optional, List, Set
+from typing import Any, Optional, List, Set
 from pathlib import Path
 
 import requests
-from pyinaturalist import get_observations
+from pyinaturalist import get_observations, get_observation_species_counts
 
 
 # Required metadata fields that must always be present
@@ -49,7 +49,7 @@ def download_inat_audio(
     taxon_name: Optional[str] = None,
     place_id: Optional[int] = None,
     user_id: Optional[str] = None,
-    project_id: Optional[int] = None,
+    project_id: Optional[str] = None,
     quality_grade: Optional[str] = "research",
     sound_license: Optional[str] = None,
     d1: Optional[str] = None,
@@ -75,7 +75,7 @@ def download_inat_audio(
         taxon_name: Filter by taxon name (e.g., "Aves" for birds)
         place_id: Filter by place ID (e.g., 1 for United States)
         user_id: Filter by observer username
-        project_id: Filter by iNaturalist project ID
+        project_id: Filter by iNaturalist project ID or slug (e.g., "appalachia-bioacoustics")
         quality_grade: Filter by quality grade ("research", "needs_id", or "casual")
         sound_license: Filter by sound license (e.g., "cc-by", "cc-by-nc", "cc0")
         d1: Start date for observation date range (YYYY-MM-DD format)
@@ -95,6 +95,7 @@ def download_inat_audio(
         dict: Summary statistics including:
             - total_observations: Number of observations processed
             - total_sounds: Number of audio files downloaded
+            - skipped_existing: Number of files skipped (already in collection)
             - failed_downloads: Number of failed downloads
             - output_dir: Path to output directory
             - metadata_file: Path to metadata CSV file
@@ -117,12 +118,18 @@ def download_inat_audio(
     stats = {
         "total_observations": 0,
         "total_sounds": 0,
+        "skipped_existing": 0,
         "failed_downloads": 0,
         "output_dir": str(output_path.absolute()),
         "metadata_file": str(output_path / "metadata.csv")
     }
 
     metadata_rows = []
+
+    # Load existing metadata to skip already-downloaded files
+    existing_files = _get_existing_files(output_path / "metadata.csv")
+    if verbose and existing_files:
+        print(f"Found {len(existing_files)} existing files in collection, will skip duplicates.")
 
     # Normalize sound_license to uppercase for pyinaturalist API compatibility
     normalized_license = sound_license.upper() if sound_license else None
@@ -218,6 +225,14 @@ def download_inat_audio(
                         if verbose:
                             print(f"  Skipped: {ext} file (filtering for {normalized_extensions})")
                         continue
+
+                    # Skip files that already exist in the collection
+                    if (obs_id, sound_id) in existing_files:
+                        if verbose:
+                            print(f"  Skipped: inat_{obs_id}_sound_{sound_id} (already exists)")
+                        stats["skipped_existing"] += 1
+                        continue
+
                     filename = f"inat_{obs_id}_sound_{sound_id}{ext}"
                     filepath = species_dir / filename
 
@@ -279,6 +294,7 @@ def download_inat_audio(
         print(f"\nDownload complete!")
         print(f"  Observations processed: {stats['total_observations']}")
         print(f"  Audio files downloaded: {stats['total_sounds']}")
+        print(f"  Skipped (already exist): {stats['skipped_existing']}")
         print(f"  Failed downloads: {stats['failed_downloads']}")
         print(f"  Output directory: {stats['output_dir']}")
         print(f"  Metadata file: {stats['metadata_file']}")
@@ -347,6 +363,177 @@ def get_observation_sounds(observation_id: int) -> list:
     if results:
         return results[0].get("sounds", [])
     return []
+
+
+def get_taxa(
+    place_id: Optional[int] = None,
+    project_id: Optional[str] = None,
+    quality_grade: Optional[str] = "research",
+    taxon_id: Optional[int] = None,
+    verbose: bool = True
+) -> List[dict]:
+    """
+    Find all taxa from observations in a place or project.
+
+    Uses the iNaturalist species_counts API for efficient retrieval.
+
+    Args:
+        place_id: Filter by place ID (e.g., 1 for United States)
+        project_id: Filter by iNaturalist project ID or slug
+        quality_grade: Filter by quality grade ("research", "needs_id", or "casual")
+        taxon_id: Filter by parent taxon ID (e.g., 20979 for Amphibia)
+        verbose: If True, print progress information
+
+    Returns:
+        List of dictionaries containing taxon information:
+            - taxon_id: The iNaturalist taxon ID
+            - name: Scientific name
+            - common_name: Common name (if available)
+            - observation_count: Number of observations found
+
+    Example:
+        >>> taxa = get_taxa(project_id="appalachia-bioacoustics", taxon_id=20979)
+        >>> for t in taxa:
+        ...     print(f"{t['name']} ({t['common_name']}): {t['observation_count']} observations")
+    """
+    if not place_id and not project_id:
+        raise ValueError("At least one of place_id or project_id must be provided")
+
+    if verbose:
+        print("Fetching species counts from iNaturalist...")
+
+    taxa_list = []
+    page = 1
+    per_page = 500
+
+    while True:
+        response = get_observation_species_counts(
+            place_id=place_id,
+            project_id=project_id,
+            quality_grade=quality_grade,
+            taxon_id=taxon_id,
+            page=page,
+            per_page=per_page
+        )
+
+        results = response.get("results", [])
+
+        if not results:
+            break
+
+        for item in results:
+            taxon = item.get("taxon", {})
+            taxa_list.append({
+                "taxon_id": taxon.get("id"),
+                "name": taxon.get("name", "unknown"),
+                "common_name": taxon.get("preferred_common_name", ""),
+                "observation_count": item.get("count", 0)
+            })
+
+        if verbose:
+            print(f"  Fetched {len(taxa_list)} taxa...")
+
+        if len(results) < per_page:
+            break
+
+        page += 1
+
+    # Sort by observation count descending
+    taxa_list.sort(key=lambda x: x["observation_count"], reverse=True)
+
+    if verbose:
+        print(f"Found {len(taxa_list)} unique taxa")
+
+    return taxa_list
+
+
+def get_project_stats(
+    project_id: str,
+    verbose: bool = True
+) -> dict[str, Any]:
+    """
+    Get statistics for an iNaturalist project.
+
+    Queries the iNaturalist API for project information including
+    observation counts, species counts, and observer information.
+
+    Args:
+        project_id: iNaturalist project ID or slug (e.g., "appalachia-bioacoustics")
+        verbose: If True, print progress information
+
+    Returns:
+        Dictionary containing project statistics:
+            - id: Project ID
+            - title: Project title
+            - description: Project description
+            - slug: Project slug
+            - observation_count: Total number of observations
+            - species_count: Number of species observed
+            - observers_count: Number of observers
+            - created_at: Project creation date
+            - project_type: Type of project
+            - place: Place information (if applicable)
+            - url: URL to the project page
+
+    Example:
+        >>> stats = get_project_stats("appalachia-bioacoustics")
+        >>> print(f"{stats['title']}: {stats['observation_count']} observations")
+    """
+    if verbose:
+        print(f"Fetching project stats for '{project_id}'...")
+
+    # Get project metadata
+    project_url = f"https://api.inaturalist.org/v1/projects/{project_id}"
+    response = requests.get(project_url, timeout=30)
+    response.raise_for_status()
+
+    data = response.json()
+    results = data.get("results", [])
+
+    if not results:
+        raise ValueError(f"Project '{project_id}' not found")
+
+    project = results[0]
+
+    # Get observation count
+    obs_url = f"https://api.inaturalist.org/v1/observations?project_id={project_id}&per_page=0"
+    obs_response = requests.get(obs_url, timeout=30)
+    obs_response.raise_for_status()
+    observation_count = obs_response.json().get("total_results", 0)
+
+    # Get species count
+    species_url = f"https://api.inaturalist.org/v1/observations/species_counts?project_id={project_id}&per_page=0"
+    species_response = requests.get(species_url, timeout=30)
+    species_response.raise_for_status()
+    species_count = species_response.json().get("total_results", 0)
+
+    # Get observers count
+    observers_url = f"https://api.inaturalist.org/v1/observations/observers?project_id={project_id}&per_page=0"
+    observers_response = requests.get(observers_url, timeout=30)
+    observers_response.raise_for_status()
+    observers_count = observers_response.json().get("total_results", 0)
+
+    stats = {
+        "id": project.get("id"),
+        "title": project.get("title", ""),
+        "description": project.get("description", ""),
+        "slug": project.get("slug", ""),
+        "observation_count": observation_count,
+        "species_count": species_count,
+        "observers_count": observers_count,
+        "created_at": project.get("created_at", ""),
+        "project_type": project.get("project_type", ""),
+        "place": project.get("place", {}).get("display_name", "") if project.get("place") else "",
+        "url": f"https://www.inaturalist.org/projects/{project.get('slug', project_id)}"
+    }
+
+    if verbose:
+        print(f"  Title: {stats['title']}")
+        print(f"  Observations: {stats['observation_count']}")
+        print(f"  Species: {stats['species_count']}")
+        print(f"  Observers: {stats['observers_count']}")
+
+    return stats
 
 
 def _sanitize_filename(name: str) -> str:
@@ -419,6 +606,50 @@ def _get_extension_from_content_type(content_type: str) -> str:
         "audio/x-flac": ".flac",
     }
     return mapping.get(content_type, "")
+
+
+def _get_existing_files(metadata_path: Path) -> Set[tuple[int, int]]:
+    """
+    Read existing metadata CSV and extract (observation_id, sound_id) pairs.
+
+    This is used to skip downloading files that already exist in the collection.
+    The function parses filenames in the format 'inat_{obs_id}_sound_{sound_id}.ext'
+    to extract the IDs.
+
+    Args:
+        metadata_path: Path to the metadata.csv file
+
+    Returns:
+        Set of (observation_id, sound_id) tuples for existing files
+    """
+    existing: Set[tuple[int, int]] = set()
+
+    if not metadata_path.exists():
+        return existing
+
+    try:
+        with open(metadata_path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                filename = row.get("filename", "")
+                # Extract obs_id and sound_id from filename pattern: inat_{obs_id}_sound_{sound_id}.ext
+                # The filename may include a subdirectory (e.g., "species_name/inat_123_sound_456.mp3")
+                basename = Path(filename).name
+                if basename.startswith("inat_") and "_sound_" in basename:
+                    try:
+                        # Parse: inat_{obs_id}_sound_{sound_id}.ext
+                        parts = basename.replace("inat_", "").split("_sound_")
+                        obs_id = int(parts[0])
+                        sound_id = int(parts[1].split(".")[0])
+                        existing.add((obs_id, sound_id))
+                    except (ValueError, IndexError):
+                        # Skip malformed filenames
+                        continue
+    except (OSError, csv.Error):
+        # If we can't read the file, return empty set (will download everything)
+        pass
+
+    return existing
 
 
 def _read_existing_metadata(filepath: Path) -> tuple[list[dict], Set[str]]:
