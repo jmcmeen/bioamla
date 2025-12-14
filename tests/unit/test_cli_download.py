@@ -3,8 +3,8 @@ Unit tests for bioamla CLI download command.
 """
 
 import os
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from click.testing import CliRunner
 
 from bioamla.cli import cli

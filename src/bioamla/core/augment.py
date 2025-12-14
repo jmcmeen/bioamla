@@ -12,7 +12,7 @@ Supported augmentations:
 - pitch-shift: Pitch shifting (change pitch without speed change)
 - gain: Random gain adjustment
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -187,8 +187,8 @@ def augment_file(
 
     # Resample if needed
     if orig_sr != config.sample_rate:
-        import torchaudio
         import torch
+        import torchaudio
 
         waveform_tensor = torch.from_numpy(audio).unsqueeze(0)
         resampler = torchaudio.transforms.Resample(orig_sr, config.sample_rate)
@@ -285,8 +285,8 @@ def batch_augment(
 
             # Resample if needed
             if orig_sr != config.sample_rate:
-                import torchaudio
                 import torch
+                import torchaudio
 
                 waveform_tensor = torch.from_numpy(audio).unsqueeze(0)
                 resampler = torchaudio.transforms.Resample(orig_sr, config.sample_rate)

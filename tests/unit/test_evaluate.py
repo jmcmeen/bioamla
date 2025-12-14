@@ -3,7 +3,6 @@ Unit tests for bioamla.core.evaluate module.
 """
 
 import json
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -11,9 +10,9 @@ import pytest
 from bioamla.core.evaluate import (
     EvaluationResult,
     compute_metrics,
-    load_ground_truth,
     evaluate_predictions,
     format_metrics_report,
+    load_ground_truth,
     save_evaluation_results,
 )
 

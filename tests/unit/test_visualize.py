@@ -3,7 +3,6 @@ Unit tests for bioamla.core.visualize module.
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -136,7 +135,6 @@ class TestBatchGenerateSpectrograms:
         output_dir = temp_dir / "output"
 
         # Create mock audio files using the same structure as conftest
-        import struct
 
         for i in range(3):
             audio_path = input_dir / f"test_{i}.wav"

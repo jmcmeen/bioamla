@@ -2,8 +2,8 @@
 Unit tests for bioamla.core.ast module.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import torch
 
 
@@ -289,7 +289,7 @@ class TestProcessSegmentsBatched:
         mock_inputs.input_values = torch.zeros(1, 100)
         mock_extractor.return_value = mock_inputs
 
-        from bioamla.core.ast import _process_segments_batched, InferenceConfig
+        from bioamla.core.ast import InferenceConfig, _process_segments_batched
 
         segments = [
             (torch.randn(1, 16000), 0, 16000),

@@ -10,7 +10,6 @@ audio datasets.
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
 from typing import List, Optional
 
 from textual import on, work
@@ -26,22 +25,16 @@ from textual.widgets import (
     Header,
     Input,
     Label,
-    ListItem,
-    ListView,
     OptionList,
-    ProgressBar,
     Rule,
     Select,
     Static,
-    TabbedContent,
-    TabPane,
 )
 
 from bioamla.core.explore import (
     AudioFileInfo,
     DatasetInfo,
     filter_audio_files,
-    get_category_summary,
     scan_directory,
     sort_audio_files,
 )

@@ -7,7 +7,6 @@ in the bioamla package. It supports loading audio file information, metadata,
 and preparing data for display in the TUI dashboard.
 """
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -151,7 +150,7 @@ def scan_directory(
 
     # Find audio files
     audio_files: List[AudioFileInfo] = []
-    extensions = set(ext.lower() for ext in SUPPORTED_AUDIO_EXTENSIONS)
+    extensions = {ext.lower() for ext in SUPPORTED_AUDIO_EXTENSIONS}
 
     if recursive:
         all_files = list(dir_path.rglob("*"))

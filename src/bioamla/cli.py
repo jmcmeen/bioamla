@@ -464,7 +464,7 @@ def ast_train(
         PitchShift,
         TimeStretch,
     )
-    from datasets import Audio, ClassLabel, Dataset, DatasetDict, load_dataset
+    from datasets import Audio, Dataset, DatasetDict, load_dataset
     from novus_pytils.files import create_directory
     from transformers import (
         ASTConfig,
@@ -817,6 +817,7 @@ def ast_evaluate(
         bioamla ast evaluate ./test_audio --model bioamla/scp-frogs --ground-truth labels.csv
     """
     from pathlib import Path as PathLib
+
     from bioamla.core.evaluate import (
         evaluate_directory,
         format_metrics_report,
@@ -1011,10 +1012,10 @@ def audio_convert(
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet):
     """Apply frequency filter to audio files."""
-    import os
     from bioamla.core.signal import (
-        bandpass_filter, lowpass_filter, highpass_filter,
-        process_file, batch_process, load_audio, save_audio
+        bandpass_filter,
+        highpass_filter,
+        lowpass_filter,
     )
 
     if not any([bandpass, lowpass, highpass]):
@@ -1061,8 +1062,8 @@ def audio_denoise(path, output, batch, method, strength, quiet):
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_segment(path, output, silence_threshold, min_silence, min_segment, quiet):
     """Split audio on silence into separate files."""
-    import os
     from pathlib import Path
+
     from bioamla.core.signal import load_audio, save_audio, split_audio_on_silence
 
     path = Path(path)
@@ -1103,7 +1104,8 @@ def audio_detect_events(path, output, quiet):
     """Detect onset events in audio and save to CSV."""
     import csv
     from pathlib import Path
-    from bioamla.core.signal import load_audio, detect_onsets
+
+    from bioamla.core.signal import detect_onsets, load_audio
 
     path = Path(path)
     if not path.exists():
@@ -1189,9 +1191,9 @@ def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
 
 def _run_signal_processing(path, output, batch, processor, quiet, operation, output_sr=None):
     """Helper to run signal processing on file or directory."""
-    import os
     from pathlib import Path
-    from bioamla.core.signal import process_file, batch_process, load_audio, save_audio
+
+    from bioamla.core.signal import batch_process, load_audio, save_audio
 
     path = Path(path)
 
