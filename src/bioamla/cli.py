@@ -914,6 +914,128 @@ def visualize(
 
 
 # =============================================================================
+# Augment Command
+# =============================================================================
+
+def parse_range(value: str) -> tuple:
+    """Parse a range string like '0.8-1.2' or '-2,2' into (min, max)."""
+    if '-' in value and not value.startswith('-'):
+        parts = value.split('-')
+        return float(parts[0]), float(parts[1])
+    elif ',' in value:
+        parts = value.split(',')
+        return float(parts[0]), float(parts[1])
+    else:
+        val = float(value)
+        return val, val
+
+
+@cli.command()
+@click.argument('input_dir')
+@click.option('--output', '-o', required=True, help='Output directory for augmented files')
+@click.option('--add-noise', default=None, help='Add Gaussian noise with SNR range (e.g., "3-30" dB)')
+@click.option('--time-stretch', default=None, help='Time stretch range (e.g., "0.8-1.2")')
+@click.option('--pitch-shift', default=None, help='Pitch shift range in semitones (e.g., "-2,2")')
+@click.option('--gain', default=None, help='Gain range in dB (e.g., "-12,12")')
+@click.option('--multiply', default=1, type=int, help='Number of augmented copies to create per file')
+@click.option('--sample-rate', default=16000, type=int, help='Target sample rate for output')
+@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def augment(
+    input_dir: str,
+    output: str,
+    add_noise: str,
+    time_stretch: str,
+    pitch_shift: str,
+    gain: str,
+    multiply: int,
+    sample_rate: int,
+    recursive: bool,
+    quiet: bool
+):
+    """
+    Augment audio files to expand training datasets.
+
+    Creates augmented copies of audio files with various transformations.
+    At least one augmentation option must be specified.
+
+    Examples:
+        bioamla augment ./audio --output ./augmented --add-noise 3-30
+
+        bioamla augment ./audio --output ./augmented \\
+            --add-noise 3-30 \\
+            --time-stretch 0.8-1.2 \\
+            --pitch-shift -2,2 \\
+            --multiply 5
+
+    Augmentation options:
+        --add-noise: Add Gaussian noise with SNR in specified range (dB)
+        --time-stretch: Speed up/slow down without changing pitch
+        --pitch-shift: Change pitch without changing speed (semitones)
+        --gain: Random volume adjustment (dB)
+    """
+    from bioamla.core.augment import AugmentationConfig, batch_augment
+
+    # Build configuration from options
+    config = AugmentationConfig(
+        sample_rate=sample_rate,
+        multiply=multiply,
+    )
+
+    # Parse augmentation options
+    if add_noise:
+        config.add_noise = True
+        min_snr, max_snr = parse_range(add_noise)
+        config.noise_min_snr = min_snr
+        config.noise_max_snr = max_snr
+
+    if time_stretch:
+        config.time_stretch = True
+        min_rate, max_rate = parse_range(time_stretch)
+        config.time_stretch_min = min_rate
+        config.time_stretch_max = max_rate
+
+    if pitch_shift:
+        config.pitch_shift = True
+        min_semi, max_semi = parse_range(pitch_shift)
+        config.pitch_shift_min = min_semi
+        config.pitch_shift_max = max_semi
+
+    if gain:
+        config.gain = True
+        min_db, max_db = parse_range(gain)
+        config.gain_min_db = min_db
+        config.gain_max_db = max_db
+
+    # Check that at least one augmentation is enabled
+    if not any([config.add_noise, config.time_stretch, config.pitch_shift, config.gain]):
+        click.echo("Error: At least one augmentation option must be specified")
+        click.echo("Use --help for available options")
+        raise SystemExit(1)
+
+    try:
+        stats = batch_augment(
+            input_dir=input_dir,
+            output_dir=output,
+            config=config,
+            recursive=recursive,
+            verbose=not quiet,
+        )
+
+        if quiet:
+            click.echo(
+                f"Created {stats['files_created']} augmented files from "
+                f"{stats['files_processed']} source files in {stats['output_dir']}"
+            )
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"Error during augmentation: {e}")
+        raise SystemExit(1)
+
+
+# =============================================================================
 # iNaturalist Command Group
 # =============================================================================
 
