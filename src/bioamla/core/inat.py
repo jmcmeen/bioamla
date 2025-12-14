@@ -21,11 +21,26 @@ Example usage:
 
 import time
 import csv
-from typing import Optional, List
+import warnings
+from typing import Optional, List, Set
 from pathlib import Path
 
 import requests
 from pyinaturalist import get_observations
+
+
+# Required metadata fields that must always be present
+_REQUIRED_METADATA_FIELDS = [
+    "file_name", "split", "target", "category",
+    "attr_id", "attr_lic", "attr_url", "attr_note"
+]
+
+# Optional iNaturalist metadata fields
+_OPTIONAL_METADATA_FIELDS = [
+    "observation_id", "sound_id", "common_name", "taxon_id",
+    "observed_on", "location", "place_guess", "observer",
+    "quality_grade", "observation_url"
+]
 
 
 def download_inat_audio(
@@ -250,7 +265,7 @@ def download_inat_audio(
             break
 
     if metadata_rows:
-        _write_metadata_csv(output_path / "metadata.csv", metadata_rows)
+        _write_metadata_csv(output_path / "metadata.csv", metadata_rows, verbose)
 
     if verbose:
         print(f"\nDownload complete!")
@@ -398,14 +413,76 @@ def _get_extension_from_content_type(content_type: str) -> str:
     return mapping.get(content_type, "")
 
 
-def _write_metadata_csv(filepath: Path, rows: list) -> None:
-    """Write metadata rows to a CSV file."""
+def _read_existing_metadata(filepath: Path) -> tuple[list[dict], Set[str]]:
+    """Read existing metadata CSV and return rows and fieldnames."""
+    rows = []
+    fieldnames: Set[str] = set()
+
+    if not filepath.exists():
+        return rows, fieldnames
+
+    with open(filepath, "r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        fieldnames = set(reader.fieldnames or [])
+        rows = list(reader)
+
+    return rows, fieldnames
+
+
+def _write_metadata_csv(filepath: Path, rows: list, verbose: bool = True) -> None:
+    """Write metadata rows to a CSV file, merging with existing data if present."""
     if not rows:
         return
 
-    fieldnames = rows[0].keys()
+    new_fieldnames = set(rows[0].keys())
+    existing_rows, existing_fieldnames = _read_existing_metadata(filepath)
+
+    if existing_rows:
+        # Check for optional metadata mismatch
+        existing_optional = existing_fieldnames & set(_OPTIONAL_METADATA_FIELDS)
+        new_optional = new_fieldnames & set(_OPTIONAL_METADATA_FIELDS)
+
+        if existing_optional != new_optional:
+            # TODO: Handle optional metadata mismatch more gracefully by allowing
+            # users to choose whether to keep, drop, or fill with defaults
+            warnings.warn(
+                f"Optional metadata mismatch when merging datasets. "
+                f"Existing has: {existing_optional or 'none'}, "
+                f"New has: {new_optional or 'none'}. "
+                f"Dropping optional metadata columns to maintain consistency.",
+                UserWarning
+            )
+            # Drop optional metadata from both existing and new rows
+            for row in existing_rows:
+                for field in _OPTIONAL_METADATA_FIELDS:
+                    row.pop(field, None)
+            for row in rows:
+                for field in _OPTIONAL_METADATA_FIELDS:
+                    row.pop(field, None)
+
+            # Update fieldnames to required only
+            final_fieldnames = _REQUIRED_METADATA_FIELDS
+        else:
+            # Fieldnames match, use existing order
+            final_fieldnames = list(existing_fieldnames)
+
+        # Get existing file names to avoid duplicates
+        existing_files = {row.get("file_name") for row in existing_rows}
+
+        # Filter out duplicates from new rows
+        new_unique_rows = [row for row in rows if row.get("file_name") not in existing_files]
+
+        if verbose and len(new_unique_rows) < len(rows):
+            skipped = len(rows) - len(new_unique_rows)
+            print(f"  Skipped {skipped} duplicate entries during merge")
+
+        # Merge rows
+        all_rows = existing_rows + new_unique_rows
+    else:
+        final_fieldnames = list(rows[0].keys())
+        all_rows = rows
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = csv.DictWriter(f, fieldnames=final_fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(all_rows)
