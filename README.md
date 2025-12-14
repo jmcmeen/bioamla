@@ -57,17 +57,17 @@ The `devices` command will show your CUDA/GPU availability and configuration.
 Classify a single audio file using a pre-trained model:
 
 ```bash
-bioamla ast predict path/to/audio.wav bioamla/scp-frogs 16000
+bioamla ast predict path/to/audio.wav --model-path bioamla/scp-frogs
 ```
 
-This will output the top predictions with confidence scores for the audio file.
+This will output the predicted class for the audio file.
 
 ### 2. Batch Inference on Directory
 
-Process all audio files in a directory and export results to CSV:
+Process all audio files in a directory and export results to CSV using the `--batch` flag:
 
 ```bash
-bioamla ast infer /path/to/audio/directory \
+bioamla ast predict /path/to/audio/directory --batch \
   --output-csv results.csv \
   --model-path bioamla/scp-frogs \
   --resample-freq 16000 \
@@ -80,7 +80,7 @@ This creates a CSV file with columns: `filepath`, `start`, `stop`, `prediction`
 **Optimized inference with GPU acceleration:**
 
 ```bash
-bioamla ast infer /path/to/audio/directory \
+bioamla ast predict /path/to/audio/directory --batch \
   --model-path bioamla/scp-frogs \
   --batch-size 16 \
   --fp16 \
@@ -88,7 +88,7 @@ bioamla ast infer /path/to/audio/directory \
   --workers 4
 ```
 
-Performance options:
+Performance options (batch mode only):
 
 - `--batch-size`: Process multiple segments in one forward pass (2-4x faster)
 - `--fp16`: Use half-precision inference (~2x faster on modern GPUs)
@@ -98,7 +98,7 @@ Performance options:
 **Resume interrupted processing:**
 
 ```bash
-bioamla ast infer /path/to/audio/directory \
+bioamla ast predict /path/to/audio/directory --batch \
   --output-csv results.csv \
   --no-restart
 ```
@@ -135,7 +135,54 @@ bioamla ast train \
   --push-to-hub
 ```
 
-### 4. Audio File Utilities
+### 4. Spectrogram Visualization
+
+Generate spectrograms and other audio visualizations:
+
+**Single file:**
+
+```bash
+bioamla visualize audio.wav --output spectrogram.png
+```
+
+**Batch processing:**
+
+```bash
+bioamla visualize ./audio_dir --batch --output ./spectrograms
+```
+
+**Visualization types:**
+
+```bash
+# Mel spectrogram (default)
+bioamla visualize audio.wav --type mel --output mel_spec.png
+
+# MFCC visualization
+bioamla visualize audio.wav --type mfcc --output mfcc.png
+
+# Waveform plot
+bioamla visualize audio.wav --type waveform --output waveform.png
+```
+
+### 5. Audio Augmentation
+
+Expand training datasets with augmented audio:
+
+```bash
+bioamla augment ./audio --output ./augmented \
+  --add-noise 3-30 \
+  --time-stretch 0.8-1.2 \
+  --pitch-shift -2,2 \
+  --multiply 5
+```
+
+This creates 5 augmented copies of each audio file with random combinations of:
+
+- Gaussian noise (SNR 3-30 dB)
+- Time stretching (80%-120% speed)
+- Pitch shifting (-2 to +2 semitones)
+
+### 6. Audio File Utilities
 
 **List all audio files in a directory:**
 
@@ -161,7 +208,7 @@ bioamla download https://example.com/audio.zip ./downloads
 bioamla unzip ./downloads/audio.zip ./extracted
 ```
 
-### 5. Python API Usage
+### 7. Python API Usage
 
 Use bioamla programmatically in your Python scripts:
 
@@ -227,7 +274,7 @@ segments = split_waveform_tensor(
 )
 ```
 
-### 6. System Diagnostics
+### 8. System Diagnostics
 
 **Check GPU availability:**
 
@@ -250,7 +297,7 @@ for package, version in versions.items():
     print(f"{package}: {version}")
 ```
 
-### 7. Experiment Tracking with MLflow
+### 9. Experiment Tracking with MLflow
 
 bioamla integrates with MLflow for experiment tracking during model training:
 
@@ -319,6 +366,26 @@ bioamla purge --all -y          # Purge everything without confirmation
 
 Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
 
+### Visualization Commands
+
+| Command | Description |
+|---------|-------------|
+| `bioamla visualize <PATH>` | Generate spectrogram visualizations (use `--batch` for directories) |
+
+**visualize options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | | Output file path (single file) or directory (batch mode) |
+| `--batch` | | Process all audio files in a directory |
+| `--type` | `mel` | Visualization type: `mel`, `mfcc`, or `waveform` |
+| `--sample-rate` | `16000` | Target sample rate for processing |
+| `--n-mels` | `128` | Number of mel bands (mel spectrogram only) |
+| `--n-mfcc` | `40` | Number of MFCCs (mfcc only) |
+| `--cmap` | `magma` | Colormap for spectrogram visualizations |
+| `--recursive/--no-recursive` | `--recursive` | Search subdirectories (batch mode only) |
+| `--quiet` | | Suppress progress output |
+
 ### File Utilities
 
 | Command | Description |
@@ -331,25 +398,25 @@ Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
 
 | Command | Description |
 |---------|-------------|
-| `bioamla ast predict <FILE> <MODEL> <SR>` | Single file inference |
-| `bioamla ast infer <DIR>` | Batch directory inference with segmentation |
+| `bioamla ast predict <PATH>` | Single file or batch inference (use `--batch` for directories) |
 | `bioamla ast train` | Fine-tune AST model on custom datasets |
 | `bioamla ast push <MODEL_PATH> <REPO_ID>` | Push fine-tuned model to HuggingFace Hub |
 
-**ast infer options:**
+**ast predict options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--output-csv` | `output.csv` | Output CSV file name |
 | `--model-path` | `bioamla/scp-frogs` | AST model to use for inference |
 | `--resample-freq` | `16000` | Resampling frequency |
-| `--clip-seconds` | `1` | Duration of audio clips in seconds |
-| `--overlap-seconds` | `0` | Overlap between clips in seconds |
-| `--restart/--no-restart` | `--no-restart` | Resume from existing results |
-| `--batch-size` | `8` | Number of segments to process in parallel (GPU optimization) |
-| `--fp16/--no-fp16` | `--no-fp16` | Use half-precision inference for ~2x speedup on modern GPUs |
-| `--compile/--no-compile` | `--no-compile` | Use torch.compile() for optimized inference (PyTorch 2.0+) |
-| `--workers` | `1` | Number of parallel workers for file loading |
+| `--batch` | | Run batch inference on a directory of audio files |
+| `--output-csv` | `output.csv` | Output CSV file name (batch mode only) |
+| `--clip-seconds` | `1` | Duration of audio clips in seconds (batch mode only) |
+| `--overlap-seconds` | `0` | Overlap between clips in seconds (batch mode only) |
+| `--restart/--no-restart` | `--no-restart` | Resume from existing results (batch mode only) |
+| `--batch-size` | `8` | Number of segments to process in parallel (batch mode only) |
+| `--fp16/--no-fp16` | `--no-fp16` | Use half-precision inference (batch mode only) |
+| `--compile/--no-compile` | `--no-compile` | Use torch.compile() for optimized inference (batch mode only) |
+| `--workers` | `1` | Number of parallel workers for file loading (batch mode only) |
 
 **ast train options:**
 
