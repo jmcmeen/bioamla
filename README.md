@@ -135,7 +135,34 @@ bioamla ast train \
   --push-to-hub
 ```
 
-### 4. Spectrogram Visualization
+### 4. Model Evaluation
+
+Evaluate model performance on a test dataset with ground truth labels:
+
+```bash
+bioamla ast evaluate ./test_audio --model-path bioamla/scp-frogs \
+  --ground-truth labels.csv
+```
+
+This outputs:
+
+- Accuracy, Precision, Recall, F1 Score
+- Per-class metrics
+- Confusion matrix
+
+**Save results to different formats:**
+
+```bash
+# JSON output
+bioamla ast evaluate ./test_audio --ground-truth labels.csv \
+  --output results.json --format json
+
+# CSV output (per-class metrics)
+bioamla ast evaluate ./test_audio --ground-truth labels.csv \
+  --output results.csv --format csv
+```
+
+### 5. Spectrogram Visualization
 
 Generate spectrograms and other audio visualizations:
 
@@ -164,7 +191,7 @@ bioamla visualize audio.wav --type mfcc --output mfcc.png
 bioamla visualize audio.wav --type waveform --output waveform.png
 ```
 
-### 5. Audio Augmentation
+### 6. Audio Augmentation
 
 Expand training datasets with augmented audio:
 
@@ -182,7 +209,80 @@ This creates 5 augmented copies of each audio file with random combinations of:
 - Time stretching (80%-120% speed)
 - Pitch shifting (-2 to +2 semitones)
 
-### 6. Audio File Utilities
+### 7. Signal Processing
+
+Process audio files with filtering, denoising, and other operations:
+
+**Apply frequency filters:**
+
+```bash
+# Bandpass filter (keep 1000-8000 Hz)
+bioamla audio filter recording.wav --bandpass 1000-8000 --output filtered.wav
+
+# Lowpass filter (remove high frequencies)
+bioamla audio filter recording.wav --lowpass 4000 --output lowpassed.wav
+
+# Highpass filter (remove low frequencies)
+bioamla audio filter recording.wav --highpass 500 --output highpassed.wav
+```
+
+**Remove noise:**
+
+```bash
+bioamla audio denoise noisy.wav --output clean.wav --strength 1.5
+```
+
+**Split audio on silence:**
+
+```bash
+bioamla audio segment long_recording.wav --output ./segments \
+  --silence-threshold -40 \
+  --min-silence 0.3 \
+  --min-segment 0.5
+```
+
+**Detect onset events:**
+
+```bash
+bioamla audio detect-events recording.wav --output events.csv
+```
+
+**Normalize loudness:**
+
+```bash
+# RMS normalization (default)
+bioamla audio normalize recording.wav --target-db -20 --output normalized.wav
+
+# Peak normalization
+bioamla audio normalize recording.wav --peak --target-db -3 --output normalized.wav
+```
+
+**Resample audio:**
+
+```bash
+bioamla audio resample recording.wav --rate 16000 --output resampled.wav
+```
+
+**Trim audio:**
+
+```bash
+# Trim by time
+bioamla audio trim recording.wav --start 1.5 --end 5.0 --output trimmed.wav
+
+# Trim silence from start and end
+bioamla audio trim recording.wav --silence --threshold -40 --output trimmed.wav
+```
+
+**Batch processing:**
+
+All signal processing commands support `--batch` for directory processing:
+
+```bash
+bioamla audio normalize ./recordings --batch --output ./normalized --target-db -20
+bioamla audio filter ./recordings --batch --output ./filtered --lowpass 8000
+```
+
+### 8. Audio File Utilities
 
 **List all audio files in a directory:**
 
@@ -208,7 +308,7 @@ bioamla download https://example.com/audio.zip ./downloads
 bioamla unzip ./downloads/audio.zip ./extracted
 ```
 
-### 7. Python API Usage
+### 9. Python API Usage
 
 Use bioamla programmatically in your Python scripts:
 
@@ -274,7 +374,7 @@ segments = split_waveform_tensor(
 )
 ```
 
-### 8. System Diagnostics
+### 10. System Diagnostics
 
 **Check GPU availability:**
 
@@ -297,7 +397,7 @@ for package, version in versions.items():
     print(f"{package}: {version}")
 ```
 
-### 9. Experiment Tracking with MLflow
+### 11. Experiment Tracking with MLflow
 
 bioamla integrates with MLflow for experiment tracking during model training:
 
@@ -354,17 +454,111 @@ bioamla purge --all -y          # Purge everything without confirmation
 |---------|-------------|
 | `bioamla audio list [DIR]` | List audio files in directory |
 | `bioamla audio info <FILE>` | Display WAV file metadata |
-| `bioamla audio convert <DATASET_PATH> <FORMAT>` | Convert all audio files in a dataset |
+| `bioamla audio convert <PATH> <FORMAT>` | Convert audio files (single file or batch with `--batch`) |
+| `bioamla audio filter <PATH>` | Apply frequency filters (bandpass, lowpass, highpass) |
+| `bioamla audio denoise <PATH>` | Apply spectral noise reduction |
+| `bioamla audio segment <PATH>` | Split audio on silence into separate files |
+| `bioamla audio detect-events <PATH>` | Detect onset events and export to CSV |
+| `bioamla audio normalize <PATH>` | Normalize audio loudness (RMS or peak) |
+| `bioamla audio resample <PATH>` | Resample audio to a different sample rate |
+| `bioamla audio trim <PATH>` | Trim audio by time or remove silence |
 
 **audio convert options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--metadata-filename` | `metadata.csv` | Name of metadata CSV file |
+| `--output, -o` | | Output file or directory |
+| `--batch` | | Process all files in directory |
+| `--dataset` | | Convert dataset with metadata.csv (updates metadata) |
+| `--metadata-filename` | `metadata.csv` | Name of metadata CSV file (for --dataset mode) |
 | `--keep-original` | | Keep original files after conversion |
+| `--recursive/--no-recursive` | `--recursive` | Search subdirectories (batch mode) |
 | `--quiet` | | Suppress progress output |
 
 Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
+
+**Convert examples:**
+
+```bash
+# Single file
+bioamla audio convert recording.mp3 wav --output recording.wav
+
+# Batch convert directory
+bioamla audio convert ./mp3_files wav --batch --output ./wav_files
+
+# Dataset mode (updates metadata.csv)
+bioamla audio convert ./my_dataset mp3 --dataset
+```
+
+**audio filter options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | | Output file or directory |
+| `--batch` | | Process all files in directory |
+| `--bandpass` | | Bandpass filter range (e.g., "1000-8000") |
+| `--lowpass` | | Lowpass cutoff frequency in Hz |
+| `--highpass` | | Highpass cutoff frequency in Hz |
+| `--order` | `5` | Filter order |
+| `--quiet` | | Suppress progress output |
+
+**audio denoise options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | | Output file or directory |
+| `--batch` | | Process all files in directory |
+| `--method` | `spectral` | Denoising method |
+| `--strength` | `1.0` | Noise reduction strength (0-2) |
+| `--quiet` | | Suppress progress output |
+
+**audio segment options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | (required) | Output directory for segments |
+| `--silence-threshold` | `-40` | Silence threshold in dB |
+| `--min-silence` | `0.3` | Minimum silence duration in seconds |
+| `--min-segment` | `0.5` | Minimum segment duration in seconds |
+| `--quiet` | | Suppress progress output |
+
+**audio detect-events options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | (required) | Output CSV file for events |
+| `--quiet` | | Suppress progress output |
+
+**audio normalize options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | | Output file or directory |
+| `--batch` | | Process all files in directory |
+| `--target-db` | `-20` | Target loudness in dB |
+| `--peak` | | Use peak normalization instead of RMS |
+| `--quiet` | | Suppress progress output |
+
+**audio resample options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | | Output file or directory |
+| `--batch` | | Process all files in directory |
+| `--rate` | (required) | Target sample rate in Hz |
+| `--quiet` | | Suppress progress output |
+
+**audio trim options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | | Output file or directory |
+| `--batch` | | Process all files in directory |
+| `--start` | | Start time in seconds |
+| `--end` | | End time in seconds |
+| `--silence` | | Trim silence from start/end instead |
+| `--threshold` | `-40` | Silence threshold in dB (for --silence) |
+| `--quiet` | | Suppress progress output |
 
 ### Visualization Commands
 
@@ -420,6 +614,7 @@ Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
 |---------|-------------|
 | `bioamla ast predict <PATH>` | Single file or batch inference (use `--batch` for directories) |
 | `bioamla ast train` | Fine-tune AST model on custom datasets |
+| `bioamla ast evaluate <PATH>` | Evaluate model on test data with ground truth labels |
 | `bioamla ast push <MODEL_PATH> <REPO_ID>` | Push fine-tuned model to HuggingFace Hub |
 
 **ast predict options:**
@@ -485,6 +680,45 @@ bioamla ast train \
   --mlflow-tracking-uri "http://localhost:5000" \
   --mlflow-experiment-name "frog-classifier" \
   --mlflow-run-name "baseline-run"
+```
+
+**ast evaluate options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--model-path` | `bioamla/scp-frogs` | AST model to use for evaluation |
+| `--ground-truth, -g` | (required) | Path to CSV file with ground truth labels |
+| `--output, -o` | | Output file for evaluation results |
+| `--format` | `txt` | Output format: `json`, `csv`, or `txt` |
+| `--file-column` | `file_name` | Column name for file names in ground truth CSV |
+| `--label-column` | `label` | Column name for labels in ground truth CSV |
+| `--resample-freq` | `16000` | Resampling frequency |
+| `--batch-size` | `8` | Batch size for inference |
+| `--fp16/--no-fp16` | `--no-fp16` | Use half-precision inference |
+| `--quiet` | | Only output metrics, suppress progress |
+
+**Evaluate examples:**
+
+```bash
+# Evaluate model on test directory
+bioamla ast evaluate ./test_audio --model-path bioamla/scp-frogs \
+  --ground-truth labels.csv
+
+# Save results to JSON
+bioamla ast evaluate ./test_audio --model-path bioamla/scp-frogs \
+  --ground-truth labels.csv --output results.json --format json
+
+# Custom ground truth columns
+bioamla ast evaluate ./test_audio --ground-truth data.csv \
+  --file-column filename --label-column species
+```
+
+The ground truth CSV should have columns for file names and labels:
+
+```csv
+file_name,label
+audio1.wav,species_a
+audio2.wav,species_b
 ```
 
 **ast push options:**
@@ -594,10 +828,13 @@ taxon_id,name,common_name,observation_count
 
 - **PyTorch + HuggingFace Transformers**: Audio Spectrogram Transformer models
 - **TorchAudio**: Audio file I/O and preprocessing
+- **Librosa**: Audio analysis and feature extraction
+- **SciPy**: Signal processing and filtering
 - **Click**: Command-line interface framework
 - **FastAPI**: Web service capability (optional)
 - **Pydantic**: Data validation and API schemas
 - **Audiomentations**: Audio data augmentation
+- **Matplotlib**: Spectrogram visualization
 - **TensorBoard**: Training visualization
 - **MLflow**: Experiment tracking and model management (optional)
 
