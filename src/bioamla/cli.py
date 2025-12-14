@@ -144,6 +144,116 @@ def version():
     click.echo(f"bioamla v{get_bioamla_version()}")
 
 @cli.command()
+@click.option('--models', is_flag=True, help='Purge cached models')
+@click.option('--datasets', is_flag=True, help='Purge cached datasets')
+@click.option('--all', 'purge_all', is_flag=True, help='Purge all cached data (models and datasets)')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt')
+def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
+    """
+    Purge cached HuggingFace Hub data from local storage.
+
+    Removes cached models and/or datasets from the HuggingFace Hub cache
+    directory to free up disk space. Use with caution as this will require
+    re-downloading any purged data.
+
+    Examples:
+        bioamla purge --models          # Purge only cached models
+        bioamla purge --datasets        # Purge only cached datasets
+        bioamla purge --all             # Purge everything
+        bioamla purge --all -y          # Purge everything without confirmation
+    """
+    import shutil
+    from pathlib import Path
+
+    from huggingface_hub import scan_cache_dir
+
+    # If no specific option is provided, show help
+    if not models and not datasets and not purge_all:
+        click.echo("Please specify what to purge: --models, --datasets, or --all")
+        click.echo("Run 'bioamla purge --help' for more information.")
+        return
+
+    if purge_all:
+        models = True
+        datasets = True
+
+    # Scan the cache to get information
+    cache_info = scan_cache_dir()
+    cache_path = Path(cache_info.cache_dir)
+
+    models_to_delete = []
+    datasets_to_delete = []
+
+    for repo in cache_info.repos:
+        if repo.repo_type == "model" and models:
+            models_to_delete.append(repo)
+        elif repo.repo_type == "dataset" and datasets:
+            datasets_to_delete.append(repo)
+
+    # Calculate sizes
+    models_size = sum(repo.size_on_disk for repo in models_to_delete)
+    datasets_size = sum(repo.size_on_disk for repo in datasets_to_delete)
+    total_size = models_size + datasets_size
+
+    if not models_to_delete and not datasets_to_delete:
+        click.echo("No cached data found to purge.")
+        return
+
+    # Display what will be deleted
+    click.echo("The following cached data will be purged:")
+    click.echo()
+
+    if models_to_delete:
+        click.echo(f"Models ({len(models_to_delete)} items, {_format_size(models_size)}):")
+        for repo in models_to_delete:
+            click.echo(f"  - {repo.repo_id} ({_format_size(repo.size_on_disk)})")
+        click.echo()
+
+    if datasets_to_delete:
+        click.echo(f"Datasets ({len(datasets_to_delete)} items, {_format_size(datasets_size)}):")
+        for repo in datasets_to_delete:
+            click.echo(f"  - {repo.repo_id} ({_format_size(repo.size_on_disk)})")
+        click.echo()
+
+    click.echo(f"Total space to be freed: {_format_size(total_size)}")
+    click.echo()
+
+    # Confirm deletion
+    if not yes:
+        if not click.confirm("Are you sure you want to delete this cached data?"):
+            click.echo("Aborted.")
+            return
+
+    # Perform deletion
+    deleted_count = 0
+    freed_space = 0
+
+    for repo in models_to_delete + datasets_to_delete:
+        try:
+            for revision in repo.revisions:
+                shutil.rmtree(revision.snapshot_path, ignore_errors=True)
+            # Also try to remove the repo directory if empty
+            repo_path = cache_path / f"{repo.repo_type}s--{repo.repo_id.replace('/', '--')}"
+            if repo_path.exists():
+                shutil.rmtree(repo_path, ignore_errors=True)
+            deleted_count += 1
+            freed_space += repo.size_on_disk
+        except Exception as e:
+            click.echo(f"Warning: Failed to delete {repo.repo_id}: {e}")
+
+    click.echo(f"Successfully purged {deleted_count} items, freed {_format_size(freed_space)}.")
+
+
+def _format_size(size_bytes: int) -> str:
+    """Format bytes into human-readable size."""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} PB"
+
+
+@cli.command()
 @click.option('--training-dir', default='.', help='Directory to save training outputs')
 @click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
 @click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub') #TODO lets make this something else
@@ -238,27 +348,22 @@ def ast_finetune(
     # Cast category column to ClassLabel (converts string names to integer indices)
     # Create label mapping to avoid PyArrow offset overflow with large datasets
     label_to_id = {name: idx for idx, name in enumerate(class_names)}
+    num_labels = len(class_names)
 
     def convert_labels(example):
-        example[category_label_column] = label_to_id[example[category_label_column]]
+        example["labels"] = label_to_id[example[category_label_column]]
         return example
 
-    dataset = dataset.map(convert_labels, writer_batch_size=1000)
+    # Process labels in small batches to avoid PyArrow offset overflow
+    dataset = dataset.map(
+        convert_labels,
+        remove_columns=[category_label_column],
+        writer_batch_size=100,
+        num_proc=1,
+    )
 
-    # Now cast with the proper ClassLabel type
-    new_features = dataset.features.copy() if isinstance(dataset, Dataset) else dataset[list(dataset.keys())[0]].features.copy()
-    new_features[category_label_column] = ClassLabel(names=class_names)
-    dataset = dataset.cast(new_features)
+    # Set audio sampling rate
     dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
-
-    # Rename category to labels for training
-    dataset = dataset.rename_column(category_label_column, "labels")
-    if isinstance(dataset, Dataset):
-        num_labels = len(np.unique(list(dataset["labels"])))
-    elif isinstance(dataset, DatasetDict) and "train" in dataset:
-        num_labels = len(np.unique(list(dataset["train"]["labels"])))
-    else:
-        raise TypeError("Unable to determine number of labels from dataset")
 
     # Define the pretrained model and instantiate the feature extractor
     pretrained_model = base_model
@@ -281,17 +386,9 @@ def ast_finetune(
         inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
         return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
-    # we use the esc50 train split
-    if isinstance(dataset, DatasetDict):
-        first_split = list(dataset.keys())[0]
-        features = dataset[first_split].features
-    else:
-        features = dataset.features
-
-    if features and "labels" in features:
-        label2id = features["labels"]._str2int  # we add the mapping from INTs to STRINGs
-    else:
-        raise ValueError("Labels feature not found in dataset")
+    # Create label mappings from class_names (since we converted labels manually)
+    label2id = {name: idx for idx, name in enumerate(class_names)}
+    id2label = {idx: name for idx, name in enumerate(class_names)}
 
     # split training data
     test_size = 0.2
