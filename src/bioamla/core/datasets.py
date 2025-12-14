@@ -211,7 +211,7 @@ def merge_datasets(
         existing_rows, existing_fieldnames = read_metadata_csv(output_metadata_path)
         all_metadata_rows.extend(existing_rows)
         all_fieldnames.update(existing_fieldnames)
-        existing_filenames.update(row.get("filename", "") for row in existing_rows)
+        existing_filenames.update(row.get("file_name", "") for row in existing_rows)
         # Collect all category names
         for row in existing_rows:
             category = row.get("category", "")
