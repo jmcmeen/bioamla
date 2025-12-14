@@ -21,4 +21,4 @@ bioamla download https://www.bioamla.org/datasets/scp_small.zip .
 bioamla unzip scp_small.zip .
 
 # Step 6: Run batch inference on the test dataset using the fine-tuned model
-bioamla ast infer ./scp_small --model-path ./frogs_out/best_model
+bioamla ast predict ./scp_small --batch --model-path ./frogs_out/best_model
