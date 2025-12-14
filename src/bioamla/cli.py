@@ -1138,5 +1138,85 @@ def convert_audio(
         click.echo(f"Converted {stats['files_converted']} files to {target_format}")
 
 
+@cli.command()
+@click.argument('model_path')
+@click.argument('repo_id')
+@click.option('--private/--public', default=False, help='Make the repository private (default: public)')
+@click.option('--commit-message', default=None, help='Custom commit message for the push')
+def ast_push(
+    model_path: str,
+    repo_id: str,
+    private: bool,
+    commit_message: str
+):
+    """
+    Push a fine-tuned AST model to the HuggingFace Hub.
+
+    Uploads a locally saved AST model (and its associated files) to a
+    HuggingFace Hub repository. The model must have been saved using
+    the transformers library (e.g., from ast-finetune).
+
+    Args:
+        model_path: Path to the local model directory (e.g., ./my-training/best_model)
+        repo_id: HuggingFace Hub repository ID (e.g., username/model-name)
+
+    Examples:
+
+        Push a model to HuggingFace Hub:
+        bioamla ast-push ./my-training/best_model myusername/my-frog-classifier
+
+        Push as a private repository:
+        bioamla ast-push ./my-model myusername/private-model --private
+
+        Push with a custom commit message:
+        bioamla ast-push ./my-model myusername/my-model --commit-message "v1.0 release"
+
+    Note:
+        You must be logged in to HuggingFace Hub. Use 'huggingface-cli login' first.
+    """
+    import os
+
+    from huggingface_hub import HfApi
+    from transformers import ASTForAudioClassification, AutoFeatureExtractor
+
+    # Validate model path exists
+    if not os.path.isdir(model_path):
+        click.echo(f"Error: Model path '{model_path}' does not exist or is not a directory.")
+        raise SystemExit(1)
+
+    click.echo(f"Loading model from {model_path}...")
+
+    try:
+        # Load the model and feature extractor
+        model = ASTForAudioClassification.from_pretrained(model_path)
+        feature_extractor = AutoFeatureExtractor.from_pretrained(model_path)
+    except Exception as e:
+        click.echo(f"Error loading model: {e}")
+        click.echo("Make sure the path contains a valid transformers model.")
+        raise SystemExit(1)
+
+    click.echo(f"Pushing model to HuggingFace Hub: {repo_id}...")
+
+    try:
+        # Create repo if it doesn't exist
+        api = HfApi()
+        api.create_repo(repo_id=repo_id, private=private, exist_ok=True)
+
+        # Push model and feature extractor
+        kwargs = {"repo_id": repo_id}
+        if commit_message:
+            kwargs["commit_message"] = commit_message
+
+        model.push_to_hub(**kwargs)
+        feature_extractor.push_to_hub(**kwargs)
+
+        click.echo(f"Successfully pushed model to: https://huggingface.co/{repo_id}")
+
+    except Exception as e:
+        click.echo(f"Error pushing to HuggingFace Hub: {e}")
+        click.echo("Make sure you are logged in with 'huggingface-cli login'.")
+        raise SystemExit(1)
+
+
 if __name__ == '__main__':
     cli()
