@@ -5,18 +5,17 @@ import click
 
 @click.group()
 def cli():
-    """Bioamla CLI"""
+    """Bioamla CLI - Bioacoustics and Machine Learning Applications"""
     pass
+
+
+# =============================================================================
+# Top-level utility commands
+# =============================================================================
 
 @cli.command()
 def devices():
-    """
-    Display comprehensive device information including CUDA and GPU details.
-
-    Retrieves and displays information about available compute devices,
-    focusing on CUDA-capable GPUs that can be used for machine learning
-    inference and training tasks.
-    """
+    """Display comprehensive device information including CUDA and GPU details."""
     from bioamla.core.diagnostics import get_device_info
     device_info = get_device_info()
 
@@ -28,22 +27,19 @@ def devices():
     for device in device_info['devices']:
         click.echo(f'  - Index: {device["index"]}, Name: {device["name"]}')
 
+
+@cli.command()
+def version():
+    """Display the current version of the bioamla package."""
+    from bioamla.core.diagnostics import get_bioamla_version
+    click.echo(f"bioamla v{get_bioamla_version()}")
+
+
 @cli.command()
 @click.argument('url', required=True)
 @click.argument('output_dir', required=False, default='.')
 def download(url: str, output_dir: str):
-    """
-    Download a file from the specified URL to the target directory.
-
-    Downloads a file from the given URL and saves it to the specified output
-    directory. If no output directory is provided, downloads to the current
-    working directory.
-
-    Args:
-        url (str): The URL of the file to download
-        output_dir (str): Directory where the file should be saved.
-                         Defaults to current directory if not specified.
-    """
+    """Download a file from the specified URL to the target directory."""
     import os
     from urllib.parse import urlparse
 
@@ -52,7 +48,6 @@ def download(url: str, output_dir: str):
     if output_dir == '.':
         output_dir = os.getcwd()
 
-    # Extract filename from URL and construct full output path
     parsed_url = urlparse(url)
     filename = os.path.basename(parsed_url.path)
     if not filename:
@@ -61,45 +56,12 @@ def download(url: str, output_dir: str):
     output_path = os.path.join(output_dir, filename)
     download_file(url, output_path)
 
-@cli.command()
-@click.argument('filepath', required=False, default='.')
-def audio(filepath: str):
-    """
-    Display audio files from a specified directory.
-
-    Args:
-        filepath (str): The path to the directory to search for audio files.
-                        Defaults to the current directory if not provided.
-    """
-    from novus_pytils.audio import get_audio_files
-    try:
-        if filepath == '.':
-            import os
-            filepath = os.getcwd()
-        audio_files = get_audio_files(filepath)
-        if audio_files:
-            for file in audio_files:
-                click.echo(file)
-        else:
-            click.echo("No audio files found in the specified directory.")
-    except Exception as e:
-        click.echo(f"An error occurred: {e}")
 
 @cli.command()
 @click.argument('file_path')
 @click.argument('output_path', required=False, default='.')
 def unzip(file_path: str, output_path: str):
-    """
-    Extract a ZIP archive to the specified output directory.
-
-    Extracts the contents of a ZIP file to the target directory.
-    If no output path is specified, extracts to the current working directory.
-
-    Args:
-        file_path (str): Path to the ZIP file to extract
-        output_path (str): Directory where the ZIP contents should be extracted.
-                          Defaults to current directory if not specified.
-    """
+    """Extract a ZIP archive to the specified output directory."""
     from novus_pytils.compression import extract_zip_file
     if output_path == '.':
         import os
@@ -108,19 +70,11 @@ def unzip(file_path: str, output_path: str):
     extract_zip_file(file_path, output_path)
 
 
-@cli.command()
+@cli.command('zip')
 @click.argument('source_path')
 @click.argument('output_file')
-def zip(source_path: str, output_file: str):
-    """
-    Create a ZIP archive from a file or directory.
-
-    Compresses the specified file or directory into a ZIP archive.
-
-    Args:
-        source_path (str): Path to the file or directory to compress
-        output_file (str): Path for the output ZIP file
-    """
+def zip_cmd(source_path: str, output_file: str):
+    """Create a ZIP archive from a file or directory."""
     import os
 
     from novus_pytils.compression import create_zip_file, zip_directory
@@ -132,16 +86,6 @@ def zip(source_path: str, output_file: str):
 
     click.echo(f"Created {output_file}")
 
-@cli.command()
-def version():
-    """
-    Display the current version of the bioamla package.
-
-    This command retrieves and displays the version information
-    for the installed bioamla package.
-    """
-    from bioamla.core.diagnostics import get_bioamla_version
-    click.echo(f"bioamla v{get_bioamla_version()}")
 
 @cli.command()
 @click.option('--models', is_flag=True, help='Purge cached models')
@@ -149,25 +93,12 @@ def version():
 @click.option('--all', 'purge_all', is_flag=True, help='Purge all cached data (models and datasets)')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt')
 def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
-    """
-    Purge cached HuggingFace Hub data from local storage.
-
-    Removes cached models and/or datasets from the HuggingFace Hub cache
-    directory to free up disk space. Use with caution as this will require
-    re-downloading any purged data.
-
-    Examples:
-        bioamla purge --models          # Purge only cached models
-        bioamla purge --datasets        # Purge only cached datasets
-        bioamla purge --all             # Purge everything
-        bioamla purge --all -y          # Purge everything without confirmation
-    """
+    """Purge cached HuggingFace Hub data from local storage."""
     import shutil
     from pathlib import Path
 
     from huggingface_hub import scan_cache_dir
 
-    # If no specific option is provided, show help
     if not models and not datasets and not purge_all:
         click.echo("Please specify what to purge: --models, --datasets, or --all")
         click.echo("Run 'bioamla purge --help' for more information.")
@@ -177,7 +108,6 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
         models = True
         datasets = True
 
-    # Scan the cache to get information
     cache_info = scan_cache_dir()
 
     models_to_delete = []
@@ -189,7 +119,6 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
         elif repo.repo_type == "dataset" and datasets:
             datasets_to_delete.append(repo)
 
-    # Calculate sizes
     models_size = sum(repo.size_on_disk for repo in models_to_delete)
     datasets_size = sum(repo.size_on_disk for repo in datasets_to_delete)
     total_size = models_size + datasets_size
@@ -198,7 +127,6 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
         click.echo("No cached data found to purge.")
         return
 
-    # Display what will be deleted
     click.echo("The following cached data will be purged:")
     click.echo()
 
@@ -217,17 +145,14 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
     click.echo(f"Total space to be freed: {_format_size(total_size)}")
     click.echo()
 
-    # Confirm deletion
     if not yes:
         if not click.confirm("Are you sure you want to delete this cached data?"):
             click.echo("Aborted.")
             return
 
-    # Perform deletion
     deleted_count = 0
     freed_space = 0
 
-    # Get cache path from huggingface_hub constants
     from huggingface_hub import constants
     cache_path = Path(constants.HF_HUB_CACHE)
 
@@ -235,7 +160,6 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
         try:
             for revision in repo.revisions:
                 shutil.rmtree(revision.snapshot_path, ignore_errors=True)
-            # Also try to remove the repo directory if empty
             repo_path = cache_path / f"{repo.repo_type}s--{repo.repo_id.replace('/', '--')}"
             if repo_path.exists():
                 shutil.rmtree(repo_path, ignore_errors=True)
@@ -256,440 +180,17 @@ def _format_size(size_bytes: int) -> str:
     return f"{size_bytes:.1f} PB"
 
 
-@cli.command()
-@click.option('--training-dir', default='.', help='Directory to save training outputs')
-@click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
-@click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub') #TODO lets make this something else
-@click.option('--split', default='train', help='Dataset split to use')
-@click.option('--category-id-column', default='target', help='Column name for category IDs')
-@click.option('--category-label-column', default='category', help='Column name for category labels')
-@click.option('--report-to', default='tensorboard', help='Where to report metrics')
-@click.option('--learning-rate', default=5.0e-5, type=float, help='Learning rate for training')
-@click.option('--push-to-hub/--no-push-to-hub', default=False, help='Whether to push model to HuggingFace Hub')
-@click.option('--num-train-epochs', default=1, type=int, help='Number of training epochs')
-@click.option('--per-device-train-batch-size', default=8, type=int, help='Training batch size per device')
-@click.option('--eval-strategy', default='epoch', help='Evaluation strategy')
-@click.option('--save-strategy', default='epoch', help='Model save strategy')
-@click.option('--eval-steps', default=1, type=int, help='Number of steps between evaluations')
-@click.option('--save-steps', default=1, type=int, help='Number of steps between saves')
-@click.option('--load-best-model-at-end/--no-load-best-model-at-end', default=True, help='Load best model at end of training')
-@click.option('--metric-for-best-model', default='accuracy', help='Metric to use for best model selection')
-@click.option('--logging-strategy', default='steps', help='Logging strategy')
-@click.option('--logging-steps', default=100, type=int, help='Number of steps between logging')
-@click.option('--fp16/--no-fp16', default=False, help='Use FP16 mixed precision training (for NVIDIA GPUs)')
-@click.option('--bf16/--no-bf16', default=False, help='Use BF16 mixed precision training (for Ampere+ GPUs)')
-@click.option('--gradient-accumulation-steps', default=1, type=int, help='Number of gradient accumulation steps')
-@click.option('--dataloader-num-workers', default=4, type=int, help='Number of dataloader workers')
-@click.option('--torch-compile/--no-torch-compile', default=False, help='Use torch.compile for faster training (PyTorch 2.0+)')
-@click.option('--finetune-mode', type=click.Choice(['full', 'feature-extraction']), default='full', help='Training mode: full (all layers) or feature-extraction (freeze base, train classifier only)')
-@click.option('--mlflow-tracking-uri', default=None, help='MLflow tracking server URI (e.g., http://localhost:5000)')
-@click.option('--mlflow-experiment-name', default=None, help='MLflow experiment name')
-@click.option('--mlflow-run-name', default=None, help='MLflow run name')
-def ast_finetune(
-    training_dir: str,
-    base_model: str,
-    train_dataset: str,
-    split: str,
-    category_id_column: str,
-    category_label_column: str,
-    report_to: str,
-    learning_rate: float,
-    push_to_hub: bool,
-    num_train_epochs: int,
-    per_device_train_batch_size: int,
-    eval_strategy: str,
-    save_strategy: str,
-    eval_steps: int,
-    save_steps: int,
-    load_best_model_at_end: bool,
-    metric_for_best_model: str,
-    logging_strategy: str,
-    logging_steps: int,
-    fp16: bool,
-    bf16: bool,
-    gradient_accumulation_steps: int,
-    dataloader_num_workers: int,
-    torch_compile: bool,
-    finetune_mode: str,
-    mlflow_tracking_uri: str,
-    mlflow_experiment_name: str,
-    mlflow_run_name: str
-):
-    """
-    Fine-tune an Audio Spectrogram Transformer (AST) model using a YAML configuration.
+# =============================================================================
+# AST Command Group
+# =============================================================================
 
-    Performs complete fine-tuning workflow including data loading, preprocessing,
-    augmentation, model configuration, training, and evaluation. The process includes
-    automatic dataset normalization calculation and comprehensive metrics tracking.
+@cli.group()
+def ast():
+    """Audio Spectrogram Transformer model commands."""
+    pass
 
-    Args:
-        config_filepath (str): Path to the YAML configuration file containing
-                             training parameters, dataset information, and model settings.
-    """
-    import evaluate
-    import numpy as np
-    import torch
-    from audiomentations import (
-        AddGaussianSNR,
-        ClippingDistortion,
-        Compose,
-        Gain,
-        GainTransition,
-        PitchShift,
-        TimeStretch,
-    )
-    from datasets import Audio, ClassLabel, Dataset, DatasetDict, load_dataset
-    from novus_pytils.files import create_directory
-    from transformers import (
-        ASTConfig,
-        ASTFeatureExtractor,
-        ASTForAudioClassification,
-        Trainer,
-        TrainingArguments,
-    )
 
-    output_dir = training_dir + "/runs"
-    logging_dir = training_dir + "/logs"
-    best_model_path = training_dir + "/best_model"
-
-    # Setup MLflow if configured
-    mlflow_run = None
-    if mlflow_tracking_uri or mlflow_experiment_name:
-        try:
-            import mlflow
-            if mlflow_tracking_uri:
-                mlflow.set_tracking_uri(mlflow_tracking_uri)
-                print(f"MLflow tracking URI: {mlflow_tracking_uri}")
-            if mlflow_experiment_name:
-                mlflow.set_experiment(mlflow_experiment_name)
-                print(f"MLflow experiment: {mlflow_experiment_name}")
-            # Add mlflow to report_to if not already present
-            if "mlflow" not in report_to:
-                report_to = f"{report_to},mlflow" if report_to else "mlflow"
-            print(f"MLflow integration enabled, reporting to: {report_to}")
-        except ImportError:
-            print("Warning: MLflow not installed. Install with 'pip install mlflow' to enable MLflow tracking.")
-
-    # Load a pre-existing dataset from the HuggingFace Hub
-    dataset = load_dataset(train_dataset, split=split)
-
-    # Get unique class names from the category column
-    if isinstance(dataset, Dataset):
-        class_names = sorted(list(set(dataset[category_label_column])))
-    elif isinstance(dataset, DatasetDict):
-        first_split_name = list(dataset.keys())[0]
-        first_split = dataset[first_split_name]
-        class_names = sorted(list(set(first_split[category_label_column])))
-    else:
-        raise TypeError("Dataset must be a Dataset or DatasetDict instance")
-
-    # Cast category column to ClassLabel (converts string names to integer indices)
-    # Create label mapping to avoid PyArrow offset overflow with large datasets
-    label_to_id = {name: idx for idx, name in enumerate(class_names)}
-    num_labels = len(class_names)
-
-    def convert_labels(example):
-        example["labels"] = label_to_id[example[category_label_column]]
-        return example
-
-    # Process labels in small batches to avoid PyArrow offset overflow
-    dataset = dataset.map(
-        convert_labels,
-        remove_columns=[category_label_column],
-        writer_batch_size=100,
-        num_proc=1,
-    )
-
-    # Set audio sampling rate
-    dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
-
-    # Define the pretrained model and instantiate the feature extractor
-    pretrained_model = base_model
-    feature_extractor = ASTFeatureExtractor.from_pretrained(pretrained_model)
-    model_input_name = feature_extractor.model_input_names[0]
-    SAMPLING_RATE = feature_extractor.sampling_rate
-
-    # Preprocessing function
-    def preprocess_audio(batch):
-        """
-        Preprocess audio batch for AST model input without augmentations.
-
-        Args:
-            batch: Batch containing audio data and labels
-
-        Returns:
-            dict: Processed batch with feature-extracted audio and labels
-        """
-        wavs = [audio["array"] for audio in batch["input_values"]]
-        inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
-        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
-
-    # Create label mappings from class_names (since we converted labels manually)
-    label2id = {name: idx for idx, name in enumerate(class_names)}
-    id2label = {idx: name for idx, name in enumerate(class_names)}
-
-    # split training data
-    test_size = 0.2
-    if isinstance(dataset, Dataset):
-        # Try stratified split first, fall back to regular split if it fails
-        # (e.g., when some classes have too few samples)
-        try:
-            dataset = dataset.train_test_split(
-                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels")
-        except ValueError as e:
-            print(f"Warning: Stratified split failed ({e}). Using regular split.")
-            dataset = dataset.train_test_split(
-                test_size=test_size, shuffle=True, seed=0)
-    elif isinstance(dataset, DatasetDict) and "test" not in dataset:
-        train_data = dataset["train"]
-        try:
-            dataset = train_data.train_test_split(
-                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels")
-        except ValueError as e:
-            print(f"Warning: Stratified split failed ({e}). Using regular split.")
-            dataset = train_data.train_test_split(
-                test_size=test_size, shuffle=True, seed=0)
-
-    # Define audio augmentations
-    audio_augmentations = Compose([
-        AddGaussianSNR(min_snr_db=10, max_snr_db=20),
-        Gain(min_gain_db=-6, max_gain_db=6),
-        GainTransition(min_gain_db=-6, max_gain_db=6, min_duration=0.01, max_duration=0.3, duration_unit="fraction"),
-        ClippingDistortion(min_percentile_threshold=0, max_percentile_threshold=30, p=0.5),
-        TimeStretch(min_rate=0.8, max_rate=1.2),
-        PitchShift(min_semitones=-4, max_semitones=4),
-    ], p=0.8, shuffle=True)
-
-    # Preprocessing with augmentations
-    def preprocess_audio_with_transforms(batch):
-        """
-        Preprocess audio batch for AST model input with applied augmentations.
-
-        Args:
-            batch: Batch containing audio data and labels
-
-        Returns:
-            dict: Processed batch with augmented, feature-extracted audio and labels
-        """
-        wavs = [audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE) for audio in batch["input_values"]]
-        inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
-        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
-
-    dataset = dataset.cast_column("audio", Audio(sampling_rate=feature_extractor.sampling_rate))
-    dataset = dataset.rename_column("audio", "input_values")
-
-    # Filter out corrupted audio files before processing
-    def is_valid_audio(example):
-        """Check if audio can be decoded without errors."""
-        try:
-            _ = example["input_values"]["array"]
-            return True
-        except (RuntimeError, Exception):
-            return False
-
-    print("Filtering out corrupted audio files...")
-    original_sizes = {}
-    # Use multiple workers for parallel filtering
-    filter_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
-    if isinstance(dataset, DatasetDict):
-        for split_name in dataset.keys():
-            original_sizes[split_name] = len(dataset[split_name])
-        dataset = dataset.filter(is_valid_audio, num_proc=filter_num_proc)
-        for split_name in dataset.keys():
-            filtered_count = original_sizes[split_name] - len(dataset[split_name])
-            if filtered_count > 0:
-                print(f"  Removed {filtered_count} corrupted files from {split_name} split")
-    else:
-        original_size = len(dataset)
-        dataset = dataset.filter(is_valid_audio, num_proc=filter_num_proc)
-        filtered_count = original_size - len(dataset)
-        if filtered_count > 0:
-            print(f"  Removed {filtered_count} corrupted files")
-
-    # calculate values for normalization
-    feature_extractor.do_normalize = False  # we set normalization to False in order to calculate the mean + std of the dataset
-
-    # we use the transformation w/o augmentation on the training dataset to calculate the mean + std
-    if isinstance(dataset, DatasetDict) and "train" in dataset:
-        train_dataset_for_norm = dataset["train"]
-        if len(train_dataset_for_norm) == 0:
-            raise ValueError("No valid audio samples found in training dataset after filtering")
-
-        # Compute mean/std in parallel using map
-        def compute_stats(batch):
-            """Compute mean and std for a batch of audio samples."""
-            wavs = [audio["array"] for audio in batch["input_values"]]
-            inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
-            values = inputs.get(model_input_name)
-            # Compute per-sample statistics
-            means = [float(torch.mean(values[i])) for i in range(values.shape[0])]
-            stds = [float(torch.std(values[i])) for i in range(values.shape[0])]
-            return {"_mean": means, "_std": stds}
-
-        print("Calculating dataset normalization statistics...")
-        norm_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
-        stats_dataset = train_dataset_for_norm.map(
-            compute_stats,
-            batched=True,
-            batch_size=32,
-            num_proc=norm_num_proc,
-            remove_columns=train_dataset_for_norm.column_names,
-        )
-        all_means = stats_dataset["_mean"]
-        all_stds = stats_dataset["_std"]
-
-        if not all_means:
-            raise ValueError("No valid audio samples found in training dataset")
-
-        feature_extractor.mean = float(np.mean(all_means))
-        feature_extractor.std = float(np.mean(all_stds))
-    else:
-        raise ValueError("Expected DatasetDict with 'train' split")
-
-    feature_extractor.do_normalize = True
-
-    print("Calculated mean and std:", feature_extractor.mean, feature_extractor.std)
-
-    # Apply transforms
-    if isinstance(dataset, DatasetDict):
-        if "train" in dataset:
-            dataset["train"].set_transform(preprocess_audio_with_transforms, output_all_columns=False)
-        if "test" in dataset:
-            dataset["test"].set_transform(preprocess_audio, output_all_columns=False)
-    else:
-        raise ValueError("Expected DatasetDict for transform application")
-
-    # Load configuration from the pretrained model
-    config = ASTConfig.from_pretrained(pretrained_model)
-    config.num_labels = num_labels
-    config.label2id = label2id
-    config.id2label = {v: k for k, v in label2id.items()}
-
-    # Initialize the model with the updated configuration
-    model = ASTForAudioClassification.from_pretrained(pretrained_model, config=config, ignore_mismatched_sizes=True)
-    model.init_weights()
-
-    # Apply finetune mode - freeze base model for feature extraction
-    if finetune_mode == "feature-extraction":
-        print("Feature extraction mode: freezing base model, only training classifier head")
-        # Freeze all parameters in the base AST model
-        for param in model.audio_spectrogram_transformer.parameters():
-            param.requires_grad = False
-        # Count trainable parameters
-        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        total_params = sum(p.numel() for p in model.parameters())
-        print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
-    else:
-        print("Full finetune mode: training all model layers")
-
-    # Configure training arguments
-    training_args = TrainingArguments(
-        output_dir=output_dir,
-        logging_dir=logging_dir,
-        report_to=report_to,
-        learning_rate=learning_rate,
-        push_to_hub=push_to_hub,
-        num_train_epochs=num_train_epochs,
-        per_device_train_batch_size=per_device_train_batch_size,
-        eval_strategy=eval_strategy,
-        save_strategy=save_strategy,
-        eval_steps=eval_steps,
-        save_steps=save_steps,
-        load_best_model_at_end=load_best_model_at_end,
-        metric_for_best_model=metric_for_best_model,
-        logging_strategy=logging_strategy,
-        logging_steps=logging_steps,
-        fp16=fp16,
-        bf16=bf16,
-        gradient_accumulation_steps=gradient_accumulation_steps,
-        dataloader_num_workers=dataloader_num_workers,
-        torch_compile=torch_compile,
-        run_name=mlflow_run_name,
-    )
-
-    # Define evaluation metrics
-    accuracy = evaluate.load("accuracy")
-    recall = evaluate.load("recall")
-    precision = evaluate.load("precision")
-    f1 = evaluate.load("f1")
-
-    AVERAGE = "macro" if config.num_labels > 2 else "binary"
-
-    # setup metrics function
-    def compute_metrics(eval_pred) -> Dict[str, float]:
-        """
-        Compute evaluation metrics for the AST model training.
-
-        Args:
-            eval_pred: Evaluation prediction object containing predictions and labels
-
-        Returns:
-            dict: Dictionary containing accuracy, precision, recall, and F1 metrics
-        """
-        # get predictions and scores
-        logits = eval_pred.predictions
-        predictions = np.argmax(logits, axis=1)
-
-        # compute metrics
-        accuracy_result = accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
-        metrics: Dict[str, float] = accuracy_result if accuracy_result is not None else {}
-
-        precision_result = precision.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
-        if precision_result is not None:
-            metrics.update(precision_result)
-
-        recall_result = recall.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
-        if recall_result is not None:
-            metrics.update(recall_result)
-
-        f1_result = f1.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
-        if f1_result is not None:
-            metrics.update(f1_result)
-
-        return metrics
-
-    # setup trainer
-    if isinstance(dataset, DatasetDict):
-        train_data = dataset.get("train")
-        eval_data = dataset.get("test")
-    else:
-        raise ValueError("Expected DatasetDict for trainer setup")
-
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_data,
-        eval_dataset=eval_data,
-        compute_metrics=compute_metrics,
-    )
-
-    # start a training
-    trainer.train()
-
-    create_directory(best_model_path)
-    trainer.save_model(best_model_path)
-
-    # torch.save(model.state_dict(), best_model_path + "/pytorch_model.bin")
-    # model.save_pretrained(model_dir)
-
-@cli.command()
-@click.argument('filepath')
-@click.argument('model_path')
-@click.argument('sample_rate')
-def ast_predict(filepath, model_path, sample_rate):
-    """
-    Perform AST model prediction on a single audio file.
-
-    Args:
-        filepath: Path to the audio file to classify
-        model_path: Path to the pre-trained AST model
-        sample_rate: Target sample rate for audio preprocessing
-    """
-    from bioamla.core.ast import wav_ast_inference
-    prediction = wav_ast_inference(filepath, model_path, int(sample_rate))
-    click.echo(f"{prediction}")
-
-@cli.command()
+@ast.command('infer')
 @click.argument('directory')
 @click.option('--output-csv', default='output.csv', help='Output CSV file name')
 @click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for inference')
@@ -701,7 +202,7 @@ def ast_predict(filepath, model_path, sample_rate):
 @click.option('--fp16/--no-fp16', default=False, help='Use half-precision (FP16) for faster GPU inference')
 @click.option('--compile/--no-compile', default=False, help='Use torch.compile() for optimized inference (PyTorch 2.0+)')
 @click.option('--workers', default=1, type=int, help='Number of parallel workers for file loading (default: 1)')
-def ast_batch_inference(
+def ast_infer(
     directory: str,
     output_csv: str,
     model_path: str,
@@ -715,30 +216,16 @@ def ast_batch_inference(
     workers: int
 ):
     """
-    Run batch AST inference on a directory of WAV files.
+    Run batch inference on a directory of audio files.
 
-    Loads an AST model and processes all WAV files in the specified directory,
-    generating predictions and saving results to a CSV file. Supports resumable
-    operations by checking for existing results and skipping already processed files.
+    Processes all WAV files in the specified directory and saves predictions
+    to a CSV file. Supports resumable operations.
 
     Performance options:
-        --batch-size: Process multiple audio segments in one forward pass (GPU optimization)
+        --batch-size: Process multiple segments in one forward pass (GPU optimization)
         --fp16: Use half-precision inference for ~2x speedup on modern GPUs
         --compile: Use torch.compile() for optimized model execution
         --workers: Parallel file loading for I/O-bound workloads
-
-    Args:
-        directory (str): Directory containing WAV files to process
-        output_csv (str): Output CSV file name
-        model (str): AST model to use for inference
-        resample_freq (int): Resampling frequency
-        clip_seconds (int): Duration of audio clips in seconds
-        overlap_seconds (int): Overlap between clips in seconds
-        restart (bool): Whether to restart from existing results
-        batch_size (int): Number of segments to batch together
-        fp16 (bool): Use half-precision inference
-        compile (bool): Use torch.compile() optimization
-        workers (int): Number of parallel workers for file loading
     """
     import os
     import time
@@ -830,24 +317,487 @@ def ast_batch_inference(
     elapsed = end_time - start_time
     print(f"Elapsed time: {elapsed:.2f}s ({len(wave_files)/elapsed:.2f} files/sec)")
 
-@cli.command()
+
+@ast.command('predict')
 @click.argument('filepath')
-def wave(filepath: str):
-    """
-    Extract and display metadata from a WAV audio file.
+@click.argument('model_path')
+@click.argument('sample_rate')
+def ast_predict(filepath, model_path, sample_rate):
+    """Perform prediction on a single audio file."""
+    from bioamla.core.ast import wav_ast_inference
+    prediction = wav_ast_inference(filepath, model_path, int(sample_rate))
+    click.echo(f"{prediction}")
 
-    Analyzes the specified WAV file and extracts comprehensive metadata
-    including audio properties, file characteristics, and technical details.
 
-    Args:
-        filepath (str): Path to the WAV file to analyze
-    """
+@ast.command('train')
+@click.option('--training-dir', default='.', help='Directory to save training outputs')
+@click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
+@click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub')
+@click.option('--split', default='train', help='Dataset split to use')
+@click.option('--category-id-column', default='target', help='Column name for category IDs')
+@click.option('--category-label-column', default='category', help='Column name for category labels')
+@click.option('--report-to', default='tensorboard', help='Where to report metrics')
+@click.option('--learning-rate', default=5.0e-5, type=float, help='Learning rate for training')
+@click.option('--push-to-hub/--no-push-to-hub', default=False, help='Whether to push model to HuggingFace Hub')
+@click.option('--num-train-epochs', default=1, type=int, help='Number of training epochs')
+@click.option('--per-device-train-batch-size', default=8, type=int, help='Training batch size per device')
+@click.option('--eval-strategy', default='epoch', help='Evaluation strategy')
+@click.option('--save-strategy', default='epoch', help='Model save strategy')
+@click.option('--eval-steps', default=1, type=int, help='Number of steps between evaluations')
+@click.option('--save-steps', default=1, type=int, help='Number of steps between saves')
+@click.option('--load-best-model-at-end/--no-load-best-model-at-end', default=True, help='Load best model at end of training')
+@click.option('--metric-for-best-model', default='accuracy', help='Metric to use for best model selection')
+@click.option('--logging-strategy', default='steps', help='Logging strategy')
+@click.option('--logging-steps', default=100, type=int, help='Number of steps between logging')
+@click.option('--fp16/--no-fp16', default=False, help='Use FP16 mixed precision training (for NVIDIA GPUs)')
+@click.option('--bf16/--no-bf16', default=False, help='Use BF16 mixed precision training (for Ampere+ GPUs)')
+@click.option('--gradient-accumulation-steps', default=1, type=int, help='Number of gradient accumulation steps')
+@click.option('--dataloader-num-workers', default=4, type=int, help='Number of dataloader workers')
+@click.option('--torch-compile/--no-torch-compile', default=False, help='Use torch.compile for faster training (PyTorch 2.0+)')
+@click.option('--finetune-mode', type=click.Choice(['full', 'feature-extraction']), default='full', help='Training mode: full (all layers) or feature-extraction (freeze base, train classifier only)')
+@click.option('--mlflow-tracking-uri', default=None, help='MLflow tracking server URI (e.g., http://localhost:5000)')
+@click.option('--mlflow-experiment-name', default=None, help='MLflow experiment name')
+@click.option('--mlflow-run-name', default=None, help='MLflow run name')
+def ast_train(
+    training_dir: str,
+    base_model: str,
+    train_dataset: str,
+    split: str,
+    category_id_column: str,
+    category_label_column: str,
+    report_to: str,
+    learning_rate: float,
+    push_to_hub: bool,
+    num_train_epochs: int,
+    per_device_train_batch_size: int,
+    eval_strategy: str,
+    save_strategy: str,
+    eval_steps: int,
+    save_steps: int,
+    load_best_model_at_end: bool,
+    metric_for_best_model: str,
+    logging_strategy: str,
+    logging_steps: int,
+    fp16: bool,
+    bf16: bool,
+    gradient_accumulation_steps: int,
+    dataloader_num_workers: int,
+    torch_compile: bool,
+    finetune_mode: str,
+    mlflow_tracking_uri: str,
+    mlflow_experiment_name: str,
+    mlflow_run_name: str
+):
+    """Fine-tune an AST model on a custom dataset."""
+    import evaluate
+    import numpy as np
+    import torch
+    from audiomentations import (
+        AddGaussianSNR,
+        ClippingDistortion,
+        Compose,
+        Gain,
+        GainTransition,
+        PitchShift,
+        TimeStretch,
+    )
+    from datasets import Audio, ClassLabel, Dataset, DatasetDict, load_dataset
+    from novus_pytils.files import create_directory
+    from transformers import (
+        ASTConfig,
+        ASTFeatureExtractor,
+        ASTForAudioClassification,
+        Trainer,
+        TrainingArguments,
+    )
+
+    output_dir = training_dir + "/runs"
+    logging_dir = training_dir + "/logs"
+    best_model_path = training_dir + "/best_model"
+
+    mlflow_run = None
+    if mlflow_tracking_uri or mlflow_experiment_name:
+        try:
+            import mlflow
+            if mlflow_tracking_uri:
+                mlflow.set_tracking_uri(mlflow_tracking_uri)
+                print(f"MLflow tracking URI: {mlflow_tracking_uri}")
+            if mlflow_experiment_name:
+                mlflow.set_experiment(mlflow_experiment_name)
+                print(f"MLflow experiment: {mlflow_experiment_name}")
+            if "mlflow" not in report_to:
+                report_to = f"{report_to},mlflow" if report_to else "mlflow"
+            print(f"MLflow integration enabled, reporting to: {report_to}")
+        except ImportError:
+            print("Warning: MLflow not installed. Install with 'pip install mlflow' to enable MLflow tracking.")
+
+    dataset = load_dataset(train_dataset, split=split)
+
+    if isinstance(dataset, Dataset):
+        class_names = sorted(list(set(dataset[category_label_column])))
+    elif isinstance(dataset, DatasetDict):
+        first_split_name = list(dataset.keys())[0]
+        first_split = dataset[first_split_name]
+        class_names = sorted(list(set(first_split[category_label_column])))
+    else:
+        raise TypeError("Dataset must be a Dataset or DatasetDict instance")
+
+    label_to_id = {name: idx for idx, name in enumerate(class_names)}
+    num_labels = len(class_names)
+
+    def convert_labels(example):
+        example["labels"] = label_to_id[example[category_label_column]]
+        return example
+
+    dataset = dataset.map(
+        convert_labels,
+        remove_columns=[category_label_column],
+        writer_batch_size=100,
+        num_proc=1,
+    )
+
+    dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
+
+    pretrained_model = base_model
+    feature_extractor = ASTFeatureExtractor.from_pretrained(pretrained_model)
+    model_input_name = feature_extractor.model_input_names[0]
+    SAMPLING_RATE = feature_extractor.sampling_rate
+
+    def preprocess_audio(batch):
+        wavs = [audio["array"] for audio in batch["input_values"]]
+        inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
+        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
+
+    label2id = {name: idx for idx, name in enumerate(class_names)}
+    id2label = {idx: name for idx, name in enumerate(class_names)}
+
+    test_size = 0.2
+    if isinstance(dataset, Dataset):
+        try:
+            dataset = dataset.train_test_split(
+                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels")
+        except ValueError as e:
+            print(f"Warning: Stratified split failed ({e}). Using regular split.")
+            dataset = dataset.train_test_split(
+                test_size=test_size, shuffle=True, seed=0)
+    elif isinstance(dataset, DatasetDict) and "test" not in dataset:
+        train_data = dataset["train"]
+        try:
+            dataset = train_data.train_test_split(
+                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels")
+        except ValueError as e:
+            print(f"Warning: Stratified split failed ({e}). Using regular split.")
+            dataset = train_data.train_test_split(
+                test_size=test_size, shuffle=True, seed=0)
+
+    audio_augmentations = Compose([
+        AddGaussianSNR(min_snr_db=10, max_snr_db=20),
+        Gain(min_gain_db=-6, max_gain_db=6),
+        GainTransition(min_gain_db=-6, max_gain_db=6, min_duration=0.01, max_duration=0.3, duration_unit="fraction"),
+        ClippingDistortion(min_percentile_threshold=0, max_percentile_threshold=30, p=0.5),
+        TimeStretch(min_rate=0.8, max_rate=1.2),
+        PitchShift(min_semitones=-4, max_semitones=4),
+    ], p=0.8, shuffle=True)
+
+    def preprocess_audio_with_transforms(batch):
+        wavs = [audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE) for audio in batch["input_values"]]
+        inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
+        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
+
+    dataset = dataset.cast_column("audio", Audio(sampling_rate=feature_extractor.sampling_rate))
+    dataset = dataset.rename_column("audio", "input_values")
+
+    def is_valid_audio(example):
+        try:
+            _ = example["input_values"]["array"]
+            return True
+        except (RuntimeError, Exception):
+            return False
+
+    print("Filtering out corrupted audio files...")
+    original_sizes = {}
+    filter_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
+    if isinstance(dataset, DatasetDict):
+        for split_name in dataset.keys():
+            original_sizes[split_name] = len(dataset[split_name])
+        dataset = dataset.filter(is_valid_audio, num_proc=filter_num_proc)
+        for split_name in dataset.keys():
+            filtered_count = original_sizes[split_name] - len(dataset[split_name])
+            if filtered_count > 0:
+                print(f"  Removed {filtered_count} corrupted files from {split_name} split")
+    else:
+        original_size = len(dataset)
+        dataset = dataset.filter(is_valid_audio, num_proc=filter_num_proc)
+        filtered_count = original_size - len(dataset)
+        if filtered_count > 0:
+            print(f"  Removed {filtered_count} corrupted files")
+
+    feature_extractor.do_normalize = False
+
+    if isinstance(dataset, DatasetDict) and "train" in dataset:
+        train_dataset_for_norm = dataset["train"]
+        if len(train_dataset_for_norm) == 0:
+            raise ValueError("No valid audio samples found in training dataset after filtering")
+
+        def compute_stats(batch):
+            wavs = [audio["array"] for audio in batch["input_values"]]
+            inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
+            values = inputs.get(model_input_name)
+            means = [float(torch.mean(values[i])) for i in range(values.shape[0])]
+            stds = [float(torch.std(values[i])) for i in range(values.shape[0])]
+            return {"_mean": means, "_std": stds}
+
+        print("Calculating dataset normalization statistics...")
+        norm_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
+        stats_dataset = train_dataset_for_norm.map(
+            compute_stats,
+            batched=True,
+            batch_size=32,
+            num_proc=norm_num_proc,
+            remove_columns=train_dataset_for_norm.column_names,
+        )
+        all_means = stats_dataset["_mean"]
+        all_stds = stats_dataset["_std"]
+
+        if not all_means:
+            raise ValueError("No valid audio samples found in training dataset")
+
+        feature_extractor.mean = float(np.mean(all_means))
+        feature_extractor.std = float(np.mean(all_stds))
+    else:
+        raise ValueError("Expected DatasetDict with 'train' split")
+
+    feature_extractor.do_normalize = True
+
+    print("Calculated mean and std:", feature_extractor.mean, feature_extractor.std)
+
+    if isinstance(dataset, DatasetDict):
+        if "train" in dataset:
+            dataset["train"].set_transform(preprocess_audio_with_transforms, output_all_columns=False)
+        if "test" in dataset:
+            dataset["test"].set_transform(preprocess_audio, output_all_columns=False)
+    else:
+        raise ValueError("Expected DatasetDict for transform application")
+
+    config = ASTConfig.from_pretrained(pretrained_model)
+    config.num_labels = num_labels
+    config.label2id = label2id
+    config.id2label = {v: k for k, v in label2id.items()}
+
+    model = ASTForAudioClassification.from_pretrained(pretrained_model, config=config, ignore_mismatched_sizes=True)
+    model.init_weights()
+
+    if finetune_mode == "feature-extraction":
+        print("Feature extraction mode: freezing base model, only training classifier head")
+        for param in model.audio_spectrogram_transformer.parameters():
+            param.requires_grad = False
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        total_params = sum(p.numel() for p in model.parameters())
+        print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
+    else:
+        print("Full finetune mode: training all model layers")
+
+    training_args = TrainingArguments(
+        output_dir=output_dir,
+        logging_dir=logging_dir,
+        report_to=report_to,
+        learning_rate=learning_rate,
+        push_to_hub=push_to_hub,
+        num_train_epochs=num_train_epochs,
+        per_device_train_batch_size=per_device_train_batch_size,
+        eval_strategy=eval_strategy,
+        save_strategy=save_strategy,
+        eval_steps=eval_steps,
+        save_steps=save_steps,
+        load_best_model_at_end=load_best_model_at_end,
+        metric_for_best_model=metric_for_best_model,
+        logging_strategy=logging_strategy,
+        logging_steps=logging_steps,
+        fp16=fp16,
+        bf16=bf16,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        dataloader_num_workers=dataloader_num_workers,
+        torch_compile=torch_compile,
+        run_name=mlflow_run_name,
+    )
+
+    accuracy = evaluate.load("accuracy")
+    recall = evaluate.load("recall")
+    precision = evaluate.load("precision")
+    f1 = evaluate.load("f1")
+
+    AVERAGE = "macro" if config.num_labels > 2 else "binary"
+
+    def compute_metrics(eval_pred) -> Dict[str, float]:
+        logits = eval_pred.predictions
+        predictions = np.argmax(logits, axis=1)
+
+        accuracy_result = accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
+        metrics: Dict[str, float] = accuracy_result if accuracy_result is not None else {}
+
+        precision_result = precision.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
+        if precision_result is not None:
+            metrics.update(precision_result)
+
+        recall_result = recall.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
+        if recall_result is not None:
+            metrics.update(recall_result)
+
+        f1_result = f1.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
+        if f1_result is not None:
+            metrics.update(f1_result)
+
+        return metrics
+
+    if isinstance(dataset, DatasetDict):
+        train_data = dataset.get("train")
+        eval_data = dataset.get("test")
+    else:
+        raise ValueError("Expected DatasetDict for trainer setup")
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_data,
+        eval_dataset=eval_data,
+        compute_metrics=compute_metrics,
+    )
+
+    trainer.train()
+
+    create_directory(best_model_path)
+    trainer.save_model(best_model_path)
+
+
+@ast.command('push')
+@click.argument('model_path')
+@click.argument('repo_id')
+@click.option('--private/--public', default=False, help='Make the repository private (default: public)')
+@click.option('--commit-message', default=None, help='Custom commit message for the push')
+def ast_push(
+    model_path: str,
+    repo_id: str,
+    private: bool,
+    commit_message: str
+):
+    """Push a fine-tuned AST model to the HuggingFace Hub."""
+    import os
+
+    from huggingface_hub import HfApi
+    from transformers import ASTForAudioClassification, AutoFeatureExtractor
+
+    if not os.path.isdir(model_path):
+        click.echo(f"Error: Model path '{model_path}' does not exist or is not a directory.")
+        raise SystemExit(1)
+
+    click.echo(f"Loading model from {model_path}...")
+
+    try:
+        model = ASTForAudioClassification.from_pretrained(model_path)
+        feature_extractor = AutoFeatureExtractor.from_pretrained(model_path)
+    except Exception as e:
+        click.echo(f"Error loading model: {e}")
+        click.echo("Make sure the path contains a valid transformers model.")
+        raise SystemExit(1)
+
+    click.echo(f"Pushing model to HuggingFace Hub: {repo_id}...")
+
+    try:
+        api = HfApi()
+        api.create_repo(repo_id=repo_id, private=private, exist_ok=True)
+
+        kwargs = {"repo_id": repo_id}
+        if commit_message:
+            kwargs["commit_message"] = commit_message
+
+        model.push_to_hub(**kwargs)
+        feature_extractor.push_to_hub(**kwargs)
+
+        click.echo(f"Successfully pushed model to: https://huggingface.co/{repo_id}")
+
+    except Exception as e:
+        click.echo(f"Error pushing to HuggingFace Hub: {e}")
+        click.echo("Make sure you are logged in with 'huggingface-cli login'.")
+        raise SystemExit(1)
+
+
+# =============================================================================
+# Audio Command Group
+# =============================================================================
+
+@cli.group()
+def audio():
+    """Audio file utilities."""
+    pass
+
+
+@audio.command('list')
+@click.argument('filepath', required=False, default='.')
+def audio_list(filepath: str):
+    """List audio files in a directory."""
+    from novus_pytils.audio import get_audio_files
+    try:
+        if filepath == '.':
+            import os
+            filepath = os.getcwd()
+        audio_files = get_audio_files(filepath)
+        if audio_files:
+            for file in audio_files:
+                click.echo(file)
+        else:
+            click.echo("No audio files found in the specified directory.")
+    except Exception as e:
+        click.echo(f"An error occurred: {e}")
+
+
+@audio.command('info')
+@click.argument('filepath')
+def audio_info(filepath: str):
+    """Display metadata from an audio file."""
     from novus_pytils.audio.wave import get_wav_metadata
     metadata = get_wav_metadata(filepath)
     click.echo(f"{metadata}")
 
 
-@cli.command()
+@audio.command('convert')
+@click.argument('dataset_path')
+@click.argument('target_format')
+@click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file')
+@click.option('--keep-original', is_flag=True, help='Keep original files after conversion (default: delete)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def audio_convert(
+    dataset_path: str,
+    target_format: str,
+    metadata_filename: str,
+    keep_original: bool,
+    quiet: bool
+):
+    """Convert all audio files in a dataset to a specified format."""
+    from bioamla.core.datasets import convert_filetype
+
+    stats = convert_filetype(
+        dataset_path=dataset_path,
+        target_format=target_format,
+        metadata_filename=metadata_filename,
+        keep_original=keep_original,
+        verbose=not quiet
+    )
+
+    if quiet:
+        click.echo(f"Converted {stats['files_converted']} files to {target_format}")
+
+
+# =============================================================================
+# iNaturalist Command Group
+# =============================================================================
+
+@cli.group()
+def inat():
+    """iNaturalist integration commands."""
+    pass
+
+
+@inat.command('download')
 @click.argument('output_dir')
 @click.option('--taxon-ids', default=None, help='Comma-separated list of taxon IDs (e.g., "3" for birds, "3,20978" for multiple)')
 @click.option('--taxon-csv', default=None, type=click.Path(exists=True), help='Path to CSV file with taxon_id column')
@@ -865,7 +815,7 @@ def wave(filepath: str):
 @click.option('--file-extensions', default=None, help='Comma-separated list of file extensions to filter (e.g., "wav,mp3")')
 @click.option('--delay', type=float, default=1.0, help='Delay between downloads in seconds (rate limiting)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
-def inat_audio(
+def inat_download(
     output_dir: str,
     taxon_ids: str,
     taxon_csv: str,
@@ -884,40 +834,17 @@ def inat_audio(
     delay: float,
     quiet: bool
 ):
-    """
-    Download audio observations from iNaturalist.
-
-    Downloads audio files from iNaturalist observations matching the specified
-    filters. Creates a metadata.csv file with observation details including
-    species, location, observer, and licensing information.
-
-    Examples:
-
-        Download bird sounds from the US:
-        bioamla inat-audio ./birds --taxon-id 3 --place-id 1
-
-        Download frog sounds with specific licenses:
-        bioamla inat-audio ./frogs --taxon-name Anura --sound-license "cc-by, cc-by-nc, cc0"
-
-        Download from a CSV file of taxon IDs:
-        bioamla inat-audio ./sounds --taxon-csv taxa.csv --obs-per-taxon 10
-
-        Download 50 observations per taxon without subdirectories:
-        bioamla inat-audio ./sounds --obs-per-taxon 50 --no-organize-by-taxon
-    """
+    """Download audio observations from iNaturalist."""
     from bioamla.core.inat import download_inat_audio
 
-    # Parse comma-separated taxon IDs into a list of integers
     taxon_ids_list = None
     if taxon_ids:
         taxon_ids_list = [int(tid.strip()) for tid in taxon_ids.split(",")]
 
-    # Parse comma-separated file extensions into a list
     extensions_list = None
     if file_extensions:
         extensions_list = [ext.strip() for ext in file_extensions.split(",")]
 
-    # Parse comma-separated sound licenses into a list
     sound_license_list = None
     if sound_license:
         sound_license_list = [lic.strip() for lic in sound_license.split(",")]
@@ -946,14 +873,14 @@ def inat_audio(
         click.echo(f"Downloaded {stats['total_sounds']} audio files to {stats['output_dir']}")
 
 
-@cli.command()
+@inat.command('search')
 @click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
 @click.option('--project-id', default=None, help='Filter by iNaturalist project ID or slug')
 @click.option('--taxon-id', type=int, default=None, help='Filter by parent taxon ID (e.g., 20979 for Amphibia)')
 @click.option('--quality-grade', default='research', help='Quality grade: research, needs_id, or casual')
 @click.option('--output', '-o', default=None, help='Output file path for CSV (optional)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
-def inat_taxa_search(
+def inat_search(
     place_id: int,
     project_id: str,
     taxon_id: int,
@@ -961,22 +888,7 @@ def inat_taxa_search(
     output: str,
     quiet: bool
 ):
-    """
-    Search for taxa with observations in a place or project.
-
-    Uses the iNaturalist species_counts API for efficient retrieval.
-
-    Examples:
-
-        Find amphibian taxa in a project:
-        bioamla inat-taxa-search --project-id appalachia-bioacoustics --taxon-id 20979
-
-        Find all bird taxa in a place:
-        bioamla inat-taxa-search --place-id 1 --taxon-id 3
-
-        Export results to CSV:
-        bioamla inat-taxa-search --project-id my-project -o taxa.csv
-    """
+    """Search for taxa with observations in a place or project."""
     from bioamla.core.inat import get_taxa
 
     if not place_id and not project_id:
@@ -1004,32 +916,16 @@ def inat_taxa_search(
             click.echo(f"{t['taxon_id']:<12} {t['name']:<30} {t['common_name']:<25} {t['observation_count']:<10}")
 
 
-@cli.command()
+@inat.command('stats')
 @click.argument('project_id')
 @click.option('--output', '-o', default=None, help='Output file path for JSON (optional)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output, print only JSON')
-def inat_project_stats(
+def inat_stats(
     project_id: str,
     output: str,
     quiet: bool
 ):
-    """
-    Get statistics for an iNaturalist project.
-
-    Fetches project information including observation counts, species counts,
-    and observer information.
-
-    Examples:
-
-        Get stats for a project:
-        bioamla inat-project-stats appalachia-bioacoustics
-
-        Export stats to JSON:
-        bioamla inat-project-stats appalachia-bioacoustics -o stats.json
-
-        Get JSON output only:
-        bioamla inat-project-stats appalachia-bioacoustics --quiet
-    """
+    """Get statistics for an iNaturalist project."""
     import json
 
     from bioamla.core.inat import get_project_stats
@@ -1058,7 +954,17 @@ def inat_project_stats(
         click.echo(f"  Observers: {stats['observers_count']}")
 
 
-@cli.command()
+# =============================================================================
+# Dataset Command Group
+# =============================================================================
+
+@cli.group()
+def dataset():
+    """Dataset management commands."""
+    pass
+
+
+@dataset.command('merge')
 @click.argument('output_dir')
 @click.argument('dataset_paths', nargs=-1, required=True)
 @click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file in each dataset')
@@ -1066,7 +972,7 @@ def inat_project_stats(
 @click.option('--no-organize', is_flag=True, help='Preserve original directory structure instead of organizing by category')
 @click.option('--target-format', default=None, help='Convert all audio files to this format (wav, mp3, flac, etc.)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
-def merge_datasets(
+def dataset_merge(
     output_dir: str,
     dataset_paths: tuple,
     metadata_filename: str,
@@ -1075,30 +981,7 @@ def merge_datasets(
     target_format: str,
     quiet: bool
 ):
-    """
-    Merge multiple audio datasets into a single dataset.
-
-    Combines audio files and metadata from multiple dataset directories into
-    a single output directory. By default, files are organized into subdirectories
-    based on the 'category' field in metadata.
-
-    Examples:
-
-        Merge two datasets:
-        bioamla merge-datasets ./merged ./birds_v1 ./birds_v2
-
-        Merge multiple datasets with overwrite:
-        bioamla merge-datasets ./merged ./dataset1 ./dataset2 ./dataset3 --overwrite
-
-        Merge preserving original directory structure:
-        bioamla merge-datasets ./merged ./data1 ./data2 --no-organize
-
-        Merge and convert all files to WAV:
-        bioamla merge-datasets ./merged ./data1 ./data2 --target-format wav
-
-        Merge with custom metadata filename:
-        bioamla merge-datasets ./merged ./data1 ./data2 --metadata-filename data.csv
-    """
+    """Merge multiple audio datasets into a single dataset."""
     from bioamla.core.datasets import merge_datasets as do_merge
 
     stats = do_merge(
@@ -1116,133 +999,6 @@ def merge_datasets(
         if target_format:
             msg += f", {stats['files_converted']} converted"
         click.echo(msg)
-
-
-@cli.command()
-@click.argument('dataset_path')
-@click.argument('target_format')
-@click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file')
-@click.option('--keep-original', is_flag=True, help='Keep original files after conversion (default: delete)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
-def convert_audio(
-    dataset_path: str,
-    target_format: str,
-    metadata_filename: str,
-    keep_original: bool,
-    quiet: bool
-):
-    """
-    Convert all audio files in a dataset to a specified format.
-
-    Converts audio files and updates the metadata.csv with new filenames.
-    Original files are deleted by default. The attr_note field is updated
-    to indicate "modified clip from original source".
-
-    Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
-
-    Examples:
-
-        Convert dataset to WAV:
-        bioamla convert-audio ./my_dataset wav
-
-        Convert to MP3 and keep originals:
-        bioamla convert-audio ./my_dataset mp3 --keep-original
-
-        Convert with custom metadata filename:
-        bioamla convert-audio ./my_dataset flac --metadata-filename data.csv
-    """
-    from bioamla.core.datasets import convert_filetype
-
-    stats = convert_filetype(
-        dataset_path=dataset_path,
-        target_format=target_format,
-        metadata_filename=metadata_filename,
-        keep_original=keep_original,
-        verbose=not quiet
-    )
-
-    if quiet:
-        click.echo(f"Converted {stats['files_converted']} files to {target_format}")
-
-
-@cli.command()
-@click.argument('model_path')
-@click.argument('repo_id')
-@click.option('--private/--public', default=False, help='Make the repository private (default: public)')
-@click.option('--commit-message', default=None, help='Custom commit message for the push')
-def ast_push(
-    model_path: str,
-    repo_id: str,
-    private: bool,
-    commit_message: str
-):
-    """
-    Push a fine-tuned AST model to the HuggingFace Hub.
-
-    Uploads a locally saved AST model (and its associated files) to a
-    HuggingFace Hub repository. The model must have been saved using
-    the transformers library (e.g., from ast-finetune).
-
-    Args:
-        model_path: Path to the local model directory (e.g., ./my-training/best_model)
-        repo_id: HuggingFace Hub repository ID (e.g., username/model-name)
-
-    Examples:
-
-        Push a model to HuggingFace Hub:
-        bioamla ast-push ./my-training/best_model myusername/my-frog-classifier
-
-        Push as a private repository:
-        bioamla ast-push ./my-model myusername/private-model --private
-
-        Push with a custom commit message:
-        bioamla ast-push ./my-model myusername/my-model --commit-message "v1.0 release"
-
-    Note:
-        You must be logged in to HuggingFace Hub. Use 'huggingface-cli login' first.
-    """
-    import os
-
-    from huggingface_hub import HfApi
-    from transformers import ASTForAudioClassification, AutoFeatureExtractor
-
-    # Validate model path exists
-    if not os.path.isdir(model_path):
-        click.echo(f"Error: Model path '{model_path}' does not exist or is not a directory.")
-        raise SystemExit(1)
-
-    click.echo(f"Loading model from {model_path}...")
-
-    try:
-        # Load the model and feature extractor
-        model = ASTForAudioClassification.from_pretrained(model_path)
-        feature_extractor = AutoFeatureExtractor.from_pretrained(model_path)
-    except Exception as e:
-        click.echo(f"Error loading model: {e}")
-        click.echo("Make sure the path contains a valid transformers model.")
-        raise SystemExit(1)
-
-    click.echo(f"Pushing model to HuggingFace Hub: {repo_id}...")
-
-    try:
-        # Create repo if it doesn't exist
-        api = HfApi()
-        api.create_repo(repo_id=repo_id, private=private, exist_ok=True)
-
-        # Push model and feature extractor
-        kwargs = {"repo_id": repo_id}
-        if commit_message:
-            kwargs["commit_message"] = commit_message
-
-        model.push_to_hub(**kwargs)
-        feature_extractor.push_to_hub(**kwargs)
-
-        click.echo(f"Successfully pushed model to: https://huggingface.co/{repo_id}")
-
-    except Exception as e:
-        click.echo(f"Error pushing to HuggingFace Hub: {e}")
-        click.echo("Make sure you are logged in with 'huggingface-cli login'.")
-        raise SystemExit(1)
 
 
 if __name__ == '__main__':

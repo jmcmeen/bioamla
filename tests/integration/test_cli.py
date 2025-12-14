@@ -39,6 +39,45 @@ class TestCLIBasic:
         assert result.exit_code == 0
 
 
+class TestCLICommandGroups:
+    """Tests for CLI command groups."""
+
+    def test_ast_group_exists(self, runner):
+        """Test that ast command group exists."""
+        result = runner.invoke(cli, ["ast", "--help"])
+
+        assert result.exit_code == 0
+        assert "infer" in result.output
+        assert "train" in result.output
+        assert "predict" in result.output
+        assert "push" in result.output
+
+    def test_audio_group_exists(self, runner):
+        """Test that audio command group exists."""
+        result = runner.invoke(cli, ["audio", "--help"])
+
+        assert result.exit_code == 0
+        assert "list" in result.output
+        assert "info" in result.output
+        assert "convert" in result.output
+
+    def test_inat_group_exists(self, runner):
+        """Test that inat command group exists."""
+        result = runner.invoke(cli, ["inat", "--help"])
+
+        assert result.exit_code == 0
+        assert "download" in result.output
+        assert "search" in result.output
+        assert "stats" in result.output
+
+    def test_dataset_group_exists(self, runner):
+        """Test that dataset command group exists."""
+        result = runner.invoke(cli, ["dataset", "--help"])
+
+        assert result.exit_code == 0
+        assert "merge" in result.output
+
+
 @pytest.mark.integration
 class TestCLIDatasets:
     """Integration tests for dataset commands."""
@@ -57,9 +96,10 @@ class TestCLIInat:
     """Integration tests for iNaturalist commands."""
 
     @pytest.mark.slow
-    def test_inat_taxa_search_help(self, runner):
-        """Test inat-taxa-search command help."""
-        result = runner.invoke(cli, ["inat-taxa-search", "--help"])
+    def test_inat_search_help(self, runner):
+        """Test inat search command help."""
+        result = runner.invoke(cli, ["inat", "search", "--help"])
 
         assert result.exit_code == 0
         assert "taxa" in result.output.lower() or "Usage" in result.output
+
