@@ -294,7 +294,7 @@ bioamla purge --all -y          # Purge everything without confirmation
 | `--learning-rate` | `5e-5` | Learning rate for training |
 | `--push-to-hub/--no-push-to-hub` | `--no-push-to-hub` | Push model to HuggingFace Hub |
 | `--num-train-epochs` | `1` | Number of training epochs |
-| `--per-device-train-batch-size` | `1` | Training batch size per device |
+| `--per-device-train-batch-size` | `8` | Training batch size per device |
 | `--eval-strategy` | `epoch` | Evaluation strategy |
 | `--save-strategy` | `epoch` | Model save strategy |
 | `--eval-steps` | `1` | Steps between evaluations |
@@ -303,6 +303,11 @@ bioamla purge --all -y          # Purge everything without confirmation
 | `--metric-for-best-model` | `accuracy` | Metric for best model selection |
 | `--logging-strategy` | `steps` | Logging strategy |
 | `--logging-steps` | `100` | Steps between logging |
+| `--fp16/--no-fp16` | `--no-fp16` | Use FP16 mixed precision training (NVIDIA GPUs) |
+| `--bf16/--no-bf16` | `--no-bf16` | Use BF16 mixed precision training (Ampere+ GPUs) |
+| `--gradient-accumulation-steps` | `1` | Number of gradient accumulation steps |
+| `--dataloader-num-workers` | `4` | Number of dataloader workers |
+| `--torch-compile/--no-torch-compile` | `--no-torch-compile` | Use torch.compile for faster training (PyTorch 2.0+) |
 
 ### iNaturalist Integration
 
