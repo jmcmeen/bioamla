@@ -44,16 +44,22 @@ def download(url: str, output_dir: str):
         output_dir (str): Directory where the file should be saved.
                          Defaults to current directory if not specified.
     """
-    #TODO update to filename for output
-
     import os
+    from urllib.parse import urlparse
 
     from novus_pytils.files import download_file
 
     if output_dir == '.':
         output_dir = os.getcwd()
 
-    download_file(url, output_dir)
+    # Extract filename from URL and construct full output path
+    parsed_url = urlparse(url)
+    filename = os.path.basename(parsed_url.path)
+    if not filename:
+        filename = "downloaded_file"
+
+    output_path = os.path.join(output_dir, filename)
+    download_file(url, output_path)
 
 @cli.command()
 @click.argument('filepath', required=False, default='.')
@@ -219,30 +225,22 @@ def ast_finetune(
     # Load a pre-existing dataset from the HuggingFace Hub
     dataset = load_dataset(train_dataset, split=split)
 
-    # get target value - class name mappings
-    import pandas as pd
+    # Get unique class names from the category column
     if isinstance(dataset, Dataset):
-        selected_data = dataset.select_columns([category_id_column, category_label_column])
-        df = pd.DataFrame(selected_data.to_dict())
-        unique_indices = np.unique(df[category_id_column], return_index=True)[1]
-        class_names = df.iloc[unique_indices][category_label_column].to_list()
+        class_names = sorted(list(set(dataset[category_label_column])))
     elif isinstance(dataset, DatasetDict):
-        # For DatasetDict, use the first available split to get class names
         first_split_name = list(dataset.keys())[0]
         first_split = dataset[first_split_name]
-        selected_data = first_split.select_columns([category_id_column, category_label_column])
-        df = pd.DataFrame(selected_data.to_dict())
-        unique_indices = np.unique(df[category_id_column], return_index=True)[1]
-        class_names = df.iloc[unique_indices][category_label_column].to_list()
+        class_names = sorted(list(set(first_split[category_label_column])))
     else:
         raise TypeError("Dataset must be a Dataset or DatasetDict instance")
 
-    # cast target and audio column
-    dataset = dataset.cast_column("target", ClassLabel(names=class_names))
-    dataset = dataset.cast_column("audio", Audio(sampling_rate=16000)) #TODO bad
+    # Cast category column to ClassLabel (converts string names to integer indices)
+    dataset = dataset.cast_column(category_label_column, ClassLabel(names=class_names))
+    dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
 
-    # rename the target feature
-    dataset = dataset.rename_column("target", "labels")
+    # Rename category to labels for training
+    dataset = dataset.rename_column(category_label_column, "labels")
     if isinstance(dataset, Dataset):
         num_labels = len(np.unique(list(dataset["labels"])))
     elif isinstance(dataset, DatasetDict) and "train" in dataset:
@@ -285,11 +283,28 @@ def ast_finetune(
 
     # split training data
     if isinstance(dataset, Dataset):
-        dataset = dataset.train_test_split(
-            test_size=0.2, shuffle=True, seed=0, stratify_by_column="labels")
+        # Check if we have enough samples for stratified split
+        test_size = 0.2
+        min_test_samples = int(len(dataset) * test_size)
+        if min_test_samples >= num_labels:
+            dataset = dataset.train_test_split(
+                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels")
+        else:
+            # Not enough samples for stratified split, use regular split
+            print(f"Warning: Not enough samples for stratified split ({min_test_samples} < {num_labels} classes). Using regular split.")
+            dataset = dataset.train_test_split(
+                test_size=test_size, shuffle=True, seed=0)
     elif isinstance(dataset, DatasetDict) and "test" not in dataset:
-        dataset = dataset["train"].train_test_split(
-            test_size=0.2, shuffle=True, seed=0, stratify_by_column="labels")
+        train_data = dataset["train"]
+        test_size = 0.2
+        min_test_samples = int(len(train_data) * test_size)
+        if min_test_samples >= num_labels:
+            dataset = train_data.train_test_split(
+                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels")
+        else:
+            print(f"Warning: Not enough samples for stratified split ({min_test_samples} < {num_labels} classes). Using regular split.")
+            dataset = train_data.train_test_split(
+                test_size=test_size, shuffle=True, seed=0)
 
     # Define audio augmentations
     audio_augmentations = Compose([

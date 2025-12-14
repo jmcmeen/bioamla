@@ -21,7 +21,7 @@ class TestConstants:
         """Test that required fields are properly defined."""
         assert isinstance(REQUIRED_FIELDS, list)
         assert len(REQUIRED_FIELDS) == 8
-        assert "filename" in REQUIRED_FIELDS
+        assert "file_name" in REQUIRED_FIELDS
         assert "split" in REQUIRED_FIELDS
         assert "target" in REQUIRED_FIELDS
         assert "category" in REQUIRED_FIELDS
@@ -42,8 +42,8 @@ class TestReadMetadataCsv:
         rows, fieldnames = read_metadata_csv(metadata_csv_file)
 
         assert len(rows) == len(sample_metadata_rows)
-        assert "filename" in fieldnames
-        assert rows[0]["filename"] == "audio1.wav"
+        assert "file_name" in fieldnames
+        assert rows[0]["file_name"] == "audio1.wav"
 
     def test_read_nonexistent_file(self, temp_dir):
         """Test reading a nonexistent file returns empty results."""
@@ -94,7 +94,7 @@ class TestWriteMetadataCsv:
         # Merge new data
         new_rows = [
             {
-                "filename": "audio4.wav",
+                "file_name": "audio4.wav",
                 "split": "train",
                 "target": "3",
                 "category": "species_c",
@@ -109,7 +109,7 @@ class TestWriteMetadataCsv:
         assert count == 3  # 2 initial + 1 new
 
     def test_deduplicate_on_merge(self, temp_dir, sample_metadata_rows):
-        """Test that duplicate filenames are skipped during merge."""
+        """Test that duplicate file_names are skipped during merge."""
         csv_path = temp_dir / "dedup_test.csv"
 
         # Write initial data
@@ -127,15 +127,15 @@ class TestWriteMetadataCsv:
 class TestGetExistingObservationIds:
     """Tests for get_existing_observation_ids function."""
 
-    def test_extract_ids_from_filenames(self, temp_dir):
-        """Test extraction of observation and sound IDs from filenames."""
+    def test_extract_ids_from_file_names(self, temp_dir):
+        """Test extraction of observation and sound IDs from file_names."""
         csv_path = temp_dir / "inat_metadata.csv"
 
         rows = [
-            {"filename": "species_a/inat_123_sound_456.mp3", "split": "train",
+            {"file_name": "species_a/inat_123_sound_456.mp3", "split": "train",
              "target": "1", "category": "species_a", "attr_id": "", "attr_lic": "",
              "attr_url": "", "attr_note": ""},
-            {"filename": "species_b/inat_789_sound_101.wav", "split": "train",
+            {"file_name": "species_b/inat_789_sound_101.wav", "split": "train",
              "target": "2", "category": "species_b", "attr_id": "", "attr_lic": "",
              "attr_url": "", "attr_note": ""},
         ]
@@ -158,14 +158,14 @@ class TestGetExistingObservationIds:
         existing = get_existing_observation_ids(nonexistent)
         assert existing == set()
 
-    def test_malformed_filenames_skipped(self, temp_dir):
-        """Test that malformed filenames are skipped."""
+    def test_malformed_file_names_skipped(self, temp_dir):
+        """Test that malformed file_names are skipped."""
         csv_path = temp_dir / "malformed.csv"
 
         rows = [
-            {"filename": "regular_file.mp3", "split": "train", "target": "1",
+            {"file_name": "regular_file.mp3", "split": "train", "target": "1",
              "category": "x", "attr_id": "", "attr_lic": "", "attr_url": "", "attr_note": ""},
-            {"filename": "inat_abc_sound_def.mp3", "split": "train", "target": "1",
+            {"file_name": "inat_abc_sound_def.mp3", "split": "train", "target": "1",
              "category": "x", "attr_id": "", "attr_lic": "", "attr_url": "", "attr_note": ""},
         ]
 
@@ -190,7 +190,7 @@ class TestValidateRequiredFields:
     def test_missing_fields_detected(self):
         """Test that missing required fields are detected."""
         invalid_rows = [
-            {"filename": "test.wav", "split": "train"}  # Missing several fields
+            {"file_name": "test.wav", "split": "train"}  # Missing several fields
         ]
         is_valid, errors = validate_required_fields(invalid_rows)
         assert not is_valid
