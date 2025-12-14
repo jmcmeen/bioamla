@@ -214,3 +214,4 @@ cython_debug/
 *.m4a
 *.wav
 /dev_data
+/examples/dev_data
