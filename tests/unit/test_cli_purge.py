@@ -159,6 +159,7 @@ class TestPurgeCommand:
         assert result.exit_code == 0
         assert "Aborted" in result.output
 
+    @patch("huggingface_hub.constants.HF_HUB_CACHE", "/tmp/test_cache")
     @patch("shutil.rmtree")
     @patch("huggingface_hub.scan_cache_dir")
     def test_purge_with_yes_flag_skips_confirmation(self, mock_scan, mock_rmtree, runner):
@@ -174,7 +175,6 @@ class TestPurgeCommand:
 
         mock_cache_info = MagicMock()
         mock_cache_info.repos = [mock_repo]
-        mock_cache_info.cache_dir = "/tmp/test_cache"
         mock_scan.return_value = mock_cache_info
 
         result = runner.invoke(cli, ["purge", "--models", "-y"])
@@ -183,6 +183,7 @@ class TestPurgeCommand:
         assert "Successfully purged" in result.output
         assert "Are you sure" not in result.output
 
+    @patch("huggingface_hub.constants.HF_HUB_CACHE", "/tmp/test_cache")
     @patch("shutil.rmtree")
     @patch("huggingface_hub.scan_cache_dir")
     def test_purge_confirms_deletion(self, mock_scan, mock_rmtree, runner):
@@ -198,7 +199,6 @@ class TestPurgeCommand:
 
         mock_cache_info = MagicMock()
         mock_cache_info.repos = [mock_repo]
-        mock_cache_info.cache_dir = "/tmp/test_cache"
         mock_scan.return_value = mock_cache_info
 
         result = runner.invoke(cli, ["purge", "--models"], input="y\n")
@@ -207,3 +207,33 @@ class TestPurgeCommand:
         assert "Successfully purged" in result.output
         assert "1 items" in result.output
         mock_rmtree.assert_called()
+
+    @patch("huggingface_hub.constants.HF_HUB_CACHE", "/tmp/test_cache")
+    @patch("shutil.rmtree")
+    @patch("huggingface_hub.scan_cache_dir")
+    def test_purge_does_not_use_cache_dir_attribute(self, mock_scan, mock_rmtree, runner):
+        """Test that purge works without cache_dir attribute on HFCacheInfo.
+
+        This test ensures the fix for the AttributeError when HFCacheInfo
+        doesn't have cache_dir attribute (uses HF_HUB_CACHE constant instead).
+        """
+        mock_revision = MagicMock()
+        mock_revision.snapshot_path = "/tmp/test_cache/models--test--model/snapshot"
+
+        mock_repo = MagicMock()
+        mock_repo.repo_type = "model"
+        mock_repo.repo_id = "test/model"
+        mock_repo.size_on_disk = 1024 * 1024 * 100
+        mock_repo.revisions = [mock_revision]
+
+        # Create mock without cache_dir attribute (like real HFCacheInfo)
+        mock_cache_info = MagicMock(spec=['repos', 'size_on_disk', 'warnings'])
+        mock_cache_info.repos = [mock_repo]
+        mock_scan.return_value = mock_cache_info
+
+        result = runner.invoke(cli, ["purge", "--models", "-y"])
+
+        assert result.exit_code == 0
+        assert "Successfully purged" in result.output
+        # Verify it didn't try to access cache_dir
+        assert not hasattr(mock_cache_info, 'cache_dir')
