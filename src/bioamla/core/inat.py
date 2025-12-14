@@ -35,6 +35,7 @@ from bioamla.core.fileutils import (
 from bioamla.core.logging import get_logger
 from bioamla.core.metadata import (
     get_existing_observation_ids,
+    read_metadata_csv,
     write_metadata_csv,
 )
 
@@ -284,8 +285,10 @@ def download_inat_audio(
                 user = obs.get("user", {}).get("login", "")
                 quality = obs.get("quality_grade", "")
 
+                # Sanitize species name for folder and category consistency
+                safe_species = sanitize_filename(species_name)
+
                 if organize_by_taxon:
-                    safe_species = sanitize_filename(species_name)
                     species_dir = output_path / safe_species
                     species_dir.mkdir(exist_ok=True)
                 else:
@@ -308,6 +311,7 @@ def download_inat_audio(
                         continue
 
                     # Skip files that already exist in the collection
+                    # (metadata for existing files is preserved from the read at the start)
                     if (obs_id, sound_id) in existing_files:
                         if verbose:
                             print(f"  Skipped: inat_{obs_id}_sound_{sound_id} (already exists)")
@@ -329,7 +333,7 @@ def download_inat_audio(
                             "file_name": str(relative_path),
                             "split": "train",
                             "target": taxon_id_val,
-                            "category": species_name,
+                            "category": safe_species,
                             "attr_id": user,
                             "attr_lic": license_code,
                             "attr_url": file_url,
@@ -369,7 +373,26 @@ def download_inat_audio(
                 break
 
     if metadata_rows:
-        write_metadata_csv(output_path / "metadata.csv", metadata_rows, merge_existing=True)
+        metadata_path = output_path / "metadata.csv"
+        # Read existing metadata and merge with new rows for consistent file
+        existing_rows, existing_fieldnames = read_metadata_csv(metadata_path)
+
+        # Combine existing and new rows, deduplicating by file_name
+        seen_files: set = set()
+        all_rows = []
+        for row in existing_rows:
+            file_name = row.get("file_name", "")
+            if file_name and file_name not in seen_files:
+                seen_files.add(file_name)
+                all_rows.append(row)
+        for row in metadata_rows:
+            file_name = row.get("file_name", "")
+            if file_name and file_name not in seen_files:
+                seen_files.add(file_name)
+                all_rows.append(row)
+
+        # Rewrite entire file for consistency
+        write_metadata_csv(metadata_path, all_rows, merge_existing=False)
 
     if verbose:
         print("\nDownload complete!")
