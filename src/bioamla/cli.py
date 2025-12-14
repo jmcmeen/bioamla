@@ -539,16 +539,89 @@ def ast_batch_inference(
 def wave(filepath: str):
     """
     Extract and display metadata from a WAV audio file.
-    
+
     Analyzes the specified WAV file and extracts comprehensive metadata
     including audio properties, file characteristics, and technical details.
-    
+
     Args:
         filepath (str): Path to the WAV file to analyze
     """
     from novus_pytils.audio.wave import get_wav_metadata
     metadata = get_wav_metadata(filepath)
     click.echo(f"{metadata}")
+
+
+@cli.command()
+@click.argument('output_dir')
+@click.option('--taxon-id', type=int, default=None, help='Filter by taxon ID (e.g., 3 for birds/Aves)')
+@click.option('--taxon-name', default=None, help='Filter by taxon name (e.g., "Aves" for birds)')
+@click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
+@click.option('--user-id', default=None, help='Filter by observer username')
+@click.option('--project-id', type=int, default=None, help='Filter by iNaturalist project ID')
+@click.option('--quality-grade', default='research', help='Quality grade: research, needs_id, or casual')
+@click.option('--sound-license', default=None, help='Filter by sound license (e.g., cc-by, cc-by-nc, cc0)')
+@click.option('--start-date', default=None, help='Start date for observations (YYYY-MM-DD)')
+@click.option('--end-date', default=None, help='End date for observations (YYYY-MM-DD)')
+@click.option('--max-observations', type=int, default=100, help='Maximum number of observations to download')
+@click.option('--organize-by-taxon/--no-organize-by-taxon', default=True, help='Organize files into subdirectories by species')
+@click.option('--delay', type=float, default=1.0, help='Delay between downloads in seconds (rate limiting)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def inat_audio(
+    output_dir: str,
+    taxon_id: int,
+    taxon_name: str,
+    place_id: int,
+    user_id: str,
+    project_id: int,
+    quality_grade: str,
+    sound_license: str,
+    start_date: str,
+    end_date: str,
+    max_observations: int,
+    organize_by_taxon: bool,
+    delay: float,
+    quiet: bool
+):
+    """
+    Download audio observations from iNaturalist.
+
+    Downloads audio files from iNaturalist observations matching the specified
+    filters. Creates a metadata.csv file with observation details including
+    species, location, observer, and licensing information.
+
+    Examples:
+
+        Download bird sounds from the US:
+        bioamla inat-audio ./birds --taxon-id 3 --place-id 1
+
+        Download frog sounds with specific license:
+        bioamla inat-audio ./frogs --taxon-name Anura --sound-license cc-by
+
+        Download 50 observations without subdirectories:
+        bioamla inat-audio ./sounds --max-observations 50 --no-organize-by-taxon
+    """
+    from bioamla.core.wrappers.inat import download_inat_audio
+
+    stats = download_inat_audio(
+        output_dir=output_dir,
+        taxon_id=taxon_id,
+        taxon_name=taxon_name,
+        place_id=place_id,
+        user_id=user_id,
+        project_id=project_id,
+        quality_grade=quality_grade,
+        sound_license=sound_license,
+        d1=start_date,
+        d2=end_date,
+        max_observations=max_observations,
+        organize_by_taxon=organize_by_taxon,
+        delay_between_downloads=delay,
+        verbose=not quiet
+    )
+
+    if quiet:
+        click.echo(f"Downloaded {stats['total_sounds']} audio files to {stats['output_dir']}")
+
 
 if __name__ == '__main__':
     cli()
