@@ -821,6 +821,99 @@ def audio_convert(
 
 
 # =============================================================================
+# Visualize Command
+# =============================================================================
+
+@cli.command()
+@click.argument('path')
+@click.option('--output', '-o', default=None, help='Output file path (single file) or directory (batch with --batch)')
+@click.option('--batch', is_flag=True, default=False, help='Process all audio files in a directory')
+@click.option('--type', 'viz_type', type=click.Choice(['mel', 'mfcc', 'waveform']), default='mel', help='Type of visualization')
+@click.option('--sample-rate', default=16000, type=int, help='Target sample rate for processing')
+@click.option('--n-mels', default=128, type=int, help='Number of mel bands (mel spectrogram only)')
+@click.option('--n-mfcc', default=40, type=int, help='Number of MFCCs (mfcc only)')
+@click.option('--cmap', default='magma', help='Colormap for spectrogram visualizations')
+@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode only)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def visualize(
+    path: str,
+    output: str,
+    batch: bool,
+    viz_type: str,
+    sample_rate: int,
+    n_mels: int,
+    n_mfcc: int,
+    cmap: str,
+    recursive: bool,
+    quiet: bool
+):
+    """
+    Generate spectrogram visualizations from audio files.
+
+    PATH can be a single audio file or a directory (with --batch flag).
+
+    Single file mode (default):
+        bioamla visualize audio.wav --output spec.png
+
+    Batch mode (--batch):
+        bioamla visualize ./audio_dir --batch --output ./specs
+
+    Visualization types:
+        mel: Mel spectrogram (default)
+        mfcc: Mel-frequency cepstral coefficients
+        waveform: Time-domain waveform plot
+    """
+    import os
+
+    from bioamla.core.visualize import batch_generate_spectrograms, generate_spectrogram
+
+    if batch:
+        # Batch mode: process directory
+        if output is None:
+            output = os.path.join(path, "spectrograms")
+
+        stats = batch_generate_spectrograms(
+            input_dir=path,
+            output_dir=output,
+            viz_type=viz_type,
+            sample_rate=sample_rate,
+            n_mels=n_mels,
+            n_mfcc=n_mfcc,
+            cmap=cmap,
+            recursive=recursive,
+            verbose=not quiet,
+        )
+
+        if quiet:
+            click.echo(f"Generated {stats['files_processed']} spectrograms in {stats['output_dir']}")
+    else:
+        # Single file mode
+        if output is None:
+            # Default output: same name with .png extension
+            base_name = os.path.splitext(path)[0]
+            output = f"{base_name}.png"
+
+        try:
+            result = generate_spectrogram(
+                audio_path=path,
+                output_path=output,
+                viz_type=viz_type,
+                sample_rate=sample_rate,
+                n_mels=n_mels,
+                n_mfcc=n_mfcc,
+                cmap=cmap,
+            )
+            if not quiet:
+                click.echo(f"Generated {viz_type} spectrogram: {result}")
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}")
+            raise SystemExit(1)
+        except Exception as e:
+            click.echo(f"Error generating spectrogram: {e}")
+            raise SystemExit(1)
+
+
+# =============================================================================
 # iNaturalist Command Group
 # =============================================================================
 
