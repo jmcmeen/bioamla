@@ -190,19 +190,74 @@ def ast():
     pass
 
 
-@ast.command('infer')
-@click.argument('directory')
-@click.option('--output-csv', default='output.csv', help='Output CSV file name')
+@ast.command('predict')
+@click.argument('path')
 @click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for inference')
 @click.option('--resample-freq', default=16000, type=int, help='Resampling frequency')
-@click.option('--clip-seconds', default=1, type=int, help='Duration of audio clips in seconds')
-@click.option('--overlap-seconds', default=0, type=int, help='Overlap between clips in seconds')
-@click.option('--restart/--no-restart', default=False, help='Whether to restart from existing results')
-@click.option('--batch-size', default=8, type=int, help='Number of segments to process in parallel (default: 8)')
-@click.option('--fp16/--no-fp16', default=False, help='Use half-precision (FP16) for faster GPU inference')
-@click.option('--compile/--no-compile', default=False, help='Use torch.compile() for optimized inference (PyTorch 2.0+)')
-@click.option('--workers', default=1, type=int, help='Number of parallel workers for file loading (default: 1)')
-def ast_infer(
+@click.option('--batch', is_flag=True, default=False, help='Run batch inference on a directory of audio files')
+@click.option('--output-csv', default='output.csv', help='Output CSV file name (batch mode only)')
+@click.option('--clip-seconds', default=1, type=int, help='Duration of audio clips in seconds (batch mode only)')
+@click.option('--overlap-seconds', default=0, type=int, help='Overlap between clips in seconds (batch mode only)')
+@click.option('--restart/--no-restart', default=False, help='Whether to restart from existing results (batch mode only)')
+@click.option('--batch-size', default=8, type=int, help='Number of segments to process in parallel (default: 8, batch mode only)')
+@click.option('--fp16/--no-fp16', default=False, help='Use half-precision (FP16) for faster GPU inference (batch mode only)')
+@click.option('--compile/--no-compile', default=False, help='Use torch.compile() for optimized inference (PyTorch 2.0+, batch mode only)')
+@click.option('--workers', default=1, type=int, help='Number of parallel workers for file loading (default: 1, batch mode only)')
+def ast_predict(
+    path: str,
+    model_path: str,
+    resample_freq: int,
+    batch: bool,
+    output_csv: str,
+    clip_seconds: int,
+    overlap_seconds: int,
+    restart: bool,
+    batch_size: int,
+    fp16: bool,
+    compile: bool,
+    workers: int
+):
+    """
+    Perform prediction on audio file(s).
+
+    PATH can be a single audio file or a directory (with --batch flag).
+
+    Single file mode (default):
+        bioamla ast predict audio.wav --model-path my_model
+
+    Batch mode (--batch):
+        bioamla ast predict ./audio_dir --batch --model-path my_model
+
+        Processes all WAV files in the specified directory and saves predictions
+        to a CSV file. Supports resumable operations.
+
+        Performance options (batch mode only):
+            --batch-size: Process multiple segments in one forward pass (GPU optimization)
+            --fp16: Use half-precision inference for ~2x speedup on modern GPUs
+            --compile: Use torch.compile() for optimized model execution
+            --workers: Parallel file loading for I/O-bound workloads
+    """
+    if batch:
+        _run_batch_inference(
+            directory=path,
+            output_csv=output_csv,
+            model_path=model_path,
+            resample_freq=resample_freq,
+            clip_seconds=clip_seconds,
+            overlap_seconds=overlap_seconds,
+            restart=restart,
+            batch_size=batch_size,
+            fp16=fp16,
+            compile=compile,
+            workers=workers
+        )
+    else:
+        from bioamla.core.ast import wav_ast_inference
+        prediction = wav_ast_inference(path, model_path, resample_freq)
+        click.echo(f"{prediction}")
+
+
+def _run_batch_inference(
     directory: str,
     output_csv: str,
     model_path: str,
@@ -215,18 +270,7 @@ def ast_infer(
     compile: bool,
     workers: int
 ):
-    """
-    Run batch inference on a directory of audio files.
-
-    Processes all WAV files in the specified directory and saves predictions
-    to a CSV file. Supports resumable operations.
-
-    Performance options:
-        --batch-size: Process multiple segments in one forward pass (GPU optimization)
-        --fp16: Use half-precision inference for ~2x speedup on modern GPUs
-        --compile: Use torch.compile() for optimized model execution
-        --workers: Parallel file loading for I/O-bound workloads
-    """
+    """Run batch inference on a directory of audio files."""
     import os
     import time
 
@@ -316,17 +360,6 @@ def ast_infer(
     print("End batch inference at " + time_string)
     elapsed = end_time - start_time
     print(f"Elapsed time: {elapsed:.2f}s ({len(wave_files)/elapsed:.2f} files/sec)")
-
-
-@ast.command('predict')
-@click.argument('filepath')
-@click.argument('model_path')
-@click.argument('sample_rate')
-def ast_predict(filepath, model_path, sample_rate):
-    """Perform prediction on a single audio file."""
-    from bioamla.core.ast import wav_ast_inference
-    prediction = wav_ast_inference(filepath, model_path, int(sample_rate))
-    click.echo(f"{prediction}")
 
 
 @ast.command('train')
