@@ -5,6 +5,23 @@ Model Evaluation Module
 This module provides functions for evaluating audio classification models,
 computing metrics (accuracy, precision, recall, F1), and generating
 confusion matrices.
+
+Key features:
+- Compute classification metrics from predictions and ground truth
+- Load ground truth labels from CSV files
+- Evaluate predictions from CSV output files
+- Evaluate models directly on audio directories
+- Generate formatted evaluation reports
+- Save results in JSON, CSV, or text formats
+
+Example:
+    >>> from bioamla.core.evaluate import evaluate_directory, format_metrics_report
+    >>> result = evaluate_directory(
+    ...     audio_dir="./test_audio",
+    ...     model_path="./my_model",
+    ...     ground_truth_csv="./labels.csv"
+    ... )
+    >>> print(format_metrics_report(result))
 """
 
 from dataclasses import dataclass
@@ -17,7 +34,25 @@ import pandas as pd
 
 @dataclass
 class EvaluationResult:
-    """Results from model evaluation."""
+    """
+    Results from model evaluation.
+
+    Contains overall metrics, per-class metrics, and confusion matrix
+    for a classification evaluation.
+
+    Attributes:
+        accuracy: Overall accuracy (correct predictions / total samples).
+        precision: Macro-averaged precision across all classes.
+        recall: Macro-averaged recall across all classes.
+        f1_score: Macro-averaged F1 score across all classes.
+        confusion_matrix: NxN numpy array where rows are true labels
+            and columns are predicted labels.
+        class_labels: Ordered list of class label names.
+        per_class_metrics: Dictionary mapping class names to dictionaries
+            containing 'precision', 'recall', 'f1_score', and 'support'.
+        total_samples: Total number of samples evaluated.
+        correct_predictions: Number of correctly classified samples.
+    """
     accuracy: float
     precision: float
     recall: float
@@ -37,13 +72,29 @@ def compute_metrics(
     """
     Compute classification metrics from predictions and ground truth.
 
+    Calculates accuracy, precision, recall, F1 score (macro-averaged),
+    per-class metrics, and confusion matrix.
+
     Args:
-        y_true: List of ground truth labels
-        y_pred: List of predicted labels
-        labels: Optional list of all possible labels (for confusion matrix ordering)
+        y_true: List of ground truth labels.
+        y_pred: List of predicted labels. Must have same length as y_true.
+        labels: Optional list of all possible labels for ordering the
+            confusion matrix. If None, labels are derived from the data.
 
     Returns:
-        EvaluationResult with computed metrics
+        EvaluationResult containing all computed metrics.
+
+    Raises:
+        ValueError: If y_true and y_pred have different lengths.
+        ValueError: If y_true or y_pred are empty.
+
+    Example:
+        >>> result = compute_metrics(
+        ...     y_true=["cat", "dog", "cat"],
+        ...     y_pred=["cat", "cat", "cat"]
+        ... )
+        >>> print(f"Accuracy: {result.accuracy:.2f}")
+        Accuracy: 0.67
     """
     if len(y_true) != len(y_pred):
         raise ValueError(f"Length mismatch: y_true ({len(y_true)}) != y_pred ({len(y_pred)})")
@@ -127,13 +178,21 @@ def load_ground_truth(
     """
     Load ground truth labels from a CSV file.
 
+    Reads a CSV file and extracts a mapping from filenames to labels.
+    File paths in the CSV are normalized to just the filename (basename)
+    for matching.
+
     Args:
-        csv_path: Path to the CSV file
-        file_column: Name of the column containing file names/paths
-        label_column: Name of the column containing labels
+        csv_path: Path to the CSV file containing ground truth labels.
+        file_column: Name of the column containing file names or paths.
+        label_column: Name of the column containing ground truth labels.
 
     Returns:
-        Dictionary mapping file names to labels
+        Dictionary mapping filenames (without path) to their labels.
+
+    Raises:
+        ValueError: If the specified columns are not found in the CSV.
+        FileNotFoundError: If the CSV file does not exist.
     """
     df = pd.read_csv(csv_path)
 
