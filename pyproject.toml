@@ -50,6 +50,14 @@ dev = [
 mlflow = [
   "mlflow>=2.0",
 ]
+all = [
+  "pytest>=7.0",
+  "pytest-cov",
+  "pytest-mock",
+  "pytest-asyncio",
+  "ruff",
+  "mlflow>=2.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
