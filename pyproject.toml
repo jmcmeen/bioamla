@@ -46,6 +46,8 @@ dev = [
   "pytest-mock",
   "pytest-asyncio",
   "ruff",
+  "build",
+  "twine",
 ]
 mlflow = [
   "mlflow>=2.0",
@@ -56,6 +58,8 @@ all = [
   "pytest-mock",
   "pytest-asyncio",
   "ruff",
+  "build",
+  "twine",
   "mlflow>=2.0",
 ]
 

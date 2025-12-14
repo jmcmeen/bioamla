@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 
 from bioamla.core.datasets import (
-    convert_audio_file,
     batch_convert_audio,
+    convert_audio_file,
 )
 
 

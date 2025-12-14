@@ -15,7 +15,7 @@ Supported operations:
 """
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Literal, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import librosa
 import numpy as np
@@ -23,7 +23,6 @@ import soundfile as sf
 from scipy import signal as scipy_signal
 
 from bioamla.core.torchaudio import load_waveform_tensor
-
 
 # =============================================================================
 # Filter Functions

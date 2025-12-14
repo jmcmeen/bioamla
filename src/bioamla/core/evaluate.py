@@ -9,7 +9,7 @@ confusion matrices.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -228,15 +228,15 @@ def evaluate_directory(
     Returns:
         EvaluationResult with computed metrics
     """
+    import torch
+
     from bioamla.core.ast import (
-        load_pretrained_ast_model,
-        get_cached_feature_extractor,
-        extract_features,
         ast_predict,
-        InferenceConfig,
+        extract_features,
+        get_cached_feature_extractor,
+        load_pretrained_ast_model,
     )
     from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
-    import torch
 
     audio_dir = Path(audio_dir)
     if not audio_dir.exists():
