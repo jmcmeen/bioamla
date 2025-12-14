@@ -267,7 +267,7 @@ def _format_size(size_bytes: int) -> str:
 @click.option('--learning-rate', default=5.0e-5, type=float, help='Learning rate for training')
 @click.option('--push-to-hub/--no-push-to-hub', default=False, help='Whether to push model to HuggingFace Hub')
 @click.option('--num-train-epochs', default=1, type=int, help='Number of training epochs')
-@click.option('--per-device-train-batch-size', default=1, type=int, help='Training batch size per device')
+@click.option('--per-device-train-batch-size', default=8, type=int, help='Training batch size per device')
 @click.option('--eval-strategy', default='epoch', help='Evaluation strategy')
 @click.option('--save-strategy', default='epoch', help='Model save strategy')
 @click.option('--eval-steps', default=1, type=int, help='Number of steps between evaluations')
@@ -276,6 +276,11 @@ def _format_size(size_bytes: int) -> str:
 @click.option('--metric-for-best-model', default='accuracy', help='Metric to use for best model selection')
 @click.option('--logging-strategy', default='steps', help='Logging strategy')
 @click.option('--logging-steps', default=100, type=int, help='Number of steps between logging')
+@click.option('--fp16/--no-fp16', default=False, help='Use FP16 mixed precision training (for NVIDIA GPUs)')
+@click.option('--bf16/--no-bf16', default=False, help='Use BF16 mixed precision training (for Ampere+ GPUs)')
+@click.option('--gradient-accumulation-steps', default=1, type=int, help='Number of gradient accumulation steps')
+@click.option('--dataloader-num-workers', default=4, type=int, help='Number of dataloader workers')
+@click.option('--torch-compile/--no-torch-compile', default=False, help='Use torch.compile for faster training (PyTorch 2.0+)')
 def ast_finetune(
     training_dir: str,
     base_model: str,
@@ -295,7 +300,12 @@ def ast_finetune(
     load_best_model_at_end: bool,
     metric_for_best_model: str,
     logging_strategy: str,
-    logging_steps: int
+    logging_steps: int,
+    fp16: bool,
+    bf16: bool,
+    gradient_accumulation_steps: int,
+    dataloader_num_workers: int,
+    torch_compile: bool
 ):
     """
     Fine-tune an Audio Spectrogram Transformer (AST) model using a YAML configuration.
@@ -449,51 +459,68 @@ def ast_finetune(
         try:
             _ = example["input_values"]["array"]
             return True
-        except (RuntimeError, Exception) as e:
-            print(f"Warning: Filtering out corrupted audio file: {e}")
+        except (RuntimeError, Exception):
             return False
 
     print("Filtering out corrupted audio files...")
     original_sizes = {}
+    # Use multiple workers for parallel filtering
+    filter_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
     if isinstance(dataset, DatasetDict):
         for split_name in dataset.keys():
             original_sizes[split_name] = len(dataset[split_name])
-        dataset = dataset.filter(is_valid_audio)
+        dataset = dataset.filter(is_valid_audio, num_proc=filter_num_proc)
         for split_name in dataset.keys():
             filtered_count = original_sizes[split_name] - len(dataset[split_name])
             if filtered_count > 0:
                 print(f"  Removed {filtered_count} corrupted files from {split_name} split")
     else:
         original_size = len(dataset)
-        dataset = dataset.filter(is_valid_audio)
+        dataset = dataset.filter(is_valid_audio, num_proc=filter_num_proc)
         filtered_count = original_size - len(dataset)
         if filtered_count > 0:
             print(f"  Removed {filtered_count} corrupted files")
 
     # calculate values for normalization
     feature_extractor.do_normalize = False  # we set normalization to False in order to calculate the mean + std of the dataset
-    mean = []
-    std = []
 
     # we use the transformation w/o augmentation on the training dataset to calculate the mean + std
     if isinstance(dataset, DatasetDict) and "train" in dataset:
-        train_dataset = dataset["train"]
-        if len(train_dataset) == 0:
+        train_dataset_for_norm = dataset["train"]
+        if len(train_dataset_for_norm) == 0:
             raise ValueError("No valid audio samples found in training dataset after filtering")
-        train_dataset.set_transform(preprocess_audio, output_all_columns=False)
-        for sample in train_dataset:
-            if isinstance(sample, dict) and model_input_name in sample:
-                cur_mean = torch.mean(sample[model_input_name])
-                cur_std = torch.std(sample[model_input_name])
-                mean.append(cur_mean)
-                std.append(cur_std)
-        if not mean:
+
+        # Compute mean/std in parallel using map
+        def compute_stats(batch):
+            """Compute mean and std for a batch of audio samples."""
+            wavs = [audio["array"] for audio in batch["input_values"]]
+            inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
+            values = inputs.get(model_input_name)
+            # Compute per-sample statistics
+            means = [float(torch.mean(values[i])) for i in range(values.shape[0])]
+            stds = [float(torch.std(values[i])) for i in range(values.shape[0])]
+            return {"_mean": means, "_std": stds}
+
+        print("Calculating dataset normalization statistics...")
+        norm_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
+        stats_dataset = train_dataset_for_norm.map(
+            compute_stats,
+            batched=True,
+            batch_size=32,
+            num_proc=norm_num_proc,
+            remove_columns=train_dataset_for_norm.column_names,
+        )
+        all_means = stats_dataset["_mean"]
+        all_stds = stats_dataset["_std"]
+
+        if not all_means:
             raise ValueError("No valid audio samples found in training dataset")
+
+        feature_extractor.mean = float(np.mean(all_means))
+        feature_extractor.std = float(np.mean(all_stds))
     else:
         raise ValueError("Expected DatasetDict with 'train' split")
 
-    feature_extractor.mean = float(np.mean(mean))
-    feature_extractor.std = float(np.mean(std))
     feature_extractor.do_normalize = True
 
     print("Calculated mean and std:", feature_extractor.mean, feature_extractor.std)
@@ -533,7 +560,12 @@ def ast_finetune(
         load_best_model_at_end=load_best_model_at_end,
         metric_for_best_model=metric_for_best_model,
         logging_strategy=logging_strategy,
-        logging_steps=logging_steps
+        logging_steps=logging_steps,
+        fp16=fp16,
+        bf16=bf16,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        dataloader_num_workers=dataloader_num_workers,
+        torch_compile=torch_compile,
     )
 
     # Define evaluation metrics
