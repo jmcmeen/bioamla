@@ -557,7 +557,7 @@ def wave(filepath: str):
 @click.option('--taxon-name', default=None, help='Filter by taxon name (e.g., "Aves" for birds)')
 @click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
 @click.option('--user-id', default=None, help='Filter by observer username')
-@click.option('--project-id', type=int, default=None, help='Filter by iNaturalist project ID')
+@click.option('--project-id', default=None, help='Filter by iNaturalist project ID or slug')
 @click.option('--quality-grade', default='research', help='Quality grade: research, needs_id, or casual')
 @click.option('--sound-license', default=None, help='Filter by sound license (e.g., cc-by, cc-by-nc, cc0)')
 @click.option('--start-date', default=None, help='Start date for observations (YYYY-MM-DD)')
@@ -574,7 +574,7 @@ def inat_audio(
     taxon_name: str,
     place_id: int,
     user_id: str,
-    project_id: int,
+    project_id: str,
     quality_grade: str,
     sound_license: str,
     start_date: str,
@@ -637,6 +637,224 @@ def inat_audio(
 
     if quiet:
         click.echo(f"Downloaded {stats['total_sounds']} audio files to {stats['output_dir']}")
+
+
+@cli.command()
+@click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
+@click.option('--project-id', default=None, help='Filter by iNaturalist project ID or slug')
+@click.option('--taxon-id', type=int, default=None, help='Filter by parent taxon ID (e.g., 20979 for Amphibia)')
+@click.option('--quality-grade', default='research', help='Quality grade: research, needs_id, or casual')
+@click.option('--output', '-o', default=None, help='Output file path for CSV (optional)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def inat_taxa_search(
+    place_id: int,
+    project_id: str,
+    taxon_id: int,
+    quality_grade: str,
+    output: str,
+    quiet: bool
+):
+    """
+    Search for taxa with observations in a place or project.
+
+    Uses the iNaturalist species_counts API for efficient retrieval.
+
+    Examples:
+
+        Find amphibian taxa in a project:
+        bioamla inat-taxa-search --project-id appalachia-bioacoustics --taxon-id 20979
+
+        Find all bird taxa in a place:
+        bioamla inat-taxa-search --place-id 1 --taxon-id 3
+
+        Export results to CSV:
+        bioamla inat-taxa-search --project-id my-project -o taxa.csv
+    """
+    from bioamla.core.inat import get_taxa
+
+    if not place_id and not project_id:
+        raise click.UsageError("At least one of --place-id or --project-id must be provided")
+
+    taxa = get_taxa(
+        place_id=place_id,
+        project_id=project_id,
+        quality_grade=quality_grade,
+        taxon_id=taxon_id,
+        verbose=not quiet
+    )
+
+    if output:
+        import csv
+        with open(output, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=['taxon_id', 'name', 'common_name', 'observation_count'])
+            writer.writeheader()
+            writer.writerows(taxa)
+        click.echo(f"Saved {len(taxa)} taxa to {output}")
+    else:
+        click.echo(f"\n{'Taxon ID':<12} {'Scientific Name':<30} {'Common Name':<25} {'Obs Count':<10}")
+        click.echo("-" * 80)
+        for t in taxa:
+            click.echo(f"{t['taxon_id']:<12} {t['name']:<30} {t['common_name']:<25} {t['observation_count']:<10}")
+
+
+@cli.command()
+@click.argument('project_id')
+@click.option('--output', '-o', default=None, help='Output file path for JSON (optional)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output, print only JSON')
+def inat_project_stats(
+    project_id: str,
+    output: str,
+    quiet: bool
+):
+    """
+    Get statistics for an iNaturalist project.
+
+    Fetches project information including observation counts, species counts,
+    and observer information.
+
+    Examples:
+
+        Get stats for a project:
+        bioamla inat-project-stats appalachia-bioacoustics
+
+        Export stats to JSON:
+        bioamla inat-project-stats appalachia-bioacoustics -o stats.json
+
+        Get JSON output only:
+        bioamla inat-project-stats appalachia-bioacoustics --quiet
+    """
+    import json
+    from bioamla.core.inat import get_project_stats
+
+    stats = get_project_stats(
+        project_id=project_id,
+        verbose=not quiet
+    )
+
+    if output:
+        with open(output, 'w', encoding='utf-8') as f:
+            json.dump(stats, f, indent=2)
+        click.echo(f"Saved project stats to {output}")
+    elif quiet:
+        click.echo(json.dumps(stats, indent=2))
+    else:
+        click.echo(f"\nProject: {stats['title']}")
+        click.echo(f"URL: {stats['url']}")
+        click.echo(f"Type: {stats['project_type']}")
+        if stats['place']:
+            click.echo(f"Place: {stats['place']}")
+        click.echo(f"Created: {stats['created_at']}")
+        click.echo(f"\nStatistics:")
+        click.echo(f"  Observations: {stats['observation_count']}")
+        click.echo(f"  Species: {stats['species_count']}")
+        click.echo(f"  Observers: {stats['observers_count']}")
+
+
+@cli.command()
+@click.argument('output_dir')
+@click.argument('dataset_paths', nargs=-1, required=True)
+@click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file in each dataset')
+@click.option('--overwrite', is_flag=True, help='Overwrite existing files instead of skipping')
+@click.option('--no-organize', is_flag=True, help='Preserve original directory structure instead of organizing by category')
+@click.option('--target-format', default=None, help='Convert all audio files to this format (wav, mp3, flac, etc.)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def merge_datasets(
+    output_dir: str,
+    dataset_paths: tuple,
+    metadata_filename: str,
+    overwrite: bool,
+    no_organize: bool,
+    target_format: str,
+    quiet: bool
+):
+    """
+    Merge multiple audio datasets into a single dataset.
+
+    Combines audio files and metadata from multiple dataset directories into
+    a single output directory. By default, files are organized into subdirectories
+    based on the 'category' field in metadata.
+
+    Examples:
+
+        Merge two datasets:
+        bioamla merge-datasets ./merged ./birds_v1 ./birds_v2
+
+        Merge multiple datasets with overwrite:
+        bioamla merge-datasets ./merged ./dataset1 ./dataset2 ./dataset3 --overwrite
+
+        Merge preserving original directory structure:
+        bioamla merge-datasets ./merged ./data1 ./data2 --no-organize
+
+        Merge and convert all files to WAV:
+        bioamla merge-datasets ./merged ./data1 ./data2 --target-format wav
+
+        Merge with custom metadata filename:
+        bioamla merge-datasets ./merged ./data1 ./data2 --metadata-filename data.csv
+    """
+    from bioamla.core.datasets import merge_datasets as do_merge
+
+    stats = do_merge(
+        dataset_paths=list(dataset_paths),
+        output_dir=output_dir,
+        metadata_filename=metadata_filename,
+        skip_existing=not overwrite,
+        organize_by_category=not no_organize,
+        target_format=target_format,
+        verbose=not quiet
+    )
+
+    if quiet:
+        msg = f"Merged {stats['datasets_merged']} datasets: {stats['total_files']} total files"
+        if target_format:
+            msg += f", {stats['files_converted']} converted"
+        click.echo(msg)
+
+
+@cli.command()
+@click.argument('dataset_path')
+@click.argument('target_format')
+@click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file')
+@click.option('--keep-original', is_flag=True, help='Keep original files after conversion (default: delete)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def convert_audio(
+    dataset_path: str,
+    target_format: str,
+    metadata_filename: str,
+    keep_original: bool,
+    quiet: bool
+):
+    """
+    Convert all audio files in a dataset to a specified format.
+
+    Converts audio files and updates the metadata.csv with new filenames.
+    Original files are deleted by default. The attr_note field is updated
+    to indicate "modified clip from original source".
+
+    Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
+
+    Examples:
+
+        Convert dataset to WAV:
+        bioamla convert-audio ./my_dataset wav
+
+        Convert to MP3 and keep originals:
+        bioamla convert-audio ./my_dataset mp3 --keep-original
+
+        Convert with custom metadata filename:
+        bioamla convert-audio ./my_dataset flac --metadata-filename data.csv
+    """
+    from bioamla.core.datasets import convert_filetype
+
+    stats = convert_filetype(
+        dataset_path=dataset_path,
+        target_format=target_format,
+        metadata_filename=metadata_filename,
+        keep_original=keep_original,
+        verbose=not quiet
+    )
+
+    if quiet:
+        click.echo(f"Converted {stats['files_converted']} files to {target_format}")
 
 
 if __name__ == '__main__':
