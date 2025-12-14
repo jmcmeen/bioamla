@@ -21,7 +21,7 @@ Example usage:
 
 import time
 import csv
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 
 import requests
@@ -30,7 +30,7 @@ from pyinaturalist import get_observations
 
 def download_inat_audio(
     output_dir: str,
-    taxon_id: Optional[int] = None,
+    taxon_ids: Optional[List[int]] = None,
     taxon_name: Optional[str] = None,
     place_id: Optional[int] = None,
     user_id: Optional[str] = None,
@@ -44,6 +44,7 @@ def download_inat_audio(
     delay_between_downloads: float = 1.0,
     organize_by_taxon: bool = True,
     include_inat_metadata: bool = False,
+    file_extensions: Optional[List[str]] = None,
     verbose: bool = True
 ) -> dict:
     """
@@ -55,7 +56,7 @@ def download_inat_audio(
 
     Args:
         output_dir: Directory where audio files will be saved
-        taxon_id: Filter by taxon ID (e.g., 3 for birds/Aves)
+        taxon_ids: Filter by taxon ID(s) (e.g., [3] for birds/Aves, [3, 20978] for multiple taxa)
         taxon_name: Filter by taxon name (e.g., "Aves" for birds)
         place_id: Filter by place ID (e.g., 1 for United States)
         user_id: Filter by observer username
@@ -71,6 +72,8 @@ def download_inat_audio(
         include_inat_metadata: If True, include additional iNaturalist metadata fields
             (observation_id, sound_id, common_name, taxon_id, observed_on, location,
             place_guess, observer, quality_grade, observation_url)
+        file_extensions: List of file extensions to filter by (e.g., ["wav", "mp3"]).
+            If None, all audio formats are downloaded.
         verbose: If True, print progress information
 
     Returns:
@@ -112,6 +115,14 @@ def download_inat_audio(
     # Normalize sound_license to uppercase for pyinaturalist API compatibility
     normalized_license = sound_license.upper() if sound_license else None
 
+    # Normalize file extensions (ensure they start with a dot and are lowercase)
+    normalized_extensions = None
+    if file_extensions:
+        normalized_extensions = [
+            ext.lower() if ext.startswith(".") else f".{ext.lower()}"
+            for ext in file_extensions
+        ]
+
     if verbose:
         print(f"Querying iNaturalist for observations with sounds...")
 
@@ -121,7 +132,7 @@ def download_inat_audio(
 
         response = get_observations(
             sounds=True,
-            taxon_id=taxon_id,
+            taxon_id=taxon_ids,
             taxon_name=taxon_name,
             place_id=place_id,
             user_id=user_id,
@@ -178,6 +189,12 @@ def download_inat_audio(
                     continue
 
                 ext = _get_extension_from_url(file_url)
+
+                # Skip files that don't match the requested extensions
+                if normalized_extensions and ext.lower() not in normalized_extensions:
+                    if verbose:
+                        print(f"  Skipped: {ext} file (filtering for {normalized_extensions})")
+                    continue
                 filename = f"inat_{obs_id}_sound_{sound_id}{ext}"
                 filepath = species_dir / filename
 
@@ -312,7 +329,8 @@ def get_observation_sounds(observation_id: int) -> list:
 def _sanitize_filename(name: str) -> str:
     """Sanitize a string for use as a filename or directory name."""
     invalid_chars = '<>:"/\\|?*'
-    sanitized = name
+    sanitized = name.lower()
+    sanitized = sanitized.replace(" ", "_")
     for char in invalid_chars:
         sanitized = sanitized.replace(char, "_")
     sanitized = sanitized.strip(". ")
