@@ -564,6 +564,7 @@ def wave(filepath: str):
 @click.option('--end-date', default=None, help='End date for observations (YYYY-MM-DD)')
 @click.option('--max-observations', type=int, default=100, help='Maximum number of observations to download')
 @click.option('--organize-by-taxon/--no-organize-by-taxon', default=True, help='Organize files into subdirectories by species')
+@click.option('--include-inat-metadata', is_flag=True, help='Include additional iNaturalist metadata fields in CSV')
 @click.option('--delay', type=float, default=1.0, help='Delay between downloads in seconds (rate limiting)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def inat_audio(
@@ -579,6 +580,7 @@ def inat_audio(
     end_date: str,
     max_observations: int,
     organize_by_taxon: bool,
+    include_inat_metadata: bool,
     delay: float,
     quiet: bool
 ):
@@ -615,6 +617,7 @@ def inat_audio(
         d2=end_date,
         max_observations=max_observations,
         organize_by_taxon=organize_by_taxon,
+        include_inat_metadata=include_inat_metadata,
         delay_between_downloads=delay,
         verbose=not quiet
     )
