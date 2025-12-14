@@ -697,6 +697,10 @@ def ast_predict(filepath, model_path, sample_rate):
 @click.option('--clip-seconds', default=1, type=int, help='Duration of audio clips in seconds')
 @click.option('--overlap-seconds', default=0, type=int, help='Overlap between clips in seconds')
 @click.option('--restart/--no-restart', default=False, help='Whether to restart from existing results')
+@click.option('--batch-size', default=8, type=int, help='Number of segments to process in parallel (default: 8)')
+@click.option('--fp16/--no-fp16', default=False, help='Use half-precision (FP16) for faster GPU inference')
+@click.option('--compile/--no-compile', default=False, help='Use torch.compile() for optimized inference (PyTorch 2.0+)')
+@click.option('--workers', default=1, type=int, help='Number of parallel workers for file loading (default: 1)')
 def ast_batch_inference(
     directory: str,
     output_csv: str,
@@ -704,7 +708,11 @@ def ast_batch_inference(
     resample_freq: int,
     clip_seconds: int,
     overlap_seconds: int,
-    restart: bool
+    restart: bool,
+    batch_size: int,
+    fp16: bool,
+    compile: bool,
+    workers: int
 ):
     """
     Run batch AST inference on a directory of WAV files.
@@ -712,6 +720,12 @@ def ast_batch_inference(
     Loads an AST model and processes all WAV files in the specified directory,
     generating predictions and saving results to a CSV file. Supports resumable
     operations by checking for existing results and skipping already processed files.
+
+    Performance options:
+        --batch-size: Process multiple audio segments in one forward pass (GPU optimization)
+        --fp16: Use half-precision inference for ~2x speedup on modern GPUs
+        --compile: Use torch.compile() for optimized model execution
+        --workers: Parallel file loading for I/O-bound workloads
 
     Args:
         directory (str): Directory containing WAV files to process
@@ -721,6 +735,10 @@ def ast_batch_inference(
         clip_seconds (int): Duration of audio clips in seconds
         overlap_seconds (int): Overlap between clips in seconds
         restart (bool): Whether to restart from existing results
+        batch_size (int): Number of segments to batch together
+        fp16 (bool): Use half-precision inference
+        compile (bool): Use torch.compile() optimization
+        workers (int): Number of parallel workers for file loading
     """
     import os
     import time
@@ -729,14 +747,18 @@ def ast_batch_inference(
     import torch
     from novus_pytils.files import file_exists, get_files_by_extension
 
-    from bioamla.core.ast import load_pretrained_ast_model, wave_file_batch_inference
+    from bioamla.core.ast import (
+        InferenceConfig,
+        load_pretrained_ast_model,
+        wave_file_batch_inference,
+    )
 
     output_csv = os.path.join(directory, output_csv)
     print("Output csv: " + output_csv)
 
     wave_files = get_files_by_extension(directory=directory, extensions=['.wav'], recursive=True)
 
-    if(len(wave_files) == 0):
+    if len(wave_files) == 0:
         print("No wave files found in directory: " + directory)
         return
     else:
@@ -744,18 +766,14 @@ def ast_batch_inference(
 
     print("Restart: " + str(restart))
     if restart:
-        #if file exists, read file names from file and remove from wave files
         if file_exists(output_csv):
             print("file exists: " + output_csv)
             df = pd.read_csv(output_csv)
-            #filenames exist more than once get the unique ones
             processed_files = set(df['filepath'])
             print("Found " + str(len(processed_files)) + " processed files")
 
             print("Removing processed files from wave files")
-            # Todo use sets
-            for filepath in processed_files:
-                wave_files.remove(filepath)
+            wave_files = [f for f in wave_files if f not in processed_files]
 
             print("Found " + str(len(wave_files)) + " wave files left to process")
 
@@ -772,9 +790,10 @@ def ast_batch_inference(
         results.to_csv(output_csv, header=True, index=False)
 
     print("Loading model: " + model_path)
-    model = load_pretrained_ast_model(model_path)
+    print(f"Performance options: batch_size={batch_size}, fp16={fp16}, compile={compile}, workers={workers}")
 
-    # Type cast to indicate this is a PyTorch module with eval() and to() methods
+    model = load_pretrained_ast_model(model_path, use_fp16=fp16, use_compile=compile)
+
     from torch.nn import Module
     if not isinstance(model, Module):
         raise TypeError("Model must be a PyTorch Module")
@@ -783,25 +802,33 @@ def ast_batch_inference(
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("Using device: " + device)
-    model.to(device)
 
-    # start timercurrent
+    config = InferenceConfig(
+        batch_size=batch_size,
+        use_fp16=fp16,
+        use_compile=compile,
+        num_workers=workers
+    )
+
     start_time = time.time()
-    #format start time
     time_string = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time))
     print("Start batch inference at " + time_string)
-    wave_file_batch_inference(wave_files=wave_files,
-                              model=model,
-                              freq=resample_freq,
-                              clip_seconds=clip_seconds,
-                              overlap_seconds=overlap_seconds,
-                              output_csv=output_csv)
 
-    # end timer
+    wave_file_batch_inference(
+        wave_files=wave_files,
+        model=model,
+        freq=resample_freq,
+        clip_seconds=clip_seconds,
+        overlap_seconds=overlap_seconds,
+        output_csv=output_csv,
+        config=config
+    )
+
     end_time = time.time()
     time_string = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end_time))
     print("End batch inference at " + time_string)
-    print("Elapsed time: " + str(end_time - start_time))
+    elapsed = end_time - start_time
+    print(f"Elapsed time: {elapsed:.2f}s ({len(wave_files)/elapsed:.2f} files/sec)")
 
 @cli.command()
 @click.argument('filepath')
