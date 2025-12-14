@@ -267,6 +267,24 @@ for package, version in versions.items():
 | `bioamla inat-taxa-search` | Search for taxa with observations in a place or project |
 | `bioamla inat-project-stats <PROJECT_ID>` | Get statistics for an iNaturalist project |
 
+**Download audio from a CSV of taxon IDs:**
+
+```bash
+# First, search for taxa and export to CSV
+bioamla inat-taxa-search --project-id appalachia-bioacoustics --taxon-id 20979 -o taxa.csv
+
+# Then download audio for all taxa in the CSV
+bioamla inat-audio ./sounds --taxon-csv taxa.csv --obs-per-taxon 10
+```
+
+The CSV file should have a `taxon_id` column with integer taxon IDs:
+
+```csv
+taxon_id,name,common_name,observation_count
+65489,Lithobates catesbeianus,American Bullfrog,150
+23456,Anaxyrus americanus,American Toad,200
+```
+
 ### Dataset Management
 
 | Command | Description |

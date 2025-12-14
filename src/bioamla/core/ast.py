@@ -11,22 +11,27 @@ particularly effective for environmental sound classification tasks.
 
 """
 
-from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
-from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
-import torch
 import pandas as pd
+import torch
+from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
+
+from bioamla.core.torchaudio import (
+    load_waveform_tensor,
+    resample_waveform_tensor,
+    split_waveform_tensor,
+)
 
 
-def wave_file_batch_inference(wave_files: list, model: AutoModelForAudioClassification, 
+def wave_file_batch_inference(wave_files: list, model: AutoModelForAudioClassification,
                               freq: int, clip_seconds: int, overlap_seconds: int,
                               output_csv: str) -> None:
     """
     Perform batch inference on multiple audio files using an AST model.
-    
+
     This function processes a list of audio files, performs segmented inference
     on each file, and appends the results to a CSV file. Each file is processed
     in segments to handle long audio recordings efficiently.
-    
+
     Args:
         wave_files (list): List of file paths to audio files to process
         model (AutoModelForAudioClassification): Pre-trained AST model for inference
@@ -34,10 +39,10 @@ def wave_file_batch_inference(wave_files: list, model: AutoModelForAudioClassifi
         clip_seconds (int): Duration of each audio segment in seconds
         overlap_seconds (int): Overlap between consecutive segments in seconds
         output_csv (str): Path to output CSV file for results
-        
+
     Returns:
         None: Results are written directly to the CSV file
-        
+
     Note:
         Results are appended to the CSV file, so the file will grow with each
         processed audio file. The CSV format includes: filepath, start, stop, prediction
@@ -47,22 +52,22 @@ def wave_file_batch_inference(wave_files: list, model: AutoModelForAudioClassifi
         # results = pd.concat([results, df]) # TODO this should just return a dict. pandaing should go somewhere else
         df.to_csv(output_csv, mode='a', header=False, index=False)
 
-def segmented_wave_file_inference(filepath: str, model: AutoModelForAudioClassification, 
+def segmented_wave_file_inference(filepath: str, model: AutoModelForAudioClassification,
                                   freq: int, clip_seconds: int, overlap_seconds: int) -> pd.DataFrame:
     """
     Perform inference on a single audio file by processing it in segments.
-    
+
     This function loads an audio file, splits it into overlapping segments,
     and runs AST model inference on each segment. This approach allows for
     processing of long audio recordings while maintaining temporal resolution.
-    
+
     Args:
         filepath (str): Path to the audio file to process
         model (AutoModelForAudioClassification): Pre-trained AST model
         freq (int): Target sampling frequency for preprocessing
         clip_seconds (int): Duration of each segment in seconds
         overlap_seconds (int): Overlap between consecutive segments in seconds
-        
+
     Returns:
         pd.DataFrame: DataFrame with columns ['filepath', 'start', 'stop', 'prediction']
                      containing the inference results for each segment
@@ -81,16 +86,16 @@ def segmented_wave_file_inference(filepath: str, model: AutoModelForAudioClassif
 def wav_ast_inference(wave_path: str, model_path: str, sample_rate: int):
     """
     Perform AST inference on a single audio file.
-    
+
     This is a convenience function that loads an audio file, preprocesses it,
     loads the specified AST model, and returns a single prediction for the
     entire audio file.
-    
+
     Args:
         wave_path (str): Path to the audio file to classify
         model_path (str): Path to the pre-trained AST model
         sample_rate (int): Target sampling rate for preprocessing
-        
+
     Returns:
         str: Predicted class label for the audio file
     """
@@ -103,14 +108,14 @@ def wav_ast_inference(wave_path: str, model_path: str, sample_rate: int):
 def ast_predict(input_values, model: AutoModelForAudioClassification) -> str:
     """
     Perform prediction using an AST model on preprocessed audio features.
-    
+
     This function runs the actual model inference and returns the predicted
     class label. It uses torch.inference_mode() for optimized inference.
-    
+
     Args:
         input_values: Preprocessed audio features from the feature extractor
         model (AutoModelForAudioClassification): The AST model to use for prediction
-        
+
     Returns:
         str: The predicted class label (e.g., species name or sound type)
     """
@@ -123,17 +128,17 @@ def ast_predict(input_values, model: AutoModelForAudioClassification) -> str:
 def extract_features(waveform_tensor: torch.Tensor, sample_rate: int):
     """
     Extract features from audio waveform for AST model input.
-    
+
     This function converts a waveform tensor into the feature representation
     expected by AST models using the appropriate feature extractor.
-    
+
     Args:
         waveform_tensor (torch.Tensor): Audio waveform as a tensor
         sample_rate (int): Sampling rate of the audio
-        
+
     Returns:
         torch.Tensor: Extracted features ready for model input
-        
+
     Note:
         The function automatically detects and uses CUDA if available,
         otherwise falls back to CPU processing.
@@ -149,17 +154,17 @@ def extract_features(waveform_tensor: torch.Tensor, sample_rate: int):
 def load_pretrained_ast_model(model_path: str) -> AutoModelForAudioClassification:
     """
     Load a pre-trained AST model from a given path.
-    
+
     This function loads an Audio Spectrogram Transformer model that has been
     pre-trained for audio classification tasks. The model is automatically
     distributed across available devices.
-    
+
     Args:
         model_path (str): Path to the pre-trained model directory or Hugging Face model identifier
-        
+
     Returns:
         AutoModelForAudioClassification: The loaded AST model ready for inference
-        
+
     Note:
         The device_map="auto" parameter automatically distributes the model
         across available GPUs if present, otherwise uses CPU.

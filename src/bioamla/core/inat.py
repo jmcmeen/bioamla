@@ -7,7 +7,7 @@ It uses the pyinaturalist library to query observations with sounds and download
 audio files for use in bioacoustic machine learning workflows.
 
 Example usage:
-    from bioamla.core.wrappers.inat import download_inat_audio
+    from bioamla.core.inat import download_inat_audio
 
     # Download bird sounds from a specific place
     download_inat_audio(
@@ -19,33 +19,92 @@ Example usage:
     )
 """
 
-import time
 import csv
-import warnings
-from typing import Any, Optional, List, Set
+import time
 from pathlib import Path
+from typing import Any, List, Optional, Union
 
 import requests
-from pyinaturalist import get_observations, get_observation_species_counts
+from pyinaturalist import get_observation_species_counts, get_observations
+
+from bioamla.core.fileutils import (
+    get_extension_from_content_type,
+    get_extension_from_url,
+    sanitize_filename,
+)
+from bioamla.core.logging import get_logger
+from bioamla.core.metadata import (
+    get_existing_observation_ids,
+    write_metadata_csv,
+)
+
+logger = get_logger(__name__)
 
 
-# Required metadata fields that must always be present
-_REQUIRED_METADATA_FIELDS = [
-    "filename", "split", "target", "category",
-    "attr_id", "attr_lic", "attr_url", "attr_note"
-]
+def load_taxon_ids_from_csv(csv_path: Union[str, Path]) -> List[int]:
+    """
+    Load taxon IDs from a CSV file.
 
-# Optional iNaturalist metadata fields
-_OPTIONAL_METADATA_FIELDS = [
-    "observation_id", "sound_id", "common_name", "taxon_id",
-    "observed_on", "location", "place_guess", "observer",
-    "quality_grade", "observation_url"
-]
+    The CSV file should have a column named 'taxon_id' containing integer taxon IDs.
+
+    Args:
+        csv_path: Path to the CSV file
+
+    Returns:
+        List of taxon IDs as integers
+
+    Raises:
+        FileNotFoundError: If the CSV file doesn't exist
+        ValueError: If the CSV doesn't have a 'taxon_id' column or contains invalid data
+
+    Example CSV format:
+        taxon_id
+        65489
+        23456
+        78901
+    """
+    csv_path = Path(csv_path)
+
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Taxon CSV file not found: {csv_path}")
+
+    taxon_ids: List[int] = []
+
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+
+        if reader.fieldnames is None or "taxon_id" not in reader.fieldnames:
+            raise ValueError(
+                f"CSV file must have a 'taxon_id' column. "
+                f"Found columns: {reader.fieldnames}"
+            )
+
+        for row_num, row in enumerate(reader, start=2):  # start=2 accounts for header
+            taxon_id_str = row.get("taxon_id", "").strip()
+
+            if not taxon_id_str:
+                logger.warning(f"Empty taxon_id at row {row_num}, skipping")
+                continue
+
+            try:
+                taxon_id = int(taxon_id_str)
+                taxon_ids.append(taxon_id)
+            except ValueError:
+                logger.warning(
+                    f"Invalid taxon_id '{taxon_id_str}' at row {row_num}, skipping"
+                )
+
+    if not taxon_ids:
+        raise ValueError(f"No valid taxon IDs found in {csv_path}")
+
+    logger.info(f"Loaded {len(taxon_ids)} taxon IDs from {csv_path}")
+    return taxon_ids
 
 
 def download_inat_audio(
     output_dir: str,
     taxon_ids: Optional[List[int]] = None,
+    taxon_csv: Optional[Union[str, Path]] = None,
     taxon_name: Optional[str] = None,
     place_id: Optional[int] = None,
     user_id: Optional[str] = None,
@@ -72,6 +131,8 @@ def download_inat_audio(
     Args:
         output_dir: Directory where audio files will be saved
         taxon_ids: Filter by taxon ID(s) (e.g., [3] for birds/Aves, [3, 20978] for multiple taxa)
+        taxon_csv: Path to a CSV file containing taxon IDs (must have a 'taxon_id' column).
+            If provided along with taxon_ids, the CSV IDs are appended to taxon_ids.
         taxon_name: Filter by taxon name (e.g., "Aves" for birds)
         place_id: Filter by place ID (e.g., 1 for United States)
         user_id: Filter by observer username
@@ -102,6 +163,8 @@ def download_inat_audio(
 
     Raises:
         ValueError: If output_dir cannot be created
+        FileNotFoundError: If taxon_csv is provided but the file doesn't exist
+        ValueError: If taxon_csv doesn't have a 'taxon_id' column
 
     Example:
         >>> stats = download_inat_audio(
@@ -111,9 +174,27 @@ def download_inat_audio(
         ...     max_observations=50
         ... )
         >>> print(f"Downloaded {stats['total_sounds']} audio files")
+
+        >>> # Using a CSV file with taxon IDs
+        >>> stats = download_inat_audio(
+        ...     output_dir="./sounds",
+        ...     taxon_csv="taxa.csv",
+        ...     obs_per_taxon=10
+        ... )
     """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
+
+    # Load taxon IDs from CSV if provided
+    if taxon_csv:
+        csv_taxon_ids = load_taxon_ids_from_csv(taxon_csv)
+        if taxon_ids:
+            # Combine provided taxon_ids with CSV taxon_ids
+            taxon_ids = list(taxon_ids) + csv_taxon_ids
+        else:
+            taxon_ids = csv_taxon_ids
+        if verbose:
+            print(f"Loaded {len(csv_taxon_ids)} taxon IDs from CSV file")
 
     stats = {
         "total_observations": 0,
@@ -127,7 +208,7 @@ def download_inat_audio(
     metadata_rows = []
 
     # Load existing metadata to skip already-downloaded files
-    existing_files = _get_existing_files(output_path / "metadata.csv")
+    existing_files = get_existing_observation_ids(output_path / "metadata.csv")
     if verbose and existing_files:
         print(f"Found {len(existing_files)} existing files in collection, will skip duplicates.")
 
@@ -154,7 +235,7 @@ def download_inat_audio(
             if current_taxon_id:
                 print(f"Querying iNaturalist for taxon ID {current_taxon_id}...")
             else:
-                print(f"Querying iNaturalist for observations with sounds...")
+                print("Querying iNaturalist for observations with sounds...")
 
         while observations_processed < obs_per_taxon:
             remaining = obs_per_taxon - observations_processed
@@ -204,7 +285,7 @@ def download_inat_audio(
                 quality = obs.get("quality_grade", "")
 
                 if organize_by_taxon:
-                    safe_species = _sanitize_filename(species_name)
+                    safe_species = sanitize_filename(species_name)
                     species_dir = output_path / safe_species
                     species_dir.mkdir(exist_ok=True)
                 else:
@@ -218,7 +299,7 @@ def download_inat_audio(
                     if not file_url:
                         continue
 
-                    ext = _get_extension_from_url(file_url)
+                    ext = get_extension_from_url(file_url)
 
                     # Skip files that don't match the requested extensions
                     if normalized_extensions and ext.lower() not in normalized_extensions:
@@ -288,10 +369,10 @@ def download_inat_audio(
                 break
 
     if metadata_rows:
-        _write_metadata_csv(output_path / "metadata.csv", metadata_rows, verbose)
+        write_metadata_csv(output_path / "metadata.csv", metadata_rows, merge_existing=True)
 
     if verbose:
-        print(f"\nDownload complete!")
+        print("\nDownload complete!")
         print(f"  Observations processed: {stats['total_observations']}")
         print(f"  Audio files downloaded: {stats['total_sounds']}")
         print(f"  Skipped (already exist): {stats['skipped_existing']}")
@@ -536,33 +617,6 @@ def get_project_stats(
     return stats
 
 
-def _sanitize_filename(name: str) -> str:
-    """Sanitize a string for use as a filename or directory name."""
-    invalid_chars = '<>:"/\\|?*'
-    sanitized = name.lower()
-    sanitized = sanitized.replace(" ", "_")
-    for char in invalid_chars:
-        sanitized = sanitized.replace(char, "_")
-    sanitized = sanitized.strip(". ")
-    return sanitized if sanitized else "unknown"
-
-
-def _get_extension_from_url(url: str) -> str:
-    """Extract file extension from URL or return default."""
-    url_lower = url.lower()
-    if ".wav" in url_lower:
-        return ".wav"
-    elif ".m4a" in url_lower:
-        return ".m4a"
-    elif ".mp3" in url_lower:
-        return ".mp3"
-    elif ".ogg" in url_lower:
-        return ".ogg"
-    elif ".flac" in url_lower:
-        return ".flac"
-    return ".mp3"
-
-
 def _download_file(url: str, filepath: Path, verbose: bool = True) -> bool:
     """Download a file from URL to local path."""
     try:
@@ -571,7 +625,7 @@ def _download_file(url: str, filepath: Path, verbose: bool = True) -> bool:
 
         content_type = response.headers.get("Content-Type", "")
         if content_type:
-            ext = _get_extension_from_content_type(content_type)
+            ext = get_extension_from_content_type(content_type)
             if ext and not str(filepath).lower().endswith(ext):
                 filepath = filepath.with_suffix(ext)
 
@@ -586,159 +640,5 @@ def _download_file(url: str, filepath: Path, verbose: bool = True) -> bool:
     except requests.RequestException as e:
         if verbose:
             print(f"  Failed to download {url}: {e}")
+        logger.warning(f"Failed to download {url}: {e}")
         return False
-
-
-def _get_extension_from_content_type(content_type: str) -> str:
-    """Map content type to file extension."""
-    content_type = content_type.lower().split(";")[0].strip()
-    mapping = {
-        "audio/mpeg": ".mp3",
-        "audio/mp3": ".mp3",
-        "audio/wav": ".wav",
-        "audio/x-wav": ".wav",
-        "audio/wave": ".wav",
-        "audio/m4a": ".m4a",
-        "audio/x-m4a": ".m4a",
-        "audio/mp4": ".m4a",
-        "audio/ogg": ".ogg",
-        "audio/flac": ".flac",
-        "audio/x-flac": ".flac",
-    }
-    return mapping.get(content_type, "")
-
-
-def _get_existing_files(metadata_path: Path) -> Set[tuple[int, int]]:
-    """
-    Read existing metadata CSV and extract (observation_id, sound_id) pairs.
-
-    This is used to skip downloading files that already exist in the collection.
-    The function parses filenames in the format 'inat_{obs_id}_sound_{sound_id}.ext'
-    to extract the IDs.
-
-    Args:
-        metadata_path: Path to the metadata.csv file
-
-    Returns:
-        Set of (observation_id, sound_id) tuples for existing files
-    """
-    existing: Set[tuple[int, int]] = set()
-
-    if not metadata_path.exists():
-        return existing
-
-    try:
-        with open(metadata_path, "r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                filename = row.get("filename", "")
-                # Extract obs_id and sound_id from filename pattern: inat_{obs_id}_sound_{sound_id}.ext
-                # The filename may include a subdirectory (e.g., "species_name/inat_123_sound_456.mp3")
-                basename = Path(filename).name
-                if basename.startswith("inat_") and "_sound_" in basename:
-                    try:
-                        # Parse: inat_{obs_id}_sound_{sound_id}.ext
-                        parts = basename.replace("inat_", "").split("_sound_")
-                        obs_id = int(parts[0])
-                        sound_id = int(parts[1].split(".")[0])
-                        existing.add((obs_id, sound_id))
-                    except (ValueError, IndexError):
-                        # Skip malformed filenames
-                        continue
-    except (OSError, csv.Error):
-        # If we can't read the file, return empty set (will download everything)
-        pass
-
-    return existing
-
-
-def _read_existing_metadata(filepath: Path) -> tuple[list[dict], Set[str]]:
-    """Read existing metadata CSV and return rows and fieldnames."""
-    rows = []
-    fieldnames: Set[str] = set()
-
-    if not filepath.exists():
-        return rows, fieldnames
-
-    with open(filepath, "r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        fieldnames = set(reader.fieldnames or [])
-        rows = list(reader)
-
-    return rows, fieldnames
-
-
-def _write_metadata_csv(filepath: Path, rows: list, verbose: bool = True) -> None:
-    """Write metadata rows to a CSV file, merging with existing data if present."""
-    if not rows:
-        return
-
-    new_fieldnames = set(rows[0].keys())
-    existing_rows, existing_fieldnames = _read_existing_metadata(filepath)
-
-    if existing_rows:
-        # Check for optional metadata mismatch
-        existing_optional = existing_fieldnames & set(_OPTIONAL_METADATA_FIELDS)
-        new_optional = new_fieldnames & set(_OPTIONAL_METADATA_FIELDS)
-
-        if existing_optional != new_optional:
-            # TODO: Handle optional metadata mismatch more gracefully by allowing
-            # users to choose whether to keep, drop, or fill with defaults
-            warnings.warn(
-                f"Optional metadata mismatch when merging datasets. "
-                f"Existing has: {existing_optional or 'none'}, "
-                f"New has: {new_optional or 'none'}. "
-                f"Dropping optional metadata columns to maintain consistency.",
-                UserWarning
-            )
-            # Drop optional metadata from both existing and new rows
-            for row in existing_rows:
-                for field in _OPTIONAL_METADATA_FIELDS:
-                    row.pop(field, None)
-            for row in rows:
-                for field in _OPTIONAL_METADATA_FIELDS:
-                    row.pop(field, None)
-
-            # Update fieldnames to required only
-            final_fieldnames = _REQUIRED_METADATA_FIELDS
-        else:
-            # Fieldnames match, use required order plus any optional fields
-            final_fieldnames = list(_REQUIRED_METADATA_FIELDS)
-            optional_in_rows = [f for f in _OPTIONAL_METADATA_FIELDS if f in existing_fieldnames]
-            final_fieldnames.extend(optional_in_rows)
-
-        # Get existing file names to avoid duplicates
-        seen_files = {row.get("filename") for row in existing_rows}
-
-        # Filter out duplicates from new rows (against existing and within new rows)
-        new_unique_rows = []
-        for row in rows:
-            filename = row.get("filename")
-            if filename not in seen_files:
-                seen_files.add(filename)
-                new_unique_rows.append(row)
-
-        if verbose and len(new_unique_rows) < len(rows):
-            skipped = len(rows) - len(new_unique_rows)
-            print(f"  Skipped {skipped} duplicate entries during merge")
-
-        # Merge rows
-        all_rows = existing_rows + new_unique_rows
-    else:
-        # Use required fields in defined order, then any optional fields
-        final_fieldnames = list(_REQUIRED_METADATA_FIELDS)
-        optional_in_rows = [f for f in _OPTIONAL_METADATA_FIELDS if f in rows[0]]
-        final_fieldnames.extend(optional_in_rows)
-        # Deduplicate rows by filename
-        seen_files: Set[str] = set()
-        all_rows = []
-        for row in rows:
-            filename = row.get("filename")
-            if filename not in seen_files:
-                seen_files.add(filename)
-                all_rows.append(row)
-
-    with open(filepath, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=final_fieldnames)
-        writer.writeheader()
-        writer.writerows(all_rows)
