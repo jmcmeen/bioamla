@@ -179,7 +179,6 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
 
     # Scan the cache to get information
     cache_info = scan_cache_dir()
-    cache_path = Path(cache_info.cache_dir)
 
     models_to_delete = []
     datasets_to_delete = []
@@ -227,6 +226,10 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
     # Perform deletion
     deleted_count = 0
     freed_space = 0
+
+    # Get cache path from huggingface_hub constants
+    from huggingface_hub import constants
+    cache_path = Path(constants.HF_HUB_CACHE)
 
     for repo in models_to_delete + datasets_to_delete:
         try:
