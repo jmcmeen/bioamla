@@ -54,7 +54,7 @@ def download_inat_audio(
     sound_license: Optional[str] = None,
     d1: Optional[str] = None,
     d2: Optional[str] = None,
-    max_observations: int = 100,
+    obs_per_taxon: int = 100,
     per_page: int = 30,
     delay_between_downloads: float = 1.0,
     organize_by_taxon: bool = True,
@@ -80,7 +80,7 @@ def download_inat_audio(
         sound_license: Filter by sound license (e.g., "cc-by", "cc-by-nc", "cc0")
         d1: Start date for observation date range (YYYY-MM-DD format)
         d2: End date for observation date range (YYYY-MM-DD format)
-        max_observations: Maximum number of observations to download
+        obs_per_taxon: Number of observations to download per taxon ID
         per_page: Number of results per API request (max 200)
         delay_between_downloads: Seconds to wait between file downloads (rate limiting)
         organize_by_taxon: If True, organize files into subdirectories by species
@@ -124,9 +124,6 @@ def download_inat_audio(
 
     metadata_rows = []
 
-    page = 1
-    observations_processed = 0
-
     # Normalize sound_license to uppercase for pyinaturalist API compatibility
     normalized_license = sound_license.upper() if sound_license else None
 
@@ -138,131 +135,142 @@ def download_inat_audio(
             for ext in file_extensions
         ]
 
-    if verbose:
-        print(f"Querying iNaturalist for observations with sounds...")
+    # Build list of taxon IDs to iterate over
+    # If taxon_ids provided, iterate over each; otherwise use None (single query)
+    taxon_list = taxon_ids if taxon_ids else [None]
 
-    while observations_processed < max_observations:
-        remaining = max_observations - observations_processed
-        current_per_page = min(per_page, remaining)
+    for current_taxon_id in taxon_list:
+        page = 1
+        observations_processed = 0
 
-        response = get_observations(
-            sounds=True,
-            taxon_id=taxon_ids,
-            taxon_name=taxon_name,
-            place_id=place_id,
-            user_id=user_id,
-            project_id=project_id,
-            quality_grade=quality_grade,
-            sound_license=normalized_license,
-            d1=d1,
-            d2=d2,
-            page=page,
-            per_page=current_per_page
-        )
+        if verbose:
+            if current_taxon_id:
+                print(f"Querying iNaturalist for taxon ID {current_taxon_id}...")
+            else:
+                print(f"Querying iNaturalist for observations with sounds...")
 
-        results = response.get("results", [])
+        while observations_processed < obs_per_taxon:
+            remaining = obs_per_taxon - observations_processed
+            current_per_page = min(per_page, remaining)
 
-        if not results:
-            if verbose:
-                print("No more observations found.")
-            break
+            response = get_observations(
+                sounds=True,
+                taxon_id=current_taxon_id,
+                taxon_name=taxon_name,
+                place_id=place_id,
+                user_id=user_id,
+                project_id=project_id,
+                quality_grade=quality_grade,
+                sound_license=normalized_license,
+                d1=d1,
+                d2=d2,
+                page=page,
+                per_page=current_per_page
+            )
 
-        for obs in results:
-            if observations_processed >= max_observations:
+            results = response.get("results", [])
+
+            if not results:
+                if verbose:
+                    print("No more observations found.")
                 break
 
-            obs_id = obs.get("id")
-            sounds = obs.get("sounds", [])
+            for obs in results:
+                if observations_processed >= obs_per_taxon:
+                    break
 
-            if not sounds:
-                continue
+                obs_id = obs.get("id")
+                sounds = obs.get("sounds", [])
 
-            taxon = obs.get("taxon", {})
-            species_name = taxon.get("name", "unknown")
-            common_name = taxon.get("preferred_common_name", "")
-            taxon_id_val = taxon.get("id", "")
-
-            observed_on = obs.get("observed_on", "")
-            location = obs.get("location", "")
-            place_guess = obs.get("place_guess", "")
-            user = obs.get("user", {}).get("login", "")
-            quality = obs.get("quality_grade", "")
-
-            if organize_by_taxon:
-                safe_species = _sanitize_filename(species_name)
-                species_dir = output_path / safe_species
-                species_dir.mkdir(exist_ok=True)
-            else:
-                species_dir = output_path
-
-            for sound in sounds:
-                sound_id = sound.get("id")
-                file_url = sound.get("file_url")
-                license_code = sound.get("license_code", "")
-
-                if not file_url:
+                if not sounds:
                     continue
 
-                ext = _get_extension_from_url(file_url)
+                taxon = obs.get("taxon", {})
+                species_name = taxon.get("name", "unknown")
+                common_name = taxon.get("preferred_common_name", "")
+                taxon_id_val = taxon.get("id", "")
 
-                # Skip files that don't match the requested extensions
-                if normalized_extensions and ext.lower() not in normalized_extensions:
-                    if verbose:
-                        print(f"  Skipped: {ext} file (filtering for {normalized_extensions})")
-                    continue
-                filename = f"inat_{obs_id}_sound_{sound_id}{ext}"
-                filepath = species_dir / filename
+                observed_on = obs.get("observed_on", "")
+                location = obs.get("location", "")
+                place_guess = obs.get("place_guess", "")
+                user = obs.get("user", {}).get("login", "")
+                quality = obs.get("quality_grade", "")
 
-                success = _download_file(file_url, filepath, verbose)
-
-                if success:
-                    stats["total_sounds"] += 1
-
-                    relative_path = filepath.relative_to(output_path)
-
-                    # Default metadata headers
-                    row = {
-                        "filename": str(relative_path),
-                        "split": "train",
-                        "target": taxon_id_val,
-                        "category": species_name,
-                        "attr_id": user,
-                        "attr_lic": license_code,
-                        "attr_url": file_url,
-                        "attr_note": ""
-                    }
-
-                    # Optional iNaturalist metadata
-                    if include_inat_metadata:
-                        row.update({
-                            "observation_id": obs_id,
-                            "sound_id": sound_id,
-                            "common_name": common_name,
-                            "taxon_id": taxon_id_val,
-                            "observed_on": observed_on,
-                            "location": location,
-                            "place_guess": place_guess,
-                            "observer": user,
-                            "quality_grade": quality,
-                            "observation_url": f"https://www.inaturalist.org/observations/{obs_id}"
-                        })
-
-                    metadata_rows.append(row)
+                if organize_by_taxon:
+                    safe_species = _sanitize_filename(species_name)
+                    species_dir = output_path / safe_species
+                    species_dir.mkdir(exist_ok=True)
                 else:
-                    stats["failed_downloads"] += 1
+                    species_dir = output_path
 
-                time.sleep(delay_between_downloads)
+                for sound in sounds:
+                    sound_id = sound.get("id")
+                    file_url = sound.get("file_url")
+                    license_code = sound.get("license_code", "")
 
-            observations_processed += 1
-            stats["total_observations"] += 1
+                    if not file_url:
+                        continue
 
-            if verbose and observations_processed % 10 == 0:
-                print(f"Processed {observations_processed}/{max_observations} observations...")
+                    ext = _get_extension_from_url(file_url)
 
-        page += 1
+                    # Skip files that don't match the requested extensions
+                    if normalized_extensions and ext.lower() not in normalized_extensions:
+                        if verbose:
+                            print(f"  Skipped: {ext} file (filtering for {normalized_extensions})")
+                        continue
+                    filename = f"inat_{obs_id}_sound_{sound_id}{ext}"
+                    filepath = species_dir / filename
 
-        if len(results) < current_per_page:
-            break
+                    success = _download_file(file_url, filepath, verbose)
+
+                    if success:
+                        stats["total_sounds"] += 1
+
+                        relative_path = filepath.relative_to(output_path)
+
+                        # Default metadata headers
+                        row = {
+                            "filename": str(relative_path),
+                            "split": "train",
+                            "target": taxon_id_val,
+                            "category": species_name,
+                            "attr_id": user,
+                            "attr_lic": license_code,
+                            "attr_url": file_url,
+                            "attr_note": ""
+                        }
+
+                        # Optional iNaturalist metadata
+                        if include_inat_metadata:
+                            row.update({
+                                "observation_id": obs_id,
+                                "sound_id": sound_id,
+                                "common_name": common_name,
+                                "taxon_id": taxon_id_val,
+                                "observed_on": observed_on,
+                                "location": location,
+                                "place_guess": place_guess,
+                                "observer": user,
+                                "quality_grade": quality,
+                                "observation_url": f"https://www.inaturalist.org/observations/{obs_id}"
+                            })
+
+                        metadata_rows.append(row)
+                    else:
+                        stats["failed_downloads"] += 1
+
+                    time.sleep(delay_between_downloads)
+
+                observations_processed += 1
+                stats["total_observations"] += 1
+
+                if verbose and observations_processed % 10 == 0:
+                    print(f"Processed {observations_processed}/{obs_per_taxon} observations for current taxon...")
+
+            page += 1
+
+            if len(results) < current_per_page:
+                break
 
     if metadata_rows:
         _write_metadata_csv(output_path / "metadata.csv", metadata_rows, verbose)
@@ -463,8 +471,10 @@ def _write_metadata_csv(filepath: Path, rows: list, verbose: bool = True) -> Non
             # Update fieldnames to required only
             final_fieldnames = _REQUIRED_METADATA_FIELDS
         else:
-            # Fieldnames match, use existing order
-            final_fieldnames = list(existing_fieldnames)
+            # Fieldnames match, use required order plus any optional fields
+            final_fieldnames = list(_REQUIRED_METADATA_FIELDS)
+            optional_in_rows = [f for f in _OPTIONAL_METADATA_FIELDS if f in existing_fieldnames]
+            final_fieldnames.extend(optional_in_rows)
 
         # Get existing file names to avoid duplicates
         seen_files = {row.get("filename") for row in existing_rows}
