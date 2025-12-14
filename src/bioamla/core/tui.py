@@ -578,29 +578,35 @@ class DatasetExplorer(App):
         self.selected_category = None
         self._update_table()
 
+    def _get_selected_file(self) -> Optional[AudioFileInfo]:
+        """Get the currently selected file from the table."""
+        table = self.query_one("#files-table", DataTable)
+        if table.cursor_row is not None and table.row_count > 0:
+            try:
+                rows = list(table.ordered_rows)
+                if 0 <= table.cursor_row < len(rows):
+                    row_key = rows[table.cursor_row].key
+                    file_path = str(row_key.value)
+                    for f in self._all_audio_files:
+                        if str(f.path) == file_path:
+                            return f
+            except (IndexError, AttributeError):
+                pass
+        return None
+
     def action_play(self) -> None:
         """Play the selected audio file."""
-        table = self.query_one("#files-table", DataTable)
-        if table.cursor_row is not None:
-            row_key = table.get_row_at(table.cursor_row)
-            if row_key:
-                file_path = str(table.get_row_key_at(table.cursor_row))
-                for f in self._all_audio_files:
-                    if str(f.path) == file_path:
-                        screen = FileDetailScreen(f)
-                        screen._play_audio()
-                        break
+        file_info = self._get_selected_file()
+        if file_info:
+            screen = FileDetailScreen(file_info)
+            screen._play_audio()
 
     def action_spectrogram(self) -> None:
         """Generate spectrogram for selected file."""
-        table = self.query_one("#files-table", DataTable)
-        if table.cursor_row is not None:
-            file_path = str(table.get_row_key_at(table.cursor_row))
-            for f in self._all_audio_files:
-                if str(f.path) == file_path:
-                    screen = FileDetailScreen(f)
-                    screen._show_spectrogram()
-                    break
+        file_info = self._get_selected_file()
+        if file_info:
+            screen = FileDetailScreen(file_info)
+            screen._show_spectrogram()
 
 
 def run_explorer(directory: str) -> None:
