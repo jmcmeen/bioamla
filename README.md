@@ -300,6 +300,7 @@ bioamla purge --all -y          # Purge everything without confirmation
 | `bioamla ast-predict <FILE> <MODEL> <SR>` | Single file inference |
 | `bioamla ast-batch-inference <DIR>` | Batch directory inference with segmentation |
 | `bioamla ast-finetune` | Fine-tune AST model on custom datasets |
+| `bioamla ast-push <MODEL_PATH> <REPO_ID>` | Push fine-tuned model to HuggingFace Hub |
 
 **ast-batch-inference options:**
 
@@ -360,6 +361,28 @@ bioamla ast-finetune \
   --mlflow-experiment-name "frog-classifier" \
   --mlflow-run-name "baseline-run"
 ```
+
+**ast-push options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--private/--public` | `--public` | Make the repository private or public |
+| `--commit-message` | | Custom commit message for the push |
+
+**Push model to HuggingFace Hub:**
+
+```bash
+# Push a fine-tuned model to HuggingFace Hub
+bioamla ast-push ./my-training/best_model myusername/my-frog-classifier
+
+# Push as a private repository
+bioamla ast-push ./my-model myusername/private-model --private
+
+# Push with a custom commit message
+bioamla ast-push ./my-model myusername/my-model --commit-message "v1.0 release"
+```
+
+Note: You must be logged in to HuggingFace Hub first using `huggingface-cli login`.
 
 ### iNaturalist Integration
 
