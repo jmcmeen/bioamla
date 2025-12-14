@@ -562,7 +562,7 @@ def wave(filepath: str):
 @click.option('--sound-license', default=None, help='Filter by sound license (e.g., cc-by, cc-by-nc, cc0)')
 @click.option('--start-date', default=None, help='Start date for observations (YYYY-MM-DD)')
 @click.option('--end-date', default=None, help='End date for observations (YYYY-MM-DD)')
-@click.option('--max-observations', type=int, default=100, help='Maximum number of observations to download')
+@click.option('--obs-per-taxon', type=int, default=100, help='Number of observations to download per taxon ID')
 @click.option('--organize-by-taxon/--no-organize-by-taxon', default=True, help='Organize files into subdirectories by species')
 @click.option('--include-inat-metadata', is_flag=True, help='Include additional iNaturalist metadata fields in CSV')
 @click.option('--file-extensions', default=None, help='Comma-separated list of file extensions to filter (e.g., "wav,mp3")')
@@ -579,7 +579,7 @@ def inat_audio(
     sound_license: str,
     start_date: str,
     end_date: str,
-    max_observations: int,
+    obs_per_taxon: int,
     organize_by_taxon: bool,
     include_inat_metadata: bool,
     file_extensions: str,
@@ -601,8 +601,8 @@ def inat_audio(
         Download frog sounds with specific license:
         bioamla inat-audio ./frogs --taxon-name Anura --sound-license cc-by
 
-        Download 50 observations without subdirectories:
-        bioamla inat-audio ./sounds --max-observations 50 --no-organize-by-taxon
+        Download 50 observations per taxon without subdirectories:
+        bioamla inat-audio ./sounds --obs-per-taxon 50 --no-organize-by-taxon
     """
     from bioamla.core.inat import download_inat_audio
 
@@ -627,7 +627,7 @@ def inat_audio(
         sound_license=sound_license,
         d1=start_date,
         d2=end_date,
-        max_observations=max_observations,
+        obs_per_taxon=obs_per_taxon,
         organize_by_taxon=organize_by_taxon,
         include_inat_metadata=include_inat_metadata,
         file_extensions=extensions_list,
