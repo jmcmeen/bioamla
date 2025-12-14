@@ -32,7 +32,8 @@ dependencies = [
   "matplotlib",
   "scipy",
   "librosa",
-  "soundfile"
+  "soundfile",
+  "pyinaturalist"
 ]
 
 [project.scripts]
