@@ -6,13 +6,13 @@
 bioamla inat-audio ./frogs_dataset \
     --taxon-ids "24268, 65982, 23930, 24263, 65979, 66002, 66012, 60341, 64968, 64977, 24256" \
     --quality-grade research \
-    --obs-per-taxon 6
+    --obs-per-taxon 100
 
 # Step 2: Convert all audio files in the dataset to WAV format
 bioamla convert-audio ./frogs_dataset wav
 
 # Step 3: Fine-tune an audio spectrogram transformer (AST) model on the downloaded dataset
-bioamla ast-finetune --training-dir ./frogs_out --train-dataset ./frogs_dataset --num-train-epochs 2
+bioamla ast-finetune --training-dir ./frogs_out --train-dataset ./frogs_dataset --num-train-epochs 25
 
 # Step 4: Download a test dataset
 bioamla download https://www.bioamla.org/datasets/scp_small.zip .
