@@ -63,7 +63,6 @@ class TestPurgeCommand:
         """Test purge with empty cache."""
         mock_cache_info = MagicMock()
         mock_cache_info.repos = []
-        mock_cache_info.cache_dir = "/tmp/test_cache"
         mock_scan.return_value = mock_cache_info
 
         result = runner.invoke(cli, ["purge", "--all"])
@@ -86,7 +85,6 @@ class TestPurgeCommand:
 
         mock_cache_info = MagicMock()
         mock_cache_info.repos = [mock_model_repo, mock_dataset_repo]
-        mock_cache_info.cache_dir = "/tmp/test_cache"
         mock_scan.return_value = mock_cache_info
 
         result = runner.invoke(cli, ["purge", "--models"], input="n\n")
@@ -111,7 +109,6 @@ class TestPurgeCommand:
 
         mock_cache_info = MagicMock()
         mock_cache_info.repos = [mock_model_repo, mock_dataset_repo]
-        mock_cache_info.cache_dir = "/tmp/test_cache"
         mock_scan.return_value = mock_cache_info
 
         result = runner.invoke(cli, ["purge", "--datasets"], input="n\n")
@@ -136,7 +133,6 @@ class TestPurgeCommand:
 
         mock_cache_info = MagicMock()
         mock_cache_info.repos = [mock_model_repo, mock_dataset_repo]
-        mock_cache_info.cache_dir = "/tmp/test_cache"
         mock_scan.return_value = mock_cache_info
 
         result = runner.invoke(cli, ["purge", "--all"], input="n\n")
@@ -156,7 +152,6 @@ class TestPurgeCommand:
 
         mock_cache_info = MagicMock()
         mock_cache_info.repos = [mock_repo]
-        mock_cache_info.cache_dir = "/tmp/test_cache"
         mock_scan.return_value = mock_cache_info
 
         result = runner.invoke(cli, ["purge", "--models"], input="n\n")
