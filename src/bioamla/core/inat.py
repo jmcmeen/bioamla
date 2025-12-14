@@ -278,6 +278,23 @@ def download_inat_audio(
                 species_name = taxon.get("name", "unknown")
                 common_name = taxon.get("preferred_common_name", "")
                 taxon_id_val = taxon.get("id", "")
+                taxon_rank = taxon.get("rank", "")
+
+                # For subspecies/varieties, use the parent species name for grouping
+                # The rank field tells us if this is a subspecies, variety, etc.
+                if taxon_rank in ("subspecies", "variety", "form"):
+                    # Try to get the species-level name from ancestors or by truncating
+                    ancestors = taxon.get("ancestors", [])
+                    # Find the species-level ancestor
+                    for ancestor in reversed(ancestors):
+                        if ancestor.get("rank") == "species":
+                            species_name = ancestor.get("name", species_name)
+                            break
+                    else:
+                        # Fallback: take first two words (genus + species) from subspecies name
+                        name_parts = species_name.split()
+                        if len(name_parts) >= 2:
+                            species_name = " ".join(name_parts[:2])
 
                 observed_on = obs.get("observed_on", "")
                 location = obs.get("location", "")
