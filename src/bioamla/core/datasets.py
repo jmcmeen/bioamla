@@ -75,7 +75,7 @@ def validate_metadata(audio_folder_path: str, metadata_csv_filename: str = 'meta
     # Check that all audio files are in metadata
     audio_files = get_audio_files(audio_folder_path, SUPPORTED_AUDIO_EXTENSIONS)
     for audio_file in audio_files:
-        if audio_file not in metadata_df['filename'].tolist():
+        if audio_file not in metadata_df['file_name'].tolist():
             raise ValueError(f"The audio file {audio_file} is not in the metadata.csv file")
 
     return True
