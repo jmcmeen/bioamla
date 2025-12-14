@@ -754,6 +754,91 @@ def ast_push(
         raise SystemExit(1)
 
 
+@ast.command('evaluate')
+@click.argument('path')
+@click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for evaluation')
+@click.option('--ground-truth', '-g', required=True, help='Path to CSV file with ground truth labels')
+@click.option('--output', '-o', default=None, help='Output file for evaluation results')
+@click.option('--format', 'output_format', type=click.Choice(['json', 'csv', 'txt']), default='txt', help='Output format')
+@click.option('--file-column', default='file_name', help='Column name for file names in ground truth CSV')
+@click.option('--label-column', default='label', help='Column name for labels in ground truth CSV')
+@click.option('--resample-freq', default=16000, type=int, help='Resampling frequency')
+@click.option('--batch-size', default=8, type=int, help='Batch size for inference')
+@click.option('--fp16/--no-fp16', default=False, help='Use half-precision inference')
+@click.option('--quiet', is_flag=True, help='Only output metrics, suppress progress')
+def ast_evaluate(
+    path: str,
+    model_path: str,
+    ground_truth: str,
+    output: str,
+    output_format: str,
+    file_column: str,
+    label_column: str,
+    resample_freq: int,
+    batch_size: int,
+    fp16: bool,
+    quiet: bool,
+):
+    """Evaluate an AST model on a directory of audio files.
+
+    PATH is a directory containing audio files to evaluate.
+
+    Example:
+        bioamla ast evaluate ./test_audio --model bioamla/scp-frogs --ground-truth labels.csv
+    """
+    from pathlib import Path as PathLib
+    from bioamla.core.evaluate import (
+        evaluate_directory,
+        format_metrics_report,
+        save_evaluation_results,
+    )
+
+    path_obj = PathLib(path)
+    if not path_obj.exists():
+        click.echo(f"Error: Path not found: {path}")
+        raise SystemExit(1)
+
+    gt_path = PathLib(ground_truth)
+    if not gt_path.exists():
+        click.echo(f"Error: Ground truth file not found: {ground_truth}")
+        raise SystemExit(1)
+
+    try:
+        result = evaluate_directory(
+            audio_dir=path,
+            model_path=model_path,
+            ground_truth_csv=ground_truth,
+            gt_file_column=file_column,
+            gt_label_column=label_column,
+            resample_freq=resample_freq,
+            batch_size=batch_size,
+            use_fp16=fp16,
+            verbose=not quiet,
+        )
+
+        # Display results
+        if not quiet:
+            report = format_metrics_report(result)
+            click.echo(report)
+        else:
+            click.echo(f"Accuracy: {result.accuracy:.4f}")
+            click.echo(f"Precision: {result.precision:.4f}")
+            click.echo(f"Recall: {result.recall:.4f}")
+            click.echo(f"F1 Score: {result.f1_score:.4f}")
+
+        # Save results if output specified
+        if output:
+            save_evaluation_results(result, output, format=output_format)
+            click.echo(f"Results saved to: {output}")
+
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+
+
 # =============================================================================
 # Audio Command Group
 # =============================================================================
@@ -793,31 +878,326 @@ def audio_info(filepath: str):
 
 
 @audio.command('convert')
-@click.argument('dataset_path')
+@click.argument('path')
 @click.argument('target_format')
-@click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file')
-@click.option('--keep-original', is_flag=True, help='Keep original files after conversion (default: delete)')
+@click.option('--output', '-o', default=None, help='Output file or directory')
+@click.option('--batch', is_flag=True, help='Process all files in directory')
+@click.option('--dataset', is_flag=True, help='Convert dataset with metadata.csv (updates metadata)')
+@click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file (for --dataset mode)')
+@click.option('--keep-original', is_flag=True, help='Keep original files after conversion')
+@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_convert(
-    dataset_path: str,
+    path: str,
     target_format: str,
+    output: str,
+    batch: bool,
+    dataset: bool,
     metadata_filename: str,
     keep_original: bool,
+    recursive: bool,
     quiet: bool
 ):
-    """Convert all audio files in a dataset to a specified format."""
-    from bioamla.core.datasets import convert_filetype
+    """Convert audio files to a different format.
 
-    stats = convert_filetype(
-        dataset_path=dataset_path,
-        target_format=target_format,
-        metadata_filename=metadata_filename,
-        keep_original=keep_original,
-        verbose=not quiet
+    Single file: bioamla audio convert input.mp3 wav -o output.wav
+
+    Batch mode: bioamla audio convert ./audio_dir wav --batch -o ./converted
+
+    Dataset mode: bioamla audio convert ./dataset wav --dataset (updates metadata.csv)
+    """
+    from pathlib import Path
+
+    if dataset:
+        # Legacy dataset mode with metadata.csv
+        from bioamla.core.datasets import convert_filetype
+
+        stats = convert_filetype(
+            dataset_path=path,
+            target_format=target_format,
+            metadata_filename=metadata_filename,
+            keep_original=keep_original,
+            verbose=not quiet
+        )
+
+        if quiet:
+            click.echo(f"Converted {stats['files_converted']} files to {target_format}")
+
+    elif batch:
+        # Batch convert directory
+        from bioamla.core.datasets import batch_convert_audio
+
+        if output is None:
+            output = str(Path(path)) + f"_{target_format}"
+
+        try:
+            stats = batch_convert_audio(
+                input_dir=path,
+                output_dir=output,
+                target_format=target_format,
+                recursive=recursive,
+                keep_original=keep_original,
+                verbose=not quiet
+            )
+
+            if quiet:
+                click.echo(f"Converted {stats['files_converted']} files to {output}")
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}")
+            raise SystemExit(1)
+        except ValueError as e:
+            click.echo(f"Error: {e}")
+            raise SystemExit(1)
+
+    else:
+        # Single file conversion
+        from bioamla.core.datasets import convert_audio_file
+
+        input_path = Path(path)
+        if not input_path.exists():
+            click.echo(f"Error: File not found: {path}")
+            raise SystemExit(1)
+
+        if output is None:
+            output = str(input_path.with_suffix(f".{target_format.lstrip('.')}"))
+
+        try:
+            result = convert_audio_file(str(input_path), output, target_format)
+            if not quiet:
+                click.echo(f"Converted: {result}")
+        except ValueError as e:
+            click.echo(f"Error: {e}")
+            raise SystemExit(1)
+
+
+@audio.command('filter')
+@click.argument('path')
+@click.option('--output', '-o', default=None, help='Output file or directory')
+@click.option('--batch', is_flag=True, help='Process all files in directory')
+@click.option('--bandpass', default=None, help='Bandpass filter range (e.g., "1000-8000")')
+@click.option('--lowpass', default=None, type=float, help='Lowpass cutoff frequency in Hz')
+@click.option('--highpass', default=None, type=float, help='Highpass cutoff frequency in Hz')
+@click.option('--order', default=5, type=int, help='Filter order (default: 5)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet):
+    """Apply frequency filter to audio files."""
+    import os
+    from bioamla.core.signal import (
+        bandpass_filter, lowpass_filter, highpass_filter,
+        process_file, batch_process, load_audio, save_audio
     )
 
-    if quiet:
-        click.echo(f"Converted {stats['files_converted']} files to {target_format}")
+    if not any([bandpass, lowpass, highpass]):
+        click.echo("Error: Must specify --bandpass, --lowpass, or --highpass")
+        raise SystemExit(1)
+
+    def processor(audio, sr):
+        if bandpass:
+            parts = bandpass.split('-')
+            low, high = float(parts[0]), float(parts[1])
+            return bandpass_filter(audio, sr, low, high, order)
+        elif lowpass:
+            return lowpass_filter(audio, sr, lowpass, order)
+        elif highpass:
+            return highpass_filter(audio, sr, highpass, order)
+        return audio
+
+    _run_signal_processing(path, output, batch, processor, quiet, "filter")
+
+
+@audio.command('denoise')
+@click.argument('path')
+@click.option('--output', '-o', default=None, help='Output file or directory')
+@click.option('--batch', is_flag=True, help='Process all files in directory')
+@click.option('--method', type=click.Choice(['spectral']), default='spectral', help='Denoising method')
+@click.option('--strength', default=1.0, type=float, help='Noise reduction strength (0-2, default: 1.0)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def audio_denoise(path, output, batch, method, strength, quiet):
+    """Apply noise reduction to audio files."""
+    from bioamla.core.signal import spectral_denoise
+
+    def processor(audio, sr):
+        return spectral_denoise(audio, sr, noise_reduce_factor=strength)
+
+    _run_signal_processing(path, output, batch, processor, quiet, "denoise")
+
+
+@audio.command('segment')
+@click.argument('path')
+@click.option('--output', '-o', required=True, help='Output directory for segments')
+@click.option('--silence-threshold', default=-40, type=float, help='Silence threshold in dB (default: -40)')
+@click.option('--min-silence', default=0.3, type=float, help='Min silence duration in seconds (default: 0.3)')
+@click.option('--min-segment', default=0.5, type=float, help='Min segment duration in seconds (default: 0.5)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def audio_segment(path, output, silence_threshold, min_silence, min_segment, quiet):
+    """Split audio on silence into separate files."""
+    import os
+    from pathlib import Path
+    from bioamla.core.signal import load_audio, save_audio, split_audio_on_silence
+
+    path = Path(path)
+    output = Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+
+    if not path.exists():
+        click.echo(f"Error: File not found: {path}")
+        raise SystemExit(1)
+
+    audio, sr = load_audio(str(path))
+    chunks = split_audio_on_silence(
+        audio, sr,
+        silence_threshold_db=silence_threshold,
+        min_silence_duration=min_silence,
+        min_segment_duration=min_segment
+    )
+
+    if not chunks:
+        click.echo("No segments found")
+        return
+
+    stem = path.stem
+    for i, (chunk, start, end) in enumerate(chunks):
+        out_path = output / f"{stem}_seg{i+1:03d}_{start:.2f}-{end:.2f}s.wav"
+        save_audio(str(out_path), chunk, sr)
+        if not quiet:
+            click.echo(f"  Created: {out_path}")
+
+    click.echo(f"Created {len(chunks)} segments in {output}")
+
+
+@audio.command('detect-events')
+@click.argument('path')
+@click.option('--output', '-o', required=True, help='Output CSV file for events')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def audio_detect_events(path, output, quiet):
+    """Detect onset events in audio and save to CSV."""
+    import csv
+    from pathlib import Path
+    from bioamla.core.signal import load_audio, detect_onsets
+
+    path = Path(path)
+    if not path.exists():
+        click.echo(f"Error: File not found: {path}")
+        raise SystemExit(1)
+
+    audio, sr = load_audio(str(path))
+    events = detect_onsets(audio, sr)
+
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['time', 'strength'])
+        for event in events:
+            writer.writerow([f"{event.time:.4f}", f"{event.strength:.4f}"])
+
+    if not quiet:
+        click.echo(f"Detected {len(events)} events, saved to {output}")
+
+
+@audio.command('normalize')
+@click.argument('path')
+@click.option('--output', '-o', default=None, help='Output file or directory')
+@click.option('--batch', is_flag=True, help='Process all files in directory')
+@click.option('--target-db', default=-20, type=float, help='Target loudness in dB (default: -20)')
+@click.option('--peak', is_flag=True, help='Use peak normalization instead of RMS')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def audio_normalize(path, output, batch, target_db, peak, quiet):
+    """Normalize audio loudness."""
+    from bioamla.core.signal import normalize_loudness, peak_normalize
+
+    def processor(audio, sr):
+        if peak:
+            target_linear = 10 ** (target_db / 20)
+            return peak_normalize(audio, target_peak=min(target_linear, 0.99))
+        return normalize_loudness(audio, sr, target_db=target_db)
+
+    _run_signal_processing(path, output, batch, processor, quiet, "normalize")
+
+
+@audio.command('resample')
+@click.argument('path')
+@click.option('--output', '-o', default=None, help='Output file or directory')
+@click.option('--batch', is_flag=True, help='Process all files in directory')
+@click.option('--rate', required=True, type=int, help='Target sample rate in Hz')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def audio_resample(path, output, batch, rate, quiet):
+    """Resample audio to a different sample rate."""
+    from bioamla.core.signal import resample_audio
+
+    def processor(audio, sr):
+        return resample_audio(audio, sr, rate)
+
+    _run_signal_processing(path, output, batch, processor, quiet, "resample", output_sr=rate)
+
+
+@audio.command('trim')
+@click.argument('path')
+@click.option('--output', '-o', default=None, help='Output file or directory')
+@click.option('--batch', is_flag=True, help='Process all files in directory')
+@click.option('--start', default=None, type=float, help='Start time in seconds')
+@click.option('--end', default=None, type=float, help='End time in seconds')
+@click.option('--silence', is_flag=True, help='Trim silence from start/end instead')
+@click.option('--threshold', default=-40, type=float, help='Silence threshold in dB (for --silence)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
+    """Trim audio by time or remove silence."""
+    from bioamla.core.signal import trim_audio, trim_silence
+
+    if not silence and start is None and end is None:
+        click.echo("Error: Must specify --start/--end or use --silence")
+        raise SystemExit(1)
+
+    def processor(audio, sr):
+        if silence:
+            return trim_silence(audio, sr, threshold_db=threshold)
+        return trim_audio(audio, sr, start_time=start, end_time=end)
+
+    _run_signal_processing(path, output, batch, processor, quiet, "trim")
+
+
+def _run_signal_processing(path, output, batch, processor, quiet, operation, output_sr=None):
+    """Helper to run signal processing on file or directory."""
+    import os
+    from pathlib import Path
+    from bioamla.core.signal import process_file, batch_process, load_audio, save_audio
+
+    path = Path(path)
+
+    if batch:
+        if output is None:
+            output = str(path) + f"_{operation}"
+
+        try:
+            stats = batch_process(
+                str(path), output, processor,
+                sample_rate=output_sr, verbose=not quiet
+            )
+            if quiet:
+                click.echo(f"Processed {stats['files_processed']} files to {stats['output_dir']}")
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}")
+            raise SystemExit(1)
+    else:
+        if not path.exists():
+            click.echo(f"Error: File not found: {path}")
+            raise SystemExit(1)
+
+        if output is None:
+            output = str(path.with_stem(path.stem + f"_{operation}"))
+
+        try:
+            audio, sr = load_audio(str(path))
+            processed = processor(audio, sr)
+            if output_sr:
+                sr = output_sr
+            save_audio(output, processed, sr)
+            if not quiet:
+                click.echo(f"Saved: {output}")
+        except Exception as e:
+            click.echo(f"Error: {e}")
+            raise SystemExit(1)
 
 
 # =============================================================================
