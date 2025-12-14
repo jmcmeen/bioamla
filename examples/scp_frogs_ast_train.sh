@@ -9,5 +9,5 @@ bioamla ast-finetune \
   --fp16 \
   --gradient-accumulation-steps 2 \
   --dataloader-num-workers 4 \
-  --torch-compile
+  --mlflow-experiment-name "scp-frogs"
 

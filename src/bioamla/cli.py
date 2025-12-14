@@ -281,6 +281,10 @@ def _format_size(size_bytes: int) -> str:
 @click.option('--gradient-accumulation-steps', default=1, type=int, help='Number of gradient accumulation steps')
 @click.option('--dataloader-num-workers', default=4, type=int, help='Number of dataloader workers')
 @click.option('--torch-compile/--no-torch-compile', default=False, help='Use torch.compile for faster training (PyTorch 2.0+)')
+@click.option('--finetune-mode', type=click.Choice(['full', 'feature-extraction']), default='full', help='Training mode: full (all layers) or feature-extraction (freeze base, train classifier only)')
+@click.option('--mlflow-tracking-uri', default=None, help='MLflow tracking server URI (e.g., http://localhost:5000)')
+@click.option('--mlflow-experiment-name', default=None, help='MLflow experiment name')
+@click.option('--mlflow-run-name', default=None, help='MLflow run name')
 def ast_finetune(
     training_dir: str,
     base_model: str,
@@ -305,7 +309,11 @@ def ast_finetune(
     bf16: bool,
     gradient_accumulation_steps: int,
     dataloader_num_workers: int,
-    torch_compile: bool
+    torch_compile: bool,
+    finetune_mode: str,
+    mlflow_tracking_uri: str,
+    mlflow_experiment_name: str,
+    mlflow_run_name: str
 ):
     """
     Fine-tune an Audio Spectrogram Transformer (AST) model using a YAML configuration.
@@ -344,6 +352,23 @@ def ast_finetune(
     logging_dir = training_dir + "/logs"
     best_model_path = training_dir + "/best_model"
 
+    # Setup MLflow if configured
+    mlflow_run = None
+    if mlflow_tracking_uri or mlflow_experiment_name:
+        try:
+            import mlflow
+            if mlflow_tracking_uri:
+                mlflow.set_tracking_uri(mlflow_tracking_uri)
+                print(f"MLflow tracking URI: {mlflow_tracking_uri}")
+            if mlflow_experiment_name:
+                mlflow.set_experiment(mlflow_experiment_name)
+                print(f"MLflow experiment: {mlflow_experiment_name}")
+            # Add mlflow to report_to if not already present
+            if "mlflow" not in report_to:
+                report_to = f"{report_to},mlflow" if report_to else "mlflow"
+            print(f"MLflow integration enabled, reporting to: {report_to}")
+        except ImportError:
+            print("Warning: MLflow not installed. Install with 'pip install mlflow' to enable MLflow tracking.")
 
     # Load a pre-existing dataset from the HuggingFace Hub
     dataset = load_dataset(train_dataset, split=split)
@@ -544,6 +569,19 @@ def ast_finetune(
     model = ASTForAudioClassification.from_pretrained(pretrained_model, config=config, ignore_mismatched_sizes=True)
     model.init_weights()
 
+    # Apply finetune mode - freeze base model for feature extraction
+    if finetune_mode == "feature-extraction":
+        print("Feature extraction mode: freezing base model, only training classifier head")
+        # Freeze all parameters in the base AST model
+        for param in model.audio_spectrogram_transformer.parameters():
+            param.requires_grad = False
+        # Count trainable parameters
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        total_params = sum(p.numel() for p in model.parameters())
+        print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
+    else:
+        print("Full finetune mode: training all model layers")
+
     # Configure training arguments
     training_args = TrainingArguments(
         output_dir=output_dir,
@@ -566,6 +604,7 @@ def ast_finetune(
         gradient_accumulation_steps=gradient_accumulation_steps,
         dataloader_num_workers=dataloader_num_workers,
         torch_compile=torch_compile,
+        run_name=mlflow_run_name,
     )
 
     # Define evaluation metrics

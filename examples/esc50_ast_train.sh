@@ -8,5 +8,6 @@ bioamla ast-finetune \
   --per-device-train-batch-size 8 \
   --fp16 \
   --gradient-accumulation-steps 2 \
-  --dataloader-num-workers 4
+  --dataloader-num-workers 4 \
+  --mlflow-experiment-name "esc50"
 
