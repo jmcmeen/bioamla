@@ -1,4 +1,3 @@
-
 """
 Dataset Management and Validation
 =================================
@@ -11,77 +10,35 @@ These utilities are essential for ensuring data quality and consistency
 in bioacoustic machine learning projects.
 """
 
-import csv
+import os
 import shutil
-import warnings
 from pathlib import Path
 from typing import List, Optional, Set
 
 import pandas as pd
-import os
 from novus_pytils.audio import get_audio_files
+
+from bioamla.core.fileutils import find_species_name, sanitize_filename
 from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
+from bioamla.core.logging import get_logger
+from bioamla.core.metadata import (
+    read_metadata_csv,
+    write_metadata_csv,
+)
 
-
-# Required metadata fields that must always be present
-_REQUIRED_METADATA_FIELDS = [
-    "filename", "split", "target", "category",
-    "attr_id", "attr_lic", "attr_url", "attr_note"
-]
-
-
-def _sanitize_filename(name: str) -> str:
-    """Sanitize a string for use as a filename or directory name."""
-    invalid_chars = '<>:"/\\|?*'
-    sanitized = name.lower()
-    sanitized = sanitized.replace(" ", "_")
-    for char in invalid_chars:
-        sanitized = sanitized.replace(char, "_")
-    sanitized = sanitized.strip(". ")
-    return sanitized if sanitized else "unknown"
-
-
-def _find_species_name(category: str, all_categories: Set[str]) -> str:
-    """
-    Find the species name for a given category.
-
-    If the category is a subspecies (e.g., "Lithobates sphenocephalus utricularius"),
-    this will return the matching species name (e.g., "Lithobates sphenocephalus")
-    if it exists in the set of all categories.
-
-    Args:
-        category: The category name to check
-        all_categories: Set of all known category names
-
-    Returns:
-        The shortest matching species name, or the original category if no match
-    """
-    if not category:
-        return category
-
-    # Find all categories that are prefixes of this category
-    matching_species = [
-        c for c in all_categories
-        if category.startswith(c) and c != category
-    ]
-
-    if matching_species:
-        # Return the shortest matching species (most general)
-        return min(matching_species, key=len)
-
-    return category
+logger = get_logger(__name__)
 
 
 def count_audio_files(audio_folder_path: str) -> int:
     """
     Count the number of audio files in a directory.
-    
+
     This function scans a directory and counts all files with supported
     audio extensions as defined in the global configuration.
-    
+
     Args:
         audio_folder_path (str): Path to the directory containing audio files
-        
+
     Returns:
         int: Number of audio files found in the directory
     """
@@ -91,19 +48,19 @@ def count_audio_files(audio_folder_path: str) -> int:
 def validate_metadata(audio_folder_path: str, metadata_csv_filename: str = 'metadata.csv') -> bool:
     """
     Validate that metadata CSV file matches the audio files in a directory.
-    
+
     This function performs several validation checks to ensure consistency
     between audio files and their corresponding metadata:
     1. Number of audio files matches number of metadata entries
     2. All audio files are referenced in the metadata
-    
+
     Args:
         audio_folder_path (str): Path to directory containing audio files
         metadata_csv_filename (str): Name of the metadata CSV file (default: 'metadata.csv')
-        
+
     Returns:
         bool: True if validation passes
-        
+
     Raises:
         ValueError: If validation fails (file count mismatch or missing references)
     """
@@ -126,28 +83,28 @@ def validate_metadata(audio_folder_path: str, metadata_csv_filename: str = 'meta
 def load_local_dataset(audio_folder_path: str):
     """
     Load a local audio dataset using Hugging Face datasets library.
-    
+
     This function loads audio files from a local directory into a Hugging Face
     Dataset object for use in machine learning workflows. It performs basic
     validation to ensure the directory exists and contains audio files.
-    
+
     Args:
         audio_folder_path (str): Path to directory containing audio files
-        
+
     Returns:
         Dataset: Hugging Face Dataset object containing the audio data
-        
+
     Raises:
         ValueError: If directory doesn't exist or contains no audio files
     """
     from datasets import load_dataset
     from novus_pytils.files import directory_exists
-    
+
     if not directory_exists(audio_folder_path):
         raise ValueError(f"The audio folder {audio_folder_path} does not exist")
     if count_audio_files(audio_folder_path) == 0:
         raise ValueError(f"The audio folder {audio_folder_path} is empty")
-    
+
     dataset = load_dataset(audio_folder_path)
 
     return dataset
@@ -251,7 +208,7 @@ def merge_datasets(
     # Load existing metadata from output directory if it exists
     output_metadata_path = output_path / metadata_filename
     if output_metadata_path.exists():
-        existing_rows, existing_fieldnames = _read_metadata_csv(output_metadata_path)
+        existing_rows, existing_fieldnames = read_metadata_csv(output_metadata_path)
         all_metadata_rows.extend(existing_rows)
         all_fieldnames.update(existing_fieldnames)
         existing_filenames.update(row.get("filename", "") for row in existing_rows)
@@ -280,7 +237,7 @@ def merge_datasets(
             print(f"Processing dataset: {dataset_path}")
 
         # Read source metadata
-        source_rows, source_fieldnames = _read_metadata_csv(source_metadata_path)
+        source_rows, source_fieldnames = read_metadata_csv(source_metadata_path)
         all_fieldnames.update(source_fieldnames)
 
         # Collect all category names from source
@@ -305,9 +262,9 @@ def merge_datasets(
             if organize_by_category:
                 category = row.get("category", "")
                 # Check if this is a subspecies - find shortest matching species name
-                dir_category = _find_species_name(category, all_categories)
+                dir_category = find_species_name(category, all_categories)
                 if dir_category:
-                    category_dir = _sanitize_filename(dir_category)
+                    category_dir = sanitize_filename(dir_category)
                 else:
                     category_dir = "unknown"
                 # Use just the base filename, placed in category directory
@@ -397,17 +354,17 @@ def merge_datasets(
 
     # Write merged metadata
     if all_metadata_rows:
-        _write_merged_metadata_csv(
+        write_metadata_csv(
             output_metadata_path,
             all_metadata_rows,
             all_fieldnames,
-            verbose
+            merge_existing=False  # Already merged above
         )
 
     stats["total_files"] = len(all_metadata_rows)
 
     if verbose:
-        print(f"\nMerge complete!")
+        print("\nMerge complete!")
         print(f"  Datasets merged: {stats['datasets_merged']}")
         print(f"  Total files: {stats['total_files']}")
         print(f"  Files copied: {stats['files_copied']}")
@@ -418,57 +375,6 @@ def merge_datasets(
         print(f"  Metadata file: {stats['metadata_file']}")
 
     return stats
-
-
-def _read_metadata_csv(filepath: Path) -> tuple[List[dict], Set[str]]:
-    """Read metadata CSV and return rows and fieldnames."""
-    rows = []
-    fieldnames: Set[str] = set()
-
-    if not filepath.exists():
-        return rows, fieldnames
-
-    with open(filepath, "r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        fieldnames = set(reader.fieldnames or [])
-        rows = list(reader)
-
-    return rows, fieldnames
-
-
-def _write_merged_metadata_csv(
-    filepath: Path,
-    rows: List[dict],
-    all_fieldnames: Set[str],
-    verbose: bool = True
-) -> None:
-    """Write merged metadata rows to a CSV file with consistent field ordering."""
-    if not rows:
-        return
-
-    # Build ordered fieldnames: required fields first, then optional fields sorted
-    final_fieldnames = []
-    for field in _REQUIRED_METADATA_FIELDS:
-        if field in all_fieldnames:
-            final_fieldnames.append(field)
-            all_fieldnames.discard(field)
-
-    # Add remaining fields in sorted order
-    final_fieldnames.extend(sorted(all_fieldnames))
-
-    # Ensure all rows have all fields (fill missing with empty string)
-    normalized_rows = []
-    for row in rows:
-        normalized_row = {field: row.get(field, "") for field in final_fieldnames}
-        normalized_rows.append(normalized_row)
-
-    with open(filepath, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=final_fieldnames)
-        writer.writeheader()
-        writer.writerows(normalized_rows)
-
-    if verbose:
-        print(f"  Wrote {len(normalized_rows)} entries to {filepath}")
 
 
 # Supported audio formats for conversion
@@ -562,7 +468,7 @@ def convert_filetype(
     }
 
     # Read metadata
-    rows, fieldnames = _read_metadata_csv(metadata_path)
+    rows, fieldnames = read_metadata_csv(metadata_path)
     stats["total_files"] = len(rows)
 
     if verbose:
@@ -633,10 +539,10 @@ def convert_filetype(
             updated_rows.append(row)
 
     # Write updated metadata
-    _write_merged_metadata_csv(metadata_path, updated_rows, fieldnames, verbose)
+    write_metadata_csv(metadata_path, updated_rows, fieldnames, merge_existing=False)
 
     if verbose:
-        print(f"\nConversion complete!")
+        print("\nConversion complete!")
         print(f"  Total files: {stats['total_files']}")
         print(f"  Converted: {stats['files_converted']}")
         print(f"  Skipped (already {target_format}): {stats['files_skipped']}")

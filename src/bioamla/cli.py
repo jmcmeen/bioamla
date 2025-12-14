@@ -1,5 +1,6 @@
-import click
 from typing import Dict
+
+import click
 
 
 @click.group()
@@ -11,14 +12,14 @@ def cli():
 def devices():
     """
     Display comprehensive device information including CUDA and GPU details.
-    
+
     Retrieves and displays information about available compute devices,
     focusing on CUDA-capable GPUs that can be used for machine learning
     inference and training tasks.
     """
     from bioamla.core.diagnostics import get_device_info
     device_info = get_device_info()
-    
+
     click.echo("Devices:")
     click.echo(f'CUDA available: {device_info["cuda_available"]}')
     click.echo(f'Current device: {device_info["current_device"]}')
@@ -33,24 +34,25 @@ def devices():
 def download(url: str, output_dir: str):
     """
     Download a file from the specified URL to the target directory.
-    
+
     Downloads a file from the given URL and saves it to the specified output
     directory. If no output directory is provided, downloads to the current
     working directory.
-    
+
     Args:
         url (str): The URL of the file to download
         output_dir (str): Directory where the file should be saved.
                          Defaults to current directory if not specified.
     """
     #TODO update to filename for output
-    
-    from novus_pytils.files import download_file
+
     import os
-    
+
+    from novus_pytils.files import download_file
+
     if output_dir == '.':
         output_dir = os.getcwd()
-        
+
     download_file(url, output_dir)
 
 @cli.command()
@@ -76,7 +78,7 @@ def audio(filepath: str):
             click.echo("No audio files found in the specified directory.")
     except Exception as e:
         click.echo(f"An error occurred: {e}")
-     
+
 @cli.command()
 @click.argument('file_path')
 @click.argument('output_path', required=False, default='.')
@@ -114,6 +116,7 @@ def zip(source_path: str, output_file: str):
         output_file (str): Path for the output ZIP file
     """
     import os
+
     from novus_pytils.compression import create_zip_file, zip_directory
 
     if os.path.isdir(source_path):
@@ -127,13 +130,13 @@ def zip(source_path: str, output_file: str):
 def version():
     """
     Display the current version of the bioamla package.
-    
+
     This command retrieves and displays the version information
     for the installed bioamla package.
     """
     from bioamla.core.diagnostics import get_bioamla_version
-    click.echo(f"bioamla v{get_bioamla_version()}")  
-     
+    click.echo(f"bioamla v{get_bioamla_version()}")
+
 @cli.command()
 @click.option('--training-dir', default='.', help='Directory to save training outputs')
 @click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
@@ -177,28 +180,42 @@ def ast_finetune(
 ):
     """
     Fine-tune an Audio Spectrogram Transformer (AST) model using a YAML configuration.
-    
+
     Performs complete fine-tuning workflow including data loading, preprocessing,
     augmentation, model configuration, training, and evaluation. The process includes
     automatic dataset normalization calculation and comprehensive metrics tracking.
-    
+
     Args:
         config_filepath (str): Path to the YAML configuration file containing
                              training parameters, dataset information, and model settings.
     """
-    from datasets import Audio, ClassLabel, load_dataset, Dataset, DatasetDict
-    from transformers import ASTFeatureExtractor, ASTConfig, ASTForAudioClassification, TrainingArguments, Trainer
-    from audiomentations import Compose, AddGaussianSNR, GainTransition, Gain, ClippingDistortion, TimeStretch, PitchShift
-    import torch
     import evaluate
     import numpy as np
+    import torch
+    from audiomentations import (
+        AddGaussianSNR,
+        ClippingDistortion,
+        Compose,
+        Gain,
+        GainTransition,
+        PitchShift,
+        TimeStretch,
+    )
+    from datasets import Audio, ClassLabel, Dataset, DatasetDict, load_dataset
     from novus_pytils.files import create_directory
+    from transformers import (
+        ASTConfig,
+        ASTFeatureExtractor,
+        ASTForAudioClassification,
+        Trainer,
+        TrainingArguments,
+    )
 
     output_dir = training_dir + "/runs"
     logging_dir = training_dir + "/logs"
     best_model_path = training_dir + "/best_model"
-    
-    
+
+
     # Load a pre-existing dataset from the HuggingFace Hub
     dataset = load_dataset(train_dataset, split=split)
 
@@ -227,9 +244,9 @@ def ast_finetune(
     # rename the target feature
     dataset = dataset.rename_column("target", "labels")
     if isinstance(dataset, Dataset):
-        num_labels = len(np.unique([item for item in dataset["labels"]]))
+        num_labels = len(np.unique(list(dataset["labels"])))
     elif isinstance(dataset, DatasetDict) and "train" in dataset:
-        num_labels = len(np.unique([item for item in dataset["train"]["labels"]]))
+        num_labels = len(np.unique(list(dataset["train"]["labels"])))
     else:
         raise TypeError("Unable to determine number of labels from dataset")
 
@@ -243,10 +260,10 @@ def ast_finetune(
     def preprocess_audio(batch):
         """
         Preprocess audio batch for AST model input without augmentations.
-        
+
         Args:
             batch: Batch containing audio data and labels
-            
+
         Returns:
             dict: Processed batch with feature-extracted audio and labels
         """
@@ -260,7 +277,7 @@ def ast_finetune(
         features = dataset[first_split].features
     else:
         features = dataset.features
-    
+
     if features and "labels" in features:
         label2id = features["labels"]._str2int  # we add the mapping from INTs to STRINGs
     else:
@@ -288,10 +305,10 @@ def ast_finetune(
     def preprocess_audio_with_transforms(batch):
         """
         Preprocess audio batch for AST model input with applied augmentations.
-        
+
         Args:
             batch: Batch containing audio data and labels
-            
+
         Returns:
             dict: Processed batch with augmented, feature-extracted audio and labels
         """
@@ -376,10 +393,10 @@ def ast_finetune(
     def compute_metrics(eval_pred) -> Dict[str, float]:
         """
         Compute evaluation metrics for the AST model training.
-        
+
         Args:
             eval_pred: Evaluation prediction object containing predictions and labels
-            
+
         Returns:
             dict: Dictionary containing accuracy, precision, recall, and F1 metrics
         """
@@ -390,15 +407,15 @@ def ast_finetune(
         # compute metrics
         accuracy_result = accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
         metrics: Dict[str, float] = accuracy_result if accuracy_result is not None else {}
-        
+
         precision_result = precision.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
         if precision_result is not None:
             metrics.update(precision_result)
-        
+
         recall_result = recall.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
         if recall_result is not None:
             metrics.update(recall_result)
-        
+
         f1_result = f1.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
         if f1_result is not None:
             metrics.update(f1_result)
@@ -411,7 +428,7 @@ def ast_finetune(
         eval_data = dataset.get("test")
     else:
         raise ValueError("Expected DatasetDict for trainer setup")
-    
+
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -425,7 +442,7 @@ def ast_finetune(
 
     create_directory(best_model_path)
     trainer.save_model(best_model_path)
-    
+
     # torch.save(model.state_dict(), best_model_path + "/pytorch_model.bin")
     # model.save_pretrained(model_dir)
 
@@ -436,7 +453,7 @@ def ast_finetune(
 def ast_predict(filepath, model_path, sample_rate):
     """
     Perform AST model prediction on a single audio file.
-    
+
     Args:
         filepath: Path to the audio file to classify
         model_path: Path to the pre-trained AST model
@@ -465,11 +482,11 @@ def ast_batch_inference(
 ):
     """
     Run batch AST inference on a directory of WAV files.
-    
+
     Loads an AST model and processes all WAV files in the specified directory,
     generating predictions and saving results to a CSV file. Supports resumable
     operations by checking for existing results and skipping already processed files.
-    
+
     Args:
         directory (str): Directory containing WAV files to process
         output_csv (str): Output CSV file name
@@ -479,13 +496,15 @@ def ast_batch_inference(
         overlap_seconds (int): Overlap between clips in seconds
         restart (bool): Whether to restart from existing results
     """
-    from novus_pytils.files import get_files_by_extension, file_exists
-    from bioamla.core.ast import load_pretrained_ast_model, wave_file_batch_inference
-    import torch
-    import time
-    import pandas as pd
     import os
-    
+    import time
+
+    import pandas as pd
+    import torch
+    from novus_pytils.files import file_exists, get_files_by_extension
+
+    from bioamla.core.ast import load_pretrained_ast_model, wave_file_batch_inference
+
     output_csv = os.path.join(directory, output_csv)
     print("Output csv: " + output_csv)
 
@@ -528,14 +547,14 @@ def ast_batch_inference(
 
     print("Loading model: " + model_path)
     model = load_pretrained_ast_model(model_path)
-    
+
     # Type cast to indicate this is a PyTorch module with eval() and to() methods
     from torch.nn import Module
     if not isinstance(model, Module):
         raise TypeError("Model must be a PyTorch Module")
-    
+
     model.eval()
-    
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("Using device: " + device)
     model.to(device)
@@ -545,19 +564,19 @@ def ast_batch_inference(
     #format start time
     time_string = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time))
     print("Start batch inference at " + time_string)
-    wave_file_batch_inference(wave_files=wave_files, 
+    wave_file_batch_inference(wave_files=wave_files,
                               model=model,
-                              freq=resample_freq, 
-                              clip_seconds=clip_seconds, 
+                              freq=resample_freq,
+                              clip_seconds=clip_seconds,
                               overlap_seconds=overlap_seconds,
                               output_csv=output_csv)
-    
+
     # end timer
     end_time = time.time()
     time_string = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end_time))
     print("End batch inference at " + time_string)
     print("Elapsed time: " + str(end_time - start_time))
-    
+
 @cli.command()
 @click.argument('filepath')
 def wave(filepath: str):
@@ -578,6 +597,7 @@ def wave(filepath: str):
 @cli.command()
 @click.argument('output_dir')
 @click.option('--taxon-ids', default=None, help='Comma-separated list of taxon IDs (e.g., "3" for birds, "3,20978" for multiple)')
+@click.option('--taxon-csv', default=None, type=click.Path(exists=True), help='Path to CSV file with taxon_id column')
 @click.option('--taxon-name', default=None, help='Filter by taxon name (e.g., "Aves" for birds)')
 @click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
 @click.option('--user-id', default=None, help='Filter by observer username')
@@ -595,6 +615,7 @@ def wave(filepath: str):
 def inat_audio(
     output_dir: str,
     taxon_ids: str,
+    taxon_csv: str,
     taxon_name: str,
     place_id: int,
     user_id: str,
@@ -625,6 +646,9 @@ def inat_audio(
         Download frog sounds with specific license:
         bioamla inat-audio ./frogs --taxon-name Anura --sound-license cc-by
 
+        Download from a CSV file of taxon IDs:
+        bioamla inat-audio ./sounds --taxon-csv taxa.csv --obs-per-taxon 10
+
         Download 50 observations per taxon without subdirectories:
         bioamla inat-audio ./sounds --obs-per-taxon 50 --no-organize-by-taxon
     """
@@ -643,6 +667,7 @@ def inat_audio(
     stats = download_inat_audio(
         output_dir=output_dir,
         taxon_ids=taxon_ids_list,
+        taxon_csv=taxon_csv,
         taxon_name=taxon_name,
         place_id=place_id,
         user_id=user_id,
@@ -748,6 +773,7 @@ def inat_project_stats(
         bioamla inat-project-stats appalachia-bioacoustics --quiet
     """
     import json
+
     from bioamla.core.inat import get_project_stats
 
     stats = get_project_stats(
@@ -768,7 +794,7 @@ def inat_project_stats(
         if stats['place']:
             click.echo(f"Place: {stats['place']}")
         click.echo(f"Created: {stats['created_at']}")
-        click.echo(f"\nStatistics:")
+        click.echo("\nStatistics:")
         click.echo(f"  Observations: {stats['observation_count']}")
         click.echo(f"  Species: {stats['species_count']}")
         click.echo(f"  Observers: {stats['observers_count']}")
