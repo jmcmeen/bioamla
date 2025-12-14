@@ -137,3 +137,39 @@ class TestAstFinetuneMlflowOptions:
 
         assert result.exit_code == 0
         assert "--mlflow-run-name" in result.output
+
+
+class TestAstPush:
+    """Tests for ast-push command."""
+
+    def test_ast_push_help(self, runner):
+        """Test ast-push --help shows all options."""
+        result = runner.invoke(cli, ["ast-push", "--help"])
+
+        assert result.exit_code == 0
+        assert "MODEL_PATH" in result.output
+        assert "REPO_ID" in result.output
+        assert "--private" in result.output
+        assert "--public" in result.output
+        assert "--commit-message" in result.output
+
+    def test_ast_push_requires_model_path(self, runner):
+        """Test that ast-push requires model_path argument."""
+        result = runner.invoke(cli, ["ast-push"])
+
+        assert result.exit_code != 0
+        assert "Missing argument" in result.output or "MODEL_PATH" in result.output
+
+    def test_ast_push_requires_repo_id(self, runner):
+        """Test that ast-push requires repo_id argument."""
+        result = runner.invoke(cli, ["ast-push", "/some/path"])
+
+        assert result.exit_code != 0
+        assert "Missing argument" in result.output or "REPO_ID" in result.output
+
+    def test_ast_push_invalid_model_path(self, runner):
+        """Test that ast-push fails with non-existent model path."""
+        result = runner.invoke(cli, ["ast-push", "/nonexistent/path", "user/repo"])
+
+        assert result.exit_code != 0
+        assert "does not exist" in result.output
