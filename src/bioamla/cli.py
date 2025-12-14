@@ -83,10 +83,10 @@ def audio(filepath: str):
 def unzip(file_path: str, output_path: str):
     """
     Extract a ZIP archive to the specified output directory.
-    
+
     Extracts the contents of a ZIP file to the target directory.
     If no output path is specified, extracts to the current working directory.
-    
+
     Args:
         file_path (str): Path to the ZIP file to extract
         output_path (str): Directory where the ZIP contents should be extracted.
@@ -96,8 +96,32 @@ def unzip(file_path: str, output_path: str):
     if output_path == '.':
         import os
         output_path = os.getcwd()
-  
+
     extract_zip_file(file_path, output_path)
+
+
+@cli.command()
+@click.argument('source_path')
+@click.argument('output_file')
+def zip(source_path: str, output_file: str):
+    """
+    Create a ZIP archive from a file or directory.
+
+    Compresses the specified file or directory into a ZIP archive.
+
+    Args:
+        source_path (str): Path to the file or directory to compress
+        output_file (str): Path for the output ZIP file
+    """
+    import os
+    from novus_pytils.compression import create_zip_file, zip_directory
+
+    if os.path.isdir(source_path):
+        zip_directory(source_path, output_file)
+    else:
+        create_zip_file([source_path], output_file)
+
+    click.echo(f"Created {output_file}")
 
 @cli.command()
 def version():
