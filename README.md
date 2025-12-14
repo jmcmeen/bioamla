@@ -77,6 +77,24 @@ bioamla ast-batch-inference /path/to/audio/directory \
 
 This creates a CSV file with columns: `filepath`, `start`, `stop`, `prediction`
 
+**Optimized inference with GPU acceleration:**
+
+```bash
+bioamla ast-batch-inference /path/to/audio/directory \
+  --model-path bioamla/scp-frogs \
+  --batch-size 16 \
+  --fp16 \
+  --compile \
+  --workers 4
+```
+
+Performance options:
+
+- `--batch-size`: Process multiple segments in one forward pass (2-4x faster)
+- `--fp16`: Use half-precision inference (~2x faster on modern GPUs)
+- `--compile`: Use torch.compile() for optimized execution (1.5-2x faster, PyTorch 2.0+)
+- `--workers`: Parallel file loading for I/O-bound workloads
+
 **Resume interrupted processing:**
 
 ```bash
@@ -312,6 +330,10 @@ bioamla purge --all -y          # Purge everything without confirmation
 | `--clip-seconds` | `1` | Duration of audio clips in seconds |
 | `--overlap-seconds` | `0` | Overlap between clips in seconds |
 | `--restart/--no-restart` | `--no-restart` | Resume from existing results |
+| `--batch-size` | `8` | Number of segments to process in parallel (GPU optimization) |
+| `--fp16/--no-fp16` | `--no-fp16` | Use half-precision inference for ~2x speedup on modern GPUs |
+| `--compile/--no-compile` | `--no-compile` | Use torch.compile() for optimized inference (PyTorch 2.0+) |
+| `--workers` | `1` | Number of parallel workers for file loading |
 
 **ast-finetune options:**
 
