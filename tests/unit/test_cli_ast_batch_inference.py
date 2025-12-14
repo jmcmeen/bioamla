@@ -1,5 +1,5 @@
 """
-Unit tests for the ast-batch-inference CLI command options.
+Unit tests for the ast infer CLI command options.
 """
 
 from unittest.mock import MagicMock, patch
@@ -16,12 +16,12 @@ def runner():
     return CliRunner()
 
 
-class TestAstBatchInferenceHelp:
-    """Tests for ast-batch-inference help and options."""
+class TestAstInferHelp:
+    """Tests for ast infer help and options."""
 
-    def test_ast_batch_inference_help(self, runner):
-        """Test ast-batch-inference --help shows all options."""
-        result = runner.invoke(cli, ["ast-batch-inference", "--help"])
+    def test_ast_infer_help(self, runner):
+        """Test ast infer --help shows all options."""
+        result = runner.invoke(cli, ["ast", "infer", "--help"])
 
         assert result.exit_code == 0
         assert "DIRECTORY" in result.output
@@ -32,9 +32,9 @@ class TestAstBatchInferenceHelp:
         assert "--overlap-seconds" in result.output
         assert "--restart" in result.output
 
-    def test_ast_batch_inference_performance_options_exist(self, runner):
+    def test_ast_infer_performance_options_exist(self, runner):
         """Test that performance options are shown in help."""
-        result = runner.invoke(cli, ["ast-batch-inference", "--help"])
+        result = runner.invoke(cli, ["ast", "infer", "--help"])
 
         assert result.exit_code == 0
         assert "--batch-size" in result.output
@@ -42,20 +42,20 @@ class TestAstBatchInferenceHelp:
         assert "--compile" in result.output
         assert "--workers" in result.output
 
-    def test_ast_batch_inference_requires_directory(self, runner):
-        """Test that ast-batch-inference requires directory argument."""
-        result = runner.invoke(cli, ["ast-batch-inference"])
+    def test_ast_infer_requires_directory(self, runner):
+        """Test that ast infer requires directory argument."""
+        result = runner.invoke(cli, ["ast", "infer"])
 
         assert result.exit_code != 0
         assert "Missing argument" in result.output or "DIRECTORY" in result.output
 
 
-class TestAstBatchInferencePerformanceOptions:
+class TestAstInferPerformanceOptions:
     """Tests for performance-related options."""
 
     def test_batch_size_option_exists(self, runner):
         """Test that --batch-size option exists."""
-        result = runner.invoke(cli, ["ast-batch-inference", "--help"])
+        result = runner.invoke(cli, ["ast", "infer", "--help"])
 
         assert result.exit_code == 0
         assert "--batch-size" in result.output
@@ -63,7 +63,7 @@ class TestAstBatchInferencePerformanceOptions:
 
     def test_fp16_option_exists(self, runner):
         """Test that --fp16 option exists."""
-        result = runner.invoke(cli, ["ast-batch-inference", "--help"])
+        result = runner.invoke(cli, ["ast", "infer", "--help"])
 
         assert result.exit_code == 0
         assert "--fp16" in result.output
@@ -71,7 +71,7 @@ class TestAstBatchInferencePerformanceOptions:
 
     def test_compile_option_exists(self, runner):
         """Test that --compile option exists."""
-        result = runner.invoke(cli, ["ast-batch-inference", "--help"])
+        result = runner.invoke(cli, ["ast", "infer", "--help"])
 
         assert result.exit_code == 0
         assert "--compile" in result.output
@@ -79,19 +79,19 @@ class TestAstBatchInferencePerformanceOptions:
 
     def test_workers_option_exists(self, runner):
         """Test that --workers option exists."""
-        result = runner.invoke(cli, ["ast-batch-inference", "--help"])
+        result = runner.invoke(cli, ["ast", "infer", "--help"])
 
         assert result.exit_code == 0
         assert "--workers" in result.output
         assert "Number of parallel workers" in result.output
 
 
-class TestAstBatchInferenceDefaults:
+class TestAstInferDefaults:
     """Tests for default option values."""
 
     def test_default_batch_size_is_8(self, runner):
         """Test that default batch size is 8."""
-        result = runner.invoke(cli, ["ast-batch-inference", "--help"])
+        result = runner.invoke(cli, ["ast", "infer", "--help"])
 
         assert result.exit_code == 0
         # Check help text contains default value info
@@ -99,14 +99,14 @@ class TestAstBatchInferenceDefaults:
 
     def test_default_workers_is_1(self, runner):
         """Test that default workers is 1."""
-        result = runner.invoke(cli, ["ast-batch-inference", "--help"])
+        result = runner.invoke(cli, ["ast", "infer", "--help"])
 
         assert result.exit_code == 0
         assert "(default:" in result.output.lower() and "1)" in result.output
 
 
-class TestAstBatchInferenceExecution:
-    """Tests for ast-batch-inference execution with mocked dependencies."""
+class TestAstInferExecution:
+    """Tests for ast infer execution with mocked dependencies."""
 
     def test_passes_performance_options_to_config(self, runner, temp_dir):
         """Test that performance options are passed to InferenceConfig."""
@@ -117,7 +117,7 @@ class TestAstBatchInferenceExecution:
             mock_get_files.return_value = []
 
             result = runner.invoke(cli, [
-                "ast-batch-inference",
+                "ast", "infer",
                 str(audio_dir),
                 "--batch-size", "16",
                 "--fp16",
@@ -146,7 +146,7 @@ class TestAstBatchInferenceExecution:
 
                 with patch("bioamla.core.ast.wave_file_batch_inference"):
                     result = runner.invoke(cli, [
-                        "ast-batch-inference",
+                        "ast", "infer",
                         str(audio_dir),
                         "--batch-size", "16",
                         "--fp16",
@@ -175,7 +175,7 @@ class TestAstBatchInferenceExecution:
 
                 with patch("bioamla.core.ast.wave_file_batch_inference") as mock_inference:
                     result = runner.invoke(cli, [
-                        "ast-batch-inference",
+                        "ast", "infer",
                         str(audio_dir),
                         "--batch-size", "32",
                         "--workers", "8"
@@ -202,7 +202,7 @@ class TestAstBatchInferenceExecution:
 
                 with patch("bioamla.core.ast.wave_file_batch_inference"):
                     runner.invoke(cli, [
-                        "ast-batch-inference",
+                        "ast", "infer",
                         str(audio_dir),
                         "--fp16"
                     ])
@@ -228,7 +228,7 @@ class TestAstBatchInferenceExecution:
 
                 with patch("bioamla.core.ast.wave_file_batch_inference"):
                     runner.invoke(cli, [
-                        "ast-batch-inference",
+                        "ast", "infer",
                         str(audio_dir),
                         "--compile"
                     ])
@@ -236,3 +236,5 @@ class TestAstBatchInferenceExecution:
                     mock_load.assert_called_once()
                     call_kwargs = mock_load.call_args[1]
                     assert call_kwargs['use_compile'] is True
+
+

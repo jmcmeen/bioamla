@@ -1,7 +1,7 @@
 #example workflow for SCP frogs
 bioamla version
 bioamla devices
-bioamla ast-finetune \
+bioamla ast train \
   --training-dir "scp-frogs" \
   --train-dataset "bioamla/scp-frogs" \
   --num-train-epochs 50 \
@@ -10,4 +10,3 @@ bioamla ast-finetune \
   --gradient-accumulation-steps 2 \
   --dataloader-num-workers 4 \
   --mlflow-experiment-name "scp-frogs"
-

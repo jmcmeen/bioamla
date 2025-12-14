@@ -57,7 +57,7 @@ The `devices` command will show your CUDA/GPU availability and configuration.
 Classify a single audio file using a pre-trained model:
 
 ```bash
-bioamla ast-predict path/to/audio.wav bioamla/scp-frogs 16000
+bioamla ast predict path/to/audio.wav bioamla/scp-frogs 16000
 ```
 
 This will output the top predictions with confidence scores for the audio file.
@@ -67,7 +67,7 @@ This will output the top predictions with confidence scores for the audio file.
 Process all audio files in a directory and export results to CSV:
 
 ```bash
-bioamla ast-batch-inference /path/to/audio/directory \
+bioamla ast infer /path/to/audio/directory \
   --output-csv results.csv \
   --model-path bioamla/scp-frogs \
   --resample-freq 16000 \
@@ -80,7 +80,7 @@ This creates a CSV file with columns: `filepath`, `start`, `stop`, `prediction`
 **Optimized inference with GPU acceleration:**
 
 ```bash
-bioamla ast-batch-inference /path/to/audio/directory \
+bioamla ast infer /path/to/audio/directory \
   --model-path bioamla/scp-frogs \
   --batch-size 16 \
   --fp16 \
@@ -98,7 +98,7 @@ Performance options:
 **Resume interrupted processing:**
 
 ```bash
-bioamla ast-batch-inference /path/to/audio/directory \
+bioamla ast infer /path/to/audio/directory \
   --output-csv results.csv \
   --no-restart
 ```
@@ -108,7 +108,7 @@ bioamla ast-batch-inference /path/to/audio/directory \
 Train a custom model on your own dataset from Hugging Face Hub:
 
 ```bash
-bioamla ast-finetune \
+bioamla ast train \
   --training-dir ./my-training \
   --base-model MIT/ast-finetuned-audioset-10-10-0.4593 \
   --train-dataset your-username/your-dataset \
@@ -128,7 +128,7 @@ tensorboard --logdir ./my-training
 **Push trained model to Hugging Face Hub:**
 
 ```bash
-bioamla ast-finetune \
+bioamla ast train \
   --training-dir ./my-training \
   --train-dataset your-username/your-dataset \
   --num-train-epochs 10 \
@@ -140,13 +140,13 @@ bioamla ast-finetune \
 **List all audio files in a directory:**
 
 ```bash
-bioamla audio /path/to/audio/directory
+bioamla audio list /path/to/audio/directory
 ```
 
 **Extract WAV file metadata:**
 
 ```bash
-bioamla wave /path/to/file.wav
+bioamla audio info /path/to/file.wav
 ```
 
 **Download audio files:**
@@ -263,7 +263,7 @@ mlflow server --host 0.0.0.0 --port 5000
 **Train with MLflow tracking:**
 
 ```bash
-bioamla ast-finetune \
+bioamla ast train \
   --training-dir "my-model" \
   --train-dataset "bioamla/scp-frogs" \
   --num-train-epochs 10 \
@@ -301,26 +301,42 @@ bioamla purge --all             # Purge everything
 bioamla purge --all -y          # Purge everything without confirmation
 ```
 
-### Audio Utilities
+### Audio Commands (`bioamla audio`)
 
 | Command | Description |
 |---------|-------------|
-| `bioamla audio [DIR]` | List audio files in directory |
-| `bioamla wave <FILE>` | Display WAV file metadata |
+| `bioamla audio list [DIR]` | List audio files in directory |
+| `bioamla audio info <FILE>` | Display WAV file metadata |
+| `bioamla audio convert <DATASET_PATH> <FORMAT>` | Convert all audio files in a dataset |
+
+**audio convert options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--metadata-filename` | `metadata.csv` | Name of metadata CSV file |
+| `--keep-original` | | Keep original files after conversion |
+| `--quiet` | | Suppress progress output |
+
+Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
+
+### File Utilities
+
+| Command | Description |
+|---------|-------------|
 | `bioamla download <URL> [DIR]` | Download files from URL |
 | `bioamla unzip <FILE> [DIR]` | Extract ZIP archives |
 | `bioamla zip <SOURCE> <OUTPUT>` | Create ZIP archive from file or directory |
 
-### AST Model Commands
+### AST Model Commands (`bioamla ast`)
 
 | Command | Description |
 |---------|-------------|
-| `bioamla ast-predict <FILE> <MODEL> <SR>` | Single file inference |
-| `bioamla ast-batch-inference <DIR>` | Batch directory inference with segmentation |
-| `bioamla ast-finetune` | Fine-tune AST model on custom datasets |
-| `bioamla ast-push <MODEL_PATH> <REPO_ID>` | Push fine-tuned model to HuggingFace Hub |
+| `bioamla ast predict <FILE> <MODEL> <SR>` | Single file inference |
+| `bioamla ast infer <DIR>` | Batch directory inference with segmentation |
+| `bioamla ast train` | Fine-tune AST model on custom datasets |
+| `bioamla ast push <MODEL_PATH> <REPO_ID>` | Push fine-tuned model to HuggingFace Hub |
 
-**ast-batch-inference options:**
+**ast infer options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -335,7 +351,7 @@ bioamla purge --all -y          # Purge everything without confirmation
 | `--compile/--no-compile` | `--no-compile` | Use torch.compile() for optimized inference (PyTorch 2.0+) |
 | `--workers` | `1` | Number of parallel workers for file loading |
 
-**ast-finetune options:**
+**ast train options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -375,7 +391,7 @@ bioamla purge --all -y          # Purge everything without confirmation
 mlflow server --host 0.0.0.0 --port 5000
 
 # Train with MLflow tracking
-bioamla ast-finetune \
+bioamla ast train \
   --training-dir "my-model" \
   --train-dataset "bioamla/scp-frogs" \
   --num-train-epochs 10 \
@@ -384,7 +400,7 @@ bioamla ast-finetune \
   --mlflow-run-name "baseline-run"
 ```
 
-**ast-push options:**
+**ast push options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -395,26 +411,26 @@ bioamla ast-finetune \
 
 ```bash
 # Push a fine-tuned model to HuggingFace Hub
-bioamla ast-push ./my-training/best_model myusername/my-frog-classifier
+bioamla ast push ./my-training/best_model myusername/my-frog-classifier
 
 # Push as a private repository
-bioamla ast-push ./my-model myusername/private-model --private
+bioamla ast push ./my-model myusername/private-model --private
 
 # Push with a custom commit message
-bioamla ast-push ./my-model myusername/my-model --commit-message "v1.0 release"
+bioamla ast push ./my-model myusername/my-model --commit-message "v1.0 release"
 ```
 
 Note: You must be logged in to HuggingFace Hub first using `huggingface-cli login`.
 
-### iNaturalist Integration
+### iNaturalist Commands (`bioamla inat`)
 
 | Command | Description |
 |---------|-------------|
-| `bioamla inat-audio <OUTPUT_DIR>` | Download audio observations from iNaturalist |
-| `bioamla inat-taxa-search` | Search for taxa with observations in a place or project |
-| `bioamla inat-project-stats <PROJECT_ID>` | Get statistics for an iNaturalist project |
+| `bioamla inat download <OUTPUT_DIR>` | Download audio observations from iNaturalist |
+| `bioamla inat search` | Search for taxa with observations in a place or project |
+| `bioamla inat stats <PROJECT_ID>` | Get statistics for an iNaturalist project |
 
-**inat-audio options:**
+**inat download options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -435,7 +451,7 @@ Note: You must be logged in to HuggingFace Hub first using `huggingface-cli logi
 | `--delay` | `1.0` | Delay between downloads (rate limiting) |
 | `--quiet` | | Suppress progress output |
 
-**inat-taxa-search options:**
+**inat search options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -446,7 +462,7 @@ Note: You must be logged in to HuggingFace Hub first using `huggingface-cli logi
 | `--output, -o` | | Output file path for CSV |
 | `--quiet` | | Suppress progress output |
 
-**inat-project-stats options:**
+**inat stats options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -457,10 +473,10 @@ Note: You must be logged in to HuggingFace Hub first using `huggingface-cli logi
 
 ```bash
 # First, search for taxa and export to CSV
-bioamla inat-taxa-search --project-id appalachia-bioacoustics --taxon-id 20979 -o taxa.csv
+bioamla inat search --project-id appalachia-bioacoustics --taxon-id 20979 -o taxa.csv
 
 # Then download audio for all taxa in the CSV
-bioamla inat-audio ./sounds --taxon-csv taxa.csv --obs-per-taxon 10
+bioamla inat download ./sounds --taxon-csv taxa.csv --obs-per-taxon 10
 ```
 
 The CSV file should have a `taxon_id` column with integer taxon IDs:
@@ -471,14 +487,13 @@ taxon_id,name,common_name,observation_count
 23456,Anaxyrus americanus,American Toad,200
 ```
 
-### Dataset Management
+### Dataset Commands (`bioamla dataset`)
 
 | Command | Description |
 |---------|-------------|
-| `bioamla merge-datasets <OUTPUT_DIR> <PATHS...>` | Merge multiple audio datasets into one |
-| `bioamla convert-audio <DATASET_PATH> <FORMAT>` | Convert all audio files in a dataset to a specified format |
+| `bioamla dataset merge <OUTPUT_DIR> <PATHS...>` | Merge multiple audio datasets into one |
 
-**merge-datasets options:**
+**dataset merge options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -487,16 +502,6 @@ taxon_id,name,common_name,observation_count
 | `--no-organize` | | Preserve original directory structure |
 | `--target-format` | | Convert all audio files to this format |
 | `--quiet` | | Suppress progress output |
-
-**convert-audio options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--metadata-filename` | `metadata.csv` | Name of metadata CSV file |
-| `--keep-original` | | Keep original files after conversion |
-| `--quiet` | | Suppress progress output |
-
-Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
 
 ## Technologies
 

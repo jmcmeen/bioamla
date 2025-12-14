@@ -1,7 +1,7 @@
 #example workflow for esc50
 bioamla version
 bioamla devices
-bioamla ast-finetune \
+bioamla ast train \
   --training-dir "esc50" \
   --train-dataset "ashraq/esc50" \
   --num-train-epochs 1 \
@@ -10,4 +10,3 @@ bioamla ast-finetune \
   --gradient-accumulation-steps 2 \
   --dataloader-num-workers 4 \
   --mlflow-experiment-name "esc50"
-
