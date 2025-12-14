@@ -600,7 +600,7 @@ def inat_audio(
         Download 50 observations without subdirectories:
         bioamla inat-audio ./sounds --max-observations 50 --no-organize-by-taxon
     """
-    from bioamla.core.wrappers.inat import download_inat_audio
+    from bioamla.core.inat import download_inat_audio
 
     stats = download_inat_audio(
         output_dir=output_dir,
