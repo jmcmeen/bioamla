@@ -47,6 +47,9 @@ dev = [
   "pytest-asyncio",
   "ruff",
 ]
+mlflow = [
+  "mlflow>=2.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
