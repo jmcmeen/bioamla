@@ -232,6 +232,38 @@ for package, version in versions.items():
     print(f"{package}: {version}")
 ```
 
+### 7. Experiment Tracking with MLflow
+
+bioamla integrates with MLflow for experiment tracking during model training:
+
+**Start MLflow server:**
+
+```bash
+mlflow server --host 0.0.0.0 --port 5000
+```
+
+**Train with MLflow tracking:**
+
+```bash
+bioamla ast-finetune \
+  --training-dir "my-model" \
+  --train-dataset "bioamla/scp-frogs" \
+  --num-train-epochs 10 \
+  --mlflow-tracking-uri "http://localhost:5000" \
+  --mlflow-experiment-name "frog-classifier" \
+  --mlflow-run-name "baseline-run"
+```
+
+**View experiments in MLflow UI:**
+
+Open `http://localhost:5000` in your browser to view training metrics, compare runs, and analyze model performance.
+
+MLflow tracks:
+
+- Training and evaluation metrics (loss, accuracy)
+- Model hyperparameters
+- Training artifacts
+
 ## CLI Commands Reference
 
 ### System Commands
@@ -308,6 +340,26 @@ bioamla purge --all -y          # Purge everything without confirmation
 | `--gradient-accumulation-steps` | `1` | Number of gradient accumulation steps |
 | `--dataloader-num-workers` | `4` | Number of dataloader workers |
 | `--torch-compile/--no-torch-compile` | `--no-torch-compile` | Use torch.compile for faster training (PyTorch 2.0+) |
+| `--finetune-mode` | `full` | Training mode: `full` (all layers) or `feature-extraction` (freeze base, train classifier only) |
+| `--mlflow-tracking-uri` | | MLflow tracking server URI (e.g., `http://localhost:5000`) |
+| `--mlflow-experiment-name` | | MLflow experiment name |
+| `--mlflow-run-name` | | MLflow run name |
+
+**MLflow integration example:**
+
+```bash
+# Start MLflow server (in separate terminal)
+mlflow server --host 0.0.0.0 --port 5000
+
+# Train with MLflow tracking
+bioamla ast-finetune \
+  --training-dir "my-model" \
+  --train-dataset "bioamla/scp-frogs" \
+  --num-train-epochs 10 \
+  --mlflow-tracking-uri "http://localhost:5000" \
+  --mlflow-experiment-name "frog-classifier" \
+  --mlflow-run-name "baseline-run"
+```
 
 ### iNaturalist Integration
 
@@ -410,6 +462,7 @@ Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
 - **Pydantic**: Data validation and API schemas
 - **Audiomentations**: Audio data augmentation
 - **TensorBoard**: Training visualization
+- **MLflow**: Experiment tracking and model management (optional)
 
 ## Contributing
 
