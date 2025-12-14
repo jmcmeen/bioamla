@@ -385,23 +385,9 @@ def ast_finetune(
         Returns:
             dict: Processed batch with feature-extracted audio and labels
         """
-        wavs = []
-        valid_labels = []
-        for audio, label in zip(batch["input_values"], batch["labels"]):
-            try:
-                wavs.append(audio["array"])
-                valid_labels.append(label)
-            except (RuntimeError, Exception) as e:
-                # Skip corrupted audio files
-                print(f"Warning: Skipping corrupted audio file: {e}")
-                continue
-
-        if not wavs:
-            # Return empty batch if all files were corrupted
-            return {model_input_name: None, "labels": []}
-
+        wavs = [audio["array"] for audio in batch["input_values"]]
         inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
-        return {model_input_name: inputs.get(model_input_name), "labels": valid_labels}
+        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
     # Create label mappings from class_names (since we converted labels manually)
     label2id = {name: idx for idx, name in enumerate(class_names)}
@@ -450,27 +436,39 @@ def ast_finetune(
         Returns:
             dict: Processed batch with augmented, feature-extracted audio and labels
         """
-        wavs = []
-        valid_labels = []
-        for audio, label in zip(batch["input_values"], batch["labels"]):
-            try:
-                wav = audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE)
-                wavs.append(wav)
-                valid_labels.append(label)
-            except (RuntimeError, Exception) as e:
-                # Skip corrupted audio files
-                print(f"Warning: Skipping corrupted audio file: {e}")
-                continue
-
-        if not wavs:
-            # Return empty batch if all files were corrupted
-            return {model_input_name: None, "labels": []}
-
+        wavs = [audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE) for audio in batch["input_values"]]
         inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
-        return {model_input_name: inputs.get(model_input_name), "labels": valid_labels}
+        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
     dataset = dataset.cast_column("audio", Audio(sampling_rate=feature_extractor.sampling_rate))
     dataset = dataset.rename_column("audio", "input_values")
+
+    # Filter out corrupted audio files before processing
+    def is_valid_audio(example):
+        """Check if audio can be decoded without errors."""
+        try:
+            _ = example["input_values"]["array"]
+            return True
+        except (RuntimeError, Exception) as e:
+            print(f"Warning: Filtering out corrupted audio file: {e}")
+            return False
+
+    print("Filtering out corrupted audio files...")
+    original_sizes = {}
+    if isinstance(dataset, DatasetDict):
+        for split_name in dataset.keys():
+            original_sizes[split_name] = len(dataset[split_name])
+        dataset = dataset.filter(is_valid_audio)
+        for split_name in dataset.keys():
+            filtered_count = original_sizes[split_name] - len(dataset[split_name])
+            if filtered_count > 0:
+                print(f"  Removed {filtered_count} corrupted files from {split_name} split")
+    else:
+        original_size = len(dataset)
+        dataset = dataset.filter(is_valid_audio)
+        filtered_count = original_size - len(dataset)
+        if filtered_count > 0:
+            print(f"  Removed {filtered_count} corrupted files")
 
     # calculate values for normalization
     feature_extractor.do_normalize = False  # we set normalization to False in order to calculate the mean + std of the dataset
@@ -480,18 +478,15 @@ def ast_finetune(
     # we use the transformation w/o augmentation on the training dataset to calculate the mean + std
     if isinstance(dataset, DatasetDict) and "train" in dataset:
         train_dataset = dataset["train"]
+        if len(train_dataset) == 0:
+            raise ValueError("No valid audio samples found in training dataset after filtering")
         train_dataset.set_transform(preprocess_audio, output_all_columns=False)
-        skipped_count = 0
         for sample in train_dataset:
-            if isinstance(sample, dict) and model_input_name in sample and sample[model_input_name] is not None:
+            if isinstance(sample, dict) and model_input_name in sample:
                 cur_mean = torch.mean(sample[model_input_name])
                 cur_std = torch.std(sample[model_input_name])
                 mean.append(cur_mean)
                 std.append(cur_std)
-            else:
-                skipped_count += 1
-        if skipped_count > 0:
-            print(f"Warning: Skipped {skipped_count} corrupted audio files during normalization calculation")
         if not mean:
             raise ValueError("No valid audio samples found in training dataset")
     else:
