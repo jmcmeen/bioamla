@@ -218,3 +218,5 @@ cython_debug/
 /scp-frogs
 scp_small.zip
 *.mp3
+/frogs_dataset
+/frogs_out
