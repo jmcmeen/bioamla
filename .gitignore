@@ -215,3 +215,5 @@ cython_debug/
 *.wav
 /dev_data
 /examples/dev_data
+/scp-frogs
+scp_small.zip
