@@ -236,7 +236,19 @@ def ast_finetune(
         raise TypeError("Dataset must be a Dataset or DatasetDict instance")
 
     # Cast category column to ClassLabel (converts string names to integer indices)
-    dataset = dataset.cast_column(category_label_column, ClassLabel(names=class_names))
+    # Create label mapping to avoid PyArrow offset overflow with large datasets
+    label_to_id = {name: idx for idx, name in enumerate(class_names)}
+
+    def convert_labels(example):
+        example[category_label_column] = label_to_id[example[category_label_column]]
+        return example
+
+    dataset = dataset.map(convert_labels, writer_batch_size=1000)
+
+    # Now cast with the proper ClassLabel type
+    new_features = dataset.features.copy() if isinstance(dataset, Dataset) else dataset[list(dataset.keys())[0]].features.copy()
+    new_features[category_label_column] = ClassLabel(names=class_names)
+    dataset = dataset.cast(new_features)
     dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
 
     # Rename category to labels for training
