@@ -58,7 +58,7 @@ class TestPurgeCommand:
         assert "--all" in result.output
         assert "--yes" in result.output
 
-    @patch("bioamla.cli.scan_cache_dir")
+    @patch("huggingface_hub.scan_cache_dir")
     def test_purge_empty_cache(self, mock_scan, runner):
         """Test purge with empty cache."""
         mock_cache_info = MagicMock()
@@ -71,7 +71,7 @@ class TestPurgeCommand:
         assert result.exit_code == 0
         assert "No cached data found to purge" in result.output
 
-    @patch("bioamla.cli.scan_cache_dir")
+    @patch("huggingface_hub.scan_cache_dir")
     def test_purge_models_only(self, mock_scan, runner):
         """Test purge with --models flag shows only models."""
         mock_model_repo = MagicMock()
@@ -96,7 +96,7 @@ class TestPurgeCommand:
         assert "test/dataset" not in result.output
         assert "100.0 MB" in result.output
 
-    @patch("bioamla.cli.scan_cache_dir")
+    @patch("huggingface_hub.scan_cache_dir")
     def test_purge_datasets_only(self, mock_scan, runner):
         """Test purge with --datasets flag shows only datasets."""
         mock_model_repo = MagicMock()
@@ -121,7 +121,7 @@ class TestPurgeCommand:
         assert "test/dataset" in result.output
         assert "50.0 MB" in result.output
 
-    @patch("bioamla.cli.scan_cache_dir")
+    @patch("huggingface_hub.scan_cache_dir")
     def test_purge_all(self, mock_scan, runner):
         """Test purge with --all flag shows both models and datasets."""
         mock_model_repo = MagicMock()
@@ -146,7 +146,7 @@ class TestPurgeCommand:
         assert "test/dataset" in result.output
         assert "150.0 MB" in result.output  # Total size
 
-    @patch("bioamla.cli.scan_cache_dir")
+    @patch("huggingface_hub.scan_cache_dir")
     def test_purge_abort_on_no_confirmation(self, mock_scan, runner):
         """Test that purge aborts when user says no to confirmation."""
         mock_repo = MagicMock()
@@ -164,8 +164,8 @@ class TestPurgeCommand:
         assert result.exit_code == 0
         assert "Aborted" in result.output
 
-    @patch("bioamla.cli.shutil.rmtree")
-    @patch("bioamla.cli.scan_cache_dir")
+    @patch("shutil.rmtree")
+    @patch("huggingface_hub.scan_cache_dir")
     def test_purge_with_yes_flag_skips_confirmation(self, mock_scan, mock_rmtree, runner):
         """Test that -y flag skips confirmation prompt."""
         mock_revision = MagicMock()
@@ -188,8 +188,8 @@ class TestPurgeCommand:
         assert "Successfully purged" in result.output
         assert "Are you sure" not in result.output
 
-    @patch("bioamla.cli.shutil.rmtree")
-    @patch("bioamla.cli.scan_cache_dir")
+    @patch("shutil.rmtree")
+    @patch("huggingface_hub.scan_cache_dir")
     def test_purge_confirms_deletion(self, mock_scan, mock_rmtree, runner):
         """Test that purge confirms and performs deletion when user says yes."""
         mock_revision = MagicMock()
