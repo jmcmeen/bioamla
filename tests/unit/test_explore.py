@@ -13,7 +13,7 @@ from bioamla.core.explore import (
     DatasetInfo,
     filter_audio_files,
     get_audio_file_info,
-    get_category_summary,
+    get_label_summary,
     get_split_summary,
     scan_directory,
     sort_audio_files,
@@ -199,14 +199,14 @@ class TestScanDirectory:
         _create_mock_wav(temp_dir / "test.wav")
         metadata_csv = temp_dir / "metadata.csv"
         metadata_csv.write_text(
-            "file_name,split,target,category,attr_id,attr_lic,attr_url,attr_note\n"
+            "file_name,split,target,label,attr_id,attr_lic,attr_url,attr_note\n"
             "test.wav,train,0,species_a,user1,CC-BY,http://example.com,note\n"
         )
 
         files, info = scan_directory(str(temp_dir), load_audio_metadata=False)
 
         assert len(files) == 1
-        assert files[0].category == "species_a"
+        assert files[0].label == "species_a"
         assert files[0].split == "train"
         assert files[0].target == 0
         assert info.has_metadata is True
@@ -217,14 +217,14 @@ class TestScanDirectory:
         _create_mock_wav(temp_dir / "b.wav")
         metadata_csv = temp_dir / "metadata.csv"
         metadata_csv.write_text(
-            "file_name,split,target,category,attr_id,attr_lic,attr_url,attr_note\n"
-            "a.wav,train,0,cat_a,user1,CC-BY,http://example.com,\n"
-            "b.wav,test,1,cat_b,user1,CC-BY,http://example.com,\n"
+            "file_name,split,target,label,attr_id,attr_lic,attr_url,attr_note\n"
+            "a.wav,train,0,label_a,user1,CC-BY,http://example.com,\n"
+            "b.wav,test,1,label_b,user1,CC-BY,http://example.com,\n"
         )
 
         files, info = scan_directory(str(temp_dir), load_audio_metadata=False)
 
-        assert info.categories == {"cat_a": 1, "cat_b": 1}
+        assert info.labels == {"label_a": 1, "label_b": 1}
         assert info.splits == {"train": 1, "test": 1}
         assert info.formats == {"WAV": 2}
 
@@ -242,44 +242,44 @@ class TestScanDirectory:
             scan_directory(str(audio_file))
 
 
-class TestGetCategorySummary:
-    """Tests for get_category_summary function."""
+class TestGetLabelSummary:
+    """Tests for get_label_summary function."""
 
-    def test_groups_by_category(self):
-        """Test grouping files by category."""
+    def test_groups_by_label(self):
+        """Test grouping files by label."""
         files = [
             AudioFileInfo(
                 path=Path("/a.wav"), filename="a.wav", size_bytes=1000,
-                category="cat_a", duration_seconds=1.0
+                label="label_a", duration_seconds=1.0
             ),
             AudioFileInfo(
                 path=Path("/b.wav"), filename="b.wav", size_bytes=2000,
-                category="cat_a", duration_seconds=2.0
+                label="label_a", duration_seconds=2.0
             ),
             AudioFileInfo(
                 path=Path("/c.wav"), filename="c.wav", size_bytes=3000,
-                category="cat_b", duration_seconds=3.0
+                label="label_b", duration_seconds=3.0
             ),
         ]
 
-        summary = get_category_summary(files)
+        summary = get_label_summary(files)
 
         assert len(summary) == 2
-        assert summary["cat_a"]["count"] == 2
-        assert summary["cat_a"]["total_size"] == 3000
-        assert summary["cat_a"]["total_duration"] == 3.0
-        assert summary["cat_b"]["count"] == 1
+        assert summary["label_a"]["count"] == 2
+        assert summary["label_a"]["total_size"] == 3000
+        assert summary["label_a"]["total_duration"] == 3.0
+        assert summary["label_b"]["count"] == 1
 
-    def test_uncategorized_files(self):
-        """Test handling of files without category."""
+    def test_unlabeled_files(self):
+        """Test handling of files without label."""
         files = [
             AudioFileInfo(path=Path("/a.wav"), filename="a.wav", size_bytes=1000),
         ]
 
-        summary = get_category_summary(files)
+        summary = get_label_summary(files)
 
-        assert "Uncategorized" in summary
-        assert summary["Uncategorized"]["count"] == 1
+        assert "Unlabeled" in summary
+        assert summary["Unlabeled"]["count"] == 1
 
 
 class TestGetSplitSummary:
@@ -315,21 +315,21 @@ class TestFilterAudioFiles:
         return [
             AudioFileInfo(
                 path=Path("/a.wav"), filename="alpha.wav", size_bytes=1000,
-                category="cat_a", split="train", format="wav", duration_seconds=1.0
+                label="label_a", split="train", format="wav", duration_seconds=1.0
             ),
             AudioFileInfo(
                 path=Path("/b.mp3"), filename="beta.mp3", size_bytes=2000,
-                category="cat_b", split="test", format="mp3", duration_seconds=5.0
+                label="label_b", split="test", format="mp3", duration_seconds=5.0
             ),
             AudioFileInfo(
                 path=Path("/c.wav"), filename="gamma.wav", size_bytes=3000,
-                category="cat_a", split="train", format="wav", duration_seconds=10.0
+                label="label_a", split="train", format="wav", duration_seconds=10.0
             ),
         ]
 
-    def test_filter_by_category(self, sample_files):
-        """Test filtering by category."""
-        result = filter_audio_files(sample_files, category="cat_a")
+    def test_filter_by_label(self, sample_files):
+        """Test filtering by label."""
+        result = filter_audio_files(sample_files, label="label_a")
         assert len(result) == 2
 
     def test_filter_by_split(self, sample_files):
@@ -362,7 +362,7 @@ class TestFilterAudioFiles:
     def test_filter_combined(self, sample_files):
         """Test combining multiple filters."""
         result = filter_audio_files(
-            sample_files, category="cat_a", format="wav", min_duration=5.0
+            sample_files, label="label_a", format="wav", min_duration=5.0
         )
         assert len(result) == 1
         assert result[0].filename == "gamma.wav"
@@ -377,15 +377,15 @@ class TestSortAudioFiles:
         return [
             AudioFileInfo(
                 path=Path("/c.wav"), filename="charlie.wav", size_bytes=3000,
-                category="cat_b", format="wav", duration_seconds=3.0
+                label="label_b", format="wav", duration_seconds=3.0
             ),
             AudioFileInfo(
                 path=Path("/a.wav"), filename="alpha.wav", size_bytes=1000,
-                category="cat_a", format="mp3", duration_seconds=1.0
+                label="label_a", format="mp3", duration_seconds=1.0
             ),
             AudioFileInfo(
                 path=Path("/b.wav"), filename="bravo.wav", size_bytes=2000,
-                category="cat_c", format="flac", duration_seconds=2.0
+                label="label_c", format="flac", duration_seconds=2.0
             ),
         ]
 
@@ -408,11 +408,11 @@ class TestSortAudioFiles:
         assert result[0].duration_seconds == 1.0
         assert result[2].duration_seconds == 3.0
 
-    def test_sort_by_category(self, sample_files):
-        """Test sorting by category."""
-        result = sort_audio_files(sample_files, sort_by="category")
-        assert result[0].category == "cat_a"
-        assert result[2].category == "cat_c"
+    def test_sort_by_label(self, sample_files):
+        """Test sorting by label."""
+        result = sort_audio_files(sample_files, sort_by="label")
+        assert result[0].label == "label_a"
+        assert result[2].label == "label_c"
 
     def test_sort_by_format(self, sample_files):
         """Test sorting by format."""

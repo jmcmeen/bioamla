@@ -7,7 +7,7 @@ for interactively exploring audio datasets. Features include:
 
 - File browser with sorting and filtering
 - Dataset statistics display
-- Category and split summaries
+- Label and split summaries
 - Audio playback (using system audio players)
 - Spectrogram generation and viewing
 - Search functionality
@@ -96,11 +96,11 @@ class FileDetailScreen(ModalScreen[None]):
                 yield Static(f"[bold]Duration:[/bold] {f.duration_human}")
                 yield Static(f"[bold]Channels:[/bold] {f.num_channels or 'Unknown'}")
                 yield Static(f"[bold]Frames:[/bold] {f.num_frames or 'Unknown'}")
-                if f.category or f.split or f.attribution:
+                if f.label or f.split or f.attribution:
                     yield Rule()
                     yield Static("[bold]Metadata:[/bold]")
-                    if f.category:
-                        yield Static(f"  Category: {f.category}")
+                    if f.label:
+                        yield Static(f"  Label: {f.label}")
                     if f.split:
                         yield Static(f"  Split: {f.split}")
                     if f.target is not None:
@@ -271,9 +271,9 @@ class DatasetExplorer(App):
     A full-featured terminal interface for browsing and analyzing audio files
     in a directory. Features include:
 
-    - File browser with sorting and filtering by category
+    - File browser with sorting and filtering by label
     - Dataset statistics panel (file count, total size, formats)
-    - Category breakdown with quick filtering
+    - Label breakdown with quick filtering
     - Search functionality
     - Audio playback using system players
     - Spectrogram generation and viewing
@@ -282,7 +282,7 @@ class DatasetExplorer(App):
         directory: Path to the dataset directory being explored.
         audio_files: Currently displayed list of audio files (after filtering).
         dataset_info: Aggregated dataset statistics.
-        selected_category: Currently selected category filter.
+        selected_label: Currently selected label filter.
         search_term: Current search filter string.
         sort_by: Current sort field.
         is_loading: Whether data is currently being loaded.
@@ -323,7 +323,7 @@ class DatasetExplorer(App):
         margin-bottom: 1;
     }
 
-    #categories-panel {
+    #labels-panel {
         height: 1fr;
         border: solid $primary;
         padding: 1;
@@ -352,7 +352,7 @@ class DatasetExplorer(App):
         width: 20;
     }
 
-    #category-filter {
+    #label-filter {
         width: 20;
     }
 
@@ -399,7 +399,7 @@ class DatasetExplorer(App):
         padding: 1;
     }
 
-    .category-item {
+    .label-item {
         padding: 0 1;
     }
 
@@ -435,7 +435,7 @@ class DatasetExplorer(App):
     directory: reactive[str] = reactive("")
     audio_files: reactive[List[AudioFileInfo]] = reactive([])
     dataset_info: reactive[Optional[DatasetInfo]] = reactive(None)
-    selected_category: reactive[Optional[str]] = reactive(None)
+    selected_label: reactive[Optional[str]] = reactive(None)
     search_term: reactive[str] = reactive("")
     sort_by: reactive[str] = reactive("name")
     is_loading: reactive[bool] = reactive(False)
@@ -459,9 +459,9 @@ class DatasetExplorer(App):
                 yield Static("[bold]Dataset Info[/bold]", id="stats-title")
                 with Container(id="stats-panel"):
                     yield Static("Loading...", id="stats-content")
-                yield Static("[bold]Categories[/bold]", id="categories-title")
-                with Container(id="categories-panel"):
-                    yield OptionList(id="category-list")
+                yield Static("[bold]Labels[/bold]", id="labels-title")
+                with Container(id="labels-panel"):
+                    yield OptionList(id="label-list")
             with Vertical(id="content"):
                 with Horizontal(id="search-bar"):
                     yield Input(placeholder="Search files...", id="search-input")
@@ -471,7 +471,7 @@ class DatasetExplorer(App):
                             ("Name", "name"),
                             ("Size", "size"),
                             ("Duration", "duration"),
-                            ("Category", "category"),
+                            ("Label", "label"),
                             ("Format", "format"),
                         ],
                         value="name",
@@ -491,7 +491,7 @@ class DatasetExplorer(App):
         table = self.query_one("#files-table", DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
-        table.add_columns("File", "Size", "Duration", "Format", "Category")
+        table.add_columns("File", "Size", "Duration", "Format", "Label")
 
         # Load data
         self.load_data()
@@ -530,7 +530,7 @@ class DatasetExplorer(App):
         self.dataset_info = info
         self.audio_files = files
         self._update_stats()
-        self._update_categories()
+        self._update_labels()
         self._update_table()
 
     def _update_stats(self) -> None:
@@ -558,27 +558,27 @@ class DatasetExplorer(App):
 
         stats_content.update("\n".join(lines))
 
-    def _update_categories(self) -> None:
-        """Update the categories sidebar list with counts."""
-        category_list = self.query_one("#category-list", OptionList)
-        category_list.clear_options()
+    def _update_labels(self) -> None:
+        """Update the labels sidebar list with counts."""
+        label_list = self.query_one("#label-list", OptionList)
+        label_list.clear_options()
 
         if not self.dataset_info:
             return
 
         # Add "All" option
         total = self.dataset_info.total_files
-        category_list.add_option(f"All ({total})")
+        label_list.add_option(f"All ({total})")
 
-        # Add categories
-        for cat, count in sorted(self.dataset_info.categories.items()):
-            category_list.add_option(f"{cat} ({count})")
+        # Add labels
+        for lbl, count in sorted(self.dataset_info.labels.items()):
+            label_list.add_option(f"{lbl} ({count})")
 
-        # Add uncategorized if there are files without category
-        categorized = sum(self.dataset_info.categories.values())
-        uncategorized = total - categorized
-        if uncategorized > 0:
-            category_list.add_option(f"Uncategorized ({uncategorized})")
+        # Add unlabeled if there are files without label
+        labeled = sum(self.dataset_info.labels.values())
+        unlabeled = total - labeled
+        if unlabeled > 0:
+            label_list.add_option(f"Unlabeled ({unlabeled})")
 
     def _update_table(self) -> None:
         """Update the file table with filtered and sorted audio files."""
@@ -588,11 +588,11 @@ class DatasetExplorer(App):
         # Apply filters and sorting
         files = self._all_audio_files
 
-        if self.selected_category:
-            if self.selected_category == "Uncategorized":
-                files = [f for f in files if not f.category]
+        if self.selected_label:
+            if self.selected_label == "Unlabeled":
+                files = [f for f in files if not f.label]
             else:
-                files = [f for f in files if f.category == self.selected_category]
+                files = [f for f in files if f.label == self.selected_label]
 
         if self.search_term:
             files = filter_audio_files(files, search_term=self.search_term)
@@ -606,7 +606,7 @@ class DatasetExplorer(App):
                 f.size_human,
                 f.duration_human,
                 f.format or "-",
-                f.category or "-",
+                f.label or "-",
                 key=str(f.path),
             )
 
@@ -645,22 +645,22 @@ class DatasetExplorer(App):
         self.sort_by = str(event.value)
         self._update_table()
 
-    @on(OptionList.OptionSelected, "#category-list")
-    def on_category_selected(self, event: OptionList.OptionSelected) -> None:
+    @on(OptionList.OptionSelected, "#label-list")
+    def on_label_selected(self, event: OptionList.OptionSelected) -> None:
         """
-        Handle category selection from the sidebar.
+        Handle label selection from the sidebar.
 
         Args:
-            event: The option selected event containing the category choice.
+            event: The option selected event containing the label choice.
         """
         option_text = str(event.option.prompt)
-        # Extract category name (remove count)
-        cat_name = option_text.rsplit(" (", 1)[0]
+        # Extract label name (remove count)
+        lbl_name = option_text.rsplit(" (", 1)[0]
 
-        if cat_name == "All":
-            self.selected_category = None
+        if lbl_name == "All":
+            self.selected_label = None
         else:
-            self.selected_category = cat_name
+            self.selected_label = lbl_name
 
         self._update_table()
 
@@ -700,11 +700,11 @@ class DatasetExplorer(App):
         self.query_one("#search-input", Input).focus()
 
     def action_clear_search(self) -> None:
-        """Clear the search term and category filter."""
+        """Clear the search term and label filter."""
         search_input = self.query_one("#search-input", Input)
         search_input.value = ""
         self.search_term = ""
-        self.selected_category = None
+        self.selected_label = None
         self._update_table()
 
     def _get_selected_file(self) -> Optional[AudioFileInfo]:
