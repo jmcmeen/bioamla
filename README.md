@@ -386,6 +386,26 @@ Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
 | `--recursive/--no-recursive` | `--recursive` | Search subdirectories (batch mode only) |
 | `--quiet` | | Suppress progress output |
 
+### Augmentation Commands
+
+| Command | Description |
+|---------|-------------|
+| `bioamla augment <INPUT_DIR>` | Augment audio files to expand training datasets |
+
+**augment options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | (required) | Output directory for augmented files |
+| `--add-noise` | | Add Gaussian noise with SNR range (e.g., "3-30" dB) |
+| `--time-stretch` | | Time stretch range (e.g., "0.8-1.2") |
+| `--pitch-shift` | | Pitch shift range in semitones (e.g., "-2,2") |
+| `--gain` | | Gain range in dB (e.g., "-12,12") |
+| `--multiply` | `1` | Number of augmented copies to create per file |
+| `--sample-rate` | `16000` | Target sample rate for output |
+| `--recursive/--no-recursive` | `--recursive` | Search subdirectories |
+| `--quiet` | | Suppress progress output |
+
 ### File Utilities
 
 | Command | Description |
