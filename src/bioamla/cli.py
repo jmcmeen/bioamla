@@ -385,9 +385,23 @@ def ast_finetune(
         Returns:
             dict: Processed batch with feature-extracted audio and labels
         """
-        wavs = [audio["array"] for audio in batch["input_values"]]
+        wavs = []
+        valid_labels = []
+        for audio, label in zip(batch["input_values"], batch["labels"]):
+            try:
+                wavs.append(audio["array"])
+                valid_labels.append(label)
+            except (RuntimeError, Exception) as e:
+                # Skip corrupted audio files
+                print(f"Warning: Skipping corrupted audio file: {e}")
+                continue
+
+        if not wavs:
+            # Return empty batch if all files were corrupted
+            return {model_input_name: None, "labels": []}
+
         inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
-        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
+        return {model_input_name: inputs.get(model_input_name), "labels": valid_labels}
 
     # Create label mappings from class_names (since we converted labels manually)
     label2id = {name: idx for idx, name in enumerate(class_names)}
@@ -436,9 +450,24 @@ def ast_finetune(
         Returns:
             dict: Processed batch with augmented, feature-extracted audio and labels
         """
-        wavs = [audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE) for audio in batch["input_values"]]
+        wavs = []
+        valid_labels = []
+        for audio, label in zip(batch["input_values"], batch["labels"]):
+            try:
+                wav = audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE)
+                wavs.append(wav)
+                valid_labels.append(label)
+            except (RuntimeError, Exception) as e:
+                # Skip corrupted audio files
+                print(f"Warning: Skipping corrupted audio file: {e}")
+                continue
+
+        if not wavs:
+            # Return empty batch if all files were corrupted
+            return {model_input_name: None, "labels": []}
+
         inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
-        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
+        return {model_input_name: inputs.get(model_input_name), "labels": valid_labels}
 
     dataset = dataset.cast_column("audio", Audio(sampling_rate=feature_extractor.sampling_rate))
     dataset = dataset.rename_column("audio", "input_values")
@@ -452,12 +481,19 @@ def ast_finetune(
     if isinstance(dataset, DatasetDict) and "train" in dataset:
         train_dataset = dataset["train"]
         train_dataset.set_transform(preprocess_audio, output_all_columns=False)
+        skipped_count = 0
         for sample in train_dataset:
-            if isinstance(sample, dict) and model_input_name in sample:
+            if isinstance(sample, dict) and model_input_name in sample and sample[model_input_name] is not None:
                 cur_mean = torch.mean(sample[model_input_name])
                 cur_std = torch.std(sample[model_input_name])
                 mean.append(cur_mean)
                 std.append(cur_std)
+            else:
+                skipped_count += 1
+        if skipped_count > 0:
+            print(f"Warning: Skipped {skipped_count} corrupted audio files during normalization calculation")
+        if not mean:
+            raise ValueError("No valid audio samples found in training dataset")
     else:
         raise ValueError("Expected DatasetDict with 'train' split")
 
