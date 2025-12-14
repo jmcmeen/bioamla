@@ -326,7 +326,7 @@ def download_inat_audio(
 
                         # Default metadata headers
                         row = {
-                            "filename": str(relative_path),
+                            "file_name": str(relative_path),
                             "split": "train",
                             "target": taxon_id_val,
                             "category": species_name,

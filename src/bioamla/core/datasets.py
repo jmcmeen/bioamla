@@ -252,7 +252,7 @@ def merge_datasets(
         files_converted_from_source = 0
 
         for row in source_rows:
-            source_filename = row.get("filename", "")
+            source_filename = row.get("file_name", "")
             if not source_filename:
                 continue
 
@@ -303,10 +303,10 @@ def merge_datasets(
                             converter(str(source_file_path), str(dest_file_path))
                             files_converted_from_source += 1
 
-                            # Add to metadata with updated filename and attr_note
+                            # Add to metadata with updated file_name and attr_note
                             if dest_filename not in existing_filenames:
                                 updated_row = row.copy()
-                                updated_row["filename"] = dest_filename
+                                updated_row["file_name"] = dest_filename
                                 updated_row["attr_note"] = "modified clip from original source"
                                 all_metadata_rows.append(updated_row)
                                 existing_filenames.add(dest_filename)
@@ -323,7 +323,7 @@ def merge_datasets(
                         files_copied_from_source += 1
                         if dest_filename not in existing_filenames:
                             updated_row = row.copy()
-                            updated_row["filename"] = dest_filename
+                            updated_row["file_name"] = dest_filename
                             all_metadata_rows.append(updated_row)
                             existing_filenames.add(dest_filename)
                 else:
@@ -331,10 +331,10 @@ def merge_datasets(
                     shutil.copy2(source_file_path, dest_file_path)
                     files_copied_from_source += 1
 
-                    # Add to metadata with updated filename
+                    # Add to metadata with updated file_name
                     if dest_filename not in existing_filenames:
                         updated_row = row.copy()
-                        updated_row["filename"] = dest_filename
+                        updated_row["file_name"] = dest_filename
                         all_metadata_rows.append(updated_row)
                         existing_filenames.add(dest_filename)
             else:
@@ -476,12 +476,12 @@ def convert_filetype(
 
     updated_rows = []
     for row in rows:
-        filename = row.get("filename", "")
-        if not filename:
+        file_name = row.get("file_name", "")
+        if not file_name:
             updated_rows.append(row)
             continue
 
-        source_path = dataset_dir / filename
+        source_path = dataset_dir / file_name
         source_ext = source_path.suffix.lower().lstrip(".")
 
         # Skip if already in target format
@@ -490,15 +490,15 @@ def convert_filetype(
             updated_rows.append(row)
             continue
 
-        # Build target filename
-        target_filename = str(Path(filename).with_suffix(f".{target_format}"))
-        target_path = dataset_dir / target_filename
+        # Build target file_name
+        target_file_name = str(Path(file_name).with_suffix(f".{target_format}"))
+        target_path = dataset_dir / target_file_name
 
         # Get converter function
         converter = _get_converter(source_ext, target_format)
         if converter is None:
             if verbose:
-                print(f"  Warning: No converter for {source_ext} -> {target_format}, removing: {filename}")
+                print(f"  Warning: No converter for {source_ext} -> {target_format}, removing: {file_name}")
             stats["files_failed"] += 1
             # Delete the source file since it can't be converted
             if source_path.exists():
@@ -509,7 +509,7 @@ def convert_filetype(
         # Check if source file exists
         if not source_path.exists():
             if verbose:
-                print(f"  Warning: Source file not found, removing from metadata: {filename}")
+                print(f"  Warning: Source file not found, removing from metadata: {file_name}")
             stats["files_failed"] += 1
             # Don't add to updated_rows - remove from metadata
             continue
@@ -522,9 +522,9 @@ def convert_filetype(
             converter(str(source_path), str(target_path))
             stats["files_converted"] += 1
 
-            # Update row with new filename and attr_note
+            # Update row with new file_name and attr_note
             updated_row = row.copy()
-            updated_row["filename"] = target_filename
+            updated_row["file_name"] = target_file_name
             updated_row["attr_note"] = "modified clip from original source"
             updated_rows.append(updated_row)
 
@@ -533,11 +533,11 @@ def convert_filetype(
                 source_path.unlink()
 
             if verbose:
-                print(f"  Converted: {filename} -> {target_filename}")
+                print(f"  Converted: {file_name} -> {target_file_name}")
 
         except Exception as e:
             if verbose:
-                print(f"  Error converting {filename}, removing: {e}")
+                print(f"  Error converting {file_name}, removing: {e}")
             stats["files_failed"] += 1
             # Delete the source file since conversion failed
             if source_path.exists():
