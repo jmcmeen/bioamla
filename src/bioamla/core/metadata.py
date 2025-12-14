@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Required metadata fields that must always be present in dataset metadata
 REQUIRED_FIELDS = [
-    "filename",     # Relative path to the audio file
+    "file_name",    # Relative path to the audio file
     "split",        # Dataset split (train, test, val)
     "target",       # Numeric target/label ID
     "category",     # Category/class name (e.g., species name)
@@ -99,7 +99,7 @@ def write_metadata_csv(
         Number of rows written
 
     Note:
-        When merge_existing is True, rows are deduplicated by filename.
+        When merge_existing is True, rows are deduplicated by file_name.
         Required fields are ordered first, followed by optional fields.
     """
     if not rows:
@@ -140,23 +140,23 @@ def write_metadata_csv(
             # Update fieldnames to required only
             fieldnames = set(REQUIRED_FIELDS)
 
-        # Deduplicate by filename
+        # Deduplicate by file_name
         seen_files: Set[str] = set()
         deduplicated_rows: List[dict] = []
 
         for row in existing_rows:
-            filename = row.get("filename", "")
-            if filename and filename not in seen_files:
-                seen_files.add(filename)
+            file_name = row.get("file_name", "")
+            if file_name and file_name not in seen_files:
+                seen_files.add(file_name)
                 deduplicated_rows.append(row)
 
         skipped = 0
         for row in rows:
-            filename = row.get("filename", "")
-            if filename and filename not in seen_files:
-                seen_files.add(filename)
+            file_name = row.get("file_name", "")
+            if file_name and file_name not in seen_files:
+                seen_files.add(file_name)
                 deduplicated_rows.append(row)
-            elif filename:
+            elif file_name:
                 skipped += 1
 
         if skipped > 0:
@@ -217,9 +217,9 @@ def get_existing_observation_ids(metadata_path: Path) -> Set[Tuple[int, int]]:
     try:
         rows, _ = read_metadata_csv(metadata_path)
         for row in rows:
-            filename = row.get("filename", "")
-            # Extract obs_id and sound_id from filename pattern: inat_{obs_id}_sound_{sound_id}.ext
-            basename = Path(filename).name
+            file_name = row.get("file_name", "")
+            # Extract obs_id and sound_id from file_name pattern: inat_{obs_id}_sound_{sound_id}.ext
+            basename = Path(file_name).name
             if basename.startswith("inat_") and "_sound_" in basename:
                 try:
                     parts = basename.replace("inat_", "").split("_sound_")
@@ -251,7 +251,7 @@ def validate_required_fields(rows: List[dict]) -> Tuple[bool, List[str]]:
     for i, row in enumerate(rows):
         missing = [field for field in REQUIRED_FIELDS if field not in row or not row[field]]
         if missing:
-            # filename can be empty for some operations, but should warn
+            # file_name can be empty for some operations, but should warn
             critical_missing = [f for f in missing if f != "attr_note"]
             if critical_missing:
                 errors.append(f"Row {i+1}: missing required fields {critical_missing}")
