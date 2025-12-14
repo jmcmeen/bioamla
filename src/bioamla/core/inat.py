@@ -479,7 +479,10 @@ def _write_metadata_csv(filepath: Path, rows: list, verbose: bool = True) -> Non
         # Merge rows
         all_rows = existing_rows + new_unique_rows
     else:
-        final_fieldnames = list(rows[0].keys())
+        # Use required fields in defined order, then any optional fields
+        final_fieldnames = list(_REQUIRED_METADATA_FIELDS)
+        optional_in_rows = [f for f in _OPTIONAL_METADATA_FIELDS if f in rows[0]]
+        final_fieldnames.extend(optional_in_rows)
         all_rows = rows
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:
