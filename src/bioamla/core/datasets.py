@@ -498,17 +498,20 @@ def convert_filetype(
         converter = _get_converter(source_ext, target_format)
         if converter is None:
             if verbose:
-                print(f"  Warning: No converter for {source_ext} -> {target_format}, skipping: {filename}")
+                print(f"  Warning: No converter for {source_ext} -> {target_format}, removing: {filename}")
             stats["files_failed"] += 1
-            updated_rows.append(row)
+            # Delete the source file since it can't be converted
+            if source_path.exists():
+                source_path.unlink()
+            # Don't add to updated_rows - remove from metadata
             continue
 
         # Check if source file exists
         if not source_path.exists():
             if verbose:
-                print(f"  Warning: Source file not found: {source_path}")
+                print(f"  Warning: Source file not found, removing from metadata: {filename}")
             stats["files_failed"] += 1
-            updated_rows.append(row)
+            # Don't add to updated_rows - remove from metadata
             continue
 
         # Create target directory if needed
@@ -534,9 +537,12 @@ def convert_filetype(
 
         except Exception as e:
             if verbose:
-                print(f"  Error converting {filename}: {e}")
+                print(f"  Error converting {filename}, removing: {e}")
             stats["files_failed"] += 1
-            updated_rows.append(row)
+            # Delete the source file since conversion failed
+            if source_path.exists():
+                source_path.unlink()
+            # Don't add to updated_rows - remove from metadata
 
     # Write updated metadata
     write_metadata_csv(metadata_path, updated_rows, fieldnames, merge_existing=False)
