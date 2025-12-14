@@ -553,7 +553,7 @@ def wave(filepath: str):
 
 @cli.command()
 @click.argument('output_dir')
-@click.option('--taxon-id', type=int, default=None, help='Filter by taxon ID (e.g., 3 for birds/Aves)')
+@click.option('--taxon-ids', default=None, help='Comma-separated list of taxon IDs (e.g., "3" for birds, "3,20978" for multiple)')
 @click.option('--taxon-name', default=None, help='Filter by taxon name (e.g., "Aves" for birds)')
 @click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
 @click.option('--user-id', default=None, help='Filter by observer username')
@@ -565,11 +565,12 @@ def wave(filepath: str):
 @click.option('--max-observations', type=int, default=100, help='Maximum number of observations to download')
 @click.option('--organize-by-taxon/--no-organize-by-taxon', default=True, help='Organize files into subdirectories by species')
 @click.option('--include-inat-metadata', is_flag=True, help='Include additional iNaturalist metadata fields in CSV')
+@click.option('--file-extensions', default=None, help='Comma-separated list of file extensions to filter (e.g., "wav,mp3")')
 @click.option('--delay', type=float, default=1.0, help='Delay between downloads in seconds (rate limiting)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def inat_audio(
     output_dir: str,
-    taxon_id: int,
+    taxon_ids: str,
     taxon_name: str,
     place_id: int,
     user_id: str,
@@ -581,6 +582,7 @@ def inat_audio(
     max_observations: int,
     organize_by_taxon: bool,
     include_inat_metadata: bool,
+    file_extensions: str,
     delay: float,
     quiet: bool
 ):
@@ -604,9 +606,19 @@ def inat_audio(
     """
     from bioamla.core.inat import download_inat_audio
 
+    # Parse comma-separated taxon IDs into a list of integers
+    taxon_ids_list = None
+    if taxon_ids:
+        taxon_ids_list = [int(tid.strip()) for tid in taxon_ids.split(",")]
+
+    # Parse comma-separated file extensions into a list
+    extensions_list = None
+    if file_extensions:
+        extensions_list = [ext.strip() for ext in file_extensions.split(",")]
+
     stats = download_inat_audio(
         output_dir=output_dir,
-        taxon_id=taxon_id,
+        taxon_ids=taxon_ids_list,
         taxon_name=taxon_name,
         place_id=place_id,
         user_id=user_id,
@@ -618,6 +630,7 @@ def inat_audio(
         max_observations=max_observations,
         organize_by_taxon=organize_by_taxon,
         include_inat_metadata=include_inat_metadata,
+        file_extensions=extensions_list,
         delay_between_downloads=delay,
         verbose=not quiet
     )
