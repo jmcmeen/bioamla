@@ -3,10 +3,13 @@ Unit tests for the ast train CLI command options.
 """
 
 
+import os
+import tempfile
+
 import pytest
 from click.testing import CliRunner
 
-from bioamla.cli import cli
+from bioamla.cli import _count_files, _get_folder_size, _is_large_folder, cli
 
 
 @pytest.fixture
@@ -210,5 +213,128 @@ class TestHfPushDataset:
 
         assert result.exit_code != 0
         assert "does not exist" in result.output
+
+
+class TestGetFolderSize:
+    """Tests for _get_folder_size helper function."""
+
+    def test_empty_folder(self):
+        """Test that empty folder returns 0 bytes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            assert _get_folder_size(tmpdir) == 0
+
+    def test_folder_with_files(self):
+        """Test that folder size is calculated correctly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a file with known size
+            file_path = os.path.join(tmpdir, "test.txt")
+            content = b"Hello, World!"  # 13 bytes
+            with open(file_path, "wb") as f:
+                f.write(content)
+
+            assert _get_folder_size(tmpdir) == 13
+
+    def test_folder_with_nested_files(self):
+        """Test that nested folder sizes are included."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create nested directory
+            nested_dir = os.path.join(tmpdir, "subdir")
+            os.makedirs(nested_dir)
+
+            # Create files in both directories
+            file1 = os.path.join(tmpdir, "file1.txt")
+            file2 = os.path.join(nested_dir, "file2.txt")
+
+            with open(file1, "wb") as f:
+                f.write(b"12345")  # 5 bytes
+            with open(file2, "wb") as f:
+                f.write(b"67890")  # 5 bytes
+
+            assert _get_folder_size(tmpdir) == 10
+
+
+class TestCountFiles:
+    """Tests for _count_files helper function."""
+
+    def test_empty_folder(self):
+        """Test that empty folder returns 0 files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            assert _count_files(tmpdir) == 0
+
+    def test_folder_with_files(self):
+        """Test that file count is correct."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create multiple files
+            for i in range(5):
+                file_path = os.path.join(tmpdir, f"file{i}.txt")
+                with open(file_path, "w") as f:
+                    f.write("test")
+
+            assert _count_files(tmpdir) == 5
+
+    def test_folder_with_nested_files(self):
+        """Test that nested files are counted."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create nested directories
+            nested_dir = os.path.join(tmpdir, "subdir")
+            os.makedirs(nested_dir)
+
+            # Create files in both directories
+            with open(os.path.join(tmpdir, "file1.txt"), "w") as f:
+                f.write("test")
+            with open(os.path.join(nested_dir, "file2.txt"), "w") as f:
+                f.write("test")
+            with open(os.path.join(nested_dir, "file3.txt"), "w") as f:
+                f.write("test")
+
+            assert _count_files(tmpdir) == 3
+
+
+class TestIsLargeFolder:
+    """Tests for _is_large_folder helper function."""
+
+    def test_small_folder_returns_false(self):
+        """Test that small folder is not detected as large."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a small file
+            with open(os.path.join(tmpdir, "small.txt"), "w") as f:
+                f.write("small content")
+
+            assert _is_large_folder(tmpdir) is False
+
+    def test_many_files_returns_true(self):
+        """Test that folder with many files is detected as large."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create many small files (use threshold of 10 for testing)
+            for i in range(15):
+                with open(os.path.join(tmpdir, f"file{i}.txt"), "w") as f:
+                    f.write("test")
+
+            # With low threshold, should return True
+            assert _is_large_folder(tmpdir, file_count_threshold=10) is True
+
+    def test_large_size_returns_true(self):
+        """Test that folder with large total size is detected as large."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a file that exceeds a small threshold
+            with open(os.path.join(tmpdir, "large.bin"), "wb") as f:
+                f.write(b"x" * 1024 * 1024)  # 1 MB
+
+            # With 0.0005 GB threshold (~500KB), should return True
+            assert _is_large_folder(tmpdir, size_threshold_gb=0.0005) is True
+
+    def test_custom_thresholds(self):
+        """Test that custom thresholds work correctly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a few files
+            for i in range(5):
+                with open(os.path.join(tmpdir, f"file{i}.txt"), "w") as f:
+                    f.write("test content")
+
+            # Should be small with default thresholds
+            assert _is_large_folder(tmpdir) is False
+
+            # Should be large with very low file threshold
+            assert _is_large_folder(tmpdir, file_count_threshold=3) is True
 
 
