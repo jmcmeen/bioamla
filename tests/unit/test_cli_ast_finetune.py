@@ -5,6 +5,7 @@ Unit tests for the ast train CLI command options.
 
 import os
 import tempfile
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -336,5 +337,195 @@ class TestIsLargeFolder:
 
             # Should be large with very low file threshold
             assert _is_large_folder(tmpdir, file_count_threshold=3) is True
+
+
+class TestHfPushModelUploadSwitching:
+    """Tests that hf push-model correctly switches between upload_folder and upload_large_folder."""
+
+    @patch('bioamla.cli._is_large_folder')
+    @patch('huggingface_hub.HfApi')
+    def test_small_folder_uses_upload_folder(self, mock_hf_api_class, mock_is_large, runner):
+        """Test that small folders use upload_folder."""
+        mock_is_large.return_value = False
+        mock_api = MagicMock()
+        mock_hf_api_class.return_value = mock_api
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a small file
+            with open(os.path.join(tmpdir, "model.bin"), "w") as f:
+                f.write("test")
+
+            result = runner.invoke(cli, ["hf", "push-model", tmpdir, "user/test-repo"])
+
+            # Should call upload_folder, not upload_large_folder
+            mock_api.upload_folder.assert_called_once()
+            mock_api.upload_large_folder.assert_not_called()
+
+            # Verify correct arguments
+            call_kwargs = mock_api.upload_folder.call_args[1]
+            assert call_kwargs['folder_path'] == tmpdir
+            assert call_kwargs['repo_id'] == "user/test-repo"
+            assert call_kwargs['repo_type'] == "model"
+            assert call_kwargs['commit_message'] == "Upload model"
+
+    @patch('bioamla.cli._is_large_folder')
+    @patch('huggingface_hub.HfApi')
+    def test_large_folder_uses_upload_large_folder(self, mock_hf_api_class, mock_is_large, runner):
+        """Test that large folders use upload_large_folder."""
+        mock_is_large.return_value = True
+        mock_api = MagicMock()
+        mock_hf_api_class.return_value = mock_api
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a file (size doesn't matter since we mock _is_large_folder)
+            with open(os.path.join(tmpdir, "model.bin"), "w") as f:
+                f.write("test")
+
+            result = runner.invoke(cli, ["hf", "push-model", tmpdir, "user/test-repo"])
+
+            # Should call upload_large_folder, not upload_folder
+            mock_api.upload_large_folder.assert_called_once()
+            mock_api.upload_folder.assert_not_called()
+
+            # Verify correct arguments
+            call_kwargs = mock_api.upload_large_folder.call_args[1]
+            assert call_kwargs['folder_path'] == tmpdir
+            assert call_kwargs['repo_id'] == "user/test-repo"
+            assert call_kwargs['repo_type'] == "model"
+            assert call_kwargs['commit_message'] == "Upload model"
+
+    @patch('bioamla.cli._is_large_folder')
+    @patch('huggingface_hub.HfApi')
+    def test_custom_commit_message_passed_to_upload_folder(self, mock_hf_api_class, mock_is_large, runner):
+        """Test that custom commit message is passed to upload_folder."""
+        mock_is_large.return_value = False
+        mock_api = MagicMock()
+        mock_hf_api_class.return_value = mock_api
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "model.bin"), "w") as f:
+                f.write("test")
+
+            result = runner.invoke(cli, [
+                "hf", "push-model", tmpdir, "user/test-repo",
+                "--commit-message", "My custom message"
+            ])
+
+            call_kwargs = mock_api.upload_folder.call_args[1]
+            assert call_kwargs['commit_message'] == "My custom message"
+
+    @patch('bioamla.cli._is_large_folder')
+    @patch('huggingface_hub.HfApi')
+    def test_custom_commit_message_passed_to_upload_large_folder(self, mock_hf_api_class, mock_is_large, runner):
+        """Test that custom commit message is passed to upload_large_folder."""
+        mock_is_large.return_value = True
+        mock_api = MagicMock()
+        mock_hf_api_class.return_value = mock_api
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "model.bin"), "w") as f:
+                f.write("test")
+
+            result = runner.invoke(cli, [
+                "hf", "push-model", tmpdir, "user/test-repo",
+                "--commit-message", "My custom message"
+            ])
+
+            call_kwargs = mock_api.upload_large_folder.call_args[1]
+            assert call_kwargs['commit_message'] == "My custom message"
+
+
+class TestHfPushDatasetUploadSwitching:
+    """Tests that hf push-dataset correctly switches between upload_folder and upload_large_folder."""
+
+    @patch('bioamla.cli._is_large_folder')
+    @patch('huggingface_hub.HfApi')
+    def test_small_folder_uses_upload_folder(self, mock_hf_api_class, mock_is_large, runner):
+        """Test that small folders use upload_folder."""
+        mock_is_large.return_value = False
+        mock_api = MagicMock()
+        mock_hf_api_class.return_value = mock_api
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "data.csv"), "w") as f:
+                f.write("col1,col2\n1,2")
+
+            result = runner.invoke(cli, ["hf", "push-dataset", tmpdir, "user/test-dataset"])
+
+            # Should call upload_folder, not upload_large_folder
+            mock_api.upload_folder.assert_called_once()
+            mock_api.upload_large_folder.assert_not_called()
+
+            # Verify correct arguments
+            call_kwargs = mock_api.upload_folder.call_args[1]
+            assert call_kwargs['folder_path'] == tmpdir
+            assert call_kwargs['repo_id'] == "user/test-dataset"
+            assert call_kwargs['repo_type'] == "dataset"
+            assert call_kwargs['commit_message'] == "Upload dataset"
+
+    @patch('bioamla.cli._is_large_folder')
+    @patch('huggingface_hub.HfApi')
+    def test_large_folder_uses_upload_large_folder(self, mock_hf_api_class, mock_is_large, runner):
+        """Test that large folders use upload_large_folder."""
+        mock_is_large.return_value = True
+        mock_api = MagicMock()
+        mock_hf_api_class.return_value = mock_api
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "data.csv"), "w") as f:
+                f.write("col1,col2\n1,2")
+
+            result = runner.invoke(cli, ["hf", "push-dataset", tmpdir, "user/test-dataset"])
+
+            # Should call upload_large_folder, not upload_folder
+            mock_api.upload_large_folder.assert_called_once()
+            mock_api.upload_folder.assert_not_called()
+
+            # Verify correct arguments
+            call_kwargs = mock_api.upload_large_folder.call_args[1]
+            assert call_kwargs['folder_path'] == tmpdir
+            assert call_kwargs['repo_id'] == "user/test-dataset"
+            assert call_kwargs['repo_type'] == "dataset"
+            assert call_kwargs['commit_message'] == "Upload dataset"
+
+    @patch('bioamla.cli._is_large_folder')
+    @patch('huggingface_hub.HfApi')
+    def test_custom_commit_message_passed_to_upload_folder(self, mock_hf_api_class, mock_is_large, runner):
+        """Test that custom commit message is passed to upload_folder."""
+        mock_is_large.return_value = False
+        mock_api = MagicMock()
+        mock_hf_api_class.return_value = mock_api
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "data.csv"), "w") as f:
+                f.write("col1,col2\n1,2")
+
+            result = runner.invoke(cli, [
+                "hf", "push-dataset", tmpdir, "user/test-dataset",
+                "--commit-message", "Custom dataset upload"
+            ])
+
+            call_kwargs = mock_api.upload_folder.call_args[1]
+            assert call_kwargs['commit_message'] == "Custom dataset upload"
+
+    @patch('bioamla.cli._is_large_folder')
+    @patch('huggingface_hub.HfApi')
+    def test_custom_commit_message_passed_to_upload_large_folder(self, mock_hf_api_class, mock_is_large, runner):
+        """Test that custom commit message is passed to upload_large_folder."""
+        mock_is_large.return_value = True
+        mock_api = MagicMock()
+        mock_hf_api_class.return_value = mock_api
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "data.csv"), "w") as f:
+                f.write("col1,col2\n1,2")
+
+            result = runner.invoke(cli, [
+                "hf", "push-dataset", tmpdir, "user/test-dataset",
+                "--commit-message", "Custom dataset upload"
+            ])
+
+            call_kwargs = mock_api.upload_large_folder.call_args[1]
+            assert call_kwargs['commit_message'] == "Custom dataset upload"
 
 
