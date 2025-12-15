@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bioamla.core.signal import (
+from bioamla.signal import (
     AudioEvent,
     AudioSegment,
     bandpass_filter,
