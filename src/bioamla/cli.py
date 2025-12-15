@@ -743,38 +743,30 @@ def ast_push(
     private: bool,
     commit_message: str
 ):
-    """Push a fine-tuned AST model to the HuggingFace Hub."""
+    """Push a fine-tuned AST model to the HuggingFace Hub.
+
+    Uploads the entire contents of MODEL_PATH folder to the Hub.
+    """
     import os
 
     from huggingface_hub import HfApi
-    from transformers import ASTForAudioClassification, AutoFeatureExtractor
 
     if not os.path.isdir(model_path):
         click.echo(f"Error: Model path '{model_path}' does not exist or is not a directory.")
         raise SystemExit(1)
 
-    click.echo(f"Loading model from {model_path}...")
-
-    try:
-        model = ASTForAudioClassification.from_pretrained(model_path)
-        feature_extractor = AutoFeatureExtractor.from_pretrained(model_path)
-    except Exception as e:
-        click.echo(f"Error loading model: {e}")
-        click.echo("Make sure the path contains a valid transformers model.")
-        raise SystemExit(1)
-
-    click.echo(f"Pushing model to HuggingFace Hub: {repo_id}...")
+    click.echo(f"Pushing model folder {model_path} to HuggingFace Hub: {repo_id}...")
 
     try:
         api = HfApi()
-        api.create_repo(repo_id=repo_id, private=private, exist_ok=True)
+        api.create_repo(repo_id=repo_id, repo_type="model", private=private, exist_ok=True)
 
-        kwargs = {"repo_id": repo_id}
-        if commit_message:
-            kwargs["commit_message"] = commit_message
-
-        model.push_to_hub(**kwargs)
-        feature_extractor.push_to_hub(**kwargs)
+        api.upload_folder(
+            folder_path=model_path,
+            repo_id=repo_id,
+            repo_type="model",
+            commit_message=commit_message or "Upload model",
+        )
 
         click.echo(f"Successfully pushed model to: https://huggingface.co/{repo_id}")
 
