@@ -13,6 +13,6 @@ Key Features:
 - Web API for audio classification
 - Command-line tools for various audio tasks
 
-Version: 0.0.48
+Version: 0.0.49
 """
-__version__ = "0.0.48"
+__version__ = "0.0.49"
