@@ -21,7 +21,7 @@ Bioamla provides a toolkit for researchers, biologists, and machine learning eng
 - Python 3.8 or higher
 - CUDA-capable GPU (recommended for training and large-scale inference)
 
-### Installation
+### Installation w/ pip
 
 Install bioamla using pip:
 
@@ -397,7 +397,7 @@ for package, version in versions.items():
     print(f"{package}: {version}")
 ```
 
-### 11. Dataset Explorer
+### 11. Dataset Explorer (Experimental)
 
 Launch an interactive terminal dashboard to explore audio datasets:
 
@@ -446,9 +446,7 @@ MLflow tracks:
 - Model hyperparameters
 - Training artifacts
 
-## CLI Commands Reference
-
-### System Commands
+## CLI Reference
 
 | Command | Description |
 |---------|-------------|
@@ -456,32 +454,11 @@ MLflow tracks:
 | `bioamla devices` | Show CUDA/GPU information |
 | `bioamla explore <DIR>` | Launch interactive TUI dashboard for exploring datasets |
 | `bioamla purge` | Purge cached HuggingFace Hub data (models/datasets) |
-
-**Explore datasets interactively:**
-
-```bash
-bioamla explore ./my_dataset
-```
-
-The explore command launches a terminal-based dashboard for browsing audio files, viewing metadata, playing audio, and generating spectrograms. Keyboard shortcuts:
-
-- `↑/↓`, `j/k` - Navigate file list
-- `Enter` - View file details
-- `p` - Play selected audio
-- `s` - Generate spectrogram
-- `r` - Refresh file list
-- `/` - Search files
-- `?` - Show help
-- `q` - Quit
-
-**Purge cached data:**
-
-```bash
-bioamla purge --models          # Purge only cached models
-bioamla purge --datasets        # Purge only cached datasets
-bioamla purge --all             # Purge everything
-bioamla purge --all -y          # Purge everything without confirmation
-```
+| `bioamla visualize <PATH>` | Generate spectrogram visualizations |
+| `bioamla augment <INPUT_DIR>` | Augment audio files to expand training datasets |
+| `bioamla download <URL> [DIR]` | Download files from URL |
+| `bioamla unzip <FILE> [DIR]` | Extract ZIP archives |
+| `bioamla zip <SOURCE> <OUTPUT>` | Create ZIP archive from file or directory |
 
 ### Audio Commands (`bioamla audio`)
 
@@ -489,7 +466,7 @@ bioamla purge --all -y          # Purge everything without confirmation
 |---------|-------------|
 | `bioamla audio list [DIR]` | List audio files in directory |
 | `bioamla audio info <FILE>` | Display WAV file metadata |
-| `bioamla audio convert <PATH> <FORMAT>` | Convert audio files (single file or batch with `--batch`) |
+| `bioamla audio convert <PATH> <FORMAT>` | Convert audio files between formats |
 | `bioamla audio filter <PATH>` | Apply frequency filters (bandpass, lowpass, highpass) |
 | `bioamla audio denoise <PATH>` | Apply spectral noise reduction |
 | `bioamla audio segment <PATH>` | Split audio on silence into separate files |
@@ -498,285 +475,14 @@ bioamla purge --all -y          # Purge everything without confirmation
 | `bioamla audio resample <PATH>` | Resample audio to a different sample rate |
 | `bioamla audio trim <PATH>` | Trim audio by time or remove silence |
 
-**audio convert options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | | Output file or directory |
-| `--batch` | | Process all files in directory |
-| `--dataset` | | Convert dataset with metadata.csv (updates metadata) |
-| `--metadata-filename` | `metadata.csv` | Name of metadata CSV file (for --dataset mode) |
-| `--keep-original` | | Keep original files after conversion |
-| `--recursive/--no-recursive` | `--recursive` | Search subdirectories (batch mode) |
-| `--quiet` | | Suppress progress output |
-
-Supported formats: wav, mp3, m4a, aac, flac, ogg, wma
-
-**Convert examples:**
-
-```bash
-# Single file
-bioamla audio convert recording.mp3 wav --output recording.wav
-
-# Batch convert directory
-bioamla audio convert ./mp3_files wav --batch --output ./wav_files
-
-# Dataset mode (updates metadata.csv)
-bioamla audio convert ./my_dataset mp3 --dataset
-```
-
-**audio filter options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | | Output file or directory |
-| `--batch` | | Process all files in directory |
-| `--bandpass` | | Bandpass filter range (e.g., "1000-8000") |
-| `--lowpass` | | Lowpass cutoff frequency in Hz |
-| `--highpass` | | Highpass cutoff frequency in Hz |
-| `--order` | `5` | Filter order |
-| `--quiet` | | Suppress progress output |
-
-**audio denoise options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | | Output file or directory |
-| `--batch` | | Process all files in directory |
-| `--method` | `spectral` | Denoising method |
-| `--strength` | `1.0` | Noise reduction strength (0-2) |
-| `--quiet` | | Suppress progress output |
-
-**audio segment options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | (required) | Output directory for segments |
-| `--silence-threshold` | `-40` | Silence threshold in dB |
-| `--min-silence` | `0.3` | Minimum silence duration in seconds |
-| `--min-segment` | `0.5` | Minimum segment duration in seconds |
-| `--quiet` | | Suppress progress output |
-
-**audio detect-events options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | (required) | Output CSV file for events |
-| `--quiet` | | Suppress progress output |
-
-**audio normalize options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | | Output file or directory |
-| `--batch` | | Process all files in directory |
-| `--target-db` | `-20` | Target loudness in dB |
-| `--peak` | | Use peak normalization instead of RMS |
-| `--quiet` | | Suppress progress output |
-
-**audio resample options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | | Output file or directory |
-| `--batch` | | Process all files in directory |
-| `--rate` | (required) | Target sample rate in Hz |
-| `--quiet` | | Suppress progress output |
-
-**audio trim options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | | Output file or directory |
-| `--batch` | | Process all files in directory |
-| `--start` | | Start time in seconds |
-| `--end` | | End time in seconds |
-| `--silence` | | Trim silence from start/end instead |
-| `--threshold` | `-40` | Silence threshold in dB (for --silence) |
-| `--quiet` | | Suppress progress output |
-
-### Visualization Commands
-
-| Command | Description |
-|---------|-------------|
-| `bioamla visualize <PATH>` | Generate spectrogram visualizations (use `--batch` for directories) |
-
-**visualize options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | | Output file path (single file) or directory (batch mode) |
-| `--batch` | | Process all audio files in a directory |
-| `--type` | `mel` | Visualization type: `mel`, `mfcc`, or `waveform` |
-| `--sample-rate` | `16000` | Target sample rate for processing |
-| `--n-mels` | `128` | Number of mel bands (mel spectrogram only) |
-| `--n-mfcc` | `40` | Number of MFCCs (mfcc only) |
-| `--cmap` | `magma` | Colormap for spectrogram visualizations |
-| `--recursive/--no-recursive` | `--recursive` | Search subdirectories (batch mode only) |
-| `--quiet` | | Suppress progress output |
-
-### Augmentation Commands
-
-| Command | Description |
-|---------|-------------|
-| `bioamla augment <INPUT_DIR>` | Augment audio files to expand training datasets |
-
-**augment options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | (required) | Output directory for augmented files |
-| `--add-noise` | | Add Gaussian noise with SNR range (e.g., "3-30" dB) |
-| `--time-stretch` | | Time stretch range (e.g., "0.8-1.2") |
-| `--pitch-shift` | | Pitch shift range in semitones (e.g., "-2,2") |
-| `--gain` | | Gain range in dB (e.g., "-12,12") |
-| `--multiply` | `1` | Number of augmented copies to create per file |
-| `--sample-rate` | `16000` | Target sample rate for output |
-| `--recursive/--no-recursive` | `--recursive` | Search subdirectories |
-| `--quiet` | | Suppress progress output |
-
-### File Utilities
-
-| Command | Description |
-|---------|-------------|
-| `bioamla download <URL> [DIR]` | Download files from URL |
-| `bioamla unzip <FILE> [DIR]` | Extract ZIP archives |
-| `bioamla zip <SOURCE> <OUTPUT>` | Create ZIP archive from file or directory |
-
 ### AST Model Commands (`bioamla ast`)
 
 | Command | Description |
 |---------|-------------|
-| `bioamla ast predict <PATH>` | Single file or batch inference (use `--batch` for directories) |
+| `bioamla ast predict <PATH>` | Single file or batch inference |
 | `bioamla ast train` | Fine-tune AST model on custom datasets |
 | `bioamla ast evaluate <PATH>` | Evaluate model on test data with ground truth labels |
 | `bioamla ast push <MODEL_PATH> <REPO_ID>` | Push fine-tuned model to HuggingFace Hub |
-
-**ast predict options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--model-path` | `bioamla/scp-frogs` | AST model to use for inference |
-| `--resample-freq` | `16000` | Resampling frequency |
-| `--batch` | | Run batch inference on a directory of audio files |
-| `--output-csv` | `output.csv` | Output CSV file name (batch mode only) |
-| `--clip-seconds` | `1` | Duration of audio clips in seconds (batch mode only) |
-| `--overlap-seconds` | `0` | Overlap between clips in seconds (batch mode only) |
-| `--restart/--no-restart` | `--no-restart` | Resume from existing results (batch mode only) |
-| `--batch-size` | `8` | Number of segments to process in parallel (batch mode only) |
-| `--fp16/--no-fp16` | `--no-fp16` | Use half-precision inference (batch mode only) |
-| `--compile/--no-compile` | `--no-compile` | Use torch.compile() for optimized inference (batch mode only) |
-| `--workers` | `1` | Number of parallel workers for file loading (batch mode only) |
-
-**ast train options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--training-dir` | `.` | Directory to save training outputs |
-| `--base-model` | `MIT/ast-finetuned-audioset-10-10-0.4593` | Base model to fine-tune |
-| `--train-dataset` | `bioamla/scp-frogs` | Training dataset from HuggingFace Hub |
-| `--split` | `train` | Dataset split to use |
-| `--category-id-column` | `target` | Column name for category IDs |
-| `--category-label-column` | `category` | Column name for category labels |
-| `--report-to` | `tensorboard` | Where to report metrics |
-| `--learning-rate` | `5e-5` | Learning rate for training |
-| `--push-to-hub/--no-push-to-hub` | `--no-push-to-hub` | Push model to HuggingFace Hub |
-| `--num-train-epochs` | `1` | Number of training epochs |
-| `--per-device-train-batch-size` | `8` | Training batch size per device |
-| `--eval-strategy` | `epoch` | Evaluation strategy |
-| `--save-strategy` | `epoch` | Model save strategy |
-| `--eval-steps` | `1` | Steps between evaluations |
-| `--save-steps` | `1` | Steps between saves |
-| `--load-best-model-at-end/--no-load-best-model-at-end` | `--load-best-model-at-end` | Load best model at end |
-| `--metric-for-best-model` | `accuracy` | Metric for best model selection |
-| `--logging-strategy` | `steps` | Logging strategy |
-| `--logging-steps` | `100` | Steps between logging |
-| `--fp16/--no-fp16` | `--no-fp16` | Use FP16 mixed precision training (NVIDIA GPUs) |
-| `--bf16/--no-bf16` | `--no-bf16` | Use BF16 mixed precision training (Ampere+ GPUs) |
-| `--gradient-accumulation-steps` | `1` | Number of gradient accumulation steps |
-| `--dataloader-num-workers` | `4` | Number of dataloader workers |
-| `--torch-compile/--no-torch-compile` | `--no-torch-compile` | Use torch.compile for faster training (PyTorch 2.0+) |
-| `--finetune-mode` | `full` | Training mode: `full` (all layers) or `feature-extraction` (freeze base, train classifier only) |
-| `--mlflow-tracking-uri` | | MLflow tracking server URI (e.g., `http://localhost:5000`) |
-| `--mlflow-experiment-name` | | MLflow experiment name |
-| `--mlflow-run-name` | | MLflow run name |
-
-**MLflow integration example:**
-
-```bash
-# Start MLflow server (in separate terminal)
-mlflow server --host 0.0.0.0 --port 5000
-
-# Train with MLflow tracking
-bioamla ast train \
-  --training-dir "my-model" \
-  --train-dataset "bioamla/scp-frogs" \
-  --num-train-epochs 10 \
-  --mlflow-tracking-uri "http://localhost:5000" \
-  --mlflow-experiment-name "frog-classifier" \
-  --mlflow-run-name "baseline-run"
-```
-
-**ast evaluate options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--model-path` | `bioamla/scp-frogs` | AST model to use for evaluation |
-| `--ground-truth, -g` | (required) | Path to CSV file with ground truth labels |
-| `--output, -o` | | Output file for evaluation results |
-| `--format` | `txt` | Output format: `json`, `csv`, or `txt` |
-| `--file-column` | `file_name` | Column name for file names in ground truth CSV |
-| `--label-column` | `label` | Column name for labels in ground truth CSV |
-| `--resample-freq` | `16000` | Resampling frequency |
-| `--batch-size` | `8` | Batch size for inference |
-| `--fp16/--no-fp16` | `--no-fp16` | Use half-precision inference |
-| `--quiet` | | Only output metrics, suppress progress |
-
-**Evaluate examples:**
-
-```bash
-# Evaluate model on test directory
-bioamla ast evaluate ./test_audio --model-path bioamla/scp-frogs \
-  --ground-truth labels.csv
-
-# Save results to JSON
-bioamla ast evaluate ./test_audio --model-path bioamla/scp-frogs \
-  --ground-truth labels.csv --output results.json --format json
-
-# Custom ground truth columns
-bioamla ast evaluate ./test_audio --ground-truth data.csv \
-  --file-column filename --label-column species
-```
-
-The ground truth CSV should have columns for file names and labels:
-
-```csv
-file_name,label
-audio1.wav,species_a
-audio2.wav,species_b
-```
-
-**ast push options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--private/--public` | `--public` | Make the repository private or public |
-| `--commit-message` | | Custom commit message for the push |
-
-**Push model to HuggingFace Hub:**
-
-```bash
-# Push a fine-tuned model to HuggingFace Hub
-bioamla ast push ./my-training/best_model myusername/my-frog-classifier
-
-# Push as a private repository
-bioamla ast push ./my-model myusername/private-model --private
-
-# Push with a custom commit message
-bioamla ast push ./my-model myusername/my-model --commit-message "v1.0 release"
-```
-
-Note: You must be logged in to HuggingFace Hub first using `huggingface-cli login`.
 
 ### iNaturalist Commands (`bioamla inat`)
 
@@ -786,78 +492,13 @@ Note: You must be logged in to HuggingFace Hub first using `huggingface-cli logi
 | `bioamla inat search` | Search for taxa with observations in a place or project |
 | `bioamla inat stats <PROJECT_ID>` | Get statistics for an iNaturalist project |
 
-**inat download options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--taxon-ids` | | Comma-separated list of taxon IDs |
-| `--taxon-csv` | | Path to CSV file with taxon_id column |
-| `--taxon-name` | | Filter by taxon name (e.g., "Aves") |
-| `--place-id` | | Filter by place ID (e.g., 1 for US) |
-| `--user-id` | | Filter by observer username |
-| `--project-id` | | Filter by iNaturalist project ID or slug |
-| `--quality-grade` | `research` | Quality grade: research, needs_id, casual |
-| `--sound-license` | | Comma-separated list of licenses |
-| `--start-date` | | Start date (YYYY-MM-DD) |
-| `--end-date` | | End date (YYYY-MM-DD) |
-| `--obs-per-taxon` | `100` | Observations to download per taxon ID |
-| `--organize-by-taxon/--no-organize-by-taxon` | `--organize-by-taxon` | Organize into subdirectories by species |
-| `--include-inat-metadata` | | Include additional iNaturalist metadata |
-| `--file-extensions` | | Comma-separated list of extensions to filter |
-| `--delay` | `1.0` | Delay between downloads (rate limiting) |
-| `--quiet` | | Suppress progress output |
-
-**inat search options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--place-id` | | Filter by place ID |
-| `--project-id` | | Filter by project ID or slug |
-| `--taxon-id` | | Filter by parent taxon ID |
-| `--quality-grade` | `research` | Quality grade filter |
-| `--output, -o` | | Output file path for CSV |
-| `--quiet` | | Suppress progress output |
-
-**inat stats options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output, -o` | | Output file path for JSON |
-| `--quiet` | | Suppress output, print only JSON |
-
-**Download audio from a CSV of taxon IDs:**
-
-```bash
-# First, search for taxa and export to CSV
-bioamla inat search --project-id appalachia-bioacoustics --taxon-id 20979 -o taxa.csv
-
-# Then download audio for all taxa in the CSV
-bioamla inat download ./sounds --taxon-csv taxa.csv --obs-per-taxon 10
-```
-
-The CSV file should have a `taxon_id` column with integer taxon IDs:
-
-```csv
-taxon_id,name,common_name,observation_count
-65489,Lithobates catesbeianus,American Bullfrog,150
-23456,Anaxyrus americanus,American Toad,200
-```
-
 ### Dataset Commands (`bioamla dataset`)
 
 | Command | Description |
 |---------|-------------|
 | `bioamla dataset merge <OUTPUT_DIR> <PATHS...>` | Merge multiple audio datasets into one |
 
-**dataset merge options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--metadata-filename` | `metadata.csv` | Name of metadata CSV file in each dataset |
-| `--overwrite` | | Overwrite existing files instead of skipping |
-| `--no-organize` | | Preserve original directory structure |
-| `--target-format` | | Convert all audio files to this format |
-| `--quiet` | | Suppress progress output |
+Use `bioamla <command> --help` for detailed options on any command.
 
 ## Technologies
 
