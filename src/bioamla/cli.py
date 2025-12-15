@@ -1609,6 +1609,114 @@ def dataset_merge(
         click.echo(msg)
 
 
+@dataset.command('license')
+@click.argument('path')
+@click.option('--template', '-t', default=None, help='Template file to prepend to the license file')
+@click.option('--output', '-o', default='LICENSE', help='Output filename for the license file')
+@click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file')
+@click.option('--batch', is_flag=True, help='Process all datasets in directory (each subdirectory with metadata.csv)')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def dataset_license(
+    path: str,
+    template: str,
+    output: str,
+    metadata_filename: str,
+    batch: bool,
+    quiet: bool
+):
+    """Generate license/attribution file from dataset metadata.
+
+    Reads attribution data from metadata CSV and generates a formatted LICENSE file.
+
+    Required CSV columns: file_name, attr_id, attr_lic, attr_url, attr_note
+    """
+    from pathlib import Path as PathLib
+
+    from bioamla.core.license import (
+        generate_license_for_dataset,
+        generate_licenses_for_directory,
+    )
+
+    path_obj = PathLib(path)
+    template_path = PathLib(template) if template else None
+
+    if template_path and not template_path.exists():
+        click.echo(f"Error: Template file '{template}' not found.")
+        raise SystemExit(1)
+
+    if batch:
+        # Process all datasets in directory
+        if not path_obj.is_dir():
+            click.echo(f"Error: Path '{path}' is not a directory.")
+            raise SystemExit(1)
+
+        if not quiet:
+            click.echo(f"Scanning directory for datasets: {path}")
+
+        try:
+            stats = generate_licenses_for_directory(
+                audio_dir=path_obj,
+                template_path=template_path,
+                output_filename=output,
+                metadata_filename=metadata_filename
+            )
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}")
+            raise SystemExit(1)
+
+        if stats['datasets_found'] == 0:
+            click.echo("No datasets found (no directories with metadata.csv)")
+            raise SystemExit(1)
+
+        if not quiet:
+            click.echo(f"\nProcessed {stats['datasets_found']} dataset(s):")
+            click.echo(f"  Successful: {stats['datasets_processed']}")
+            click.echo(f"  Failed: {stats['datasets_failed']}")
+
+            for result in stats['results']:
+                if result['status'] == 'success':
+                    click.echo(f"  - {result['dataset_name']}: {result['attributions_count']} attributions")
+                else:
+                    click.echo(f"  - {result['dataset_name']}: FAILED - {result.get('error', 'Unknown error')}")
+        else:
+            click.echo(f"Generated {stats['datasets_processed']} license files")
+
+        if stats['datasets_failed'] > 0:
+            raise SystemExit(1)
+
+    else:
+        # Process single dataset
+        if not path_obj.is_dir():
+            click.echo(f"Error: Path '{path}' is not a directory.")
+            raise SystemExit(1)
+
+        csv_path = path_obj / metadata_filename
+        if not csv_path.exists():
+            click.echo(f"Error: Metadata file '{csv_path}' not found.")
+            raise SystemExit(1)
+
+        if not quiet:
+            click.echo(f"Generating license file for: {path}")
+
+        try:
+            stats = generate_license_for_dataset(
+                dataset_path=path_obj,
+                template_path=template_path,
+                output_filename=output,
+                metadata_filename=metadata_filename
+            )
+        except (FileNotFoundError, ValueError) as e:
+            click.echo(f"Error: {e}")
+            raise SystemExit(1)
+
+        if not quiet:
+            click.echo(f"License file generated: {stats['output_path']}")
+            click.echo(f"  Attributions: {stats['attributions_count']}")
+            click.echo(f"  File size: {stats['file_size']:,} bytes")
+        else:
+            click.echo(f"Generated {output} with {stats['attributions_count']} attributions")
+
+
 # =============================================================================
 # HuggingFace Hub Command Group
 # =============================================================================
