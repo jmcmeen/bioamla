@@ -138,75 +138,75 @@ class TestAstTrainMlflowOptions:
         assert "--mlflow-run-name" in result.output
 
 
-class TestAstPush:
-    """Tests for ast push command."""
+class TestHfPushModel:
+    """Tests for hf push-model command."""
 
-    def test_ast_push_help(self, runner):
-        """Test ast push --help shows all options."""
-        result = runner.invoke(cli, ["ast", "push", "--help"])
+    def test_hf_push_model_help(self, runner):
+        """Test hf push-model --help shows all options."""
+        result = runner.invoke(cli, ["hf", "push-model", "--help"])
 
         assert result.exit_code == 0
-        assert "MODEL_PATH" in result.output
+        assert "PATH" in result.output
         assert "REPO_ID" in result.output
         assert "--private" in result.output
         assert "--public" in result.output
         assert "--commit-message" in result.output
         assert "entire contents" in result.output
 
-    def test_ast_push_requires_model_path(self, runner):
-        """Test that ast push requires model_path argument."""
-        result = runner.invoke(cli, ["ast", "push"])
+    def test_hf_push_model_requires_path(self, runner):
+        """Test that hf push-model requires path argument."""
+        result = runner.invoke(cli, ["hf", "push-model"])
 
         assert result.exit_code != 0
-        assert "Missing argument" in result.output or "MODEL_PATH" in result.output
+        assert "Missing argument" in result.output or "PATH" in result.output
 
-    def test_ast_push_requires_repo_id(self, runner):
-        """Test that ast push requires repo_id argument."""
-        result = runner.invoke(cli, ["ast", "push", "/some/path"])
+    def test_hf_push_model_requires_repo_id(self, runner):
+        """Test that hf push-model requires repo_id argument."""
+        result = runner.invoke(cli, ["hf", "push-model", "/some/path"])
 
         assert result.exit_code != 0
         assert "Missing argument" in result.output or "REPO_ID" in result.output
 
-    def test_ast_push_invalid_model_path(self, runner):
-        """Test that ast push fails with non-existent model path."""
-        result = runner.invoke(cli, ["ast", "push", "/nonexistent/path", "user/repo"])
+    def test_hf_push_model_invalid_path(self, runner):
+        """Test that hf push-model fails with non-existent path."""
+        result = runner.invoke(cli, ["hf", "push-model", "/nonexistent/path", "user/repo"])
 
         assert result.exit_code != 0
         assert "does not exist" in result.output
 
 
-class TestDatasetPush:
-    """Tests for dataset push command."""
+class TestHfPushDataset:
+    """Tests for hf push-dataset command."""
 
-    def test_dataset_push_help(self, runner):
-        """Test dataset push --help shows all options."""
-        result = runner.invoke(cli, ["dataset", "push", "--help"])
+    def test_hf_push_dataset_help(self, runner):
+        """Test hf push-dataset --help shows all options."""
+        result = runner.invoke(cli, ["hf", "push-dataset", "--help"])
 
         assert result.exit_code == 0
-        assert "DATASET_PATH" in result.output
+        assert "PATH" in result.output
         assert "REPO_ID" in result.output
         assert "--private" in result.output
         assert "--public" in result.output
         assert "--commit-message" in result.output
         assert "entire contents" in result.output
 
-    def test_dataset_push_requires_dataset_path(self, runner):
-        """Test that dataset push requires dataset_path argument."""
-        result = runner.invoke(cli, ["dataset", "push"])
+    def test_hf_push_dataset_requires_path(self, runner):
+        """Test that hf push-dataset requires path argument."""
+        result = runner.invoke(cli, ["hf", "push-dataset"])
 
         assert result.exit_code != 0
-        assert "Missing argument" in result.output or "DATASET_PATH" in result.output
+        assert "Missing argument" in result.output or "PATH" in result.output
 
-    def test_dataset_push_requires_repo_id(self, runner):
-        """Test that dataset push requires repo_id argument."""
-        result = runner.invoke(cli, ["dataset", "push", "/some/path"])
+    def test_hf_push_dataset_requires_repo_id(self, runner):
+        """Test that hf push-dataset requires repo_id argument."""
+        result = runner.invoke(cli, ["hf", "push-dataset", "/some/path"])
 
         assert result.exit_code != 0
         assert "Missing argument" in result.output or "REPO_ID" in result.output
 
-    def test_dataset_push_invalid_dataset_path(self, runner):
-        """Test that dataset push fails with non-existent dataset path."""
-        result = runner.invoke(cli, ["dataset", "push", "/nonexistent/path", "user/repo"])
+    def test_hf_push_dataset_invalid_path(self, runner):
+        """Test that hf push-dataset fails with non-existent path."""
+        result = runner.invoke(cli, ["hf", "push-dataset", "/nonexistent/path", "user/repo"])
 
         assert result.exit_code != 0
         assert "does not exist" in result.output
