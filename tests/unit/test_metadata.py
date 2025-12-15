@@ -24,7 +24,7 @@ class TestConstants:
         assert "file_name" in REQUIRED_FIELDS
         assert "split" in REQUIRED_FIELDS
         assert "target" in REQUIRED_FIELDS
-        assert "category" in REQUIRED_FIELDS
+        assert "label" in REQUIRED_FIELDS
 
     def test_optional_inat_fields_defined(self):
         """Test that optional iNaturalist fields are properly defined."""
@@ -97,7 +97,7 @@ class TestWriteMetadataCsv:
                 "file_name": "audio4.wav",
                 "split": "train",
                 "target": "3",
-                "category": "species_c",
+                "label": "species_c",
                 "attr_id": "user4",
                 "attr_lic": "CC-BY",
                 "attr_url": "https://example.com/4",
@@ -133,10 +133,10 @@ class TestGetExistingObservationIds:
 
         rows = [
             {"file_name": "species_a/inat_123_sound_456.mp3", "split": "train",
-             "target": "1", "category": "species_a", "attr_id": "", "attr_lic": "",
+             "target": "1", "label": "species_a", "attr_id": "", "attr_lic": "",
              "attr_url": "", "attr_note": ""},
             {"file_name": "species_b/inat_789_sound_101.wav", "split": "train",
-             "target": "2", "category": "species_b", "attr_id": "", "attr_lic": "",
+             "target": "2", "label": "species_b", "attr_id": "", "attr_lic": "",
              "attr_url": "", "attr_note": ""},
         ]
 
@@ -164,9 +164,9 @@ class TestGetExistingObservationIds:
 
         rows = [
             {"file_name": "regular_file.mp3", "split": "train", "target": "1",
-             "category": "x", "attr_id": "", "attr_lic": "", "attr_url": "", "attr_note": ""},
+             "label": "x", "attr_id": "", "attr_lic": "", "attr_url": "", "attr_note": ""},
             {"file_name": "inat_abc_sound_def.mp3", "split": "train", "target": "1",
-             "category": "x", "attr_id": "", "attr_lic": "", "attr_url": "", "attr_note": ""},
+             "label": "x", "attr_id": "", "attr_lic": "", "attr_url": "", "attr_note": ""},
         ]
 
         with open(csv_path, "w", newline="", encoding="utf-8") as f:

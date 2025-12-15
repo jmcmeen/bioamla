@@ -381,6 +381,164 @@ def merge_datasets(
 _SUPPORTED_FORMATS = {"wav", "mp3", "m4a", "aac", "flac", "ogg", "wma"}
 
 
+def convert_audio_file(
+    input_path: str,
+    output_path: str,
+    target_format: str = None,
+) -> str:
+    """
+    Convert a single audio file to a different format.
+
+    Args:
+        input_path: Path to the input audio file
+        output_path: Path for the output file (format inferred from extension if target_format not specified)
+        target_format: Target audio format (optional, inferred from output_path if not provided)
+
+    Returns:
+        Path to the converted file
+
+    Raises:
+        FileNotFoundError: If input file doesn't exist
+        ValueError: If target format is unsupported or no converter available
+    """
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    source_ext = input_path.suffix.lower().lstrip(".")
+
+    # Determine target format
+    if target_format:
+        target_format = target_format.lower().lstrip(".")
+    else:
+        target_format = output_path.suffix.lower().lstrip(".")
+
+    if target_format not in _SUPPORTED_FORMATS:
+        raise ValueError(
+            f"Unsupported target format: {target_format}. "
+            f"Supported formats: {', '.join(sorted(_SUPPORTED_FORMATS))}"
+        )
+
+    # If same format, just copy
+    if source_ext == target_format:
+        import shutil
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(input_path), str(output_path))
+        return str(output_path)
+
+    # Get converter
+    converter = _get_converter(source_ext, target_format)
+    if converter is None:
+        raise ValueError(f"No converter available for {source_ext} -> {target_format}")
+
+    # Create output directory
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Convert
+    converter(str(input_path), str(output_path))
+    return str(output_path)
+
+
+def batch_convert_audio(
+    input_dir: str,
+    output_dir: str,
+    target_format: str,
+    recursive: bool = True,
+    keep_original: bool = True,
+    verbose: bool = True,
+) -> dict:
+    """
+    Convert all audio files in a directory to a different format.
+
+    Args:
+        input_dir: Path to the input directory
+        output_dir: Path to the output directory
+        target_format: Target audio format
+        recursive: Search subdirectories (default: True)
+        keep_original: Keep original files (default: True)
+        verbose: Print progress information (default: True)
+
+    Returns:
+        Statistics dict with files_converted, files_skipped, files_failed
+    """
+    input_dir = Path(input_dir)
+    output_dir = Path(output_dir)
+
+    if not input_dir.exists():
+        raise FileNotFoundError(f"Input directory not found: {input_dir}")
+
+    target_format = target_format.lower().lstrip(".")
+    if target_format not in _SUPPORTED_FORMATS:
+        raise ValueError(
+            f"Unsupported target format: {target_format}. "
+            f"Supported formats: {', '.join(sorted(_SUPPORTED_FORMATS))}"
+        )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get audio files using glob
+    audio_extensions = [".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma"]
+    audio_files = []
+    for ext in audio_extensions:
+        if recursive:
+            audio_files.extend(input_dir.rglob(f"*{ext}"))
+        else:
+            audio_files.extend(input_dir.glob(f"*{ext}"))
+    audio_files = [str(f) for f in audio_files]
+
+    if not audio_files:
+        if verbose:
+            print(f"No audio files found in {input_dir}")
+        return {"files_converted": 0, "files_skipped": 0, "files_failed": 0, "output_dir": str(output_dir)}
+
+    if verbose:
+        print(f"Found {len(audio_files)} audio files to convert")
+
+    stats = {"files_converted": 0, "files_skipped": 0, "files_failed": 0, "output_dir": str(output_dir)}
+
+    for audio_path in audio_files:
+        audio_path = Path(audio_path)
+        source_ext = audio_path.suffix.lower().lstrip(".")
+
+        # Compute relative path for output
+        try:
+            rel_path = audio_path.relative_to(input_dir)
+        except ValueError:
+            rel_path = Path(audio_path.name)
+
+        # Change extension for output
+        output_path = output_dir / rel_path.with_suffix(f".{target_format}")
+
+        # Skip if already in target format
+        if source_ext == target_format:
+            stats["files_skipped"] += 1
+            if verbose:
+                print(f"  Skipped (same format): {audio_path.name}")
+            continue
+
+        try:
+            convert_audio_file(str(audio_path), str(output_path), target_format)
+            stats["files_converted"] += 1
+            if verbose:
+                print(f"  Converted: {output_path}")
+
+            # Delete original if not keeping
+            if not keep_original:
+                audio_path.unlink()
+
+        except Exception as e:
+            stats["files_failed"] += 1
+            if verbose:
+                print(f"  Failed: {audio_path} - {e}")
+
+    if verbose:
+        print(f"Converted {stats['files_converted']} files, {stats['files_skipped']} skipped, {stats['files_failed']} failed")
+
+    return stats
+
+
 def _get_converter(source_ext: str, target_format: str):
     """
     Get the appropriate converter function from novus_pytils.audio.

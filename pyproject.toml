@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.0.47"
+version = "0.0.48"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -46,6 +46,21 @@ dev = [
   "pytest-mock",
   "pytest-asyncio",
   "ruff",
+  "build",
+  "twine",
+]
+mlflow = [
+  "mlflow>=2.0",
+]
+all = [
+  "pytest>=7.0",
+  "pytest-cov",
+  "pytest-mock",
+  "pytest-asyncio",
+  "ruff",
+  "build",
+  "twine",
+  "mlflow>=2.0",
 ]
 
 [project.urls]
