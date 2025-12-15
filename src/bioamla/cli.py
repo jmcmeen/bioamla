@@ -1616,6 +1616,50 @@ def dataset():
     pass
 
 
+@dataset.command('push')
+@click.argument('dataset_path')
+@click.argument('repo_id')
+@click.option('--private/--public', default=False, help='Make the repository private (default: public)')
+@click.option('--commit-message', default=None, help='Custom commit message for the push')
+def dataset_push(
+    dataset_path: str,
+    repo_id: str,
+    private: bool,
+    commit_message: str
+):
+    """Push a dataset folder to the HuggingFace Hub.
+
+    Uploads the entire contents of DATASET_PATH folder to the Hub as a dataset.
+    """
+    import os
+
+    from huggingface_hub import HfApi
+
+    if not os.path.isdir(dataset_path):
+        click.echo(f"Error: Dataset path '{dataset_path}' does not exist or is not a directory.")
+        raise SystemExit(1)
+
+    click.echo(f"Pushing dataset folder {dataset_path} to HuggingFace Hub: {repo_id}...")
+
+    try:
+        api = HfApi()
+        api.create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True)
+
+        api.upload_folder(
+            folder_path=dataset_path,
+            repo_id=repo_id,
+            repo_type="dataset",
+            commit_message=commit_message or "Upload dataset",
+        )
+
+        click.echo(f"Successfully pushed dataset to: https://huggingface.co/datasets/{repo_id}")
+
+    except Exception as e:
+        click.echo(f"Error pushing to HuggingFace Hub: {e}")
+        click.echo("Make sure you are logged in with 'huggingface-cli login'.")
+        raise SystemExit(1)
+
+
 @dataset.command('merge')
 @click.argument('output_dir')
 @click.argument('dataset_paths', nargs=-1, required=True)
