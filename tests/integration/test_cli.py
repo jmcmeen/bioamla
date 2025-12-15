@@ -47,10 +47,9 @@ class TestCLICommandGroups:
         result = runner.invoke(cli, ["ast", "--help"])
 
         assert result.exit_code == 0
-        assert "infer" in result.output
         assert "train" in result.output
         assert "predict" in result.output
-        assert "push" in result.output
+        assert "evaluate" in result.output
 
     def test_audio_group_exists(self, runner):
         """Test that audio command group exists."""
