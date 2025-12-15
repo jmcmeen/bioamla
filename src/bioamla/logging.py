@@ -7,7 +7,7 @@ It replaces scattered verbose flags with proper Python logging, allowing
 consistent and configurable log output across all modules.
 
 Usage:
-    from bioamla.core.logging import get_logger, configure_logging
+    from bioamla.logging import get_logger, configure_logging
 
     # In module code:
     logger = get_logger(__name__)

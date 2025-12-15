@@ -18,10 +18,10 @@ from typing import List, Optional, Set
 import pandas as pd
 from novus_pytils.audio import get_audio_files
 
-from bioamla.core.fileutils import find_species_name, sanitize_filename
-from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
-from bioamla.core.logging import get_logger
-from bioamla.core.metadata import (
+from bioamla.fileutils import find_species_name, sanitize_filename
+from bioamla.globals import SUPPORTED_AUDIO_EXTENSIONS
+from bioamla.logging import get_logger
+from bioamla.metadata import (
     read_metadata_csv,
     write_metadata_csv,
 )

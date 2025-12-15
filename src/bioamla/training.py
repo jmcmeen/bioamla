@@ -7,7 +7,7 @@ models on custom audio classification datasets. It extracts and consolidates
 training logic for better modularity and testability.
 
 Example usage:
-    from bioamla.core.training import ASTTrainer, TrainingConfig
+    from bioamla.training import ASTTrainer, TrainingConfig
 
     config = TrainingConfig(
         base_model="MIT/ast-finetuned-audioset-10-10-0.4593",
@@ -35,7 +35,7 @@ from audiomentations import (
     TimeStretch,
 )
 
-from bioamla.core.logging import get_logger
+from bioamla.logging import get_logger
 
 logger = get_logger(__name__)
 

@@ -16,7 +16,7 @@ The main entry point is the :func:`run_explorer` function, which launches the
 :class:`DatasetExplorer` application.
 
 Example:
-    >>> from bioamla.core.tui import run_explorer
+    >>> from bioamla.tui import run_explorer
     >>> run_explorer("./my_dataset")
 """
 
@@ -44,7 +44,7 @@ from textual.widgets import (
     Static,
 )
 
-from bioamla.core.explore import (
+from bioamla.explore import (
     AudioFileInfo,
     DatasetInfo,
     filter_audio_files,
@@ -178,7 +178,7 @@ class FileDetailScreen(ModalScreen[None]):
         Generate and display a spectrogram visualization.
 
         Creates a mel spectrogram image of the audio file using the
-        bioamla.core.visualize module, saves it to a temporary file,
+        bioamla.visualize module, saves it to a temporary file,
         and opens it with the system's default image viewer.
 
         Uses platform-specific image viewers:
@@ -189,7 +189,7 @@ class FileDetailScreen(ModalScreen[None]):
         Displays a notification on success or error.
         """
         try:
-            from bioamla.core.visualize import generate_spectrogram
+            from bioamla.visualize import generate_spectrogram
 
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                 output_path = tmp.name

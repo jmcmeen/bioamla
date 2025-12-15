@@ -15,7 +15,7 @@ Key features:
 - Save results in JSON, CSV, or text formats
 
 Example:
-    >>> from bioamla.core.evaluate import evaluate_directory, format_metrics_report
+    >>> from bioamla.evaluate import evaluate_directory, format_metrics_report
     >>> result = evaluate_directory(
     ...     audio_dir="./test_audio",
     ...     model_path="./my_model",
@@ -289,13 +289,13 @@ def evaluate_directory(
     """
     import torch
 
-    from bioamla.core.ast import (
+    from bioamla.ast import (
         ast_predict,
         extract_features,
         get_cached_feature_extractor,
         load_pretrained_ast_model,
     )
-    from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
+    from bioamla.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
     audio_dir = Path(audio_dir)
     if not audio_dir.exists():
