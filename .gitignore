@@ -223,3 +223,4 @@ scp_small.zip
 scp_small/output.csv
 /scp_frogs_eval
 scp_frogs_eval.zip
+*.db
