@@ -3,12 +3,13 @@ Unit tests for bioamla.core.datasets module.
 """
 
 import csv
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from bioamla.core.datasets import convert_filetype
-from bioamla.core.metadata import read_metadata_csv, write_metadata_csv
+from bioamla.core.metadata import read_metadata_csv
 
 
 def write_test_metadata(csv_path: Path, rows: list):
@@ -42,7 +43,7 @@ class TestConvertFiletype:
                 "file_name": "species_a/test_audio.xyz",
                 "split": "train",
                 "target": "1",
-                "category": "species_a",
+                "label": "species_a",
                 "attr_id": "user1",
                 "attr_lic": "CC-BY",
                 "attr_url": "https://example.com/1",
@@ -79,7 +80,7 @@ class TestConvertFiletype:
                 "file_name": "missing_dir/missing_file.mp3",
                 "split": "train",
                 "target": "1",
-                "category": "species_a",
+                "label": "species_a",
                 "attr_id": "user1",
                 "attr_lic": "CC-BY",
                 "attr_url": "https://example.com/1",
@@ -129,7 +130,7 @@ class TestConvertFiletype:
                 "file_name": "species_a/error_file.mp3",
                 "split": "train",
                 "target": "1",
-                "category": "species_a",
+                "label": "species_a",
                 "attr_id": "user1",
                 "attr_lic": "CC-BY",
                 "attr_url": "https://example.com/1",
@@ -181,7 +182,7 @@ class TestConvertFiletype:
                 "file_name": "species_a/success_file.mp3",
                 "split": "train",
                 "target": "1",
-                "category": "species_a",
+                "label": "species_a",
                 "attr_id": "user1",
                 "attr_lic": "CC-BY",
                 "attr_url": "https://example.com/1",
@@ -236,7 +237,7 @@ class TestConvertFiletype:
                 "file_name": "species_a/keep_file.mp3",
                 "split": "train",
                 "target": "1",
-                "category": "species_a",
+                "label": "species_a",
                 "attr_id": "user1",
                 "attr_lic": "CC-BY",
                 "attr_url": "https://example.com/1",
@@ -284,7 +285,7 @@ class TestConvertFiletype:
                 "file_name": "species_a/already_wav.wav",
                 "split": "train",
                 "target": "1",
-                "category": "species_a",
+                "label": "species_a",
                 "attr_id": "user1",
                 "attr_lic": "CC-BY",
                 "attr_url": "https://example.com/1",
@@ -340,7 +341,7 @@ class TestConvertFiletype:
                 "file_name": "species_a/success.mp3",
                 "split": "train",
                 "target": "1",
-                "category": "species_a",
+                "label": "species_a",
                 "attr_id": "user1",
                 "attr_lic": "CC-BY",
                 "attr_url": "https://example.com/1",
@@ -350,7 +351,7 @@ class TestConvertFiletype:
                 "file_name": "species_a/fail.mp3",
                 "split": "train",
                 "target": "1",
-                "category": "species_a",
+                "label": "species_a",
                 "attr_id": "user2",
                 "attr_lic": "CC-BY",
                 "attr_url": "https://example.com/2",
@@ -360,7 +361,7 @@ class TestConvertFiletype:
                 "file_name": "species_a/skip.wav",
                 "split": "train",
                 "target": "1",
-                "category": "species_a",
+                "label": "species_a",
                 "attr_id": "user3",
                 "attr_lic": "CC-BY",
                 "attr_url": "https://example.com/3",
