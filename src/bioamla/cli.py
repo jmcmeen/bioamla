@@ -1721,6 +1721,41 @@ def dataset_license(
 # HuggingFace Hub Command Group
 # =============================================================================
 
+def _get_folder_size(path: str) -> int:
+    """Calculate the total size of a folder in bytes."""
+    import os
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(path):
+        for filename in filenames:
+            filepath = os.path.join(dirpath, filename)
+            if os.path.isfile(filepath):
+                total_size += os.path.getsize(filepath)
+    return total_size
+
+
+def _count_files(path: str) -> int:
+    """Count the total number of files in a folder."""
+    import os
+    count = 0
+    for dirpath, dirnames, filenames in os.walk(path):
+        count += len(filenames)
+    return count
+
+
+def _is_large_folder(path: str, size_threshold_gb: float = 5.0, file_count_threshold: int = 1000) -> bool:
+    """
+    Determine if a folder should be uploaded using upload_large_folder.
+
+    A folder is considered 'large' if:
+    - Total size exceeds size_threshold_gb (default: 5 GB), OR
+    - Total file count exceeds file_count_threshold (default: 1000 files)
+    """
+    size_threshold_bytes = size_threshold_gb * 1024 * 1024 * 1024
+    folder_size = _get_folder_size(path)
+    file_count = _count_files(path)
+    return folder_size > size_threshold_bytes or file_count > file_count_threshold
+
+
 @cli.group()
 def hf():
     """HuggingFace Hub commands for pushing models and datasets."""
@@ -1741,6 +1776,7 @@ def hf_push_model(
     """Push a model folder to the HuggingFace Hub.
 
     Uploads the entire contents of PATH folder to the Hub as a model.
+    Automatically uses upload_large_folder for folders >5GB or >1000 files.
     """
     import os
 
@@ -1756,12 +1792,20 @@ def hf_push_model(
         api = HfApi()
         api.create_repo(repo_id=repo_id, repo_type="model", private=private, exist_ok=True)
 
-        api.upload_folder(
-            folder_path=path,
-            repo_id=repo_id,
-            repo_type="model",
-            commit_message=commit_message or "Upload model",
-        )
+        if _is_large_folder(path):
+            click.echo("Large folder detected, using optimized upload method...")
+            api.upload_large_folder(
+                folder_path=path,
+                repo_id=repo_id,
+                repo_type="model",
+            )
+        else:
+            api.upload_folder(
+                folder_path=path,
+                repo_id=repo_id,
+                repo_type="model",
+                commit_message=commit_message or "Upload model",
+            )
 
         click.echo(f"Successfully pushed model to: https://huggingface.co/{repo_id}")
 
@@ -1785,6 +1829,7 @@ def hf_push_dataset(
     """Push a dataset folder to the HuggingFace Hub.
 
     Uploads the entire contents of PATH folder to the Hub as a dataset.
+    Automatically uses upload_large_folder for folders >5GB or >1000 files.
     """
     import os
 
@@ -1800,12 +1845,20 @@ def hf_push_dataset(
         api = HfApi()
         api.create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True)
 
-        api.upload_folder(
-            folder_path=path,
-            repo_id=repo_id,
-            repo_type="dataset",
-            commit_message=commit_message or "Upload dataset",
-        )
+        if _is_large_folder(path):
+            click.echo("Large folder detected, using optimized upload method...")
+            api.upload_large_folder(
+                folder_path=path,
+                repo_id=repo_id,
+                repo_type="dataset",
+            )
+        else:
+            api.upload_folder(
+                folder_path=path,
+                repo_id=repo_id,
+                repo_type="dataset",
+                commit_message=commit_message or "Upload dataset",
+            )
 
         click.echo(f"Successfully pushed dataset to: https://huggingface.co/datasets/{repo_id}")
 

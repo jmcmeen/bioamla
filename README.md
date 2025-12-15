@@ -535,6 +535,8 @@ MLflow tracks:
 | `bioamla hf push-model <PATH> <REPO_ID>` | Push model folder to HuggingFace Hub |
 | `bioamla hf push-dataset <PATH> <REPO_ID>` | Push dataset folder to HuggingFace Hub |
 
+Both push commands automatically detect large folders (>5GB or >1000 files) and use the optimized `upload_large_folder` method for better reliability.
+
 Use `bioamla <command> --help` for detailed options on any command.
 
 ## Technologies
