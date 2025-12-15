@@ -5,7 +5,7 @@ Unit tests for bioamla.core.torchaudio module.
 import pytest
 import torch
 
-from bioamla.core.torchaudio import (
+from bioamla.torchaudio import (
     load_audio_from_bytes,
     load_waveform_tensor,
     resample_waveform_tensor,

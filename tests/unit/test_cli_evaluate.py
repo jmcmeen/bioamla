@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from bioamla.cli import cli
-from bioamla.core.evaluate import EvaluationResult
+from bioamla.evaluate import EvaluationResult
 
 
 @pytest.fixture
@@ -96,7 +96,7 @@ class TestEvaluateCommand:
         assert result.exit_code == 1
         assert "Error" in result.output
 
-    @patch('bioamla.core.evaluate.evaluate_directory')
+    @patch('bioamla.evaluate.evaluate_directory')
     def test_evaluate_displays_report(self, mock_evaluate, runner, temp_dir, mock_evaluation_result):
         """Test that evaluate displays formatted report."""
         mock_evaluate.return_value = mock_evaluation_result
@@ -116,7 +116,7 @@ class TestEvaluateCommand:
         assert "Accuracy" in result.output
         assert "0.85" in result.output
 
-    @patch('bioamla.core.evaluate.evaluate_directory')
+    @patch('bioamla.evaluate.evaluate_directory')
     def test_evaluate_quiet_mode(self, mock_evaluate, runner, temp_dir, mock_evaluation_result):
         """Test quiet mode output."""
         mock_evaluate.return_value = mock_evaluation_result
@@ -138,8 +138,8 @@ class TestEvaluateCommand:
         # Should not have the full report format
         assert "Model Evaluation Report" not in result.output
 
-    @patch('bioamla.core.evaluate.evaluate_directory')
-    @patch('bioamla.core.evaluate.save_evaluation_results')
+    @patch('bioamla.evaluate.evaluate_directory')
+    @patch('bioamla.evaluate.save_evaluation_results')
     def test_evaluate_saves_output(self, mock_save, mock_evaluate, runner, temp_dir, mock_evaluation_result):
         """Test that evaluate saves output when --output specified."""
         mock_evaluate.return_value = mock_evaluation_result
@@ -163,7 +163,7 @@ class TestEvaluateCommand:
         mock_save.assert_called_once()
         assert "Results saved to" in result.output
 
-    @patch('bioamla.core.evaluate.evaluate_directory')
+    @patch('bioamla.evaluate.evaluate_directory')
     def test_evaluate_custom_columns(self, mock_evaluate, runner, temp_dir, mock_evaluation_result):
         """Test evaluate with custom column names."""
         mock_evaluate.return_value = mock_evaluation_result
@@ -188,7 +188,7 @@ class TestEvaluateCommand:
         assert call_args.kwargs['gt_file_column'] == 'filename'
         assert call_args.kwargs['gt_label_column'] == 'class'
 
-    @patch('bioamla.core.evaluate.evaluate_directory')
+    @patch('bioamla.evaluate.evaluate_directory')
     def test_evaluate_custom_model(self, mock_evaluate, runner, temp_dir, mock_evaluation_result):
         """Test evaluate with custom model path."""
         mock_evaluate.return_value = mock_evaluation_result
@@ -209,7 +209,7 @@ class TestEvaluateCommand:
         mock_evaluate.assert_called_once()
         assert mock_evaluate.call_args.kwargs['model_path'] == 'custom/model'
 
-    @patch('bioamla.core.evaluate.evaluate_directory')
+    @patch('bioamla.evaluate.evaluate_directory')
     def test_evaluate_fp16_option(self, mock_evaluate, runner, temp_dir, mock_evaluation_result):
         """Test evaluate with FP16 option."""
         mock_evaluate.return_value = mock_evaluation_result
@@ -233,8 +233,8 @@ class TestEvaluateCommand:
 class TestEvaluateOutputFormats:
     """Tests for different output formats."""
 
-    @patch('bioamla.core.evaluate.evaluate_directory')
-    @patch('bioamla.core.evaluate.save_evaluation_results')
+    @patch('bioamla.evaluate.evaluate_directory')
+    @patch('bioamla.evaluate.save_evaluation_results')
     def test_json_format(self, mock_save, mock_evaluate, runner, temp_dir, mock_evaluation_result):
         """Test JSON output format."""
         mock_evaluate.return_value = mock_evaluation_result
@@ -256,8 +256,8 @@ class TestEvaluateOutputFormats:
         assert result.exit_code == 0
         mock_save.assert_called_with(mock_evaluation_result, str(temp_dir / "results.json"), format="json")
 
-    @patch('bioamla.core.evaluate.evaluate_directory')
-    @patch('bioamla.core.evaluate.save_evaluation_results')
+    @patch('bioamla.evaluate.evaluate_directory')
+    @patch('bioamla.evaluate.save_evaluation_results')
     def test_csv_format(self, mock_save, mock_evaluate, runner, temp_dir, mock_evaluation_result):
         """Test CSV output format."""
         mock_evaluate.return_value = mock_evaluation_result
@@ -279,8 +279,8 @@ class TestEvaluateOutputFormats:
         assert result.exit_code == 0
         mock_save.assert_called_with(mock_evaluation_result, str(temp_dir / "results.csv"), format="csv")
 
-    @patch('bioamla.core.evaluate.evaluate_directory')
-    @patch('bioamla.core.evaluate.save_evaluation_results')
+    @patch('bioamla.evaluate.evaluate_directory')
+    @patch('bioamla.evaluate.save_evaluation_results')
     def test_txt_format(self, mock_save, mock_evaluate, runner, temp_dir, mock_evaluation_result):
         """Test text output format."""
         mock_evaluate.return_value = mock_evaluation_result

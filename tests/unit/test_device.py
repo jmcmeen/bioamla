@@ -5,7 +5,7 @@ Unit tests for bioamla.core.device module.
 import pytest
 import torch
 
-from bioamla.core.device import (
+from bioamla.device import (
     DeviceContext,
     get_current_device_index,
     get_device,

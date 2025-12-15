@@ -142,11 +142,11 @@ class TestAstPredictBatchExecution:
         with patch("novus_pytils.files.get_files_by_extension") as mock_get_files:
             mock_get_files.return_value = [str(wav_file)]
 
-            with patch("bioamla.core.ast.load_pretrained_ast_model") as mock_load:
+            with patch("bioamla.ast.load_pretrained_ast_model") as mock_load:
                 mock_model = MagicMock()
                 mock_load.return_value = mock_model
 
-                with patch("bioamla.core.ast.wave_file_batch_inference"):
+                with patch("bioamla.ast.wave_file_batch_inference"):
                     result = runner.invoke(cli, [
                         "ast", "predict",
                         str(audio_dir),
@@ -172,11 +172,11 @@ class TestAstPredictBatchExecution:
         with patch("novus_pytils.files.get_files_by_extension") as mock_get_files:
             mock_get_files.return_value = [str(wav_file)]
 
-            with patch("bioamla.core.ast.load_pretrained_ast_model") as mock_load:
+            with patch("bioamla.ast.load_pretrained_ast_model") as mock_load:
                 mock_model = MagicMock()
                 mock_load.return_value = mock_model
 
-                with patch("bioamla.core.ast.wave_file_batch_inference") as mock_inference:
+                with patch("bioamla.ast.wave_file_batch_inference") as mock_inference:
                     result = runner.invoke(cli, [
                         "ast", "predict",
                         str(audio_dir),
@@ -200,11 +200,11 @@ class TestAstPredictBatchExecution:
         with patch("novus_pytils.files.get_files_by_extension") as mock_get_files:
             mock_get_files.return_value = [str(wav_file)]
 
-            with patch("bioamla.core.ast.load_pretrained_ast_model") as mock_load:
+            with patch("bioamla.ast.load_pretrained_ast_model") as mock_load:
                 mock_model = MagicMock()
                 mock_load.return_value = mock_model
 
-                with patch("bioamla.core.ast.wave_file_batch_inference"):
+                with patch("bioamla.ast.wave_file_batch_inference"):
                     runner.invoke(cli, [
                         "ast", "predict",
                         str(audio_dir),
@@ -227,11 +227,11 @@ class TestAstPredictBatchExecution:
         with patch("novus_pytils.files.get_files_by_extension") as mock_get_files:
             mock_get_files.return_value = [str(wav_file)]
 
-            with patch("bioamla.core.ast.load_pretrained_ast_model") as mock_load:
+            with patch("bioamla.ast.load_pretrained_ast_model") as mock_load:
                 mock_model = MagicMock()
                 mock_load.return_value = mock_model
 
-                with patch("bioamla.core.ast.wave_file_batch_inference"):
+                with patch("bioamla.ast.wave_file_batch_inference"):
                     runner.invoke(cli, [
                         "ast", "predict",
                         str(audio_dir),
@@ -249,7 +249,7 @@ class TestAstPredictSingleFile:
 
     def test_single_file_prediction(self, runner):
         """Test single file prediction mode."""
-        with patch("bioamla.core.ast.wav_ast_inference") as mock_inference:
+        with patch("bioamla.ast.wav_ast_inference") as mock_inference:
             mock_inference.return_value = "species_a"
 
             result = runner.invoke(cli, [
@@ -264,7 +264,7 @@ class TestAstPredictSingleFile:
 
     def test_single_file_with_custom_resample_freq(self, runner):
         """Test single file prediction with custom resample frequency."""
-        with patch("bioamla.core.ast.wav_ast_inference") as mock_inference:
+        with patch("bioamla.ast.wav_ast_inference") as mock_inference:
             mock_inference.return_value = "species_b"
 
             result = runner.invoke(cli, [

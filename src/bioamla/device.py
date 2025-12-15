@@ -7,7 +7,7 @@ It consolidates device detection and model placement logic used across
 the bioamla package.
 
 Usage:
-    from bioamla.core.device import get_device, move_to_device
+    from bioamla.device import get_device, move_to_device
 
     device = get_device()
     model = move_to_device(model)
@@ -18,7 +18,7 @@ from typing import Optional, Union
 import torch
 from torch import nn
 
-from bioamla.core.logging import get_logger
+from bioamla.logging import get_logger
 
 logger = get_logger(__name__)
 

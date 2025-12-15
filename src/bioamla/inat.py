@@ -7,7 +7,7 @@ It uses the pyinaturalist library to query observations with sounds and download
 audio files for use in bioacoustic machine learning workflows.
 
 Example usage:
-    from bioamla.core.inat import download_inat_audio
+    from bioamla.inat import download_inat_audio
 
     # Download bird sounds from a specific place
     download_inat_audio(
@@ -27,13 +27,13 @@ from typing import Any, List, Optional, Union
 import requests
 from pyinaturalist import get_observation_species_counts, get_observations
 
-from bioamla.core.fileutils import (
+from bioamla.fileutils import (
     get_extension_from_content_type,
     get_extension_from_url,
     sanitize_filename,
 )
-from bioamla.core.logging import get_logger
-from bioamla.core.metadata import (
+from bioamla.logging import get_logger
+from bioamla.metadata import (
     get_existing_observation_ids,
     read_metadata_csv,
     write_metadata_csv,
