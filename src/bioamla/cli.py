@@ -1721,8 +1721,16 @@ def dataset_license(
 # HuggingFace Hub Command Group
 # =============================================================================
 
-def _get_folder_size(path: str) -> int:
-    """Calculate the total size of a folder in bytes."""
+def _get_folder_size(path: str, limit: int | None = None) -> int:
+    """Calculate the total size of a folder in bytes.
+
+    Args:
+        path: Path to the folder.
+        limit: If provided, short-circuit and return once this size is exceeded.
+
+    Returns:
+        Total size in bytes, or a value > limit if short-circuited.
+    """
     import os
     total_size = 0
     for dirpath, dirnames, filenames in os.walk(path):
@@ -1730,15 +1738,27 @@ def _get_folder_size(path: str) -> int:
             filepath = os.path.join(dirpath, filename)
             if os.path.isfile(filepath):
                 total_size += os.path.getsize(filepath)
+                if limit is not None and total_size > limit:
+                    return total_size
     return total_size
 
 
-def _count_files(path: str) -> int:
-    """Count the total number of files in a folder."""
+def _count_files(path: str, limit: int | None = None) -> int:
+    """Count the total number of files in a folder.
+
+    Args:
+        path: Path to the folder.
+        limit: If provided, short-circuit and return once this count is exceeded.
+
+    Returns:
+        Total file count, or a value > limit if short-circuited.
+    """
     import os
     count = 0
     for dirpath, dirnames, filenames in os.walk(path):
         count += len(filenames)
+        if limit is not None and count > limit:
+            return count
     return count
 
 
@@ -1749,11 +1769,19 @@ def _is_large_folder(path: str, size_threshold_gb: float = 5.0, file_count_thres
     A folder is considered 'large' if:
     - Total size exceeds size_threshold_gb (default: 5 GB), OR
     - Total file count exceeds file_count_threshold (default: 1000 files)
+
+    Uses short-circuiting to avoid walking the entire tree for very large directories.
     """
-    size_threshold_bytes = size_threshold_gb * 1024 * 1024 * 1024
-    folder_size = _get_folder_size(path)
-    file_count = _count_files(path)
-    return folder_size > size_threshold_bytes or file_count > file_count_threshold
+    size_threshold_bytes = int(size_threshold_gb * 1024 * 1024 * 1024)
+
+    # Check file count first (usually faster) with short-circuit
+    file_count = _count_files(path, limit=file_count_threshold)
+    if file_count > file_count_threshold:
+        return True
+
+    # Check size with short-circuit
+    folder_size = _get_folder_size(path, limit=size_threshold_bytes)
+    return folder_size > size_threshold_bytes
 
 
 @cli.group()
@@ -1798,6 +1826,7 @@ def hf_push_model(
                 folder_path=path,
                 repo_id=repo_id,
                 repo_type="model",
+                commit_message=commit_message or "Upload model",
             )
         else:
             api.upload_folder(
@@ -1851,6 +1880,7 @@ def hf_push_dataset(
                 folder_path=path,
                 repo_id=repo_id,
                 repo_type="dataset",
+                commit_message=commit_message or "Upload dataset",
             )
         else:
             api.upload_folder(
