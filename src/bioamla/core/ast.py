@@ -50,16 +50,22 @@ def get_cached_feature_extractor(model_path: Optional[str] = None) -> ASTFeature
     Get a cached feature extractor instance.
 
     Uses LRU cache to avoid recreating the feature extractor on every call.
+    If loading from a model path fails (e.g., missing preprocessor_config.json),
+    falls back to the default ASTFeatureExtractor.
 
     Args:
         model_path: Optional path to load feature extractor from a specific model.
-                   If None, uses the default ASTFeatureExtractor.
+                   If None or if loading fails, uses the default ASTFeatureExtractor.
 
     Returns:
         ASTFeatureExtractor: Cached feature extractor instance
     """
     if model_path:
-        return ASTFeatureExtractor.from_pretrained(model_path)
+        try:
+            return ASTFeatureExtractor.from_pretrained(model_path)
+        except OSError:
+            # Model doesn't have preprocessor_config.json, use default
+            pass
     return ASTFeatureExtractor()
 
 
