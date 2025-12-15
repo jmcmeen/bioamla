@@ -308,7 +308,37 @@ bioamla download https://example.com/audio.zip ./downloads
 bioamla unzip ./downloads/audio.zip ./extracted
 ```
 
-### 9. Python API Usage
+### 9. License File Generation
+
+Generate license/attribution files from dataset metadata:
+
+**Single dataset:**
+
+```bash
+bioamla dataset license ./my_dataset
+```
+
+**With a template file:**
+
+```bash
+bioamla dataset license ./my_dataset --template ./license_template.txt
+```
+
+**Process all datasets in a directory:**
+
+```bash
+bioamla dataset license ./audio_datasets --batch
+```
+
+**Custom output filename:**
+
+```bash
+bioamla dataset license ./my_dataset --output ATTRIBUTION.txt
+```
+
+The metadata CSV must contain these columns: `file_name`, `attr_id`, `attr_lic`, `attr_url`, `attr_note`
+
+### 10. Python API Usage
 
 Use bioamla programmatically in your Python scripts:
 
@@ -374,7 +404,7 @@ segments = split_waveform_tensor(
 )
 ```
 
-### 10. System Diagnostics
+### 11. System Diagnostics
 
 **Check GPU availability:**
 
@@ -397,7 +427,7 @@ for package, version in versions.items():
     print(f"{package}: {version}")
 ```
 
-### 11. Dataset Explorer (Experimental)
+### 12. Dataset Explorer (Experimental)
 
 Launch an interactive terminal dashboard to explore audio datasets:
 
@@ -414,7 +444,7 @@ The explorer provides:
 - Spectrogram generation and viewing
 - Search functionality
 
-### 12. Experiment Tracking with MLflow
+### 13. Experiment Tracking with MLflow
 
 bioamla integrates with MLflow for experiment tracking during model training:
 
@@ -482,7 +512,6 @@ MLflow tracks:
 | `bioamla ast predict <PATH>` | Single file or batch inference |
 | `bioamla ast train` | Fine-tune AST model on custom datasets |
 | `bioamla ast evaluate <PATH>` | Evaluate model on test data with ground truth labels |
-| `bioamla ast push <MODEL_PATH> <REPO_ID>` | Push fine-tuned model to HuggingFace Hub |
 
 ### iNaturalist Commands (`bioamla inat`)
 
@@ -497,6 +526,14 @@ MLflow tracks:
 | Command | Description |
 |---------|-------------|
 | `bioamla dataset merge <OUTPUT_DIR> <PATHS...>` | Merge multiple audio datasets into one |
+| `bioamla dataset license <PATH>` | Generate license/attribution file from metadata |
+
+### HuggingFace Hub Commands (`bioamla hf`)
+
+| Command | Description |
+|---------|-------------|
+| `bioamla hf push-model <PATH> <REPO_ID>` | Push model folder to HuggingFace Hub |
+| `bioamla hf push-dataset <PATH> <REPO_ID>` | Push dataset folder to HuggingFace Hub |
 
 Use `bioamla <command> --help` for detailed options on any command.
 
