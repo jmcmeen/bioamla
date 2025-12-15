@@ -205,6 +205,24 @@ class TestCachedFeatureExtractor:
             mock_extractor.from_pretrained.assert_called_once_with("my/model")
             assert result == mock_instance
 
+    def test_falls_back_to_default_when_model_missing_preprocessor_config(self):
+        """Test fallback to default extractor when model lacks preprocessor_config.json."""
+        with patch("bioamla.core.ast.ASTFeatureExtractor") as mock_extractor:
+            mock_default_instance = MagicMock()
+            mock_extractor.return_value = mock_default_instance
+            mock_extractor.from_pretrained.side_effect = OSError(
+                "Can't load feature extractor for 'bioamla/scp-frogs'"
+            )
+
+            from bioamla.core.ast import get_cached_feature_extractor
+            get_cached_feature_extractor.cache_clear()
+
+            result = get_cached_feature_extractor("bioamla/scp-frogs")
+
+            mock_extractor.from_pretrained.assert_called_once_with("bioamla/scp-frogs")
+            mock_extractor.assert_called_once()
+            assert result == mock_default_instance
+
 
 class TestExtractFeatures:
     """Tests for extract_features function."""
