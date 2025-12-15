@@ -7,7 +7,7 @@ Bioacoustics & Machine Learning Applications
    :maxdepth: 2
    :caption: Contents:
 
-   modules/core
+   modules/bioamla
    modules/cli
 
 Indices and tables
