@@ -7,7 +7,7 @@ Transformer (AST) models. It consolidates inference logic for better modularity
 and testability.
 
 Example usage:
-    from bioamla.core.inference import ASTInference, BatchInferenceConfig
+    from bioamla.inference import ASTInference, BatchInferenceConfig
 
     inference = ASTInference(model_path="./my_model")
     result = inference.predict("audio.wav")
@@ -29,9 +29,9 @@ from typing import Any, Dict, List, Optional, Union
 import torch
 from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
-from bioamla.core.device import get_device
-from bioamla.core.logging import get_logger
-from bioamla.core.torchaudio import (
+from bioamla.device import get_device
+from bioamla.logging import get_logger
+from bioamla.torchaudio import (
     load_waveform_tensor,
     resample_waveform_tensor,
     split_waveform_tensor,

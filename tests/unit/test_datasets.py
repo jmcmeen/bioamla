@@ -1,5 +1,5 @@
 """
-Unit tests for bioamla.core.datasets module.
+Unit tests for bioamla.datasets module.
 """
 
 import csv
@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bioamla.core.datasets import convert_filetype
-from bioamla.core.metadata import read_metadata_csv
+from bioamla.datasets import convert_filetype
+from bioamla.metadata import read_metadata_csv
 
 
 def write_test_metadata(csv_path: Path, rows: list):
@@ -53,7 +53,7 @@ class TestConvertFiletype:
         write_test_metadata(metadata_path, rows)
 
         # Mock _get_converter to return None (no converter available)
-        with patch("bioamla.core.datasets._get_converter", return_value=None):
+        with patch("bioamla.datasets._get_converter", return_value=None):
             stats = convert_filetype(
                 dataset_path=str(temp_dir),
                 target_format="wav",
@@ -91,7 +91,7 @@ class TestConvertFiletype:
 
         # Mock _get_converter to return a valid converter
         mock_converter = MagicMock()
-        with patch("bioamla.core.datasets._get_converter", return_value=mock_converter):
+        with patch("bioamla.datasets._get_converter", return_value=mock_converter):
             stats = convert_filetype(
                 dataset_path=str(temp_dir),
                 target_format="wav",
@@ -143,7 +143,7 @@ class TestConvertFiletype:
         def failing_converter(src, dst):
             raise RuntimeError("Conversion failed!")
 
-        with patch("bioamla.core.datasets._get_converter", return_value=failing_converter):
+        with patch("bioamla.datasets._get_converter", return_value=failing_converter):
             stats = convert_filetype(
                 dataset_path=str(temp_dir),
                 target_format="wav",
@@ -195,7 +195,7 @@ class TestConvertFiletype:
         def successful_converter(src, dst):
             Path(dst).write_bytes(b"converted-audio-data")
 
-        with patch("bioamla.core.datasets._get_converter", return_value=successful_converter):
+        with patch("bioamla.datasets._get_converter", return_value=successful_converter):
             stats = convert_filetype(
                 dataset_path=str(temp_dir),
                 target_format="wav",
@@ -250,7 +250,7 @@ class TestConvertFiletype:
         def successful_converter(src, dst):
             Path(dst).write_bytes(b"converted-audio-data")
 
-        with patch("bioamla.core.datasets._get_converter", return_value=successful_converter):
+        with patch("bioamla.datasets._get_converter", return_value=successful_converter):
             stats = convert_filetype(
                 dataset_path=str(temp_dir),
                 target_format="wav",
@@ -295,7 +295,7 @@ class TestConvertFiletype:
         write_test_metadata(metadata_path, rows)
 
         mock_converter = MagicMock()
-        with patch("bioamla.core.datasets._get_converter", return_value=mock_converter):
+        with patch("bioamla.datasets._get_converter", return_value=mock_converter):
             stats = convert_filetype(
                 dataset_path=str(temp_dir),
                 target_format="wav",
@@ -379,7 +379,7 @@ class TestConvertFiletype:
                 raise RuntimeError("Intentional failure")
             Path(dst).write_bytes(b"converted-audio-data")
 
-        with patch("bioamla.core.datasets._get_converter", return_value=mixed_converter):
+        with patch("bioamla.datasets._get_converter", return_value=mixed_converter):
             stats = convert_filetype(
                 dataset_path=str(temp_dir),
                 target_format="wav",

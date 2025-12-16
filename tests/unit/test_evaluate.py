@@ -7,7 +7,7 @@ import json
 import numpy as np
 import pytest
 
-from bioamla.core.evaluate import (
+from bioamla.evaluate import (
     EvaluationResult,
     compute_metrics,
     evaluate_predictions,

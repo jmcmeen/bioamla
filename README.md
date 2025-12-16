@@ -343,8 +343,8 @@ The metadata CSV must contain these columns: `file_name`, `attr_id`, `attr_lic`,
 Use bioamla programmatically in your Python scripts:
 
 ```python
-from bioamla.core.ast import load_pretrained_ast_model, wav_ast_inference
-from bioamla.core.torchaudio import load_waveform_tensor
+from bioamla.ast import load_pretrained_ast_model, wav_ast_inference
+from bioamla.torchaudio import load_waveform_tensor
 
 # Load a pre-trained model
 model, processor = load_pretrained_ast_model("bioamla/scp-frogs")
@@ -364,7 +364,7 @@ for pred in predictions[:5]:
 **Batch processing with segmentation:**
 
 ```python
-from bioamla.core.ast import wave_file_batch_inference
+from bioamla.ast import wave_file_batch_inference
 
 # Process directory with 1-second segments and 0.5s overlap
 wave_file_batch_inference(
@@ -381,7 +381,7 @@ wave_file_batch_inference(
 **Load and process audio:**
 
 ```python
-from bioamla.core.torchaudio import (
+from bioamla.torchaudio import (
     load_waveform_tensor,
     resample_waveform_tensor,
     split_waveform_tensor
@@ -409,7 +409,7 @@ segments = split_waveform_tensor(
 **Check GPU availability:**
 
 ```python
-from bioamla.core.diagnostics import get_device_info
+from bioamla.diagnostics import get_device_info
 
 device_info = get_device_info()
 print(f"CUDA available: {device_info['cuda_available']}")
@@ -420,7 +420,7 @@ print(f"Device name: {device_info['device_name']}")
 **Get package versions:**
 
 ```python
-from bioamla.core.diagnostics import get_package_versions
+from bioamla.diagnostics import get_package_versions
 
 versions = get_package_versions()
 for package, version in versions.items():
@@ -534,6 +534,8 @@ MLflow tracks:
 |---------|-------------|
 | `bioamla hf push-model <PATH> <REPO_ID>` | Push model folder to HuggingFace Hub |
 | `bioamla hf push-dataset <PATH> <REPO_ID>` | Push dataset folder to HuggingFace Hub |
+
+Both push commands automatically detect large folders (>5GB or >1000 files) and use the optimized `upload_large_folder` method for better reliability.
 
 Use `bioamla <command> --help` for detailed options on any command.
 

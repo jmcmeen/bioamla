@@ -4,7 +4,7 @@ Unit tests for bioamla.core.metadata module.
 
 import csv
 
-from bioamla.core.metadata import (
+from bioamla.metadata import (
     OPTIONAL_INAT_FIELDS,
     REQUIRED_FIELDS,
     get_existing_observation_ids,
