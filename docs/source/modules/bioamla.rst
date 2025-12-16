@@ -1,9 +1,9 @@
-Core Module
-===========
+Bioamla Modules
+===============
 
-The core module contains the main functionality for bioacoustics processing and machine learning.
+The bioamla package contains the main functionality for bioacoustics processing and machine learning.
 
-.. automodule:: bioamla.core
+.. automodule:: bioamla
    :members:
    :undoc-members:
    :show-inheritance:
@@ -11,7 +11,7 @@ The core module contains the main functionality for bioacoustics processing and 
 AST (Audio Spectrogram Transformer)
 -----------------------------------
 
-.. automodule:: bioamla.core.ast
+.. automodule:: bioamla.ast
    :members:
    :undoc-members:
    :show-inheritance:
@@ -19,7 +19,7 @@ AST (Audio Spectrogram Transformer)
 Datasets
 --------
 
-.. automodule:: bioamla.core.datasets
+.. automodule:: bioamla.datasets
    :members:
    :undoc-members:
    :show-inheritance:
@@ -27,7 +27,7 @@ Datasets
 Training
 --------
 
-.. automodule:: bioamla.core.training
+.. automodule:: bioamla.training
    :members:
    :undoc-members:
    :show-inheritance:
@@ -35,7 +35,7 @@ Training
 Inference
 ---------
 
-.. automodule:: bioamla.core.inference
+.. automodule:: bioamla.inference
    :members:
    :undoc-members:
    :show-inheritance:
@@ -43,7 +43,7 @@ Inference
 Evaluation
 ----------
 
-.. automodule:: bioamla.core.evaluate
+.. automodule:: bioamla.evaluate
    :members:
    :undoc-members:
    :show-inheritance:
@@ -51,7 +51,7 @@ Evaluation
 Signal Processing
 -----------------
 
-.. automodule:: bioamla.core.signal
+.. automodule:: bioamla.signal
    :members:
    :undoc-members:
    :show-inheritance:
@@ -59,7 +59,7 @@ Signal Processing
 Visualization
 -------------
 
-.. automodule:: bioamla.core.visualize
+.. automodule:: bioamla.visualize
    :members:
    :undoc-members:
    :show-inheritance:
@@ -67,7 +67,7 @@ Visualization
 Augmentation
 ------------
 
-.. automodule:: bioamla.core.augment
+.. automodule:: bioamla.augment
    :members:
    :undoc-members:
    :show-inheritance:
@@ -75,7 +75,7 @@ Augmentation
 Device Utilities
 ----------------
 
-.. automodule:: bioamla.core.device
+.. automodule:: bioamla.device
    :members:
    :undoc-members:
    :show-inheritance:
@@ -83,7 +83,7 @@ Device Utilities
 File Utilities
 --------------
 
-.. automodule:: bioamla.core.fileutils
+.. automodule:: bioamla.fileutils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -91,7 +91,7 @@ File Utilities
 Logging
 -------
 
-.. automodule:: bioamla.core.logging
+.. automodule:: bioamla.logging
    :members:
    :undoc-members:
    :show-inheritance:
@@ -99,7 +99,7 @@ Logging
 Metadata
 --------
 
-.. automodule:: bioamla.core.metadata
+.. automodule:: bioamla.metadata
    :members:
    :undoc-members:
    :show-inheritance:
@@ -107,7 +107,7 @@ Metadata
 iNaturalist Integration
 -----------------------
 
-.. automodule:: bioamla.core.inat
+.. automodule:: bioamla.inat
    :members:
    :undoc-members:
    :show-inheritance:
@@ -115,7 +115,7 @@ iNaturalist Integration
 Wildlife Acoustics
 ------------------
 
-.. automodule:: bioamla.core.wildlife_acoustics
+.. automodule:: bioamla.wildlife_acoustics
    :members:
    :undoc-members:
    :show-inheritance:
