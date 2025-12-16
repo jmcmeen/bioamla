@@ -3,7 +3,7 @@ Unit tests for bioamla.core.fileutils module.
 """
 
 
-from bioamla.core.fileutils import (
+from bioamla.fileutils import (
     ensure_directory,
     find_species_name,
     get_extension_from_content_type,

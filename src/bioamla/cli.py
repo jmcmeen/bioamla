@@ -16,7 +16,7 @@ def cli():
 @cli.command()
 def devices():
     """Display comprehensive device information including CUDA and GPU details."""
-    from bioamla.core.diagnostics import get_device_info
+    from bioamla.diagnostics import get_device_info
     device_info = get_device_info()
 
     click.echo("Devices:")
@@ -31,7 +31,7 @@ def devices():
 @cli.command()
 def version():
     """Display the current version of the bioamla package."""
-    from bioamla.core.diagnostics import get_bioamla_version
+    from bioamla.diagnostics import get_bioamla_version
     click.echo(f"bioamla v{get_bioamla_version()}")
 
 
@@ -206,7 +206,7 @@ def explore(directory: str):
         click.echo(f"Error: '{directory}' is not a valid directory", err=True)
         raise SystemExit(1)
 
-    from bioamla.core.tui import run_explorer
+    from bioamla.tui import run_explorer
     run_explorer(directory)
 
 
@@ -282,7 +282,7 @@ def ast_predict(
             workers=workers
         )
     else:
-        from bioamla.core.ast import wav_ast_inference
+        from bioamla.ast import wav_ast_inference
         prediction = wav_ast_inference(path, model_path, resample_freq)
         click.echo(f"{prediction}")
 
@@ -308,7 +308,7 @@ def _run_batch_inference(
     import torch
     from novus_pytils.files import file_exists, get_files_by_extension
 
-    from bioamla.core.ast import (
+    from bioamla.ast import (
         InferenceConfig,
         load_pretrained_ast_model,
         wave_file_batch_inference,
@@ -766,7 +766,7 @@ def ast_evaluate(
     """
     from pathlib import Path as PathLib
 
-    from bioamla.core.evaluate import (
+    from bioamla.evaluate import (
         evaluate_directory,
         format_metrics_report,
         save_evaluation_results,
@@ -889,7 +889,7 @@ def audio_convert(
 
     if dataset:
         # Legacy dataset mode with metadata.csv
-        from bioamla.core.datasets import convert_filetype
+        from bioamla.datasets import convert_filetype
 
         stats = convert_filetype(
             dataset_path=path,
@@ -904,7 +904,7 @@ def audio_convert(
 
     elif batch:
         # Batch convert directory
-        from bioamla.core.datasets import batch_convert_audio
+        from bioamla.datasets import batch_convert_audio
 
         if output is None:
             output = str(Path(path)) + f"_{target_format}"
@@ -930,7 +930,7 @@ def audio_convert(
 
     else:
         # Single file conversion
-        from bioamla.core.datasets import convert_audio_file
+        from bioamla.datasets import convert_audio_file
 
         input_path = Path(path)
         if not input_path.exists():
@@ -960,7 +960,7 @@ def audio_convert(
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet):
     """Apply frequency filter to audio files."""
-    from bioamla.core.signal import (
+    from bioamla.signal import (
         bandpass_filter,
         highpass_filter,
         lowpass_filter,
@@ -993,7 +993,7 @@ def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet)
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_denoise(path, output, batch, method, strength, quiet):
     """Apply noise reduction to audio files."""
-    from bioamla.core.signal import spectral_denoise
+    from bioamla.signal import spectral_denoise
 
     def processor(audio, sr):
         return spectral_denoise(audio, sr, noise_reduce_factor=strength)
@@ -1012,7 +1012,7 @@ def audio_segment(path, output, silence_threshold, min_silence, min_segment, qui
     """Split audio on silence into separate files."""
     from pathlib import Path
 
-    from bioamla.core.signal import load_audio, save_audio, split_audio_on_silence
+    from bioamla.signal import load_audio, save_audio, split_audio_on_silence
 
     path = Path(path)
     output = Path(output)
@@ -1053,7 +1053,7 @@ def audio_detect_events(path, output, quiet):
     import csv
     from pathlib import Path
 
-    from bioamla.core.signal import detect_onsets, load_audio
+    from bioamla.signal import detect_onsets, load_audio
 
     path = Path(path)
     if not path.exists():
@@ -1085,7 +1085,7 @@ def audio_detect_events(path, output, quiet):
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_normalize(path, output, batch, target_db, peak, quiet):
     """Normalize audio loudness."""
-    from bioamla.core.signal import normalize_loudness, peak_normalize
+    from bioamla.signal import normalize_loudness, peak_normalize
 
     def processor(audio, sr):
         if peak:
@@ -1104,7 +1104,7 @@ def audio_normalize(path, output, batch, target_db, peak, quiet):
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_resample(path, output, batch, rate, quiet):
     """Resample audio to a different sample rate."""
-    from bioamla.core.signal import resample_audio
+    from bioamla.signal import resample_audio
 
     def processor(audio, sr):
         return resample_audio(audio, sr, rate)
@@ -1123,7 +1123,7 @@ def audio_resample(path, output, batch, rate, quiet):
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
     """Trim audio by time or remove silence."""
-    from bioamla.core.signal import trim_audio, trim_silence
+    from bioamla.signal import trim_audio, trim_silence
 
     if not silence and start is None and end is None:
         click.echo("Error: Must specify --start/--end or use --silence")
@@ -1141,7 +1141,7 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
     """Helper to run signal processing on file or directory."""
     from pathlib import Path
 
-    from bioamla.core.signal import batch_process, load_audio, save_audio
+    from bioamla.signal import batch_process, load_audio, save_audio
 
     path = Path(path)
 
@@ -1225,7 +1225,7 @@ def visualize(
     """
     import os
 
-    from bioamla.core.visualize import batch_generate_spectrograms, generate_spectrogram
+    from bioamla.visualize import batch_generate_spectrograms, generate_spectrogram
 
     if batch:
         # Batch mode: process directory
@@ -1334,7 +1334,7 @@ def augment(
         --pitch-shift: Change pitch without changing speed (semitones)
         --gain: Random volume adjustment (dB)
     """
-    from bioamla.core.augment import AugmentationConfig, batch_augment
+    from bioamla.augment import AugmentationConfig, batch_augment
 
     # Build configuration from options
     config = AugmentationConfig(
@@ -1443,7 +1443,7 @@ def inat_download(
     quiet: bool
 ):
     """Download audio observations from iNaturalist."""
-    from bioamla.core.inat import download_inat_audio
+    from bioamla.inat import download_inat_audio
 
     taxon_ids_list = None
     if taxon_ids:
@@ -1497,7 +1497,7 @@ def inat_search(
     quiet: bool
 ):
     """Search for taxa with observations in a place or project."""
-    from bioamla.core.inat import get_taxa
+    from bioamla.inat import get_taxa
 
     if not place_id and not project_id:
         raise click.UsageError("At least one of --place-id or --project-id must be provided")
@@ -1536,7 +1536,7 @@ def inat_stats(
     """Get statistics for an iNaturalist project."""
     import json
 
-    from bioamla.core.inat import get_project_stats
+    from bioamla.inat import get_project_stats
 
     stats = get_project_stats(
         project_id=project_id,
@@ -1590,7 +1590,7 @@ def dataset_merge(
     quiet: bool
 ):
     """Merge multiple audio datasets into a single dataset."""
-    from bioamla.core.datasets import merge_datasets as do_merge
+    from bioamla.datasets import merge_datasets as do_merge
 
     stats = do_merge(
         dataset_paths=list(dataset_paths),
@@ -1632,7 +1632,7 @@ def dataset_license(
     """
     from pathlib import Path as PathLib
 
-    from bioamla.core.license import (
+    from bioamla.license import (
         generate_license_for_dataset,
         generate_licenses_for_directory,
     )
@@ -1721,6 +1721,69 @@ def dataset_license(
 # HuggingFace Hub Command Group
 # =============================================================================
 
+def _get_folder_size(path: str, limit: int | None = None) -> int:
+    """Calculate the total size of a folder in bytes.
+
+    Args:
+        path: Path to the folder.
+        limit: If provided, short-circuit and return once this size is exceeded.
+
+    Returns:
+        Total size in bytes, or a value > limit if short-circuited.
+    """
+    import os
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(path):
+        for filename in filenames:
+            filepath = os.path.join(dirpath, filename)
+            if os.path.isfile(filepath):
+                total_size += os.path.getsize(filepath)
+                if limit is not None and total_size > limit:
+                    return total_size
+    return total_size
+
+
+def _count_files(path: str, limit: int | None = None) -> int:
+    """Count the total number of files in a folder.
+
+    Args:
+        path: Path to the folder.
+        limit: If provided, short-circuit and return once this count is exceeded.
+
+    Returns:
+        Total file count, or a value > limit if short-circuited.
+    """
+    import os
+    count = 0
+    for dirpath, dirnames, filenames in os.walk(path):
+        count += len(filenames)
+        if limit is not None and count > limit:
+            return count
+    return count
+
+
+def _is_large_folder(path: str, size_threshold_gb: float = 5.0, file_count_threshold: int = 1000) -> bool:
+    """
+    Determine if a folder should be uploaded using upload_large_folder.
+
+    A folder is considered 'large' if:
+    - Total size exceeds size_threshold_gb (default: 5 GB), OR
+    - Total file count exceeds file_count_threshold (default: 1000 files)
+
+    Uses short-circuiting to avoid walking the entire tree for very large directories.
+    """
+    size_threshold_bytes = int(size_threshold_gb * 1024 * 1024 * 1024)
+
+    # Check file count first (usually faster) with short-circuit
+    file_count = _count_files(path, limit=file_count_threshold)
+    if file_count > file_count_threshold:
+        return True
+
+    # Check size with short-circuit
+    folder_size = _get_folder_size(path, limit=size_threshold_bytes)
+    return folder_size > size_threshold_bytes
+
+
 @cli.group()
 def hf():
     """HuggingFace Hub commands for pushing models and datasets."""
@@ -1741,6 +1804,7 @@ def hf_push_model(
     """Push a model folder to the HuggingFace Hub.
 
     Uploads the entire contents of PATH folder to the Hub as a model.
+    Automatically uses upload_large_folder for folders >5GB or >1000 files.
     """
     import os
 
@@ -1756,12 +1820,21 @@ def hf_push_model(
         api = HfApi()
         api.create_repo(repo_id=repo_id, repo_type="model", private=private, exist_ok=True)
 
-        api.upload_folder(
-            folder_path=path,
-            repo_id=repo_id,
-            repo_type="model",
-            commit_message=commit_message or "Upload model",
-        )
+        if _is_large_folder(path):
+            click.echo("Large folder detected, using optimized upload method...")
+            api.upload_large_folder(
+                folder_path=path,
+                repo_id=repo_id,
+                repo_type="model",
+                commit_message=commit_message or "Upload model",
+            )
+        else:
+            api.upload_folder(
+                folder_path=path,
+                repo_id=repo_id,
+                repo_type="model",
+                commit_message=commit_message or "Upload model",
+            )
 
         click.echo(f"Successfully pushed model to: https://huggingface.co/{repo_id}")
 
@@ -1785,6 +1858,7 @@ def hf_push_dataset(
     """Push a dataset folder to the HuggingFace Hub.
 
     Uploads the entire contents of PATH folder to the Hub as a dataset.
+    Automatically uses upload_large_folder for folders >5GB or >1000 files.
     """
     import os
 
@@ -1800,12 +1874,21 @@ def hf_push_dataset(
         api = HfApi()
         api.create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True)
 
-        api.upload_folder(
-            folder_path=path,
-            repo_id=repo_id,
-            repo_type="dataset",
-            commit_message=commit_message or "Upload dataset",
-        )
+        if _is_large_folder(path):
+            click.echo("Large folder detected, using optimized upload method...")
+            api.upload_large_folder(
+                folder_path=path,
+                repo_id=repo_id,
+                repo_type="dataset",
+                commit_message=commit_message or "Upload dataset",
+            )
+        else:
+            api.upload_folder(
+                folder_path=path,
+                repo_id=repo_id,
+                repo_type="dataset",
+                commit_message=commit_message or "Upload dataset",
+            )
 
         click.echo(f"Successfully pushed dataset to: https://huggingface.co/datasets/{repo_id}")
 

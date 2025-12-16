@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from bioamla.core.license import (
+from bioamla.license import (
     format_attribution,
     generate_license_file,
     generate_license_for_dataset,
