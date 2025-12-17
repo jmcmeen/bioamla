@@ -8,7 +8,4 @@ and other package-wide settings.
 
 """
 
-from novus_pytils.globals import SUPPORTED_AUDIO_EXTENSIONS as PYUTILS_AUDIO_EXTS
-
-# List of audio file extensions supported by the bioamla package
-SUPPORTED_AUDIO_EXTENSIONS = PYUTILS_AUDIO_EXTS
+from bioamla.utils import SUPPORTED_AUDIO_EXTENSIONS

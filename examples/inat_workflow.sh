@@ -12,13 +12,13 @@ bioamla inat download ./frogs_dataset \
 bioamla audio convert ./frogs_dataset wav
 
 # Step 3: Fine-tune an audio spectrogram transformer (AST) model on the downloaded dataset
-bioamla ast train --training-dir ./frogs_out --train-dataset ./frogs_dataset --num-train-epochs 25
+bioamla models ast-train --training-dir ./frogs_out --train-dataset ./frogs_dataset --num-train-epochs 25
 
 # Step 4: Download a test dataset
-bioamla download https://www.bioamla.org/datasets/scp_small.zip .
+bioamla dataset download https://www.bioamla.org/datasets/scp_small.zip .
 
 # Step 5: Unzip the test dataset
-bioamla unzip scp_small.zip .
+bioamla dataset unzip scp_small.zip .
 
 # Step 6: Run batch inference on the test dataset using the fine-tuned model
-bioamla ast predict ./scp_small --batch --model-path ./frogs_out/best_model
+bioamla models ast-predict ./scp_small --batch --model-path ./frogs_out/best_model
