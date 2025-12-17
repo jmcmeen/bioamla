@@ -41,6 +41,12 @@ class RateLimiter:
     Limits the number of requests that can be made within a time window
     to comply with API rate limits.
 
+    Thread Safety:
+        This class is fully thread-safe. All public methods use internal
+        locking via ``threading.Lock`` to ensure safe concurrent access
+        from multiple threads. Safe to share a single instance across
+        worker threads.
+
     Args:
         requests_per_second: Maximum requests allowed per second.
         burst_size: Maximum burst of requests allowed (default: 1).
@@ -121,6 +127,12 @@ class APICache:
 
     Stores cached responses as JSON or pickle files in a cache directory.
     Automatically cleans up expired entries on access.
+
+    Thread Safety:
+        This class is thread-safe for concurrent read/write operations.
+        Uses ``threading.Lock`` internally to protect cache modifications.
+        Multiple threads can safely call ``get()``, ``set()``, and ``delete()``
+        concurrently.
 
     Args:
         cache_dir: Directory to store cache files (default: ~/.cache/bioamla).

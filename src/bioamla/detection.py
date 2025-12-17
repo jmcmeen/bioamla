@@ -47,6 +47,21 @@ from bioamla.signal import bandpass_filter
 
 logger = get_logger(__name__)
 
+__all__ = [
+    # Data classes
+    "Detection",
+    "PeakDetection",
+    # Detector classes
+    "BandLimitedEnergyDetector",
+    "RibbitDetector",
+    "CWTPeakDetector",
+    "AcceleratingPatternDetector",
+    # Convenience functions
+    "detect_all",
+    "export_detections",
+    "batch_detect",
+]
+
 
 # =============================================================================
 # Detection Result Classes

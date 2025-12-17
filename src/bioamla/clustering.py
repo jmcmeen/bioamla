@@ -26,6 +26,27 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    # Configuration
+    "ReductionConfig",
+    "ClusteringConfig",
+    # Core classes
+    "IncrementalReducer",
+    "AudioClusterer",
+    "NoveltyResult",
+    "NoveltyDetector",
+    # Functions
+    "reduce_dimensions",
+    "find_optimal_clusters",
+    "compute_cluster_similarity",
+    "sort_by_similarity",
+    "sort_clusters_by_similarity",
+    "discover_novel_sounds",
+    "extract_embeddings_batch",
+    "analyze_clusters",
+    "export_clusters",
+]
+
 
 # =============================================================================
 # Dimensionality Reduction
