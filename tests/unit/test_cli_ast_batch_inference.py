@@ -21,7 +21,7 @@ class TestAstPredictHelp:
 
     def test_ast_predict_help(self, runner):
         """Test ast predict --help shows all options."""
-        result = runner.invoke(cli, ["models", "ast-predict", "--help"])
+        result = runner.invoke(cli, ["models", "predict", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "PATH" in result.output
@@ -35,7 +35,7 @@ class TestAstPredictHelp:
 
     def test_ast_predict_performance_options_exist(self, runner):
         """Test that performance options are shown in help."""
-        result = runner.invoke(cli, ["models", "ast-predict", "--help"])
+        result = runner.invoke(cli, ["models", "predict", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--batch-size" in result.output
@@ -45,7 +45,7 @@ class TestAstPredictHelp:
 
     def test_ast_predict_requires_path(self, runner):
         """Test that ast predict requires path argument."""
-        result = runner.invoke(cli, ["models", "ast-predict"])
+        result = runner.invoke(cli, ["models", "predict", "ast"])
 
         assert result.exit_code != 0
         assert "Missing argument" in result.output or "PATH" in result.output
@@ -56,7 +56,7 @@ class TestAstPredictPerformanceOptions:
 
     def test_batch_size_option_exists(self, runner):
         """Test that --batch-size option exists."""
-        result = runner.invoke(cli, ["models", "ast-predict", "--help"])
+        result = runner.invoke(cli, ["models", "predict", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--batch-size" in result.output
@@ -64,7 +64,7 @@ class TestAstPredictPerformanceOptions:
 
     def test_fp16_option_exists(self, runner):
         """Test that --fp16 option exists."""
-        result = runner.invoke(cli, ["models", "ast-predict", "--help"])
+        result = runner.invoke(cli, ["models", "predict", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--fp16" in result.output
@@ -72,7 +72,7 @@ class TestAstPredictPerformanceOptions:
 
     def test_compile_option_exists(self, runner):
         """Test that --compile option exists."""
-        result = runner.invoke(cli, ["models", "ast-predict", "--help"])
+        result = runner.invoke(cli, ["models", "predict", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--compile" in result.output
@@ -80,7 +80,7 @@ class TestAstPredictPerformanceOptions:
 
     def test_workers_option_exists(self, runner):
         """Test that --workers option exists."""
-        result = runner.invoke(cli, ["models", "ast-predict", "--help"])
+        result = runner.invoke(cli, ["models", "predict", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--workers" in result.output
@@ -92,7 +92,7 @@ class TestAstPredictDefaults:
 
     def test_default_batch_size_is_8(self, runner):
         """Test that default batch size is 8."""
-        result = runner.invoke(cli, ["models", "ast-predict", "--help"])
+        result = runner.invoke(cli, ["models", "predict", "ast", "--help"])
 
         assert result.exit_code == 0
         # Check help text contains default value info
@@ -100,7 +100,7 @@ class TestAstPredictDefaults:
 
     def test_default_workers_is_1(self, runner):
         """Test that default workers is 1."""
-        result = runner.invoke(cli, ["models", "ast-predict", "--help"])
+        result = runner.invoke(cli, ["models", "predict", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "(default:" in result.output.lower() and "1" in result.output
@@ -118,7 +118,7 @@ class TestAstPredictBatchExecution:
             mock_get_files.return_value = []
 
             result = runner.invoke(cli, [
-                "models", "ast-predict",
+                "models", "predict", "ast",
                 str(audio_dir),
                 "--batch",
                 "--batch-size", "16",
@@ -148,7 +148,7 @@ class TestAstPredictBatchExecution:
 
                 with patch("bioamla.ast.wave_file_batch_inference"):
                     result = runner.invoke(cli, [
-                        "models", "ast-predict",
+                        "models", "predict", "ast",
                         str(audio_dir),
                         "--batch",
                         "--batch-size", "16",
@@ -178,7 +178,7 @@ class TestAstPredictBatchExecution:
 
                 with patch("bioamla.ast.wave_file_batch_inference") as mock_inference:
                     result = runner.invoke(cli, [
-                        "models", "ast-predict",
+                        "models", "predict", "ast",
                         str(audio_dir),
                         "--batch",
                         "--batch-size", "32",
@@ -206,7 +206,7 @@ class TestAstPredictBatchExecution:
 
                 with patch("bioamla.ast.wave_file_batch_inference"):
                     runner.invoke(cli, [
-                        "models", "ast-predict",
+                        "models", "predict", "ast",
                         str(audio_dir),
                         "--batch",
                         "--fp16"
@@ -233,7 +233,7 @@ class TestAstPredictBatchExecution:
 
                 with patch("bioamla.ast.wave_file_batch_inference"):
                     runner.invoke(cli, [
-                        "models", "ast-predict",
+                        "models", "predict", "ast",
                         str(audio_dir),
                         "--batch",
                         "--compile"
@@ -253,7 +253,7 @@ class TestAstPredictSingleFile:
             mock_inference.return_value = "species_a"
 
             result = runner.invoke(cli, [
-                "models", "ast-predict",
+                "models", "predict", "ast",
                 "test.wav",
                 "--model-path", "my_model"
             ])
@@ -268,7 +268,7 @@ class TestAstPredictSingleFile:
             mock_inference.return_value = "species_b"
 
             result = runner.invoke(cli, [
-                "models", "ast-predict",
+                "models", "predict", "ast",
                 "test.wav",
                 "--model-path", "my_model",
                 "--resample-freq", "22050"

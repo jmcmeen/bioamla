@@ -44,12 +44,25 @@ The bioamla CLI is organized into the following command groups:
 **models** - ML model operations:
 
 - ``bioamla models list`` - List available model types
-- ``bioamla models predict`` - Run inference with ML model
+- ``bioamla models info`` - Display model information
 - ``bioamla models embed`` - Extract audio embeddings
-- ``bioamla models train`` - Train custom CNN model
-- ``bioamla models ast-predict`` - AST model inference
-- ``bioamla models ast-train`` - Fine-tune AST model
-- ``bioamla models ast-evaluate`` - Evaluate AST model
+- ``bioamla models convert`` - Convert model formats (PyTorch to ONNX)
+- ``bioamla models ensemble`` - Create model ensemble
+
+**models predict** - Run inference:
+
+- ``bioamla models predict ast`` - AST model inference
+- ``bioamla models predict generic`` - Generic model inference (multi-model)
+
+**models train** - Train models:
+
+- ``bioamla models train ast`` - Fine-tune AST model
+- ``bioamla models train cnn`` - Train CNN model (ResNet)
+- ``bioamla models train spec`` - Train spectrogram classifier
+
+**models evaluate** - Evaluate models:
+
+- ``bioamla models evaluate ast`` - Evaluate AST model
 
 **detect** - Detection algorithms:
 
@@ -78,28 +91,45 @@ The bioamla CLI is organized into the following command groups:
 - ``bioamla indices adi`` - Acoustic Diversity Index
 - ``bioamla indices ndsi`` - Normalized Difference Soundscape Index
 
-**api** - External API integrations:
+**services** - External service integrations:
 
-- ``bioamla api xc-search`` - Search Xeno-canto
-- ``bioamla api xc-download`` - Download from Xeno-canto
-- ``bioamla api ml-search`` - Search Macaulay Library
-- ``bioamla api species`` - Species name lookup
+- ``bioamla services clear-cache`` - Clear API response caches
 
-**inat** - iNaturalist integration:
+**services xc** - Xeno-canto:
 
-- ``bioamla inat download`` - Download iNaturalist audio
-- ``bioamla inat search`` - Search observations
-- ``bioamla inat stats`` - Show statistics
+- ``bioamla services xc search`` - Search Xeno-canto
+- ``bioamla services xc download`` - Download from Xeno-canto
 
-**hf** - HuggingFace Hub:
+**services ml** - Macaulay Library:
 
-- ``bioamla hf push-model`` - Push model to Hub
-- ``bioamla hf push-dataset`` - Push dataset to Hub
+- ``bioamla services ml search`` - Search Macaulay Library
+- ``bioamla services ml download`` - Download from Macaulay Library
 
-**integrations** - External integrations:
+**services species** - Species lookup:
 
-- ``bioamla integrations ebird-validate`` - Validate against eBird
-- ``bioamla integrations pg-export`` - Export to PostgreSQL
+- ``bioamla services species lookup`` - Look up species names
+- ``bioamla services species search`` - Search for species
+
+**services inat** - iNaturalist:
+
+- ``bioamla services inat download`` - Download iNaturalist audio
+- ``bioamla services inat search`` - Search observations
+- ``bioamla services inat stats`` - Show statistics
+
+**services hf** - HuggingFace Hub:
+
+- ``bioamla services hf push-model`` - Push model to Hub
+- ``bioamla services hf push-dataset`` - Push dataset to Hub
+
+**services ebird** - eBird:
+
+- ``bioamla services ebird validate`` - Validate species for location
+- ``bioamla services ebird nearby`` - Get nearby observations
+
+**services pg** - PostgreSQL:
+
+- ``bioamla services pg export`` - Export detections to PostgreSQL
+- ``bioamla services pg stats`` - Show database statistics
 
 API Reference
 -------------

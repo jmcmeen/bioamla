@@ -273,11 +273,30 @@ def models():
     pass
 
 
+# Subgroups for models
+@models.group()
+def predict():
+    """Run inference with ML models."""
+    pass
+
+
+@models.group()
+def train():
+    """Train ML models."""
+    pass
+
+
+@models.group()
+def evaluate():
+    """Evaluate ML models."""
+    pass
+
+
 # =============================================================================
 # AST Commands (Audio Spectrogram Transformer)
 # =============================================================================
 
-@models.command('ast-predict')
+@predict.command('ast')
 @click.argument('path')
 @click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for inference')
 @click.option('--resample-freq', default=16000, type=int, help='Resampling frequency')
@@ -449,7 +468,7 @@ def _run_batch_inference(
     print(f"Elapsed time: {elapsed:.2f}s ({len(wave_files)/elapsed:.2f} files/sec)")
 
 
-@models.command('ast-train')
+@train.command('ast')
 @click.option('--training-dir', default='.', help='Directory to save training outputs')
 @click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
 @click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub')
@@ -790,7 +809,7 @@ def ast_train(
     trainer.save_model(best_model_path)
 
 
-@models.command('ast-evaluate')
+@evaluate.command('ast')
 @click.argument('path')
 @click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for evaluation')
 @click.option('--ground-truth', '-g', required=True, help='Path to CSV file with ground truth labels')
@@ -885,7 +904,7 @@ def models_list():
         click.echo(f"  - {model_name}")
 
 
-@models.command('predict')
+@predict.command('generic')
 @click.argument('path')
 @click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
               default='ast', help='Model type to use')
@@ -900,17 +919,17 @@ def models_list():
 @click.option('--batch-size', default=8, type=int, help='Batch size for processing')
 @click.option('--fp16/--no-fp16', default=False, help='Use half-precision inference')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
-def models_predict(
+def predict_generic(
     path, model_type, model_path, output, batch, min_confidence,
     top_k, clip_duration, overlap, sample_rate, batch_size, fp16, quiet
 ):
-    """Run predictions using an ML model.
+    """Run predictions using an ML model (multi-model interface).
 
     Single file:
-        bioamla models predict audio.wav --model-type ast --model-path my_model
+        bioamla models predict generic audio.wav --model-type ast --model-path my_model
 
     Batch mode:
-        bioamla models predict ./audio --batch --model-type ast --model-path my_model -o results.csv
+        bioamla models predict generic ./audio --batch --model-type ast --model-path my_model -o results.csv
     """
     import csv
     import time
@@ -1084,7 +1103,7 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
             click.echo(f"Saved to {output}")
 
 
-@models.command('train')
+@train.command('cnn')
 @click.argument('train_dir')
 @click.option('--val-dir', default=None, help='Validation data directory')
 @click.option('--output-dir', '-o', default='./output', help='Output directory for model')
@@ -1099,7 +1118,7 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
 @click.option('--fp16/--no-fp16', default=False, help='Use mixed precision training')
 @click.option('--sample-rate', default=16000, type=int, help='Target sample rate')
 @click.option('--clip-duration', default=3.0, type=float, help='Clip duration in seconds')
-def models_train(
+def train_cnn(
     train_dir, val_dir, output_dir, classes, architecture, epochs,
     batch_size, learning_rate, freeze_epochs, pretrained, fp16, sample_rate, clip_duration
 ):
@@ -1115,7 +1134,7 @@ def models_train(
                 ...
 
     Example:
-        bioamla models train ./data/train --val-dir ./data/val \\
+        bioamla models train cnn ./data/train --val-dir ./data/val \\
             --classes "bird,frog,insect" --epochs 20 -o ./my_model
     """
     from bioamla.models import ModelTrainer, TrainingConfig
@@ -1893,16 +1912,26 @@ def audio_visualize(
 
 
 # =============================================================================
-# iNaturalist Command Group
+# Services Command Group
 # =============================================================================
 
 @cli.group()
-def inat():
-    """iNaturalist integration commands."""
+def services():
+    """External service integrations (Xeno-canto, Macaulay Library, iNaturalist, etc.)."""
     pass
 
 
-@inat.command('download')
+# =============================================================================
+# iNaturalist subgroup (under services)
+# =============================================================================
+
+@services.group('inat')
+def services_inat():
+    """iNaturalist observation database."""
+    pass
+
+
+@services_inat.command('download')
 @click.argument('output_dir')
 @click.option('--taxon-ids', default=None, help='Comma-separated list of taxon IDs (e.g., "3" for birds, "3,20978" for multiple)')
 @click.option('--taxon-csv', default=None, type=click.Path(exists=True), help='Path to CSV file with taxon_id column')
@@ -1978,7 +2007,7 @@ def inat_download(
         click.echo(f"Downloaded {stats['total_sounds']} audio files to {stats['output_dir']}")
 
 
-@inat.command('search')
+@services_inat.command('search')
 @click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
 @click.option('--project-id', default=None, help='Filter by iNaturalist project ID or slug')
 @click.option('--taxon-id', type=int, default=None, help='Filter by parent taxon ID (e.g., 20979 for Amphibia)')
@@ -2021,7 +2050,7 @@ def inat_search(
             click.echo(f"{t['taxon_id']:<12} {t['name']:<30} {t['common_name']:<25} {t['observation_count']:<10}")
 
 
-@inat.command('stats')
+@services_inat.command('stats')
 @click.argument('project_id')
 @click.option('--output', '-o', default=None, help='Output file path for JSON (optional)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output, print only JSON')
@@ -2470,13 +2499,14 @@ def _is_large_folder(path: str, size_threshold_gb: float = 5.0, file_count_thres
     return folder_size > size_threshold_bytes
 
 
-@cli.group()
-def hf():
-    """HuggingFace Hub commands for pushing models and datasets."""
+# --- HuggingFace Hub subgroup ---
+@services.group('hf')
+def services_hf():
+    """HuggingFace Hub model and dataset management."""
     pass
 
 
-@hf.command('push-model')
+@services_hf.command('push-model')
 @click.argument('path')
 @click.argument('repo_id')
 @click.option('--private/--public', default=False, help='Make the repository private (default: public)')
@@ -2908,7 +2938,7 @@ def annotation_generate_labels(
         click.echo(f"Output: {output_file}")
 
 
-@hf.command('push-dataset')
+@services_hf.command('push-dataset')
 @click.argument('path')
 @click.argument('repo_id')
 @click.option('--private/--public', default=False, help='Make the repository private (default: public)')
@@ -2962,17 +2992,14 @@ def hf_push_dataset(
         raise SystemExit(1)
 
 
-# =============================================================================
-# API Command Group
-# =============================================================================
-
-@cli.group()
-def api():
-    """API integrations for bioacoustic databases."""
+# --- Xeno-canto subgroup ---
+@services.group('xc')
+def services_xc():
+    """Xeno-canto bird recording database."""
     pass
 
 
-@api.command('xc-search')
+@services_xc.command('search')
 @click.option('--species', '-s', help='Species name (scientific or common)')
 @click.option('--genus', '-g', help='Genus name')
 @click.option('--country', '-c', help='Country name')
@@ -3032,7 +3059,7 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
             click.echo()
 
 
-@api.command('xc-download')
+@services_xc.command('download')
 @click.option('--species', '-s', help='Species name (scientific or common)')
 @click.option('--genus', '-g', help='Genus name')
 @click.option('--country', '-c', help='Country name')
@@ -3082,7 +3109,14 @@ def xc_download(species, genus, country, quality, max_recordings, output_dir, de
     click.echo(f"\nDownload complete: {stats['downloaded']}/{stats['total']} recordings")
 
 
-@api.command('ml-search')
+# --- Macaulay Library subgroup ---
+@services.group('ml')
+def services_ml():
+    """Macaulay Library audio recordings database."""
+    pass
+
+
+@services_ml.command('search')
 @click.option('--species-code', '-s', help='eBird species code (e.g., amerob)')
 @click.option('--scientific-name', help='Scientific name')
 @click.option('--region', '-r', help='Region code (e.g., US-NY)')
@@ -3133,7 +3167,7 @@ def ml_search(species_code, scientific_name, region, min_rating, max_results, ou
             click.echo()
 
 
-@api.command('ml-download')
+@services_ml.command('download')
 @click.option('--species-code', '-s', help='eBird species code (e.g., amerob)')
 @click.option('--scientific-name', help='Scientific name')
 @click.option('--region', '-r', help='Region code (e.g., US-NY)')
@@ -3182,7 +3216,14 @@ def ml_download(species_code, scientific_name, region, min_rating, max_recording
     click.echo(f"\nDownload complete: {stats['downloaded']}/{stats['total']} recordings")
 
 
-@api.command('species')
+# --- Species lookup subgroup ---
+@services.group('species')
+def services_species():
+    """Species name lookup and search."""
+    pass
+
+
+@services_species.command('lookup')
 @click.argument('name')
 @click.option('--to-common', '-c', is_flag=True, help='Convert scientific to common name')
 @click.option('--to-scientific', '-s', is_flag=True, help='Convert common to scientific name')
@@ -3233,7 +3274,7 @@ def species_lookup(name, to_common, to_scientific, info):
             raise SystemExit(1)
 
 
-@api.command('species-search')
+@services_species.command('search')
 @click.argument('query')
 @click.option('--limit', '-n', default=10, type=int, help='Maximum results')
 def species_search(query, limit):
@@ -3259,7 +3300,7 @@ def species_search(query, limit):
         click.echo()
 
 
-@api.command('clear-cache')
+@services.command('clear-cache')
 @click.option('--all', 'clear_all', is_flag=True, help='Clear all API caches')
 @click.option('--xc', is_flag=True, help='Clear Xeno-canto cache')
 @click.option('--ml', is_flag=True, help='Clear Macaulay Library cache')
@@ -4620,16 +4661,16 @@ def realtime_test(duration: float, device: int, output: str):
 
 
 # =============================================================================
-# Integration Commands
+# eBird subgroup (under services)
 # =============================================================================
 
-@cli.group()
-def integrations():
-    """External integration commands (eBird, PostgreSQL)."""
+@services.group('ebird')
+def services_ebird():
+    """eBird bird observation database."""
     pass
 
 
-@integrations.command('ebird-validate')
+@services_ebird.command('validate')
 @click.argument('species_code')
 @click.option('--lat', type=float, required=True, help='Latitude')
 @click.option('--lng', type=float, required=True, help='Longitude')
@@ -4660,7 +4701,7 @@ def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, dist
         click.echo(f"  {result['total_species_in_area']} other species observed nearby")
 
 
-@integrations.command('ebird-nearby')
+@services_ebird.command('nearby')
 @click.option('--lat', type=float, required=True, help='Latitude')
 @click.option('--lng', type=float, required=True, help='Longitude')
 @click.option('--api-key', envvar='EBIRD_API_KEY', required=True, help='eBird API key')
@@ -4703,7 +4744,14 @@ def ebird_nearby(lat: float, lng: float, api_key: str, distance: float,
         click.echo(f"Saved to: {output}")
 
 
-@integrations.command('pg-export')
+# --- PostgreSQL subgroup ---
+@services.group('pg')
+def services_pg():
+    """PostgreSQL database integration."""
+    pass
+
+
+@services_pg.command('export')
 @click.argument('detections_file')
 @click.option('--connection', '-c', envvar='DATABASE_URL', required=True,
               help='PostgreSQL connection string')
@@ -4737,7 +4785,7 @@ def pg_export(detections_file: str, connection: str, detector: str,
         click.echo(f"Exported {count} detections to database")
 
 
-@integrations.command('pg-stats')
+@services_pg.command('stats')
 @click.option('--connection', '-c', envvar='DATABASE_URL', required=True,
               help='PostgreSQL connection string')
 def pg_stats(connection: str):
@@ -4760,17 +4808,7 @@ def pg_stats(connection: str):
             click.echo(f"  {label}: {count}")
 
 
-# =============================================================================
-# ML Commands
-# =============================================================================
-
-@cli.group()
-def ml():
-    """Advanced machine learning commands."""
-    pass
-
-
-@ml.command('train-classifier')
+@train.command('spec')
 @click.argument('data_dir')
 @click.option('--output', '-o', required=True, help='Output directory for model')
 @click.option('--model', '-m', type=click.Choice(['cnn', 'crnn', 'attention']),
@@ -4780,11 +4818,14 @@ def ml():
 @click.option('--lr', type=float, default=1e-3, help='Learning rate')
 @click.option('--n-classes', '-n', type=int, required=True, help='Number of classes')
 @click.option('--quiet', '-q', is_flag=True, help='Suppress output')
-def ml_train_classifier(data_dir: str, output: str, model: str, epochs: int,
-                        batch_size: int, lr: float, n_classes: int, quiet: bool):
-    """Train a custom classifier on spectrograms.
+def train_spec(data_dir: str, output: str, model: str, epochs: int,
+               batch_size: int, lr: float, n_classes: int, quiet: bool):
+    """Train a spectrogram classifier (CNN/CRNN/Attention).
 
     DATA_DIR: Directory containing training data (spectrograms as .npy files)
+
+    Example:
+        bioamla models train spec ./spectrograms -o ./model -n 5
     """
     from bioamla.ml import (
         AttentionClassifier,
@@ -4816,16 +4857,19 @@ def ml_train_classifier(data_dir: str, output: str, model: str, epochs: int,
     click.echo(f"Model will be saved to: {output}")
 
 
-@ml.command('ensemble')
+@models.command('ensemble')
 @click.argument('model_dirs', nargs=-1, required=True)
 @click.option('--output', '-o', required=True, help='Output directory for ensemble')
 @click.option('--strategy', '-s', type=click.Choice(['averaging', 'voting', 'max']),
               default='averaging', help='Ensemble combination strategy')
 @click.option('--weights', '-w', multiple=True, type=float, help='Model weights')
-def ml_ensemble(model_dirs, output: str, strategy: str, weights):
+def models_ensemble(model_dirs, output: str, strategy: str, weights):
     """Create an ensemble from multiple trained models.
 
     MODEL_DIRS: Directories containing trained models
+
+    Example:
+        bioamla models ensemble ./model1 ./model2 -o ./ensemble -s voting
     """
     from pathlib import Path
 

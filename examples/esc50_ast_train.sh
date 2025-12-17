@@ -1,7 +1,7 @@
 #example workflow for esc50
 bioamla version
 bioamla devices
-bioamla models ast-train \
+bioamla models train ast \
   --training-dir "esc50" \
   --train-dataset "ashraq/esc50" \
   --num-train-epochs 1 \

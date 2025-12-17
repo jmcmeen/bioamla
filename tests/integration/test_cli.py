@@ -42,14 +42,13 @@ class TestCLIBasic:
 class TestCLICommandGroups:
     """Tests for CLI command groups."""
 
-    def test_ast_group_exists(self, runner):
-        """Test that ast command group exists under models."""
-        result = runner.invoke(cli, ["models", "ast", "--help"])
+    def test_models_predict_group_exists(self, runner):
+        """Test that predict command group exists under models."""
+        result = runner.invoke(cli, ["models", "predict", "--help"])
 
         assert result.exit_code == 0
-        assert "train" in result.output
-        assert "predict" in result.output
-        assert "evaluate" in result.output
+        assert "ast" in result.output
+        assert "generic" in result.output
 
     def test_audio_group_exists(self, runner):
         """Test that audio command group exists."""
@@ -60,9 +59,9 @@ class TestCLICommandGroups:
         assert "info" in result.output
         assert "convert" in result.output
 
-    def test_inat_group_exists(self, runner):
-        """Test that inat command group exists."""
-        result = runner.invoke(cli, ["inat", "--help"])
+    def test_services_inat_group_exists(self, runner):
+        """Test that services inat command group exists."""
+        result = runner.invoke(cli, ["services", "inat", "--help"])
 
         assert result.exit_code == 0
         assert "download" in result.output
@@ -91,13 +90,13 @@ class TestCLIDatasets:
 
 
 @pytest.mark.integration
-class TestCLIInat:
+class TestCLIServicesInat:
     """Integration tests for iNaturalist commands."""
 
     @pytest.mark.slow
-    def test_inat_search_help(self, runner):
-        """Test inat search command help."""
-        result = runner.invoke(cli, ["inat", "search", "--help"])
+    def test_services_inat_search_help(self, runner):
+        """Test services inat search command help."""
+        result = runner.invoke(cli, ["services", "inat", "search", "--help"])
 
         assert result.exit_code == 0
         assert "taxa" in result.output.lower() or "Usage" in result.output
