@@ -43,7 +43,7 @@ def download(url: str, output_dir: str):
     import os
     from urllib.parse import urlparse
 
-    from novus_pytils.files import download_file
+    from bioamla.utils import download_file
 
     if output_dir == '.':
         output_dir = os.getcwd()
@@ -62,7 +62,7 @@ def download(url: str, output_dir: str):
 @click.argument('output_path', required=False, default='.')
 def unzip(file_path: str, output_path: str):
     """Extract a ZIP archive to the specified output directory."""
-    from novus_pytils.compression import extract_zip_file
+    from bioamla.utils import extract_zip_file
     if output_path == '.':
         import os
         output_path = os.getcwd()
@@ -77,7 +77,7 @@ def zip_cmd(source_path: str, output_file: str):
     """Create a ZIP archive from a file or directory."""
     import os
 
-    from novus_pytils.compression import create_zip_file, zip_directory
+    from bioamla.utils import create_zip_file, zip_directory
 
     if os.path.isdir(source_path):
         zip_directory(source_path, output_file)
@@ -306,7 +306,7 @@ def _run_batch_inference(
 
     import pandas as pd
     import torch
-    from novus_pytils.files import file_exists, get_files_by_extension
+    from bioamla.utils import file_exists, get_files_by_extension
 
     from bioamla.ast import (
         InferenceConfig,
@@ -465,7 +465,7 @@ def ast_train(
         TimeStretch,
     )
     from datasets import Audio, Dataset, DatasetDict, load_dataset
-    from novus_pytils.files import create_directory
+    from bioamla.utils import create_directory
     from transformers import (
         ASTConfig,
         ASTFeatureExtractor,
@@ -832,7 +832,7 @@ def audio():
 @click.argument('filepath', required=False, default='.')
 def audio_list(filepath: str):
     """List audio files in a directory."""
-    from novus_pytils.audio import get_audio_files
+    from bioamla.utils import get_audio_files
     try:
         if filepath == '.':
             import os
@@ -851,7 +851,7 @@ def audio_list(filepath: str):
 @click.argument('filepath')
 def audio_info(filepath: str):
     """Display metadata from an audio file."""
-    from novus_pytils.audio.wave import get_wav_metadata
+    from bioamla.utils import get_wav_metadata
     metadata = get_wav_metadata(filepath)
     click.echo(f"{metadata}")
 

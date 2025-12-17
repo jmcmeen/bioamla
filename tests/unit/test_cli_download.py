@@ -21,7 +21,7 @@ class TestDownloadCommand:
         def fake_download_file(url, output_path):
             calls.append((url, output_path))
 
-        with patch("novus_pytils.files.download_file", fake_download_file):
+        with patch("bioamla.utils.download_file", fake_download_file):
             runner = CliRunner()
             result = runner.invoke(cli, ["download", "https://example.com/files/audio.wav", "."])
 
@@ -38,7 +38,7 @@ class TestDownloadCommand:
         def fake_download_file(url, output_path):
             calls.append((url, output_path))
 
-        with patch("novus_pytils.files.download_file", fake_download_file):
+        with patch("bioamla.utils.download_file", fake_download_file):
             runner = CliRunner()
             result = runner.invoke(cli, ["download", "https://example.com", str(tmp_path)])
 
@@ -55,7 +55,7 @@ class TestDownloadCommand:
         def fake_download_file(url, output_path):
             calls.append((url, output_path))
 
-        with patch("novus_pytils.files.download_file", fake_download_file):
+        with patch("bioamla.utils.download_file", fake_download_file):
             runner = CliRunner()
             result = runner.invoke(cli, ["download", "https://example.com/folder/", str(tmp_path)])
 
@@ -72,7 +72,7 @@ class TestDownloadCommand:
         def fake_download_file(url, output_path):
             calls.append((url, output_path))
 
-        with patch("novus_pytils.files.download_file", fake_download_file):
+        with patch("bioamla.utils.download_file", fake_download_file):
             runner = CliRunner()
             result = runner.invoke(cli, ["download", "https://example.com/test.zip", "."])
 
@@ -89,7 +89,7 @@ class TestDownloadCommand:
         def fake_download_file(url, output_path):
             calls.append((url, output_path))
 
-        with patch("novus_pytils.files.download_file", fake_download_file):
+        with patch("bioamla.utils.download_file", fake_download_file):
             runner = CliRunner()
             result = runner.invoke(cli, ["download", "https://example.com/data/archive.tar.gz", str(tmp_path)])
 
@@ -106,7 +106,7 @@ class TestDownloadCommand:
         def fake_download_file(url, output_path):
             calls.append((url, output_path))
 
-        with patch("novus_pytils.files.download_file", fake_download_file):
+        with patch("bioamla.utils.download_file", fake_download_file):
             runner = CliRunner()
             result = runner.invoke(cli, ["download", "https://example.com/file.wav?token=abc123", str(tmp_path)])
 
