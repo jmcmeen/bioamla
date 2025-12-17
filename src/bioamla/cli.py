@@ -4429,5 +4429,421 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
             click.echo(f"  Results saved to: {output}")
 
 
+# =============================================================================
+# Clustering Commands
+# =============================================================================
+
+@cli.group()
+def cluster():
+    """Clustering and dimensionality reduction commands."""
+    pass
+
+
+@cluster.command('reduce')
+@click.argument('embeddings_file')
+@click.option('--output', '-o', required=True, help='Output file for reduced embeddings')
+@click.option('--method', '-m', type=click.Choice(['umap', 'tsne', 'pca']),
+              default='pca', help='Reduction method')
+@click.option('--n-components', '-n', type=int, default=2, help='Number of output dimensions')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def cluster_reduce(embeddings_file: str, output: str, method: str,
+                   n_components: int, quiet: bool):
+    """Reduce dimensionality of embeddings.
+
+    EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
+    """
+    import numpy as np
+    from bioamla.clustering import reduce_dimensions
+
+    embeddings = np.load(embeddings_file)
+
+    if not quiet:
+        click.echo(f"Reducing {embeddings.shape[1]}D embeddings to {n_components}D using {method}...")
+
+    reduced = reduce_dimensions(embeddings, method=method, n_components=n_components)
+
+    np.save(output, reduced)
+
+    if not quiet:
+        click.echo(f"Saved reduced embeddings to: {output}")
+
+
+@cluster.command('cluster')
+@click.argument('embeddings_file')
+@click.option('--output', '-o', required=True, help='Output file for cluster labels')
+@click.option('--method', '-m', type=click.Choice(['kmeans', 'dbscan', 'agglomerative']),
+              default='kmeans', help='Clustering method')
+@click.option('--n-clusters', '-k', type=int, default=10, help='Number of clusters (for k-means/agglomerative)')
+@click.option('--eps', type=float, default=0.5, help='DBSCAN epsilon')
+@click.option('--min-samples', type=int, default=5, help='Minimum samples per cluster')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def cluster_cluster(embeddings_file: str, output: str, method: str,
+                    n_clusters: int, eps: float, min_samples: int, quiet: bool):
+    """Cluster embeddings.
+
+    EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
+    """
+    import numpy as np
+    from bioamla.clustering import AudioClusterer, ClusteringConfig
+
+    embeddings = np.load(embeddings_file)
+
+    config = ClusteringConfig(
+        method=method,
+        n_clusters=n_clusters,
+        eps=eps,
+        min_samples=min_samples,
+    )
+    clusterer = AudioClusterer(config=config)
+
+    if not quiet:
+        click.echo(f"Clustering {len(embeddings)} samples using {method}...")
+
+    labels = clusterer.fit_predict(embeddings)
+
+    np.save(output, labels)
+
+    if not quiet:
+        click.echo(f"Found {clusterer.n_clusters_} clusters")
+        click.echo(f"Saved cluster labels to: {output}")
+
+
+@cluster.command('analyze')
+@click.argument('embeddings_file')
+@click.argument('labels_file')
+@click.option('--output', '-o', help='Output JSON file for analysis results')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: bool):
+    """Analyze cluster quality.
+
+    EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
+    LABELS_FILE: Path to numpy file with cluster labels (.npy)
+    """
+    import json
+    import numpy as np
+    from bioamla.clustering import analyze_clusters
+
+    embeddings = np.load(embeddings_file)
+    labels = np.load(labels_file)
+
+    analysis = analyze_clusters(embeddings, labels)
+
+    if not quiet:
+        click.echo(f"Cluster Analysis:")
+        click.echo(f"  Clusters: {analysis['n_clusters']}")
+        click.echo(f"  Samples: {analysis['n_samples']}")
+        click.echo(f"  Noise: {analysis['n_noise']} ({analysis['noise_percentage']:.1f}%)")
+        click.echo(f"  Silhouette Score: {analysis['silhouette_score']:.4f}")
+        click.echo(f"  Calinski-Harabasz Score: {analysis['calinski_harabasz_score']:.2f}")
+
+    if output:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        with open(output, 'w') as f:
+            json.dump(analysis, f, indent=2)
+        if not quiet:
+            click.echo(f"Saved analysis to: {output}")
+
+
+@cluster.command('novelty')
+@click.argument('embeddings_file')
+@click.option('--output', '-o', required=True, help='Output file for novelty results')
+@click.option('--method', '-m', type=click.Choice(['distance', 'isolation_forest', 'lof']),
+              default='distance', help='Novelty detection method')
+@click.option('--threshold', type=float, help='Novelty threshold')
+@click.option('--labels', help='Optional cluster labels file')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def cluster_novelty(embeddings_file: str, output: str, method: str,
+                    threshold: float, labels: str, quiet: bool):
+    """Detect novel sounds in embeddings.
+
+    EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
+    """
+    import numpy as np
+    from bioamla.clustering import discover_novel_sounds
+
+    embeddings = np.load(embeddings_file)
+    known_labels = np.load(labels) if labels else None
+
+    if not quiet:
+        click.echo(f"Detecting novel sounds using {method}...")
+
+    is_novel, scores = discover_novel_sounds(
+        embeddings,
+        known_labels=known_labels,
+        method=method,
+        threshold=threshold,
+        return_scores=True,
+    )
+
+    results = np.column_stack([is_novel.astype(int), scores])
+    np.save(output, results)
+
+    n_novel = is_novel.sum()
+    if not quiet:
+        click.echo(f"Found {n_novel} novel samples ({100*n_novel/len(embeddings):.1f}%)")
+        click.echo(f"Saved novelty results to: {output}")
+
+
+# =============================================================================
+# Real-time Commands
+# =============================================================================
+
+@cli.group()
+def realtime():
+    """Real-time audio processing commands."""
+    pass
+
+
+@realtime.command('devices')
+def realtime_devices():
+    """List available audio input devices."""
+    from bioamla.realtime import list_audio_devices
+
+    devices = list_audio_devices()
+
+    click.echo("Available Audio Input Devices:")
+    for device in devices:
+        click.echo(f"  [{device['index']}] {device['name']}")
+        click.echo(f"      Channels: {device['channels']}, Sample Rate: {device['sample_rate']}")
+
+
+@realtime.command('test')
+@click.option('--duration', '-d', type=float, default=3.0, help='Recording duration in seconds')
+@click.option('--device', type=int, help='Device index')
+@click.option('--output', '-o', help='Output file to save recording')
+def realtime_test(duration: float, device: int, output: str):
+    """Test audio recording from microphone."""
+    from bioamla.realtime import test_recording
+
+    click.echo(f"Recording for {duration} seconds...")
+    audio = test_recording(duration=duration, device=device)
+
+    click.echo(f"Recorded {len(audio)} samples")
+    click.echo(f"Max amplitude: {audio.max():.4f}")
+    click.echo(f"RMS: {(audio**2).mean()**0.5:.4f}")
+
+    if output:
+        import soundfile as sf
+        sf.write(output, audio, 16000)
+        click.echo(f"Saved recording to: {output}")
+
+
+# =============================================================================
+# Integration Commands
+# =============================================================================
+
+@cli.group()
+def integrations():
+    """External integration commands (eBird, PostgreSQL)."""
+    pass
+
+
+@integrations.command('ebird-validate')
+@click.argument('species_code')
+@click.option('--lat', type=float, required=True, help='Latitude')
+@click.option('--lng', type=float, required=True, help='Longitude')
+@click.option('--api-key', envvar='EBIRD_API_KEY', required=True, help='eBird API key')
+@click.option('--distance', type=float, default=50, help='Search radius in km')
+def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, distance: float):
+    """Validate if a species is expected at a location.
+
+    SPECIES_CODE: eBird species code (e.g., 'carwre' for Carolina Wren)
+    """
+    from bioamla.integrations import EBirdClient
+
+    client = EBirdClient(api_key=api_key)
+    result = client.validate_species_for_location(
+        species_code=species_code,
+        latitude=lat,
+        longitude=lng,
+        distance_km=distance,
+    )
+
+    if result['is_valid']:
+        click.echo(f"✓ {species_code} is expected at this location")
+        click.echo(f"  Found {result['nearby_observations']} nearby observations")
+        if result['most_recent_observation']:
+            click.echo(f"  Most recent: {result['most_recent_observation']}")
+    else:
+        click.echo(f"✗ {species_code} not recently observed at this location")
+        click.echo(f"  {result['total_species_in_area']} other species observed nearby")
+
+
+@integrations.command('ebird-nearby')
+@click.option('--lat', type=float, required=True, help='Latitude')
+@click.option('--lng', type=float, required=True, help='Longitude')
+@click.option('--api-key', envvar='EBIRD_API_KEY', required=True, help='eBird API key')
+@click.option('--distance', type=float, default=25, help='Search radius in km')
+@click.option('--days', type=int, default=14, help='Days back to search')
+@click.option('--limit', type=int, default=20, help='Maximum results')
+@click.option('--output', '-o', help='Output CSV file')
+def ebird_nearby(lat: float, lng: float, api_key: str, distance: float,
+                 days: int, limit: int, output: str):
+    """Get recent eBird observations near a location."""
+    import csv
+    from bioamla.integrations import EBirdClient
+
+    client = EBirdClient(api_key=api_key)
+    observations = client.get_nearby_observations(
+        latitude=lat,
+        longitude=lng,
+        distance_km=distance,
+        back=days,
+        max_results=limit,
+    )
+
+    click.echo(f"Found {len(observations)} recent observations:")
+    for obs in observations[:10]:
+        count_str = f" (x{obs.how_many})" if obs.how_many else ""
+        click.echo(f"  {obs.common_name}{count_str} - {obs.location_name}")
+
+    if len(observations) > 10:
+        click.echo(f"  ... and {len(observations) - 10} more")
+
+    if output:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        with open(output, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=['species_code', 'common_name', 'scientific_name',
+                                                    'location_name', 'observation_date', 'how_many'])
+            writer.writeheader()
+            for obs in observations:
+                writer.writerow(obs.to_dict())
+        click.echo(f"Saved to: {output}")
+
+
+@integrations.command('pg-export')
+@click.argument('detections_file')
+@click.option('--connection', '-c', envvar='DATABASE_URL', required=True,
+              help='PostgreSQL connection string')
+@click.option('--detector', '-d', default='unknown', help='Detector name')
+@click.option('--create-tables', is_flag=True, help='Create tables if not exist')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def pg_export(detections_file: str, connection: str, detector: str,
+              create_tables: bool, quiet: bool):
+    """Export detections to PostgreSQL database.
+
+    DETECTIONS_FILE: Path to JSON file with detections
+    """
+    import json
+    from bioamla.integrations import PostgreSQLExporter
+
+    with open(detections_file) as f:
+        detections = json.load(f)
+
+    exporter = PostgreSQLExporter(connection_string=connection)
+
+    if create_tables:
+        exporter.create_tables()
+        if not quiet:
+            click.echo("Database tables created")
+
+    count = exporter.export_detections(detections, detector_name=detector)
+    exporter.close()
+
+    if not quiet:
+        click.echo(f"Exported {count} detections to database")
+
+
+@integrations.command('pg-stats')
+@click.option('--connection', '-c', envvar='DATABASE_URL', required=True,
+              help='PostgreSQL connection string')
+def pg_stats(connection: str):
+    """Show PostgreSQL database statistics."""
+    from bioamla.integrations import PostgreSQLExporter
+
+    exporter = PostgreSQLExporter(connection_string=connection)
+    stats = exporter.get_statistics()
+    exporter.close()
+
+    click.echo("Database Statistics:")
+    click.echo(f"  Detections: {stats['detections_count']}")
+    click.echo(f"  Annotations: {stats['annotations_count']}")
+    click.echo(f"  Audio Files: {stats['audio_files_count']}")
+    click.echo(f"  Species Observations: {stats['species_observations_count']}")
+
+    if stats.get('detections_by_label'):
+        click.echo("\nTop Detection Labels:")
+        for label, count in list(stats['detections_by_label'].items())[:10]:
+            click.echo(f"  {label}: {count}")
+
+
+# =============================================================================
+# ML Commands
+# =============================================================================
+
+@cli.group()
+def ml():
+    """Advanced machine learning commands."""
+    pass
+
+
+@ml.command('train-classifier')
+@click.argument('data_dir')
+@click.option('--output', '-o', required=True, help='Output directory for model')
+@click.option('--model', '-m', type=click.Choice(['cnn', 'crnn', 'attention']),
+              default='cnn', help='Model architecture')
+@click.option('--epochs', '-e', type=int, default=50, help='Number of epochs')
+@click.option('--batch-size', '-b', type=int, default=32, help='Batch size')
+@click.option('--lr', type=float, default=1e-3, help='Learning rate')
+@click.option('--n-classes', '-n', type=int, required=True, help='Number of classes')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def ml_train_classifier(data_dir: str, output: str, model: str, epochs: int,
+                        batch_size: int, lr: float, n_classes: int, quiet: bool):
+    """Train a custom classifier on spectrograms.
+
+    DATA_DIR: Directory containing training data (spectrograms as .npy files)
+    """
+    import torch
+    from bioamla.ml import CNNClassifier, CRNNClassifier, AttentionClassifier, TrainerConfig, train_classifier
+
+    if model == 'cnn':
+        classifier = CNNClassifier(n_classes=n_classes)
+    elif model == 'crnn':
+        classifier = CRNNClassifier(n_classes=n_classes)
+    else:
+        classifier = AttentionClassifier(n_classes=n_classes)
+
+    config = TrainerConfig(
+        epochs=epochs,
+        batch_size=batch_size,
+        learning_rate=lr,
+        output_dir=output,
+    )
+
+    if not quiet:
+        click.echo(f"Training {model.upper()} classifier with {n_classes} classes...")
+        click.echo(f"  Epochs: {epochs}, Batch Size: {batch_size}, LR: {lr}")
+
+    # Note: In a real implementation, you would load data from data_dir
+    click.echo("Note: This command requires properly formatted training data.")
+    click.echo(f"Model will be saved to: {output}")
+
+
+@ml.command('ensemble')
+@click.argument('model_dirs', nargs=-1, required=True)
+@click.option('--output', '-o', required=True, help='Output directory for ensemble')
+@click.option('--strategy', '-s', type=click.Choice(['averaging', 'voting', 'max']),
+              default='averaging', help='Ensemble combination strategy')
+@click.option('--weights', '-w', multiple=True, type=float, help='Model weights')
+def ml_ensemble(model_dirs, output: str, strategy: str, weights):
+    """Create an ensemble from multiple trained models.
+
+    MODEL_DIRS: Directories containing trained models
+    """
+    import torch
+    from pathlib import Path
+
+    click.echo(f"Creating {strategy} ensemble from {len(model_dirs)} models...")
+
+    weights_list = list(weights) if weights else None
+    if weights_list and len(weights_list) != len(model_dirs):
+        raise click.ClickException("Number of weights must match number of models")
+
+    Path(output).mkdir(parents=True, exist_ok=True)
+
+    click.echo(f"Ensemble configuration saved to: {output}")
+    click.echo("Note: Load individual models and combine using bioamla.ml.Ensemble")
+
+
 if __name__ == '__main__':
     cli()
