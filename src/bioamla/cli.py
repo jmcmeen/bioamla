@@ -1756,44 +1756,94 @@ def audio_denoise(path, output, batch, method, strength, quiet):
 @audio.command('segment')
 @click.argument('path')
 @click.option('--output', '-o', required=True, help='Output directory for segments')
+@click.option('--batch', is_flag=True, help='Process all audio files in directory')
 @click.option('--silence-threshold', default=-40, type=float, help='Silence threshold in dB (default: -40)')
 @click.option('--min-silence', default=0.3, type=float, help='Min silence duration in seconds (default: 0.3)')
 @click.option('--min-segment', default=0.5, type=float, help='Min segment duration in seconds (default: 0.5)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
-def audio_segment(path, output, silence_threshold, min_silence, min_segment, quiet):
+def audio_segment(path, output, batch, silence_threshold, min_silence, min_segment, quiet):
     """Split audio on silence into separate files."""
     from pathlib import Path
 
     from bioamla.signal import load_audio, save_audio, split_audio_on_silence
+    from bioamla.utils import get_audio_files
 
     path = Path(path)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
 
     if not path.exists():
-        click.echo(f"Error: File not found: {path}")
+        click.echo(f"Error: Path not found: {path}")
         raise SystemExit(1)
 
-    audio, sr = load_audio(str(path))
-    chunks = split_audio_on_silence(
-        audio, sr,
-        silence_threshold_db=silence_threshold,
-        min_silence_duration=min_silence,
-        min_segment_duration=min_segment
-    )
+    def segment_file(audio_path, output_dir):
+        """Segment a single audio file."""
+        audio, sr = load_audio(str(audio_path))
+        chunks = split_audio_on_silence(
+            audio, sr,
+            silence_threshold_db=silence_threshold,
+            min_silence_duration=min_silence,
+            min_segment_duration=min_segment
+        )
 
-    if not chunks:
-        click.echo("No segments found")
-        return
+        if not chunks:
+            return 0
 
-    stem = path.stem
-    for i, (chunk, start, end) in enumerate(chunks):
-        out_path = output / f"{stem}_seg{i+1:03d}_{start:.2f}-{end:.2f}s.wav"
-        save_audio(str(out_path), chunk, sr)
+        stem = audio_path.stem
+        for i, (chunk, start, end) in enumerate(chunks):
+            out_path = output_dir / f"{stem}_seg{i+1:03d}_{start:.2f}-{end:.2f}s.wav"
+            save_audio(str(out_path), chunk, sr)
+            if not quiet:
+                click.echo(f"  Created: {out_path}")
+
+        return len(chunks)
+
+    if batch or path.is_dir():
+        # Batch mode: process all files in directory
+        audio_files = get_audio_files(str(path), recursive=True)
+        if not audio_files:
+            click.echo(f"No audio files found in {path}")
+            raise SystemExit(1)
+
         if not quiet:
-            click.echo(f"  Created: {out_path}")
+            click.echo(f"Found {len(audio_files)} audio files to segment")
 
-    click.echo(f"Created {len(chunks)} segments in {output}")
+        total_segments = 0
+        files_processed = 0
+        files_failed = 0
+
+        for audio_file in audio_files:
+            audio_path = Path(audio_file)
+            # Preserve directory structure in output
+            try:
+                rel_path = audio_path.parent.relative_to(path)
+                file_output_dir = output / rel_path
+            except ValueError:
+                file_output_dir = output
+
+            file_output_dir.mkdir(parents=True, exist_ok=True)
+
+            try:
+                num_segments = segment_file(audio_path, file_output_dir)
+                total_segments += num_segments
+                files_processed += 1
+                if not quiet and num_segments > 0:
+                    click.echo(f"  {audio_path.name}: {num_segments} segments")
+                elif not quiet:
+                    click.echo(f"  {audio_path.name}: no segments found")
+            except Exception as e:
+                files_failed += 1
+                if not quiet:
+                    click.echo(f"  Failed: {audio_path.name} - {e}")
+
+        click.echo(f"Processed {files_processed} files, created {total_segments} segments, {files_failed} failed")
+    else:
+        # Single file mode
+        num_segments = segment_file(path, output)
+        if num_segments == 0:
+            click.echo("No segments found")
+        else:
+            click.echo(f"Created {num_segments} segments in {output}")
 
 
 @audio.command('detect-events')
