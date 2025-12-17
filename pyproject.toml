@@ -16,7 +16,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "novus-pytils",
   "click",
   "torch",
   "torchvision", 

@@ -13,7 +13,7 @@ import io
 
 import torch
 import torchaudio
-from novus_pytils.files import get_files_by_extension
+from bioamla.utils import get_files_by_extension
 from torchaudio.transforms import Resample
 
 from bioamla.models.config import DefaultConfig
