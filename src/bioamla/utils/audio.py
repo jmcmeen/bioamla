@@ -1,27 +1,27 @@
 """
-Utility Functions
-=================
+Audio File Operations
+=====================
 
-This module provides utility functions for file operations, audio processing,
-and compression. These functions were extracted from novus-pytils to remove
-the external dependency.
+Utility functions for audio file operations including loading, saving,
+metadata extraction, format conversion, and audio manipulation.
+
+Supported formats: WAV, MP3, FLAC, OGG, M4A, AAC, WMA, AIFF, OPUS
 """
 
 import logging
-import os
-import shutil
-import struct
 import wave
-import zipfile
 from pathlib import Path
-from typing import List, Optional, Union
-from urllib.request import urlretrieve
+from typing import List, Optional, Tuple, Union
+
+import numpy as np
+
+from bioamla.utils.files import get_files_by_extension
 
 logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Global Constants
+# Constants
 # =============================================================================
 
 SUPPORTED_AUDIO_EXTENSIONS = [
@@ -30,120 +30,7 @@ SUPPORTED_AUDIO_EXTENSIONS = [
 
 
 # =============================================================================
-# File Operations
-# =============================================================================
-
-def get_files_by_extension(
-    directory: str,
-    extensions: Optional[List[str]] = None,
-    recursive: bool = True
-) -> List[str]:
-    """
-    Get a list of files in a directory filtered by extension.
-
-    Args:
-        directory: Path to the directory to search
-        extensions: List of file extensions to include (e.g., ['.wav', '.mp3']).
-            If None, returns all files.
-        recursive: If True, search subdirectories recursively
-
-    Returns:
-        List of file paths matching the criteria
-    """
-    if extensions is not None:
-        extensions = [ext.lower() if ext.startswith('.') else f'.{ext.lower()}'
-                      for ext in extensions]
-
-    files = []
-    directory_path = Path(directory)
-
-    if not directory_path.exists():
-        logger.warning(f"Directory does not exist: {directory}")
-        return files
-
-    if recursive:
-        for filepath in directory_path.rglob('*'):
-            if filepath.is_file():
-                if extensions is None or filepath.suffix.lower() in extensions:
-                    files.append(str(filepath))
-    else:
-        for filepath in directory_path.iterdir():
-            if filepath.is_file():
-                if extensions is None or filepath.suffix.lower() in extensions:
-                    files.append(str(filepath))
-
-    return sorted(files)
-
-
-def create_directory(path: str) -> str:
-    """
-    Create a directory and all parent directories if they don't exist.
-
-    Args:
-        path: Path to the directory to create
-
-    Returns:
-        The path that was created
-    """
-    Path(path).mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def file_exists(path: str) -> bool:
-    """
-    Check if a file exists.
-
-    Args:
-        path: Path to check
-
-    Returns:
-        True if the file exists, False otherwise
-    """
-    return Path(path).is_file()
-
-
-def directory_exists(path: str) -> bool:
-    """
-    Check if a directory exists.
-
-    Args:
-        path: Path to check
-
-    Returns:
-        True if the directory exists, False otherwise
-    """
-    return Path(path).is_dir()
-
-
-def download_file(url: str, output_path: str, show_progress: bool = True) -> str:
-    """
-    Download a file from a URL.
-
-    Args:
-        url: URL to download from
-        output_path: Path to save the downloaded file
-        show_progress: If True, print download progress
-
-    Returns:
-        Path to the downloaded file
-    """
-    output_dir = os.path.dirname(output_path)
-    if output_dir:
-        create_directory(output_dir)
-
-    if show_progress:
-        print(f"Downloading {url} to {output_path}")
-
-    urlretrieve(url, output_path)
-
-    if show_progress:
-        print(f"Download complete: {output_path}")
-
-    return output_path
-
-
-# =============================================================================
-# Audio File Operations
+# Audio File Discovery
 # =============================================================================
 
 def get_audio_files(
@@ -161,12 +48,89 @@ def get_audio_files(
         recursive: If True, search subdirectories recursively
 
     Returns:
-        List of audio file paths
+        List of audio file paths, sorted alphabetically
     """
     if extensions is None:
         extensions = SUPPORTED_AUDIO_EXTENSIONS
     return get_files_by_extension(directory, extensions, recursive)
 
+
+# =============================================================================
+# Audio Loading and Saving
+# =============================================================================
+
+def load_audio(
+    filepath: str,
+    sample_rate: Optional[int] = None,
+    mono: bool = True
+) -> Tuple[np.ndarray, int]:
+    """
+    Load an audio file using soundfile/librosa.
+
+    Supports WAV, FLAC, MP3, OGG and other formats via soundfile and librosa.
+
+    Args:
+        filepath: Path to the audio file
+        sample_rate: Target sample rate. If None, uses the file's native rate.
+        mono: If True, convert multi-channel audio to mono
+
+    Returns:
+        Tuple of (audio_data, sample_rate) where audio_data is a numpy array
+        with shape (samples,) for mono or (channels, samples) for multi-channel
+    """
+    import soundfile as sf
+
+    try:
+        audio, sr = sf.read(filepath, dtype='float32')
+    except Exception:
+        # Fall back to librosa for formats soundfile can't handle
+        import librosa
+        audio, sr = librosa.load(filepath, sr=sample_rate, mono=mono)
+        return audio, sr
+
+    # Handle multi-channel audio
+    if audio.ndim > 1:
+        # soundfile returns (samples, channels), transpose to (channels, samples)
+        audio = audio.T
+        if mono:
+            audio = to_mono(audio)
+
+    # Resample if needed
+    if sample_rate is not None and sr != sample_rate:
+        import librosa
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=sample_rate)
+        sr = sample_rate
+
+    return audio, sr
+
+
+def save_audio(filepath: str, audio: np.ndarray, sample_rate: int) -> str:
+    """
+    Save audio data to a file.
+
+    The output format is determined by the file extension.
+
+    Args:
+        filepath: Path to save the audio file
+        audio: Audio data as numpy array, shape (samples,) or (channels, samples)
+        sample_rate: Sample rate in Hz
+
+    Returns:
+        Path to the saved file
+    """
+    import soundfile as sf
+
+    # Transpose if multi-channel (soundfile expects samples, channels)
+    if audio.ndim > 1 and audio.shape[0] < audio.shape[1]:
+        audio = audio.T
+
+    sf.write(filepath, audio, sample_rate)
+    return filepath
+
+
+# =============================================================================
+# Audio Metadata
+# =============================================================================
 
 def get_wav_metadata(filepath: str) -> dict:
     """
@@ -204,6 +168,103 @@ def get_wav_metadata(filepath: str) -> dict:
             'compression_type': compression_type,
             'compression_name': compression_name
         }
+
+
+# =============================================================================
+# Audio Manipulation
+# =============================================================================
+
+def to_mono(audio: np.ndarray) -> np.ndarray:
+    """
+    Convert multi-channel audio to mono by averaging channels.
+
+    Args:
+        audio: Audio data with shape (channels, samples) or (samples,)
+
+    Returns:
+        Mono audio with shape (samples,)
+    """
+    if audio.ndim == 1:
+        return audio
+    if audio.ndim == 2:
+        if audio.shape[0] > audio.shape[1]:
+            # Shape is (samples, channels), transpose first
+            audio = audio.T
+        return np.mean(audio, axis=0)
+    raise ValueError(f"Unexpected audio shape: {audio.shape}")
+
+
+def concatenate_audio(
+    audio_list: List[np.ndarray],
+    crossfade_samples: int = 0
+) -> np.ndarray:
+    """
+    Concatenate multiple audio arrays into one.
+
+    Args:
+        audio_list: List of audio arrays to concatenate
+        crossfade_samples: Number of samples to crossfade between clips.
+            If 0, clips are concatenated without crossfade.
+
+    Returns:
+        Concatenated audio array
+    """
+    if not audio_list:
+        raise ValueError("audio_list cannot be empty")
+
+    if len(audio_list) == 1:
+        return audio_list[0]
+
+    if crossfade_samples <= 0:
+        return np.concatenate(audio_list)
+
+    # Apply crossfade between clips
+    result = audio_list[0].copy()
+    for next_audio in audio_list[1:]:
+        # Ensure crossfade doesn't exceed either clip's length
+        fade_len = min(crossfade_samples, len(result), len(next_audio))
+
+        if fade_len > 0:
+            # Create fade curves
+            fade_out = np.linspace(1.0, 0.0, fade_len)
+            fade_in = np.linspace(0.0, 1.0, fade_len)
+
+            # Apply crossfade
+            result[-fade_len:] = result[-fade_len:] * fade_out + next_audio[:fade_len] * fade_in
+
+            # Append the rest of next_audio
+            result = np.concatenate([result, next_audio[fade_len:]])
+        else:
+            result = np.concatenate([result, next_audio])
+
+    return result
+
+
+def loop_audio(
+    audio: np.ndarray,
+    num_loops: int,
+    crossfade_samples: int = 0
+) -> np.ndarray:
+    """
+    Loop audio a specified number of times.
+
+    Args:
+        audio: Audio data to loop
+        num_loops: Number of times to repeat the audio (1 = no repetition)
+        crossfade_samples: Number of samples to crossfade between loops.
+            If 0, loops are concatenated without crossfade.
+
+    Returns:
+        Looped audio array
+    """
+    if num_loops < 1:
+        raise ValueError("num_loops must be at least 1")
+
+    if num_loops == 1:
+        return audio
+
+    audio_list = [audio] * num_loops
+    return concatenate_audio(audio_list, crossfade_samples)
 
 
 # =============================================================================
@@ -332,72 +393,3 @@ def wma_to_wav(input_path: str, output_path: str) -> str:
 def wma_to_mp3(input_path: str, output_path: str) -> str:
     """Convert WMA to MP3."""
     return _convert_audio_pydub(input_path, output_path, 'mp3')
-
-
-# =============================================================================
-# Compression Operations
-# =============================================================================
-
-def extract_zip_file(zip_path: str, output_dir: str) -> str:
-    """
-    Extract a ZIP archive to a directory.
-
-    Args:
-        zip_path: Path to the ZIP file
-        output_dir: Directory to extract to
-
-    Returns:
-        Path to the output directory
-    """
-    create_directory(output_dir)
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(output_dir)
-    return output_dir
-
-
-def create_zip_file(file_paths: List[str], output_path: str) -> str:
-    """
-    Create a ZIP archive from a list of files.
-
-    Args:
-        file_paths: List of file paths to include in the archive
-        output_path: Path for the output ZIP file
-
-    Returns:
-        Path to the created ZIP file
-    """
-    output_dir = os.path.dirname(output_path)
-    if output_dir:
-        create_directory(output_dir)
-
-    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
-        for filepath in file_paths:
-            arcname = os.path.basename(filepath)
-            zip_ref.write(filepath, arcname)
-
-    return output_path
-
-
-def zip_directory(directory: str, output_path: str) -> str:
-    """
-    Create a ZIP archive from a directory.
-
-    Args:
-        directory: Path to the directory to archive
-        output_path: Path for the output ZIP file
-
-    Returns:
-        Path to the created ZIP file
-    """
-    output_dir = os.path.dirname(output_path)
-    if output_dir:
-        create_directory(output_dir)
-
-    directory_path = Path(directory)
-    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
-        for filepath in directory_path.rglob('*'):
-            if filepath.is_file():
-                arcname = filepath.relative_to(directory_path)
-                zip_ref.write(filepath, arcname)
-
-    return output_path
