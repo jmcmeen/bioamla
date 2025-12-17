@@ -310,10 +310,10 @@ def explore(directory: str):
 
 
 # =============================================================================
-# AST Command Group
+# AST Command Group (subgroup of models)
 # =============================================================================
 
-@cli.group()
+@models.group()
 def ast():
     """Audio Spectrogram Transformer model commands."""
     pass
@@ -914,6 +914,352 @@ def ast_evaluate(
         raise SystemExit(1)
     except ValueError as e:
         click.echo(f"Error: {e}")
+        raise SystemExit(1)
+
+
+# =============================================================================
+# Models Command Group
+# =============================================================================
+
+@cli.group()
+def models():
+    """ML model operations (predict, embed, train, convert)."""
+    pass
+
+
+@models.command('list')
+def models_list():
+    """List available model types."""
+    from bioamla.models import list_models
+    click.echo("Available model types:")
+    for model_name in list_models():
+        click.echo(f"  - {model_name}")
+
+
+@models.command('predict')
+@click.argument('path')
+@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
+              default='ast', help='Model type to use')
+@click.option('--model-path', required=True, help='Path to model or HuggingFace identifier')
+@click.option('--output', '-o', default=None, help='Output CSV file')
+@click.option('--batch', is_flag=True, help='Process all files in directory')
+@click.option('--min-confidence', default=0.0, type=float, help='Minimum confidence threshold')
+@click.option('--top-k', default=1, type=int, help='Number of top predictions per segment')
+@click.option('--clip-duration', default=3.0, type=float, help='Clip duration in seconds')
+@click.option('--overlap', default=0.0, type=float, help='Overlap between clips in seconds')
+@click.option('--sample-rate', default=16000, type=int, help='Target sample rate')
+@click.option('--batch-size', default=8, type=int, help='Batch size for processing')
+@click.option('--fp16/--no-fp16', default=False, help='Use half-precision inference')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def models_predict(
+    path, model_type, model_path, output, batch, min_confidence,
+    top_k, clip_duration, overlap, sample_rate, batch_size, fp16, quiet
+):
+    """Run predictions using an ML model.
+
+    Single file:
+        bioamla models predict audio.wav --model-type ast --model-path my_model
+
+    Batch mode:
+        bioamla models predict ./audio --batch --model-type ast --model-path my_model -o results.csv
+    """
+    import csv
+    import time
+    from pathlib import Path
+
+    from bioamla.models import ModelConfig, load_model
+    from bioamla.utils import get_audio_files
+
+    config = ModelConfig(
+        sample_rate=sample_rate,
+        clip_duration=clip_duration,
+        overlap=overlap,
+        min_confidence=min_confidence,
+        top_k=top_k,
+        batch_size=batch_size,
+        use_fp16=fp16,
+    )
+
+    if not quiet:
+        click.echo(f"Loading {model_type} model from {model_path}...")
+
+    try:
+        model = load_model(model_type, model_path, config, use_fp16=fp16)
+    except Exception as e:
+        click.echo(f"Error loading model: {e}")
+        raise SystemExit(1)
+
+    if batch:
+        path = Path(path)
+        if not path.is_dir():
+            click.echo(f"Error: {path} is not a directory")
+            raise SystemExit(1)
+
+        audio_files = get_audio_files(str(path))
+        if not audio_files:
+            click.echo("No audio files found")
+            raise SystemExit(1)
+
+        if not quiet:
+            click.echo(f"Processing {len(audio_files)} files...")
+
+        start_time = time.time()
+        all_results = []
+
+        for i, filepath in enumerate(audio_files):
+            try:
+                results = model.predict(filepath)
+                all_results.extend(results)
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] {filepath}: {len(results)} predictions")
+            except Exception as e:
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
+
+        elapsed = time.time() - start_time
+
+        if output:
+            output_path = Path(output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['filepath', 'start_time', 'end_time', 'label', 'confidence'])
+                for r in all_results:
+                    writer.writerow([r.filepath, f"{r.start_time:.3f}", f"{r.end_time:.3f}",
+                                    r.label, f"{r.confidence:.4f}"])
+            if not quiet:
+                click.echo(f"\nResults saved to {output}")
+
+        if not quiet:
+            click.echo(f"\nProcessed {len(audio_files)} files in {elapsed:.2f}s")
+            click.echo(f"Total predictions: {len(all_results)}")
+
+    else:
+        # Single file
+        if not Path(path).exists():
+            click.echo(f"Error: File not found: {path}")
+            raise SystemExit(1)
+
+        results = model.predict(path)
+
+        if output:
+            with open(output, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['filepath', 'start_time', 'end_time', 'label', 'confidence'])
+                for r in results:
+                    writer.writerow([r.filepath, f"{r.start_time:.3f}", f"{r.end_time:.3f}",
+                                    r.label, f"{r.confidence:.4f}"])
+            click.echo(f"Results saved to {output}")
+        else:
+            for r in results:
+                click.echo(f"{r.start_time:.2f}-{r.end_time:.2f}s: {r.label} ({r.confidence:.3f})")
+
+
+@models.command('embed')
+@click.argument('path')
+@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
+              default='ast', help='Model type to use')
+@click.option('--model-path', required=True, help='Path to model or HuggingFace identifier')
+@click.option('--output', '-o', required=True, help='Output file (.npy or .npz)')
+@click.option('--batch', is_flag=True, help='Process all files in directory')
+@click.option('--layer', default=None, help='Layer to extract embeddings from')
+@click.option('--sample-rate', default=16000, type=int, help='Target sample rate')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def models_embed(path, model_type, model_path, output, batch, layer, sample_rate, quiet):
+    """Extract embeddings from audio using an ML model.
+
+    Single file:
+        bioamla models embed audio.wav --model-type ast --model-path my_model -o embeddings.npy
+
+    Batch mode:
+        bioamla models embed ./audio --batch --model-type ast --model-path my_model -o embeddings.npz
+    """
+    from pathlib import Path
+
+    import numpy as np
+
+    from bioamla.models import ModelConfig, load_model
+    from bioamla.utils import get_audio_files
+
+    config = ModelConfig(sample_rate=sample_rate)
+
+    if not quiet:
+        click.echo(f"Loading {model_type} model from {model_path}...")
+
+    try:
+        model = load_model(model_type, model_path, config)
+    except Exception as e:
+        click.echo(f"Error loading model: {e}")
+        raise SystemExit(1)
+
+    if batch:
+        path = Path(path)
+        if not path.is_dir():
+            click.echo(f"Error: {path} is not a directory")
+            raise SystemExit(1)
+
+        audio_files = get_audio_files(str(path))
+        if not audio_files:
+            click.echo("No audio files found")
+            raise SystemExit(1)
+
+        if not quiet:
+            click.echo(f"Extracting embeddings from {len(audio_files)} files...")
+
+        embeddings_dict = {}
+        for i, filepath in enumerate(audio_files):
+            try:
+                emb = model.extract_embeddings(filepath, layer=layer)
+                embeddings_dict[filepath] = emb
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] {filepath}: shape {emb.shape}")
+            except Exception as e:
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
+
+        np.savez(output, **{str(i): v for i, v in enumerate(embeddings_dict.values())},
+                 filepaths=list(embeddings_dict.keys()))
+        if not quiet:
+            click.echo(f"\nEmbeddings saved to {output}")
+
+    else:
+        if not Path(path).exists():
+            click.echo(f"Error: File not found: {path}")
+            raise SystemExit(1)
+
+        embeddings = model.extract_embeddings(path, layer=layer)
+        np.save(output, embeddings)
+
+        if not quiet:
+            click.echo(f"Embeddings shape: {embeddings.shape}")
+            click.echo(f"Saved to {output}")
+
+
+@models.command('train')
+@click.argument('train_dir')
+@click.option('--val-dir', default=None, help='Validation data directory')
+@click.option('--output-dir', '-o', default='./output', help='Output directory for model')
+@click.option('--classes', required=True, help='Comma-separated list of class names')
+@click.option('--architecture', type=click.Choice(['resnet18', 'resnet50']),
+              default='resnet18', help='Model architecture')
+@click.option('--epochs', default=10, type=int, help='Number of training epochs')
+@click.option('--batch-size', default=32, type=int, help='Batch size')
+@click.option('--learning-rate', default=1e-4, type=float, help='Learning rate')
+@click.option('--freeze-epochs', default=0, type=int, help='Epochs to keep backbone frozen')
+@click.option('--pretrained/--no-pretrained', default=True, help='Use ImageNet pretrained weights')
+@click.option('--fp16/--no-fp16', default=False, help='Use mixed precision training')
+@click.option('--sample-rate', default=16000, type=int, help='Target sample rate')
+@click.option('--clip-duration', default=3.0, type=float, help='Clip duration in seconds')
+def models_train(
+    train_dir, val_dir, output_dir, classes, architecture, epochs,
+    batch_size, learning_rate, freeze_epochs, pretrained, fp16, sample_rate, clip_duration
+):
+    """Train a custom CNN model using transfer learning.
+
+    Data should be organized with subdirectories per class:
+        train_dir/
+            class1/
+                audio1.wav
+                audio2.wav
+            class2/
+                audio3.wav
+                ...
+
+    Example:
+        bioamla models train ./data/train --val-dir ./data/val \\
+            --classes "bird,frog,insect" --epochs 20 -o ./my_model
+    """
+    from bioamla.models import TrainingConfig, ModelTrainer
+
+    class_names = [c.strip() for c in classes.split(',')]
+
+    click.echo(f"Training {architecture} model with classes: {class_names}")
+    click.echo(f"Training data: {train_dir}")
+    if val_dir:
+        click.echo(f"Validation data: {val_dir}")
+
+    config = TrainingConfig(
+        train_dir=train_dir,
+        val_dir=val_dir,
+        output_dir=output_dir,
+        class_names=class_names,
+        architecture=architecture,
+        pretrained=pretrained,
+        freeze_backbone_epochs=freeze_epochs,
+        batch_size=batch_size,
+        num_epochs=epochs,
+        learning_rate=learning_rate,
+        sample_rate=sample_rate,
+        clip_duration=clip_duration,
+        use_fp16=fp16,
+    )
+
+    trainer = ModelTrainer(config)
+    trainer.setup()
+
+    def progress(epoch, total, metrics):
+        val_info = ""
+        if metrics.val_loss > 0:
+            val_info = f", val_loss: {metrics.val_loss:.4f}, val_acc: {metrics.val_accuracy:.4f}"
+        click.echo(
+            f"Epoch {epoch}/{total} - "
+            f"loss: {metrics.train_loss:.4f}, acc: {metrics.train_accuracy:.4f}"
+            f"{val_info} [{metrics.epoch_time:.1f}s]"
+        )
+
+    try:
+        trainer.train(progress_callback=progress)
+        click.echo(f"\nTraining complete! Model saved to {output_dir}")
+    except Exception as e:
+        click.echo(f"Training error: {e}")
+        raise SystemExit(1)
+
+
+@models.command('convert')
+@click.argument('input_path')
+@click.argument('output_path')
+@click.option('--format', 'output_format', type=click.Choice(['pt', 'onnx']),
+              default='onnx', help='Output format')
+@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
+              default='ast', help='Model type')
+def models_convert(input_path, output_path, output_format, model_type):
+    """Convert model between formats (PyTorch to ONNX).
+
+    Example:
+        bioamla models convert ./my_model.pt ./my_model.onnx --format onnx
+    """
+    from bioamla.models import load_model
+
+    click.echo(f"Loading model from {input_path}...")
+    model = load_model(model_type, input_path)
+
+    click.echo(f"Converting to {output_format}...")
+    try:
+        result = model.save(output_path, format=output_format)
+        click.echo(f"Model saved to {result}")
+    except Exception as e:
+        click.echo(f"Conversion error: {e}")
+        raise SystemExit(1)
+
+
+@models.command('info')
+@click.argument('model_path')
+@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
+              default='ast', help='Model type')
+def models_info(model_path, model_type):
+    """Display information about a model."""
+    from bioamla.models import load_model
+
+    try:
+        model = load_model(model_type, model_path)
+        click.echo(f"Model: {model}")
+        click.echo(f"Backend: {model.backend.value}")
+        click.echo(f"Classes: {model.num_classes}")
+        if model.classes:
+            click.echo(f"Labels: {', '.join(model.classes[:10])}" +
+                      (f"... (+{len(model.classes)-10} more)" if len(model.classes) > 10 else ""))
+    except Exception as e:
+        click.echo(f"Error loading model: {e}")
         raise SystemExit(1)
 
 
