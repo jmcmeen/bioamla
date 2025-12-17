@@ -1188,11 +1188,18 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
 @click.argument('path')
 @click.option('--output', '-o', default=None, help='Output file path (single file) or directory (batch with --batch)')
 @click.option('--batch', is_flag=True, default=False, help='Process all audio files in a directory')
-@click.option('--type', 'viz_type', type=click.Choice(['mel', 'mfcc', 'waveform']), default='mel', help='Type of visualization')
+@click.option('--type', 'viz_type', type=click.Choice(['stft', 'mel', 'mfcc', 'waveform']), default='mel', help='Type of visualization')
 @click.option('--sample-rate', default=16000, type=int, help='Target sample rate for processing')
+@click.option('--n-fft', default=2048, type=int, help='FFT window size (256-8192)')
+@click.option('--hop-length', default=512, type=int, help='Samples between successive frames')
 @click.option('--n-mels', default=128, type=int, help='Number of mel bands (mel spectrogram only)')
 @click.option('--n-mfcc', default=40, type=int, help='Number of MFCCs (mfcc only)')
+@click.option('--window', type=click.Choice(['hann', 'hamming', 'blackman', 'bartlett', 'rectangular', 'kaiser']), default='hann', help='Window function for STFT')
+@click.option('--db-min', default=None, type=float, help='Minimum dB value for scaling')
+@click.option('--db-max', default=None, type=float, help='Maximum dB value for scaling')
 @click.option('--cmap', default='magma', help='Colormap for spectrogram visualizations')
+@click.option('--dpi', default=150, type=int, help='Output image resolution (dots per inch)')
+@click.option('--format', 'img_format', type=click.Choice(['png', 'jpg', 'jpeg']), default=None, help='Output image format (default: inferred from extension)')
 @click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode only)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def visualize(
@@ -1201,9 +1208,16 @@ def visualize(
     batch: bool,
     viz_type: str,
     sample_rate: int,
+    n_fft: int,
+    hop_length: int,
     n_mels: int,
     n_mfcc: int,
+    window: str,
+    db_min: float,
+    db_max: float,
     cmap: str,
+    dpi: int,
+    img_format: str,
     recursive: bool,
     quiet: bool
 ):
@@ -1219,9 +1233,23 @@ def visualize(
         bioamla visualize ./audio_dir --batch --output ./specs
 
     Visualization types:
+        stft: Short-Time Fourier Transform spectrogram
         mel: Mel spectrogram (default)
         mfcc: Mel-frequency cepstral coefficients
         waveform: Time-domain waveform plot
+
+    Window functions:
+        hann (default), hamming, blackman, bartlett, rectangular, kaiser
+
+    Examples:
+        # STFT spectrogram with custom FFT size
+        bioamla visualize audio.wav --type stft --n-fft 4096
+
+        # Mel spectrogram with dB limits and JPEG output
+        bioamla visualize audio.wav --type mel --db-min -80 --db-max 0 -o spec.jpg
+
+        # Batch processing with hamming window
+        bioamla visualize ./audio --batch --window hamming --format png
     """
     import os
 
@@ -1237,9 +1265,16 @@ def visualize(
             output_dir=output,
             viz_type=viz_type,
             sample_rate=sample_rate,
+            n_fft=n_fft,
+            hop_length=hop_length,
             n_mels=n_mels,
             n_mfcc=n_mfcc,
+            window=window,
+            db_min=db_min,
+            db_max=db_max,
             cmap=cmap,
+            dpi=dpi,
+            format=img_format if img_format else "png",
             recursive=recursive,
             verbose=not quiet,
         )
@@ -1251,7 +1286,8 @@ def visualize(
         if output is None:
             # Default output: same name with .png extension
             base_name = os.path.splitext(path)[0]
-            output = f"{base_name}.png"
+            ext = ".jpg" if img_format in ("jpg", "jpeg") else ".png"
+            output = f"{base_name}{ext}"
 
         try:
             result = generate_spectrogram(
@@ -1259,9 +1295,16 @@ def visualize(
                 output_path=output,
                 viz_type=viz_type,
                 sample_rate=sample_rate,
+                n_fft=n_fft,
+                hop_length=hop_length,
                 n_mels=n_mels,
                 n_mfcc=n_mfcc,
+                window=window,
+                db_min=db_min,
+                db_max=db_max,
                 cmap=cmap,
+                dpi=dpi,
+                format=img_format,
             )
             if not quiet:
                 click.echo(f"Generated {viz_type} spectrogram: {result}")
