@@ -306,15 +306,19 @@ class TestRealtimeSpectrogram:
         """Test Hz to mel conversion."""
         from bioamla.realtime import RealtimeSpectrogram
 
-        mel_1000 = RealtimeSpectrogram._hz_to_mel(1000)
-        assert 1000 < mel_1000 < 2000
+        spectrogram = RealtimeSpectrogram()
+        mel_1000 = spectrogram._hz_to_mel(1000)
+        # Mel scale at 1000 Hz should be around 1000 mels (by definition)
+        assert 500 < mel_1000 < 1500
 
     def test_mel_to_hz(self):
         """Test mel to Hz conversion."""
         from bioamla.realtime import RealtimeSpectrogram
 
-        hz = RealtimeSpectrogram._mel_to_hz(np.array([1000]))
-        assert 0 < hz[0] < 1000
+        spectrogram = RealtimeSpectrogram()
+        hz = spectrogram._mel_to_hz(np.array([1000]))
+        # 1000 mels should convert back to around 1000 Hz
+        assert 500 < hz[0] < 1500
 
     def test_compute_spectrogram(self):
         """Test spectrogram computation."""
