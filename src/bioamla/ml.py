@@ -22,13 +22,12 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 
 logger = logging.getLogger(__name__)
 
@@ -521,7 +520,7 @@ class LabelHierarchy:
 
         hierarchy = cls()
 
-        with open(filepath, "r", newline="", encoding="utf-8") as f:
+        with open(filepath, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
 
             for row in reader:
@@ -550,7 +549,7 @@ class LabelHierarchy:
     @classmethod
     def load(cls, filepath: str) -> "LabelHierarchy":
         """Load hierarchy from JSON file."""
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
         return cls.from_dict(data)
 
@@ -608,7 +607,7 @@ class HierarchicalClassifier(nn.Module):
 
         for level, labels in self.level_labels.items():
             self.label2idx[level] = {label: idx for idx, label in enumerate(labels)}
-            self.idx2label[level] = {idx: label for idx, label in enumerate(labels)}
+            self.idx2label[level] = dict(enumerate(labels))
 
     def forward(
         self,
@@ -921,7 +920,7 @@ class StackingStrategy(EnsembleStrategy):
         criterion = nn.CrossEntropyLoss()
 
         self.meta_classifier.train()
-        for epoch in range(epochs):
+        for _epoch in range(epochs):
             optimizer.zero_grad()
             output = self.meta_classifier(stacked)
             loss = criterion(output, labels)
@@ -1211,7 +1210,7 @@ def train_classifier(
         train_correct = 0
         train_total = 0
 
-        for batch_idx, (inputs, targets) in enumerate(train_loader):
+        for _batch_idx, (inputs, targets) in enumerate(train_loader):
             inputs, targets = inputs.to(device), targets.to(device)
 
             optimizer.zero_grad()

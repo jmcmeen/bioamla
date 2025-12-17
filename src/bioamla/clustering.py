@@ -18,9 +18,9 @@ Example:
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -85,8 +85,8 @@ def reduce_dimensions(
     if config.method == "umap":
         try:
             import umap
-        except ImportError:
-            raise ImportError("umap-learn is required for UMAP. Install with: pip install umap-learn")
+        except ImportError as err:
+            raise ImportError("umap-learn is required for UMAP. Install with: pip install umap-learn") from err
 
         reducer = umap.UMAP(
             n_components=config.n_components,
@@ -158,8 +158,8 @@ class IncrementalReducer:
         if self.method == "umap":
             try:
                 import umap
-            except ImportError:
-                raise ImportError("umap-learn is required for UMAP")
+            except ImportError as err:
+                raise ImportError("umap-learn is required for UMAP") from err
 
             self.reducer = umap.UMAP(
                 n_components=self.n_components,
@@ -286,8 +286,8 @@ class AudioClusterer:
         if self.config.method == "hdbscan":
             try:
                 import hdbscan
-            except ImportError:
-                raise ImportError("hdbscan is required. Install with: pip install hdbscan")
+            except ImportError as err:
+                raise ImportError("hdbscan is required. Install with: pip install hdbscan") from err
 
             self.clusterer = hdbscan.HDBSCAN(
                 min_cluster_size=self.config.min_cluster_size,
@@ -452,7 +452,7 @@ def compute_cluster_similarity(
     if -1 in unique_labels:
         unique_labels.remove(-1)
 
-    n_clusters = len(unique_labels)
+    len(unique_labels)
     centers = []
 
     for label in unique_labels:
@@ -915,7 +915,7 @@ def analyze_clusters(
     Returns:
         Analysis results
     """
-    from sklearn.metrics import silhouette_score, calinski_harabasz_score
+    from sklearn.metrics import calinski_harabasz_score, silhouette_score
 
     unique_labels = sorted(set(labels))
     n_noise = (labels == -1).sum() if -1 in labels else 0
