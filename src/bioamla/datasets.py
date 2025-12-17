@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import List, Optional, Set
 
 import pandas as pd
-from novus_pytils.audio import get_audio_files
+from bioamla.utils import get_audio_files
 
 from bioamla.fileutils import find_species_name, sanitize_filename
 from bioamla.globals import SUPPORTED_AUDIO_EXTENSIONS
@@ -98,7 +98,8 @@ def load_local_dataset(audio_folder_path: str):
         ValueError: If directory doesn't exist or contains no audio files
     """
     from datasets import load_dataset
-    from novus_pytils.files import directory_exists
+
+    from bioamla.utils import directory_exists
 
     if not directory_exists(audio_folder_path):
         raise ValueError(f"The audio folder {audio_folder_path} does not exist")
@@ -541,7 +542,7 @@ def batch_convert_audio(
 
 def _get_converter(source_ext: str, target_format: str):
     """
-    Get the appropriate converter function from novus_pytils.audio.
+    Get the appropriate converter function from bioamla.utils.
 
     Args:
         source_ext: Source file extension (without dot)
@@ -550,10 +551,10 @@ def _get_converter(source_ext: str, target_format: str):
     Returns:
         Converter function or None if not available
     """
-    from novus_pytils import audio as audio_module
+    from bioamla import utils as utils_module
 
     converter_name = f"{source_ext}_to_{target_format}"
-    return getattr(audio_module, converter_name, None)
+    return getattr(utils_module, converter_name, None)
 
 
 def convert_filetype(

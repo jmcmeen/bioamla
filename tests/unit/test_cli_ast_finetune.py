@@ -24,7 +24,7 @@ class TestAstTrainHelp:
 
     def test_ast_train_help(self, runner):
         """Test ast train --help shows all options."""
-        result = runner.invoke(cli, ["ast", "train", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--training-dir" in result.output
@@ -41,7 +41,7 @@ class TestAstTrainHelp:
 
     def test_ast_train_finetune_mode_choices(self, runner):
         """Test that --finetune-mode shows valid choices."""
-        result = runner.invoke(cli, ["ast", "train", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "full" in result.output
@@ -49,7 +49,7 @@ class TestAstTrainHelp:
 
     def test_ast_train_default_batch_size(self, runner):
         """Test that default batch size is 8."""
-        result = runner.invoke(cli, ["ast", "train", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--help"])
 
         assert result.exit_code == 0
         # Check help text mentions the default
@@ -61,7 +61,7 @@ class TestAstTrainOptions:
 
     def test_invalid_finetune_mode(self, runner):
         """Test that invalid finetune mode is rejected."""
-        result = runner.invoke(cli, ["ast", "train", "--finetune-mode", "invalid"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--finetune-mode", "invalid"])
 
         assert result.exit_code != 0
         assert "Invalid value" in result.output or "invalid" in result.output.lower()
@@ -69,14 +69,14 @@ class TestAstTrainOptions:
     def test_valid_finetune_mode_full(self, runner):
         """Test that 'full' is a valid finetune mode."""
         # Just check that the option is accepted (will fail later due to missing dataset)
-        result = runner.invoke(cli, ["ast", "train", "--finetune-mode", "full", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--finetune-mode", "full", "--help"])
 
         assert result.exit_code == 0
 
     def test_valid_finetune_mode_feature_extraction(self, runner):
         """Test that 'feature-extraction' is a valid finetune mode."""
         # Just check that the option is accepted
-        result = runner.invoke(cli, ["ast", "train", "--finetune-mode", "feature-extraction", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--finetune-mode", "feature-extraction", "--help"])
 
         assert result.exit_code == 0
 
@@ -86,7 +86,7 @@ class TestAstTrainPerformanceOptions:
 
     def test_fp16_and_bf16_options_exist(self, runner):
         """Test that fp16 and bf16 options exist."""
-        result = runner.invoke(cli, ["ast", "train", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--fp16" in result.output
@@ -96,21 +96,21 @@ class TestAstTrainPerformanceOptions:
 
     def test_gradient_accumulation_option_exists(self, runner):
         """Test that gradient accumulation option exists."""
-        result = runner.invoke(cli, ["ast", "train", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--gradient-accumulation-steps" in result.output
 
     def test_dataloader_workers_option_exists(self, runner):
         """Test that dataloader workers option exists."""
-        result = runner.invoke(cli, ["ast", "train", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--dataloader-num-workers" in result.output
 
     def test_torch_compile_option_exists(self, runner):
         """Test that torch compile option exists."""
-        result = runner.invoke(cli, ["ast", "train", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--torch-compile" in result.output
@@ -122,32 +122,32 @@ class TestAstTrainMlflowOptions:
 
     def test_mlflow_tracking_uri_option_exists(self, runner):
         """Test that mlflow tracking URI option exists."""
-        result = runner.invoke(cli, ["ast", "train", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--mlflow-tracking-uri" in result.output
 
     def test_mlflow_experiment_name_option_exists(self, runner):
         """Test that mlflow experiment name option exists."""
-        result = runner.invoke(cli, ["ast", "train", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--mlflow-experiment-name" in result.output
 
     def test_mlflow_run_name_option_exists(self, runner):
         """Test that mlflow run name option exists."""
-        result = runner.invoke(cli, ["ast", "train", "--help"])
+        result = runner.invoke(cli, ["models", "train", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "--mlflow-run-name" in result.output
 
 
-class TestHfPushModel:
-    """Tests for hf push-model command."""
+class TestServicesHfPushModel:
+    """Tests for services hf push-model command."""
 
-    def test_hf_push_model_help(self, runner):
-        """Test hf push-model --help shows all options."""
-        result = runner.invoke(cli, ["hf", "push-model", "--help"])
+    def test_services_hf_push_model_help(self, runner):
+        """Test services hf push-model --help shows all options."""
+        result = runner.invoke(cli, ["services", "hf", "push-model", "--help"])
 
         assert result.exit_code == 0
         assert "PATH" in result.output
@@ -157,34 +157,34 @@ class TestHfPushModel:
         assert "--commit-message" in result.output
         assert "entire contents" in result.output
 
-    def test_hf_push_model_requires_path(self, runner):
-        """Test that hf push-model requires path argument."""
-        result = runner.invoke(cli, ["hf", "push-model"])
+    def test_services_hf_push_model_requires_path(self, runner):
+        """Test that services hf push-model requires path argument."""
+        result = runner.invoke(cli, ["services", "hf", "push-model"])
 
         assert result.exit_code != 0
         assert "Missing argument" in result.output or "PATH" in result.output
 
-    def test_hf_push_model_requires_repo_id(self, runner):
-        """Test that hf push-model requires repo_id argument."""
-        result = runner.invoke(cli, ["hf", "push-model", "/some/path"])
+    def test_services_hf_push_model_requires_repo_id(self, runner):
+        """Test that services hf push-model requires repo_id argument."""
+        result = runner.invoke(cli, ["services", "hf", "push-model", "/some/path"])
 
         assert result.exit_code != 0
         assert "Missing argument" in result.output or "REPO_ID" in result.output
 
-    def test_hf_push_model_invalid_path(self, runner):
-        """Test that hf push-model fails with non-existent path."""
-        result = runner.invoke(cli, ["hf", "push-model", "/nonexistent/path", "user/repo"])
+    def test_services_hf_push_model_invalid_path(self, runner):
+        """Test that services hf push-model fails with non-existent path."""
+        result = runner.invoke(cli, ["services", "hf", "push-model", "/nonexistent/path", "user/repo"])
 
         assert result.exit_code != 0
         assert "does not exist" in result.output
 
 
-class TestHfPushDataset:
-    """Tests for hf push-dataset command."""
+class TestServicesHfPushDataset:
+    """Tests for services hf push-dataset command."""
 
-    def test_hf_push_dataset_help(self, runner):
-        """Test hf push-dataset --help shows all options."""
-        result = runner.invoke(cli, ["hf", "push-dataset", "--help"])
+    def test_services_hf_push_dataset_help(self, runner):
+        """Test services hf push-dataset --help shows all options."""
+        result = runner.invoke(cli, ["services", "hf", "push-dataset", "--help"])
 
         assert result.exit_code == 0
         assert "PATH" in result.output
@@ -194,23 +194,23 @@ class TestHfPushDataset:
         assert "--commit-message" in result.output
         assert "entire contents" in result.output
 
-    def test_hf_push_dataset_requires_path(self, runner):
-        """Test that hf push-dataset requires path argument."""
-        result = runner.invoke(cli, ["hf", "push-dataset"])
+    def test_services_hf_push_dataset_requires_path(self, runner):
+        """Test that services hf push-dataset requires path argument."""
+        result = runner.invoke(cli, ["services", "hf", "push-dataset"])
 
         assert result.exit_code != 0
         assert "Missing argument" in result.output or "PATH" in result.output
 
-    def test_hf_push_dataset_requires_repo_id(self, runner):
-        """Test that hf push-dataset requires repo_id argument."""
-        result = runner.invoke(cli, ["hf", "push-dataset", "/some/path"])
+    def test_services_hf_push_dataset_requires_repo_id(self, runner):
+        """Test that services hf push-dataset requires repo_id argument."""
+        result = runner.invoke(cli, ["services", "hf", "push-dataset", "/some/path"])
 
         assert result.exit_code != 0
         assert "Missing argument" in result.output or "REPO_ID" in result.output
 
-    def test_hf_push_dataset_invalid_path(self, runner):
-        """Test that hf push-dataset fails with non-existent path."""
-        result = runner.invoke(cli, ["hf", "push-dataset", "/nonexistent/path", "user/repo"])
+    def test_services_hf_push_dataset_invalid_path(self, runner):
+        """Test that services hf push-dataset fails with non-existent path."""
+        result = runner.invoke(cli, ["services", "hf", "push-dataset", "/nonexistent/path", "user/repo"])
 
         assert result.exit_code != 0
         assert "does not exist" in result.output
@@ -339,7 +339,7 @@ class TestIsLargeFolder:
             assert _is_large_folder(tmpdir, file_count_threshold=3) is True
 
 
-class TestHfPushModelUploadSwitching:
+class TestServicesHfPushModelUploadSwitching:
     """Tests that hf push-model correctly switches between upload_folder and upload_large_folder."""
 
     @patch('bioamla.cli._is_large_folder')
@@ -355,7 +355,7 @@ class TestHfPushModelUploadSwitching:
             with open(os.path.join(tmpdir, "model.bin"), "w") as f:
                 f.write("test")
 
-            result = runner.invoke(cli, ["hf", "push-model", tmpdir, "user/test-repo"])
+            result = runner.invoke(cli, ["services", "hf", "push-model", tmpdir, "user/test-repo"])
 
             # Should call upload_folder, not upload_large_folder
             mock_api.upload_folder.assert_called_once()
@@ -381,7 +381,7 @@ class TestHfPushModelUploadSwitching:
             with open(os.path.join(tmpdir, "model.bin"), "w") as f:
                 f.write("test")
 
-            result = runner.invoke(cli, ["hf", "push-model", tmpdir, "user/test-repo"])
+            result = runner.invoke(cli, ["services", "hf", "push-model", tmpdir, "user/test-repo"])
 
             # Should call upload_large_folder, not upload_folder
             mock_api.upload_large_folder.assert_called_once()
@@ -407,7 +407,7 @@ class TestHfPushModelUploadSwitching:
                 f.write("test")
 
             result = runner.invoke(cli, [
-                "hf", "push-model", tmpdir, "user/test-repo",
+                "services", "hf", "push-model", tmpdir, "user/test-repo",
                 "--commit-message", "My custom message"
             ])
 
@@ -427,7 +427,7 @@ class TestHfPushModelUploadSwitching:
                 f.write("test")
 
             result = runner.invoke(cli, [
-                "hf", "push-model", tmpdir, "user/test-repo",
+                "services", "hf", "push-model", tmpdir, "user/test-repo",
                 "--commit-message", "My custom message"
             ])
 
@@ -435,7 +435,7 @@ class TestHfPushModelUploadSwitching:
             assert call_kwargs['commit_message'] == "My custom message"
 
 
-class TestHfPushDatasetUploadSwitching:
+class TestServicesHfPushDatasetUploadSwitching:
     """Tests that hf push-dataset correctly switches between upload_folder and upload_large_folder."""
 
     @patch('bioamla.cli._is_large_folder')
@@ -450,7 +450,7 @@ class TestHfPushDatasetUploadSwitching:
             with open(os.path.join(tmpdir, "data.csv"), "w") as f:
                 f.write("col1,col2\n1,2")
 
-            result = runner.invoke(cli, ["hf", "push-dataset", tmpdir, "user/test-dataset"])
+            result = runner.invoke(cli, ["services", "hf", "push-dataset", tmpdir, "user/test-dataset"])
 
             # Should call upload_folder, not upload_large_folder
             mock_api.upload_folder.assert_called_once()
@@ -475,7 +475,7 @@ class TestHfPushDatasetUploadSwitching:
             with open(os.path.join(tmpdir, "data.csv"), "w") as f:
                 f.write("col1,col2\n1,2")
 
-            result = runner.invoke(cli, ["hf", "push-dataset", tmpdir, "user/test-dataset"])
+            result = runner.invoke(cli, ["services", "hf", "push-dataset", tmpdir, "user/test-dataset"])
 
             # Should call upload_large_folder, not upload_folder
             mock_api.upload_large_folder.assert_called_once()
@@ -501,7 +501,7 @@ class TestHfPushDatasetUploadSwitching:
                 f.write("col1,col2\n1,2")
 
             result = runner.invoke(cli, [
-                "hf", "push-dataset", tmpdir, "user/test-dataset",
+                "services", "hf", "push-dataset", tmpdir, "user/test-dataset",
                 "--commit-message", "Custom dataset upload"
             ])
 
@@ -521,7 +521,7 @@ class TestHfPushDatasetUploadSwitching:
                 f.write("col1,col2\n1,2")
 
             result = runner.invoke(cli, [
-                "hf", "push-dataset", tmpdir, "user/test-dataset",
+                "services", "hf", "push-dataset", tmpdir, "user/test-dataset",
                 "--commit-message", "Custom dataset upload"
             ])
 

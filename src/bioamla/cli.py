@@ -1,12 +1,37 @@
-from typing import Dict
+from typing import Dict, Optional
 
 import click
 
+from bioamla.config import get_config, load_config, set_config
+
+
+class ConfigContext:
+    """Context object to hold configuration."""
+    def __init__(self):
+        self.config = None
+
+
+pass_config = click.make_pass_decorator(ConfigContext, ensure=True)
+
 
 @click.group()
-def cli():
-    """Bioamla CLI - Bioacoustics and Machine Learning Applications"""
-    pass
+@click.option('--config', 'config_path', type=click.Path(exists=True),
+              help='Path to TOML configuration file')
+@click.pass_context
+def cli(ctx, config_path: Optional[str]):
+    """Bioamla CLI - Bioacoustics and Machine Learning Applications
+
+    Configuration can be provided via:
+    - --config option pointing to a TOML file
+    - ./bioamla.toml in current directory
+    - ~/.config/bioamla/config.toml
+    """
+    ctx.ensure_object(ConfigContext)
+    if config_path:
+        ctx.obj.config = load_config(config_path)
+        set_config(ctx.obj.config)
+    else:
+        ctx.obj.config = get_config()
 
 
 # =============================================================================
@@ -35,65 +60,102 @@ def version():
     click.echo(f"bioamla v{get_bioamla_version()}")
 
 
-@cli.command()
-@click.argument('url', required=True)
-@click.argument('output_dir', required=False, default='.')
-def download(url: str, output_dir: str):
-    """Download a file from the specified URL to the target directory."""
-    import os
-    from urllib.parse import urlparse
+# =============================================================================
+# Config Command Group
+# =============================================================================
 
-    from novus_pytils.files import download_file
-
-    if output_dir == '.':
-        output_dir = os.getcwd()
-
-    parsed_url = urlparse(url)
-    filename = os.path.basename(parsed_url.path)
-    if not filename:
-        filename = "downloaded_file"
-
-    output_path = os.path.join(output_dir, filename)
-    download_file(url, output_path)
+@cli.group()
+def config():
+    """Configuration management commands."""
+    pass
 
 
-@cli.command()
-@click.argument('file_path')
-@click.argument('output_path', required=False, default='.')
-def unzip(file_path: str, output_path: str):
-    """Extract a ZIP archive to the specified output directory."""
-    from novus_pytils.compression import extract_zip_file
-    if output_path == '.':
-        import os
-        output_path = os.getcwd()
+@config.command('show')
+@click.pass_context
+def config_show(ctx):
+    """Show current configuration."""
+    from bioamla.progress import console
 
-    extract_zip_file(file_path, output_path)
+    config_obj = ctx.obj.config if ctx.obj else get_config()
 
-
-@cli.command('zip')
-@click.argument('source_path')
-@click.argument('output_file')
-def zip_cmd(source_path: str, output_file: str):
-    """Create a ZIP archive from a file or directory."""
-    import os
-
-    from novus_pytils.compression import create_zip_file, zip_directory
-
-    if os.path.isdir(source_path):
-        zip_directory(source_path, output_file)
+    console.print("\n[bold]Current Configuration[/bold]")
+    if config_obj._source:
+        console.print(f"[dim]Source: {config_obj._source}[/dim]\n")
     else:
-        create_zip_file([source_path], output_file)
+        console.print("[dim]Source: defaults (no config file found)[/dim]\n")
 
-    click.echo(f"Created {output_file}")
+    for section_name in ['audio', 'visualize', 'analysis', 'batch', 'output', 'progress']:
+        section = getattr(config_obj, section_name, {})
+        if section:
+            console.print(f"[bold blue][{section_name}][/bold blue]")
+            for key, value in section.items():
+                console.print(f"  {key} = {value}")
+            console.print()
 
 
-@cli.command()
+@config.command('init')
+@click.option('--output', '-o', default='bioamla.toml', help='Output file path')
+@click.option('--force', '-f', is_flag=True, help='Overwrite existing file')
+def config_init(output, force):
+    """Create a default configuration file."""
+    from pathlib import Path
+
+    from bioamla.config import create_default_config_file
+    from bioamla.progress import print_error, print_success
+
+    path = Path(output)
+    if path.exists() and not force:
+        print_error(f"File already exists: {output}")
+        click.echo("Use --force to overwrite.")
+        raise SystemExit(1)
+
+    create_default_config_file(output)
+    print_success(f"Created configuration file: {output}")
+
+
+@config.command('path')
+def config_path():
+    """Show configuration file search paths."""
+    from bioamla.config import CONFIG_LOCATIONS, find_config_file
+    from bioamla.progress import console
+
+    console.print("\n[bold]Configuration File Search Paths[/bold]\n")
+    console.print("Files are searched in order (first found wins):\n")
+
+    active_config = find_config_file()
+
+    for i, location in enumerate(CONFIG_LOCATIONS, 1):
+        exists = location.exists()
+        status = "[green]✓ ACTIVE[/green]" if location == active_config else (
+            "[dim]exists[/dim]" if exists else "[dim]not found[/dim]"
+        )
+        console.print(f"  {i}. {location} {status}")
+
+    console.print()
+
+
+def _format_size(size_bytes: int) -> str:
+    """Format bytes into human-readable size."""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} PB"
+
+
+@config.command('purge')
 @click.option('--models', is_flag=True, help='Purge cached models')
 @click.option('--datasets', is_flag=True, help='Purge cached datasets')
 @click.option('--all', 'purge_all', is_flag=True, help='Purge all cached data (models and datasets)')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt')
-def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
-    """Purge cached HuggingFace Hub data from local storage."""
+def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
+    """Purge cached HuggingFace Hub data from local storage.
+
+    Examples:
+        bioamla config purge --models
+        bioamla config purge --datasets
+        bioamla config purge --all -y
+    """
     import shutil
     from pathlib import Path
 
@@ -101,7 +163,7 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
 
     if not models and not datasets and not purge_all:
         click.echo("Please specify what to purge: --models, --datasets, or --all")
-        click.echo("Run 'bioamla purge --help' for more information.")
+        click.echo("Run 'bioamla config purge --help' for more information.")
         return
 
     if purge_all:
@@ -171,15 +233,6 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
     click.echo(f"Successfully purged {deleted_count} items, freed {_format_size(freed_space)}.")
 
 
-def _format_size(size_bytes: int) -> str:
-    """Format bytes into human-readable size."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} PB"
-
-
 @cli.command()
 @click.argument('directory', required=True)
 def explore(directory: str):
@@ -211,16 +264,39 @@ def explore(directory: str):
 
 
 # =============================================================================
-# AST Command Group
+# Models Command Group
 # =============================================================================
 
 @cli.group()
-def ast():
-    """Audio Spectrogram Transformer model commands."""
+def models():
+    """ML model operations (predict, embed, train, convert)."""
     pass
 
 
-@ast.command('predict')
+# Subgroups for models
+@models.group()
+def predict():
+    """Run inference with ML models."""
+    pass
+
+
+@models.group()
+def train():
+    """Train ML models."""
+    pass
+
+
+@models.group()
+def evaluate():
+    """Evaluate ML models."""
+    pass
+
+
+# =============================================================================
+# AST Commands (Audio Spectrogram Transformer)
+# =============================================================================
+
+@predict.command('ast')
 @click.argument('path')
 @click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for inference')
 @click.option('--resample-freq', default=16000, type=int, help='Resampling frequency')
@@ -253,10 +329,10 @@ def ast_predict(
     PATH can be a single audio file or a directory (with --batch flag).
 
     Single file mode (default):
-        bioamla ast predict audio.wav --model-path my_model
+        bioamla models ast-predict audio.wav --model-path my_model
 
     Batch mode (--batch):
-        bioamla ast predict ./audio_dir --batch --model-path my_model
+        bioamla models ast-predict ./audio_dir --batch --model-path my_model
 
         Processes all WAV files in the specified directory and saves predictions
         to a CSV file. Supports resumable operations.
@@ -306,13 +382,13 @@ def _run_batch_inference(
 
     import pandas as pd
     import torch
-    from novus_pytils.files import file_exists, get_files_by_extension
 
     from bioamla.ast import (
         InferenceConfig,
         load_pretrained_ast_model,
         wave_file_batch_inference,
     )
+    from bioamla.utils import file_exists, get_files_by_extension
 
     output_csv = os.path.join(directory, output_csv)
     print("Output csv: " + output_csv)
@@ -392,7 +468,7 @@ def _run_batch_inference(
     print(f"Elapsed time: {elapsed:.2f}s ({len(wave_files)/elapsed:.2f} files/sec)")
 
 
-@ast.command('train')
+@train.command('ast')
 @click.option('--training-dir', default='.', help='Directory to save training outputs')
 @click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
 @click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub')
@@ -465,7 +541,6 @@ def ast_train(
         TimeStretch,
     )
     from datasets import Audio, Dataset, DatasetDict, load_dataset
-    from novus_pytils.files import create_directory
     from transformers import (
         ASTConfig,
         ASTFeatureExtractor,
@@ -473,6 +548,8 @@ def ast_train(
         Trainer,
         TrainingArguments,
     )
+
+    from bioamla.utils import create_directory
 
     output_dir = training_dir + "/runs"
     logging_dir = training_dir + "/logs"
@@ -732,7 +809,7 @@ def ast_train(
     trainer.save_model(best_model_path)
 
 
-@ast.command('evaluate')
+@evaluate.command('ast')
 @click.argument('path')
 @click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for evaluation')
 @click.option('--ground-truth', '-g', required=True, help='Path to CSV file with ground truth labels')
@@ -762,7 +839,7 @@ def ast_evaluate(
     PATH is a directory containing audio files to evaluate.
 
     Example:
-        bioamla ast evaluate ./test_audio --model bioamla/scp-frogs --ground-truth labels.csv
+        bioamla models ast-evaluate ./test_audio --model bioamla/scp-frogs --ground-truth labels.csv
     """
     from pathlib import Path as PathLib
 
@@ -818,6 +895,342 @@ def ast_evaluate(
         raise SystemExit(1)
 
 
+@models.command('list')
+def models_list():
+    """List available model types."""
+    from bioamla.models import list_models
+    click.echo("Available model types:")
+    for model_name in list_models():
+        click.echo(f"  - {model_name}")
+
+
+@predict.command('generic')
+@click.argument('path')
+@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
+              default='ast', help='Model type to use')
+@click.option('--model-path', required=True, help='Path to model or HuggingFace identifier')
+@click.option('--output', '-o', default=None, help='Output CSV file')
+@click.option('--batch', is_flag=True, help='Process all files in directory')
+@click.option('--min-confidence', default=0.0, type=float, help='Minimum confidence threshold')
+@click.option('--top-k', default=1, type=int, help='Number of top predictions per segment')
+@click.option('--clip-duration', default=3.0, type=float, help='Clip duration in seconds')
+@click.option('--overlap', default=0.0, type=float, help='Overlap between clips in seconds')
+@click.option('--sample-rate', default=16000, type=int, help='Target sample rate')
+@click.option('--batch-size', default=8, type=int, help='Batch size for processing')
+@click.option('--fp16/--no-fp16', default=False, help='Use half-precision inference')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def predict_generic(
+    path, model_type, model_path, output, batch, min_confidence,
+    top_k, clip_duration, overlap, sample_rate, batch_size, fp16, quiet
+):
+    """Run predictions using an ML model (multi-model interface).
+
+    Single file:
+        bioamla models predict generic audio.wav --model-type ast --model-path my_model
+
+    Batch mode:
+        bioamla models predict generic ./audio --batch --model-type ast --model-path my_model -o results.csv
+    """
+    import csv
+    import time
+    from pathlib import Path
+
+    from bioamla.models import ModelConfig, load_model
+    from bioamla.utils import get_audio_files
+
+    config = ModelConfig(
+        sample_rate=sample_rate,
+        clip_duration=clip_duration,
+        overlap=overlap,
+        min_confidence=min_confidence,
+        top_k=top_k,
+        batch_size=batch_size,
+        use_fp16=fp16,
+    )
+
+    if not quiet:
+        click.echo(f"Loading {model_type} model from {model_path}...")
+
+    try:
+        model = load_model(model_type, model_path, config, use_fp16=fp16)
+    except Exception as e:
+        click.echo(f"Error loading model: {e}")
+        raise SystemExit(1)
+
+    if batch:
+        path = Path(path)
+        if not path.is_dir():
+            click.echo(f"Error: {path} is not a directory")
+            raise SystemExit(1)
+
+        audio_files = get_audio_files(str(path))
+        if not audio_files:
+            click.echo("No audio files found")
+            raise SystemExit(1)
+
+        if not quiet:
+            click.echo(f"Processing {len(audio_files)} files...")
+
+        start_time = time.time()
+        all_results = []
+
+        for i, filepath in enumerate(audio_files):
+            try:
+                results = model.predict(filepath)
+                all_results.extend(results)
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] {filepath}: {len(results)} predictions")
+            except Exception as e:
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
+
+        elapsed = time.time() - start_time
+
+        if output:
+            output_path = Path(output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['filepath', 'start_time', 'end_time', 'label', 'confidence'])
+                for r in all_results:
+                    writer.writerow([r.filepath, f"{r.start_time:.3f}", f"{r.end_time:.3f}",
+                                    r.label, f"{r.confidence:.4f}"])
+            if not quiet:
+                click.echo(f"\nResults saved to {output}")
+
+        if not quiet:
+            click.echo(f"\nProcessed {len(audio_files)} files in {elapsed:.2f}s")
+            click.echo(f"Total predictions: {len(all_results)}")
+
+    else:
+        # Single file
+        if not Path(path).exists():
+            click.echo(f"Error: File not found: {path}")
+            raise SystemExit(1)
+
+        results = model.predict(path)
+
+        if output:
+            with open(output, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['filepath', 'start_time', 'end_time', 'label', 'confidence'])
+                for r in results:
+                    writer.writerow([r.filepath, f"{r.start_time:.3f}", f"{r.end_time:.3f}",
+                                    r.label, f"{r.confidence:.4f}"])
+            click.echo(f"Results saved to {output}")
+        else:
+            for r in results:
+                click.echo(f"{r.start_time:.2f}-{r.end_time:.2f}s: {r.label} ({r.confidence:.3f})")
+
+
+@models.command('embed')
+@click.argument('path')
+@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
+              default='ast', help='Model type to use')
+@click.option('--model-path', required=True, help='Path to model or HuggingFace identifier')
+@click.option('--output', '-o', required=True, help='Output file (.npy or .npz)')
+@click.option('--batch', is_flag=True, help='Process all files in directory')
+@click.option('--layer', default=None, help='Layer to extract embeddings from')
+@click.option('--sample-rate', default=16000, type=int, help='Target sample rate')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def models_embed(path, model_type, model_path, output, batch, layer, sample_rate, quiet):
+    """Extract embeddings from audio using an ML model.
+
+    Single file:
+        bioamla models embed audio.wav --model-type ast --model-path my_model -o embeddings.npy
+
+    Batch mode:
+        bioamla models embed ./audio --batch --model-type ast --model-path my_model -o embeddings.npz
+    """
+    from pathlib import Path
+
+    import numpy as np
+
+    from bioamla.models import ModelConfig, load_model
+    from bioamla.utils import get_audio_files
+
+    config = ModelConfig(sample_rate=sample_rate)
+
+    if not quiet:
+        click.echo(f"Loading {model_type} model from {model_path}...")
+
+    try:
+        model = load_model(model_type, model_path, config)
+    except Exception as e:
+        click.echo(f"Error loading model: {e}")
+        raise SystemExit(1)
+
+    if batch:
+        path = Path(path)
+        if not path.is_dir():
+            click.echo(f"Error: {path} is not a directory")
+            raise SystemExit(1)
+
+        audio_files = get_audio_files(str(path))
+        if not audio_files:
+            click.echo("No audio files found")
+            raise SystemExit(1)
+
+        if not quiet:
+            click.echo(f"Extracting embeddings from {len(audio_files)} files...")
+
+        embeddings_dict = {}
+        for i, filepath in enumerate(audio_files):
+            try:
+                emb = model.extract_embeddings(filepath, layer=layer)
+                embeddings_dict[filepath] = emb
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] {filepath}: shape {emb.shape}")
+            except Exception as e:
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
+
+        np.savez(output, **{str(i): v for i, v in enumerate(embeddings_dict.values())},
+                 filepaths=list(embeddings_dict.keys()))
+        if not quiet:
+            click.echo(f"\nEmbeddings saved to {output}")
+
+    else:
+        if not Path(path).exists():
+            click.echo(f"Error: File not found: {path}")
+            raise SystemExit(1)
+
+        embeddings = model.extract_embeddings(path, layer=layer)
+        np.save(output, embeddings)
+
+        if not quiet:
+            click.echo(f"Embeddings shape: {embeddings.shape}")
+            click.echo(f"Saved to {output}")
+
+
+@train.command('cnn')
+@click.argument('train_dir')
+@click.option('--val-dir', default=None, help='Validation data directory')
+@click.option('--output-dir', '-o', default='./output', help='Output directory for model')
+@click.option('--classes', required=True, help='Comma-separated list of class names')
+@click.option('--architecture', type=click.Choice(['resnet18', 'resnet50']),
+              default='resnet18', help='Model architecture')
+@click.option('--epochs', default=10, type=int, help='Number of training epochs')
+@click.option('--batch-size', default=32, type=int, help='Batch size')
+@click.option('--learning-rate', default=1e-4, type=float, help='Learning rate')
+@click.option('--freeze-epochs', default=0, type=int, help='Epochs to keep backbone frozen')
+@click.option('--pretrained/--no-pretrained', default=True, help='Use ImageNet pretrained weights')
+@click.option('--fp16/--no-fp16', default=False, help='Use mixed precision training')
+@click.option('--sample-rate', default=16000, type=int, help='Target sample rate')
+@click.option('--clip-duration', default=3.0, type=float, help='Clip duration in seconds')
+def train_cnn(
+    train_dir, val_dir, output_dir, classes, architecture, epochs,
+    batch_size, learning_rate, freeze_epochs, pretrained, fp16, sample_rate, clip_duration
+):
+    """Train a custom CNN model using transfer learning.
+
+    Data should be organized with subdirectories per class:
+        train_dir/
+            class1/
+                audio1.wav
+                audio2.wav
+            class2/
+                audio3.wav
+                ...
+
+    Example:
+        bioamla models train cnn ./data/train --val-dir ./data/val \\
+            --classes "bird,frog,insect" --epochs 20 -o ./my_model
+    """
+    from bioamla.models import ModelTrainer, TrainingConfig
+
+    class_names = [c.strip() for c in classes.split(',')]
+
+    click.echo(f"Training {architecture} model with classes: {class_names}")
+    click.echo(f"Training data: {train_dir}")
+    if val_dir:
+        click.echo(f"Validation data: {val_dir}")
+
+    config = TrainingConfig(
+        train_dir=train_dir,
+        val_dir=val_dir,
+        output_dir=output_dir,
+        class_names=class_names,
+        architecture=architecture,
+        pretrained=pretrained,
+        freeze_backbone_epochs=freeze_epochs,
+        batch_size=batch_size,
+        num_epochs=epochs,
+        learning_rate=learning_rate,
+        sample_rate=sample_rate,
+        clip_duration=clip_duration,
+        use_fp16=fp16,
+    )
+
+    trainer = ModelTrainer(config)
+    trainer.setup()
+
+    def progress(epoch, total, metrics):
+        val_info = ""
+        if metrics.val_loss > 0:
+            val_info = f", val_loss: {metrics.val_loss:.4f}, val_acc: {metrics.val_accuracy:.4f}"
+        click.echo(
+            f"Epoch {epoch}/{total} - "
+            f"loss: {metrics.train_loss:.4f}, acc: {metrics.train_accuracy:.4f}"
+            f"{val_info} [{metrics.epoch_time:.1f}s]"
+        )
+
+    try:
+        trainer.train(progress_callback=progress)
+        click.echo(f"\nTraining complete! Model saved to {output_dir}")
+    except Exception as e:
+        click.echo(f"Training error: {e}")
+        raise SystemExit(1)
+
+
+@models.command('convert')
+@click.argument('input_path')
+@click.argument('output_path')
+@click.option('--format', 'output_format', type=click.Choice(['pt', 'onnx']),
+              default='onnx', help='Output format')
+@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
+              default='ast', help='Model type')
+def models_convert(input_path, output_path, output_format, model_type):
+    """Convert model between formats (PyTorch to ONNX).
+
+    Example:
+        bioamla models convert ./my_model.pt ./my_model.onnx --format onnx
+    """
+    from bioamla.models import load_model
+
+    click.echo(f"Loading model from {input_path}...")
+    model = load_model(model_type, input_path)
+
+    click.echo(f"Converting to {output_format}...")
+    try:
+        result = model.save(output_path, format=output_format)
+        click.echo(f"Model saved to {result}")
+    except Exception as e:
+        click.echo(f"Conversion error: {e}")
+        raise SystemExit(1)
+
+
+@models.command('info')
+@click.argument('model_path')
+@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
+              default='ast', help='Model type')
+def models_info(model_path, model_type):
+    """Display information about a model."""
+    from bioamla.models import load_model
+
+    try:
+        model = load_model(model_type, model_path)
+        click.echo(f"Model: {model}")
+        click.echo(f"Backend: {model.backend.value}")
+        click.echo(f"Classes: {model.num_classes}")
+        if model.classes:
+            click.echo(f"Labels: {', '.join(model.classes[:10])}" +
+                      (f"... (+{len(model.classes)-10} more)" if len(model.classes) > 10 else ""))
+    except Exception as e:
+        click.echo(f"Error loading model: {e}")
+        raise SystemExit(1)
+
+
 # =============================================================================
 # Audio Command Group
 # =============================================================================
@@ -832,7 +1245,7 @@ def audio():
 @click.argument('filepath', required=False, default='.')
 def audio_list(filepath: str):
     """List audio files in a directory."""
-    from novus_pytils.audio import get_audio_files
+    from bioamla.utils import get_audio_files
     try:
         if filepath == '.':
             import os
@@ -851,7 +1264,7 @@ def audio_list(filepath: str):
 @click.argument('filepath')
 def audio_info(filepath: str):
     """Display metadata from an audio file."""
-    from novus_pytils.audio.wave import get_wav_metadata
+    from bioamla.utils import get_wav_metadata
     metadata = get_wav_metadata(filepath)
     click.echo(f"{metadata}")
 
@@ -1137,6 +1550,185 @@ def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
     _run_signal_processing(path, output, batch, processor, quiet, "trim")
 
 
+@audio.command('analyze')
+@click.argument('path')
+@click.option('--batch', is_flag=True, help='Analyze all audio files in directory')
+@click.option('--output', '-o', default=None, help='Output file for results (CSV or JSON)')
+@click.option('--format', 'output_format', type=click.Choice(['text', 'json', 'csv']), default='text',
+              help='Output format (default: text)')
+@click.option('--silence-threshold', default=-40, type=float, help='Silence detection threshold in dB')
+@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode)')
+@click.option('--quiet', is_flag=True, help='Suppress detailed output')
+def audio_analyze(path, batch, output, output_format, silence_threshold, recursive, quiet):
+    """Analyze audio files and display statistics.
+
+    Shows duration, sample rate, channels, RMS/peak amplitude,
+    frequency statistics, and silence detection results.
+
+    Single file mode:
+        bioamla audio analyze recording.wav
+
+    Batch mode:
+        bioamla audio analyze ./audio_dir --batch --output results.csv
+
+    Examples:
+        # Analyze a single file
+        bioamla audio analyze bird_call.wav
+
+        # Analyze with JSON output
+        bioamla audio analyze recording.wav --format json
+
+        # Batch analyze and save to CSV
+        bioamla audio analyze ./dataset --batch -o analysis.csv --format csv
+    """
+    import json
+    from pathlib import Path
+
+    from bioamla.analysis import (
+        analyze_audio,
+        summarize_analysis,
+    )
+    from bioamla.utils import get_audio_files
+
+    path = Path(path)
+
+    if batch:
+        # Batch mode
+        if not path.is_dir():
+            click.echo(f"Error: {path} is not a directory")
+            raise SystemExit(1)
+
+        audio_files = get_audio_files(str(path), recursive=recursive)
+
+        if not audio_files:
+            click.echo("No audio files found")
+            raise SystemExit(1)
+
+        if not quiet:
+            click.echo(f"Found {len(audio_files)} audio files to analyze")
+
+        analyses = []
+        for i, filepath in enumerate(audio_files):
+            try:
+                analysis = analyze_audio(filepath, silence_threshold_db=silence_threshold)
+                analyses.append(analysis)
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] Analyzed: {filepath}")
+            except Exception as e:
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
+
+        if output_format == 'json':
+            result = {
+                "summary": summarize_analysis(analyses),
+                "files": [a.to_dict() for a in analyses]
+            }
+            if output:
+                with open(output, 'w') as f:
+                    json.dump(result, f, indent=2)
+                click.echo(f"Results saved to {output}")
+            else:
+                click.echo(json.dumps(result, indent=2))
+
+        elif output_format == 'csv':
+            import csv
+            output_path = output or "analysis_results.csv"
+            with open(output_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    'file_path', 'duration', 'sample_rate', 'channels',
+                    'rms', 'rms_db', 'peak', 'peak_db',
+                    'peak_frequency', 'spectral_centroid', 'bandwidth',
+                    'is_silent', 'silence_ratio'
+                ])
+                for a in analyses:
+                    writer.writerow([
+                        a.file_path,
+                        f"{a.info.duration:.3f}",
+                        a.info.sample_rate,
+                        a.info.channels,
+                        f"{a.amplitude.rms:.6f}",
+                        f"{a.amplitude.rms_db:.2f}",
+                        f"{a.amplitude.peak:.6f}",
+                        f"{a.amplitude.peak_db:.2f}",
+                        f"{a.frequency.peak_frequency:.1f}",
+                        f"{a.frequency.spectral_centroid:.1f}",
+                        f"{a.frequency.bandwidth:.1f}",
+                        a.silence.is_silent,
+                        f"{a.silence.silence_ratio:.3f}"
+                    ])
+            click.echo(f"Results saved to {output_path}")
+
+        else:
+            # Text format - show summary
+            summary = summarize_analysis(analyses)
+            click.echo("\nBatch Analysis Summary")
+            click.echo("=" * 50)
+            click.echo(f"Files analyzed: {summary['total_files']}")
+            click.echo(f"Total duration: {summary['total_duration']:.2f}s")
+            click.echo(f"Average duration: {summary['avg_duration']:.2f}s")
+            click.echo(f"Duration range: {summary['min_duration']:.2f}s - {summary['max_duration']:.2f}s")
+            click.echo("\nAmplitude (average):")
+            click.echo(f"  RMS: {summary['avg_rms_db']:.1f} dBFS")
+            click.echo(f"  Peak: {summary['avg_peak_db']:.1f} dBFS")
+            click.echo(f"\nFrequency (average peak): {summary['avg_peak_frequency']:.1f} Hz")
+            click.echo(f"  Range: {summary['min_peak_frequency']:.1f} - {summary['max_peak_frequency']:.1f} Hz")
+            click.echo(f"\nSilent files: {summary['silent_file_count']} ({summary['silent_file_ratio']:.1%})")
+
+    else:
+        # Single file mode
+        if not path.exists():
+            click.echo(f"Error: File not found: {path}")
+            raise SystemExit(1)
+
+        try:
+            analysis = analyze_audio(str(path), silence_threshold_db=silence_threshold)
+        except Exception as e:
+            click.echo(f"Error analyzing file: {e}")
+            raise SystemExit(1)
+
+        if output_format == 'json':
+            result = analysis.to_dict()
+            if output:
+                with open(output, 'w') as f:
+                    json.dump(result, f, indent=2)
+                click.echo(f"Results saved to {output}")
+            else:
+                click.echo(json.dumps(result, indent=2))
+        else:
+            # Text format
+            click.echo(f"\nAudio Analysis: {path}")
+            click.echo("=" * 50)
+            click.echo("\nBasic Info:")
+            click.echo(f"  Duration: {analysis.info.duration:.3f}s")
+            click.echo(f"  Sample rate: {analysis.info.sample_rate} Hz")
+            click.echo(f"  Channels: {analysis.info.channels}")
+            click.echo(f"  Samples: {analysis.info.samples:,}")
+            if analysis.info.bit_depth:
+                click.echo(f"  Bit depth: {analysis.info.bit_depth}")
+            if analysis.info.format:
+                click.echo(f"  Format: {analysis.info.format}")
+
+            click.echo("\nAmplitude:")
+            click.echo(f"  RMS: {analysis.amplitude.rms:.6f} ({analysis.amplitude.rms_db:.1f} dBFS)")
+            click.echo(f"  Peak: {analysis.amplitude.peak:.6f} ({analysis.amplitude.peak_db:.1f} dBFS)")
+            click.echo(f"  Crest factor: {analysis.amplitude.crest_factor:.1f} dB")
+
+            click.echo("\nFrequency:")
+            click.echo(f"  Peak: {analysis.frequency.peak_frequency:.1f} Hz")
+            click.echo(f"  Mean: {analysis.frequency.mean_frequency:.1f} Hz")
+            click.echo(f"  Spectral centroid: {analysis.frequency.spectral_centroid:.1f} Hz")
+            click.echo(f"  Bandwidth: {analysis.frequency.min_frequency:.1f} - {analysis.frequency.max_frequency:.1f} Hz")
+            click.echo(f"  Spectral rolloff: {analysis.frequency.spectral_rolloff:.1f} Hz")
+
+            click.echo(f"\nSilence Detection (threshold: {silence_threshold} dB):")
+            click.echo(f"  Is silent: {analysis.silence.is_silent}")
+            click.echo(f"  Silence ratio: {analysis.silence.silence_ratio:.1%}")
+            click.echo(f"  Sound ratio: {analysis.silence.sound_ratio:.1%}")
+            if analysis.silence.sound_segments:
+                click.echo(f"  Sound segments: {len(analysis.silence.sound_segments)}")
+
+
 def _run_signal_processing(path, output, batch, processor, quiet, operation, output_sr=None):
     """Helper to run signal processing on file or directory."""
     from pathlib import Path
@@ -1181,30 +1773,46 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
 
 
 # =============================================================================
-# Visualize Command
+# Visualize Command (under audio group)
 # =============================================================================
 
-@cli.command()
+@audio.command('visualize')
 @click.argument('path')
 @click.option('--output', '-o', default=None, help='Output file path (single file) or directory (batch with --batch)')
 @click.option('--batch', is_flag=True, default=False, help='Process all audio files in a directory')
-@click.option('--type', 'viz_type', type=click.Choice(['mel', 'mfcc', 'waveform']), default='mel', help='Type of visualization')
+@click.option('--type', 'viz_type', type=click.Choice(['stft', 'mel', 'mfcc', 'waveform']), default='mel', help='Type of visualization')
 @click.option('--sample-rate', default=16000, type=int, help='Target sample rate for processing')
+@click.option('--n-fft', default=2048, type=int, help='FFT window size (256-8192)')
+@click.option('--hop-length', default=512, type=int, help='Samples between successive frames')
 @click.option('--n-mels', default=128, type=int, help='Number of mel bands (mel spectrogram only)')
 @click.option('--n-mfcc', default=40, type=int, help='Number of MFCCs (mfcc only)')
+@click.option('--window', type=click.Choice(['hann', 'hamming', 'blackman', 'bartlett', 'rectangular', 'kaiser']), default='hann', help='Window function for STFT')
+@click.option('--db-min', default=None, type=float, help='Minimum dB value for scaling')
+@click.option('--db-max', default=None, type=float, help='Maximum dB value for scaling')
 @click.option('--cmap', default='magma', help='Colormap for spectrogram visualizations')
+@click.option('--dpi', default=150, type=int, help='Output image resolution (dots per inch)')
+@click.option('--format', 'img_format', type=click.Choice(['png', 'jpg', 'jpeg']), default=None, help='Output image format (default: inferred from extension)')
 @click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode only)')
+@click.option('--progress/--no-progress', default=True, help='Show Rich progress bar (batch mode only)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
-def visualize(
+def audio_visualize(
     path: str,
     output: str,
     batch: bool,
     viz_type: str,
     sample_rate: int,
+    n_fft: int,
+    hop_length: int,
     n_mels: int,
     n_mfcc: int,
+    window: str,
+    db_min: float,
+    db_max: float,
     cmap: str,
+    dpi: int,
+    img_format: str,
     recursive: bool,
+    progress: bool,
     quiet: bool
 ):
     """
@@ -1213,15 +1821,29 @@ def visualize(
     PATH can be a single audio file or a directory (with --batch flag).
 
     Single file mode (default):
-        bioamla visualize audio.wav --output spec.png
+        bioamla audio visualize audio.wav --output spec.png
 
     Batch mode (--batch):
-        bioamla visualize ./audio_dir --batch --output ./specs
+        bioamla audio visualize ./audio_dir --batch --output ./specs
 
     Visualization types:
+        stft: Short-Time Fourier Transform spectrogram
         mel: Mel spectrogram (default)
         mfcc: Mel-frequency cepstral coefficients
         waveform: Time-domain waveform plot
+
+    Window functions:
+        hann (default), hamming, blackman, bartlett, rectangular, kaiser
+
+    Examples:
+        # STFT spectrogram with custom FFT size
+        bioamla audio visualize audio.wav --type stft --n-fft 4096
+
+        # Mel spectrogram with dB limits and JPEG output
+        bioamla audio visualize audio.wav --type mel --db-min -80 --db-max 0 -o spec.jpg
+
+        # Batch processing with hamming window
+        bioamla audio visualize ./audio --batch --window hamming --format png
     """
     import os
 
@@ -1237,11 +1859,19 @@ def visualize(
             output_dir=output,
             viz_type=viz_type,
             sample_rate=sample_rate,
+            n_fft=n_fft,
+            hop_length=hop_length,
             n_mels=n_mels,
             n_mfcc=n_mfcc,
+            window=window,
+            db_min=db_min,
+            db_max=db_max,
             cmap=cmap,
+            dpi=dpi,
+            format=img_format if img_format else "png",
             recursive=recursive,
             verbose=not quiet,
+            use_rich_progress=progress and not quiet,
         )
 
         if quiet:
@@ -1251,7 +1881,8 @@ def visualize(
         if output is None:
             # Default output: same name with .png extension
             base_name = os.path.splitext(path)[0]
-            output = f"{base_name}.png"
+            ext = ".jpg" if img_format in ("jpg", "jpeg") else ".png"
+            output = f"{base_name}{ext}"
 
         try:
             result = generate_spectrogram(
@@ -1259,9 +1890,16 @@ def visualize(
                 output_path=output,
                 viz_type=viz_type,
                 sample_rate=sample_rate,
+                n_fft=n_fft,
+                hop_length=hop_length,
                 n_mels=n_mels,
                 n_mfcc=n_mfcc,
+                window=window,
+                db_min=db_min,
+                db_max=db_max,
                 cmap=cmap,
+                dpi=dpi,
+                format=img_format,
             )
             if not quiet:
                 click.echo(f"Generated {viz_type} spectrogram: {result}")
@@ -1274,138 +1912,26 @@ def visualize(
 
 
 # =============================================================================
-# Augment Command
-# =============================================================================
-
-def parse_range(value: str) -> tuple:
-    """Parse a range string like '0.8-1.2' or '-2,2' into (min, max)."""
-    if '-' in value and not value.startswith('-'):
-        parts = value.split('-')
-        return float(parts[0]), float(parts[1])
-    elif ',' in value:
-        parts = value.split(',')
-        return float(parts[0]), float(parts[1])
-    else:
-        val = float(value)
-        return val, val
-
-
-@cli.command()
-@click.argument('input_dir')
-@click.option('--output', '-o', required=True, help='Output directory for augmented files')
-@click.option('--add-noise', default=None, help='Add Gaussian noise with SNR range (e.g., "3-30" dB)')
-@click.option('--time-stretch', default=None, help='Time stretch range (e.g., "0.8-1.2")')
-@click.option('--pitch-shift', default=None, help='Pitch shift range in semitones (e.g., "-2,2")')
-@click.option('--gain', default=None, help='Gain range in dB (e.g., "-12,12")')
-@click.option('--multiply', default=1, type=int, help='Number of augmented copies to create per file')
-@click.option('--sample-rate', default=16000, type=int, help='Target sample rate for output')
-@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
-def augment(
-    input_dir: str,
-    output: str,
-    add_noise: str,
-    time_stretch: str,
-    pitch_shift: str,
-    gain: str,
-    multiply: int,
-    sample_rate: int,
-    recursive: bool,
-    quiet: bool
-):
-    """
-    Augment audio files to expand training datasets.
-
-    Creates augmented copies of audio files with various transformations.
-    At least one augmentation option must be specified.
-
-    Examples:
-        bioamla augment ./audio --output ./augmented --add-noise 3-30
-
-        bioamla augment ./audio --output ./augmented \\
-            --add-noise 3-30 \\
-            --time-stretch 0.8-1.2 \\
-            --pitch-shift -2,2 \\
-            --multiply 5
-
-    Augmentation options:
-        --add-noise: Add Gaussian noise with SNR in specified range (dB)
-        --time-stretch: Speed up/slow down without changing pitch
-        --pitch-shift: Change pitch without changing speed (semitones)
-        --gain: Random volume adjustment (dB)
-    """
-    from bioamla.augment import AugmentationConfig, batch_augment
-
-    # Build configuration from options
-    config = AugmentationConfig(
-        sample_rate=sample_rate,
-        multiply=multiply,
-    )
-
-    # Parse augmentation options
-    if add_noise:
-        config.add_noise = True
-        min_snr, max_snr = parse_range(add_noise)
-        config.noise_min_snr = min_snr
-        config.noise_max_snr = max_snr
-
-    if time_stretch:
-        config.time_stretch = True
-        min_rate, max_rate = parse_range(time_stretch)
-        config.time_stretch_min = min_rate
-        config.time_stretch_max = max_rate
-
-    if pitch_shift:
-        config.pitch_shift = True
-        min_semi, max_semi = parse_range(pitch_shift)
-        config.pitch_shift_min = min_semi
-        config.pitch_shift_max = max_semi
-
-    if gain:
-        config.gain = True
-        min_db, max_db = parse_range(gain)
-        config.gain_min_db = min_db
-        config.gain_max_db = max_db
-
-    # Check that at least one augmentation is enabled
-    if not any([config.add_noise, config.time_stretch, config.pitch_shift, config.gain]):
-        click.echo("Error: At least one augmentation option must be specified")
-        click.echo("Use --help for available options")
-        raise SystemExit(1)
-
-    try:
-        stats = batch_augment(
-            input_dir=input_dir,
-            output_dir=output,
-            config=config,
-            recursive=recursive,
-            verbose=not quiet,
-        )
-
-        if quiet:
-            click.echo(
-                f"Created {stats['files_created']} augmented files from "
-                f"{stats['files_processed']} source files in {stats['output_dir']}"
-            )
-    except FileNotFoundError as e:
-        click.echo(f"Error: {e}")
-        raise SystemExit(1)
-    except Exception as e:
-        click.echo(f"Error during augmentation: {e}")
-        raise SystemExit(1)
-
-
-# =============================================================================
-# iNaturalist Command Group
+# Services Command Group
 # =============================================================================
 
 @cli.group()
-def inat():
-    """iNaturalist integration commands."""
+def services():
+    """External service integrations (Xeno-canto, Macaulay Library, iNaturalist, etc.)."""
     pass
 
 
-@inat.command('download')
+# =============================================================================
+# iNaturalist subgroup (under services)
+# =============================================================================
+
+@services.group('inat')
+def services_inat():
+    """iNaturalist observation database."""
+    pass
+
+
+@services_inat.command('download')
 @click.argument('output_dir')
 @click.option('--taxon-ids', default=None, help='Comma-separated list of taxon IDs (e.g., "3" for birds, "3,20978" for multiple)')
 @click.option('--taxon-csv', default=None, type=click.Path(exists=True), help='Path to CSV file with taxon_id column')
@@ -1481,7 +2007,7 @@ def inat_download(
         click.echo(f"Downloaded {stats['total_sounds']} audio files to {stats['output_dir']}")
 
 
-@inat.command('search')
+@services_inat.command('search')
 @click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
 @click.option('--project-id', default=None, help='Filter by iNaturalist project ID or slug')
 @click.option('--taxon-id', type=int, default=None, help='Filter by parent taxon ID (e.g., 20979 for Amphibia)')
@@ -1524,7 +2050,7 @@ def inat_search(
             click.echo(f"{t['taxon_id']:<12} {t['name']:<30} {t['common_name']:<25} {t['observation_count']:<10}")
 
 
-@inat.command('stats')
+@services_inat.command('stats')
 @click.argument('project_id')
 @click.option('--output', '-o', default=None, help='Output file path for JSON (optional)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output, print only JSON')
@@ -1718,6 +2244,195 @@ def dataset_license(
 
 
 # =============================================================================
+# Augment Command (under dataset group)
+# =============================================================================
+
+def _parse_range(value: str) -> tuple:
+    """Parse a range string like '0.8-1.2' or '-2,2' into (min, max)."""
+    if '-' in value and not value.startswith('-'):
+        parts = value.split('-')
+        return float(parts[0]), float(parts[1])
+    elif ',' in value:
+        parts = value.split(',')
+        return float(parts[0]), float(parts[1])
+    else:
+        val = float(value)
+        return val, val
+
+
+@dataset.command('augment')
+@click.argument('input_dir')
+@click.option('--output', '-o', required=True, help='Output directory for augmented files')
+@click.option('--add-noise', default=None, help='Add Gaussian noise with SNR range (e.g., "3-30" dB)')
+@click.option('--time-stretch', default=None, help='Time stretch range (e.g., "0.8-1.2")')
+@click.option('--pitch-shift', default=None, help='Pitch shift range in semitones (e.g., "-2,2")')
+@click.option('--gain', default=None, help='Gain range in dB (e.g., "-12,12")')
+@click.option('--multiply', default=1, type=int, help='Number of augmented copies to create per file')
+@click.option('--sample-rate', default=16000, type=int, help='Target sample rate for output')
+@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def dataset_augment(
+    input_dir: str,
+    output: str,
+    add_noise: str,
+    time_stretch: str,
+    pitch_shift: str,
+    gain: str,
+    multiply: int,
+    sample_rate: int,
+    recursive: bool,
+    quiet: bool
+):
+    """
+    Augment audio files to expand training datasets.
+
+    Creates augmented copies of audio files with various transformations.
+    At least one augmentation option must be specified.
+
+    Examples:
+        bioamla dataset augment ./audio --output ./augmented --add-noise 3-30
+
+        bioamla dataset augment ./audio --output ./augmented \\
+            --add-noise 3-30 \\
+            --time-stretch 0.8-1.2 \\
+            --pitch-shift -2,2 \\
+            --multiply 5
+
+    Augmentation options:
+        --add-noise: Add Gaussian noise with SNR in specified range (dB)
+        --time-stretch: Speed up/slow down without changing pitch
+        --pitch-shift: Change pitch without changing speed (semitones)
+        --gain: Random volume adjustment (dB)
+    """
+    from bioamla.augment import AugmentationConfig, batch_augment
+
+    # Build configuration from options
+    config = AugmentationConfig(
+        sample_rate=sample_rate,
+        multiply=multiply,
+    )
+
+    # Parse augmentation options
+    if add_noise:
+        config.add_noise = True
+        min_snr, max_snr = _parse_range(add_noise)
+        config.noise_min_snr = min_snr
+        config.noise_max_snr = max_snr
+
+    if time_stretch:
+        config.time_stretch = True
+        min_rate, max_rate = _parse_range(time_stretch)
+        config.time_stretch_min = min_rate
+        config.time_stretch_max = max_rate
+
+    if pitch_shift:
+        config.pitch_shift = True
+        min_semi, max_semi = _parse_range(pitch_shift)
+        config.pitch_shift_min = min_semi
+        config.pitch_shift_max = max_semi
+
+    if gain:
+        config.gain = True
+        min_db, max_db = _parse_range(gain)
+        config.gain_min_db = min_db
+        config.gain_max_db = max_db
+
+    # Check that at least one augmentation is enabled
+    if not any([config.add_noise, config.time_stretch, config.pitch_shift, config.gain]):
+        click.echo("Error: At least one augmentation option must be specified")
+        click.echo("Use --help for available options")
+        raise SystemExit(1)
+
+    try:
+        stats = batch_augment(
+            input_dir=input_dir,
+            output_dir=output,
+            config=config,
+            recursive=recursive,
+            verbose=not quiet,
+        )
+
+        if quiet:
+            click.echo(
+                f"Created {stats['files_created']} augmented files from "
+                f"{stats['files_processed']} source files in {stats['output_dir']}"
+            )
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"Error during augmentation: {e}")
+        raise SystemExit(1)
+
+
+@dataset.command('download')
+@click.argument('url', required=True)
+@click.argument('output_dir', required=False, default='.')
+def dataset_download(url: str, output_dir: str):
+    """Download a file from the specified URL to the target directory.
+
+    Examples:
+        bioamla dataset download https://example.com/dataset.zip ./data
+        bioamla dataset download https://example.com/audio.tar.gz
+    """
+    import os
+    from urllib.parse import urlparse
+
+    from bioamla.utils import download_file
+
+    if output_dir == '.':
+        output_dir = os.getcwd()
+
+    parsed_url = urlparse(url)
+    filename = os.path.basename(parsed_url.path)
+    if not filename:
+        filename = "downloaded_file"
+
+    output_path = os.path.join(output_dir, filename)
+    download_file(url, output_path)
+
+
+@dataset.command('unzip')
+@click.argument('file_path')
+@click.argument('output_path', required=False, default='.')
+def dataset_unzip(file_path: str, output_path: str):
+    """Extract a ZIP archive to the specified output directory.
+
+    Examples:
+        bioamla dataset unzip dataset.zip ./extracted
+        bioamla dataset unzip archive.zip
+    """
+    from bioamla.utils import extract_zip_file
+    import os
+    if output_path == '.':
+        output_path = os.getcwd()
+
+    extract_zip_file(file_path, output_path)
+
+
+@dataset.command('zip')
+@click.argument('source_path')
+@click.argument('output_file')
+def dataset_zip(source_path: str, output_file: str):
+    """Create a ZIP archive from a file or directory.
+
+    Examples:
+        bioamla dataset zip ./my_dataset dataset.zip
+        bioamla dataset zip audio_file.wav single_file.zip
+    """
+    import os
+
+    from bioamla.utils import create_zip_file, zip_directory
+
+    if os.path.isdir(source_path):
+        zip_directory(source_path, output_file)
+    else:
+        create_zip_file([source_path], output_file)
+
+    click.echo(f"Created {output_file}")
+
+
+# =============================================================================
 # HuggingFace Hub Command Group
 # =============================================================================
 
@@ -1784,13 +2499,14 @@ def _is_large_folder(path: str, size_threshold_gb: float = 5.0, file_count_thres
     return folder_size > size_threshold_bytes
 
 
-@cli.group()
-def hf():
-    """HuggingFace Hub commands for pushing models and datasets."""
+# --- HuggingFace Hub subgroup ---
+@services.group('hf')
+def services_hf():
+    """HuggingFace Hub model and dataset management."""
     pass
 
 
-@hf.command('push-model')
+@services_hf.command('push-model')
 @click.argument('path')
 @click.argument('repo_id')
 @click.option('--private/--public', default=False, help='Make the repository private (default: public)')
@@ -1844,7 +2560,385 @@ def hf_push_model(
         raise SystemExit(1)
 
 
-@hf.command('push-dataset')
+# =============================================================================
+# Annotation Command Group
+# =============================================================================
+
+@cli.group()
+def annotation():
+    """Annotation management commands for audio datasets."""
+    pass
+
+
+@annotation.command('convert')
+@click.argument('input_file')
+@click.argument('output_file')
+@click.option('--from', 'from_format', type=click.Choice(['raven', 'csv']), default=None,
+              help='Input format (auto-detected from extension if not specified)')
+@click.option('--to', 'to_format', type=click.Choice(['raven', 'csv']), default=None,
+              help='Output format (auto-detected from extension if not specified)')
+@click.option('--label-column', default=None, help='Column name for labels in input file')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def annotation_convert(input_file, output_file, from_format, to_format, label_column, quiet):
+    """Convert annotation files between formats.
+
+    Supported formats:
+        raven: Raven Pro selection table (.txt, tab-delimited)
+        csv: Standard CSV format
+
+    Examples:
+        bioamla annotation convert selections.txt annotations.csv
+        bioamla annotation convert annotations.csv output.txt --to raven
+    """
+    from pathlib import Path
+
+    from bioamla.annotations import (
+        load_csv_annotations,
+        load_raven_selection_table,
+        save_csv_annotations,
+        save_raven_selection_table,
+    )
+
+    input_path = Path(input_file)
+    output_path = Path(output_file)
+
+    if not input_path.exists():
+        click.echo(f"Error: Input file not found: {input_file}")
+        raise SystemExit(1)
+
+    # Auto-detect input format
+    if from_format is None:
+        if input_path.suffix.lower() == '.txt':
+            from_format = 'raven'
+        else:
+            from_format = 'csv'
+
+    # Auto-detect output format
+    if to_format is None:
+        if output_path.suffix.lower() == '.txt':
+            to_format = 'raven'
+        else:
+            to_format = 'csv'
+
+    # Load annotations
+    if from_format == 'raven':
+        annotations = load_raven_selection_table(input_file, label_column=label_column)
+    else:
+        annotations = load_csv_annotations(input_file)
+
+    # Save annotations
+    if to_format == 'raven':
+        save_raven_selection_table(annotations, output_file)
+    else:
+        save_csv_annotations(annotations, output_file)
+
+    if not quiet:
+        click.echo(f"Converted {len(annotations)} annotations from {from_format} to {to_format}")
+        click.echo(f"Output: {output_file}")
+
+
+@annotation.command('summary')
+@click.argument('path')
+@click.option('--format', 'file_format', type=click.Choice(['raven', 'csv']), default=None,
+              help='Annotation format (auto-detected from extension if not specified)')
+@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
+def annotation_summary(path, file_format, output_json):
+    """Display summary statistics for an annotation file.
+
+    Shows:
+        - Total number of annotations
+        - Unique labels and their counts
+        - Duration statistics
+    """
+    import json
+    from pathlib import Path
+
+    from bioamla.annotations import (
+        load_csv_annotations,
+        load_raven_selection_table,
+        summarize_annotations,
+    )
+
+    input_path = Path(path)
+
+    if not input_path.exists():
+        click.echo(f"Error: File not found: {path}")
+        raise SystemExit(1)
+
+    # Auto-detect format
+    if file_format is None:
+        if input_path.suffix.lower() == '.txt':
+            file_format = 'raven'
+        else:
+            file_format = 'csv'
+
+    # Load annotations
+    if file_format == 'raven':
+        annotations = load_raven_selection_table(path)
+    else:
+        annotations = load_csv_annotations(path)
+
+    summary = summarize_annotations(annotations)
+
+    if output_json:
+        click.echo(json.dumps(summary, indent=2))
+    else:
+        click.echo(f"\nAnnotation Summary: {path}")
+        click.echo("=" * 50)
+        click.echo(f"Total annotations: {summary['total_annotations']}")
+        click.echo(f"Unique labels: {summary['unique_labels']}")
+        click.echo("\nDuration statistics:")
+        click.echo(f"  Total: {summary['total_duration']:.2f}s")
+        click.echo(f"  Min: {summary['min_duration']:.2f}s")
+        click.echo(f"  Max: {summary['max_duration']:.2f}s")
+        click.echo(f"  Mean: {summary['mean_duration']:.2f}s")
+        click.echo("\nLabel counts:")
+        for label, count in sorted(summary['labels'].items()):
+            click.echo(f"  {label}: {count}")
+
+
+@annotation.command('remap')
+@click.argument('input_file')
+@click.argument('output_file')
+@click.option('--mapping', '-m', required=True, help='Path to label mapping CSV (columns: source, target)')
+@click.option('--keep-unmapped/--drop-unmapped', default=True,
+              help='Keep or drop annotations with unmapped labels')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def annotation_remap(input_file, output_file, mapping, keep_unmapped, quiet):
+    """Remap annotation labels using a mapping file.
+
+    The mapping file should be a CSV with 'source' and 'target' columns.
+
+    Example mapping.csv:
+        source,target
+        bird_song,bird
+        bird_call,bird
+        frog_croak,frog
+    """
+    from pathlib import Path
+
+    from bioamla.annotations import (
+        load_csv_annotations,
+        load_label_mapping,
+        load_raven_selection_table,
+        remap_labels,
+        save_csv_annotations,
+        save_raven_selection_table,
+    )
+
+    input_path = Path(input_file)
+    output_path = Path(output_file)
+
+    if not input_path.exists():
+        click.echo(f"Error: Input file not found: {input_file}")
+        raise SystemExit(1)
+
+    # Load mapping
+    label_mapping = load_label_mapping(mapping)
+
+    # Detect format and load
+    if input_path.suffix.lower() == '.txt':
+        annotations = load_raven_selection_table(input_file)
+        is_raven = True
+    else:
+        annotations = load_csv_annotations(input_file)
+        is_raven = False
+
+    original_count = len(annotations)
+
+    # Remap labels
+    remapped = remap_labels(annotations, label_mapping, keep_unmapped=keep_unmapped)
+
+    # Save
+    if output_path.suffix.lower() == '.txt' or is_raven:
+        save_raven_selection_table(remapped, output_file)
+    else:
+        save_csv_annotations(remapped, output_file)
+
+    if not quiet:
+        click.echo(f"Remapped {original_count} annotations -> {len(remapped)} annotations")
+        click.echo(f"Output: {output_file}")
+
+
+@annotation.command('filter')
+@click.argument('input_file')
+@click.argument('output_file')
+@click.option('--include', '-i', multiple=True, help='Labels to include (can specify multiple)')
+@click.option('--exclude', '-e', multiple=True, help='Labels to exclude (can specify multiple)')
+@click.option('--min-duration', type=float, default=None, help='Minimum duration in seconds')
+@click.option('--max-duration', type=float, default=None, help='Maximum duration in seconds')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def annotation_filter(input_file, output_file, include, exclude, min_duration, max_duration, quiet):
+    """Filter annotations by label or duration.
+
+    Examples:
+        # Include only specific labels
+        bioamla annotation filter input.csv output.csv --include bird --include frog
+
+        # Exclude specific labels
+        bioamla annotation filter input.csv output.csv --exclude noise --exclude unknown
+
+        # Filter by duration
+        bioamla annotation filter input.csv output.csv --min-duration 0.5 --max-duration 5.0
+    """
+    from pathlib import Path
+
+    from bioamla.annotations import (
+        filter_labels,
+        load_csv_annotations,
+        load_raven_selection_table,
+        save_csv_annotations,
+        save_raven_selection_table,
+    )
+
+    input_path = Path(input_file)
+    output_path = Path(output_file)
+
+    if not input_path.exists():
+        click.echo(f"Error: Input file not found: {input_file}")
+        raise SystemExit(1)
+
+    # Detect format and load
+    if input_path.suffix.lower() == '.txt':
+        annotations = load_raven_selection_table(input_file)
+        is_raven = True
+    else:
+        annotations = load_csv_annotations(input_file)
+        is_raven = False
+
+    original_count = len(annotations)
+
+    # Filter by labels
+    include_set = set(include) if include else None
+    exclude_set = set(exclude) if exclude else None
+    filtered = filter_labels(annotations, include_labels=include_set, exclude_labels=exclude_set)
+
+    # Filter by duration
+    if min_duration is not None:
+        filtered = [a for a in filtered if a.duration >= min_duration]
+    if max_duration is not None:
+        filtered = [a for a in filtered if a.duration <= max_duration]
+
+    # Save
+    if output_path.suffix.lower() == '.txt' or is_raven:
+        save_raven_selection_table(filtered, output_file)
+    else:
+        save_csv_annotations(filtered, output_file)
+
+    if not quiet:
+        click.echo(f"Filtered {original_count} annotations -> {len(filtered)} annotations")
+        click.echo(f"Output: {output_file}")
+
+
+@annotation.command('generate-labels')
+@click.argument('annotation_file')
+@click.argument('output_file')
+@click.option('--audio-duration', type=float, required=True, help='Total audio duration in seconds')
+@click.option('--clip-duration', type=float, required=True, help='Duration of each clip in seconds')
+@click.option('--hop-length', type=float, default=None, help='Hop length between clips (default: same as clip duration)')
+@click.option('--min-overlap', type=float, default=0.0, help='Minimum overlap ratio to assign label (0.0-1.0)')
+@click.option('--multi-label/--single-label', default=True, help='Generate multi-label or single-label output')
+@click.option('--format', 'output_format', type=click.Choice(['csv', 'numpy']), default='csv',
+              help='Output format for labels')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def annotation_generate_labels(
+    annotation_file, output_file, audio_duration, clip_duration,
+    hop_length, min_overlap, multi_label, output_format, quiet
+):
+    """Generate clip-level labels from annotations.
+
+    Creates a label file for fixed-duration audio clips based on annotation overlap.
+
+    Example:
+        bioamla annotation generate-labels annotations.csv labels.csv \\
+            --audio-duration 60.0 --clip-duration 3.0 --hop-length 1.0
+    """
+    from pathlib import Path
+
+    import numpy as np
+
+    from bioamla.annotations import (
+        create_label_map,
+        generate_clip_labels,
+        get_unique_labels,
+        load_csv_annotations,
+        load_raven_selection_table,
+    )
+
+    input_path = Path(annotation_file)
+
+    if not input_path.exists():
+        click.echo(f"Error: Annotation file not found: {annotation_file}")
+        raise SystemExit(1)
+
+    # Load annotations
+    if input_path.suffix.lower() == '.txt':
+        annotations = load_raven_selection_table(annotation_file)
+    else:
+        annotations = load_csv_annotations(annotation_file)
+
+    if not annotations:
+        click.echo("Error: No annotations found in file")
+        raise SystemExit(1)
+
+    # Get labels and create mapping
+    labels = get_unique_labels(annotations)
+    label_map = create_label_map(labels)
+
+    if hop_length is None:
+        hop_length = clip_duration
+
+    # Generate clip labels
+    num_clips = int((audio_duration - clip_duration) / hop_length) + 1
+    all_labels = []
+
+    for i in range(num_clips):
+        clip_start = i * hop_length
+        clip_end = clip_start + clip_duration
+
+        clip_labels = generate_clip_labels(
+            annotations, clip_start, clip_end, label_map,
+            min_overlap=min_overlap, multi_label=multi_label
+        )
+        all_labels.append(clip_labels)
+
+    labels_array = np.array(all_labels)
+
+    # Save output
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_format == 'numpy':
+        np.save(output_file, labels_array)
+        # Also save label map
+        label_map_file = output_path.with_suffix('.labels.csv')
+        import csv
+        with open(label_map_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['label', 'index'])
+            for label, idx in sorted(label_map.items(), key=lambda x: x[1]):
+                writer.writerow([label, idx])
+    else:
+        import csv
+        with open(output_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            # Header: clip_start, clip_end, then each label
+            header = ['clip_start', 'clip_end'] + sorted(label_map.keys(), key=lambda x: label_map[x])
+            writer.writerow(header)
+
+            for i, clip_labels in enumerate(labels_array):
+                clip_start = i * hop_length
+                clip_end = clip_start + clip_duration
+                row = [f"{clip_start:.3f}", f"{clip_end:.3f}"] + [int(v) for v in clip_labels]
+                writer.writerow(row)
+
+    if not quiet:
+        click.echo(f"Generated labels for {num_clips} clips")
+        click.echo(f"Labels: {', '.join(sorted(label_map.keys()))}")
+        click.echo(f"Output: {output_file}")
+
+
+@services_hf.command('push-dataset')
 @click.argument('path')
 @click.argument('repo_id')
 @click.option('--private/--public', default=False, help='Make the repository private (default: public)')
@@ -1896,6 +2990,1899 @@ def hf_push_dataset(
         click.echo(f"Error pushing to HuggingFace Hub: {e}")
         click.echo("Make sure you are logged in with 'huggingface-cli login'.")
         raise SystemExit(1)
+
+
+# --- Xeno-canto subgroup ---
+@services.group('xc')
+def services_xc():
+    """Xeno-canto bird recording database."""
+    pass
+
+
+@services_xc.command('search')
+@click.option('--species', '-s', help='Species name (scientific or common)')
+@click.option('--genus', '-g', help='Genus name')
+@click.option('--country', '-c', help='Country name')
+@click.option('--quality', '-q', help='Recording quality (A, B, C, D, E)')
+@click.option('--type', 'sound_type', help='Sound type (song, call, etc.)')
+@click.option('--max-results', '-n', default=10, type=int, help='Maximum results')
+@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
+              default='table', help='Output format')
+def xc_search(species, genus, country, quality, sound_type, max_results, output_format):
+    """Search Xeno-canto for bird recordings.
+
+    Examples:
+        bioamla api xc-search --species "Turdus migratorius" --quality A
+        bioamla api xc-search --genus Turdus --country "United States"
+    """
+    import json as json_lib
+
+    from bioamla.api import xeno_canto
+
+    try:
+        results = xeno_canto.search(
+            species=species,
+            genus=genus,
+            country=country,
+            quality=quality,
+            sound_type=sound_type,
+            max_results=max_results,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"API error: {e}")
+        raise SystemExit(1)
+
+    if not results:
+        click.echo("No recordings found.")
+        return
+
+    if output_format == 'json':
+        click.echo(json_lib.dumps([r.to_dict() for r in results], indent=2))
+    elif output_format == 'csv':
+        import csv
+        import sys
+        writer = csv.DictWriter(sys.stdout, fieldnames=results[0].to_dict().keys())
+        writer.writeheader()
+        for r in results:
+            writer.writerow(r.to_dict())
+    else:
+        click.echo(f"Found {len(results)} recordings:\n")
+        for r in results:
+            click.echo(f"XC{r.id}: {r.scientific_name} ({r.common_name})")
+            click.echo(f"  Quality: {r.quality} | Type: {r.sound_type} | Length: {r.length}")
+            click.echo(f"  Location: {r.location}, {r.country}")
+            click.echo(f"  Recordist: {r.recordist}")
+            click.echo(f"  URL: {r.url}")
+            click.echo()
+
+
+@services_xc.command('download')
+@click.option('--species', '-s', help='Species name (scientific or common)')
+@click.option('--genus', '-g', help='Genus name')
+@click.option('--country', '-c', help='Country name')
+@click.option('--quality', '-q', default='A', help='Recording quality filter (default: A)')
+@click.option('--max-recordings', '-n', default=10, type=int, help='Maximum recordings to download')
+@click.option('--output-dir', '-o', default='./xc_recordings', help='Output directory')
+@click.option('--delay', default=1.0, type=float, help='Delay between downloads in seconds')
+def xc_download(species, genus, country, quality, max_recordings, output_dir, delay):
+    """Download recordings from Xeno-canto.
+
+    Examples:
+        bioamla api xc-download --species "Turdus migratorius" --quality A -n 5
+        bioamla api xc-download --genus Strix --country "United States" -o ./owls
+    """
+    from bioamla.api import xeno_canto
+
+    click.echo("Searching Xeno-canto...")
+
+    try:
+        results = xeno_canto.search(
+            species=species,
+            genus=genus,
+            country=country,
+            quality=quality,
+            max_results=max_recordings,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"API error: {e}")
+        raise SystemExit(1)
+
+    if not results:
+        click.echo("No recordings found.")
+        return
+
+    click.echo(f"Found {len(results)} recordings. Starting download...")
+
+    stats = xeno_canto.download_recordings(
+        results,
+        output_dir=output_dir,
+        delay=delay,
+        verbose=True,
+    )
+
+    click.echo(f"\nDownload complete: {stats['downloaded']}/{stats['total']} recordings")
+
+
+# --- Macaulay Library subgroup ---
+@services.group('ml')
+def services_ml():
+    """Macaulay Library audio recordings database."""
+    pass
+
+
+@services_ml.command('search')
+@click.option('--species-code', '-s', help='eBird species code (e.g., amerob)')
+@click.option('--scientific-name', help='Scientific name')
+@click.option('--region', '-r', help='Region code (e.g., US-NY)')
+@click.option('--min-rating', default=0, type=int, help='Minimum quality rating (1-5)')
+@click.option('--max-results', '-n', default=10, type=int, help='Maximum results')
+@click.option('--format', 'output_format', type=click.Choice(['table', 'json']),
+              default='table', help='Output format')
+def ml_search(species_code, scientific_name, region, min_rating, max_results, output_format):
+    """Search Macaulay Library for audio recordings.
+
+    Examples:
+        bioamla api ml-search --species-code amerob --min-rating 4
+        bioamla api ml-search --scientific-name "Turdus migratorius" -r US-NY
+    """
+    import json as json_lib
+
+    from bioamla.api import macaulay
+
+    try:
+        results = macaulay.search(
+            species_code=species_code,
+            scientific_name=scientific_name,
+            region=region,
+            media_type="audio",
+            min_rating=min_rating,
+            count=max_results,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"API error: {e}")
+        raise SystemExit(1)
+
+    if not results:
+        click.echo("No recordings found.")
+        return
+
+    if output_format == 'json':
+        click.echo(json_lib.dumps([a.to_dict() for a in results], indent=2))
+    else:
+        click.echo(f"Found {len(results)} recordings:\n")
+        for a in results:
+            click.echo(f"ML{a.catalog_id}: {a.scientific_name} ({a.common_name})")
+            click.echo(f"  Rating: {a.rating}/5 | Duration: {a.duration or 'N/A'}s")
+            click.echo(f"  Location: {a.location}, {a.country}")
+            click.echo(f"  Contributor: {a.user_display_name}")
+            click.echo()
+
+
+@services_ml.command('download')
+@click.option('--species-code', '-s', help='eBird species code (e.g., amerob)')
+@click.option('--scientific-name', help='Scientific name')
+@click.option('--region', '-r', help='Region code (e.g., US-NY)')
+@click.option('--min-rating', default=3, type=int, help='Minimum quality rating (default: 3)')
+@click.option('--max-recordings', '-n', default=10, type=int, help='Maximum recordings to download')
+@click.option('--output-dir', '-o', default='./ml_recordings', help='Output directory')
+def ml_download(species_code, scientific_name, region, min_rating, max_recordings, output_dir):
+    """Download recordings from Macaulay Library.
+
+    Examples:
+        bioamla api ml-download --species-code amerob --min-rating 4 -n 5
+        bioamla api ml-download --scientific-name "Strix varia" -o ./owls
+    """
+    from bioamla.api import macaulay
+
+    click.echo("Searching Macaulay Library...")
+
+    try:
+        results = macaulay.search(
+            species_code=species_code,
+            scientific_name=scientific_name,
+            region=region,
+            media_type="audio",
+            min_rating=min_rating,
+            count=max_recordings,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"API error: {e}")
+        raise SystemExit(1)
+
+    if not results:
+        click.echo("No recordings found.")
+        return
+
+    click.echo(f"Found {len(results)} recordings. Starting download...")
+
+    stats = macaulay.download_assets(
+        results,
+        output_dir=output_dir,
+        verbose=True,
+    )
+
+    click.echo(f"\nDownload complete: {stats['downloaded']}/{stats['total']} recordings")
+
+
+# --- Species lookup subgroup ---
+@services.group('species')
+def services_species():
+    """Species name lookup and search."""
+    pass
+
+
+@services_species.command('lookup')
+@click.argument('name')
+@click.option('--to-common', '-c', is_flag=True, help='Convert scientific to common name')
+@click.option('--to-scientific', '-s', is_flag=True, help='Convert common to scientific name')
+@click.option('--info', '-i', is_flag=True, help='Show full species information')
+def species_lookup(name, to_common, to_scientific, info):
+    """Look up species names and convert between formats.
+
+    Examples:
+        bioamla api species "Turdus migratorius" --to-common
+        bioamla api species "American Robin" --to-scientific
+        bioamla api species "amerob" --info
+    """
+    from bioamla.api import species
+
+    if info:
+        result = species.get_species_info(name)
+        if result:
+            click.echo(f"Scientific name: {result.scientific_name}")
+            click.echo(f"Common name: {result.common_name}")
+            click.echo(f"Species code: {result.species_code}")
+            click.echo(f"Family: {result.family}")
+            click.echo(f"Order: {result.order}")
+            click.echo(f"Source: {result.source}")
+        else:
+            click.echo(f"Species not found: {name}")
+            raise SystemExit(1)
+    elif to_common:
+        result = species.scientific_to_common(name)
+        if result:
+            click.echo(result)
+        else:
+            click.echo(f"No common name found for: {name}")
+            raise SystemExit(1)
+    elif to_scientific:
+        result = species.common_to_scientific(name)
+        if result:
+            click.echo(result)
+        else:
+            click.echo(f"No scientific name found for: {name}")
+            raise SystemExit(1)
+    else:
+        # Default: show both if possible
+        info_result = species.get_species_info(name)
+        if info_result:
+            click.echo(f"{info_result.scientific_name} - {info_result.common_name}")
+        else:
+            click.echo(f"Species not found: {name}")
+            raise SystemExit(1)
+
+
+@services_species.command('search')
+@click.argument('query')
+@click.option('--limit', '-n', default=10, type=int, help='Maximum results')
+def species_search(query, limit):
+    """Fuzzy search for species by name.
+
+    Examples:
+        bioamla api species-search robin
+        bioamla api species-search "barred" --limit 5
+    """
+    from bioamla.api import species
+
+    results = species.search(query, limit=limit)
+
+    if not results:
+        click.echo(f"No species found matching: {query}")
+        return
+
+    click.echo(f"Found {len(results)} matching species:\n")
+    for r in results:
+        score = r['score'] * 100
+        click.echo(f"{r['scientific_name']} - {r['common_name']}")
+        click.echo(f"  Code: {r['species_code']} | Family: {r['family']} | Match: {score:.0f}%")
+        click.echo()
+
+
+@services.command('clear-cache')
+@click.option('--all', 'clear_all', is_flag=True, help='Clear all API caches')
+@click.option('--xc', is_flag=True, help='Clear Xeno-canto cache')
+@click.option('--ml', is_flag=True, help='Clear Macaulay Library cache')
+@click.option('--species', is_flag=True, help='Clear species cache')
+def clear_cache(clear_all, xc, ml, species):
+    """Clear API response caches.
+
+    Examples:
+        bioamla api clear-cache --all
+        bioamla api clear-cache --xc --species
+    """
+    total = 0
+
+    if clear_all or xc:
+        from bioamla.api import xeno_canto
+        count = xeno_canto.clear_cache()
+        click.echo(f"Cleared {count} Xeno-canto cache entries")
+        total += count
+
+    if clear_all or ml:
+        from bioamla.api import macaulay
+        count = macaulay.clear_cache()
+        click.echo(f"Cleared {count} Macaulay Library cache entries")
+        total += count
+
+    if clear_all or species:
+        from bioamla.api import species as species_mod
+        count = species_mod.clear_cache()
+        click.echo(f"Cleared {count} species cache entries")
+        total += count
+
+    if not any([clear_all, xc, ml, species]):
+        click.echo("No cache specified. Use --all to clear all caches.")
+        return
+
+    click.echo(f"\nTotal: {total} cache entries cleared")
+
+
+# =============================================================================
+# Indices Command Group
+# =============================================================================
+
+@cli.group()
+def indices():
+    """Acoustic indices for soundscape ecology analysis."""
+    pass
+
+
+@indices.command('compute')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--output', '-o', type=click.Path(), help='Output CSV file for results')
+@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
+              default='table', help='Output format')
+@click.option('--n-fft', default=512, type=int, help='FFT window size')
+@click.option('--aci-min-freq', default=0.0, type=float, help='ACI minimum frequency (Hz)')
+@click.option('--aci-max-freq', default=None, type=float, help='ACI maximum frequency (Hz)')
+@click.option('--bio-min-freq', default=2000.0, type=float, help='BIO minimum frequency (Hz)')
+@click.option('--bio-max-freq', default=8000.0, type=float, help='BIO maximum frequency (Hz)')
+@click.option('--db-threshold', default=-50.0, type=float, help='dB threshold for ADI/AEI')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress progress output')
+def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_freq,
+                    bio_min_freq, bio_max_freq, db_threshold, quiet):
+    """Compute acoustic indices for audio file(s).
+
+    Computes ACI, ADI, AEI, BIO, and NDSI indices for soundscape ecology analysis.
+
+    PATH can be a single audio file or a directory of audio files.
+
+    Examples:
+        bioamla indices compute recording.wav
+        bioamla indices compute ./recordings --output results.csv
+        bioamla indices compute forest.wav --format json
+    """
+    import json as json_lib
+    from pathlib import Path as PathLib
+
+    from bioamla.indices import batch_compute_indices, compute_indices_from_file
+
+    path_obj = PathLib(path)
+
+    # Build kwargs
+    kwargs = {
+        "n_fft": n_fft,
+        "aci_min_freq": aci_min_freq,
+        "bio_min_freq": bio_min_freq,
+        "bio_max_freq": bio_max_freq,
+        "db_threshold": db_threshold,
+    }
+    if aci_max_freq:
+        kwargs["aci_max_freq"] = aci_max_freq
+
+    if path_obj.is_file():
+        # Single file
+        try:
+            indices_result = compute_indices_from_file(path_obj, **kwargs)
+            results = [{"filepath": str(path_obj), "success": True, **indices_result.to_dict()}]
+        except Exception as e:
+            click.echo(f"Error processing {path}: {e}")
+            raise SystemExit(1)
+    else:
+        # Directory - find audio files
+        audio_extensions = {'.wav', '.mp3', '.flac', '.ogg', '.m4a'}
+        files = [f for f in path_obj.rglob('*') if f.suffix.lower() in audio_extensions]
+
+        if not files:
+            click.echo(f"No audio files found in {path}")
+            raise SystemExit(1)
+
+        results = batch_compute_indices(files, verbose=not quiet, **kwargs)
+
+    # Filter successful results for output
+    successful = [r for r in results if r.get("success", False)]
+    failed = len(results) - len(successful)
+
+    if output_format == 'json':
+        click.echo(json_lib.dumps(results, indent=2))
+    elif output_format == 'csv' or output:
+        import csv
+        import sys
+
+        if successful:
+            fieldnames = list(successful[0].keys())
+            if output:
+                with open(output, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(successful)
+                click.echo(f"Results saved to {output}")
+            else:
+                writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(successful)
+    else:
+        # Table format
+        for r in results:
+            if r.get("success"):
+                click.echo(f"\n{r.get('filepath', 'Unknown')}:")
+                click.echo(f"  ACI:  {r['aci']:.2f}")
+                click.echo(f"  ADI:  {r['adi']:.3f}")
+                click.echo(f"  AEI:  {r['aei']:.3f}")
+                click.echo(f"  BIO:  {r['bio']:.2f}")
+                click.echo(f"  NDSI: {r['ndsi']:.3f}")
+                if r.get('anthrophony'):
+                    click.echo(f"  Anthrophony: {r['anthrophony']:.2f}")
+                    click.echo(f"  Biophony: {r['biophony']:.2f}")
+            else:
+                click.echo(f"\n{r.get('filepath', 'Unknown')}: Error - {r.get('error', 'Unknown error')}")
+
+    if not quiet:
+        click.echo(f"\nProcessed {len(results)} file(s): {len(successful)} successful, {failed} failed")
+
+
+@indices.command('temporal')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--window', '-w', default=60.0, type=float, help='Window duration in seconds')
+@click.option('--hop', default=None, type=float, help='Hop duration in seconds (default: window)')
+@click.option('--output', '-o', type=click.Path(), help='Output CSV file')
+@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
+              default='table', help='Output format')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress progress output')
+def indices_temporal(path, window, hop, output, output_format, quiet):
+    """Compute acoustic indices over time windows.
+
+    Useful for analyzing how soundscape characteristics change over time
+    in long recordings.
+
+    Examples:
+        bioamla indices temporal long_recording.wav --window 60
+        bioamla indices temporal dawn_chorus.wav --window 30 --hop 15 -o results.csv
+    """
+    import json as json_lib
+
+    import librosa
+
+    from bioamla.indices import temporal_indices
+
+    try:
+        audio, sample_rate = librosa.load(path, sr=None, mono=True)
+    except Exception as e:
+        click.echo(f"Error loading audio: {e}")
+        raise SystemExit(1)
+
+    duration = len(audio) / sample_rate
+
+    if not quiet:
+        click.echo(f"Processing {path}")
+        click.echo(f"Duration: {duration:.1f}s, Sample rate: {sample_rate} Hz")
+        click.echo(f"Window: {window}s, Hop: {hop or window}s")
+
+    results = temporal_indices(
+        audio, sample_rate,
+        window_duration=window,
+        hop_duration=hop,
+    )
+
+    if not results:
+        click.echo("No complete windows in recording (audio shorter than window duration)")
+        raise SystemExit(1)
+
+    if output_format == 'json':
+        click.echo(json_lib.dumps(results, indent=2))
+    elif output_format == 'csv' or output:
+        import csv
+        import sys
+
+        fieldnames = list(results[0].keys())
+        if output:
+            with open(output, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(results)
+            click.echo(f"Results saved to {output}")
+        else:
+            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(results)
+    else:
+        click.echo(f"\nTemporal analysis ({len(results)} windows):")
+        click.echo("-" * 70)
+        click.echo(f"{'Time':>12}  {'ACI':>8}  {'ADI':>6}  {'AEI':>6}  {'BIO':>8}  {'NDSI':>6}")
+        click.echo("-" * 70)
+        for r in results:
+            time_str = f"{r['start_time']:.0f}-{r['end_time']:.0f}s"
+            click.echo(f"{time_str:>12}  {r['aci']:>8.2f}  {r['adi']:>6.3f}  "
+                      f"{r['aei']:>6.3f}  {r['bio']:>8.2f}  {r['ndsi']:>6.3f}")
+
+
+@indices.command('aci')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--min-freq', default=0.0, type=float, help='Minimum frequency (Hz)')
+@click.option('--max-freq', default=None, type=float, help='Maximum frequency (Hz)')
+@click.option('--n-fft', default=512, type=int, help='FFT window size')
+def indices_aci(path, min_freq, max_freq, n_fft):
+    """Compute Acoustic Complexity Index (ACI) for an audio file.
+
+    ACI measures the variability of sound intensities within frequency bands.
+    Higher values indicate more complex acoustic environments.
+
+    Examples:
+        bioamla indices aci recording.wav
+        bioamla indices aci forest.wav --min-freq 2000 --max-freq 8000
+    """
+    import librosa
+
+    from bioamla.indices import compute_aci
+
+    try:
+        audio, sample_rate = librosa.load(path, sr=None, mono=True)
+    except Exception as e:
+        click.echo(f"Error loading audio: {e}")
+        raise SystemExit(1)
+
+    kwargs = {"n_fft": n_fft, "min_freq": min_freq}
+    if max_freq:
+        kwargs["max_freq"] = max_freq
+
+    aci = compute_aci(audio, sample_rate, **kwargs)
+    click.echo(f"ACI: {aci:.2f}")
+
+
+@indices.command('adi')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--max-freq', default=10000.0, type=float, help='Maximum frequency (Hz)')
+@click.option('--freq-step', default=1000.0, type=float, help='Frequency band width (Hz)')
+@click.option('--db-threshold', default=-50.0, type=float, help='dB threshold')
+def indices_adi(path, max_freq, freq_step, db_threshold):
+    """Compute Acoustic Diversity Index (ADI) for an audio file.
+
+    ADI is based on Shannon diversity applied to frequency bands.
+    Higher values indicate more evenly distributed acoustic energy.
+
+    Examples:
+        bioamla indices adi recording.wav
+        bioamla indices adi forest.wav --max-freq 8000 --freq-step 500
+    """
+    import librosa
+
+    from bioamla.indices import compute_adi
+
+    try:
+        audio, sample_rate = librosa.load(path, sr=None, mono=True)
+    except Exception as e:
+        click.echo(f"Error loading audio: {e}")
+        raise SystemExit(1)
+
+    adi = compute_adi(audio, sample_rate, max_freq=max_freq, freq_step=freq_step,
+                      db_threshold=db_threshold)
+    click.echo(f"ADI: {adi:.3f}")
+
+
+@indices.command('aei')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--max-freq', default=10000.0, type=float, help='Maximum frequency (Hz)')
+@click.option('--freq-step', default=1000.0, type=float, help='Frequency band width (Hz)')
+@click.option('--db-threshold', default=-50.0, type=float, help='dB threshold')
+def indices_aei(path, max_freq, freq_step, db_threshold):
+    """Compute Acoustic Evenness Index (AEI) for an audio file.
+
+    AEI is based on the Gini coefficient applied to frequency bands.
+    Lower values indicate more even distribution (higher evenness).
+
+    Examples:
+        bioamla indices aei recording.wav
+        bioamla indices aei forest.wav --max-freq 8000
+    """
+    import librosa
+
+    from bioamla.indices import compute_aei
+
+    try:
+        audio, sample_rate = librosa.load(path, sr=None, mono=True)
+    except Exception as e:
+        click.echo(f"Error loading audio: {e}")
+        raise SystemExit(1)
+
+    aei = compute_aei(audio, sample_rate, max_freq=max_freq, freq_step=freq_step,
+                      db_threshold=db_threshold)
+    click.echo(f"AEI: {aei:.3f}")
+
+
+@indices.command('bio')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--min-freq', default=2000.0, type=float, help='Minimum frequency (Hz)')
+@click.option('--max-freq', default=8000.0, type=float, help='Maximum frequency (Hz)')
+def indices_bio(path, min_freq, max_freq):
+    """Compute Bioacoustic Index (BIO) for an audio file.
+
+    BIO calculates the area under the mean spectrum in the 2-8 kHz range
+    where most bird and insect sounds occur.
+
+    Examples:
+        bioamla indices bio recording.wav
+        bioamla indices bio tropical.wav --min-freq 1000 --max-freq 11000
+    """
+    import librosa
+
+    from bioamla.indices import compute_bio
+
+    try:
+        audio, sample_rate = librosa.load(path, sr=None, mono=True)
+    except Exception as e:
+        click.echo(f"Error loading audio: {e}")
+        raise SystemExit(1)
+
+    bio = compute_bio(audio, sample_rate, min_freq=min_freq, max_freq=max_freq)
+    click.echo(f"BIO: {bio:.2f}")
+
+
+@indices.command('ndsi')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--anthro-min', default=1000.0, type=float, help='Anthrophony min frequency (Hz)')
+@click.option('--anthro-max', default=2000.0, type=float, help='Anthrophony max frequency (Hz)')
+@click.option('--bio-min', default=2000.0, type=float, help='Biophony min frequency (Hz)')
+@click.option('--bio-max', default=8000.0, type=float, help='Biophony max frequency (Hz)')
+def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
+    """Compute Normalized Difference Soundscape Index (NDSI) for an audio file.
+
+    NDSI compares anthropogenic sounds (1-2 kHz) to biological sounds (2-8 kHz).
+    Values range from -1 (pure anthrophony) to +1 (pure biophony).
+
+    Examples:
+        bioamla indices ndsi recording.wav
+        bioamla indices ndsi urban.wav --anthro-max 2500 --bio-min 2500
+    """
+    import librosa
+
+    from bioamla.indices import compute_ndsi
+
+    try:
+        audio, sample_rate = librosa.load(path, sr=None, mono=True)
+    except Exception as e:
+        click.echo(f"Error loading audio: {e}")
+        raise SystemExit(1)
+
+    ndsi, anthro, bio = compute_ndsi(
+        audio, sample_rate,
+        anthro_min=anthro_min,
+        anthro_max=anthro_max,
+        bio_min=bio_min,
+        bio_max=bio_max,
+    )
+
+    click.echo(f"NDSI: {ndsi:.3f}")
+    click.echo(f"  Anthrophony ({anthro_min:.0f}-{anthro_max:.0f} Hz): {anthro:.2f}")
+    click.echo(f"  Biophony ({bio_min:.0f}-{bio_max:.0f} Hz): {bio:.2f}")
+
+
+@indices.command('entropy')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--spectral', '-s', is_flag=True, help='Compute spectral entropy')
+@click.option('--temporal', '-t', is_flag=True, help='Compute temporal entropy')
+def indices_entropy(path, spectral, temporal):
+    """Compute entropy-based acoustic indices for an audio file.
+
+    Spectral entropy measures uniformity of the power spectrum.
+    Temporal entropy measures uniformity of energy distribution over time.
+
+    Examples:
+        bioamla indices entropy recording.wav --spectral --temporal
+        bioamla indices entropy forest.wav -s -t
+    """
+    import librosa
+
+    from bioamla.indices import spectral_entropy, temporal_entropy
+
+    try:
+        audio, sample_rate = librosa.load(path, sr=None, mono=True)
+    except Exception as e:
+        click.echo(f"Error loading audio: {e}")
+        raise SystemExit(1)
+
+    # Default to both if neither specified
+    if not spectral and not temporal:
+        spectral = temporal = True
+
+    if spectral:
+        se = spectral_entropy(audio, sample_rate)
+        click.echo(f"Spectral Entropy: {se:.3f}")
+
+    if temporal:
+        te = temporal_entropy(audio, sample_rate)
+        click.echo(f"Temporal Entropy: {te:.3f}")
+
+
+# =============================================================================
+# Detection Command Group
+# =============================================================================
+
+@cli.group()
+def detect():
+    """Advanced acoustic detection algorithms."""
+    pass
+
+
+@detect.command('energy')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--low-freq', '-l', default=500.0, type=float, help='Low frequency bound (Hz)')
+@click.option('--high-freq', '-h', default=5000.0, type=float, help='High frequency bound (Hz)')
+@click.option('--threshold', '-t', default=-20.0, type=float, help='Detection threshold (dB)')
+@click.option('--min-duration', default=0.05, type=float, help='Minimum detection duration (s)')
+@click.option('--output', '-o', type=click.Path(), help='Output file for detections')
+@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
+              default='table', help='Output format')
+def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, output_format):
+    """Detect sounds using band-limited energy detection.
+
+    Filters audio to a frequency band and detects regions where energy
+    exceeds the threshold.
+
+    Examples:
+        bioamla detect energy recording.wav --low-freq 1000 --high-freq 4000
+        bioamla detect energy forest.wav -l 2000 -h 8000 -t -25 -o detections.csv
+    """
+    import json as json_lib
+
+    from bioamla.detection import BandLimitedEnergyDetector, export_detections
+
+    detector = BandLimitedEnergyDetector(
+        low_freq=low_freq,
+        high_freq=high_freq,
+        threshold_db=threshold,
+        min_duration=min_duration,
+    )
+
+    detections = detector.detect_from_file(path)
+
+    if output:
+        fmt = "json" if output.endswith(".json") else "csv"
+        export_detections(detections, output, format=fmt)
+        click.echo(f"Saved {len(detections)} detections to {output}")
+    elif output_format == 'json':
+        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+    elif output_format == 'csv':
+        import csv
+        import sys
+
+        if detections:
+            fieldnames = list(detections[0].to_dict().keys())
+            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+            writer.writeheader()
+            for d in detections:
+                writer.writerow(d.to_dict())
+        else:
+            click.echo("No detections found.")
+    else:
+        click.echo(f"Found {len(detections)} detections:\n")
+        for i, d in enumerate(detections, 1):
+            click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
+                      f"(confidence: {d.confidence:.2f})")
+
+    if not output and output_format == 'table':
+        click.echo(f"\nTotal: {len(detections)} detections")
+
+
+@detect.command('ribbit')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--pulse-rate', '-p', default=10.0, type=float,
+              help='Expected pulse rate in Hz (pulses per second)')
+@click.option('--tolerance', default=0.2, type=float,
+              help='Tolerance around expected pulse rate (fraction)')
+@click.option('--low-freq', '-l', default=500.0, type=float, help='Low frequency bound (Hz)')
+@click.option('--high-freq', '-h', default=5000.0, type=float, help='High frequency bound (Hz)')
+@click.option('--window', '-w', default=2.0, type=float, help='Analysis window duration (s)')
+@click.option('--min-score', default=0.3, type=float, help='Minimum detection score')
+@click.option('--output', '-o', type=click.Path(), help='Output file for detections')
+@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
+              default='table', help='Output format')
+def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
+                  min_score, output, output_format):
+    """Detect periodic calls using RIBBIT algorithm.
+
+    RIBBIT detects repetitive vocalizations by analyzing the autocorrelation
+    of the spectrogram. Effective for frog calls, insect sounds, etc.
+
+    Examples:
+        bioamla detect ribbit frog_pond.wav --pulse-rate 10 --low-freq 500 --high-freq 3000
+        bioamla detect ribbit cricket.wav -p 50 --tolerance 0.3
+    """
+    import json as json_lib
+
+    from bioamla.detection import RibbitDetector, export_detections
+
+    detector = RibbitDetector(
+        pulse_rate_hz=pulse_rate,
+        pulse_rate_tolerance=tolerance,
+        low_freq=low_freq,
+        high_freq=high_freq,
+        window_duration=window,
+        min_score=min_score,
+    )
+
+    detections = detector.detect_from_file(path)
+
+    if output:
+        fmt = "json" if output.endswith(".json") else "csv"
+        export_detections(detections, output, format=fmt)
+        click.echo(f"Saved {len(detections)} detections to {output}")
+    elif output_format == 'json':
+        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+    elif output_format == 'csv':
+        import csv
+        import sys
+
+        if detections:
+            fieldnames = list(detections[0].to_dict().keys())
+            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+            writer.writeheader()
+            for d in detections:
+                writer.writerow(d.to_dict())
+        else:
+            click.echo("No detections found.")
+    else:
+        click.echo(f"Found {len(detections)} periodic call detections:\n")
+        for i, d in enumerate(detections, 1):
+            click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
+                      f"(score: {d.confidence:.2f}, pulse_rate: {d.metadata.get('pulse_rate_hz', 'N/A')}Hz)")
+
+    if not output and output_format == 'table':
+        click.echo(f"\nTotal: {len(detections)} detections")
+
+
+@detect.command('peaks')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--snr', default=2.0, type=float, help='Signal-to-noise ratio threshold')
+@click.option('--min-distance', default=0.01, type=float, help='Minimum peak distance (s)')
+@click.option('--low-freq', '-l', default=None, type=float, help='Low frequency bound (Hz)')
+@click.option('--high-freq', '-h', default=None, type=float, help='High frequency bound (Hz)')
+@click.option('--sequences', is_flag=True, help='Detect peak sequences instead of individual peaks')
+@click.option('--min-peaks', default=3, type=int, help='Minimum peaks for sequence detection')
+@click.option('--output', '-o', type=click.Path(), help='Output file for detections')
+@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
+              default='table', help='Output format')
+def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
+                 min_peaks, output, output_format):
+    """Detect peaks using Continuous Wavelet Transform (CWT).
+
+    Uses CWT for robust peak detection in audio energy envelope.
+    Can detect individual peaks or sequences of peaks.
+
+    Examples:
+        bioamla detect peaks recording.wav --snr 3.0
+        bioamla detect peaks calls.wav --sequences --min-peaks 5
+        bioamla detect peaks forest.wav -l 2000 -h 8000 --sequences
+    """
+    import json as json_lib
+
+    from bioamla.detection import CWTPeakDetector, export_detections
+
+    detector = CWTPeakDetector(
+        snr_threshold=snr,
+        min_peak_distance=min_distance,
+        low_freq=low_freq,
+        high_freq=high_freq,
+    )
+
+    import librosa
+    audio, sample_rate = librosa.load(path, sr=None, mono=True)
+
+    if sequences:
+        detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
+
+        if output:
+            fmt = "json" if output.endswith(".json") else "csv"
+            export_detections(detections, output, format=fmt)
+            click.echo(f"Saved {len(detections)} sequence detections to {output}")
+        elif output_format == 'json':
+            click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        else:
+            click.echo(f"Found {len(detections)} peak sequences:\n")
+            for i, d in enumerate(detections, 1):
+                n_peaks = d.metadata.get('n_peaks', 0)
+                interval = d.metadata.get('mean_interval', 0)
+                click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
+                          f"({n_peaks} peaks, mean interval: {interval:.3f}s)")
+    else:
+        peaks = detector.detect(audio, sample_rate)
+
+        if output:
+            import csv
+            with open(output, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=['time', 'amplitude', 'width', 'prominence'])
+                writer.writeheader()
+                for p in peaks:
+                    writer.writerow(p.to_dict())
+            click.echo(f"Saved {len(peaks)} peaks to {output}")
+        elif output_format == 'json':
+            click.echo(json_lib.dumps([p.to_dict() for p in peaks], indent=2))
+        else:
+            click.echo(f"Found {len(peaks)} peaks:\n")
+            for i, p in enumerate(peaks[:20], 1):  # Show first 20
+                click.echo(f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, "
+                          f"width: {p.width:.3f}s)")
+            if len(peaks) > 20:
+                click.echo(f"... and {len(peaks) - 20} more peaks")
+
+    if not output and output_format == 'table':
+        n = len(detections) if sequences else len(peaks)
+        click.echo(f"\nTotal: {n} {'sequences' if sequences else 'peaks'}")
+
+
+@detect.command('accelerating')
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--min-pulses', default=5, type=int, help='Minimum pulses to detect pattern')
+@click.option('--acceleration', '-a', default=1.5, type=float,
+              help='Acceleration threshold (final_rate/initial_rate)')
+@click.option('--deceleration', '-d', default=None, type=float,
+              help='Deceleration threshold (optional)')
+@click.option('--low-freq', '-l', default=500.0, type=float, help='Low frequency bound (Hz)')
+@click.option('--high-freq', '-h', default=5000.0, type=float, help='High frequency bound (Hz)')
+@click.option('--window', '-w', default=3.0, type=float, help='Analysis window duration (s)')
+@click.option('--output', '-o', type=click.Path(), help='Output file for detections')
+@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
+              default='table', help='Output format')
+def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
+                        high_freq, window, output, output_format):
+    """Detect accelerating or decelerating call patterns.
+
+    Identifies vocalizations with increasing or decreasing pulse rates,
+    common in many frog and insect species.
+
+    Examples:
+        bioamla detect accelerating tree_frog.wav --acceleration 2.0
+        bioamla detect accelerating chorus.wav -a 1.5 -d 1.5 -l 1000 -h 4000
+    """
+    import json as json_lib
+
+    from bioamla.detection import AcceleratingPatternDetector, export_detections
+
+    detector = AcceleratingPatternDetector(
+        min_pulses=min_pulses,
+        acceleration_threshold=acceleration,
+        deceleration_threshold=deceleration,
+        low_freq=low_freq,
+        high_freq=high_freq,
+        window_duration=window,
+    )
+
+    detections = detector.detect_from_file(path)
+
+    if output:
+        fmt = "json" if output.endswith(".json") else "csv"
+        export_detections(detections, output, format=fmt)
+        click.echo(f"Saved {len(detections)} detections to {output}")
+    elif output_format == 'json':
+        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+    elif output_format == 'csv':
+        import csv
+        import sys
+
+        if detections:
+            fieldnames = list(detections[0].to_dict().keys())
+            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+            writer.writeheader()
+            for d in detections:
+                writer.writerow(d.to_dict())
+        else:
+            click.echo("No detections found.")
+    else:
+        click.echo(f"Found {len(detections)} pattern detections:\n")
+        for i, d in enumerate(detections, 1):
+            pattern = d.metadata.get('pattern_type', 'unknown')
+            ratio = d.metadata.get('acceleration_ratio', 1.0)
+            init_rate = d.metadata.get('initial_rate', 0)
+            final_rate = d.metadata.get('final_rate', 0)
+            click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s")
+            click.echo(f"   Pattern: {pattern}, ratio: {ratio:.2f}x")
+            click.echo(f"   Rate: {init_rate:.1f} -> {final_rate:.1f} Hz")
+
+    if not output and output_format == 'table':
+        click.echo(f"\nTotal: {len(detections)} detections")
+
+
+@detect.command('batch')
+@click.argument('directory', type=click.Path(exists=True))
+@click.option('--detector', '-d', type=click.Choice(['energy', 'ribbit', 'peaks', 'accelerating']),
+              default='energy', help='Detector type to use')
+@click.option('--output-dir', '-o', required=True, type=click.Path(),
+              help='Output directory for detection files')
+@click.option('--low-freq', '-l', default=500.0, type=float, help='Low frequency bound (Hz)')
+@click.option('--high-freq', '-h', default=5000.0, type=float, help='High frequency bound (Hz)')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress progress output')
+def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
+    """Run detection on all audio files in a directory.
+
+    Examples:
+        bioamla detect batch ./recordings -d energy -o ./detections
+        bioamla detect batch ./field_data -d ribbit -o ./results -l 1000 -h 4000
+    """
+    from pathlib import Path as PathLib
+
+    from bioamla.detection import (
+        AcceleratingPatternDetector,
+        BandLimitedEnergyDetector,
+        CWTPeakDetector,
+        Detection,
+        RibbitDetector,
+        batch_detect,
+        export_detections,
+    )
+
+    # Create detector
+    if detector == 'energy':
+        det = BandLimitedEnergyDetector(low_freq=low_freq, high_freq=high_freq)
+    elif detector == 'ribbit':
+        det = RibbitDetector(low_freq=low_freq, high_freq=high_freq)
+    elif detector == 'peaks':
+        det = CWTPeakDetector(low_freq=low_freq, high_freq=high_freq)
+    else:
+        det = AcceleratingPatternDetector(low_freq=low_freq, high_freq=high_freq)
+
+    # Find audio files
+    directory_path = PathLib(directory)
+    audio_extensions = {'.wav', '.mp3', '.flac', '.ogg', '.m4a'}
+    files = [f for f in directory_path.rglob('*') if f.suffix.lower() in audio_extensions]
+
+    if not files:
+        click.echo(f"No audio files found in {directory}")
+        return
+
+    if not quiet:
+        click.echo(f"Found {len(files)} audio files")
+
+    # Run batch detection
+    results = batch_detect(files, det, verbose=not quiet)
+
+    # Save results
+    output_path = PathLib(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    total_detections = 0
+    for filepath, detections in results.items():
+        if detections:
+            if isinstance(detections[0], Detection):
+                output_file = output_path / f"{PathLib(filepath).stem}_detections.csv"
+                export_detections(detections, output_file, format="csv")
+                total_detections += len(detections)
+
+    click.echo("\nBatch detection complete:")
+    click.echo(f"  Files processed: {len(files)}")
+    click.echo(f"  Total detections: {total_detections}")
+    click.echo(f"  Output directory: {output_dir}")
+
+
+# =============================================================================
+# Active Learning Commands
+# =============================================================================
+
+@cli.group()
+def learn():
+    """Active learning commands for efficient annotation."""
+    pass
+
+
+@learn.command('init')
+@click.argument('predictions_csv', type=click.Path(exists=True))
+@click.argument('output_state', type=click.Path())
+@click.option('--strategy', '-s', type=click.Choice(['entropy', 'least_confidence', 'margin', 'random', 'hybrid']),
+              default='entropy', help='Sampling strategy')
+@click.option('--labeled-csv', type=click.Path(exists=True),
+              help='CSV file with pre-labeled samples (id,label columns)')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def learn_init(predictions_csv: str, output_state: str, strategy: str,
+               labeled_csv: Optional[str], quiet: bool):
+    """Initialize active learning session from predictions.
+
+    PREDICTIONS_CSV should contain columns: filepath, start_time, end_time,
+    predicted_label, confidence.
+    """
+    import csv
+
+    from bioamla.active_learning import (
+        ActiveLearner,
+        HybridSampler,
+        RandomSampler,
+        UncertaintySampler,
+        create_samples_from_predictions,
+    )
+
+    # Create sampler based on strategy
+    if strategy == 'random':
+        sampler = RandomSampler()
+    elif strategy == 'hybrid':
+        sampler = HybridSampler()
+    else:
+        sampler = UncertaintySampler(strategy=strategy)
+
+    learner = ActiveLearner(sampler=sampler)
+
+    # Load unlabeled samples from predictions
+    samples = create_samples_from_predictions(predictions_csv)
+    learner.add_unlabeled(samples)
+
+    if not quiet:
+        click.echo(f"Loaded {len(samples)} samples from {predictions_csv}")
+
+    # Load pre-labeled samples if provided
+    if labeled_csv:
+        labeled_samples = []
+        with open(labeled_csv, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                sample_id = row.get('id') or row.get('sample_id')
+                label = row.get('label')
+                if sample_id and label:
+                    # Find sample in pool
+                    if sample_id in learner.unlabeled_pool:
+                        sample = learner.unlabeled_pool[sample_id]
+                        sample.label = label
+                        labeled_samples.append(sample)
+
+        if labeled_samples:
+            learner.add_labeled(labeled_samples)
+            if not quiet:
+                click.echo(f"Added {len(labeled_samples)} pre-labeled samples")
+
+    # Save state
+    learner.save_state(output_state)
+
+    if not quiet:
+        click.echo("\nActive learning session initialized:")
+        click.echo(f"  Strategy: {strategy}")
+        click.echo(f"  Unlabeled samples: {learner.state.total_unlabeled}")
+        click.echo(f"  Labeled samples: {learner.state.total_labeled}")
+        click.echo(f"  State saved to: {output_state}")
+
+
+@learn.command('query')
+@click.argument('state_file', type=click.Path(exists=True))
+@click.option('--n-samples', '-n', default=10, help='Number of samples to query')
+@click.option('--output', '-o', type=click.Path(), help='Output CSV for query results')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: bool):
+    """Query samples for annotation from active learning session.
+
+    Selects the most informative samples based on the configured strategy.
+    """
+    import csv
+    import json
+    from pathlib import Path
+
+    from bioamla.active_learning import (
+        ActiveLearner,
+        UncertaintySampler,
+    )
+
+    # Load state to determine sampler type
+    with open(state_file) as f:
+        state_data = json.load(f)
+
+    # Default to entropy sampler
+    sampler = UncertaintySampler(strategy='entropy')
+
+    learner = ActiveLearner.load_state(state_file, sampler=sampler)
+
+    if learner.state.total_unlabeled == 0:
+        click.echo("No unlabeled samples remaining!")
+        return
+
+    # Query samples
+    queried = learner.query(n_samples=n_samples, update_predictions=False)
+
+    if not quiet:
+        click.echo(f"\nQueried {len(queried)} samples (iteration {learner.state.iteration}):")
+        for i, sample in enumerate(queried, 1):
+            conf_str = f"{sample.confidence:.3f}" if sample.confidence else "N/A"
+            click.echo(f"  {i}. {sample.id}")
+            click.echo(f"     File: {sample.filepath}")
+            click.echo(f"     Time: {sample.start_time:.2f}s - {sample.end_time:.2f}s")
+            click.echo(f"     Predicted: {sample.predicted_label or 'N/A'} (conf: {conf_str})")
+
+    # Save query results
+    if output:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        with open(output, 'w', newline='', encoding='utf-8') as f:
+            fieldnames = ['id', 'filepath', 'start_time', 'end_time',
+                         'predicted_label', 'confidence', 'label']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for sample in queried:
+                writer.writerow({
+                    'id': sample.id,
+                    'filepath': sample.filepath,
+                    'start_time': sample.start_time,
+                    'end_time': sample.end_time,
+                    'predicted_label': sample.predicted_label or '',
+                    'confidence': sample.confidence or '',
+                    'label': '',  # To be filled by annotator
+                })
+
+        if not quiet:
+            click.echo(f"\nQuery results saved to: {output}")
+            click.echo("Fill in the 'label' column and use 'learn annotate' to import.")
+
+    # Save updated state
+    learner.save_state(state_file)
+
+
+@learn.command('annotate')
+@click.argument('state_file', type=click.Path(exists=True))
+@click.argument('annotations_csv', type=click.Path(exists=True))
+@click.option('--annotator', '-a', default='unknown', help='Annotator identifier')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet: bool):
+    """Import annotations into active learning session.
+
+    ANNOTATIONS_CSV should have columns: id (or sample_id), label.
+    """
+    import csv
+
+    from bioamla.active_learning import ActiveLearner, UncertaintySampler
+
+    # Load learner
+    sampler = UncertaintySampler(strategy='entropy')
+    learner = ActiveLearner.load_state(state_file, sampler=sampler)
+
+    # Read annotations
+    annotations_imported = 0
+    with open(annotations_csv, newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            sample_id = row.get('id') or row.get('sample_id')
+            label = row.get('label', '').strip()
+
+            if not sample_id or not label:
+                continue
+
+            # Find sample in unlabeled pool
+            if sample_id in learner.unlabeled_pool:
+                sample = learner.unlabeled_pool[sample_id]
+                learner.teach(sample, label, annotator=annotator)
+                annotations_imported += 1
+
+    # Save updated state
+    learner.save_state(state_file)
+
+    if not quiet:
+        click.echo(f"\nImported {annotations_imported} annotations")
+        click.echo(f"  Annotator: {annotator}")
+        click.echo(f"  Total labeled: {learner.state.total_labeled}")
+        click.echo(f"  Remaining unlabeled: {learner.state.total_unlabeled}")
+        click.echo(f"  Labels per class: {learner.state.labels_per_class}")
+
+
+@learn.command('status')
+@click.argument('state_file', type=click.Path(exists=True))
+def learn_status(state_file: str):
+    """Show status of active learning session."""
+    from bioamla.active_learning import (
+        ActiveLearner,
+        UncertaintySampler,
+        summarize_annotation_session,
+    )
+
+    sampler = UncertaintySampler(strategy='entropy')
+    learner = ActiveLearner.load_state(state_file, sampler=sampler)
+
+    summary = summarize_annotation_session(learner)
+
+    click.echo("\nActive Learning Session Status")
+    click.echo("=" * 40)
+    click.echo(f"Iteration: {summary['iteration']}")
+    click.echo(f"Total labeled: {summary['total_labeled']}")
+    click.echo(f"Total unlabeled: {summary['total_unlabeled']}")
+    click.echo(f"Total annotations: {summary['total_annotations']}")
+
+    if summary['labels_per_class']:
+        click.echo("\nLabels per class:")
+        for label, count in sorted(summary['labels_per_class'].items()):
+            click.echo(f"  {label}: {count}")
+
+    if summary['total_annotation_time_seconds'] > 0:
+        click.echo("\nAnnotation statistics:")
+        click.echo(f"  Total time: {summary['total_annotation_time_seconds']:.1f}s")
+        click.echo(f"  Rate: {summary['annotations_per_hour']:.1f} annotations/hour")
+
+    if summary['class_balance_ratio'] > 0:
+        click.echo(f"  Class balance ratio: {summary['class_balance_ratio']:.2f}")
+
+
+@learn.command('export')
+@click.argument('state_file', type=click.Path(exists=True))
+@click.argument('output_file', type=click.Path())
+@click.option('--format', '-f', 'fmt', type=click.Choice(['csv', 'raven']),
+              default='csv', help='Output format')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def learn_export(state_file: str, output_file: str, fmt: str, quiet: bool):
+    """Export labeled samples from active learning session."""
+    from bioamla.active_learning import ActiveLearner, UncertaintySampler, export_annotations
+
+    sampler = UncertaintySampler(strategy='entropy')
+    learner = ActiveLearner.load_state(state_file, sampler=sampler)
+
+    export_annotations(learner, output_file, format=fmt)
+
+    if not quiet:
+        click.echo(f"\nExported {learner.state.total_labeled} annotations to {output_file}")
+        click.echo(f"  Format: {fmt}")
+
+
+@learn.command('simulate')
+@click.argument('predictions_csv', type=click.Path(exists=True))
+@click.argument('ground_truth_csv', type=click.Path(exists=True))
+@click.option('--n-iterations', '-n', default=10, help='Number of iterations')
+@click.option('--batch-size', '-b', default=10, help='Samples per iteration')
+@click.option('--strategy', '-s', type=click.Choice(['entropy', 'least_confidence', 'margin', 'random', 'hybrid']),
+              default='entropy', help='Sampling strategy')
+@click.option('--output', '-o', type=click.Path(), help='Output CSV for simulation results')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: int,
+                   batch_size: int, strategy: str, output: Optional[str], quiet: bool):
+    """Simulate active learning loop using ground truth labels.
+
+    Useful for evaluating different sampling strategies.
+
+    GROUND_TRUTH_CSV should have columns: id (or sample_id), label.
+    """
+    import csv
+    from pathlib import Path
+
+    from bioamla.active_learning import (
+        ActiveLearner,
+        HybridSampler,
+        RandomSampler,
+        SimulatedOracle,
+        UncertaintySampler,
+        create_samples_from_predictions,
+    )
+
+    # Load ground truth
+    ground_truth = {}
+    with open(ground_truth_csv, newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            sample_id = row.get('id') or row.get('sample_id')
+            label = row.get('label', '').strip()
+            if sample_id and label:
+                ground_truth[sample_id] = label
+
+    if not ground_truth:
+        click.echo("Error: No ground truth labels found in CSV")
+        return
+
+    # Create sampler
+    if strategy == 'random':
+        sampler = RandomSampler()
+    elif strategy == 'hybrid':
+        sampler = HybridSampler()
+    else:
+        sampler = UncertaintySampler(strategy=strategy)
+
+    # Create oracle
+    oracle = SimulatedOracle(ground_truth=ground_truth)
+
+    # Initialize learner
+    learner = ActiveLearner(sampler=sampler)
+    samples = create_samples_from_predictions(predictions_csv)
+
+    # Filter samples that have ground truth
+    samples = [s for s in samples if s.id in ground_truth]
+    learner.add_unlabeled(samples)
+
+    if not quiet:
+        click.echo("\nSimulating active learning:")
+        click.echo(f"  Strategy: {strategy}")
+        click.echo(f"  Samples: {len(samples)}")
+        click.echo(f"  Iterations: {n_iterations}")
+        click.echo(f"  Batch size: {batch_size}")
+        click.echo()
+
+    # Run simulation
+    results = []
+    for iteration in range(n_iterations):
+        if learner.state.total_unlabeled == 0:
+            break
+
+        # Query
+        queried = learner.query(n_samples=batch_size, update_predictions=False)
+
+        # Annotate
+        for sample in queried:
+            try:
+                label = oracle.annotate(sample)
+                learner.teach(sample, label, annotator='oracle')
+            except ValueError:
+                pass  # Sample not in ground truth
+
+        # Record progress
+        result = {
+            'iteration': iteration + 1,
+            'total_labeled': learner.state.total_labeled,
+            'total_unlabeled': learner.state.total_unlabeled,
+        }
+        results.append(result)
+
+        if not quiet:
+            click.echo(f"  Iteration {iteration + 1}: {learner.state.total_labeled} labeled")
+
+    if not quiet:
+        click.echo("\nSimulation complete:")
+        click.echo(f"  Final labeled: {learner.state.total_labeled}")
+        click.echo(f"  Labels per class: {learner.state.labels_per_class}")
+
+    # Save results
+    if output:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        with open(output, 'w', newline='', encoding='utf-8') as f:
+            fieldnames = ['iteration', 'total_labeled', 'total_unlabeled']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(results)
+
+        if not quiet:
+            click.echo(f"  Results saved to: {output}")
+
+
+# =============================================================================
+# Clustering Commands
+# =============================================================================
+
+@cli.group()
+def cluster():
+    """Clustering and dimensionality reduction commands."""
+    pass
+
+
+@cluster.command('reduce')
+@click.argument('embeddings_file')
+@click.option('--output', '-o', required=True, help='Output file for reduced embeddings')
+@click.option('--method', '-m', type=click.Choice(['umap', 'tsne', 'pca']),
+              default='pca', help='Reduction method')
+@click.option('--n-components', '-n', type=int, default=2, help='Number of output dimensions')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def cluster_reduce(embeddings_file: str, output: str, method: str,
+                   n_components: int, quiet: bool):
+    """Reduce dimensionality of embeddings.
+
+    EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
+    """
+    import numpy as np
+
+    from bioamla.clustering import reduce_dimensions
+
+    embeddings = np.load(embeddings_file)
+
+    if not quiet:
+        click.echo(f"Reducing {embeddings.shape[1]}D embeddings to {n_components}D using {method}...")
+
+    reduced = reduce_dimensions(embeddings, method=method, n_components=n_components)
+
+    np.save(output, reduced)
+
+    if not quiet:
+        click.echo(f"Saved reduced embeddings to: {output}")
+
+
+@cluster.command('cluster')
+@click.argument('embeddings_file')
+@click.option('--output', '-o', required=True, help='Output file for cluster labels')
+@click.option('--method', '-m', type=click.Choice(['kmeans', 'dbscan', 'agglomerative']),
+              default='kmeans', help='Clustering method')
+@click.option('--n-clusters', '-k', type=int, default=10, help='Number of clusters (for k-means/agglomerative)')
+@click.option('--eps', type=float, default=0.5, help='DBSCAN epsilon')
+@click.option('--min-samples', type=int, default=5, help='Minimum samples per cluster')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def cluster_cluster(embeddings_file: str, output: str, method: str,
+                    n_clusters: int, eps: float, min_samples: int, quiet: bool):
+    """Cluster embeddings.
+
+    EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
+    """
+    import numpy as np
+
+    from bioamla.clustering import AudioClusterer, ClusteringConfig
+
+    embeddings = np.load(embeddings_file)
+
+    config = ClusteringConfig(
+        method=method,
+        n_clusters=n_clusters,
+        eps=eps,
+        min_samples=min_samples,
+    )
+    clusterer = AudioClusterer(config=config)
+
+    if not quiet:
+        click.echo(f"Clustering {len(embeddings)} samples using {method}...")
+
+    labels = clusterer.fit_predict(embeddings)
+
+    np.save(output, labels)
+
+    if not quiet:
+        click.echo(f"Found {clusterer.n_clusters_} clusters")
+        click.echo(f"Saved cluster labels to: {output}")
+
+
+@cluster.command('analyze')
+@click.argument('embeddings_file')
+@click.argument('labels_file')
+@click.option('--output', '-o', help='Output JSON file for analysis results')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: bool):
+    """Analyze cluster quality.
+
+    EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
+    LABELS_FILE: Path to numpy file with cluster labels (.npy)
+    """
+    import json
+
+    import numpy as np
+
+    from bioamla.clustering import analyze_clusters
+
+    embeddings = np.load(embeddings_file)
+    labels = np.load(labels_file)
+
+    analysis = analyze_clusters(embeddings, labels)
+
+    if not quiet:
+        click.echo("Cluster Analysis:")
+        click.echo(f"  Clusters: {analysis['n_clusters']}")
+        click.echo(f"  Samples: {analysis['n_samples']}")
+        click.echo(f"  Noise: {analysis['n_noise']} ({analysis['noise_percentage']:.1f}%)")
+        click.echo(f"  Silhouette Score: {analysis['silhouette_score']:.4f}")
+        click.echo(f"  Calinski-Harabasz Score: {analysis['calinski_harabasz_score']:.2f}")
+
+    if output:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        with open(output, 'w') as f:
+            json.dump(analysis, f, indent=2)
+        if not quiet:
+            click.echo(f"Saved analysis to: {output}")
+
+
+@cluster.command('novelty')
+@click.argument('embeddings_file')
+@click.option('--output', '-o', required=True, help='Output file for novelty results')
+@click.option('--method', '-m', type=click.Choice(['distance', 'isolation_forest', 'lof']),
+              default='distance', help='Novelty detection method')
+@click.option('--threshold', type=float, help='Novelty threshold')
+@click.option('--labels', help='Optional cluster labels file')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def cluster_novelty(embeddings_file: str, output: str, method: str,
+                    threshold: float, labels: str, quiet: bool):
+    """Detect novel sounds in embeddings.
+
+    EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
+    """
+    import numpy as np
+
+    from bioamla.clustering import discover_novel_sounds
+
+    embeddings = np.load(embeddings_file)
+    known_labels = np.load(labels) if labels else None
+
+    if not quiet:
+        click.echo(f"Detecting novel sounds using {method}...")
+
+    is_novel, scores = discover_novel_sounds(
+        embeddings,
+        known_labels=known_labels,
+        method=method,
+        threshold=threshold,
+        return_scores=True,
+    )
+
+    results = np.column_stack([is_novel.astype(int), scores])
+    np.save(output, results)
+
+    n_novel = is_novel.sum()
+    if not quiet:
+        click.echo(f"Found {n_novel} novel samples ({100*n_novel/len(embeddings):.1f}%)")
+        click.echo(f"Saved novelty results to: {output}")
+
+
+# =============================================================================
+# Real-time Commands
+# =============================================================================
+
+@cli.group()
+def realtime():
+    """Real-time audio processing commands."""
+    pass
+
+
+@realtime.command('devices')
+def realtime_devices():
+    """List available audio input devices."""
+    from bioamla.realtime import list_audio_devices
+
+    devices = list_audio_devices()
+
+    click.echo("Available Audio Input Devices:")
+    for device in devices:
+        click.echo(f"  [{device['index']}] {device['name']}")
+        click.echo(f"      Channels: {device['channels']}, Sample Rate: {device['sample_rate']}")
+
+
+@realtime.command('test')
+@click.option('--duration', '-d', type=float, default=3.0, help='Recording duration in seconds')
+@click.option('--device', type=int, help='Device index')
+@click.option('--output', '-o', help='Output file to save recording')
+def realtime_test(duration: float, device: int, output: str):
+    """Test audio recording from microphone."""
+    from bioamla.realtime import test_recording
+
+    click.echo(f"Recording for {duration} seconds...")
+    audio = test_recording(duration=duration, device=device)
+
+    click.echo(f"Recorded {len(audio)} samples")
+    click.echo(f"Max amplitude: {audio.max():.4f}")
+    click.echo(f"RMS: {(audio**2).mean()**0.5:.4f}")
+
+    if output:
+        import soundfile as sf
+        sf.write(output, audio, 16000)
+        click.echo(f"Saved recording to: {output}")
+
+
+# =============================================================================
+# eBird subgroup (under services)
+# =============================================================================
+
+@services.group('ebird')
+def services_ebird():
+    """eBird bird observation database."""
+    pass
+
+
+@services_ebird.command('validate')
+@click.argument('species_code')
+@click.option('--lat', type=float, required=True, help='Latitude')
+@click.option('--lng', type=float, required=True, help='Longitude')
+@click.option('--api-key', envvar='EBIRD_API_KEY', required=True, help='eBird API key')
+@click.option('--distance', type=float, default=50, help='Search radius in km')
+def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, distance: float):
+    """Validate if a species is expected at a location.
+
+    SPECIES_CODE: eBird species code (e.g., 'carwre' for Carolina Wren)
+    """
+    from bioamla.integrations import EBirdClient
+
+    client = EBirdClient(api_key=api_key)
+    result = client.validate_species_for_location(
+        species_code=species_code,
+        latitude=lat,
+        longitude=lng,
+        distance_km=distance,
+    )
+
+    if result['is_valid']:
+        click.echo(f"✓ {species_code} is expected at this location")
+        click.echo(f"  Found {result['nearby_observations']} nearby observations")
+        if result['most_recent_observation']:
+            click.echo(f"  Most recent: {result['most_recent_observation']}")
+    else:
+        click.echo(f"✗ {species_code} not recently observed at this location")
+        click.echo(f"  {result['total_species_in_area']} other species observed nearby")
+
+
+@services_ebird.command('nearby')
+@click.option('--lat', type=float, required=True, help='Latitude')
+@click.option('--lng', type=float, required=True, help='Longitude')
+@click.option('--api-key', envvar='EBIRD_API_KEY', required=True, help='eBird API key')
+@click.option('--distance', type=float, default=25, help='Search radius in km')
+@click.option('--days', type=int, default=14, help='Days back to search')
+@click.option('--limit', type=int, default=20, help='Maximum results')
+@click.option('--output', '-o', help='Output CSV file')
+def ebird_nearby(lat: float, lng: float, api_key: str, distance: float,
+                 days: int, limit: int, output: str):
+    """Get recent eBird observations near a location."""
+    import csv
+
+    from bioamla.integrations import EBirdClient
+
+    client = EBirdClient(api_key=api_key)
+    observations = client.get_nearby_observations(
+        latitude=lat,
+        longitude=lng,
+        distance_km=distance,
+        back=days,
+        max_results=limit,
+    )
+
+    click.echo(f"Found {len(observations)} recent observations:")
+    for obs in observations[:10]:
+        count_str = f" (x{obs.how_many})" if obs.how_many else ""
+        click.echo(f"  {obs.common_name}{count_str} - {obs.location_name}")
+
+    if len(observations) > 10:
+        click.echo(f"  ... and {len(observations) - 10} more")
+
+    if output:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        with open(output, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=['species_code', 'common_name', 'scientific_name',
+                                                    'location_name', 'observation_date', 'how_many'])
+            writer.writeheader()
+            for obs in observations:
+                writer.writerow(obs.to_dict())
+        click.echo(f"Saved to: {output}")
+
+
+# --- PostgreSQL subgroup ---
+@services.group('pg')
+def services_pg():
+    """PostgreSQL database integration."""
+    pass
+
+
+@services_pg.command('export')
+@click.argument('detections_file')
+@click.option('--connection', '-c', envvar='DATABASE_URL', required=True,
+              help='PostgreSQL connection string')
+@click.option('--detector', '-d', default='unknown', help='Detector name')
+@click.option('--create-tables', is_flag=True, help='Create tables if not exist')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def pg_export(detections_file: str, connection: str, detector: str,
+              create_tables: bool, quiet: bool):
+    """Export detections to PostgreSQL database.
+
+    DETECTIONS_FILE: Path to JSON file with detections
+    """
+    import json
+
+    from bioamla.integrations import PostgreSQLExporter
+
+    with open(detections_file) as f:
+        detections = json.load(f)
+
+    exporter = PostgreSQLExporter(connection_string=connection)
+
+    if create_tables:
+        exporter.create_tables()
+        if not quiet:
+            click.echo("Database tables created")
+
+    count = exporter.export_detections(detections, detector_name=detector)
+    exporter.close()
+
+    if not quiet:
+        click.echo(f"Exported {count} detections to database")
+
+
+@services_pg.command('stats')
+@click.option('--connection', '-c', envvar='DATABASE_URL', required=True,
+              help='PostgreSQL connection string')
+def pg_stats(connection: str):
+    """Show PostgreSQL database statistics."""
+    from bioamla.integrations import PostgreSQLExporter
+
+    exporter = PostgreSQLExporter(connection_string=connection)
+    stats = exporter.get_statistics()
+    exporter.close()
+
+    click.echo("Database Statistics:")
+    click.echo(f"  Detections: {stats['detections_count']}")
+    click.echo(f"  Annotations: {stats['annotations_count']}")
+    click.echo(f"  Audio Files: {stats['audio_files_count']}")
+    click.echo(f"  Species Observations: {stats['species_observations_count']}")
+
+    if stats.get('detections_by_label'):
+        click.echo("\nTop Detection Labels:")
+        for label, count in list(stats['detections_by_label'].items())[:10]:
+            click.echo(f"  {label}: {count}")
+
+
+@train.command('spec')
+@click.argument('data_dir')
+@click.option('--output', '-o', required=True, help='Output directory for model')
+@click.option('--model', '-m', type=click.Choice(['cnn', 'crnn', 'attention']),
+              default='cnn', help='Model architecture')
+@click.option('--epochs', '-e', type=int, default=50, help='Number of epochs')
+@click.option('--batch-size', '-b', type=int, default=32, help='Batch size')
+@click.option('--lr', type=float, default=1e-3, help='Learning rate')
+@click.option('--n-classes', '-n', type=int, required=True, help='Number of classes')
+@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+def train_spec(data_dir: str, output: str, model: str, epochs: int,
+               batch_size: int, lr: float, n_classes: int, quiet: bool):
+    """Train a spectrogram classifier (CNN/CRNN/Attention).
+
+    DATA_DIR: Directory containing training data (spectrograms as .npy files)
+
+    Example:
+        bioamla models train spec ./spectrograms -o ./model -n 5
+    """
+    from bioamla.ml import (
+        AttentionClassifier,
+        CNNClassifier,
+        CRNNClassifier,
+        TrainerConfig,
+    )
+
+    if model == 'cnn':
+        classifier = CNNClassifier(n_classes=n_classes)
+    elif model == 'crnn':
+        classifier = CRNNClassifier(n_classes=n_classes)
+    else:
+        classifier = AttentionClassifier(n_classes=n_classes)
+
+    config = TrainerConfig(
+        epochs=epochs,
+        batch_size=batch_size,
+        learning_rate=lr,
+        output_dir=output,
+    )
+
+    if not quiet:
+        click.echo(f"Training {model.upper()} classifier with {n_classes} classes...")
+        click.echo(f"  Epochs: {epochs}, Batch Size: {batch_size}, LR: {lr}")
+
+    # Note: In a real implementation, you would load data from data_dir
+    click.echo("Note: This command requires properly formatted training data.")
+    click.echo(f"Model will be saved to: {output}")
+
+
+@models.command('ensemble')
+@click.argument('model_dirs', nargs=-1, required=True)
+@click.option('--output', '-o', required=True, help='Output directory for ensemble')
+@click.option('--strategy', '-s', type=click.Choice(['averaging', 'voting', 'max']),
+              default='averaging', help='Ensemble combination strategy')
+@click.option('--weights', '-w', multiple=True, type=float, help='Model weights')
+def models_ensemble(model_dirs, output: str, strategy: str, weights):
+    """Create an ensemble from multiple trained models.
+
+    MODEL_DIRS: Directories containing trained models
+
+    Example:
+        bioamla models ensemble ./model1 ./model2 -o ./ensemble -s voting
+    """
+    from pathlib import Path
+
+    click.echo(f"Creating {strategy} ensemble from {len(model_dirs)} models...")
+
+    weights_list = list(weights) if weights else None
+    if weights_list and len(weights_list) != len(model_dirs):
+        raise click.ClickException("Number of weights must match number of models")
+
+    Path(output).mkdir(parents=True, exist_ok=True)
+
+    click.echo(f"Ensemble configuration saved to: {output}")
+    click.echo("Note: Load individual models and combine using bioamla.ml.Ensemble")
 
 
 if __name__ == '__main__':

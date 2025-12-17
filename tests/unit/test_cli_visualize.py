@@ -1,5 +1,5 @@
 """
-Unit tests for the visualize CLI command.
+Unit tests for the visualize CLI command (bioamla audio visualize).
 """
 
 import struct
@@ -52,7 +52,7 @@ class TestVisualizeHelp:
 
     def test_visualize_help(self, runner):
         """Test visualize --help shows all options."""
-        result = runner.invoke(cli, ["visualize", "--help"])
+        result = runner.invoke(cli, ["audio", "visualize", "--help"])
 
         assert result.exit_code == 0
         assert "PATH" in result.output
@@ -65,7 +65,7 @@ class TestVisualizeHelp:
 
     def test_visualize_requires_path(self, runner):
         """Test that visualize requires path argument."""
-        result = runner.invoke(cli, ["visualize"])
+        result = runner.invoke(cli, ["audio", "visualize"])
 
         assert result.exit_code != 0
         assert "Missing argument" in result.output or "PATH" in result.output
@@ -81,7 +81,7 @@ class TestVisualizeSingleFile:
         output_file = temp_dir / "output.png"
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(audio_file),
             "--output", str(output_file),
         ])
@@ -97,7 +97,7 @@ class TestVisualizeSingleFile:
         output_file = temp_dir / "output.png"
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(audio_file),
             "--output", str(output_file),
             "--type", "mfcc",
@@ -114,7 +114,7 @@ class TestVisualizeSingleFile:
         output_file = temp_dir / "output.png"
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(audio_file),
             "--output", str(output_file),
             "--type", "waveform",
@@ -130,7 +130,7 @@ class TestVisualizeSingleFile:
         _create_mock_wav(audio_file)
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(audio_file),
         ])
 
@@ -141,7 +141,7 @@ class TestVisualizeSingleFile:
     def test_missing_file_error(self, runner, temp_dir):
         """Test error handling for missing audio file."""
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             "/nonexistent/audio.wav",
             "--output", str(temp_dir / "output.png"),
         ])
@@ -156,7 +156,7 @@ class TestVisualizeSingleFile:
         output_file = temp_dir / "output.png"
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(audio_file),
             "--output", str(output_file),
             "--quiet",
@@ -181,7 +181,7 @@ class TestVisualizeBatch:
             _create_mock_wav(input_dir / f"audio_{i}.wav")
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(input_dir),
             "--batch",
             "--output", str(output_dir),
@@ -198,7 +198,7 @@ class TestVisualizeBatch:
         _create_mock_wav(input_dir / "test.wav")
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(input_dir),
             "--batch",
         ])
@@ -216,7 +216,7 @@ class TestVisualizeBatch:
         _create_mock_wav(input_dir / "test.wav")
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(input_dir),
             "--batch",
             "--output", str(output_dir),
@@ -236,7 +236,7 @@ class TestVisualizeBatch:
             output_dir = temp_dir / f"output_{viz_type}"
 
             result = runner.invoke(cli, [
-                "visualize",
+                "audio", "visualize",
                 str(input_dir),
                 "--batch",
                 "--output", str(output_dir),
@@ -257,7 +257,7 @@ class TestVisualizeOptions:
         output_file = temp_dir / "output.png"
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(audio_file),
             "--output", str(output_file),
             "--sample-rate", "8000",
@@ -273,7 +273,7 @@ class TestVisualizeOptions:
         output_file = temp_dir / "output.png"
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(audio_file),
             "--output", str(output_file),
             "--n-mels", "64",
@@ -289,7 +289,7 @@ class TestVisualizeOptions:
         output_file = temp_dir / "output.png"
 
         result = runner.invoke(cli, [
-            "visualize",
+            "audio", "visualize",
             str(audio_file),
             "--output", str(output_file),
             "--cmap", "viridis",
