@@ -2946,5 +2946,382 @@ def hf_push_dataset(
         raise SystemExit(1)
 
 
+# =============================================================================
+# API Command Group
+# =============================================================================
+
+@cli.group()
+def api():
+    """API integrations for bioacoustic databases."""
+    pass
+
+
+@api.command('xc-search')
+@click.option('--species', '-s', help='Species name (scientific or common)')
+@click.option('--genus', '-g', help='Genus name')
+@click.option('--country', '-c', help='Country name')
+@click.option('--quality', '-q', help='Recording quality (A, B, C, D, E)')
+@click.option('--type', 'sound_type', help='Sound type (song, call, etc.)')
+@click.option('--max-results', '-n', default=10, type=int, help='Maximum results')
+@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
+              default='table', help='Output format')
+def xc_search(species, genus, country, quality, sound_type, max_results, output_format):
+    """Search Xeno-canto for bird recordings.
+
+    Examples:
+        bioamla api xc-search --species "Turdus migratorius" --quality A
+        bioamla api xc-search --genus Turdus --country "United States"
+    """
+    import json as json_lib
+
+    from bioamla.api import xeno_canto
+
+    try:
+        results = xeno_canto.search(
+            species=species,
+            genus=genus,
+            country=country,
+            quality=quality,
+            sound_type=sound_type,
+            max_results=max_results,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"API error: {e}")
+        raise SystemExit(1)
+
+    if not results:
+        click.echo("No recordings found.")
+        return
+
+    if output_format == 'json':
+        click.echo(json_lib.dumps([r.to_dict() for r in results], indent=2))
+    elif output_format == 'csv':
+        import csv
+        import sys
+        writer = csv.DictWriter(sys.stdout, fieldnames=results[0].to_dict().keys())
+        writer.writeheader()
+        for r in results:
+            writer.writerow(r.to_dict())
+    else:
+        click.echo(f"Found {len(results)} recordings:\n")
+        for r in results:
+            click.echo(f"XC{r.id}: {r.scientific_name} ({r.common_name})")
+            click.echo(f"  Quality: {r.quality} | Type: {r.sound_type} | Length: {r.length}")
+            click.echo(f"  Location: {r.location}, {r.country}")
+            click.echo(f"  Recordist: {r.recordist}")
+            click.echo(f"  URL: {r.url}")
+            click.echo()
+
+
+@api.command('xc-download')
+@click.option('--species', '-s', help='Species name (scientific or common)')
+@click.option('--genus', '-g', help='Genus name')
+@click.option('--country', '-c', help='Country name')
+@click.option('--quality', '-q', default='A', help='Recording quality filter (default: A)')
+@click.option('--max-recordings', '-n', default=10, type=int, help='Maximum recordings to download')
+@click.option('--output-dir', '-o', default='./xc_recordings', help='Output directory')
+@click.option('--delay', default=1.0, type=float, help='Delay between downloads in seconds')
+def xc_download(species, genus, country, quality, max_recordings, output_dir, delay):
+    """Download recordings from Xeno-canto.
+
+    Examples:
+        bioamla api xc-download --species "Turdus migratorius" --quality A -n 5
+        bioamla api xc-download --genus Strix --country "United States" -o ./owls
+    """
+    from bioamla.api import xeno_canto
+
+    click.echo("Searching Xeno-canto...")
+
+    try:
+        results = xeno_canto.search(
+            species=species,
+            genus=genus,
+            country=country,
+            quality=quality,
+            max_results=max_recordings,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"API error: {e}")
+        raise SystemExit(1)
+
+    if not results:
+        click.echo("No recordings found.")
+        return
+
+    click.echo(f"Found {len(results)} recordings. Starting download...")
+
+    stats = xeno_canto.download_recordings(
+        results,
+        output_dir=output_dir,
+        delay=delay,
+        verbose=True,
+    )
+
+    click.echo(f"\nDownload complete: {stats['downloaded']}/{stats['total']} recordings")
+
+
+@api.command('ml-search')
+@click.option('--species-code', '-s', help='eBird species code (e.g., amerob)')
+@click.option('--scientific-name', help='Scientific name')
+@click.option('--region', '-r', help='Region code (e.g., US-NY)')
+@click.option('--min-rating', default=0, type=int, help='Minimum quality rating (1-5)')
+@click.option('--max-results', '-n', default=10, type=int, help='Maximum results')
+@click.option('--format', 'output_format', type=click.Choice(['table', 'json']),
+              default='table', help='Output format')
+def ml_search(species_code, scientific_name, region, min_rating, max_results, output_format):
+    """Search Macaulay Library for audio recordings.
+
+    Examples:
+        bioamla api ml-search --species-code amerob --min-rating 4
+        bioamla api ml-search --scientific-name "Turdus migratorius" -r US-NY
+    """
+    import json as json_lib
+
+    from bioamla.api import macaulay
+
+    try:
+        results = macaulay.search(
+            species_code=species_code,
+            scientific_name=scientific_name,
+            region=region,
+            media_type="audio",
+            min_rating=min_rating,
+            count=max_results,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"API error: {e}")
+        raise SystemExit(1)
+
+    if not results:
+        click.echo("No recordings found.")
+        return
+
+    if output_format == 'json':
+        click.echo(json_lib.dumps([a.to_dict() for a in results], indent=2))
+    else:
+        click.echo(f"Found {len(results)} recordings:\n")
+        for a in results:
+            click.echo(f"ML{a.catalog_id}: {a.scientific_name} ({a.common_name})")
+            click.echo(f"  Rating: {a.rating}/5 | Duration: {a.duration or 'N/A'}s")
+            click.echo(f"  Location: {a.location}, {a.country}")
+            click.echo(f"  Contributor: {a.user_display_name}")
+            click.echo()
+
+
+@api.command('ml-download')
+@click.option('--species-code', '-s', help='eBird species code (e.g., amerob)')
+@click.option('--scientific-name', help='Scientific name')
+@click.option('--region', '-r', help='Region code (e.g., US-NY)')
+@click.option('--min-rating', default=3, type=int, help='Minimum quality rating (default: 3)')
+@click.option('--max-recordings', '-n', default=10, type=int, help='Maximum recordings to download')
+@click.option('--output-dir', '-o', default='./ml_recordings', help='Output directory')
+def ml_download(species_code, scientific_name, region, min_rating, max_recordings, output_dir):
+    """Download recordings from Macaulay Library.
+
+    Examples:
+        bioamla api ml-download --species-code amerob --min-rating 4 -n 5
+        bioamla api ml-download --scientific-name "Strix varia" -o ./owls
+    """
+    from bioamla.api import macaulay
+
+    click.echo("Searching Macaulay Library...")
+
+    try:
+        results = macaulay.search(
+            species_code=species_code,
+            scientific_name=scientific_name,
+            region=region,
+            media_type="audio",
+            min_rating=min_rating,
+            count=max_recordings,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"API error: {e}")
+        raise SystemExit(1)
+
+    if not results:
+        click.echo("No recordings found.")
+        return
+
+    click.echo(f"Found {len(results)} recordings. Starting download...")
+
+    stats = macaulay.download_assets(
+        results,
+        output_dir=output_dir,
+        verbose=True,
+    )
+
+    click.echo(f"\nDownload complete: {stats['downloaded']}/{stats['total']} recordings")
+
+
+@api.command('species')
+@click.argument('name')
+@click.option('--to-common', '-c', is_flag=True, help='Convert scientific to common name')
+@click.option('--to-scientific', '-s', is_flag=True, help='Convert common to scientific name')
+@click.option('--info', '-i', is_flag=True, help='Show full species information')
+def species_lookup(name, to_common, to_scientific, info):
+    """Look up species names and convert between formats.
+
+    Examples:
+        bioamla api species "Turdus migratorius" --to-common
+        bioamla api species "American Robin" --to-scientific
+        bioamla api species "amerob" --info
+    """
+    from bioamla.api import species
+
+    if info:
+        result = species.get_species_info(name)
+        if result:
+            click.echo(f"Scientific name: {result.scientific_name}")
+            click.echo(f"Common name: {result.common_name}")
+            click.echo(f"Species code: {result.species_code}")
+            click.echo(f"Family: {result.family}")
+            click.echo(f"Order: {result.order}")
+            click.echo(f"Source: {result.source}")
+        else:
+            click.echo(f"Species not found: {name}")
+            raise SystemExit(1)
+    elif to_common:
+        result = species.scientific_to_common(name)
+        if result:
+            click.echo(result)
+        else:
+            click.echo(f"No common name found for: {name}")
+            raise SystemExit(1)
+    elif to_scientific:
+        result = species.common_to_scientific(name)
+        if result:
+            click.echo(result)
+        else:
+            click.echo(f"No scientific name found for: {name}")
+            raise SystemExit(1)
+    else:
+        # Default: show both if possible
+        info_result = species.get_species_info(name)
+        if info_result:
+            click.echo(f"{info_result.scientific_name} - {info_result.common_name}")
+        else:
+            click.echo(f"Species not found: {name}")
+            raise SystemExit(1)
+
+
+@api.command('species-search')
+@click.argument('query')
+@click.option('--limit', '-n', default=10, type=int, help='Maximum results')
+def species_search(query, limit):
+    """Fuzzy search for species by name.
+
+    Examples:
+        bioamla api species-search robin
+        bioamla api species-search "barred" --limit 5
+    """
+    from bioamla.api import species
+
+    results = species.search(query, limit=limit)
+
+    if not results:
+        click.echo(f"No species found matching: {query}")
+        return
+
+    click.echo(f"Found {len(results)} matching species:\n")
+    for r in results:
+        score = r['score'] * 100
+        click.echo(f"{r['scientific_name']} - {r['common_name']}")
+        click.echo(f"  Code: {r['species_code']} | Family: {r['family']} | Match: {score:.0f}%")
+        click.echo()
+
+
+@api.command('inat-download')
+@click.option('--taxon-id', '-t', type=int, help='iNaturalist taxon ID')
+@click.option('--taxon-name', help='Taxon name (e.g., "Anura" for frogs)')
+@click.option('--place-id', '-p', type=int, help='iNaturalist place ID')
+@click.option('--project-id', help='iNaturalist project ID or slug')
+@click.option('--quality-grade', default='research',
+              type=click.Choice(['research', 'needs_id', 'casual']),
+              help='Quality grade filter')
+@click.option('--max-observations', '-n', default=100, type=int,
+              help='Maximum observations to download')
+@click.option('--output-dir', '-o', default='./inat_sounds', help='Output directory')
+@click.option('--include-metadata', is_flag=True, help='Include extended iNaturalist metadata')
+def inat_download(taxon_id, taxon_name, place_id, project_id, quality_grade,
+                  max_observations, output_dir, include_metadata):
+    """Download audio files from iNaturalist observations.
+
+    Examples:
+        bioamla api inat-download --taxon-name "Anura" --place-id 1 -n 50
+        bioamla api inat-download --project-id "appalachia-bioacoustics" -n 100
+    """
+    from bioamla.inat import download_inat_audio
+
+    if not any([taxon_id, taxon_name, place_id, project_id]):
+        click.echo("Error: At least one filter is required (--taxon-id, --taxon-name, --place-id, or --project-id)")
+        raise SystemExit(1)
+
+    stats = download_inat_audio(
+        output_dir=output_dir,
+        taxon_ids=[taxon_id] if taxon_id else None,
+        taxon_name=taxon_name,
+        place_id=place_id,
+        project_id=project_id,
+        quality_grade=quality_grade,
+        obs_per_taxon=max_observations,
+        include_inat_metadata=include_metadata,
+        verbose=True,
+    )
+
+    click.echo(f"\nDownload complete: {stats['total_sounds']} audio files")
+
+
+@api.command('clear-cache')
+@click.option('--all', 'clear_all', is_flag=True, help='Clear all API caches')
+@click.option('--xc', is_flag=True, help='Clear Xeno-canto cache')
+@click.option('--ml', is_flag=True, help='Clear Macaulay Library cache')
+@click.option('--species', is_flag=True, help='Clear species cache')
+def clear_cache(clear_all, xc, ml, species):
+    """Clear API response caches.
+
+    Examples:
+        bioamla api clear-cache --all
+        bioamla api clear-cache --xc --species
+    """
+    total = 0
+
+    if clear_all or xc:
+        from bioamla.api import xeno_canto
+        count = xeno_canto.clear_cache()
+        click.echo(f"Cleared {count} Xeno-canto cache entries")
+        total += count
+
+    if clear_all or ml:
+        from bioamla.api import macaulay
+        count = macaulay.clear_cache()
+        click.echo(f"Cleared {count} Macaulay Library cache entries")
+        total += count
+
+    if clear_all or species:
+        from bioamla.api import species as species_mod
+        count = species_mod.clear_cache()
+        click.echo(f"Cleared {count} species cache entries")
+        total += count
+
+    if not any([clear_all, xc, ml, species]):
+        click.echo("No cache specified. Use --all to clear all caches.")
+        return
+
+    click.echo(f"\nTotal: {total} cache entries cleared")
+
+
 if __name__ == '__main__':
     cli()
