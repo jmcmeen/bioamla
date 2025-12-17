@@ -1137,6 +1137,185 @@ def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
     _run_signal_processing(path, output, batch, processor, quiet, "trim")
 
 
+@audio.command('analyze')
+@click.argument('path')
+@click.option('--batch', is_flag=True, help='Analyze all audio files in directory')
+@click.option('--output', '-o', default=None, help='Output file for results (CSV or JSON)')
+@click.option('--format', 'output_format', type=click.Choice(['text', 'json', 'csv']), default='text',
+              help='Output format (default: text)')
+@click.option('--silence-threshold', default=-40, type=float, help='Silence detection threshold in dB')
+@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode)')
+@click.option('--quiet', is_flag=True, help='Suppress detailed output')
+def audio_analyze(path, batch, output, output_format, silence_threshold, recursive, quiet):
+    """Analyze audio files and display statistics.
+
+    Shows duration, sample rate, channels, RMS/peak amplitude,
+    frequency statistics, and silence detection results.
+
+    Single file mode:
+        bioamla audio analyze recording.wav
+
+    Batch mode:
+        bioamla audio analyze ./audio_dir --batch --output results.csv
+
+    Examples:
+        # Analyze a single file
+        bioamla audio analyze bird_call.wav
+
+        # Analyze with JSON output
+        bioamla audio analyze recording.wav --format json
+
+        # Batch analyze and save to CSV
+        bioamla audio analyze ./dataset --batch -o analysis.csv --format csv
+    """
+    import json
+    from pathlib import Path
+
+    from bioamla.analysis import (
+        analyze_audio,
+        summarize_analysis,
+    )
+    from bioamla.utils import get_audio_files
+
+    path = Path(path)
+
+    if batch:
+        # Batch mode
+        if not path.is_dir():
+            click.echo(f"Error: {path} is not a directory")
+            raise SystemExit(1)
+
+        audio_files = get_audio_files(str(path), recursive=recursive)
+
+        if not audio_files:
+            click.echo("No audio files found")
+            raise SystemExit(1)
+
+        if not quiet:
+            click.echo(f"Found {len(audio_files)} audio files to analyze")
+
+        analyses = []
+        for i, filepath in enumerate(audio_files):
+            try:
+                analysis = analyze_audio(filepath, silence_threshold_db=silence_threshold)
+                analyses.append(analysis)
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] Analyzed: {filepath}")
+            except Exception as e:
+                if not quiet:
+                    click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
+
+        if output_format == 'json':
+            result = {
+                "summary": summarize_analysis(analyses),
+                "files": [a.to_dict() for a in analyses]
+            }
+            if output:
+                with open(output, 'w') as f:
+                    json.dump(result, f, indent=2)
+                click.echo(f"Results saved to {output}")
+            else:
+                click.echo(json.dumps(result, indent=2))
+
+        elif output_format == 'csv':
+            import csv
+            output_path = output or "analysis_results.csv"
+            with open(output_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    'file_path', 'duration', 'sample_rate', 'channels',
+                    'rms', 'rms_db', 'peak', 'peak_db',
+                    'peak_frequency', 'spectral_centroid', 'bandwidth',
+                    'is_silent', 'silence_ratio'
+                ])
+                for a in analyses:
+                    writer.writerow([
+                        a.file_path,
+                        f"{a.info.duration:.3f}",
+                        a.info.sample_rate,
+                        a.info.channels,
+                        f"{a.amplitude.rms:.6f}",
+                        f"{a.amplitude.rms_db:.2f}",
+                        f"{a.amplitude.peak:.6f}",
+                        f"{a.amplitude.peak_db:.2f}",
+                        f"{a.frequency.peak_frequency:.1f}",
+                        f"{a.frequency.spectral_centroid:.1f}",
+                        f"{a.frequency.bandwidth:.1f}",
+                        a.silence.is_silent,
+                        f"{a.silence.silence_ratio:.3f}"
+                    ])
+            click.echo(f"Results saved to {output_path}")
+
+        else:
+            # Text format - show summary
+            summary = summarize_analysis(analyses)
+            click.echo(f"\nBatch Analysis Summary")
+            click.echo("=" * 50)
+            click.echo(f"Files analyzed: {summary['total_files']}")
+            click.echo(f"Total duration: {summary['total_duration']:.2f}s")
+            click.echo(f"Average duration: {summary['avg_duration']:.2f}s")
+            click.echo(f"Duration range: {summary['min_duration']:.2f}s - {summary['max_duration']:.2f}s")
+            click.echo(f"\nAmplitude (average):")
+            click.echo(f"  RMS: {summary['avg_rms_db']:.1f} dBFS")
+            click.echo(f"  Peak: {summary['avg_peak_db']:.1f} dBFS")
+            click.echo(f"\nFrequency (average peak): {summary['avg_peak_frequency']:.1f} Hz")
+            click.echo(f"  Range: {summary['min_peak_frequency']:.1f} - {summary['max_peak_frequency']:.1f} Hz")
+            click.echo(f"\nSilent files: {summary['silent_file_count']} ({summary['silent_file_ratio']:.1%})")
+
+    else:
+        # Single file mode
+        if not path.exists():
+            click.echo(f"Error: File not found: {path}")
+            raise SystemExit(1)
+
+        try:
+            analysis = analyze_audio(str(path), silence_threshold_db=silence_threshold)
+        except Exception as e:
+            click.echo(f"Error analyzing file: {e}")
+            raise SystemExit(1)
+
+        if output_format == 'json':
+            result = analysis.to_dict()
+            if output:
+                with open(output, 'w') as f:
+                    json.dump(result, f, indent=2)
+                click.echo(f"Results saved to {output}")
+            else:
+                click.echo(json.dumps(result, indent=2))
+        else:
+            # Text format
+            click.echo(f"\nAudio Analysis: {path}")
+            click.echo("=" * 50)
+            click.echo(f"\nBasic Info:")
+            click.echo(f"  Duration: {analysis.info.duration:.3f}s")
+            click.echo(f"  Sample rate: {analysis.info.sample_rate} Hz")
+            click.echo(f"  Channels: {analysis.info.channels}")
+            click.echo(f"  Samples: {analysis.info.samples:,}")
+            if analysis.info.bit_depth:
+                click.echo(f"  Bit depth: {analysis.info.bit_depth}")
+            if analysis.info.format:
+                click.echo(f"  Format: {analysis.info.format}")
+
+            click.echo(f"\nAmplitude:")
+            click.echo(f"  RMS: {analysis.amplitude.rms:.6f} ({analysis.amplitude.rms_db:.1f} dBFS)")
+            click.echo(f"  Peak: {analysis.amplitude.peak:.6f} ({analysis.amplitude.peak_db:.1f} dBFS)")
+            click.echo(f"  Crest factor: {analysis.amplitude.crest_factor:.1f} dB")
+
+            click.echo(f"\nFrequency:")
+            click.echo(f"  Peak: {analysis.frequency.peak_frequency:.1f} Hz")
+            click.echo(f"  Mean: {analysis.frequency.mean_frequency:.1f} Hz")
+            click.echo(f"  Spectral centroid: {analysis.frequency.spectral_centroid:.1f} Hz")
+            click.echo(f"  Bandwidth: {analysis.frequency.min_frequency:.1f} - {analysis.frequency.max_frequency:.1f} Hz")
+            click.echo(f"  Spectral rolloff: {analysis.frequency.spectral_rolloff:.1f} Hz")
+
+            click.echo(f"\nSilence Detection (threshold: {silence_threshold} dB):")
+            click.echo(f"  Is silent: {analysis.silence.is_silent}")
+            click.echo(f"  Silence ratio: {analysis.silence.silence_ratio:.1%}")
+            click.echo(f"  Sound ratio: {analysis.silence.sound_ratio:.1%}")
+            if analysis.silence.sound_segments:
+                click.echo(f"  Sound segments: {len(analysis.silence.sound_segments)}")
+
+
 def _run_signal_processing(path, output, batch, processor, quiet, operation, output_sr=None):
     """Helper to run signal processing on file or directory."""
     from pathlib import Path
