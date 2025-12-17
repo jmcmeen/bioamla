@@ -310,6 +310,16 @@ def explore(directory: str):
 
 
 # =============================================================================
+# Models Command Group
+# =============================================================================
+
+@cli.group()
+def models():
+    """ML model operations (predict, embed, train, convert)."""
+    pass
+
+
+# =============================================================================
 # AST Command Group (subgroup of models)
 # =============================================================================
 
@@ -915,16 +925,6 @@ def ast_evaluate(
     except ValueError as e:
         click.echo(f"Error: {e}")
         raise SystemExit(1)
-
-
-# =============================================================================
-# Models Command Group
-# =============================================================================
-
-@cli.group()
-def models():
-    """ML model operations (predict, embed, train, convert)."""
-    pass
 
 
 @models.command('list')
