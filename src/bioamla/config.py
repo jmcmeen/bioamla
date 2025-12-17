@@ -32,7 +32,7 @@ Example configuration file (bioamla.toml):
     dpi = 150
 
     [models]
-    default_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
+    default_ast_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
 
     [inference]
     batch_size = 8
@@ -101,7 +101,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "window": "hann",
     },
     "models": {
-        "default_model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+        "default_ast_model": "MIT/ast-finetuned-audioset-10-10-0.4593",
         "cache_dir": None,  # None = use HuggingFace default
     },
     "inference": {
