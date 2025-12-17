@@ -207,7 +207,7 @@ class TestConfigShow:
 
             # Check for values from new sections in output
             # (section headers may have Rich formatting stripped)
-            assert "default_model" in result.output  # from models section
+            assert "default_ast_model" in result.output  # from models section
             assert "batch_size" in result.output  # from inference section
             assert "learning_rate" in result.output  # from training section
             assert "max_history" in result.output  # from logging section
