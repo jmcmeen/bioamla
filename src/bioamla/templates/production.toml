@@ -30,7 +30,7 @@ normalize = false            # Skip normalization for speed
 # Used by: bioamla models predict, bioamla models embed
 # =============================================================================
 [models]
-default_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
+default_ast_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
 
 # =============================================================================
 # INFERENCE SETTINGS

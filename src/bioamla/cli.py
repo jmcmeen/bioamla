@@ -92,7 +92,7 @@ def config_show(ctx):
     for section_name in sections:
         section = getattr(config_obj, section_name, {})
         if section:
-            console.print(f"[bold blue][{section_name}][/bold blue]")
+            console.print(f"[bold blue]\\[{section_name}][/bold blue]")
             for key, value in section.items():
                 console.print(f"  {key} = {value}")
             console.print()
