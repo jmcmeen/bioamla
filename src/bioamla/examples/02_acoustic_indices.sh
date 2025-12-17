@@ -21,7 +21,7 @@
 set -e  # Exit on error
 
 # Configuration
-AUDIO_DIR="./field_recordings"
+AUDIO_DIR="${1:-./raw_recordings}"
 OUTPUT_DIR="./indices_results"
 
 echo "=== Acoustic Indices Analysis Workflow ==="
