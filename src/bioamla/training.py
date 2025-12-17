@@ -415,7 +415,7 @@ class ASTTrainer:
             dict: Training results
         """
         import evaluate
-        from novus_pytils.files import create_directory
+        from bioamla.utils import create_directory
         from transformers import Trainer, TrainingArguments
 
         if self.model is None:
