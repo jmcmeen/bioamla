@@ -404,7 +404,7 @@ def get_config() -> Config:
     """Get the global configuration instance."""
     global _global_config
     if _global_config is None:
-        _global_config = load_config()
+        _global_config = load_config_cascade()
     return _global_config
 
 
