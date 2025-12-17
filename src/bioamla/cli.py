@@ -126,7 +126,7 @@ def config():
 @click.pass_context
 def config_show(ctx):
     """Show current configuration."""
-    from bioamla.progress import console, print_panel
+    from bioamla.progress import console
 
     config_obj = ctx.obj.config if ctx.obj else get_config()
 
@@ -415,13 +415,13 @@ def _run_batch_inference(
 
     import pandas as pd
     import torch
-    from bioamla.utils import file_exists, get_files_by_extension
 
     from bioamla.ast import (
         InferenceConfig,
         load_pretrained_ast_model,
         wave_file_batch_inference,
     )
+    from bioamla.utils import file_exists, get_files_by_extension
 
     output_csv = os.path.join(directory, output_csv)
     print("Output csv: " + output_csv)
@@ -574,7 +574,6 @@ def ast_train(
         TimeStretch,
     )
     from datasets import Audio, Dataset, DatasetDict, load_dataset
-    from bioamla.utils import create_directory
     from transformers import (
         ASTConfig,
         ASTFeatureExtractor,
@@ -582,6 +581,8 @@ def ast_train(
         Trainer,
         TrainingArguments,
     )
+
+    from bioamla.utils import create_directory
 
     output_dir = training_dir + "/runs"
     logging_dir = training_dir + "/logs"
@@ -1169,7 +1170,7 @@ def models_train(
         bioamla models train ./data/train --val-dir ./data/val \\
             --classes "bird,frog,insect" --epochs 20 -o ./my_model
     """
-    from bioamla.models import TrainingConfig, ModelTrainer
+    from bioamla.models import ModelTrainer, TrainingConfig
 
     class_names = [c.strip() for c in classes.split(',')]
 
@@ -1694,13 +1695,13 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
         else:
             # Text format - show summary
             summary = summarize_analysis(analyses)
-            click.echo(f"\nBatch Analysis Summary")
+            click.echo("\nBatch Analysis Summary")
             click.echo("=" * 50)
             click.echo(f"Files analyzed: {summary['total_files']}")
             click.echo(f"Total duration: {summary['total_duration']:.2f}s")
             click.echo(f"Average duration: {summary['avg_duration']:.2f}s")
             click.echo(f"Duration range: {summary['min_duration']:.2f}s - {summary['max_duration']:.2f}s")
-            click.echo(f"\nAmplitude (average):")
+            click.echo("\nAmplitude (average):")
             click.echo(f"  RMS: {summary['avg_rms_db']:.1f} dBFS")
             click.echo(f"  Peak: {summary['avg_peak_db']:.1f} dBFS")
             click.echo(f"\nFrequency (average peak): {summary['avg_peak_frequency']:.1f} Hz")
@@ -1731,7 +1732,7 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
             # Text format
             click.echo(f"\nAudio Analysis: {path}")
             click.echo("=" * 50)
-            click.echo(f"\nBasic Info:")
+            click.echo("\nBasic Info:")
             click.echo(f"  Duration: {analysis.info.duration:.3f}s")
             click.echo(f"  Sample rate: {analysis.info.sample_rate} Hz")
             click.echo(f"  Channels: {analysis.info.channels}")
@@ -1741,12 +1742,12 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
             if analysis.info.format:
                 click.echo(f"  Format: {analysis.info.format}")
 
-            click.echo(f"\nAmplitude:")
+            click.echo("\nAmplitude:")
             click.echo(f"  RMS: {analysis.amplitude.rms:.6f} ({analysis.amplitude.rms_db:.1f} dBFS)")
             click.echo(f"  Peak: {analysis.amplitude.peak:.6f} ({analysis.amplitude.peak_db:.1f} dBFS)")
             click.echo(f"  Crest factor: {analysis.amplitude.crest_factor:.1f} dB")
 
-            click.echo(f"\nFrequency:")
+            click.echo("\nFrequency:")
             click.echo(f"  Peak: {analysis.frequency.peak_frequency:.1f} Hz")
             click.echo(f"  Mean: {analysis.frequency.mean_frequency:.1f} Hz")
             click.echo(f"  Spectral centroid: {analysis.frequency.spectral_centroid:.1f} Hz")
@@ -2641,12 +2642,12 @@ def annotation_summary(path, file_format, output_json):
         click.echo("=" * 50)
         click.echo(f"Total annotations: {summary['total_annotations']}")
         click.echo(f"Unique labels: {summary['unique_labels']}")
-        click.echo(f"\nDuration statistics:")
+        click.echo("\nDuration statistics:")
         click.echo(f"  Total: {summary['total_duration']:.2f}s")
         click.echo(f"  Min: {summary['min_duration']:.2f}s")
         click.echo(f"  Max: {summary['max_duration']:.2f}s")
         click.echo(f"  Mean: {summary['mean_duration']:.2f}s")
-        click.echo(f"\nLabel counts:")
+        click.echo("\nLabel counts:")
         for label, count in sorted(summary['labels'].items()):
             click.echo(f"  {label}: {count}")
 
@@ -3361,7 +3362,7 @@ def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_fr
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.indices import compute_indices_from_file, batch_compute_indices
+    from bioamla.indices import batch_compute_indices, compute_indices_from_file
 
     path_obj = PathLib(path)
 
@@ -4061,7 +4062,7 @@ def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
                 export_detections(detections, output_file, format="csv")
                 total_detections += len(detections)
 
-    click.echo(f"\nBatch detection complete:")
+    click.echo("\nBatch detection complete:")
     click.echo(f"  Files processed: {len(files)}")
     click.echo(f"  Total detections: {total_detections}")
     click.echo(f"  Output directory: {output_dir}")
@@ -4069,7 +4070,6 @@ def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
 
 # Import Detection for type hints in batch command
 from bioamla.detection import Detection
-
 
 # =============================================================================
 # Active Learning Commands
@@ -4096,12 +4096,14 @@ def learn_init(predictions_csv: str, output_state: str, strategy: str,
     PREDICTIONS_CSV should contain columns: filepath, start_time, end_time,
     predicted_label, confidence.
     """
-    from pathlib import Path
     import csv
 
     from bioamla.active_learning import (
-        ActiveLearner, Sample, UncertaintySampler, RandomSampler,
-        HybridSampler, create_samples_from_predictions
+        ActiveLearner,
+        HybridSampler,
+        RandomSampler,
+        UncertaintySampler,
+        create_samples_from_predictions,
     )
 
     # Create sampler based on strategy
@@ -4124,7 +4126,7 @@ def learn_init(predictions_csv: str, output_state: str, strategy: str,
     # Load pre-labeled samples if provided
     if labeled_csv:
         labeled_samples = []
-        with open(labeled_csv, 'r', newline='', encoding='utf-8') as f:
+        with open(labeled_csv, newline='', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 sample_id = row.get('id') or row.get('sample_id')
@@ -4145,7 +4147,7 @@ def learn_init(predictions_csv: str, output_state: str, strategy: str,
     learner.save_state(output_state)
 
     if not quiet:
-        click.echo(f"\nActive learning session initialized:")
+        click.echo("\nActive learning session initialized:")
         click.echo(f"  Strategy: {strategy}")
         click.echo(f"  Unlabeled samples: {learner.state.total_unlabeled}")
         click.echo(f"  Labeled samples: {learner.state.total_labeled}")
@@ -4162,15 +4164,17 @@ def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: b
 
     Selects the most informative samples based on the configured strategy.
     """
-    from bioamla.active_learning import (
-        ActiveLearner, UncertaintySampler, RandomSampler, HybridSampler
-    )
     import csv
     import json
     from pathlib import Path
 
+    from bioamla.active_learning import (
+        ActiveLearner,
+        UncertaintySampler,
+    )
+
     # Load state to determine sampler type
-    with open(state_file, 'r') as f:
+    with open(state_file) as f:
         state_data = json.load(f)
 
     # Default to entropy sampler
@@ -4231,8 +4235,9 @@ def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet:
 
     ANNOTATIONS_CSV should have columns: id (or sample_id), label.
     """
-    from bioamla.active_learning import ActiveLearner, UncertaintySampler
     import csv
+
+    from bioamla.active_learning import ActiveLearner, UncertaintySampler
 
     # Load learner
     sampler = UncertaintySampler(strategy='entropy')
@@ -4240,7 +4245,7 @@ def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet:
 
     # Read annotations
     annotations_imported = 0
-    with open(annotations_csv, 'r', newline='', encoding='utf-8') as f:
+    with open(annotations_csv, newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             sample_id = row.get('id') or row.get('sample_id')
@@ -4270,7 +4275,11 @@ def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet:
 @click.argument('state_file', type=click.Path(exists=True))
 def learn_status(state_file: str):
     """Show status of active learning session."""
-    from bioamla.active_learning import ActiveLearner, UncertaintySampler, summarize_annotation_session
+    from bioamla.active_learning import (
+        ActiveLearner,
+        UncertaintySampler,
+        summarize_annotation_session,
+    )
 
     sampler = UncertaintySampler(strategy='entropy')
     learner = ActiveLearner.load_state(state_file, sampler=sampler)
@@ -4285,12 +4294,12 @@ def learn_status(state_file: str):
     click.echo(f"Total annotations: {summary['total_annotations']}")
 
     if summary['labels_per_class']:
-        click.echo(f"\nLabels per class:")
+        click.echo("\nLabels per class:")
         for label, count in sorted(summary['labels_per_class'].items()):
             click.echo(f"  {label}: {count}")
 
     if summary['total_annotation_time_seconds'] > 0:
-        click.echo(f"\nAnnotation statistics:")
+        click.echo("\nAnnotation statistics:")
         click.echo(f"  Total time: {summary['total_annotation_time_seconds']:.1f}s")
         click.echo(f"  Rate: {summary['annotations_per_hour']:.1f} annotations/hour")
 
@@ -4335,16 +4344,21 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
 
     GROUND_TRUTH_CSV should have columns: id (or sample_id), label.
     """
-    from bioamla.active_learning import (
-        ActiveLearner, UncertaintySampler, RandomSampler, HybridSampler,
-        SimulatedOracle, create_samples_from_predictions
-    )
     import csv
     from pathlib import Path
 
+    from bioamla.active_learning import (
+        ActiveLearner,
+        HybridSampler,
+        RandomSampler,
+        SimulatedOracle,
+        UncertaintySampler,
+        create_samples_from_predictions,
+    )
+
     # Load ground truth
     ground_truth = {}
-    with open(ground_truth_csv, 'r', newline='', encoding='utf-8') as f:
+    with open(ground_truth_csv, newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             sample_id = row.get('id') or row.get('sample_id')
@@ -4376,7 +4390,7 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
     learner.add_unlabeled(samples)
 
     if not quiet:
-        click.echo(f"\nSimulating active learning:")
+        click.echo("\nSimulating active learning:")
         click.echo(f"  Strategy: {strategy}")
         click.echo(f"  Samples: {len(samples)}")
         click.echo(f"  Iterations: {n_iterations}")
@@ -4412,7 +4426,7 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
             click.echo(f"  Iteration {iteration + 1}: {learner.state.total_labeled} labeled")
 
     if not quiet:
-        click.echo(f"\nSimulation complete:")
+        click.echo("\nSimulation complete:")
         click.echo(f"  Final labeled: {learner.state.total_labeled}")
         click.echo(f"  Labels per class: {learner.state.labels_per_class}")
 
@@ -4453,6 +4467,7 @@ def cluster_reduce(embeddings_file: str, output: str, method: str,
     EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
     """
     import numpy as np
+
     from bioamla.clustering import reduce_dimensions
 
     embeddings = np.load(embeddings_file)
@@ -4484,6 +4499,7 @@ def cluster_cluster(embeddings_file: str, output: str, method: str,
     EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
     """
     import numpy as np
+
     from bioamla.clustering import AudioClusterer, ClusteringConfig
 
     embeddings = np.load(embeddings_file)
@@ -4520,7 +4536,9 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
     LABELS_FILE: Path to numpy file with cluster labels (.npy)
     """
     import json
+
     import numpy as np
+
     from bioamla.clustering import analyze_clusters
 
     embeddings = np.load(embeddings_file)
@@ -4529,7 +4547,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
     analysis = analyze_clusters(embeddings, labels)
 
     if not quiet:
-        click.echo(f"Cluster Analysis:")
+        click.echo("Cluster Analysis:")
         click.echo(f"  Clusters: {analysis['n_clusters']}")
         click.echo(f"  Samples: {analysis['n_samples']}")
         click.echo(f"  Noise: {analysis['n_noise']} ({analysis['noise_percentage']:.1f}%)")
@@ -4559,6 +4577,7 @@ def cluster_novelty(embeddings_file: str, output: str, method: str,
     EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
     """
     import numpy as np
+
     from bioamla.clustering import discover_novel_sounds
 
     embeddings = np.load(embeddings_file)
@@ -4681,6 +4700,7 @@ def ebird_nearby(lat: float, lng: float, api_key: str, distance: float,
                  days: int, limit: int, output: str):
     """Get recent eBird observations near a location."""
     import csv
+
     from bioamla.integrations import EBirdClient
 
     client = EBirdClient(api_key=api_key)
@@ -4725,6 +4745,7 @@ def pg_export(detections_file: str, connection: str, detector: str,
     DETECTIONS_FILE: Path to JSON file with detections
     """
     import json
+
     from bioamla.integrations import PostgreSQLExporter
 
     with open(detections_file) as f:
@@ -4793,8 +4814,12 @@ def ml_train_classifier(data_dir: str, output: str, model: str, epochs: int,
 
     DATA_DIR: Directory containing training data (spectrograms as .npy files)
     """
-    import torch
-    from bioamla.ml import CNNClassifier, CRNNClassifier, AttentionClassifier, TrainerConfig, train_classifier
+    from bioamla.ml import (
+        AttentionClassifier,
+        CNNClassifier,
+        CRNNClassifier,
+        TrainerConfig,
+    )
 
     if model == 'cnn':
         classifier = CNNClassifier(n_classes=n_classes)
@@ -4830,7 +4855,6 @@ def ml_ensemble(model_dirs, output: str, strategy: str, weights):
 
     MODEL_DIRS: Directories containing trained models
     """
-    import torch
     from pathlib import Path
 
     click.echo(f"Creating {strategy} ensemble from {len(model_dirs)} models...")

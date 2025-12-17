@@ -23,11 +23,10 @@ import logging
 import queue
 import threading
 import time
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
@@ -99,11 +98,11 @@ class AudioRecorder:
         try:
             import sounddevice as sd
             return sd
-        except ImportError:
+        except ImportError as err:
             raise ImportError(
                 "sounddevice is required for recording. "
                 "Install with: pip install sounddevice"
-            )
+            ) from err
 
     def start(self) -> None:
         """Start recording."""
@@ -786,10 +785,10 @@ def list_audio_devices() -> List[Dict[str, Any]]:
     """
     try:
         import sounddevice as sd
-    except ImportError:
+    except ImportError as err:
         raise ImportError(
             "sounddevice is required. Install with: pip install sounddevice"
-        )
+        ) from err
 
     devices = []
     for i, device in enumerate(sd.query_devices()):
@@ -826,10 +825,10 @@ def test_recording(duration: float = 2.0, device: Optional[int] = None) -> np.nd
     """
     try:
         import sounddevice as sd
-    except ImportError:
+    except ImportError as err:
         raise ImportError(
             "sounddevice is required. Install with: pip install sounddevice"
-        )
+        ) from err
 
     sample_rate = 16000
     audio = sd.rec(

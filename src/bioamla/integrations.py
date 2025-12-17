@@ -19,10 +19,9 @@ import csv
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, date
+from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
-from urllib.parse import urlencode
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -148,10 +147,10 @@ class EBirdClient:
         if self._session is None:
             try:
                 import requests
-            except ImportError:
+            except ImportError as err:
                 raise ImportError(
                     "requests is required. Install with: pip install requests"
-                )
+                ) from err
             self._session = requests.Session()
             self._session.headers["X-eBirdApiToken"] = self.api_key
         return self._session
@@ -369,7 +368,7 @@ class EBirdClient:
         species_obs = [o for o in observations if o.species_code == species_code]
 
         # Get all species in area for comparison
-        all_species = set(o.species_code for o in observations)
+        all_species = {o.species_code for o in observations}
 
         return {
             "species_code": species_code,
@@ -484,11 +483,11 @@ class PostgreSQLExporter:
         if self._engine is None:
             try:
                 from sqlalchemy import create_engine
-            except ImportError:
+            except ImportError as err:
                 raise ImportError(
                     "sqlalchemy and psycopg2 are required. "
                     "Install with: pip install sqlalchemy psycopg2-binary"
-                )
+                ) from err
             self._engine = create_engine(self._connection_string)
         return self._engine
 
@@ -497,10 +496,10 @@ class PostgreSQLExporter:
         if self._connection is None:
             try:
                 import psycopg2
-            except ImportError:
+            except ImportError as err:
                 raise ImportError(
                     "psycopg2 is required. Install with: pip install psycopg2-binary"
-                )
+                ) from err
 
             self._connection = psycopg2.connect(self._connection_string)
         return self._connection
