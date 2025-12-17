@@ -104,7 +104,7 @@ echo "Step 7: Analyzing processed audio files..."
 bioamla audio analyze "$OUTPUT_DIR/segments" \
     --batch \
     --output "$OUTPUT_DIR/analysis_report.csv" \
-    --output-format csv
+    --format csv
 
 echo ""
 echo "=== Preprocessing Complete ==="
