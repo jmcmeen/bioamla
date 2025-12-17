@@ -1,12 +1,37 @@
-from typing import Dict
+from typing import Dict, Optional
 
 import click
 
+from bioamla.config import get_config, load_config, set_config
+
+
+class ConfigContext:
+    """Context object to hold configuration."""
+    def __init__(self):
+        self.config = None
+
+
+pass_config = click.make_pass_decorator(ConfigContext, ensure=True)
+
 
 @click.group()
-def cli():
-    """Bioamla CLI - Bioacoustics and Machine Learning Applications"""
-    pass
+@click.option('--config', 'config_path', type=click.Path(exists=True),
+              help='Path to TOML configuration file')
+@click.pass_context
+def cli(ctx, config_path: Optional[str]):
+    """Bioamla CLI - Bioacoustics and Machine Learning Applications
+
+    Configuration can be provided via:
+    - --config option pointing to a TOML file
+    - ./bioamla.toml in current directory
+    - ~/.config/bioamla/config.toml
+    """
+    ctx.ensure_object(ConfigContext)
+    if config_path:
+        ctx.obj.config = load_config(config_path)
+        set_config(ctx.obj.config)
+    else:
+        ctx.obj.config = get_config()
 
 
 # =============================================================================
@@ -85,6 +110,80 @@ def zip_cmd(source_path: str, output_file: str):
         create_zip_file([source_path], output_file)
 
     click.echo(f"Created {output_file}")
+
+
+# =============================================================================
+# Config Command Group
+# =============================================================================
+
+@cli.group()
+def config():
+    """Configuration management commands."""
+    pass
+
+
+@config.command('show')
+@click.pass_context
+def config_show(ctx):
+    """Show current configuration."""
+    from bioamla.progress import console, print_panel
+
+    config_obj = ctx.obj.config if ctx.obj else get_config()
+
+    console.print("\n[bold]Current Configuration[/bold]")
+    if config_obj._source:
+        console.print(f"[dim]Source: {config_obj._source}[/dim]\n")
+    else:
+        console.print("[dim]Source: defaults (no config file found)[/dim]\n")
+
+    for section_name in ['audio', 'visualize', 'analysis', 'batch', 'output', 'progress']:
+        section = getattr(config_obj, section_name, {})
+        if section:
+            console.print(f"[bold blue][{section_name}][/bold blue]")
+            for key, value in section.items():
+                console.print(f"  {key} = {value}")
+            console.print()
+
+
+@config.command('init')
+@click.option('--output', '-o', default='bioamla.toml', help='Output file path')
+@click.option('--force', '-f', is_flag=True, help='Overwrite existing file')
+def config_init(output, force):
+    """Create a default configuration file."""
+    from pathlib import Path
+
+    from bioamla.config import create_default_config_file
+    from bioamla.progress import print_error, print_success
+
+    path = Path(output)
+    if path.exists() and not force:
+        print_error(f"File already exists: {output}")
+        click.echo("Use --force to overwrite.")
+        raise SystemExit(1)
+
+    create_default_config_file(output)
+    print_success(f"Created configuration file: {output}")
+
+
+@config.command('path')
+def config_path():
+    """Show configuration file search paths."""
+    from bioamla.config import CONFIG_LOCATIONS, find_config_file
+    from bioamla.progress import console
+
+    console.print("\n[bold]Configuration File Search Paths[/bold]\n")
+    console.print("Files are searched in order (first found wins):\n")
+
+    active_config = find_config_file()
+
+    for i, location in enumerate(CONFIG_LOCATIONS, 1):
+        exists = location.exists()
+        status = "[green]✓ ACTIVE[/green]" if location == active_config else (
+            "[dim]exists[/dim]" if exists else "[dim]not found[/dim]"
+        )
+        console.print(f"  {i}. {location} {status}")
+
+    console.print()
 
 
 @cli.command()
@@ -1380,6 +1479,7 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
 @click.option('--dpi', default=150, type=int, help='Output image resolution (dots per inch)')
 @click.option('--format', 'img_format', type=click.Choice(['png', 'jpg', 'jpeg']), default=None, help='Output image format (default: inferred from extension)')
 @click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode only)')
+@click.option('--progress/--no-progress', default=True, help='Show Rich progress bar (batch mode only)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def visualize(
     path: str,
@@ -1398,6 +1498,7 @@ def visualize(
     dpi: int,
     img_format: str,
     recursive: bool,
+    progress: bool,
     quiet: bool
 ):
     """
@@ -1456,6 +1557,7 @@ def visualize(
             format=img_format if img_format else "png",
             recursive=recursive,
             verbose=not quiet,
+            use_rich_progress=progress and not quiet,
         )
 
         if quiet:

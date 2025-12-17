@@ -520,6 +520,7 @@ def batch_generate_spectrograms(
     format: str = "png",
     recursive: bool = True,
     verbose: bool = True,
+    use_rich_progress: bool = False,
 ) -> dict:
     """
     Generate spectrograms for all audio files in a directory.
@@ -542,6 +543,7 @@ def batch_generate_spectrograms(
         format: Output format ('png' or 'jpg')
         recursive: Whether to search subdirectories
         verbose: Whether to print progress messages
+        use_rich_progress: Use Rich progress bar instead of simple output
 
     Returns:
         dict: Statistics about the batch processing including:
@@ -569,7 +571,7 @@ def batch_generate_spectrograms(
             print(f"No audio files found in {input_dir}")
         return {"files_processed": 0, "files_failed": 0, "output_dir": str(output_dir)}
 
-    if verbose:
+    if verbose and not use_rich_progress:
         print(f"Found {len(audio_files)} audio files to process")
 
     files_processed = 0
@@ -578,44 +580,90 @@ def batch_generate_spectrograms(
     # Determine output extension
     out_ext = ".jpg" if format.lower() in ("jpg", "jpeg") else ".png"
 
-    for audio_path in audio_files:
-        audio_path = Path(audio_path)
-        # Preserve relative directory structure
-        try:
-            rel_path = audio_path.relative_to(input_dir)
-        except ValueError:
-            rel_path = audio_path.name
+    # Use Rich progress bar if requested
+    if use_rich_progress and verbose:
+        from bioamla.progress import ProgressBar, print_error, print_success
 
-        output_path = output_dir / rel_path.with_suffix(out_ext)
+        with ProgressBar(
+            total=len(audio_files),
+            description="Generating spectrograms",
+        ) as progress:
+            for audio_path in audio_files:
+                audio_path = Path(audio_path)
+                try:
+                    rel_path = audio_path.relative_to(input_dir)
+                except ValueError:
+                    rel_path = audio_path.name
 
-        try:
-            generate_spectrogram(
-                audio_path=str(audio_path),
-                output_path=str(output_path),
-                viz_type=viz_type,
-                sample_rate=sample_rate,
-                n_mels=n_mels,
-                n_mfcc=n_mfcc,
-                hop_length=hop_length,
-                n_fft=n_fft,
-                window=window,
-                figsize=figsize,
-                cmap=cmap,
-                db_min=db_min,
-                db_max=db_max,
-                dpi=dpi,
-                format=format,
-            )
-            files_processed += 1
-            if verbose:
-                print(f"  Generated: {output_path}")
-        except Exception as e:
-            files_failed += 1
-            if verbose:
-                print(f"  Failed: {audio_path} - {e}")
+                output_path = output_dir / rel_path.with_suffix(out_ext)
 
-    if verbose:
-        print(f"Processed {files_processed} files, {files_failed} failed")
+                try:
+                    generate_spectrogram(
+                        audio_path=str(audio_path),
+                        output_path=str(output_path),
+                        viz_type=viz_type,
+                        sample_rate=sample_rate,
+                        n_mels=n_mels,
+                        n_mfcc=n_mfcc,
+                        hop_length=hop_length,
+                        n_fft=n_fft,
+                        window=window,
+                        figsize=figsize,
+                        cmap=cmap,
+                        db_min=db_min,
+                        db_max=db_max,
+                        dpi=dpi,
+                        format=format,
+                    )
+                    files_processed += 1
+                except Exception as e:
+                    files_failed += 1
+
+                progress.advance()
+
+        if files_failed == 0:
+            print_success(f"Generated {files_processed} spectrograms")
+        else:
+            print_error(f"Processed {files_processed} files, {files_failed} failed")
+    else:
+        # Simple output mode
+        for audio_path in audio_files:
+            audio_path = Path(audio_path)
+            try:
+                rel_path = audio_path.relative_to(input_dir)
+            except ValueError:
+                rel_path = audio_path.name
+
+            output_path = output_dir / rel_path.with_suffix(out_ext)
+
+            try:
+                generate_spectrogram(
+                    audio_path=str(audio_path),
+                    output_path=str(output_path),
+                    viz_type=viz_type,
+                    sample_rate=sample_rate,
+                    n_mels=n_mels,
+                    n_mfcc=n_mfcc,
+                    hop_length=hop_length,
+                    n_fft=n_fft,
+                    window=window,
+                    figsize=figsize,
+                    cmap=cmap,
+                    db_min=db_min,
+                    db_max=db_max,
+                    dpi=dpi,
+                    format=format,
+                )
+                files_processed += 1
+                if verbose:
+                    print(f"  Generated: {output_path}")
+            except Exception as e:
+                files_failed += 1
+                if verbose:
+                    print(f"  Failed: {audio_path} - {e}")
+
+        if verbose:
+            print(f"Processed {files_processed} files, {files_failed} failed")
 
     return {
         "files_processed": files_processed,
