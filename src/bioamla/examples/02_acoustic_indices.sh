@@ -33,7 +33,7 @@ mkdir -p "$OUTPUT_DIR"
 echo "Step 1: Computing all acoustic indices..."
 bioamla indices compute "$AUDIO_DIR" \
     --output "$OUTPUT_DIR/all_indices.csv" \
-    --output-format csv \
+    --format csv \
     --n-fft 2048 \
     --aci-min-freq 500 \
     --aci-max-freq 10000
@@ -99,7 +99,7 @@ bioamla indices temporal "$AUDIO_DIR" \
     --window 10.0 \
     --hop 5.0 \
     --output "$OUTPUT_DIR/temporal_indices.csv" \
-    --output-format csv
+    --format csv
 
 echo ""
 echo "=== Acoustic Indices Analysis Complete ==="
