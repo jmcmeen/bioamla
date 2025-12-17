@@ -6,10 +6,12 @@ import os
 import zipfile
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from bioamla.utils import (
     SUPPORTED_AUDIO_EXTENSIONS,
+    concatenate_audio,
     create_directory,
     create_zip_file,
     directory_exists,
@@ -18,6 +20,10 @@ from bioamla.utils import (
     get_audio_files,
     get_files_by_extension,
     get_wav_metadata,
+    load_audio,
+    loop_audio,
+    save_audio,
+    to_mono,
     zip_directory,
 )
 
@@ -308,3 +314,163 @@ class TestZipOperations:
         assert (output_dir / "source.txt").exists()
         assert (output_dir / "source.txt").read_text() == "test content"
         assert result == str(output_dir)
+
+
+class TestToMono:
+    """Tests for to_mono function."""
+
+    def test_mono_unchanged(self):
+        """Test that mono audio is unchanged."""
+        audio = np.array([0.1, 0.2, 0.3, 0.4])
+        result = to_mono(audio)
+
+        np.testing.assert_array_equal(result, audio)
+
+    def test_stereo_to_mono_channels_samples(self):
+        """Test stereo to mono conversion with (channels, samples) shape."""
+        # 2 channels, 4 samples
+        left = np.array([0.1, 0.2, 0.3, 0.4])
+        right = np.array([0.5, 0.6, 0.7, 0.8])
+        stereo = np.vstack([left, right])  # Shape: (2, 4)
+
+        result = to_mono(stereo)
+
+        expected = (left + right) / 2
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_stereo_to_mono_samples_channels(self):
+        """Test stereo to mono conversion with (samples, channels) shape."""
+        # 4 samples, 2 channels (will be transposed internally)
+        stereo = np.array([[0.1, 0.5], [0.2, 0.6], [0.3, 0.7], [0.4, 0.8]])
+
+        result = to_mono(stereo)
+
+        # Expected: average of each row
+        expected = np.array([0.3, 0.4, 0.5, 0.6])
+        np.testing.assert_array_almost_equal(result, expected)
+
+
+class TestConcatenateAudio:
+    """Tests for concatenate_audio function."""
+
+    def test_concatenate_single_array(self):
+        """Test concatenating a single array returns it unchanged."""
+        audio = np.array([0.1, 0.2, 0.3])
+        result = concatenate_audio([audio])
+
+        np.testing.assert_array_equal(result, audio)
+
+    def test_concatenate_multiple_arrays(self):
+        """Test concatenating multiple arrays."""
+        audio1 = np.array([0.1, 0.2])
+        audio2 = np.array([0.3, 0.4])
+        audio3 = np.array([0.5, 0.6])
+
+        result = concatenate_audio([audio1, audio2, audio3])
+
+        expected = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_concatenate_with_crossfade(self):
+        """Test concatenating with crossfade."""
+        audio1 = np.array([1.0, 1.0, 1.0, 1.0])
+        audio2 = np.array([0.0, 0.0, 0.0, 0.0])
+
+        result = concatenate_audio([audio1, audio2], crossfade_samples=2)
+
+        # With 2-sample crossfade:
+        # Original audio1: [1.0, 1.0, 1.0, 1.0]
+        # After crossfade at end: first 2 unchanged, last 2 faded
+        # Fade: audio1[-2:] * [1, 0.5, 0] + audio2[:2] * [0, 0.5, 1]
+        assert len(result) == 6  # 4 + 4 - 2 (crossfade overlap)
+
+    def test_concatenate_empty_list_raises(self):
+        """Test that empty list raises ValueError."""
+        with pytest.raises(ValueError, match="cannot be empty"):
+            concatenate_audio([])
+
+
+class TestLoopAudio:
+    """Tests for loop_audio function."""
+
+    def test_loop_once_unchanged(self):
+        """Test that looping once returns unchanged audio."""
+        audio = np.array([0.1, 0.2, 0.3])
+        result = loop_audio(audio, num_loops=1)
+
+        np.testing.assert_array_equal(result, audio)
+
+    def test_loop_twice(self):
+        """Test looping audio twice."""
+        audio = np.array([0.1, 0.2])
+        result = loop_audio(audio, num_loops=2)
+
+        expected = np.array([0.1, 0.2, 0.1, 0.2])
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_loop_three_times(self):
+        """Test looping audio three times."""
+        audio = np.array([1.0, 2.0])
+        result = loop_audio(audio, num_loops=3)
+
+        expected = np.array([1.0, 2.0, 1.0, 2.0, 1.0, 2.0])
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_loop_with_crossfade(self):
+        """Test looping with crossfade."""
+        audio = np.array([1.0, 1.0, 1.0, 1.0])
+        result = loop_audio(audio, num_loops=2, crossfade_samples=2)
+
+        # Length should be 8 - 2 = 6 due to crossfade
+        assert len(result) == 6
+
+    def test_loop_zero_raises(self):
+        """Test that zero loops raises ValueError."""
+        audio = np.array([0.1, 0.2])
+        with pytest.raises(ValueError, match="at least 1"):
+            loop_audio(audio, num_loops=0)
+
+
+class TestLoadAndSaveAudio:
+    """Tests for load_audio and save_audio functions."""
+
+    def test_save_and_load_wav(self, temp_dir):
+        """Test saving and loading a WAV file."""
+        # Create test audio
+        sample_rate = 16000
+        duration = 0.5
+        t = np.linspace(0, duration, int(sample_rate * duration))
+        audio = np.sin(2 * np.pi * 440 * t).astype(np.float32)
+
+        # Save
+        filepath = str(temp_dir / "test.wav")
+        save_audio(filepath, audio, sample_rate)
+
+        assert os.path.exists(filepath)
+
+        # Load
+        loaded_audio, loaded_sr = load_audio(filepath)
+
+        assert loaded_sr == sample_rate
+        assert len(loaded_audio) == len(audio)
+        np.testing.assert_array_almost_equal(loaded_audio, audio, decimal=4)
+
+    def test_load_with_resample(self, temp_dir):
+        """Test loading with resampling."""
+        # Create test audio at 44100 Hz
+        sample_rate = 44100
+        duration = 0.5
+        t = np.linspace(0, duration, int(sample_rate * duration))
+        audio = np.sin(2 * np.pi * 440 * t).astype(np.float32)
+
+        # Save
+        filepath = str(temp_dir / "test.wav")
+        save_audio(filepath, audio, sample_rate)
+
+        # Load with resampling to 16000 Hz
+        loaded_audio, loaded_sr = load_audio(filepath, sample_rate=16000)
+
+        assert loaded_sr == 16000
+        # Duration should be preserved (approximately)
+        expected_samples = int(16000 * duration)
+        assert abs(len(loaded_audio) - expected_samples) < 10
