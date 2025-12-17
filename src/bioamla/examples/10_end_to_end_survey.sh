@@ -80,7 +80,7 @@ mkdir -p "./results"
 if [ -d "./processed/resampled" ] && [ "$(ls -A ./processed/resampled 2>/dev/null)" ]; then
     bioamla indices compute "./processed/resampled" \
         --output "./results/acoustic_indices.csv" \
-        --output-format csv
+        --format csv
 fi
 
 # Step 5: Run species detection algorithms
