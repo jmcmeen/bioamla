@@ -43,7 +43,7 @@ dpi = 150                    # Output image resolution in dots per inch
 # Used by: bioamla models predict, bioamla models embed
 # =============================================================================
 [models]
-default_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
+default_ast_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
 
 # =============================================================================
 # INFERENCE SETTINGS

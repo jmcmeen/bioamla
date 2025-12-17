@@ -21,7 +21,7 @@ created = ""
 #
 # [audio]          - Audio preprocessing (sample_rate, mono, normalize)
 # [visualize]      - Spectrogram settings (type, n_fft, hop_length, n_mels)
-# [models]         - Model configuration (default_model, cache_dir)
+# [models]         - Model configuration (default_ast_model, cache_dir)
 # [inference]      - Prediction settings (batch_size, top_k, min_confidence)
 # [training]       - Training settings (learning_rate, epochs, batch_size)
 # [output]         - Output format (format, verbose, overwrite)
