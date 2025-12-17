@@ -42,7 +42,7 @@ class TestEvaluateHelp:
 
     def test_evaluate_help(self, runner):
         """Test evaluate --help shows all options."""
-        result = runner.invoke(cli, ["models", "ast", "evaluate", "--help"])
+        result = runner.invoke(cli, ["models", "ast-evaluate", "--help"])
 
         assert result.exit_code == 0
         assert "PATH" in result.output
@@ -57,7 +57,7 @@ class TestEvaluateHelp:
         audio_dir.mkdir()
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
         ])
 
@@ -74,7 +74,7 @@ class TestEvaluateCommand:
         gt_path.write_text("file_name,label\naudio.wav,cat\n")
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             "/nonexistent/path",
             "--ground-truth", str(gt_path),
         ])
@@ -88,7 +88,7 @@ class TestEvaluateCommand:
         audio_dir.mkdir()
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
             "--ground-truth", "/nonexistent/labels.csv",
         ])
@@ -107,7 +107,7 @@ class TestEvaluateCommand:
         gt_path.write_text("file_name,label\naudio.wav,cat\n")
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
             "--ground-truth", str(gt_path),
         ])
@@ -127,7 +127,7 @@ class TestEvaluateCommand:
         gt_path.write_text("file_name,label\naudio.wav,cat\n")
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
             "--ground-truth", str(gt_path),
             "--quiet",
@@ -152,7 +152,7 @@ class TestEvaluateCommand:
         output_path = temp_dir / "results.json"
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
             "--ground-truth", str(gt_path),
             "--output", str(output_path),
@@ -174,7 +174,7 @@ class TestEvaluateCommand:
         gt_path.write_text("filename,class\naudio.wav,cat\n")
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
             "--ground-truth", str(gt_path),
             "--file-column", "filename",
@@ -199,7 +199,7 @@ class TestEvaluateCommand:
         gt_path.write_text("file_name,label\naudio.wav,cat\n")
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
             "--ground-truth", str(gt_path),
             "--model-path", "custom/model",
@@ -220,7 +220,7 @@ class TestEvaluateCommand:
         gt_path.write_text("file_name,label\naudio.wav,cat\n")
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
             "--ground-truth", str(gt_path),
             "--fp16",
@@ -246,7 +246,7 @@ class TestEvaluateOutputFormats:
         gt_path.write_text("file_name,label\naudio.wav,cat\n")
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
             "--ground-truth", str(gt_path),
             "--output", str(temp_dir / "results.json"),
@@ -269,7 +269,7 @@ class TestEvaluateOutputFormats:
         gt_path.write_text("file_name,label\naudio.wav,cat\n")
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
             "--ground-truth", str(gt_path),
             "--output", str(temp_dir / "results.csv"),
@@ -292,7 +292,7 @@ class TestEvaluateOutputFormats:
         gt_path.write_text("file_name,label\naudio.wav,cat\n")
 
         result = runner.invoke(cli, [
-            "models", "ast", "evaluate",
+            "models", "ast-evaluate",
             str(audio_dir),
             "--ground-truth", str(gt_path),
             "--output", str(temp_dir / "results.txt"),

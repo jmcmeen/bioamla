@@ -56,7 +56,7 @@ class TestAugmentHelp:
 
     def test_augment_help(self, runner):
         """Test augment --help shows all options."""
-        result = runner.invoke(cli, ["augment", "--help"])
+        result = runner.invoke(cli, ["dataset", "augment", "--help"])
 
         assert result.exit_code == 0
         assert "INPUT_DIR" in result.output
@@ -69,7 +69,7 @@ class TestAugmentHelp:
 
     def test_augment_requires_input_dir(self, runner):
         """Test that augment requires input directory argument."""
-        result = runner.invoke(cli, ["augment", "--output", "out"])
+        result = runner.invoke(cli, ["dataset", "augment", "--output", "out"])
 
         assert result.exit_code != 0
 
@@ -78,7 +78,7 @@ class TestAugmentHelp:
         input_dir = temp_dir / "input"
         input_dir.mkdir()
 
-        result = runner.invoke(cli, ["augment", str(input_dir)])
+        result = runner.invoke(cli, ["dataset", "augment", str(input_dir)])
 
         assert result.exit_code != 0
         assert "Missing option" in result.output or "--output" in result.output
@@ -96,7 +96,7 @@ class TestAugmentExecution:
         _create_mock_wav(input_dir / "test.wav")
 
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
             "--add-noise", "3-30",
@@ -115,7 +115,7 @@ class TestAugmentExecution:
         _create_mock_wav(input_dir / "test.wav")
 
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
             "--time-stretch", "0.8-1.2",
@@ -133,7 +133,7 @@ class TestAugmentExecution:
         _create_mock_wav(input_dir / "test.wav")
 
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
             "--pitch-shift", "-2,2",
@@ -151,7 +151,7 @@ class TestAugmentExecution:
         _create_mock_wav(input_dir / "test.wav")
 
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
             "--gain", "-12,12",
@@ -169,7 +169,7 @@ class TestAugmentExecution:
         _create_mock_wav(input_dir / "test.wav")
 
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
             "--add-noise", "3-30",
@@ -189,7 +189,7 @@ class TestAugmentExecution:
         _create_mock_wav(input_dir / "test.wav")
 
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
             "--add-noise", "3-30",
@@ -210,7 +210,7 @@ class TestAugmentExecution:
         _create_mock_wav(input_dir / "test.wav")
 
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
         ])
@@ -221,7 +221,7 @@ class TestAugmentExecution:
     def test_augment_missing_input_dir(self, runner, temp_dir):
         """Test error handling for missing input directory."""
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             "/nonexistent/dir",
             "--output", str(temp_dir / "output"),
             "--add-noise", "3-30",
@@ -239,7 +239,7 @@ class TestAugmentExecution:
         _create_mock_wav(input_dir / "test.wav")
 
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
             "--add-noise", "3-30",
@@ -259,7 +259,7 @@ class TestAugmentExecution:
             _create_mock_wav(input_dir / f"audio_{i}.wav")
 
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
             "--add-noise", "3-30",
@@ -282,7 +282,7 @@ class TestParseRange:
 
         # This should work with dash separator
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
             "--add-noise", "5-25",
@@ -300,7 +300,7 @@ class TestParseRange:
 
         # This should work with comma separator (for negative values)
         result = runner.invoke(cli, [
-            "augment",
+            "dataset", "augment",
             str(input_dir),
             "--output", str(output_dir),
             "--pitch-shift", "-4,4",
