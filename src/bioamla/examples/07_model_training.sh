@@ -84,9 +84,9 @@ bioamla models list
 echo ""
 echo "Step 4: Converting model to ONNX format..."
 bioamla models convert \
-    --input-path "$OUTPUT_DIR/ast_model/best_model" \
-    --output-path "$OUTPUT_DIR/ast_model_onnx" \
-    --output-format onnx \
+    "$OUTPUT_DIR/ast_model/best_model" \
+    "$OUTPUT_DIR/ast_model_onnx" \
+    --format onnx \
     --model-type ast
 
 # Step 5: Push to HuggingFace Hub (optional)
