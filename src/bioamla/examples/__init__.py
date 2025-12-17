@@ -53,12 +53,12 @@ EXAMPLES = {
     "07": (
         "07_model_training.sh",
         "Model Training",
-        "Train ML models: AST fine-tuning, CNN training, augmentation, ensemble",
+        "Train ML models: AST fine-tuning with HuggingFace datasets (ESC-50, frogs)",
     ),
     "08": (
         "08_batch_inference.sh",
         "Batch Inference",
-        "Large-scale classification: batch prediction, embeddings, format conversion",
+        "Large-scale classification with HuggingFace models (AudioSet, ESC-50, frogs)",
     ),
     "09": (
         "09_visualization.sh",
@@ -68,7 +68,43 @@ EXAMPLES = {
     "10": (
         "10_end_to_end_survey.sh",
         "End-to-End Survey",
-        "Complete wildlife survey workflow combining all features",
+        "Complete wildlife survey workflow with HuggingFace models",
+    ),
+    # Dataset-specific examples
+    "esc50_ast_train": (
+        "esc50_ast_train.sh",
+        "ESC-50 Training",
+        "Train AST on ESC-50 environmental sounds (ashraq/esc50)",
+    ),
+    "esc50_ast_inference": (
+        "esc50_ast_inference.sh",
+        "ESC-50 Inference",
+        "Run inference with bioamla/ast-esc50 model",
+    ),
+    "scp_frogs_ast_train": (
+        "scp_frogs_ast_train.sh",
+        "Frogs Training",
+        "Train AST on frog species (bioamla/scp-frogs-inat-v1)",
+    ),
+    "scp_frogs_ast_inference": (
+        "scp_frogs_ast_inference.sh",
+        "Frogs Inference",
+        "Run inference with bioamla/scp-frogs model",
+    ),
+    "birdset_ast_train": (
+        "birdset_ast_train.sh",
+        "BirdSet Training",
+        "Train AST on BirdSet bird sounds (DBD-research-group/BirdSet)",
+    ),
+    "birdset_ast_inference": (
+        "birdset_ast_inference.sh",
+        "BirdSet Inference",
+        "Run inference for bird species classification",
+    ),
+    "inat_workflow": (
+        "inat_workflow.sh",
+        "iNaturalist Workflow",
+        "Download from iNaturalist, train model, run inference",
     ),
 }
 

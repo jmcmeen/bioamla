@@ -3,7 +3,7 @@
 # Model Training and Evaluation Workflow
 # =============================================================================
 # PURPOSE: Train, fine-tune, and evaluate machine learning models for audio
-#          classification tasks.
+#          classification tasks using publicly available datasets.
 #
 # FEATURES DEMONSTRATED:
 #   - Dataset augmentation for training
@@ -14,18 +14,35 @@
 #   - Model format conversion
 #   - Pushing models to HuggingFace Hub
 #
-# INPUT: Labeled audio dataset with metadata.csv
+# AVAILABLE DATASETS (HuggingFace):
+#   - ashraq/esc50: Environmental sounds (50 classes, 2000 clips)
+#   - bioamla/scp-frogs-inat-v1: Frog species from iNaturalist
+#   - bioamla/scp-frogs-small: Small frog dataset for testing
+#   - DBD-research-group/BirdSet: Bird sounds (~10,000 species)
+#
+# AVAILABLE MODELS (HuggingFace):
+#   - MIT/ast-finetuned-audioset-10-10-0.4593: Base AST model
+#   - bioamla/ast-esc50: ESC-50 trained model
+#   - bioamla/scp-frogs: Frog species classifier
+#
 # OUTPUT: Trained model, evaluation metrics, predictions
 # =============================================================================
 
 set -e  # Exit on error
 
-# Configuration
-DATASET_DIR="./training_data"
+# Configuration - choose your dataset
+# Option 1: ESC-50 environmental sounds
+DATASET="ashraq/esc50"
+# Option 2: Frog species
+# DATASET="bioamla/scp-frogs-inat-v1"
+# Option 3: Quick test with small dataset
+# DATASET="bioamla/scp-frogs-small"
+
 OUTPUT_DIR="./trained_models"
 MODEL_NAME="species_classifier"
 
 echo "=== Model Training and Evaluation Workflow ==="
+echo "Dataset: $DATASET"
 echo ""
 
 # Check system capabilities
@@ -34,26 +51,14 @@ bioamla devices
 
 mkdir -p "$OUTPUT_DIR"
 
-# Step 1: Augment training data
-# Create variations of training samples to improve model robustness
-echo ""
-echo "Step 1: Augmenting training data..."
-bioamla dataset augment "$DATASET_DIR" \
-    --output "$OUTPUT_DIR/augmented_data" \
-    --noise 0.3 \
-    --time-stretch "0.8-1.2" \
-    --pitch-shift "-2-2" \
-    --gain "-6-6" \
-    --multiplier 3
-
-# Step 2: Fine-tune AST model
+# Step 1: Fine-tune AST model on HuggingFace dataset
 # Transfer learning from pretrained AudioSet model
 echo ""
-echo "Step 2: Fine-tuning AST model..."
+echo "Step 1: Fine-tuning AST model on $DATASET..."
 bioamla models train ast \
     --training-dir "$OUTPUT_DIR/ast_model" \
-    --train-dataset "$OUTPUT_DIR/augmented_data" \
-    --num-train-epochs 25 \
+    --train-dataset "$DATASET" \
+    --num-train-epochs 10 \
     --per-device-train-batch-size 8 \
     --gradient-accumulation-steps 2 \
     --learning-rate 5e-5 \
@@ -62,72 +67,31 @@ bioamla models train ast \
     --dataloader-num-workers 4 \
     --save-strategy epoch \
     --evaluation-strategy epoch \
-    --load-best-model-at-end
+    --load-best-model-at-end \
+    --mlflow-experiment-name "bioamla-training"
 
-# Step 3: Train custom CNN model
-# Alternative: train a lightweight CNN from scratch
+# Step 2: Get model information
 echo ""
-echo "Step 3: Training custom CNN model..."
-bioamla models train cnn \
-    --data-dir "$DATASET_DIR" \
-    --output "$OUTPUT_DIR/cnn_model" \
-    --epochs 50 \
-    --batch-size 32 \
-    --learning-rate 0.001
-
-# Step 4: Train spectrogram-based classifier
-echo ""
-echo "Step 4: Training spectrogram classifier..."
-bioamla models train spec \
-    --data-dir "$DATASET_DIR" \
-    --output "$OUTPUT_DIR/spec_model" \
-    --model resnet18 \
-    --epochs 30 \
-    --batch-size 16 \
-    --image-size 224 \
-    --learning-rate 0.0001
-
-# Step 5: Evaluate models
-echo ""
-echo "Step 5: Evaluating AST model..."
-bioamla models evaluate ast \
-    --model-path "$OUTPUT_DIR/ast_model/best_model" \
-    --test-dataset "$DATASET_DIR/test" \
-    --output "$OUTPUT_DIR/ast_evaluation.json" \
-    --per-class-metrics \
-    --confusion-matrix "$OUTPUT_DIR/ast_confusion.png"
-
-# Step 6: Create ensemble from multiple models
-echo ""
-echo "Step 6: Creating model ensemble..."
-bioamla models ensemble \
-    --model-dirs "$OUTPUT_DIR/ast_model/best_model" "$OUTPUT_DIR/cnn_model" \
-    --output "$OUTPUT_DIR/ensemble_predictions.csv" \
-    --strategy voting \
-    --weights 0.7 0.3
-
-# Step 7: Get model information
-echo ""
-echo "Step 7: Model information..."
+echo "Step 2: Model information..."
 bioamla models info "$OUTPUT_DIR/ast_model/best_model" --model-type ast
 
-# Step 8: List available models
+# Step 3: List available models
 echo ""
-echo "Step 8: Available models..."
+echo "Step 3: Available pre-trained models..."
 bioamla models list
 
-# Step 9: Convert model format (optional)
+# Step 4: Convert model format (optional - for deployment)
 echo ""
-echo "Step 9: Converting model format..."
+echo "Step 4: Converting model to ONNX format..."
 bioamla models convert \
     --input-path "$OUTPUT_DIR/ast_model/best_model" \
     --output-path "$OUTPUT_DIR/ast_model_onnx" \
     --output-format onnx \
     --model-type ast
 
-# Step 10: Push to HuggingFace Hub (optional)
+# Step 5: Push to HuggingFace Hub (optional)
 echo ""
-echo "Step 10: (Example) Pushing model to HuggingFace Hub..."
+echo "Step 5: (Example) Pushing model to HuggingFace Hub..."
 echo "   bioamla services hf push-model \\"
 echo "       --model-path \"$OUTPUT_DIR/ast_model/best_model\" \\"
 echo "       --repo-name \"your-username/$MODEL_NAME\" \\"
@@ -135,15 +99,15 @@ echo "       --private"
 
 echo ""
 echo "=== Model Training Complete ==="
-echo "Models saved to: $OUTPUT_DIR/"
+echo "Model saved to: $OUTPUT_DIR/ast_model/best_model"
 echo ""
-echo "Output files:"
-echo "  - ast_model/: Fine-tuned AST model"
-echo "  - cnn_model/: Custom CNN model"
-echo "  - spec_model/: Spectrogram classifier"
-echo "  - ast_evaluation.json: Evaluation metrics"
-echo "  - ast_confusion.png: Confusion matrix"
-echo "  - ensemble_predictions.csv: Ensemble results"
+echo "To run inference with your trained model:"
+echo "  bioamla models predict ast <audio_file> --model-path $OUTPUT_DIR/ast_model/best_model"
+echo ""
+echo "Pre-trained alternatives available on HuggingFace:"
+echo "  - MIT/ast-finetuned-audioset-10-10-0.4593 (AudioSet, 527 classes)"
+echo "  - bioamla/ast-esc50 (ESC-50, 50 environmental sounds)"
+echo "  - bioamla/scp-frogs (Frog species classification)"
 echo ""
 echo "Training tips:"
 echo "  - Use --fp16 for faster training on supported GPUs"
