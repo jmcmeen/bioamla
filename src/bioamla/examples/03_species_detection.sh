@@ -37,7 +37,7 @@ bioamla detect energy "$AUDIO_DIR" \
     --threshold 0.5 \
     --min-duration 0.1 \
     --output "$OUTPUT_DIR/energy_detections.csv" \
-    --output-format csv
+    --format csv
 
 # Step 2: RIBBIT Detection
 # Detect periodic pulsed calls characteristic of many frog species
