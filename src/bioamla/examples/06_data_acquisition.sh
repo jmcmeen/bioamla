@@ -70,7 +70,7 @@ bioamla services xc search \
     --species "$BIRD_SPECIES" \
     --quality A \
     --max-results 20 \
-    --output-format table
+    --format table
 
 # Step 5: Download from Xeno-canto
 echo ""
@@ -89,7 +89,7 @@ bioamla services ml search \
     --scientific-name "$BIRD_SPECIES" \
     --min-rating 4 \
     --max-results 20 \
-    --output-format table
+    --format table
 
 # Step 7: Download from Macaulay Library
 echo ""
