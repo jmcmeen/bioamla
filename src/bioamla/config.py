@@ -341,6 +341,8 @@ def load_config(config_path: Optional[str] = None) -> Config:
     if config_file:
         try:
             file_config = load_toml(config_file)
+            # Migrate any deprecated keys in file config before merging
+            file_config = _migrate_deprecated_keys(file_config)
             # Merge file config into defaults
             config_data = _merge_dicts(config_data, file_config)
             logger.info(f"Loaded configuration from {config_file}")
@@ -394,6 +396,55 @@ def _merge_dicts(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, An
         else:
             result[key] = value
     return result
+
+
+# Deprecated config key mappings: (section, old_key) -> new_key
+_DEPRECATED_KEYS = {
+    ("models", "default_model"): "default_ast_model",
+}
+
+
+def _migrate_deprecated_keys(config_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Migrate deprecated config keys to their new names.
+
+    If a deprecated key is found, it will be renamed to the new key
+    (unless the new key already exists) and a warning will be logged.
+
+    Args:
+        config_data: Configuration dictionary to migrate
+
+    Returns:
+        Migrated configuration dictionary
+    """
+    import warnings
+
+    for (section, old_key), new_key in _DEPRECATED_KEYS.items():
+        if section in config_data and isinstance(config_data[section], dict):
+            section_data = config_data[section]
+            if old_key in section_data:
+                if new_key not in section_data:
+                    # Migrate the value to the new key
+                    section_data[new_key] = section_data[old_key]
+                    warnings.warn(
+                        f"Config key '[{section}].{old_key}' is deprecated. "
+                        f"Please update to '[{section}].{new_key}'.",
+                        DeprecationWarning,
+                        stacklevel=4,
+                    )
+                else:
+                    # Both keys exist, prefer new key but warn
+                    warnings.warn(
+                        f"Config key '[{section}].{old_key}' is deprecated and "
+                        f"'[{section}].{new_key}' is also present. "
+                        f"Using '[{section}].{new_key}'. Please remove the deprecated key.",
+                        DeprecationWarning,
+                        stacklevel=4,
+                    )
+                # Remove the old key
+                del section_data[old_key]
+
+    return config_data
 
 
 # Global configuration instance
@@ -480,6 +531,8 @@ def load_config_cascade(
         if location.exists():
             try:
                 file_config = load_toml(location)
+                # Migrate any deprecated keys in file config before merging
+                file_config = _migrate_deprecated_keys(file_config)
                 config_data = _merge_dicts(config_data, file_config)
                 source = str(location)
                 logger.debug(f"Merged configuration from {location}")
@@ -492,6 +545,8 @@ def load_config_cascade(
         if path.exists():
             try:
                 file_config = load_toml(path)
+                # Migrate any deprecated keys in file config before merging
+                file_config = _migrate_deprecated_keys(file_config)
                 config_data = _merge_dicts(config_data, file_config)
                 source = str(path)
                 logger.debug(f"Merged configuration from {path}")

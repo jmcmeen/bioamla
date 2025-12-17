@@ -199,7 +199,7 @@ class TestCreateProject:
         # Should not have actual sections (only [project]), though may have comments
         # Check that no actual section headers exist besides [project]
         import re
-        actual_sections = re.findall(r'^\[([^\]]+)\]', config_content, re.MULTILINE)
+        actual_sections = re.findall(r'^\s*\[([^\]]+)\]', config_content, re.MULTILINE)
         assert actual_sections == ["project"], f"Expected only [project], got {actual_sections}"
 
     def test_invalid_template_raises(self, tmp_path):
