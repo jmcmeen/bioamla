@@ -539,7 +539,7 @@ config = load_config()
 
 # Access values
 sample_rate = config.audio.sample_rate
-model_name = config.models.default_model
+model_name = config.models.default_ast_model
 batch_size = config.inference.batch_size
 
 # Modify runtime configuration
