@@ -43,8 +43,8 @@ class TestCLICommandGroups:
     """Tests for CLI command groups."""
 
     def test_ast_group_exists(self, runner):
-        """Test that ast command group exists."""
-        result = runner.invoke(cli, ["ast", "--help"])
+        """Test that ast command group exists under models."""
+        result = runner.invoke(cli, ["models", "ast", "--help"])
 
         assert result.exit_code == 0
         assert "train" in result.output
