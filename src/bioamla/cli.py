@@ -60,58 +60,6 @@ def version():
     click.echo(f"bioamla v{get_bioamla_version()}")
 
 
-@cli.command()
-@click.argument('url', required=True)
-@click.argument('output_dir', required=False, default='.')
-def download(url: str, output_dir: str):
-    """Download a file from the specified URL to the target directory."""
-    import os
-    from urllib.parse import urlparse
-
-    from bioamla.utils import download_file
-
-    if output_dir == '.':
-        output_dir = os.getcwd()
-
-    parsed_url = urlparse(url)
-    filename = os.path.basename(parsed_url.path)
-    if not filename:
-        filename = "downloaded_file"
-
-    output_path = os.path.join(output_dir, filename)
-    download_file(url, output_path)
-
-
-@cli.command()
-@click.argument('file_path')
-@click.argument('output_path', required=False, default='.')
-def unzip(file_path: str, output_path: str):
-    """Extract a ZIP archive to the specified output directory."""
-    from bioamla.utils import extract_zip_file
-    if output_path == '.':
-        import os
-        output_path = os.getcwd()
-
-    extract_zip_file(file_path, output_path)
-
-
-@cli.command('zip')
-@click.argument('source_path')
-@click.argument('output_file')
-def zip_cmd(source_path: str, output_file: str):
-    """Create a ZIP archive from a file or directory."""
-    import os
-
-    from bioamla.utils import create_zip_file, zip_directory
-
-    if os.path.isdir(source_path):
-        zip_directory(source_path, output_file)
-    else:
-        create_zip_file([source_path], output_file)
-
-    click.echo(f"Created {output_file}")
-
-
 # =============================================================================
 # Config Command Group
 # =============================================================================
@@ -186,13 +134,28 @@ def config_path():
     console.print()
 
 
-@cli.command()
+def _format_size(size_bytes: int) -> str:
+    """Format bytes into human-readable size."""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} PB"
+
+
+@config.command('purge')
 @click.option('--models', is_flag=True, help='Purge cached models')
 @click.option('--datasets', is_flag=True, help='Purge cached datasets')
 @click.option('--all', 'purge_all', is_flag=True, help='Purge all cached data (models and datasets)')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt')
-def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
-    """Purge cached HuggingFace Hub data from local storage."""
+def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
+    """Purge cached HuggingFace Hub data from local storage.
+
+    Examples:
+        bioamla config purge --models
+        bioamla config purge --datasets
+        bioamla config purge --all -y
+    """
     import shutil
     from pathlib import Path
 
@@ -200,7 +163,7 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
 
     if not models and not datasets and not purge_all:
         click.echo("Please specify what to purge: --models, --datasets, or --all")
-        click.echo("Run 'bioamla purge --help' for more information.")
+        click.echo("Run 'bioamla config purge --help' for more information.")
         return
 
     if purge_all:
@@ -270,15 +233,6 @@ def purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
     click.echo(f"Successfully purged {deleted_count} items, freed {_format_size(freed_space)}.")
 
 
-def _format_size(size_bytes: int) -> str:
-    """Format bytes into human-readable size."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} PB"
-
-
 @cli.command()
 @click.argument('directory', required=True)
 def explore(directory: str):
@@ -320,16 +274,10 @@ def models():
 
 
 # =============================================================================
-# AST Command Group (subgroup of models)
+# AST Commands (Audio Spectrogram Transformer)
 # =============================================================================
 
-@models.group()
-def ast():
-    """Audio Spectrogram Transformer model commands."""
-    pass
-
-
-@ast.command('predict')
+@models.command('ast-predict')
 @click.argument('path')
 @click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for inference')
 @click.option('--resample-freq', default=16000, type=int, help='Resampling frequency')
@@ -362,10 +310,10 @@ def ast_predict(
     PATH can be a single audio file or a directory (with --batch flag).
 
     Single file mode (default):
-        bioamla ast predict audio.wav --model-path my_model
+        bioamla models ast-predict audio.wav --model-path my_model
 
     Batch mode (--batch):
-        bioamla ast predict ./audio_dir --batch --model-path my_model
+        bioamla models ast-predict ./audio_dir --batch --model-path my_model
 
         Processes all WAV files in the specified directory and saves predictions
         to a CSV file. Supports resumable operations.
@@ -501,7 +449,7 @@ def _run_batch_inference(
     print(f"Elapsed time: {elapsed:.2f}s ({len(wave_files)/elapsed:.2f} files/sec)")
 
 
-@ast.command('train')
+@models.command('ast-train')
 @click.option('--training-dir', default='.', help='Directory to save training outputs')
 @click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
 @click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub')
@@ -842,7 +790,7 @@ def ast_train(
     trainer.save_model(best_model_path)
 
 
-@ast.command('evaluate')
+@models.command('ast-evaluate')
 @click.argument('path')
 @click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for evaluation')
 @click.option('--ground-truth', '-g', required=True, help='Path to CSV file with ground truth labels')
@@ -872,7 +820,7 @@ def ast_evaluate(
     PATH is a directory containing audio files to evaluate.
 
     Example:
-        bioamla ast evaluate ./test_audio --model bioamla/scp-frogs --ground-truth labels.csv
+        bioamla models ast-evaluate ./test_audio --model bioamla/scp-frogs --ground-truth labels.csv
     """
     from pathlib import Path as PathLib
 
@@ -1806,10 +1754,10 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
 
 
 # =============================================================================
-# Visualize Command
+# Visualize Command (under audio group)
 # =============================================================================
 
-@cli.command()
+@audio.command('visualize')
 @click.argument('path')
 @click.option('--output', '-o', default=None, help='Output file path (single file) or directory (batch with --batch)')
 @click.option('--batch', is_flag=True, default=False, help='Process all audio files in a directory')
@@ -1828,7 +1776,7 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
 @click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode only)')
 @click.option('--progress/--no-progress', default=True, help='Show Rich progress bar (batch mode only)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
-def visualize(
+def audio_visualize(
     path: str,
     output: str,
     batch: bool,
@@ -1854,10 +1802,10 @@ def visualize(
     PATH can be a single audio file or a directory (with --batch flag).
 
     Single file mode (default):
-        bioamla visualize audio.wav --output spec.png
+        bioamla audio visualize audio.wav --output spec.png
 
     Batch mode (--batch):
-        bioamla visualize ./audio_dir --batch --output ./specs
+        bioamla audio visualize ./audio_dir --batch --output ./specs
 
     Visualization types:
         stft: Short-Time Fourier Transform spectrogram
@@ -1870,13 +1818,13 @@ def visualize(
 
     Examples:
         # STFT spectrogram with custom FFT size
-        bioamla visualize audio.wav --type stft --n-fft 4096
+        bioamla audio visualize audio.wav --type stft --n-fft 4096
 
         # Mel spectrogram with dB limits and JPEG output
-        bioamla visualize audio.wav --type mel --db-min -80 --db-max 0 -o spec.jpg
+        bioamla audio visualize audio.wav --type mel --db-min -80 --db-max 0 -o spec.jpg
 
         # Batch processing with hamming window
-        bioamla visualize ./audio --batch --window hamming --format png
+        bioamla audio visualize ./audio --batch --window hamming --format png
     """
     import os
 
@@ -1942,128 +1890,6 @@ def visualize(
         except Exception as e:
             click.echo(f"Error generating spectrogram: {e}")
             raise SystemExit(1)
-
-
-# =============================================================================
-# Augment Command
-# =============================================================================
-
-def parse_range(value: str) -> tuple:
-    """Parse a range string like '0.8-1.2' or '-2,2' into (min, max)."""
-    if '-' in value and not value.startswith('-'):
-        parts = value.split('-')
-        return float(parts[0]), float(parts[1])
-    elif ',' in value:
-        parts = value.split(',')
-        return float(parts[0]), float(parts[1])
-    else:
-        val = float(value)
-        return val, val
-
-
-@cli.command()
-@click.argument('input_dir')
-@click.option('--output', '-o', required=True, help='Output directory for augmented files')
-@click.option('--add-noise', default=None, help='Add Gaussian noise with SNR range (e.g., "3-30" dB)')
-@click.option('--time-stretch', default=None, help='Time stretch range (e.g., "0.8-1.2")')
-@click.option('--pitch-shift', default=None, help='Pitch shift range in semitones (e.g., "-2,2")')
-@click.option('--gain', default=None, help='Gain range in dB (e.g., "-12,12")')
-@click.option('--multiply', default=1, type=int, help='Number of augmented copies to create per file')
-@click.option('--sample-rate', default=16000, type=int, help='Target sample rate for output')
-@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
-def augment(
-    input_dir: str,
-    output: str,
-    add_noise: str,
-    time_stretch: str,
-    pitch_shift: str,
-    gain: str,
-    multiply: int,
-    sample_rate: int,
-    recursive: bool,
-    quiet: bool
-):
-    """
-    Augment audio files to expand training datasets.
-
-    Creates augmented copies of audio files with various transformations.
-    At least one augmentation option must be specified.
-
-    Examples:
-        bioamla augment ./audio --output ./augmented --add-noise 3-30
-
-        bioamla augment ./audio --output ./augmented \\
-            --add-noise 3-30 \\
-            --time-stretch 0.8-1.2 \\
-            --pitch-shift -2,2 \\
-            --multiply 5
-
-    Augmentation options:
-        --add-noise: Add Gaussian noise with SNR in specified range (dB)
-        --time-stretch: Speed up/slow down without changing pitch
-        --pitch-shift: Change pitch without changing speed (semitones)
-        --gain: Random volume adjustment (dB)
-    """
-    from bioamla.augment import AugmentationConfig, batch_augment
-
-    # Build configuration from options
-    config = AugmentationConfig(
-        sample_rate=sample_rate,
-        multiply=multiply,
-    )
-
-    # Parse augmentation options
-    if add_noise:
-        config.add_noise = True
-        min_snr, max_snr = parse_range(add_noise)
-        config.noise_min_snr = min_snr
-        config.noise_max_snr = max_snr
-
-    if time_stretch:
-        config.time_stretch = True
-        min_rate, max_rate = parse_range(time_stretch)
-        config.time_stretch_min = min_rate
-        config.time_stretch_max = max_rate
-
-    if pitch_shift:
-        config.pitch_shift = True
-        min_semi, max_semi = parse_range(pitch_shift)
-        config.pitch_shift_min = min_semi
-        config.pitch_shift_max = max_semi
-
-    if gain:
-        config.gain = True
-        min_db, max_db = parse_range(gain)
-        config.gain_min_db = min_db
-        config.gain_max_db = max_db
-
-    # Check that at least one augmentation is enabled
-    if not any([config.add_noise, config.time_stretch, config.pitch_shift, config.gain]):
-        click.echo("Error: At least one augmentation option must be specified")
-        click.echo("Use --help for available options")
-        raise SystemExit(1)
-
-    try:
-        stats = batch_augment(
-            input_dir=input_dir,
-            output_dir=output,
-            config=config,
-            recursive=recursive,
-            verbose=not quiet,
-        )
-
-        if quiet:
-            click.echo(
-                f"Created {stats['files_created']} augmented files from "
-                f"{stats['files_processed']} source files in {stats['output_dir']}"
-            )
-    except FileNotFoundError as e:
-        click.echo(f"Error: {e}")
-        raise SystemExit(1)
-    except Exception as e:
-        click.echo(f"Error during augmentation: {e}")
-        raise SystemExit(1)
 
 
 # =============================================================================
@@ -2386,6 +2212,195 @@ def dataset_license(
             click.echo(f"  File size: {stats['file_size']:,} bytes")
         else:
             click.echo(f"Generated {output} with {stats['attributions_count']} attributions")
+
+
+# =============================================================================
+# Augment Command (under dataset group)
+# =============================================================================
+
+def _parse_range(value: str) -> tuple:
+    """Parse a range string like '0.8-1.2' or '-2,2' into (min, max)."""
+    if '-' in value and not value.startswith('-'):
+        parts = value.split('-')
+        return float(parts[0]), float(parts[1])
+    elif ',' in value:
+        parts = value.split(',')
+        return float(parts[0]), float(parts[1])
+    else:
+        val = float(value)
+        return val, val
+
+
+@dataset.command('augment')
+@click.argument('input_dir')
+@click.option('--output', '-o', required=True, help='Output directory for augmented files')
+@click.option('--add-noise', default=None, help='Add Gaussian noise with SNR range (e.g., "3-30" dB)')
+@click.option('--time-stretch', default=None, help='Time stretch range (e.g., "0.8-1.2")')
+@click.option('--pitch-shift', default=None, help='Pitch shift range in semitones (e.g., "-2,2")')
+@click.option('--gain', default=None, help='Gain range in dB (e.g., "-12,12")')
+@click.option('--multiply', default=1, type=int, help='Number of augmented copies to create per file')
+@click.option('--sample-rate', default=16000, type=int, help='Target sample rate for output')
+@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories')
+@click.option('--quiet', is_flag=True, help='Suppress progress output')
+def dataset_augment(
+    input_dir: str,
+    output: str,
+    add_noise: str,
+    time_stretch: str,
+    pitch_shift: str,
+    gain: str,
+    multiply: int,
+    sample_rate: int,
+    recursive: bool,
+    quiet: bool
+):
+    """
+    Augment audio files to expand training datasets.
+
+    Creates augmented copies of audio files with various transformations.
+    At least one augmentation option must be specified.
+
+    Examples:
+        bioamla dataset augment ./audio --output ./augmented --add-noise 3-30
+
+        bioamla dataset augment ./audio --output ./augmented \\
+            --add-noise 3-30 \\
+            --time-stretch 0.8-1.2 \\
+            --pitch-shift -2,2 \\
+            --multiply 5
+
+    Augmentation options:
+        --add-noise: Add Gaussian noise with SNR in specified range (dB)
+        --time-stretch: Speed up/slow down without changing pitch
+        --pitch-shift: Change pitch without changing speed (semitones)
+        --gain: Random volume adjustment (dB)
+    """
+    from bioamla.augment import AugmentationConfig, batch_augment
+
+    # Build configuration from options
+    config = AugmentationConfig(
+        sample_rate=sample_rate,
+        multiply=multiply,
+    )
+
+    # Parse augmentation options
+    if add_noise:
+        config.add_noise = True
+        min_snr, max_snr = _parse_range(add_noise)
+        config.noise_min_snr = min_snr
+        config.noise_max_snr = max_snr
+
+    if time_stretch:
+        config.time_stretch = True
+        min_rate, max_rate = _parse_range(time_stretch)
+        config.time_stretch_min = min_rate
+        config.time_stretch_max = max_rate
+
+    if pitch_shift:
+        config.pitch_shift = True
+        min_semi, max_semi = _parse_range(pitch_shift)
+        config.pitch_shift_min = min_semi
+        config.pitch_shift_max = max_semi
+
+    if gain:
+        config.gain = True
+        min_db, max_db = _parse_range(gain)
+        config.gain_min_db = min_db
+        config.gain_max_db = max_db
+
+    # Check that at least one augmentation is enabled
+    if not any([config.add_noise, config.time_stretch, config.pitch_shift, config.gain]):
+        click.echo("Error: At least one augmentation option must be specified")
+        click.echo("Use --help for available options")
+        raise SystemExit(1)
+
+    try:
+        stats = batch_augment(
+            input_dir=input_dir,
+            output_dir=output,
+            config=config,
+            recursive=recursive,
+            verbose=not quiet,
+        )
+
+        if quiet:
+            click.echo(
+                f"Created {stats['files_created']} augmented files from "
+                f"{stats['files_processed']} source files in {stats['output_dir']}"
+            )
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"Error during augmentation: {e}")
+        raise SystemExit(1)
+
+
+@dataset.command('download')
+@click.argument('url', required=True)
+@click.argument('output_dir', required=False, default='.')
+def dataset_download(url: str, output_dir: str):
+    """Download a file from the specified URL to the target directory.
+
+    Examples:
+        bioamla dataset download https://example.com/dataset.zip ./data
+        bioamla dataset download https://example.com/audio.tar.gz
+    """
+    import os
+    from urllib.parse import urlparse
+
+    from bioamla.utils import download_file
+
+    if output_dir == '.':
+        output_dir = os.getcwd()
+
+    parsed_url = urlparse(url)
+    filename = os.path.basename(parsed_url.path)
+    if not filename:
+        filename = "downloaded_file"
+
+    output_path = os.path.join(output_dir, filename)
+    download_file(url, output_path)
+
+
+@dataset.command('unzip')
+@click.argument('file_path')
+@click.argument('output_path', required=False, default='.')
+def dataset_unzip(file_path: str, output_path: str):
+    """Extract a ZIP archive to the specified output directory.
+
+    Examples:
+        bioamla dataset unzip dataset.zip ./extracted
+        bioamla dataset unzip archive.zip
+    """
+    from bioamla.utils import extract_zip_file
+    import os
+    if output_path == '.':
+        output_path = os.getcwd()
+
+    extract_zip_file(file_path, output_path)
+
+
+@dataset.command('zip')
+@click.argument('source_path')
+@click.argument('output_file')
+def dataset_zip(source_path: str, output_file: str):
+    """Create a ZIP archive from a file or directory.
+
+    Examples:
+        bioamla dataset zip ./my_dataset dataset.zip
+        bioamla dataset zip audio_file.wav single_file.zip
+    """
+    import os
+
+    from bioamla.utils import create_zip_file, zip_directory
+
+    if os.path.isdir(source_path):
+        zip_directory(source_path, output_file)
+    else:
+        create_zip_file([source_path], output_file)
+
+    click.echo(f"Created {output_file}")
 
 
 # =============================================================================
@@ -3242,47 +3257,6 @@ def species_search(query, limit):
         click.echo(f"{r['scientific_name']} - {r['common_name']}")
         click.echo(f"  Code: {r['species_code']} | Family: {r['family']} | Match: {score:.0f}%")
         click.echo()
-
-
-@api.command('inat-download')
-@click.option('--taxon-id', '-t', type=int, help='iNaturalist taxon ID')
-@click.option('--taxon-name', help='Taxon name (e.g., "Anura" for frogs)')
-@click.option('--place-id', '-p', type=int, help='iNaturalist place ID')
-@click.option('--project-id', help='iNaturalist project ID or slug')
-@click.option('--quality-grade', default='research',
-              type=click.Choice(['research', 'needs_id', 'casual']),
-              help='Quality grade filter')
-@click.option('--max-observations', '-n', default=100, type=int,
-              help='Maximum observations to download')
-@click.option('--output-dir', '-o', default='./inat_sounds', help='Output directory')
-@click.option('--include-metadata', is_flag=True, help='Include extended iNaturalist metadata')
-def inat_download(taxon_id, taxon_name, place_id, project_id, quality_grade,
-                  max_observations, output_dir, include_metadata):
-    """Download audio files from iNaturalist observations.
-
-    Examples:
-        bioamla api inat-download --taxon-name "Anura" --place-id 1 -n 50
-        bioamla api inat-download --project-id "appalachia-bioacoustics" -n 100
-    """
-    from bioamla.inat import download_inat_audio
-
-    if not any([taxon_id, taxon_name, place_id, project_id]):
-        click.echo("Error: At least one filter is required (--taxon-id, --taxon-name, --place-id, or --project-id)")
-        raise SystemExit(1)
-
-    stats = download_inat_audio(
-        output_dir=output_dir,
-        taxon_ids=[taxon_id] if taxon_id else None,
-        taxon_name=taxon_name,
-        place_id=place_id,
-        project_id=project_id,
-        quality_grade=quality_grade,
-        obs_per_taxon=max_observations,
-        include_inat_metadata=include_metadata,
-        verbose=True,
-    )
-
-    click.echo(f"\nDownload complete: {stats['total_sounds']} audio files")
 
 
 @api.command('clear-cache')
