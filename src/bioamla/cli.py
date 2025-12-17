@@ -238,6 +238,92 @@ def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
     click.echo(f"Successfully purged {deleted_count} items, freed {_format_size(freed_space)}.")
 
 
+@config.command('deps')
+@click.option('--install', 'do_install', is_flag=True,
+              help='Install missing system dependencies')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt')
+def config_deps(do_install: bool, yes: bool):
+    """Check or install system dependencies (FFmpeg, libsndfile, PortAudio).
+
+    These system libraries are required for full bioamla functionality:
+
+    \b
+      - FFmpeg: Audio format conversion (MP3, FLAC, etc.)
+      - libsndfile: Audio file I/O
+      - PortAudio: Real-time audio recording
+
+    \b
+    Examples:
+        bioamla config deps              # Check dependencies
+        bioamla config deps --install    # Install missing dependencies
+        bioamla config deps --install -y # Install without confirmation
+    """
+    from bioamla.deps import check_all_dependencies, detect_os, get_full_install_command, run_install
+    from bioamla.progress import console
+
+    os_type = detect_os()
+    deps = check_all_dependencies()
+
+    # Display status
+    console.print("\n[bold]System Dependencies[/bold]")
+    console.print(f"[dim]Detected OS: {os_type}[/dim]\n")
+
+    all_installed = True
+    missing_deps = []
+
+    for dep in deps:
+        if dep.installed:
+            version_str = f" (v{dep.version})" if dep.version else ""
+            console.print(f"[green]✓[/green] {dep.name}{version_str}")
+            console.print(f"  [dim]{dep.description} - {dep.required_for}[/dim]")
+        else:
+            all_installed = False
+            missing_deps.append(dep)
+            console.print(f"[red]✗[/red] {dep.name} [red]not installed[/red]")
+            console.print(f"  [dim]{dep.description} - {dep.required_for}[/dim]")
+            if dep.install_hint:
+                console.print(f"  [yellow]Install: {dep.install_hint}[/yellow]")
+
+    console.print()
+
+    if all_installed:
+        console.print("[green]All system dependencies are installed![/green]")
+        return
+
+    # Show combined install command
+    full_command = get_full_install_command(os_type)
+    if full_command and not do_install:
+        console.print("[bold]To install all missing dependencies:[/bold]")
+        console.print(f"  {full_command}")
+        console.print()
+        console.print("[dim]Or run: bioamla config deps --install[/dim]")
+
+    # Install if requested
+    if do_install:
+        console.print()
+        if not yes:
+            if not click.confirm("Install missing system dependencies?"):
+                click.echo("Aborted.")
+                return
+
+        console.print("\n[bold]Installing dependencies...[/bold]")
+        success, message = run_install(os_type)
+
+        if success:
+            console.print(f"[green]{message}[/green]")
+            # Re-check to confirm
+            console.print("\n[bold]Verifying installation...[/bold]")
+            deps = check_all_dependencies()
+            for dep in deps:
+                if dep.installed:
+                    console.print(f"[green]✓[/green] {dep.name}")
+                else:
+                    console.print(f"[red]✗[/red] {dep.name}")
+        else:
+            console.print(f"[red]{message}[/red]")
+            raise SystemExit(1)
+
+
 @cli.command()
 @click.argument('directory', required=True)
 def explore(directory: str):
