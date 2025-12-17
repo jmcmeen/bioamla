@@ -6,6 +6,38 @@ A Python CLI and library for Bioacoustics and Machine Learning Applications.
 
 ## Installation
 
+### System Dependencies
+
+Bioamla requires some system-level libraries for full functionality. Install them using the provided script:
+
+```bash
+# Download and run the installer (or clone the repo first)
+curl -fsSL https://raw.githubusercontent.com/jmcmeen/bioamla/main/scripts/install-deps.sh | bash
+
+# Or if you have the repo cloned:
+./scripts/install-deps.sh
+
+# Check what's installed:
+./scripts/install-deps.sh --check
+```
+
+**Manual installation by platform:**
+
+| Platform | Command |
+|----------|---------|
+| Ubuntu/Debian | `sudo apt install ffmpeg libsndfile1 portaudio19-dev` |
+| Fedora | `sudo dnf install ffmpeg libsndfile portaudio` |
+| Arch Linux | `sudo pacman -S ffmpeg libsndfile portaudio` |
+| macOS | `brew install ffmpeg libsndfile portaudio` |
+
+| Dependency | Purpose | Required For |
+|------------|---------|--------------|
+| FFmpeg | Audio format conversion | MP3, FLAC, and other formats (WAV works without) |
+| libsndfile | Audio file I/O | Reading/writing audio files |
+| PortAudio | Audio hardware access | Real-time recording (`bioamla realtime` commands) |
+
+### Python Package
+
 ```bash
 pip install bioamla
 ```
@@ -440,7 +472,7 @@ config = load_config()
 
 # Access configuration values
 sample_rate = config.audio.sample_rate
-model_name = config.models.default_model
+model_name = config.models.default_ast_model
 
 # Modify configuration
 set_config("inference.batch_size", 16)
