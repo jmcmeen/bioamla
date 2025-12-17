@@ -52,7 +52,7 @@ bioamla detect ribbit "$AUDIO_DIR" \
     --window 2.0 \
     --threshold 0.3 \
     --output "$OUTPUT_DIR/ribbit_detections.csv" \
-    --output-format csv
+    --format csv
 
 # Step 3: CWT Peak Detection
 # Detect call sequences using continuous wavelet transform
@@ -66,7 +66,7 @@ bioamla detect peaks "$AUDIO_DIR" \
     --high-freq 5000 \
     --sequences 3 \
     --output "$OUTPUT_DIR/peak_detections.csv" \
-    --output-format csv
+    --format csv
 
 # Step 4: Accelerating Pattern Detection
 # Detect species with calls that increase in rate over time
@@ -79,7 +79,7 @@ bioamla detect accelerating "$AUDIO_DIR" \
     --low-freq 500 \
     --high-freq 3000 \
     --output "$OUTPUT_DIR/accelerating_detections.csv" \
-    --output-format csv
+    --format csv
 
 # Step 5: Batch Detection with Multiple Detectors
 # Run all detectors on the dataset and merge results
