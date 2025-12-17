@@ -71,38 +71,38 @@ EXAMPLES = {
         "Complete wildlife survey workflow with HuggingFace models",
     ),
     # Dataset-specific examples
-    "esc50_ast_train": (
-        "esc50_ast_train.sh",
+    "11": (
+        "11_esc50_ast_train.sh",
         "ESC-50 Training",
         "Train AST on ESC-50 environmental sounds (ashraq/esc50)",
     ),
-    "esc50_ast_inference": (
-        "esc50_ast_inference.sh",
+    "12": (
+        "12_esc50_ast_inference.sh",
         "ESC-50 Inference",
         "Run inference with bioamla/ast-esc50 model",
     ),
-    "scp_frogs_ast_train": (
-        "scp_frogs_ast_train.sh",
+    "13": (
+        "13_scp_frogs_ast_train.sh",
         "Frogs Training",
         "Train AST on frog species (bioamla/scp-frogs-inat-v1)",
     ),
-    "scp_frogs_ast_inference": (
-        "scp_frogs_ast_inference.sh",
+    "14": (
+        "14_scp_frogs_ast_inference.sh",
         "Frogs Inference",
         "Run inference with bioamla/scp-frogs model",
     ),
-    "birdset_ast_train": (
-        "birdset_ast_train.sh",
+    "15": (
+        "15_birdset_ast_train.sh",
         "BirdSet Training",
         "Train AST on BirdSet bird sounds (DBD-research-group/BirdSet)",
     ),
-    "birdset_ast_inference": (
-        "birdset_ast_inference.sh",
+    "16": (
+        "16_birdset_ast_inference.sh",
         "BirdSet Inference",
         "Run inference for bird species classification",
     ),
-    "inat_workflow": (
-        "inat_workflow.sh",
+    "17": (
+        "17_inat_workflow.sh",
         "iNaturalist Workflow",
         "Download from iNaturalist, train model, run inference",
     ),
