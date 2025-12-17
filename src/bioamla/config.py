@@ -4,17 +4,25 @@ Configuration Management
 
 This module provides TOML-based configuration file support for bioamla CLI.
 
-Configuration files are searched in the following order:
+Configuration files are searched in the following order (highest to lowest priority):
 1. Path specified via --config option
-2. ./bioamla.toml (current directory)
-3. ~/.config/bioamla/config.toml (user config)
-4. /etc/bioamla/config.toml (system config)
+2. Project config (.bioamla/config.toml) - if in a bioamla project
+3. ./bioamla.toml (current directory)
+4. ~/.config/bioamla/config.toml (user config)
+5. /etc/bioamla/config.toml (system config)
+6. Built-in defaults
 
 Example configuration file (bioamla.toml):
+
+    [project]
+    name = "my-bioacoustics-study"
+    version = "1.0.0"
+    description = "Species identification project"
 
     [audio]
     sample_rate = 16000
     mono = true
+    normalize = false
 
     [visualize]
     type = "mel"
@@ -22,6 +30,19 @@ Example configuration file (bioamla.toml):
     hop_length = 512
     cmap = "magma"
     dpi = 150
+
+    [models]
+    default_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
+
+    [inference]
+    batch_size = 8
+    use_fp16 = false
+    top_k = 5
+
+    [training]
+    learning_rate = 5.0e-5
+    epochs = 10
+    batch_size = 16
 
     [analysis]
     silence_threshold = -40
@@ -31,8 +52,12 @@ Example configuration file (bioamla.toml):
     workers = 4
 
     [output]
-    format = "wav"
+    format = "csv"
     verbose = true
+
+    [logging]
+    level = "WARNING"
+    max_history = 1000
 """
 
 import logging
@@ -56,9 +81,15 @@ else:
 
 # Default configuration values
 DEFAULT_CONFIG: Dict[str, Any] = {
+    "project": {
+        "name": "",
+        "version": "1.0.0",
+        "description": "",
+    },
     "audio": {
         "sample_rate": 16000,
         "mono": True,
+        "normalize": False,
     },
     "visualize": {
         "type": "mel",
@@ -68,6 +99,25 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "cmap": "magma",
         "dpi": 150,
         "window": "hann",
+    },
+    "models": {
+        "default_model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+        "cache_dir": None,  # None = use HuggingFace default
+    },
+    "inference": {
+        "batch_size": 8,
+        "use_fp16": False,
+        "top_k": 5,
+        "min_confidence": 0.01,
+        "clip_seconds": 10,
+        "overlap_seconds": 0,
+    },
+    "training": {
+        "learning_rate": 5.0e-5,
+        "epochs": 10,
+        "batch_size": 16,
+        "eval_strategy": "epoch",
+        "save_strategy": "epoch",
     },
     "analysis": {
         "silence_threshold": -40,
@@ -79,12 +129,18 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "verbose": True,
     },
     "output": {
-        "format": "wav",
+        "format": "csv",
         "verbose": True,
+        "overwrite": False,
     },
     "progress": {
         "enabled": True,
         "style": "rich",  # "rich", "simple", or "none"
+    },
+    "logging": {
+        "level": "WARNING",
+        "max_history": 1000,
+        "rotate_size_mb": 10,
     },
 }
 
@@ -102,25 +158,37 @@ class Config:
     Configuration container for bioamla settings.
 
     Attributes:
+        project: Project metadata
         audio: Audio processing settings
         visualize: Visualization settings
+        models: Model configuration
+        inference: Inference settings
+        training: Training settings
         analysis: Analysis settings
         batch: Batch processing settings
         output: Output settings
         progress: Progress bar settings
+        logging: Logging settings
         _source: Path to the config file that was loaded
     """
+    project: Dict[str, Any] = field(default_factory=dict)
     audio: Dict[str, Any] = field(default_factory=dict)
     visualize: Dict[str, Any] = field(default_factory=dict)
+    models: Dict[str, Any] = field(default_factory=dict)
+    inference: Dict[str, Any] = field(default_factory=dict)
+    training: Dict[str, Any] = field(default_factory=dict)
     analysis: Dict[str, Any] = field(default_factory=dict)
     batch: Dict[str, Any] = field(default_factory=dict)
     output: Dict[str, Any] = field(default_factory=dict)
     progress: Dict[str, Any] = field(default_factory=dict)
+    logging: Dict[str, Any] = field(default_factory=dict)
     _source: Optional[str] = None
 
     def get(self, section: str, key: str, default: Any = None) -> Any:
         """Get a configuration value."""
         section_dict = getattr(self, section, {})
+        if section_dict is None:
+            return default
         return section_dict.get(key, default)
 
     def set(self, section: str, key: str, value: Any) -> None:
@@ -132,24 +200,34 @@ class Config:
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
         return {
+            "project": self.project,
             "audio": self.audio,
             "visualize": self.visualize,
+            "models": self.models,
+            "inference": self.inference,
+            "training": self.training,
             "analysis": self.analysis,
             "batch": self.batch,
             "output": self.output,
             "progress": self.progress,
+            "logging": self.logging,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any], source: Optional[str] = None) -> "Config":
         """Create Config from dictionary."""
         return cls(
+            project=data.get("project", {}),
             audio=data.get("audio", {}),
             visualize=data.get("visualize", {}),
+            models=data.get("models", {}),
+            inference=data.get("inference", {}),
+            training=data.get("training", {}),
             analysis=data.get("analysis", {}),
             batch=data.get("batch", {}),
             output=data.get("output", {}),
             progress=data.get("progress", {}),
+            logging=data.get("logging", {}),
             _source=source,
         )
 
@@ -340,3 +418,116 @@ def reset_config() -> None:
     """Reset the global configuration to None (will reload on next access)."""
     global _global_config
     _global_config = None
+
+
+def get_config_locations(include_project: bool = True) -> List[Path]:
+    """
+    Get configuration file search locations in priority order.
+
+    Args:
+        include_project: Whether to include project config location
+
+    Returns:
+        List of paths to search, in priority order (highest first)
+    """
+    locations = []
+
+    # Project config (highest priority after explicit path)
+    if include_project:
+        try:
+            from bioamla.project import find_project_root, PROJECT_MARKER
+
+            project_root = find_project_root()
+            if project_root:
+                locations.append(project_root / PROJECT_MARKER / "config.toml")
+        except ImportError:
+            pass
+
+    # Standard locations
+    locations.extend(CONFIG_LOCATIONS)
+
+    return locations
+
+
+def load_config_cascade(
+    explicit_path: Optional[str] = None,
+    include_project: bool = True,
+) -> Config:
+    """
+    Load configuration with full cascade support.
+
+    Merges configs from all levels in priority order:
+    defaults -> system -> user -> current dir -> project -> explicit
+
+    Higher priority configs override lower priority ones.
+
+    Args:
+        explicit_path: Explicit config file path (highest priority)
+        include_project: Whether to include project config in cascade
+
+    Returns:
+        Config object with merged settings from all sources
+    """
+    # Start with defaults
+    config_data = _deep_copy_dict(DEFAULT_CONFIG)
+    source = "defaults"
+
+    # Get all config locations (in priority order: highest to lowest)
+    locations = get_config_locations(include_project=include_project)
+
+    # Load in reverse order (lowest to highest priority) so higher overrides lower
+    for location in reversed(locations):
+        if location.exists():
+            try:
+                file_config = load_toml(location)
+                config_data = _merge_dicts(config_data, file_config)
+                source = str(location)
+                logger.debug(f"Merged configuration from {location}")
+            except Exception as e:
+                logger.warning(f"Error loading {location}: {e}")
+
+    # Explicit path has highest priority
+    if explicit_path:
+        path = Path(explicit_path)
+        if path.exists():
+            try:
+                file_config = load_toml(path)
+                config_data = _merge_dicts(config_data, file_config)
+                source = str(path)
+                logger.debug(f"Merged configuration from {path}")
+            except Exception as e:
+                logger.warning(f"Error loading {path}: {e}")
+        else:
+            logger.warning(f"Specified config file not found: {explicit_path}")
+
+    return Config.from_dict(config_data, source=source)
+
+
+def is_in_project() -> bool:
+    """
+    Check if currently in a bioamla project.
+
+    Returns:
+        True if in a bioamla project, False otherwise
+    """
+    try:
+        from bioamla.project import is_in_project as _is_in_project
+
+        return _is_in_project()
+    except ImportError:
+        return False
+
+
+def get_project_root() -> Optional[Path]:
+    """
+    Get the root directory of the current bioamla project.
+
+    Returns:
+        Path to project root, or None if not in a project
+    """
+    try:
+        from bioamla.project import find_project_root
+
+        return find_project_root()
+    except ImportError:
+        return None

@@ -1,0 +1,51 @@
+# Bioamla Project Configuration - Research Template
+# Optimized for reproducibility and detailed logging
+
+[project]
+name = ""
+version = "1.0.0"
+description = ""
+created = ""
+
+[audio]
+sample_rate = 16000
+mono = true
+normalize = true
+
+[visualize]
+type = "mel"
+n_fft = 2048
+hop_length = 512
+n_mels = 128
+cmap = "viridis"
+dpi = 300                    # High-res for publications
+
+[models]
+default_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
+cache_dir = ".bioamla/model_cache"  # Local cache for reproducibility
+
+[inference]
+batch_size = 4               # Smaller for reproducibility
+use_fp16 = false             # Full precision
+top_k = 10                   # More predictions for analysis
+min_confidence = 0.001       # Lower threshold for research
+
+[training]
+learning_rate = 5.0e-5
+epochs = 20
+batch_size = 8
+eval_strategy = "steps"
+eval_steps = 100
+save_strategy = "steps"
+save_steps = 100
+logging_steps = 10           # Frequent logging
+
+[output]
+format = "csv"
+verbose = true
+overwrite = false
+include_metadata = true      # Include full metadata in outputs
+
+[logging]
+level = "DEBUG"              # Detailed logging
+max_history = 10000          # Keep more history
