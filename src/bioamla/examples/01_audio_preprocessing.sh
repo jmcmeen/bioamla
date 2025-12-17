@@ -93,6 +93,7 @@ echo ""
 echo "Step 6: Segmenting audio on silence..."
 bioamla audio segment "$OUTPUT_DIR/normalized" \
     --output "$OUTPUT_DIR/segments" \
+    --batch \
     --silence-threshold -40 \
     --min-silence 0.3 \
     --min-segment 0.5
