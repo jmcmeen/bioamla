@@ -3994,6 +3994,7 @@ def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
         AcceleratingPatternDetector,
         BandLimitedEnergyDetector,
         CWTPeakDetector,
+        Detection,
         RibbitDetector,
         batch_detect,
         export_detections,
@@ -4041,9 +4042,6 @@ def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
     click.echo(f"  Total detections: {total_detections}")
     click.echo(f"  Output directory: {output_dir}")
 
-
-# Import Detection for type hints in batch command
-from bioamla.detection import Detection
 
 # =============================================================================
 # Active Learning Commands
