@@ -55,8 +55,7 @@ echo "  - production : Optimized for deployment pipelines"
 echo ""
 
 # Create project with research template (includes all directories)
-bioamla project init \
-    --path "$PROJECT_DIR" \
+bioamla project init "$PROJECT_DIR" \
     --name "$PROJECT_NAME" \
     --description "Acoustic monitoring study initialized with bioamla" \
     --template research
@@ -74,7 +73,7 @@ bioamla project status
 # Step 7: View project configuration
 echo ""
 echo "Step 7: Viewing project configuration..."
-bioamla project config --show
+bioamla project config show
 
 # Step 8: Set up recommended directory structure
 echo ""
