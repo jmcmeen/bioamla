@@ -1,6 +1,6 @@
-# Bioamla
+# bioamla
 
-A Python CLI and library for bioacoustic analysis and machine learning-based audio classification.
+A Python CLI and library for Bioacoustics and Machine Learning Applications.
 
 > **Prerelease Notice:** This is a prerelease version. Do not use on production data.
 
@@ -105,14 +105,14 @@ print(f"{result.label}: {result.confidence:.2%}")
 
 Bioamla can be used either as a command-line tool or as a Python library. Choose based on your workflow:
 
-| Use Case | CLI | API |
-|----------|-----|-----|
-| Quick one-off analysis | `bioamla models predict ast ./audio/` | - |
-| Batch processing scripts | `bioamla models predict ast ./data/ -o results.csv` | - |
-| Integration in Python code | - | `model.predict_file("audio.wav")` |
-| Custom pipelines | - | Full access to all modules |
-| Interactive exploration | - | Jupyter notebooks |
-| Automation & cron jobs | Shell scripts with CLI | Python scripts with API |
+| Use Case                   | CLI                                                 | API                               |
+| -------------------------- | --------------------------------------------------- | --------------------------------- |
+| Quick one-off analysis     | `bioamla models predict ast ./audio/`               | -                                 |
+| Batch processing scripts   | `bioamla models predict ast ./data/ -o results.csv` | -                                 |
+| Integration in Python code | -                                                   | `model.predict_file("audio.wav")` |
+| Custom pipelines           | -                                                   | Full access to all modules        |
+| Interactive exploration    | -                                                   | Jupyter notebooks                 |
+| Automation & cron jobs     | Shell scripts with CLI                              | Python scripts with API           |
 
 **CLI Advantages:**
 
@@ -596,68 +596,14 @@ bioamla log show --limit 50            # Show command history
 
 ---
 
-## Configuration File
-
-Create `bioamla.toml` in your project directory:
-
-```toml
-[project]
-name = "my-study"
-description = "Species identification project"
-
-[audio]
-sample_rate = 16000
-mono = true
-normalize = false
-
-[visualize]
-type = "mel"
-n_fft = 2048
-hop_length = 512
-n_mels = 128
-cmap = "magma"
-
-[models]
-default_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
-
-[inference]
-batch_size = 8
-top_k = 5
-min_confidence = 0.01
-clip_seconds = 10
-overlap_seconds = 0
-
-[training]
-learning_rate = 5.0e-5
-epochs = 10
-batch_size = 16
-
-[batch]
-recursive = true
-workers = 1
-
-[output]
-format = "csv"
-overwrite = false
-
-[progress]
-enabled = true
-style = "rich"
-
-[logging]
-level = "WARNING"
-```
-
----
-
 ## Supported Model Backends
 
-| Backend | Description | Use Case |
-|---------|-------------|----------|
-| **AST** | Audio Spectrogram Transformer | General audio classification, fine-tuning |
-| **BirdNET** | Bird species classifier | Bird identification |
-| **OpenSoundscape** | ResNet-based CNNs | Transfer learning |
-| **Custom CNN** | From-scratch training | Domain-specific models |
+| Backend            | Description                   | Use Case                                  |
+| ------------------ | ----------------------------- | ----------------------------------------- |
+| **AST**            | Audio Spectrogram Transformer | General audio classification, fine-tuning |
+| **BirdNET**        | Bird species classifier       | Bird identification                       |
+| **OpenSoundscape** | ResNet-based CNNs             | Transfer learning                         |
+| **Custom CNN**     | From-scratch training         | Domain-specific models                    |
 
 ---
 
@@ -682,5 +628,3 @@ Bioamla builds on and complements other bioacoustics tools:
 ```
 
 ## License
-
-MIT License
