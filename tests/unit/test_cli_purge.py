@@ -42,7 +42,7 @@ class TestPurgeCommand:
 
     def test_purge_no_options_shows_help(self, runner):
         """Test that purge without options shows help message."""
-        result = runner.invoke(cli, ["purge"])
+        result = runner.invoke(cli, ["config", "purge"])
 
         assert result.exit_code == 0
         assert "Please specify what to purge" in result.output
@@ -50,7 +50,7 @@ class TestPurgeCommand:
 
     def test_purge_help(self, runner):
         """Test purge --help shows usage information."""
-        result = runner.invoke(cli, ["purge", "--help"])
+        result = runner.invoke(cli, ["config", "purge", "--help"])
 
         assert result.exit_code == 0
         assert "--models" in result.output
@@ -65,7 +65,7 @@ class TestPurgeCommand:
         mock_cache_info.repos = []
         mock_scan.return_value = mock_cache_info
 
-        result = runner.invoke(cli, ["purge", "--all"])
+        result = runner.invoke(cli, ["config", "purge", "--all"])
 
         assert result.exit_code == 0
         assert "No cached data found to purge" in result.output
@@ -87,7 +87,7 @@ class TestPurgeCommand:
         mock_cache_info.repos = [mock_model_repo, mock_dataset_repo]
         mock_scan.return_value = mock_cache_info
 
-        result = runner.invoke(cli, ["purge", "--models"], input="n\n")
+        result = runner.invoke(cli, ["config", "purge", "--models"], input="n\n")
 
         assert result.exit_code == 0
         assert "test/model" in result.output
@@ -111,7 +111,7 @@ class TestPurgeCommand:
         mock_cache_info.repos = [mock_model_repo, mock_dataset_repo]
         mock_scan.return_value = mock_cache_info
 
-        result = runner.invoke(cli, ["purge", "--datasets"], input="n\n")
+        result = runner.invoke(cli, ["config", "purge", "--datasets"], input="n\n")
 
         assert result.exit_code == 0
         assert "test/model" not in result.output
@@ -135,7 +135,7 @@ class TestPurgeCommand:
         mock_cache_info.repos = [mock_model_repo, mock_dataset_repo]
         mock_scan.return_value = mock_cache_info
 
-        result = runner.invoke(cli, ["purge", "--all"], input="n\n")
+        result = runner.invoke(cli, ["config", "purge", "--all"], input="n\n")
 
         assert result.exit_code == 0
         assert "test/model" in result.output
@@ -154,7 +154,7 @@ class TestPurgeCommand:
         mock_cache_info.repos = [mock_repo]
         mock_scan.return_value = mock_cache_info
 
-        result = runner.invoke(cli, ["purge", "--models"], input="n\n")
+        result = runner.invoke(cli, ["config", "purge", "--models"], input="n\n")
 
         assert result.exit_code == 0
         assert "Aborted" in result.output
@@ -177,7 +177,7 @@ class TestPurgeCommand:
         mock_cache_info.repos = [mock_repo]
         mock_scan.return_value = mock_cache_info
 
-        result = runner.invoke(cli, ["purge", "--models", "-y"])
+        result = runner.invoke(cli, ["config", "purge", "--models", "-y"])
 
         assert result.exit_code == 0
         assert "Successfully purged" in result.output
@@ -201,7 +201,7 @@ class TestPurgeCommand:
         mock_cache_info.repos = [mock_repo]
         mock_scan.return_value = mock_cache_info
 
-        result = runner.invoke(cli, ["purge", "--models"], input="y\n")
+        result = runner.invoke(cli, ["config", "purge", "--models"], input="y\n")
 
         assert result.exit_code == 0
         assert "Successfully purged" in result.output
@@ -231,7 +231,7 @@ class TestPurgeCommand:
         mock_cache_info.repos = [mock_repo]
         mock_scan.return_value = mock_cache_info
 
-        result = runner.invoke(cli, ["purge", "--models", "-y"])
+        result = runner.invoke(cli, ["config", "purge", "--models", "-y"])
 
         assert result.exit_code == 0
         assert "Successfully purged" in result.output

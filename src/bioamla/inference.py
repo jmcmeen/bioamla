@@ -239,7 +239,7 @@ def run_batch_inference(config: BatchInferenceConfig) -> Dict[str, Any]:
     Returns:
         dict: Summary statistics
     """
-    from novus_pytils.audio import get_audio_files
+    from bioamla.utils import get_audio_files
 
     input_path = Path(config.input_dir)
     output_path = Path(config.output_csv)
