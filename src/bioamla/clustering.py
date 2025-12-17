@@ -46,7 +46,7 @@ class ReductionConfig:
     # t-SNE parameters
     perplexity: float = 30.0
     learning_rate: float = 200.0
-    n_iter: int = 1000
+    max_iter: int = 1000
 
     # PCA parameters
     whiten: bool = False
@@ -105,7 +105,7 @@ def reduce_dimensions(
             n_components=config.n_components,
             perplexity=min(config.perplexity, len(embeddings) - 1),
             learning_rate=config.learning_rate,
-            n_iter=config.n_iter,
+            max_iter=config.max_iter,
             random_state=random_state,
             **kwargs
         )
