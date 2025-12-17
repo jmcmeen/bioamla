@@ -78,6 +78,18 @@ all = [
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/bioamla"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+
+[tool.hatch.build]
+include = [
+  "src/bioamla/**/*.py",
+  "src/bioamla/examples/*.sh",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

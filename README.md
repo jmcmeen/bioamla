@@ -47,6 +47,18 @@ print(f"{result.label}: {result.confidence:.2%}")
 - **[CLI Getting Started Guide](docs/cli-start.md)** - Command-line usage and workflows
 - **[API Getting Started Guide](docs/api-start.md)** - Using bioamla as a Python library
 
+### Example Workflows
+
+Bioamla includes ready-to-run shell scripts demonstrating various capabilities. Access them via the CLI:
+
+```bash
+bioamla examples list              # List all available examples
+bioamla examples show 01           # Display example content
+bioamla examples copy 01 ./        # Copy example to current directory
+bioamla examples copy-all ./       # Copy all examples to a directory
+bioamla examples info 01           # Show detailed information about an example
+```
+
 ## Features
 
 ### Machine Learning & Inference
@@ -585,6 +597,16 @@ bioamla realtime devices               # List audio input devices
 bioamla realtime test --duration 5     # Test recording
 ```
 
+### Examples
+
+```bash
+bioamla examples list                  # List available example workflows
+bioamla examples show 01               # Display example content
+bioamla examples copy 01 ./            # Copy to current directory
+bioamla examples copy-all ./workflows  # Copy all examples
+bioamla examples info 01               # Show example details
+```
+
 ### System
 
 ```bash
@@ -628,3 +650,5 @@ Bioamla builds on and complements other bioacoustics tools:
 ```
 
 ## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
