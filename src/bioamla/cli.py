@@ -84,7 +84,12 @@ def config_show(ctx):
     else:
         console.print("[dim]Source: defaults (no config file found)[/dim]\n")
 
-    for section_name in ['audio', 'visualize', 'analysis', 'batch', 'output', 'progress']:
+    # Show all configuration sections
+    sections = [
+        'project', 'audio', 'visualize', 'models', 'inference', 'training',
+        'analysis', 'batch', 'output', 'progress', 'logging'
+    ]
+    for section_name in sections:
         section = getattr(config_obj, section_name, {})
         if section:
             console.print(f"[bold blue][{section_name}][/bold blue]")
@@ -261,6 +266,254 @@ def explore(directory: str):
 
     from bioamla.tui import run_explorer
     run_explorer(directory)
+
+
+# =============================================================================
+# Project Command Group
+# =============================================================================
+
+@cli.group()
+def project():
+    """Project management commands."""
+    pass
+
+
+@project.command('init')
+@click.argument('path', required=False, default='.')
+@click.option('--name', '-n', help='Project name (defaults to directory name)')
+@click.option('--description', '-d', default='', help='Project description')
+@click.option('--template', '-t', default='default',
+              type=click.Choice(['default', 'minimal', 'research', 'production']),
+              help='Configuration template to use')
+@click.option('--config', '-c', 'config_file', type=click.Path(exists=True),
+              help='Custom config file to use as base')
+@click.option('--force', '-f', is_flag=True, help='Overwrite existing project')
+def project_init(path, name, description, template, config_file, force):
+    """
+    Initialize a new bioamla project.
+
+    Creates a .bioamla directory with configuration files.
+
+    \b
+    Templates:
+      default     - Balanced settings for general use
+      minimal     - Minimal config, most values use defaults
+      research    - Detailed logging, reproducibility focused
+      production  - Optimized for batch processing
+
+    \b
+    Examples:
+      bioamla project init                    # Current directory
+      bioamla project init ./my-project       # Specific directory
+      bioamla project init -n "Frog Study"    # With custom name
+      bioamla project init -t research        # Research template
+    """
+    from pathlib import Path
+
+    from bioamla.progress import print_error, print_success, print_warning
+    from bioamla.project import PROJECT_MARKER, create_project
+
+    project_path = Path(path).resolve()
+
+    # Check for existing project
+    if (project_path / PROJECT_MARKER).exists():
+        if not force:
+            print_error(f"Project already exists at {project_path}")
+            click.echo("Use --force to reinitialize.")
+            raise SystemExit(1)
+        print_warning("Reinitializing existing project...")
+
+    # Create project
+    try:
+        info = create_project(
+            path=project_path,
+            name=name,
+            description=description,
+            template=template,
+            config_file=Path(config_file) if config_file else None,
+        )
+        print_success(f"Created bioamla project: {info.name}")
+        click.echo(f"  Location: {info.root}")
+        click.echo(f"  Config: {info.config_path}")
+        click.echo(f"\nNext steps:")
+        click.echo(f"  cd {project_path}")
+        click.echo(f"  bioamla config show")
+    except Exception as e:
+        print_error(f"Failed to create project: {e}")
+        raise SystemExit(1)
+
+
+@project.command('status')
+def project_status():
+    """Show current project status and information."""
+    from bioamla.progress import console
+    from bioamla.project import load_project
+
+    info = load_project()
+
+    if not info:
+        click.echo("Not in a bioamla project.")
+        click.echo("Run 'bioamla project init' to create one.")
+        return
+
+    console.print(f"\n[bold]Project: {info.name}[/bold]")
+    console.print(f"[dim]Version: {info.version}[/dim]")
+    if info.description:
+        console.print(f"[dim]{info.description}[/dim]")
+    console.print(f"\n  Root: {info.root}")
+    console.print(f"  Config: {info.config_path}")
+    console.print(f"  Logs: {info.logs_path}")
+
+
+@project.command('config')
+@click.argument('action', type=click.Choice(['show', 'edit', 'reset']))
+@click.pass_context
+def project_config(ctx, action):
+    """Manage project configuration."""
+    from bioamla.project import load_project
+
+    info = load_project()
+
+    if not info:
+        click.echo("Not in a bioamla project.")
+        raise SystemExit(1)
+
+    if action == 'show':
+        # Reuse existing config show logic
+        ctx.invoke(config_show)
+    elif action == 'edit':
+        # Open config in editor
+        import os
+        editor = os.environ.get('EDITOR', 'nano')
+        os.system(f'{editor} {info.config_path}')
+    elif action == 'reset':
+        # Reset to template defaults
+        click.echo("Reset project config to defaults? [y/N] ", nl=False)
+        if click.getchar().lower() == 'y':
+            from bioamla.project import _get_template_content, _customize_template
+            template_content = _get_template_content('default')
+            customized = _customize_template(template_content, info.name, info.description)
+            info.config_path.write_text(customized)
+            click.echo("\nConfig reset to defaults.")
+        else:
+            click.echo("\nCancelled.")
+
+
+# =============================================================================
+# Log Command Group
+# =============================================================================
+
+@cli.group()
+def log():
+    """Command history and logging."""
+    pass
+
+
+@log.command('show')
+@click.option('--limit', '-n', default=20, help='Number of entries to show')
+@click.option('--command', '-c', 'cmd_filter', help='Filter by command name')
+@click.option('--all', 'show_all', is_flag=True, help='Show all entries')
+def log_show(limit, cmd_filter, show_all):
+    """Show command history."""
+    from bioamla.command_log import CommandLogger
+    from bioamla.progress import console
+
+    logger = CommandLogger()
+
+    if not logger.is_available():
+        click.echo("Command logging requires a bioamla project.")
+        click.echo("Run 'bioamla project init' to create one.")
+        return
+
+    entries = logger.get_history(
+        limit=None if show_all else limit,
+        command_filter=cmd_filter,
+    )
+
+    if not entries:
+        click.echo("No command history found.")
+        return
+
+    console.print(f"\n[bold]Command History[/bold] ({len(entries)} entries)\n")
+
+    for entry in entries:
+        status = "[green]✓[/green]" if entry.exit_code == 0 else "[red]✗[/red]"
+        duration = f"{entry.duration_seconds:.2f}s"
+        args_str = ' '.join(entry.args[:3])
+        if len(entry.args) > 3:
+            args_str += ' ...'
+        console.print(f"{status} {entry.timestamp[:19]}  {entry.command} {args_str}  [{duration}]")
+
+
+@log.command('search')
+@click.argument('query')
+def log_search(query):
+    """Search command history."""
+    from bioamla.command_log import CommandLogger
+    from bioamla.progress import console
+
+    logger = CommandLogger()
+
+    if not logger.is_available():
+        click.echo("Not in a bioamla project.")
+        return
+
+    results = logger.search(query)
+
+    if not results:
+        click.echo(f"No matches for '{query}'")
+        return
+
+    console.print(f"\n[bold]Search Results[/bold] ({len(results)} matches)\n")
+    for entry in results[:20]:
+        status = "[green]✓[/green]" if entry.exit_code == 0 else "[red]✗[/red]"
+        console.print(f"{status} {entry.timestamp[:19]}  {entry.command} {' '.join(entry.args)}")
+
+
+@log.command('clear')
+@click.confirmation_option(prompt='Clear all command history?')
+def log_clear():
+    """Clear command history."""
+    from bioamla.command_log import CommandLogger
+
+    logger = CommandLogger()
+
+    if not logger.is_available():
+        click.echo("Not in a bioamla project.")
+        return
+
+    count = logger.clear()
+    click.echo(f"Cleared {count} log entries.")
+
+
+@log.command('stats')
+def log_stats():
+    """Show command history statistics."""
+    from bioamla.command_log import CommandLogger
+    from bioamla.progress import console
+
+    logger = CommandLogger()
+
+    if not logger.is_available():
+        click.echo("Not in a bioamla project.")
+        return
+
+    stats = logger.get_stats()
+
+    if stats['total_commands'] == 0:
+        click.echo("No command history found.")
+        return
+
+    console.print(f"\n[bold]Command Statistics[/bold]\n")
+    console.print(f"  Total commands: {stats['total_commands']}")
+    console.print(f"  [green]Successful:[/green] {stats['successful_commands']}")
+    console.print(f"  [red]Failed:[/red] {stats['failed_commands']}")
+
+    if stats['command_counts']:
+        console.print(f"\n[bold]Commands by frequency:[/bold]")
+        sorted_cmds = sorted(stats['command_counts'].items(), key=lambda x: x[1], reverse=True)
+        for cmd, count in sorted_cmds[:10]:
+            console.print(f"  {cmd}: {count}")
 
 
 # =============================================================================
