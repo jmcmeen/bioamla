@@ -1,0 +1,11 @@
+# Bioamla Project Configuration - Minimal Template
+# Uses defaults for most settings
+
+[project]
+name = ""
+version = "1.0.0"
+description = ""
+created = ""
+
+# Only override essential settings here
+# All other settings use bioamla defaults

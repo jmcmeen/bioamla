@@ -1,0 +1,35 @@
+# Bioamla Project Configuration - Production Template
+# Optimized for batch processing and performance
+
+[project]
+name = ""
+version = "1.0.0"
+description = ""
+created = ""
+
+[audio]
+sample_rate = 16000
+mono = true
+normalize = false
+
+[models]
+default_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
+
+[inference]
+batch_size = 32              # Large batches for throughput
+use_fp16 = true              # Half precision for speed
+top_k = 3                    # Fewer predictions, faster
+min_confidence = 0.1         # Higher threshold, less noise
+
+[batch]
+recursive = true
+workers = 4                  # Parallel processing
+
+[output]
+format = "parquet"           # Efficient for large datasets
+verbose = false
+overwrite = true             # Allow reprocessing
+
+[logging]
+level = "WARNING"            # Minimal logging
+max_history = 100            # Keep less history
