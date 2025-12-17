@@ -169,9 +169,10 @@ class TestAudioClusterer:
 
     def test_kmeans_clustering(self):
         """Test k-means clustering."""
-        from bioamla.clustering import AudioClusterer
+        from bioamla.clustering import AudioClusterer, ClusteringConfig
 
-        clusterer = AudioClusterer(method="kmeans", n_clusters=3)
+        config = ClusteringConfig(method="kmeans", n_clusters=3)
+        clusterer = AudioClusterer(config=config)
         embeddings = np.random.randn(100, 64)
 
         labels = clusterer.fit_predict(embeddings)
@@ -182,9 +183,10 @@ class TestAudioClusterer:
 
     def test_kmeans_predict(self):
         """Test k-means predict on new data."""
-        from bioamla.clustering import AudioClusterer
+        from bioamla.clustering import AudioClusterer, ClusteringConfig
 
-        clusterer = AudioClusterer(method="kmeans", n_clusters=3)
+        config = ClusteringConfig(method="kmeans", n_clusters=3)
+        clusterer = AudioClusterer(config=config)
         train_embeddings = np.random.randn(100, 64)
         test_embeddings = np.random.randn(20, 64)
 
@@ -195,9 +197,10 @@ class TestAudioClusterer:
 
     def test_dbscan_clustering(self):
         """Test DBSCAN clustering."""
-        from bioamla.clustering import AudioClusterer
+        from bioamla.clustering import AudioClusterer, ClusteringConfig
 
-        clusterer = AudioClusterer(method="dbscan", eps=0.5, min_samples=3)
+        config = ClusteringConfig(method="dbscan", eps=0.5, min_samples=3)
+        clusterer = AudioClusterer(config=config)
         # Create clustered data
         cluster1 = np.random.randn(30, 64) + np.array([5] * 64)
         cluster2 = np.random.randn(30, 64) - np.array([5] * 64)
@@ -211,9 +214,10 @@ class TestAudioClusterer:
 
     def test_agglomerative_clustering(self):
         """Test agglomerative clustering."""
-        from bioamla.clustering import AudioClusterer
+        from bioamla.clustering import AudioClusterer, ClusteringConfig
 
-        clusterer = AudioClusterer(method="agglomerative", n_clusters=4)
+        config = ClusteringConfig(method="agglomerative", n_clusters=4)
+        clusterer = AudioClusterer(config=config)
         embeddings = np.random.randn(100, 64)
 
         labels = clusterer.fit_predict(embeddings)
@@ -223,9 +227,10 @@ class TestAudioClusterer:
 
     def test_get_cluster_centers(self):
         """Test computing cluster centers."""
-        from bioamla.clustering import AudioClusterer
+        from bioamla.clustering import AudioClusterer, ClusteringConfig
 
-        clusterer = AudioClusterer(method="kmeans", n_clusters=3)
+        config = ClusteringConfig(method="kmeans", n_clusters=3)
+        clusterer = AudioClusterer(config=config)
         embeddings = np.random.randn(100, 64)
 
         clusterer.fit(embeddings)
@@ -235,9 +240,10 @@ class TestAudioClusterer:
 
     def test_get_cluster_stats(self):
         """Test getting cluster statistics."""
-        from bioamla.clustering import AudioClusterer
+        from bioamla.clustering import AudioClusterer, ClusteringConfig
 
-        clusterer = AudioClusterer(method="kmeans", n_clusters=3)
+        config = ClusteringConfig(method="kmeans", n_clusters=3)
+        clusterer = AudioClusterer(config=config)
         embeddings = np.random.randn(100, 64)
 
         clusterer.fit(embeddings)
