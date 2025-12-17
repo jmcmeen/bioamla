@@ -32,6 +32,24 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    # Configuration
+    "RecordingConfig",
+    "DetectionEvent",
+    "SpectrogramConfig",
+    "MonitoringConfig",
+    # Core classes (thread-safe)
+    "AudioRecorder",
+    "LiveRecorder",
+    "RealtimeSpectrogram",
+    "ContinuousMonitor",
+    "AudioStreamProcessor",
+    # Utility functions
+    "list_audio_devices",
+    "get_default_input_device",
+    "test_recording",
+]
+
 
 # =============================================================================
 # Audio Recording
@@ -78,6 +96,12 @@ class AudioRecorder:
     Base audio recorder using sounddevice.
 
     Handles audio capture from microphone or audio interface.
+
+    Thread Safety:
+        This class is thread-safe. Audio capture runs in a separate callback
+        thread managed by sounddevice. The internal circular buffer is protected
+        by ``threading.Lock`` (``buffer_lock``), ensuring safe concurrent access
+        to ``get_buffer()`` while recording is active.
     """
 
     def __init__(self, config: Optional[RecordingConfig] = None):
@@ -184,6 +208,12 @@ class LiveRecorder:
     Live audio recorder with real-time detection.
 
     Continuously records audio and runs detection in background.
+
+    Thread Safety:
+        This class manages multiple threads internally: an audio recording
+        thread (via AudioRecorder) and a detection processing thread. Detection
+        events are communicated via a thread-safe ``queue.Queue``. The class is
+        safe to use from the main thread while background processing occurs.
     """
 
     def __init__(
@@ -369,6 +399,12 @@ class RealtimeSpectrogram:
     Real-time spectrogram streaming.
 
     Continuously computes and streams spectrogram data.
+
+    Thread Safety:
+        This class runs spectrogram computation in a background thread while
+        audio recording occurs in a separate callback thread. The callback
+        function is invoked from the computation thread. Safe for GUI integration
+        where callbacks update display from a worker thread.
     """
 
     def __init__(
@@ -539,6 +575,11 @@ class ContinuousMonitor:
     Continuous monitoring with alerting.
 
     Monitors audio stream and triggers alerts based on detections.
+
+    Thread Safety:
+        This class coordinates multiple background threads for audio capture
+        and detection processing. Alert callbacks and event handlers are invoked
+        from the monitoring thread. Safe to start/stop from the main thread.
     """
 
     def __init__(
@@ -657,6 +698,11 @@ class AudioStreamProcessor:
     Process audio streams with custom processing pipeline.
 
     Allows chaining multiple processing steps.
+
+    Thread Safety:
+        This class processes audio in a background thread. Processor functions
+        and output callbacks are invoked sequentially from this processing thread.
+        Adding processors or callbacks while running is not recommended.
     """
 
     def __init__(

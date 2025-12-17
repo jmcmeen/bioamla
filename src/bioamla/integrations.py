@@ -25,6 +25,18 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    # eBird integration
+    "EBirdObservation",
+    "EBirdChecklist",
+    "EBirdClient",
+    "match_detections_to_ebird",
+    # PostgreSQL integration
+    "DatabaseConfig",
+    "PostgreSQLExporter",
+    "export_detections_to_postgres",
+]
+
 
 # =============================================================================
 # eBird Integration
