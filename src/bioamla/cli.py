@@ -2410,46 +2410,83 @@ def inat_download(
 
 
 @services_inat.command('search')
+@click.option('--species', default=None, help='Filter by species name (scientific or common)')
+@click.option('--taxon-id', type=int, default=None, help='Filter by taxon ID (e.g., 20979 for Amphibia)')
 @click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
 @click.option('--project-id', default=None, help='Filter by iNaturalist project ID or slug')
-@click.option('--taxon-id', type=int, default=None, help='Filter by parent taxon ID (e.g., 20979 for Amphibia)')
 @click.option('--quality-grade', default='research', help='Quality grade: research, needs_id, or casual')
+@click.option('--has-sounds', is_flag=True, help='Only show observations with sounds')
+@click.option('--limit', type=int, default=20, help='Maximum number of results')
 @click.option('--output', '-o', default=None, help='Output file path for CSV (optional)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def inat_search(
+    species: str,
+    taxon_id: int,
     place_id: int,
     project_id: str,
-    taxon_id: int,
     quality_grade: str,
+    has_sounds: bool,
+    limit: int,
     output: str,
     quiet: bool
 ):
-    """Search for taxa with observations in a place or project."""
-    from bioamla.inat import get_taxa
+    """Search for iNaturalist observations."""
+    from bioamla.inat import search_inat_sounds
 
-    if not place_id and not project_id:
-        raise click.UsageError("At least one of --place-id or --project-id must be provided")
+    if not species and not taxon_id and not place_id and not project_id:
+        raise click.UsageError("At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)")
 
-    taxa = get_taxa(
-        place_id=place_id,
-        project_id=project_id,
-        quality_grade=quality_grade,
+    results = search_inat_sounds(
         taxon_id=taxon_id,
-        verbose=not quiet
+        taxon_name=species,
+        place_id=place_id,
+        quality_grade=quality_grade,
+        per_page=limit
     )
+
+    if not results:
+        click.echo("No observations found matching the search criteria.")
+        return
 
     if output:
         import csv
         with open(output, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=['taxon_id', 'name', 'common_name', 'observation_count'])
+            fieldnames = ['observation_id', 'scientific_name', 'common_name', 'sound_count', 'observed_on', 'location', 'url']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            writer.writerows(taxa)
-        click.echo(f"Saved {len(taxa)} taxa to {output}")
+            for obs in results:
+                taxon = obs.get('taxon', {})
+                observed_on_raw = obs.get('observed_on', '')
+                if hasattr(observed_on_raw, 'strftime'):
+                    observed_on = observed_on_raw.strftime('%Y-%m-%d')
+                else:
+                    observed_on = str(observed_on_raw) if observed_on_raw else ''
+                writer.writerow({
+                    'observation_id': obs.get('id'),
+                    'scientific_name': taxon.get('name', ''),
+                    'common_name': taxon.get('preferred_common_name', ''),
+                    'sound_count': len(obs.get('sounds', [])),
+                    'observed_on': observed_on,
+                    'location': obs.get('place_guess', ''),
+                    'url': f"https://www.inaturalist.org/observations/{obs.get('id')}"
+                })
+        click.echo(f"Saved {len(results)} observations to {output}")
     else:
-        click.echo(f"\n{'Taxon ID':<12} {'Scientific Name':<30} {'Common Name':<25} {'Obs Count':<10}")
-        click.echo("-" * 80)
-        for t in taxa:
-            click.echo(f"{t['taxon_id']:<12} {t['name']:<30} {t['common_name']:<25} {t['observation_count']:<10}")
+        click.echo(f"\nFound {len(results)} observations with sounds:\n")
+        click.echo(f"{'ID':<12} {'Species':<30} {'Sounds':<8} {'Date':<12} {'Location':<30}")
+        click.echo("-" * 95)
+        for obs in results:
+            taxon = obs.get('taxon', {})
+            obs_id = obs.get('id', '')
+            name = taxon.get('name', 'Unknown')[:28]
+            sound_count = len(obs.get('sounds', []))
+            observed_on_raw = obs.get('observed_on', '')
+            if hasattr(observed_on_raw, 'strftime'):
+                observed_on = observed_on_raw.strftime('%Y-%m-%d')
+            else:
+                observed_on = str(observed_on_raw)[:10] if observed_on_raw else ''
+            location = (obs.get('place_guess', '') or '')[:28]
+            click.echo(f"{obs_id:<12} {name:<30} {sound_count:<8} {observed_on:<12} {location:<30}")
 
 
 @services_inat.command('stats')
