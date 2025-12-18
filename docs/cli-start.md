@@ -433,9 +433,6 @@ bioamla devices
 # Show version
 bioamla version
 
-# Explore dataset structure
-bioamla explore ./dataset/
-
 # Get help
 bioamla --help
 bioamla models --help
