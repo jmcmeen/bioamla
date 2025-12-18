@@ -28,8 +28,8 @@ class TestAstPredictHelp:
         assert "--output-csv" in result.output
         assert "--model-path" in result.output
         assert "--resample-freq" in result.output
-        assert "--clip-seconds" in result.output
-        assert "--overlap-seconds" in result.output
+        assert "--segment-duration" in result.output
+        assert "--segment-overlap" in result.output
         assert "--restart" in result.output
         assert "--batch" in result.output
 

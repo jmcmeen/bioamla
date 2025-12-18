@@ -21,9 +21,11 @@
 set -e  # Exit on error
 
 # Configuration
-PREDICTIONS_FILE="./predictions.csv"
-STATE_FILE="./active_learning_state.json"
-OUTPUT_DIR="./active_learning"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
+PREDICTIONS_FILE="${PROJECT_DIR}/predictions.csv"
+STATE_FILE="${PROJECT_DIR}/active_learning_state.json"
+OUTPUT_DIR="${PROJECT_DIR}/active_learning"
 BATCH_SIZE=20
 
 echo "=== Active Learning Annotation Workflow ==="
@@ -32,13 +34,12 @@ echo ""
 mkdir -p "$OUTPUT_DIR"
 
 # Step 1: Initialize active learning session
-# The predictions CSV should have columns: file_path, predicted_label, confidence
+# The predictions CSV should have columns: filepath, start_time, end_time, predicted_label, confidence
 echo "Step 1: Initializing active learning session..."
 bioamla learn init \
-    --predictions "$PREDICTIONS_FILE" \
-    --output-state "$STATE_FILE" \
-    --strategy entropy \
-    --diversity-weight 0.3
+    "$PREDICTIONS_FILE" \
+    "$STATE_FILE" \
+    --strategy entropy
 
 # Step 2: Query samples for annotation
 # Entropy strategy selects samples where the model is most uncertain

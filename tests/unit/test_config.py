@@ -9,6 +9,7 @@ import pytest
 from bioamla.config import (
     Config,
     DEFAULT_CONFIG,
+    _migrate_deprecated_keys,
     create_default_config_file,
     find_config_file,
     get_default_config,
@@ -180,6 +181,73 @@ class TestCreateDefaultConfig:
         config = load_toml(str(filepath))
         assert "audio" in config
         assert "visualize" in config
+
+
+class TestDeprecatedKeyMigration:
+    """Tests for deprecated config key migration."""
+
+    def test_migrates_default_model_to_default_ast_model(self):
+        """Test that default_model is migrated to default_ast_model."""
+        config_data = {
+            "models": {
+                "default_model": "my-custom-model",
+                "cache_dir": "/tmp/cache",
+            }
+        }
+
+        with pytest.warns(DeprecationWarning, match="default_model.*deprecated"):
+            result = _migrate_deprecated_keys(config_data)
+
+        assert "default_ast_model" in result["models"]
+        assert result["models"]["default_ast_model"] == "my-custom-model"
+        assert "default_model" not in result["models"]
+        assert result["models"]["cache_dir"] == "/tmp/cache"
+
+    def test_prefers_new_key_when_both_present(self):
+        """Test that new key is preferred when both old and new keys exist."""
+        config_data = {
+            "models": {
+                "default_model": "old-model",
+                "default_ast_model": "new-model",
+            }
+        }
+
+        with pytest.warns(DeprecationWarning, match="Please remove the deprecated key"):
+            result = _migrate_deprecated_keys(config_data)
+
+        assert result["models"]["default_ast_model"] == "new-model"
+        assert "default_model" not in result["models"]
+
+    def test_no_warning_without_deprecated_key(self):
+        """Test that no warning is raised when deprecated key is not present."""
+        config_data = {
+            "models": {
+                "default_ast_model": "my-model",
+            }
+        }
+
+        # Should not raise any warnings
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result = _migrate_deprecated_keys(config_data)
+
+        assert result["models"]["default_ast_model"] == "my-model"
+
+    def test_load_config_with_deprecated_key(self, temp_dir):
+        """Test that load_config properly migrates deprecated keys."""
+        filepath = temp_dir / "deprecated.toml"
+        content = """
+[models]
+default_model = "old-style-model"
+"""
+        filepath.write_text(content)
+
+        with pytest.warns(DeprecationWarning, match="default_model.*deprecated"):
+            config = load_config(str(filepath))
+
+        assert config.models.get("default_ast_model") == "old-style-model"
+        assert "default_model" not in config.models
 
 
 @pytest.fixture

@@ -335,7 +335,7 @@ class BaseAudioModel(ABC):
                 "audio_input": {0: "batch_size"},
                 "logits": {0: "batch_size"},
             },
-            opset_version=14,
+            opset_version=18,
         )
         return path
 
