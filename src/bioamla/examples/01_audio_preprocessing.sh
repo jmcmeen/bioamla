@@ -20,17 +20,42 @@
 set -e  # Exit on error
 
 # Configuration
-INPUT_DIR="./raw_recordings"
-OUTPUT_DIR="./processed_audio"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
+INPUT_DIR="${PROJECT_DIR}/raw_recordings"
+OUTPUT_DIR="${PROJECT_DIR}/processed_audio"
 SAMPLE_RATE=22050
 TARGET_DB=-20
 
 echo "=== Audio Preprocessing Workflow ==="
+echo "Input directory: $INPUT_DIR"
+echo ""
+
+# Check if input directory exists and has audio files
+if [ ! -d "$INPUT_DIR" ]; then
+    echo "Error: Input directory '$INPUT_DIR' does not exist."
+    echo "Usage: $0 [input_directory]"
+    echo "Create the directory and add audio files, or specify a different path."
+    exit 1
+fi
+
+# Count audio files
+AUDIO_COUNT=$(find "$INPUT_DIR" -type f \( -name "*.wav" -o -name "*.mp3" -o -name "*.flac" -o -name "*.ogg" -o -name "*.m4a" \) 2>/dev/null | wc -l)
+if [ "$AUDIO_COUNT" -eq 0 ]; then
+    echo "Error: No audio files found in '$INPUT_DIR'."
+    echo "Supported formats: wav, mp3, flac, ogg, m4a"
+    echo ""
+    echo "Add some audio files and try again, or specify a different directory:"
+    echo "  $0 /path/to/audio/files"
+    exit 1
+fi
+
+echo "Found $AUDIO_COUNT audio file(s) to process."
 echo ""
 
 # Step 1: Convert all audio files to WAV format
 echo "Step 1: Converting audio files to WAV format..."
-bioamla audio convert "$INPUT_DIR" wav --output "$OUTPUT_DIR/converted"
+bioamla audio convert "$INPUT_DIR" wav --output "$OUTPUT_DIR/converted" --batch
 
 # Step 2: Resample to consistent sample rate
 echo ""
@@ -45,9 +70,7 @@ echo ""
 echo "Step 3: Applying bandpass filter (500Hz - 10kHz)..."
 bioamla audio filter "$OUTPUT_DIR/resampled" \
     --output "$OUTPUT_DIR/filtered" \
-    --bandpass \
-    --low 500 \
-    --high 10000 \
+    --bandpass "500-10000" \
     --batch
 
 # Step 4: Denoise using spectral subtraction
@@ -72,6 +95,7 @@ echo ""
 echo "Step 6: Segmenting audio on silence..."
 bioamla audio segment "$OUTPUT_DIR/normalized" \
     --output "$OUTPUT_DIR/segments" \
+    --batch \
     --silence-threshold -40 \
     --min-silence 0.3 \
     --min-segment 0.5
@@ -82,7 +106,7 @@ echo "Step 7: Analyzing processed audio files..."
 bioamla audio analyze "$OUTPUT_DIR/segments" \
     --batch \
     --output "$OUTPUT_DIR/analysis_report.csv" \
-    --output-format csv
+    --format csv
 
 echo ""
 echo "=== Preprocessing Complete ==="

@@ -45,7 +45,6 @@ Submodules:
     - signal: Audio signal processing
     - torchaudio: Audio processing utilities
     - training: AST model training
-    - tui: Text User Interface
     - visualize: Audio visualization
     - wildlife_acoustics: Wildlife Acoustics integration
 

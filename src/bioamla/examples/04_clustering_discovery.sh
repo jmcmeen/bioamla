@@ -20,8 +20,10 @@
 set -e  # Exit on error
 
 # Configuration
-AUDIO_DIR="./unlabeled_recordings"
-OUTPUT_DIR="./discovery_results"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
+AUDIO_DIR="${PROJECT_DIR}/raw_recordings"
+OUTPUT_DIR="${PROJECT_DIR}/discovery_results"
 MODEL_PATH="MIT/ast-finetuned-audioset-10-10-0.4593"
 
 echo "=== Clustering and Sound Discovery Workflow ==="
@@ -44,19 +46,15 @@ bioamla models embed "$AUDIO_DIR" \
 # UMAP - good for preserving local and global structure
 echo ""
 echo "Step 2a: Reducing dimensions with UMAP..."
-bioamla cluster reduce \
-    --embeddings "$OUTPUT_DIR/embeddings.npy" \
+bioamla cluster reduce "$OUTPUT_DIR/embeddings.npy" \
     --output "$OUTPUT_DIR/umap_embeddings.npy" \
     --method umap \
-    --n-components 2 \
-    --n-neighbors 15 \
-    --min-dist 0.1
+    --n-components 2
 
 # t-SNE - good for visualization
 echo ""
 echo "Step 2b: Reducing dimensions with t-SNE..."
-bioamla cluster reduce \
-    --embeddings "$OUTPUT_DIR/embeddings.npy" \
+bioamla cluster reduce "$OUTPUT_DIR/embeddings.npy" \
     --output "$OUTPUT_DIR/tsne_embeddings.npy" \
     --method tsne \
     --n-components 2
@@ -64,61 +62,51 @@ bioamla cluster reduce \
 # PCA - fast, linear reduction
 echo ""
 echo "Step 2c: Reducing dimensions with PCA..."
-bioamla cluster reduce \
-    --embeddings "$OUTPUT_DIR/embeddings.npy" \
+bioamla cluster reduce "$OUTPUT_DIR/embeddings.npy" \
     --output "$OUTPUT_DIR/pca_embeddings.npy" \
     --method pca \
     --n-components 10
 
 # Step 3: Cluster the embeddings
 
-# HDBSCAN - density-based, finds clusters of varying shapes
-# Does not require specifying number of clusters
+# DBSCAN - density-based, finds clusters of varying shapes
 echo ""
-echo "Step 3a: Clustering with HDBSCAN..."
-bioamla cluster cluster \
-    --embeddings "$OUTPUT_DIR/umap_embeddings.npy" \
-    --output "$OUTPUT_DIR/hdbscan_labels.npy" \
-    --method hdbscan \
-    --min-cluster-size 5 \
+echo "Step 3a: Clustering with DBSCAN..."
+bioamla cluster cluster "$OUTPUT_DIR/umap_embeddings.npy" \
+    --output "$OUTPUT_DIR/dbscan_labels.npy" \
+    --method dbscan \
+    --eps 0.5 \
     --min-samples 3
 
 # K-means - requires specifying number of clusters
 echo ""
 echo "Step 3b: Clustering with K-means (k=10)..."
-bioamla cluster cluster \
-    --embeddings "$OUTPUT_DIR/pca_embeddings.npy" \
+bioamla cluster cluster "$OUTPUT_DIR/pca_embeddings.npy" \
     --output "$OUTPUT_DIR/kmeans_labels.npy" \
     --method kmeans \
     --n-clusters 10
 
-# DBSCAN - density-based with fixed epsilon
+# Agglomerative - hierarchical clustering
 echo ""
-echo "Step 3c: Clustering with DBSCAN..."
-bioamla cluster cluster \
-    --embeddings "$OUTPUT_DIR/umap_embeddings.npy" \
-    --output "$OUTPUT_DIR/dbscan_labels.npy" \
-    --method dbscan \
-    --eps 0.5 \
-    --min-samples 5
+echo "Step 3c: Clustering with Agglomerative..."
+bioamla cluster cluster "$OUTPUT_DIR/umap_embeddings.npy" \
+    --output "$OUTPUT_DIR/agglomerative_labels.npy" \
+    --method agglomerative \
+    --n-clusters 10
 
 # Step 4: Analyze clusters
 echo ""
 echo "Step 4: Analyzing cluster structure..."
-bioamla cluster analyze \
-    --embeddings "$OUTPUT_DIR/embeddings.npy" \
-    --labels "$OUTPUT_DIR/hdbscan_labels.npy" \
+bioamla cluster analyze "$OUTPUT_DIR/embeddings.npy" "$OUTPUT_DIR/dbscan_labels.npy" \
     --output "$OUTPUT_DIR/cluster_analysis.json"
 
 # Step 5: Novelty detection
 # Find unusual or rare sounds that don't fit known patterns
 echo ""
 echo "Step 5: Detecting novel/unusual sounds..."
-bioamla cluster novelty \
-    --embeddings "$OUTPUT_DIR/embeddings.npy" \
+bioamla cluster novelty "$OUTPUT_DIR/embeddings.npy" \
     --output "$OUTPUT_DIR/novelty_scores.npy" \
     --method isolation_forest \
-    --contamination 0.1 \
     --threshold 0.8
 
 echo ""
@@ -130,9 +118,9 @@ echo "  - embeddings.npy: Raw audio embeddings"
 echo "  - umap_embeddings.npy: 2D UMAP projection for visualization"
 echo "  - tsne_embeddings.npy: 2D t-SNE projection for visualization"
 echo "  - pca_embeddings.npy: 10D PCA projection for downstream tasks"
-echo "  - hdbscan_labels.npy: HDBSCAN cluster assignments"
-echo "  - kmeans_labels.npy: K-means cluster assignments"
 echo "  - dbscan_labels.npy: DBSCAN cluster assignments"
+echo "  - kmeans_labels.npy: K-means cluster assignments"
+echo "  - agglomerative_labels.npy: Agglomerative cluster assignments"
 echo "  - cluster_analysis.json: Cluster statistics and metrics"
 echo "  - novelty_scores.npy: Anomaly scores (higher = more unusual)"
 echo ""

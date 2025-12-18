@@ -20,8 +20,10 @@
 set -e  # Exit on error
 
 # Configuration
-AUDIO_DIR="./survey_recordings"
-OUTPUT_DIR="./detections"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
+AUDIO_DIR="${PROJECT_DIR}/raw_recordings"
+OUTPUT_DIR="${PROJECT_DIR}/detections"
 
 echo "=== Species Detection Workflow ==="
 echo ""
@@ -37,7 +39,7 @@ bioamla detect energy "$AUDIO_DIR" \
     --threshold 0.5 \
     --min-duration 0.1 \
     --output "$OUTPUT_DIR/energy_detections.csv" \
-    --output-format csv
+    --format csv
 
 # Step 2: RIBBIT Detection
 # Detect periodic pulsed calls characteristic of many frog species
@@ -50,9 +52,9 @@ bioamla detect ribbit "$AUDIO_DIR" \
     --low-freq 500 \
     --high-freq 4000 \
     --window 2.0 \
-    --threshold 0.3 \
+    --min-score 0.3 \
     --output "$OUTPUT_DIR/ribbit_detections.csv" \
-    --output-format csv
+    --format csv
 
 # Step 3: CWT Peak Detection
 # Detect call sequences using continuous wavelet transform
@@ -64,9 +66,10 @@ bioamla detect peaks "$AUDIO_DIR" \
     --min-distance 0.05 \
     --low-freq 1000 \
     --high-freq 5000 \
-    --sequences 3 \
+    --sequences \
+    --min-peaks 3 \
     --output "$OUTPUT_DIR/peak_detections.csv" \
-    --output-format csv
+    --format csv
 
 # Step 4: Accelerating Pattern Detection
 # Detect species with calls that increase in rate over time
@@ -79,7 +82,7 @@ bioamla detect accelerating "$AUDIO_DIR" \
     --low-freq 500 \
     --high-freq 3000 \
     --output "$OUTPUT_DIR/accelerating_detections.csv" \
-    --output-format csv
+    --format csv
 
 # Step 5: Batch Detection with Multiple Detectors
 # Run all detectors on the dataset and merge results

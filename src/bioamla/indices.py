@@ -679,8 +679,9 @@ def batch_compute_indices(
 
         try:
             indices = compute_indices_from_file(filepath, **kwargs)
-            result = indices.to_dict()
-            result["filepath"] = str(filepath)
+            # Build result with filepath first, success last for better CSV column order
+            result = {"filepath": str(filepath)}
+            result.update(indices.to_dict())
             result["success"] = True
             results.append(result)
         except Exception as e:

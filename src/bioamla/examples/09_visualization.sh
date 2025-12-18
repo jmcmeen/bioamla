@@ -18,9 +18,12 @@
 set -e  # Exit on error
 
 # Configuration
-AUDIO_FILE="./recording.wav"
-AUDIO_DIR="./recordings"
-OUTPUT_DIR="./visualizations"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
+AUDIO_DIR="${PROJECT_DIR}/raw_recordings"
+AUDIO_FILE=$(find "$AUDIO_DIR" -type f \( -name "*.wav" -o -name "*.mp3" -o -name "*.flac" \) | head -1)
+OUTPUT_DIR="${PROJECT_DIR}/visualizations"
+
 
 echo "=== Visualization Workflow ==="
 echo ""
@@ -35,11 +38,7 @@ bioamla audio visualize "$AUDIO_FILE" \
     --n-fft 2048 \
     --hop-length 512 \
     --n-mels 128 \
-    --fmin 0 \
-    --fmax 11025 \
-    --colormap viridis \
-    --db-scale \
-    --title "Mel Spectrogram"
+    --cmap viridis
 
 # Step 2: Generate STFT spectrogram (linear frequency scale)
 echo ""
@@ -49,9 +48,7 @@ bioamla audio visualize "$AUDIO_FILE" \
     --type stft \
     --n-fft 2048 \
     --hop-length 512 \
-    --colormap magma \
-    --db-scale \
-    --title "STFT Spectrogram"
+    --cmap magma
 
 # Step 3: Generate MFCC visualization
 echo ""
@@ -62,16 +59,14 @@ bioamla audio visualize "$AUDIO_FILE" \
     --n-mfcc 20 \
     --n-fft 2048 \
     --hop-length 512 \
-    --colormap coolwarm \
-    --title "MFCC Features"
+    --cmap coolwarm
 
 # Step 4: Generate waveform plot
 echo ""
 echo "Step 4: Generating waveform visualization..."
 bioamla audio visualize "$AUDIO_FILE" \
     --output "$OUTPUT_DIR/waveform.png" \
-    --type waveform \
-    --title "Audio Waveform"
+    --type waveform
 
 # Step 5: Customize spectrogram appearance
 echo ""
@@ -82,13 +77,8 @@ bioamla audio visualize "$AUDIO_FILE" \
     --n-fft 4096 \
     --hop-length 256 \
     --n-mels 256 \
-    --fmin 500 \
-    --fmax 8000 \
-    --colormap plasma \
-    --db-scale \
-    --figsize 12 4 \
-    --dpi 150 \
-    --title "High-Resolution Spectrogram (500-8000 Hz)"
+    --cmap plasma \
+    --dpi 150
 
 # Step 6: Generate spectrograms with different colormaps
 echo ""
@@ -97,28 +87,19 @@ for cmap in viridis plasma inferno magma cividis; do
     bioamla audio visualize "$AUDIO_FILE" \
         --output "$OUTPUT_DIR/colormap_${cmap}.png" \
         --type mel \
-        --colormap "$cmap" \
-        --db-scale \
-        --title "Mel Spectrogram ($cmap)"
+        --cmap "$cmap"
 done
 
 # Step 7: Batch generate spectrograms for directory
 echo ""
 echo "Step 7: Batch generating spectrograms..."
-if [ -d "$AUDIO_DIR" ]; then
-    for audio_file in "$AUDIO_DIR"/*.wav; do
-        if [ -f "$audio_file" ]; then
-            filename=$(basename "$audio_file" .wav)
-            bioamla audio visualize "$audio_file" \
-                --output "$OUTPUT_DIR/batch/${filename}.png" \
-                --type mel \
-                --colormap viridis \
-                --db-scale
-        fi
-    done
-else
-    echo "   (Skipped - $AUDIO_DIR not found)"
-fi
+mkdir -p "$OUTPUT_DIR/batch"
+bioamla audio visualize "$AUDIO_DIR" \
+    --batch \
+    --output "$OUTPUT_DIR/batch" \
+    --type mel \
+    --cmap viridis \
+    --progress
 
 # Step 8: Generate zoomed spectrogram (specific time range)
 echo ""
@@ -131,9 +112,7 @@ bioamla audio trim "$AUDIO_FILE" \
 bioamla audio visualize "$OUTPUT_DIR/segment.wav" \
     --output "$OUTPUT_DIR/zoomed_spectrogram.png" \
     --type mel \
-    --colormap viridis \
-    --db-scale \
-    --title "Spectrogram (1-3 seconds)"
+    --cmap viridis
 
 echo ""
 echo "=== Visualization Complete ==="
@@ -153,4 +132,4 @@ echo "  - Use Mel scale for general analysis and ML"
 echo "  - Use STFT for precise frequency measurements"
 echo "  - Use MFCC for speech-like sound analysis"
 echo "  - Adjust n-fft for time/frequency resolution tradeoff"
-echo "  - Use fmin/fmax to focus on frequency bands of interest"
+echo "  - Use db-min/db-max to adjust dynamic range display"
