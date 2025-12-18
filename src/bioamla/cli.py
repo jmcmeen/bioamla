@@ -910,6 +910,10 @@ def ast_train(
         except ImportError:
             print("Warning: MLflow not installed. Install with 'pip install mlflow' to enable MLflow tracking.")
 
+    # Convert comma-separated report_to string to a list for TrainingArguments
+    if report_to and "," in report_to:
+        report_to = [r.strip() for r in report_to.split(",")]
+
     dataset = load_dataset(train_dataset, split=split)
 
     if isinstance(dataset, Dataset):
