@@ -644,7 +644,6 @@ bioamla examples info 01               # Show example details
 ```bash
 bioamla devices                        # Show CUDA/GPU info
 bioamla version                        # Show version
-bioamla explore ./dataset/             # Explore dataset structure
 bioamla log show --limit 50            # Show command history
 ```
 
