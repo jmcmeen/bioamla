@@ -21,7 +21,8 @@
 set -e  # Exit on error
 
 # Configuration
-PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
 PREDICTIONS_FILE="${PROJECT_DIR}/predictions.csv"
 STATE_FILE="${PROJECT_DIR}/active_learning_state.json"
 OUTPUT_DIR="${PROJECT_DIR}/active_learning"

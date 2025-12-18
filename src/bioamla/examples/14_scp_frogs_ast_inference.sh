@@ -21,9 +21,10 @@
 set -e
 
 # Configuration
-PROJECT_DIR="${PROJECT_DIR:-./my_project}"
-AUDIO_INPUT="${1:-${PROJECT_DIR}/frog_recordings}"
-MODEL_PATH="${2:-bioamla/scp-frogs}"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
+AUDIO_INPUT="${PROJECT_DIR}/frog_recordings"
+MODEL_PATH="${1:-bioamla/scp-frogs}"
 OUTPUT_DIR="${PROJECT_DIR}/frog_predictions"
 
 echo "=== SCP Frogs AST Inference Workflow ==="

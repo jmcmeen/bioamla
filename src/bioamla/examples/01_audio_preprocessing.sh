@@ -20,7 +20,8 @@
 set -e  # Exit on error
 
 # Configuration
-PROJECT_DIR="frog_acoustic_study"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
 INPUT_DIR="${PROJECT_DIR}/raw_recordings"
 OUTPUT_DIR="${PROJECT_DIR}/processed_audio"
 SAMPLE_RATE=22050

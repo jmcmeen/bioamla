@@ -20,7 +20,8 @@
 set -e
 
 # Configuration
-PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
 
 echo "=== ESC-50 AST Training Workflow ==="
 echo ""
