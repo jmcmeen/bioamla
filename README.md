@@ -1,566 +1,675 @@
-# Bioacoustics and Machine Learning Applications (bioamla)
+# bioamla
 
-A Python package for audio analysis and machine learning-based audio classification, focusing on bioacoustic data. Bioamla specializes in wildlife sound analysis using Audio Spectrogram Transformer (AST) models.
+A Python CLI and library for Bioacoustics and Machine Learning Applications.
 
-> **Prerelease Notice:** This is a prerelease version of bioamla. The package is functional and ready for use, but additional features, improvements, and documentation updates are planned for 2026.
+> **Prerelease Notice:** This is a prerelease version. Do not use on production data.
 
-## Description
+## Installation
 
-Bioamla provides a toolkit for researchers, biologists, and machine learning engineers working with environmental sound data and species identification. The package combines robust audio processing capabilities with deep learning models to enable:
+### System Dependencies
 
-- **Audio Classification**: Classify wildlife sounds, species calls, and environmental audio using pre-trained or fine-tuned AST models
-- **Model Training**: Fine-tune Audio Spectrogram Transformer models on custom datasets from Hugging Face Hub
-- **Batch Processing**: Efficiently process directories of audio files with temporal segmentation
-- **Audio Processing**: Load, resample, split, and extract metadata from various audio formats
-- **System Diagnostics**: Monitor GPU/CUDA availability and package versions
+Bioamla requires some system-level libraries for full functionality. Install them using the provided script:
 
-## Setup
+```bash
+# Download and run the installer (or clone the repo first)
+curl -fsSL https://raw.githubusercontent.com/jmcmeen/bioamla/main/scripts/install-deps.sh | bash
 
-### Requirements
+# Or if you have the repo cloned:
+./scripts/install-deps.sh
 
-- Python 3.8 or higher
-- CUDA-capable GPU (recommended for training and large-scale inference)
+# Check what's installed:
+./scripts/install-deps.sh --check
+```
 
-### Installation w/ pip
+**Manual installation by platform:**
 
-Install bioamla using pip:
+| Platform | Command |
+|----------|---------|
+| Ubuntu/Debian | `sudo apt install ffmpeg libsndfile1 portaudio19-dev` |
+| Fedora | `sudo dnf install ffmpeg libsndfile portaudio` |
+| Arch Linux | `sudo pacman -S ffmpeg libsndfile portaudio` |
+| macOS | `brew install ffmpeg libsndfile portaudio` |
+
+| Dependency | Purpose | Required For |
+|------------|---------|--------------|
+| FFmpeg | Audio format conversion | MP3, FLAC, and other formats (WAV works without) |
+| libsndfile | Audio file I/O | Reading/writing audio files |
+| PortAudio | Audio hardware access | Real-time recording (`bioamla realtime` commands) |
+
+### Python Package
 
 ```bash
 pip install bioamla
 ```
 
-### Installation from Source
-
-For development or the latest version:
+For GPU support, install PyTorch with CUDA first:
 
 ```bash
-git clone https://github.com/jmcmeen/bioamla.git
-cd bioamla
-pip install -e .
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install bioamla
 ```
 
-### Verify Installation
+## Quick Start
 
-Check that bioamla is installed correctly:
+**CLI:**
 
 ```bash
-bioamla version
-bioamla devices
+# Run inference on audio files
+bioamla models predict ast ./audio/
+
+# Initialize a project for organized workflows
+bioamla project init -n "My Study"
+
+# Generate spectrograms
+bioamla audio visualize recording.wav -o spectrogram.png
 ```
 
-The `devices` command will show your CUDA/GPU availability and configuration.
-
-## Examples
-
-### 1. Basic Audio Classification
-
-Classify a single audio file using a pre-trained model:
-
-```bash
-bioamla ast predict path/to/audio.wav --model-path bioamla/scp-frogs
-```
-
-This will output the predicted class for the audio file.
-
-### 2. Batch Inference on Directory
-
-Process all audio files in a directory and export results to CSV using the `--batch` flag:
-
-```bash
-bioamla ast predict /path/to/audio/directory --batch \
-  --output-csv results.csv \
-  --model-path bioamla/scp-frogs \
-  --resample-freq 16000 \
-  --clip-seconds 1 \
-  --overlap-seconds 0.5
-```
-
-This creates a CSV file with columns: `filepath`, `start`, `stop`, `prediction`
-
-**Optimized inference with GPU acceleration:**
-
-```bash
-bioamla ast predict /path/to/audio/directory --batch \
-  --model-path bioamla/scp-frogs \
-  --batch-size 16 \
-  --fp16 \
-  --compile \
-  --workers 4
-```
-
-Performance options (batch mode only):
-
-- `--batch-size`: Process multiple segments in one forward pass (2-4x faster)
-- `--fp16`: Use half-precision inference (~2x faster on modern GPUs)
-- `--compile`: Use torch.compile() for optimized execution (1.5-2x faster, PyTorch 2.0+)
-- `--workers`: Parallel file loading for I/O-bound workloads
-
-**Resume interrupted processing:**
-
-```bash
-bioamla ast predict /path/to/audio/directory --batch \
-  --output-csv results.csv \
-  --no-restart
-```
-
-### 3. Fine-tune a Model
-
-Train a custom model on your own dataset from Hugging Face Hub:
-
-```bash
-bioamla ast train \
-  --training-dir ./my-training \
-  --base-model MIT/ast-finetuned-audioset-10-10-0.4593 \
-  --train-dataset your-username/your-dataset \
-  --num-train-epochs 10 \
-  --learning-rate 5e-5 \
-  --per-device-train-batch-size 8 \
-  --eval-strategy epoch \
-  --report-to tensorboard
-```
-
-Monitor training with TensorBoard:
-
-```bash
-tensorboard --logdir ./my-training
-```
-
-**Push trained model to Hugging Face Hub:**
-
-```bash
-bioamla ast train \
-  --training-dir ./my-training \
-  --train-dataset your-username/your-dataset \
-  --num-train-epochs 10 \
-  --push-to-hub
-```
-
-### 4. Model Evaluation
-
-Evaluate model performance on a test dataset with ground truth labels:
-
-```bash
-bioamla ast evaluate ./test_audio --model-path bioamla/scp-frogs \
-  --ground-truth labels.csv
-```
-
-This outputs:
-
-- Accuracy, Precision, Recall, F1 Score
-- Per-class metrics
-- Confusion matrix
-
-**Save results to different formats:**
-
-```bash
-# JSON output
-bioamla ast evaluate ./test_audio --ground-truth labels.csv \
-  --output results.json --format json
-
-# CSV output (per-class metrics)
-bioamla ast evaluate ./test_audio --ground-truth labels.csv \
-  --output results.csv --format csv
-```
-
-### 5. Spectrogram Visualization
-
-Generate spectrograms and other audio visualizations:
-
-**Single file:**
-
-```bash
-bioamla visualize audio.wav --output spectrogram.png
-```
-
-**Batch processing:**
-
-```bash
-bioamla visualize ./audio_dir --batch --output ./spectrograms
-```
-
-**Visualization types:**
-
-```bash
-# Mel spectrogram (default)
-bioamla visualize audio.wav --type mel --output mel_spec.png
-
-# MFCC visualization
-bioamla visualize audio.wav --type mfcc --output mfcc.png
-
-# Waveform plot
-bioamla visualize audio.wav --type waveform --output waveform.png
-```
-
-### 6. Audio Augmentation
-
-Expand training datasets with augmented audio:
-
-```bash
-bioamla augment ./audio --output ./augmented \
-  --add-noise 3-30 \
-  --time-stretch 0.8-1.2 \
-  --pitch-shift -2,2 \
-  --multiply 5
-```
-
-This creates 5 augmented copies of each audio file with random combinations of:
-
-- Gaussian noise (SNR 3-30 dB)
-- Time stretching (80%-120% speed)
-- Pitch shifting (-2 to +2 semitones)
-
-### 7. Signal Processing
-
-Process audio files with filtering, denoising, and other operations:
-
-**Apply frequency filters:**
-
-```bash
-# Bandpass filter (keep 1000-8000 Hz)
-bioamla audio filter recording.wav --bandpass 1000-8000 --output filtered.wav
-
-# Lowpass filter (remove high frequencies)
-bioamla audio filter recording.wav --lowpass 4000 --output lowpassed.wav
-
-# Highpass filter (remove low frequencies)
-bioamla audio filter recording.wav --highpass 500 --output highpassed.wav
-```
-
-**Remove noise:**
-
-```bash
-bioamla audio denoise noisy.wav --output clean.wav --strength 1.5
-```
-
-**Split audio on silence:**
-
-```bash
-bioamla audio segment long_recording.wav --output ./segments \
-  --silence-threshold -40 \
-  --min-silence 0.3 \
-  --min-segment 0.5
-```
-
-**Detect onset events:**
-
-```bash
-bioamla audio detect-events recording.wav --output events.csv
-```
-
-**Normalize loudness:**
-
-```bash
-# RMS normalization (default)
-bioamla audio normalize recording.wav --target-db -20 --output normalized.wav
-
-# Peak normalization
-bioamla audio normalize recording.wav --peak --target-db -3 --output normalized.wav
-```
-
-**Resample audio:**
-
-```bash
-bioamla audio resample recording.wav --rate 16000 --output resampled.wav
-```
-
-**Trim audio:**
-
-```bash
-# Trim by time
-bioamla audio trim recording.wav --start 1.5 --end 5.0 --output trimmed.wav
-
-# Trim silence from start and end
-bioamla audio trim recording.wav --silence --threshold -40 --output trimmed.wav
-```
-
-**Batch processing:**
-
-All signal processing commands support `--batch` for directory processing:
-
-```bash
-bioamla audio normalize ./recordings --batch --output ./normalized --target-db -20
-bioamla audio filter ./recordings --batch --output ./filtered --lowpass 8000
-```
-
-### 8. Audio File Utilities
-
-**List all audio files in a directory:**
-
-```bash
-bioamla audio list /path/to/audio/directory
-```
-
-**Extract WAV file metadata:**
-
-```bash
-bioamla audio info /path/to/file.wav
-```
-
-**Download audio files:**
-
-```bash
-bioamla download https://example.com/audio.zip ./downloads
-```
-
-**Extract archives:**
-
-```bash
-bioamla unzip ./downloads/audio.zip ./extracted
-```
-
-### 9. License File Generation
-
-Generate license/attribution files from dataset metadata:
-
-**Single dataset:**
-
-```bash
-bioamla dataset license ./my_dataset
-```
-
-**With a template file:**
-
-```bash
-bioamla dataset license ./my_dataset --template ./license_template.txt
-```
-
-**Process all datasets in a directory:**
-
-```bash
-bioamla dataset license ./audio_datasets --batch
-```
-
-**Custom output filename:**
-
-```bash
-bioamla dataset license ./my_dataset --output ATTRIBUTION.txt
-```
-
-The metadata CSV must contain these columns: `file_name`, `attr_id`, `attr_lic`, `attr_url`, `attr_note`
-
-### 10. Python API Usage
-
-Use bioamla programmatically in your Python scripts:
+**Python API:**
 
 ```python
-from bioamla.ast import load_pretrained_ast_model, wav_ast_inference
-from bioamla.torchaudio import load_waveform_tensor
+from bioamla.models import load_model
 
-# Load a pre-trained model
-model, processor = load_pretrained_ast_model("bioamla/scp-frogs")
+model = load_model("ast")
+result = model.predict_file("recording.wav")
+print(f"{result.label}: {result.confidence:.2%}")
+```
 
-# Run inference on a single file
-predictions = wav_ast_inference(
-    wav_filepath="path/to/audio.wav",
-    model_path="bioamla/scp-frogs",
-    resample_freq=16000
+## Documentation
+
+- **[CLI Getting Started Guide](docs/cli-start.md)** - Command-line usage and workflows
+- **[API Getting Started Guide](docs/api-start.md)** - Using bioamla as a Python library
+
+### Example Workflows
+
+Bioamla includes ready-to-run shell scripts demonstrating various capabilities. Access them via the CLI:
+
+```bash
+bioamla examples list              # List all available examples
+bioamla examples show 01           # Display example content
+bioamla examples copy 01 ./        # Copy example to current directory
+bioamla examples copy-all ./       # Copy all examples to a directory
+bioamla examples info 01           # Show detailed information about an example
+```
+
+## Features
+
+### Machine Learning & Inference
+
+- Audio classification using Audio Spectrogram Transformer (AST) models
+- Batch inference for large-scale analysis with CSV/JSON output
+- Model fine-tuning on custom labeled datasets
+- Embedding extraction for clustering and analysis
+- Support for multiple backends: AST, BirdNET, OpenSoundscape, custom CNNs
+
+### Audio Processing
+
+- Signal filtering (bandpass, lowpass, highpass)
+- Audio denoising (spectral and waveform methods)
+- Silence-based segmentation and onset detection
+- Normalization and resampling
+- Data augmentation (noise injection, time stretch, pitch shift)
+
+### Visualization & Analysis
+
+- Spectrogram generation (mel, STFT, MFCC, waveform)
+- Acoustic indices (ACI, ADI, AEI, BIO, NDSI)
+- Dimensionality reduction (UMAP, t-SNE, PCA)
+- Clustering (HDBSCAN, K-means, DBSCAN)
+- Novelty detection for discovering unknown sounds
+
+### Specialized Detection
+
+- Band-limited energy detection
+- Periodic call detection (e.g., frog calls)
+- CWT peak detection
+- Accelerating pattern detection
+
+### Real-time & Active Learning
+
+- Live audio recording with detection callbacks
+- Real-time spectrogram streaming
+- Active learning workflows with uncertainty sampling
+- Annotation queue management
+
+### Project Management
+
+- Project-based workflows with TOML configuration
+- Command history tracking
+- Configuration hierarchy (project, user, system defaults)
+- Multiple project templates (default, minimal, research, production)
+
+### External Integrations
+
+- iNaturalist audio search and download
+- Xeno-canto recording search
+- eBird observation integration
+- PostgreSQL export
+
+## CLI vs API
+
+Bioamla can be used either as a command-line tool or as a Python library. Choose based on your workflow:
+
+| Use Case                   | CLI                                                 | API                               |
+| -------------------------- | --------------------------------------------------- | --------------------------------- |
+| Quick one-off analysis     | `bioamla models predict ast ./audio/`               | -                                 |
+| Batch processing scripts   | `bioamla models predict ast ./data/ -o results.csv` | -                                 |
+| Integration in Python code | -                                                   | `model.predict_file("audio.wav")` |
+| Custom pipelines           | -                                                   | Full access to all modules        |
+| Interactive exploration    | -                                                   | Jupyter notebooks                 |
+| Automation & cron jobs     | Shell scripts with CLI                              | Python scripts with API           |
+
+**CLI Advantages:**
+
+- No coding required
+- Project system with config files
+- Built-in command history
+- Progress bars and formatted output
+
+**API Advantages:**
+
+- Full programmatic control
+- Access to intermediate results (embeddings, spectrograms)
+- Custom model pipelines
+- Integration with other Python libraries
+
+---
+
+## API Reference
+
+### Core Modules
+
+#### Model Loading & Inference
+
+```python
+from bioamla.models import load_model
+from bioamla.inference import ASTInference, run_batch_inference
+
+# Load a model
+model = load_model(model_type="ast", model_path="MIT/ast-finetuned-audioset-10-10-0.4593")
+
+# Single file prediction
+result = model.predict_file("audio.wav")
+print(f"{result.label}: {result.confidence:.2%}")
+
+# AST inference with segmentation
+ast = ASTInference(model_path="MIT/ast-finetuned-audioset-10-10-0.4593")
+results = ast.predict_segments("long_recording.wav", clip_length=10, overlap=2)
+
+# Batch inference
+from bioamla.inference import BatchInferenceConfig
+config = BatchInferenceConfig(input_dir="./audio", output_file="results.csv")
+run_batch_inference(config)
+
+# Extract embeddings for clustering
+embeddings = model.extract_embeddings("audio.wav", layer="last_hidden_state")
+```
+
+#### Audio Processing
+
+```python
+from bioamla.signal import (
+    bandpass_filter, lowpass_filter, highpass_filter,
+    denoise_spectrogram, denoise_waveform,
+    segment_on_silence, detect_onsets,
+    normalize_audio
 )
 
-# Print top predictions
-for pred in predictions[:5]:
-    print(f"{pred['label']}: {pred['score']:.4f}")
+# Filtering
+filtered = bandpass_filter(audio, sample_rate=16000, low_freq=500, high_freq=8000)
+filtered = lowpass_filter(audio, sample_rate=16000, cutoff_freq=4000)
+filtered = highpass_filter(audio, sample_rate=16000, cutoff_freq=200)
+
+# Denoising
+clean_spec = denoise_spectrogram(spectrogram, method="spectral")
+clean_audio = denoise_waveform(audio, sample_rate=16000)
+
+# Segmentation
+segments = segment_on_silence(audio, sample_rate=16000, threshold_db=-40)
+
+# Event detection
+onset_times = detect_onsets(audio, sample_rate=16000)
+
+# Normalization
+normalized = normalize_audio(audio, target_db=-20.0)
 ```
 
-**Batch processing with segmentation:**
+#### Audio Augmentation
 
 ```python
-from bioamla.ast import wave_file_batch_inference
+from bioamla.augment import AugmentationConfig, augment_file, batch_augment
 
-# Process directory with 1-second segments and 0.5s overlap
-wave_file_batch_inference(
-    directory="./audio_files",
-    model_path="bioamla/scp-frogs",
-    output_csv="results.csv",
-    resample_freq=16000,
-    clip_seconds=1,
-    overlap_seconds=0.5,
-    restart=True
+config = AugmentationConfig(
+    noise_snr=20,
+    time_stretch_range=(0.9, 1.1),
+    pitch_shift_range=(-2, 2),
+    gain_db_range=(-6, 6)
+)
+
+# Single file
+augment_file("input.wav", "output.wav", config)
+
+# Batch augmentation
+batch_augment("./raw_audio", "./augmented", config)
+```
+
+#### Visualization
+
+```python
+from bioamla.visualize import generate_spectrogram
+
+# Generate spectrograms (mel, STFT, MFCC, or waveform)
+generate_spectrogram(
+    audio_path="audio.wav",
+    output_path="spectrogram.png",
+    viz_type="mel",      # "stft", "mel", "mfcc", "waveform"
+    n_mels=128,
+    n_fft=2048,
+    hop_length=512,
+    cmap="magma"
 )
 ```
 
-**Load and process audio:**
+#### Clustering & Discovery
 
 ```python
-from bioamla.torchaudio import (
-    load_waveform_tensor,
-    resample_waveform_tensor,
-    split_waveform_tensor
+from bioamla.clustering import (
+    AudioClusterer, reduce_dimensions,
+    NoveltyDetector, discover_novel_sounds
 )
 
-# Load audio file
-waveform, sample_rate = load_waveform_tensor("audio.wav")
+# Dimensionality reduction
+reduced = reduce_dimensions(embeddings, method="umap", n_components=2)  # or "tsne", "pca"
 
-# Resample to 16kHz
-waveform_resampled = resample_waveform_tensor(
-    waveform, sample_rate, 16000
-)
+# Clustering
+clusterer = AudioClusterer(method="hdbscan")  # or "kmeans", "dbscan"
+labels = clusterer.fit_predict(embeddings)
 
-# Split into 1-second segments with 0.5s overlap
-segments = split_waveform_tensor(
-    waveform_resampled,
-    sample_rate=16000,
-    clip_seconds=1,
-    overlap_seconds=0.5
-)
+# Novelty detection
+detector = NoveltyDetector(method="isolation_forest")
+novel_indices = detector.detect(embeddings, threshold=0.1)
+
+# Discover unknown sounds
+novel_samples = discover_novel_sounds(embeddings, known_labels, threshold=0.95)
 ```
 
-### 11. System Diagnostics
-
-**Check GPU availability:**
+#### Advanced ML
 
 ```python
-from bioamla.diagnostics import get_device_info
+from bioamla.ml import CNNClassifier, CRNNClassifier, Ensemble, HierarchicalClassifier
 
-device_info = get_device_info()
-print(f"CUDA available: {device_info['cuda_available']}")
-print(f"Device count: {device_info['device_count']}")
-print(f"Device name: {device_info['device_name']}")
+# Custom classifiers
+cnn = CNNClassifier(n_classes=10, n_mels=128)
+crnn = CRNNClassifier(n_classes=10, n_mels=128)
+
+# Ensemble predictions
+ensemble = Ensemble(models=[model1, model2, model3], strategy="average")  # or "voting", "weighted"
+result = ensemble.predict("audio.wav")
+
+# Hierarchical classification
+hierarchy = {
+    "bird": ["songbird", "raptor", "waterfowl"],
+    "songbird": ["sparrow", "warbler", "finch"]
+}
+classifier = HierarchicalClassifier(hierarchy, base_model)
+multilevel_result = classifier.predict("audio.wav")
 ```
 
-**Get package versions:**
+#### Specialized Detection
 
 ```python
-from bioamla.diagnostics import get_package_versions
+from bioamla.detection import (
+    BandLimitedEnergyDetector,
+    RibbitDetector,
+    CWTPeakDetector,
+    AcceleratingPatternDetector
+)
 
-versions = get_package_versions()
-for package, version in versions.items():
-    print(f"{package}: {version}")
+# Energy-based detection in frequency band
+detector = BandLimitedEnergyDetector(low_freq=500, high_freq=3000, threshold_db=-30)
+detections = detector.detect(audio, sample_rate=16000)
+
+# Periodic call detection (e.g., frog calls)
+ribbit = RibbitDetector(pulse_rate_hz=10, tolerance=0.1)
+pulses = ribbit.detect(audio, sample_rate=16000)
+
+# Peak detection using continuous wavelet transform
+peak_detector = CWTPeakDetector()
+peaks = peak_detector.detect(audio, sample_rate=16000)
+
+# Accelerating pattern detection
+accel = AcceleratingPatternDetector(min_pulses=3, acceleration_threshold=0.1)
+patterns = accel.detect(audio, sample_rate=16000)
 ```
 
-### 12. Dataset Explorer (Experimental)
+#### Real-time Processing
 
-Launch an interactive terminal dashboard to explore audio datasets:
+```python
+from bioamla.realtime import (
+    LiveRecorder, RealtimeSpectrogram, ContinuousMonitor,
+    list_audio_devices, get_default_input_device, test_recording
+)
+
+# List available audio devices
+devices = list_audio_devices()
+default_device = get_default_input_device()
+
+# Test recording
+audio = test_recording(duration=5.0, device=0)
+
+# Live recording with detection
+recorder = LiveRecorder(detector=model)
+recorder.start()
+# ... recording ...
+events = recorder.get_events()
+recorder.stop()
+
+# Real-time spectrogram streaming
+def on_spectrogram(spec):
+    print(f"Received spectrogram: {spec.shape}")
+
+stream = RealtimeSpectrogram(callback=on_spectrogram)
+stream.start()
+```
+
+#### Active Learning
+
+```python
+from bioamla.active_learning import (
+    ActiveLearner, Sample, AnnotationQueue,
+    UncertaintySampler, DiversitySampler, QueryByCommitteeSampler
+)
+
+# Initialize active learner
+sampler = UncertaintySampler(strategy="entropy")  # or "least_confidence", "margin"
+learner = ActiveLearner(model=model, sampler=sampler)
+
+# Query most informative samples
+samples_to_annotate = learner.query(unlabeled_pool, n_samples=10)
+
+# Teach with new annotation
+learner.teach(sample, label="species_name")
+
+# Retrain model with accumulated annotations
+learner.retrain()
+```
+
+#### Acoustic Indices
+
+```python
+from bioamla.indices import (
+    compute_aci, compute_adi, compute_aei,
+    compute_bio, compute_ndsi, compute_all_indices
+)
+
+# Individual indices
+aci = compute_aci(audio, sample_rate=16000)   # Acoustic Complexity Index
+adi = compute_adi(audio, sample_rate=16000)   # Acoustic Diversity Index
+aei = compute_aei(audio, sample_rate=16000)   # Acoustic Evenness Index
+bio = compute_bio(audio, sample_rate=16000, min_freq=2000, max_freq=8000)  # Bioacoustic Index
+
+# Normalized Difference Soundscape Index
+ndsi = compute_ndsi(
+    audio, sample_rate=16000,
+    anthro_min=1000, anthro_max=2000,
+    bio_min=2000, bio_max=8000
+)
+
+# Compute all indices at once
+indices = compute_all_indices(audio, sample_rate=16000)
+```
+
+#### External Integrations
+
+```python
+from bioamla.integrations import EBirdClient, PostgreSQLExporter, match_detections_to_ebird
+from bioamla.api import xeno_canto, macaulay, species
+
+# eBird integration
+ebird = EBirdClient(api_key="your_api_key")
+observations = ebird.get_observations_nearby(lat=40.7128, lng=-74.0060, distance=10)
+matches = match_detections_to_ebird(detections, observations)
+
+# PostgreSQL export
+exporter = PostgreSQLExporter(connection_string="postgresql://...")
+exporter.export_detections("detections.csv", table_name="audio_detections")
+
+# Xeno-canto API
+recordings = xeno_canto.search(species="Turdus migratorius")
+
+# Species name conversion
+scientific = species.common_to_scientific("American Robin")
+common = species.scientific_to_common("Turdus migratorius")
+```
+
+#### Dataset Utilities
+
+```python
+from bioamla.datasets import count_audio_files, validate_metadata
+from bioamla.metadata import read_metadata_csv, write_metadata_csv
+from bioamla.explore import scan_directory, get_label_summary, filter_audio_files
+
+# Count and validate
+count = count_audio_files("./audio")
+is_valid = validate_metadata("./audio", "metadata.csv")
+
+# Metadata operations
+rows, fields = read_metadata_csv("metadata.csv")
+write_metadata_csv("output.csv", rows, fields)
+
+# Dataset exploration
+files, info = scan_directory("./dataset", recursive=True)
+summary = get_label_summary(files)
+filtered = filter_audio_files(files, label="bird", split="train")
+```
+
+#### Configuration
+
+```python
+from bioamla.config import load_config, get_config, set_config, Config
+
+# Load configuration (searches: CLI → project → cwd → home → system → defaults)
+config = load_config()
+
+# Access configuration values
+sample_rate = config.audio.sample_rate
+model_name = config.models.default_ast_model
+
+# Modify configuration
+set_config("inference.batch_size", 16)
+```
+
+#### Project Management
+
+```python
+from bioamla.project import create_project, load_project, find_project_root
+
+# Create a new project
+project = create_project(
+    path="./my_study",
+    name="Bird Survey 2025",
+    template="research"  # "default", "minimal", "research", "production"
+)
+
+# Load existing project
+project = load_project("./my_study")
+
+# Find project root from subdirectory
+root = find_project_root("./my_study/data/recordings")
+```
+
+#### Device Management
+
+```python
+from bioamla.device import get_device, get_device_info, move_to_device
+
+# Get optimal device
+device = get_device()  # Returns CUDA if available, else CPU
+
+# Device information
+info = get_device_info()
+print(f"Device: {info['device']}, CUDA available: {info['cuda_available']}")
+
+# Move tensors/models to device
+model = move_to_device(model)
+```
+
+---
+
+## CLI Commands
+
+### Config Commands
 
 ```bash
-bioamla explore ./my_dataset
+bioamla config show                    # Display current configuration
+bioamla config init                    # Create default config file
+bioamla config path                    # Show config search paths
+bioamla config purge --models          # Clear model cache
+bioamla config purge --all             # Clear all caches
 ```
 
-The explorer provides:
-
-- File browser with sorting and filtering
-- Dataset statistics (total files, size, formats)
-- Category and split summaries (if metadata.csv present)
-- Audio playback (requires system audio player)
-- Spectrogram generation and viewing
-- Search functionality
-
-### 13. Experiment Tracking with MLflow
-
-bioamla integrates with MLflow for experiment tracking during model training:
-
-**Start MLflow server:**
+### Project Commands
 
 ```bash
-mlflow server --host 0.0.0.0 --port 5000
+bioamla project init -n "Study Name"   # Initialize new project
+bioamla project init --template research
+bioamla project status                 # Show project info
+bioamla project config --show          # View project config
 ```
 
-**Train with MLflow tracking:**
+### Model Operations
 
 ```bash
-bioamla ast train \
-  --training-dir "my-model" \
-  --train-dataset "bioamla/scp-frogs" \
-  --num-train-epochs 10 \
-  --mlflow-tracking-uri "http://localhost:5000" \
-  --mlflow-experiment-name "frog-classifier" \
-  --mlflow-run-name "baseline-run"
+# Prediction
+bioamla models predict ast ./audio/
+bioamla models predict ast --batch ./recordings/ --output results.csv
+
+# Training
+bioamla models train ast --data-dir ./training_data --epochs 10
+bioamla models train cnn --data-dir ./data --classes 25
+
+# Utilities
+bioamla models list                    # Available models
+bioamla models info --model-path ./model
+bioamla models embed --input audio.wav --output embeddings.npy
+bioamla models ensemble --model-dirs ./m1 ./m2 --strategy voting
 ```
 
-**View experiments in MLflow UI:**
+### Audio Commands
 
-Open `http://localhost:5000` in your browser to view training metrics, compare runs, and analyze model performance.
+```bash
+# Information
+bioamla audio list ./recordings/
+bioamla audio info recording.wav
 
-MLflow tracks:
+# Processing
+bioamla audio filter --bandpass --low 500 --high 8000 ./audio/
+bioamla audio denoise --method spectral ./audio/
+bioamla audio segment --silence-threshold -40 ./audio/
+bioamla audio normalize --target-db -20 ./audio/
+bioamla audio resample --rate 16000 ./audio/
 
-- Training and evaluation metrics (loss, accuracy)
-- Model hyperparameters
-- Training artifacts
+# Visualization
+bioamla audio visualize --type mel --input audio.wav --output spec.png
+```
 
-## CLI Reference
+### Detection
 
-| Command | Description |
-|---------|-------------|
-| `bioamla version` | Display bioamla version |
-| `bioamla devices` | Show CUDA/GPU information |
-| `bioamla explore <DIR>` | Launch interactive TUI dashboard for exploring datasets |
-| `bioamla purge` | Purge cached HuggingFace Hub data (models/datasets) |
-| `bioamla visualize <PATH>` | Generate spectrogram visualizations |
-| `bioamla augment <INPUT_DIR>` | Augment audio files to expand training datasets |
-| `bioamla download <URL> [DIR]` | Download files from URL |
-| `bioamla unzip <FILE> [DIR]` | Extract ZIP archives |
-| `bioamla zip <SOURCE> <OUTPUT>` | Create ZIP archive from file or directory |
+```bash
+bioamla detect energy --low-freq 500 --high-freq 3000 ./audio/
+bioamla detect ribbit --pulse-rate 10 ./audio/
+bioamla detect peaks --snr 10 ./audio/
+bioamla detect accelerating --min-pulses 3 ./audio/
+```
 
-### Audio Commands (`bioamla audio`)
+### Indices Commands
 
-| Command | Description |
-|---------|-------------|
-| `bioamla audio list [DIR]` | List audio files in directory |
-| `bioamla audio info <FILE>` | Display WAV file metadata |
-| `bioamla audio convert <PATH> <FORMAT>` | Convert audio files between formats |
-| `bioamla audio filter <PATH>` | Apply frequency filters (bandpass, lowpass, highpass) |
-| `bioamla audio denoise <PATH>` | Apply spectral noise reduction |
-| `bioamla audio segment <PATH>` | Split audio on silence into separate files |
-| `bioamla audio detect-events <PATH>` | Detect onset events and export to CSV |
-| `bioamla audio normalize <PATH>` | Normalize audio loudness (RMS or peak) |
-| `bioamla audio resample <PATH>` | Resample audio to a different sample rate |
-| `bioamla audio trim <PATH>` | Trim audio by time or remove silence |
+```bash
+bioamla indices compute ./audio/       # Compute all indices
+bioamla indices aci ./audio/           # Acoustic Complexity Index
+bioamla indices ndsi --anthro-min 1000 --anthro-max 2000 ./audio/
+```
 
-### AST Model Commands (`bioamla ast`)
+### Clustering
 
-| Command | Description |
-|---------|-------------|
-| `bioamla ast predict <PATH>` | Single file or batch inference |
-| `bioamla ast train` | Fine-tune AST model on custom datasets |
-| `bioamla ast evaluate <PATH>` | Evaluate model on test data with ground truth labels |
+```bash
+bioamla cluster reduce --embeddings emb.npy --method umap --output reduced.npy
+bioamla cluster cluster --embeddings emb.npy --method hdbscan --output labels.npy
+bioamla cluster novelty --embeddings emb.npy --output novel.npy
+```
 
-### iNaturalist Commands (`bioamla inat`)
+### Learn Commands
 
-| Command | Description |
-|---------|-------------|
-| `bioamla inat download <OUTPUT_DIR>` | Download audio observations from iNaturalist |
-| `bioamla inat search` | Search for taxa with observations in a place or project |
-| `bioamla inat stats <PROJECT_ID>` | Get statistics for an iNaturalist project |
+```bash
+bioamla learn init --predictions predictions.csv
+bioamla learn query --n-samples 20
+bioamla learn annotate --annotations new_labels.csv
+bioamla learn status
+```
 
-### Dataset Commands (`bioamla dataset`)
+### Data Services
 
-| Command | Description |
-|---------|-------------|
-| `bioamla dataset merge <OUTPUT_DIR> <PATHS...>` | Merge multiple audio datasets into one |
-| `bioamla dataset license <PATH>` | Generate license/attribution file from metadata |
+```bash
+# iNaturalist
+bioamla services inat search --species "Lithobates catesbeianus"
+bioamla services inat download --species "Lithobates catesbeianus" --output-dir ./data
 
-### HuggingFace Hub Commands (`bioamla hf`)
+# Xeno-canto
+bioamla services xc search --species "Turdus migratorius"
+bioamla services xc download --species "Turdus migratorius"
 
-| Command | Description |
-|---------|-------------|
-| `bioamla hf push-model <PATH> <REPO_ID>` | Push model folder to HuggingFace Hub |
-| `bioamla hf push-dataset <PATH> <REPO_ID>` | Push dataset folder to HuggingFace Hub |
+# eBird
+bioamla services ebird nearby --lat 40.7128 --lng -74.0060
+bioamla services ebird validate --species-code "amerob"
+```
 
-Both push commands automatically detect large folders (>5GB or >1000 files) and use the optimized `upload_large_folder` method for better reliability.
+### Real-time
 
-Use `bioamla <command> --help` for detailed options on any command.
+```bash
+bioamla realtime devices               # List audio input devices
+bioamla realtime test --duration 5     # Test recording
+```
 
-## Technologies
+### Examples
 
-- **PyTorch + HuggingFace Transformers**: Audio Spectrogram Transformer models
-- **TorchAudio**: Audio file I/O and preprocessing
-- **Librosa**: Audio analysis and feature extraction
-- **SciPy**: Signal processing and filtering
-- **Click**: Command-line interface framework
-- **Textual**: Terminal user interface for dataset exploration
-- **FastAPI**: Web service capability (optional)
-- **Pydantic**: Data validation and API schemas
-- **Audiomentations**: Audio data augmentation
-- **Matplotlib**: Spectrogram visualization
-- **TensorBoard**: Training visualization
-- **MLflow**: Experiment tracking and model management (optional)
+```bash
+bioamla examples list                  # List available example workflows
+bioamla examples show 01               # Display example content
+bioamla examples copy 01 ./            # Copy to current directory
+bioamla examples copy-all ./workflows  # Copy all examples
+bioamla examples info 01               # Show example details
+```
 
-## Contributing
+### System
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+```bash
+bioamla devices                        # Show CUDA/GPU info
+bioamla version                        # Show version
+bioamla log show --limit 50            # Show command history
+```
+
+---
+
+## Supported Model Backends
+
+| Backend            | Description                   | Use Case                                  |
+| ------------------ | ----------------------------- | ----------------------------------------- |
+| **AST**            | Audio Spectrogram Transformer | General audio classification, fine-tuning |
+| **BirdNET**        | Bird species classifier       | Bird identification                       |
+| **OpenSoundscape** | ResNet-based CNNs             | Transfer learning                         |
+| **Custom CNN**     | From-scratch training         | Domain-specific models                    |
+
+---
+
+## Related Projects
+
+Bioamla builds on and complements other bioacoustics tools:
+
+- [BirdNET](https://github.com/kahst/BirdNET-Analyzer) - Bird sound identification
+- [OpenSoundscape](https://github.com/kitzeslab/opensoundscape) - Bioacoustic analysis toolkit
+- [Koogu](https://github.com/shyamblast/Koogu) - Transfer learning for bioacoustics
+- [audiomoth-utils](https://github.com/OpenAcousticDevices/AudioMoth-Utils) - AudioMoth recorder utilities
 
 ## Citation
-
-If you use bioamla in your research, please cite:
 
 ```bibtex
 @software{bioamla,
@@ -570,3 +679,7 @@ If you use bioamla in your research, please cite:
   url = {https://github.com/jmcmeen/bioamla}
 }
 ```
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.

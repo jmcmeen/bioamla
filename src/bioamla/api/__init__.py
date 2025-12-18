@@ -42,13 +42,12 @@ __all__ = [
 
 def __getattr__(name):
     """Lazy import API modules."""
+    import importlib
+
     if name == "xeno_canto":
-        from bioamla.api import xeno_canto as xc
-        return xc
+        return importlib.import_module("bioamla.api.xeno_canto")
     if name == "macaulay":
-        from bioamla.api import macaulay as ml
-        return ml
+        return importlib.import_module("bioamla.api.macaulay")
     if name == "species":
-        from bioamla.api import species as sp
-        return sp
+        return importlib.import_module("bioamla.api.species")
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

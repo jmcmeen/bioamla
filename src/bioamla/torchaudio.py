@@ -85,7 +85,7 @@ def load_waveform_tensor(filepath: str):
     waveform, sample_rate = torchaudio.load(filepath)
     return (waveform, sample_rate)
 
-def split_waveform_tensor(waveform_tensor: torch.Tensor, freq: int, clip_seconds: int, overlap_seconds: int):
+def split_waveform_tensor(waveform_tensor: torch.Tensor, freq: int, segment_duration: int, segment_overlap: int):
     """
     Split a waveform tensor into overlapping segments.
 
@@ -96,14 +96,14 @@ def split_waveform_tensor(waveform_tensor: torch.Tensor, freq: int, clip_seconds
     Args:
         waveform_tensor (torch.Tensor): Input waveform tensor
         freq (int): Sample rate of the audio
-        clip_seconds (int): Duration of each segment in seconds
-        overlap_seconds (int): Overlap between consecutive segments in seconds
+        segment_duration (int): Duration of each segment in seconds
+        segment_overlap (int): Overlap between consecutive segments in seconds
 
     Returns:
         list: List of tuples containing (segment_tensor, start_sample, end_sample)
     """
-    segment_size = int(clip_seconds * freq)
-    step_size = int((clip_seconds - overlap_seconds) * freq)
+    segment_size = int(segment_duration * freq)
+    step_size = int((segment_duration - segment_overlap) * freq)
 
     segments = []
     start = 0
