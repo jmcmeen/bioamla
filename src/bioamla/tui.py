@@ -1,754 +1,586 @@
+"""Command Browser TUI for bioamla.
+
+A terminal user interface that provides hierarchical navigation through
+all bioamla CLI commands with interactive forms for configuring and
+executing commands.
 """
-Terminal User Interface for Dataset Exploration
-================================================
 
-This module provides a Textual-based TUI (Terminal User Interface) application
-for interactively exploring audio datasets. Features include:
-
-- File browser with sorting and filtering
-- Dataset statistics display
-- Label and split summaries
-- Audio playback (using system audio players)
-- Spectrogram generation and viewing
-- Search functionality
-
-The main entry point is the :func:`run_explorer` function, which launches the
-:class:`DatasetExplorer` application.
-
-Example:
-    >>> from bioamla.tui import run_explorer
-    >>> run_explorer("./my_dataset")
-"""
+from __future__ import annotations
 
 import subprocess
-import sys
-import tempfile
-from typing import List, Optional
+from typing import TYPE_CHECKING, Any
 
-from textual import on, work
+from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.containers import Container, Horizontal, ScrollableContainer, Vertical
+from textual.message import Message
 from textual.reactive import reactive
-from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
-    DataTable,
     Footer,
     Header,
     Input,
     Label,
-    OptionList,
-    Rule,
+    RichLog,
     Select,
     Static,
+    Switch,
+    Tree,
 )
+from textual.widgets.tree import TreeNode
 
-from bioamla.explore import (
-    AudioFileInfo,
-    DatasetInfo,
-    filter_audio_files,
-    scan_directory,
-    sort_audio_files,
-)
+if TYPE_CHECKING:
+    from bioamla.tui_commands import CommandInfo, GroupInfo, OptionInfo
 
 
-class FileDetailScreen(ModalScreen[None]):
+# =============================================================================
+# Custom Widgets
+# =============================================================================
+
+
+class CommandTree(Tree):
+    """A tree widget showing the command hierarchy."""
+
+    class CommandSelected(Message):
+        """Message sent when a command is selected."""
+
+        def __init__(self, command_info: "CommandInfo") -> None:
+            self.command_info = command_info
+            super().__init__()
+
+    def __init__(
+        self,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+    ) -> None:
+        super().__init__("bioamla", name=name, id=id, classes=classes)
+        self.command_map: dict[str, "CommandInfo"] = {}
+
+    def on_mount(self) -> None:
+        """Build the command tree on mount."""
+        from bioamla.tui_commands import CommandInfo, GroupInfo, get_command_tree
+
+        tree = get_command_tree()
+        self._add_nodes(self.root, tree)
+        self.root.expand()
+
+    def _add_nodes(
+        self,
+        parent: TreeNode,
+        items: dict[str, "GroupInfo | CommandInfo"],
+    ) -> None:
+        """Recursively add nodes to the tree."""
+        from bioamla.tui_commands import CommandInfo, GroupInfo
+
+        for name, item in items.items():
+            if isinstance(item, GroupInfo):
+                # Add group as expandable folder with folder icon
+                node = parent.add(f"📂 {name}", expand=False)
+                node.data = item
+                self._add_nodes(node, item.children)
+            else:
+                # Add command as leaf with command icon
+                node = parent.add(f"  {name}")
+                node.data = item
+                node.allow_expand = False
+                self.command_map[item.path] = item
+
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """Handle node selection."""
+        from bioamla.tui_commands import CommandInfo
+
+        if isinstance(event.node.data, CommandInfo):
+            self.post_message(self.CommandSelected(event.node.data))
+
+
+class FormField(Container):
+    """A form field with label and input widget."""
+
+    DEFAULT_CSS = """
+    FormField {
+        height: auto;
+        margin-bottom: 1;
+    }
+    FormField .field-label {
+        margin-bottom: 0;
+    }
+    FormField .field-help {
+        color: $text-muted;
+        margin-left: 2;
+    }
+    FormField Input {
+        width: 100%;
+    }
+    FormField Select {
+        width: 100%;
+    }
     """
-    Modal screen showing detailed file information.
 
-    Displays comprehensive metadata about a selected audio file including
-    path, size, format, sample rate, duration, channels, and any associated
-    metadata from the dataset CSV file.
-
-    Attributes:
-        file_info: The AudioFileInfo object containing file details.
-    """
-
-    BINDINGS = [
-        Binding("escape", "close", "Close"),
-        Binding("p", "play", "Play Audio"),
-        Binding("s", "spectrogram", "View Spectrogram"),
-    ]
-
-    def __init__(self, file_info: AudioFileInfo) -> None:
-        """
-        Initialize the file detail screen.
-
-        Args:
-            file_info: AudioFileInfo object containing the file details to display.
-        """
+    def __init__(
+        self,
+        label: str,
+        field_name: str,
+        widget: Input | Select | Switch,
+        help_text: str = "",
+        required: bool = False,
+    ) -> None:
         super().__init__()
-        self.file_info = file_info
+        self.label_text = label
+        self.field_name = field_name
+        self.input_widget = widget
+        self.help_text = help_text
+        self.required = required
 
     def compose(self) -> ComposeResult:
-        """Compose the file detail screen layout."""
-        f = self.file_info
-        with Container(id="file-detail-container"):
-            yield Label(f"[bold]{f.filename}[/bold]", id="detail-title")
-            yield Rule()
-            with VerticalScroll():
-                yield Static(f"[bold]Path:[/bold] {f.path}")
-                yield Static(f"[bold]Size:[/bold] {f.size_human}")
-                yield Static(f"[bold]Format:[/bold] {f.format or 'Unknown'}")
-                yield Rule()
-                yield Static(f"[bold]Sample Rate:[/bold] {f.sample_rate or 'Unknown'} Hz")
-                yield Static(f"[bold]Duration:[/bold] {f.duration_human}")
-                yield Static(f"[bold]Channels:[/bold] {f.num_channels or 'Unknown'}")
-                yield Static(f"[bold]Frames:[/bold] {f.num_frames or 'Unknown'}")
-                if f.label or f.split or f.attribution:
-                    yield Rule()
-                    yield Static("[bold]Metadata:[/bold]")
-                    if f.label:
-                        yield Static(f"  Label: {f.label}")
-                    if f.split:
-                        yield Static(f"  Split: {f.split}")
-                    if f.target is not None:
-                        yield Static(f"  Target: {f.target}")
-                    if f.attribution:
-                        yield Static(f"  Attribution: {f.attribution}")
-            yield Rule()
-            with Horizontal(id="detail-buttons"):
-                yield Button("Play", id="btn-play", variant="primary")
-                yield Button("Spectrogram", id="btn-spec", variant="default")
-                yield Button("Close", id="btn-close", variant="default")
+        req_marker = "[red]*[/]" if self.required else ""
+        yield Label(
+            f"[bold]{self.label_text}[/]{req_marker}",
+            classes="field-label",
+        )
+        yield self.input_widget
+        if self.help_text:
+            yield Label(f"[dim]{self.help_text}[/]", classes="field-help")
 
-    def action_close(self) -> None:
-        """Close the detail screen and return to the main view."""
-        self.dismiss()
+    def get_value(self) -> Any:
+        """Get the current value of the field."""
+        if isinstance(self.input_widget, Switch):
+            return self.input_widget.value
+        elif isinstance(self.input_widget, Select):
+            val = self.input_widget.value
+            return val if val != Select.BLANK else ""
+        elif isinstance(self.input_widget, Input):
+            return self.input_widget.value
+        return None
 
-    def action_play(self) -> None:
-        """Handle the play audio action."""
-        self._play_audio()
 
-    def action_spectrogram(self) -> None:
-        """Handle the show spectrogram action."""
-        self._show_spectrogram()
+class CommandForm(ScrollableContainer):
+    """A form for configuring command options."""
 
-    @on(Button.Pressed, "#btn-close")
-    def on_close_pressed(self) -> None:
-        """Handle close button press event."""
-        self.dismiss()
+    DEFAULT_CSS = """
+    CommandForm {
+        padding: 1 2;
+    }
+    CommandForm .form-title {
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    CommandForm .form-description {
+        color: $text-muted;
+        margin-bottom: 2;
+    }
+    CommandForm .section-header {
+        text-style: bold;
+        margin-top: 1;
+        margin-bottom: 1;
+        color: $secondary;
+    }
+    CommandForm .button-row {
+        margin-top: 2;
+        height: auto;
+    }
+    CommandForm Button {
+        margin-right: 2;
+    }
+    """
 
-    @on(Button.Pressed, "#btn-play")
-    def on_play_pressed(self) -> None:
-        """Handle play button press event."""
-        self._play_audio()
+    current_command: reactive["CommandInfo | None"] = reactive(None)
 
-    @on(Button.Pressed, "#btn-spec")
-    def on_spec_pressed(self) -> None:
-        """Handle spectrogram button press event."""
-        self._show_spectrogram()
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.argument_fields: dict[str, FormField] = {}
+        self.option_fields: dict[str, FormField] = {}
 
-    def _play_audio(self) -> None:
-        """
-        Attempt to play audio using the system audio player.
+    def compose(self) -> ComposeResult:
+        yield Static(
+            "[dim]Select a command from the tree[/]",
+            id="form-placeholder",
+        )
 
-        Uses platform-specific audio players:
-        - macOS: afplay
-        - Linux: paplay, aplay, or ffplay (tries in order)
-        - Windows: os.startfile (default system handler)
+    def watch_current_command(self, command: "CommandInfo | None") -> None:
+        """Update the form when command changes."""
+        if command:
+            self._build_form(command)
 
-        Displays a notification on success or error.
-        """
-        try:
-            if sys.platform == "darwin":
-                subprocess.Popen(["afplay", str(self.file_info.path)])
-            elif sys.platform.startswith("linux"):
-                # Try various Linux audio players
-                for player in ["paplay", "aplay", "ffplay"]:
-                    try:
-                        subprocess.Popen(
-                            [player, str(self.file_info.path)],
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                        )
-                        break
-                    except FileNotFoundError:
-                        continue
-            elif sys.platform == "win32":
-                import os
-                os.startfile(str(self.file_info.path))
-            self.notify("Playing audio...", severity="information")
-        except Exception as e:
-            self.notify(f"Could not play audio: {e}", severity="error")
+    def _build_form(self, command: "CommandInfo") -> None:
+        """Build the form for a command."""
+        self.argument_fields.clear()
+        self.option_fields.clear()
 
-    def _show_spectrogram(self) -> None:
-        """
-        Generate and display a spectrogram visualization.
+        # Clear existing content
+        self.remove_children()
 
-        Creates a mel spectrogram image of the audio file using the
-        bioamla.visualize module, saves it to a temporary file,
-        and opens it with the system's default image viewer.
+        # Title and description
+        self.mount(Static(f"[bold blue]{command.path}[/]", classes="form-title"))
+        if command.help:
+            self.mount(Static(command.help, classes="form-description"))
 
-        Uses platform-specific image viewers:
-        - macOS: open
-        - Linux: xdg-open, feh, eog, or display (tries in order)
-        - Windows: os.startfile (default system handler)
+        # Arguments section
+        if command.arguments:
+            self.mount(Static("Arguments", classes="section-header"))
+            for arg in command.arguments:
+                field = self._create_argument_field(arg)
+                self.argument_fields[arg.name] = field
+                self.mount(field)
 
-        Displays a notification on success or error.
-        """
-        try:
-            from bioamla.visualize import generate_spectrogram
+        # Options section
+        if command.options:
+            self.mount(Static("Options", classes="section-header"))
+            for opt in command.options:
+                # Skip help option
+                if opt.name == "help":
+                    continue
+                field = self._create_option_field(opt)
+                self.option_fields[opt.name] = field
+                self.mount(field)
 
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                output_path = tmp.name
+        # Buttons
+        button_row = Horizontal(classes="button-row")
+        button_row.mount(
+            Button("Run", id="run-btn", variant="primary"),
+            Button("Copy Command", id="copy-btn", variant="default"),
+        )
+        self.mount(button_row)
 
-            generate_spectrogram(
-                str(self.file_info.path),
-                output_path,
-                viz_type="mel",
+    def _create_argument_field(self, arg) -> FormField:
+        """Create a form field for an argument."""
+        widget = Input(
+            placeholder=arg.name,
+            id=f"arg-{arg.name}",
+        )
+
+        return FormField(
+            label=arg.name,
+            field_name=arg.name,
+            widget=widget,
+            help_text=arg.help,
+            required=arg.required,
+        )
+
+    def _create_option_field(self, opt: "OptionInfo") -> FormField:
+        """Create a form field for an option."""
+        if opt.is_flag:
+            widget = Switch(value=bool(opt.default), id=f"opt-{opt.name}")
+        elif opt.choices:
+            options = [(c, c) for c in opt.choices]
+            # Add blank option at start
+            options.insert(0, ("", Select.BLANK))
+            widget = Select(
+                options=options,
+                value=opt.default if opt.default in opt.choices else Select.BLANK,
+                id=f"opt-{opt.name}",
+                allow_blank=True,
+            )
+        else:
+            placeholder = f"{opt.type_name.lower()}"
+            if opt.default is not None and opt.default != ():
+                placeholder = f"{opt.default}"
+            widget = Input(
+                placeholder=placeholder,
+                value=str(opt.default) if opt.default and opt.default != () else "",
+                id=f"opt-{opt.name}",
             )
 
-            # Try to open the image
-            if sys.platform == "darwin":
-                subprocess.Popen(["open", output_path])
-            elif sys.platform.startswith("linux"):
-                for viewer in ["xdg-open", "feh", "eog", "display"]:
-                    try:
-                        subprocess.Popen([viewer, output_path])
-                        break
-                    except FileNotFoundError:
-                        continue
-            elif sys.platform == "win32":
-                import os
-                os.startfile(output_path)
+        # Build option label from param declarations
+        opt_label = ", ".join(opt.param_decls)
 
-            self.notify("Spectrogram generated", severity="information")
-        except Exception as e:
-            self.notify(f"Could not generate spectrogram: {e}", severity="error")
+        return FormField(
+            label=opt_label,
+            field_name=opt.name,
+            widget=widget,
+            help_text=opt.help,
+            required=opt.required,
+        )
+
+    def get_argument_values(self) -> dict[str, str]:
+        """Get current argument values from the form."""
+        return {name: field.get_value() for name, field in self.argument_fields.items()}
+
+    def get_option_values(self) -> dict[str, Any]:
+        """Get current option values from the form."""
+        return {name: field.get_value() for name, field in self.option_fields.items()}
 
 
-class HelpScreen(ModalScreen[None]):
+class CommandOutput(Container):
+    """Widget showing command preview and output."""
+
+    DEFAULT_CSS = """
+    CommandOutput {
+        border-top: solid $primary;
+    }
+    CommandOutput .preview-section {
+        height: auto;
+        padding: 1;
+        background: $surface;
+    }
+    CommandOutput .preview-label {
+        text-style: bold;
+        margin-bottom: 0;
+    }
+    CommandOutput .preview-command {
+        color: $success;
+    }
+    CommandOutput RichLog {
+        height: 1fr;
+        border-top: solid $surface-lighten-1;
+    }
     """
-    Modal screen showing keyboard shortcuts and help.
 
-    Displays a comprehensive list of keyboard shortcuts and actions
-    available in the Dataset Explorer application.
-    """
-
-    BINDINGS = [
-        Binding("escape", "close", "Close"),
-        Binding("q", "close", "Close"),
-    ]
+    command_preview: reactive[str] = reactive("")
 
     def compose(self) -> ComposeResult:
-        """Compose the help screen layout."""
-        with Container(id="help-container"):
-            yield Label("[bold]Bioamla Dataset Explorer[/bold]", id="help-title")
-            yield Rule()
-            yield Static("[bold]Navigation:[/bold]")
-            yield Static("  ↑/↓, j/k    Navigate file list")
-            yield Static("  Enter       View file details")
-            yield Static("  Tab         Switch panels")
-            yield Rule()
-            yield Static("[bold]Actions:[/bold]")
-            yield Static("  p           Play selected audio")
-            yield Static("  s           Generate spectrogram")
-            yield Static("  r           Refresh file list")
-            yield Static("  /           Search files")
-            yield Rule()
-            yield Static("[bold]General:[/bold]")
-            yield Static("  ?           Show this help")
-            yield Static("  q           Quit application")
-            yield Rule()
-            yield Button("Close", id="btn-help-close", variant="primary")
+        with Vertical(classes="preview-section"):
+            yield Label("Command Preview:", classes="preview-label")
+            yield Static("$ [dim]select a command[/]", id="preview-text")
+        yield RichLog(id="output-log", highlight=True, markup=True)
 
-    def action_close(self) -> None:
-        """Close the help screen and return to the main view."""
-        self.dismiss()
+    def watch_command_preview(self, preview: str) -> None:
+        """Update preview display."""
+        preview_widget = self.query_one("#preview-text", Static)
+        if preview:
+            preview_widget.update(f"$ [green]{preview}[/]")
+        else:
+            preview_widget.update("$ [dim]select a command[/]")
 
-    @on(Button.Pressed, "#btn-help-close")
-    def on_close_pressed(self) -> None:
-        """Handle close button press event."""
-        self.dismiss()
+    def write_output(self, text: str, style: str = "") -> None:
+        """Write text to the output log."""
+        log = self.query_one("#output-log", RichLog)
+        if style:
+            log.write(f"[{style}]{text}[/]")
+        else:
+            log.write(text)
+
+    def clear_output(self) -> None:
+        """Clear the output log."""
+        log = self.query_one("#output-log", RichLog)
+        log.clear()
 
 
-class DatasetExplorer(App):
-    """
-    Textual TUI application for exploring audio datasets.
+# =============================================================================
+# Main Application
+# =============================================================================
 
-    A full-featured terminal interface for browsing and analyzing audio files
-    in a directory. Features include:
 
-    - File browser with sorting and filtering by label
-    - Dataset statistics panel (file count, total size, formats)
-    - Label breakdown with quick filtering
-    - Search functionality
-    - Audio playback using system players
-    - Spectrogram generation and viewing
+class CommandBrowser(App):
+    """The main command browser application."""
 
-    Attributes:
-        directory: Path to the dataset directory being explored.
-        audio_files: Currently displayed list of audio files (after filtering).
-        dataset_info: Aggregated dataset statistics.
-        selected_label: Currently selected label filter.
-        search_term: Current search filter string.
-        sort_by: Current sort field.
-        is_loading: Whether data is currently being loaded.
-
-    Example:
-        >>> app = DatasetExplorer("./my_audio_dataset")
-        >>> app.run()
-    """
+    TITLE = "bioamla Command Browser"
+    SUB_TITLE = "Navigate and execute CLI commands"
 
     CSS = """
-    Screen {
-        background: $surface;
+    #top-panes {
+        height: 1fr;
     }
 
-    #main-container {
-        height: 100%;
-        width: 100%;
-    }
-
-    #sidebar {
-        width: 30;
-        min-width: 25;
-        max-width: 40;
-        border-right: solid $primary;
-        padding: 1;
-    }
-
-    #content {
+    #tree-panel {
         width: 1fr;
-        padding: 1;
-    }
-
-    #stats-panel {
-        height: auto;
-        max-height: 12;
-        border: solid $primary;
-        padding: 1;
-        margin-bottom: 1;
-    }
-
-    #labels-panel {
-        height: 1fr;
         border: solid $primary;
         padding: 1;
     }
 
-    #file-list {
-        height: 1fr;
+    #form-panel {
+        width: 2fr;
         border: solid $primary;
     }
 
-    #search-bar {
-        height: 3;
-        margin-bottom: 1;
+    #output-panel {
+        height: 12;
+        border-top: solid $primary;
     }
 
-    #search-input {
-        width: 1fr;
-    }
-
-    #filter-bar {
-        height: 3;
-        margin-bottom: 1;
-    }
-
-    #sort-select {
-        width: 20;
-    }
-
-    #label-filter {
-        width: 20;
-    }
-
-    DataTable {
-        height: 1fr;
-    }
-
-    #file-detail-container {
-        width: 60;
-        height: auto;
-        max-height: 80%;
-        background: $surface;
-        border: solid $primary;
-        padding: 1 2;
-        margin: 4 4;
-    }
-
-    #detail-title {
-        text-align: center;
-        padding: 1;
-    }
-
-    #detail-buttons {
-        height: 3;
-        align: center middle;
-    }
-
-    #detail-buttons Button {
-        margin: 0 1;
-    }
-
-    #help-container {
-        width: 50;
-        height: auto;
-        max-height: 80%;
-        background: $surface;
-        border: solid $primary;
-        padding: 1 2;
-        margin: 4 4;
-    }
-
-    #help-title {
-        text-align: center;
-        padding: 1;
-    }
-
-    .label-item {
-        padding: 0 1;
-    }
-
-    .stat-label {
-        color: $text-muted;
-    }
-
-    .stat-value {
-        color: $text;
-    }
-
-    ProgressBar {
-        margin: 1 0;
-    }
-
-    #loading-indicator {
-        width: 100%;
+    CommandTree {
         height: 100%;
-        content-align: center middle;
+    }
+
+    CommandTree > .tree--cursor {
+        background: $accent;
     }
     """
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("?", "help", "Help"),
-        Binding("r", "refresh", "Refresh"),
-        Binding("/", "search", "Search"),
-        Binding("p", "play", "Play"),
-        Binding("s", "spectrogram", "Spectrogram"),
-        Binding("escape", "clear_search", "Clear", show=False),
+        Binding("r", "run_command", "Run"),
+        Binding("c", "copy_command", "Copy"),
+        Binding("/", "focus_search", "Search"),
+        Binding("?", "show_help", "Help"),
+        Binding("escape", "focus_tree", "Tree"),
     ]
 
-    directory: reactive[str] = reactive("")
-    audio_files: reactive[List[AudioFileInfo]] = reactive([])
-    dataset_info: reactive[Optional[DatasetInfo]] = reactive(None)
-    selected_label: reactive[Optional[str]] = reactive(None)
-    search_term: reactive[str] = reactive("")
-    sort_by: reactive[str] = reactive("name")
-    is_loading: reactive[bool] = reactive(False)
-
-    def __init__(self, directory: str) -> None:
-        """
-        Initialize the dataset explorer application.
-
-        Args:
-            directory: Path to the directory containing audio files to explore.
-        """
-        super().__init__()
-        self.directory = directory
-        self._all_audio_files: List[AudioFileInfo] = []
+    current_command: reactive["CommandInfo | None"] = reactive(None)
 
     def compose(self) -> ComposeResult:
-        """Compose the main application layout."""
-        yield Header(show_clock=True)
-        with Horizontal(id="main-container"):
-            with Vertical(id="sidebar"):
-                yield Static("[bold]Dataset Info[/bold]", id="stats-title")
-                with Container(id="stats-panel"):
-                    yield Static("Loading...", id="stats-content")
-                yield Static("[bold]Labels[/bold]", id="labels-title")
-                with Container(id="labels-panel"):
-                    yield OptionList(id="label-list")
-            with Vertical(id="content"):
-                with Horizontal(id="search-bar"):
-                    yield Input(placeholder="Search files...", id="search-input")
-                with Horizontal(id="filter-bar"):
-                    yield Select(
-                        [
-                            ("Name", "name"),
-                            ("Size", "size"),
-                            ("Duration", "duration"),
-                            ("Label", "label"),
-                            ("Format", "format"),
-                        ],
-                        value="name",
-                        id="sort-select",
-                        prompt="Sort by",
-                    )
-                with Container(id="file-list"):
-                    yield DataTable(id="files-table")
+        yield Header()
+        with Horizontal(id="top-panes"):
+            yield CommandTree(id="tree-panel")
+            yield CommandForm(id="form-panel")
+        yield CommandOutput(id="output-panel")
         yield Footer()
 
-    def on_mount(self) -> None:
-        """Initialize the application after mounting."""
-        self.title = "Bioamla Dataset Explorer"
-        self.sub_title = self.directory
+    def on_command_tree_command_selected(
+        self, event: CommandTree.CommandSelected
+    ) -> None:
+        """Handle command selection from tree."""
+        self.current_command = event.command_info
+        form = self.query_one(CommandForm)
+        form.current_command = event.command_info
+        self._update_preview()
 
-        # Set up the data table
-        table = self.query_one("#files-table", DataTable)
-        table.cursor_type = "row"
-        table.zebra_stripes = True
-        table.add_columns("File", "Size", "Duration", "Format", "Label")
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Update preview when form inputs change."""
+        self._update_preview()
 
-        # Load data
-        self.load_data()
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Update preview when select changes."""
+        self._update_preview()
+
+    def on_switch_changed(self, event: Switch.Changed) -> None:
+        """Update preview when switch changes."""
+        self._update_preview()
+
+    def _update_preview(self) -> None:
+        """Update the command preview."""
+        if not self.current_command:
+            return
+
+        from bioamla.tui_commands import build_command_string
+
+        form = self.query_one(CommandForm)
+        cmd_str = build_command_string(
+            self.current_command,
+            form.get_argument_values(),
+            form.get_option_values(),
+        )
+
+        output = self.query_one(CommandOutput)
+        output.command_preview = cmd_str
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "run-btn":
+            self.action_run_command()
+        elif event.button.id == "copy-btn":
+            self.action_copy_command()
+
+    def action_run_command(self) -> None:
+        """Run the current command."""
+        if not self.current_command:
+            return
+
+        from bioamla.tui_commands import build_command_string
+
+        form = self.query_one(CommandForm)
+        cmd_str = build_command_string(
+            self.current_command,
+            form.get_argument_values(),
+            form.get_option_values(),
+        )
+
+        output = self.query_one(CommandOutput)
+        output.clear_output()
+        output.write_output(f"$ {cmd_str}\n", "bold green")
+
+        self._execute_command(cmd_str)
 
     @work(thread=True)
-    def load_data(self) -> None:
-        """
-        Load audio files from the directory in a background thread.
+    def _execute_command(self, cmd_str: str) -> None:
+        """Execute a command in a background thread."""
+        output = self.query_one(CommandOutput)
 
-        Scans the directory recursively for audio files, loading metadata
-        and enriching with information from metadata.csv if present.
-        Updates the UI via call_from_thread when complete.
-        """
-        self.is_loading = True
         try:
-            files, info = scan_directory(
-                self.directory,
-                recursive=True,
-                load_audio_metadata=True,
+            # Run the command
+            process = subprocess.Popen(
+                cmd_str,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
             )
-            self._all_audio_files = files
-            self.call_from_thread(self._update_ui, files, info)
-        except Exception as e:
-            self.call_from_thread(self.notify, f"Error loading data: {e}", severity="error")
-        finally:
-            self.is_loading = False
 
-    def _update_ui(self, files: List[AudioFileInfo], info: DatasetInfo) -> None:
-        """
-        Update UI components with loaded data.
+            # Stream output
+            for line in process.stdout:
+                self.call_from_thread(output.write_output, line.rstrip())
 
-        Args:
-            files: List of AudioFileInfo objects for all audio files found.
-            info: DatasetInfo object with aggregated statistics.
-        """
-        self.dataset_info = info
-        self.audio_files = files
-        self._update_stats()
-        self._update_labels()
-        self._update_table()
+            process.wait()
 
-    def _update_stats(self) -> None:
-        """Update the stats panel with dataset information."""
-        info = self.dataset_info
-        if not info:
-            return
-
-        stats_content = self.query_one("#stats-content", Static)
-
-        lines = [
-            f"[bold]Path:[/bold] {info.path}",
-            f"[bold]Files:[/bold] {info.total_files}",
-            f"[bold]Size:[/bold] {info.total_size_human}",
-            f"[bold]Metadata:[/bold] {'Yes' if info.has_metadata else 'No'}",
-        ]
-
-        if info.formats:
-            fmt_str = ", ".join(f"{k}: {v}" for k, v in sorted(info.formats.items()))
-            lines.append(f"[bold]Formats:[/bold] {fmt_str}")
-
-        if info.splits:
-            split_str = ", ".join(f"{k}: {v}" for k, v in sorted(info.splits.items()))
-            lines.append(f"[bold]Splits:[/bold] {split_str}")
-
-        stats_content.update("\n".join(lines))
-
-    def _update_labels(self) -> None:
-        """Update the labels sidebar list with counts."""
-        label_list = self.query_one("#label-list", OptionList)
-        label_list.clear_options()
-
-        if not self.dataset_info:
-            return
-
-        # Add "All" option
-        total = self.dataset_info.total_files
-        label_list.add_option(f"All ({total})")
-
-        # Add labels
-        for lbl, count in sorted(self.dataset_info.labels.items()):
-            label_list.add_option(f"{lbl} ({count})")
-
-        # Add unlabeled if there are files without label
-        labeled = sum(self.dataset_info.labels.values())
-        unlabeled = total - labeled
-        if unlabeled > 0:
-            label_list.add_option(f"Unlabeled ({unlabeled})")
-
-    def _update_table(self) -> None:
-        """Update the file table with filtered and sorted audio files."""
-        table = self.query_one("#files-table", DataTable)
-        table.clear()
-
-        # Apply filters and sorting
-        files = self._all_audio_files
-
-        if self.selected_label:
-            if self.selected_label == "Unlabeled":
-                files = [f for f in files if not f.label]
+            if process.returncode == 0:
+                self.call_from_thread(
+                    output.write_output, "\n[Command completed successfully]", "green"
+                )
             else:
-                files = [f for f in files if f.label == self.selected_label]
+                self.call_from_thread(
+                    output.write_output,
+                    f"\n[Command exited with code {process.returncode}]",
+                    "red",
+                )
 
-        if self.search_term:
-            files = filter_audio_files(files, search_term=self.search_term)
+        except Exception as e:
+            self.call_from_thread(output.write_output, f"\nError: {e}", "red")
 
-        files = sort_audio_files(files, sort_by=self.sort_by)
+    def action_copy_command(self) -> None:
+        """Copy the current command to clipboard."""
+        if not self.current_command:
+            return
 
-        # Add rows
-        for f in files:
-            table.add_row(
-                f.filename,
-                f.size_human,
-                f.duration_human,
-                f.format or "-",
-                f.label or "-",
-                key=str(f.path),
+        from bioamla.tui_commands import build_command_string
+
+        form = self.query_one(CommandForm)
+        cmd_str = build_command_string(
+            self.current_command,
+            form.get_argument_values(),
+            form.get_option_values(),
+        )
+
+        # Try to copy to clipboard
+        try:
+            import pyperclip
+
+            pyperclip.copy(cmd_str)
+            output = self.query_one(CommandOutput)
+            output.write_output("[Copied to clipboard]", "green")
+        except ImportError:
+            output = self.query_one(CommandOutput)
+            output.write_output(
+                "[Install pyperclip for clipboard support]", "yellow"
             )
 
-        self.audio_files = files
+    def action_focus_tree(self) -> None:
+        """Focus the command tree."""
+        self.query_one(CommandTree).focus()
 
-    @on(Input.Submitted, "#search-input")
-    def on_search_submitted(self, event: Input.Submitted) -> None:
-        """
-        Handle search input submission (Enter key).
-
-        Args:
-            event: The input submission event containing the search value.
-        """
-        self.search_term = event.value
-        self._update_table()
-
-    @on(Input.Changed, "#search-input")
-    def on_search_changed(self, event: Input.Changed) -> None:
-        """
-        Handle search input change (live search).
-
-        Args:
-            event: The input change event containing the current search value.
-        """
-        self.search_term = event.value
-        self._update_table()
-
-    @on(Select.Changed, "#sort-select")
-    def on_sort_changed(self, event: Select.Changed) -> None:
-        """
-        Handle sort selection change.
-
-        Args:
-            event: The select change event containing the new sort field.
-        """
-        self.sort_by = str(event.value)
-        self._update_table()
-
-    @on(OptionList.OptionSelected, "#label-list")
-    def on_label_selected(self, event: OptionList.OptionSelected) -> None:
-        """
-        Handle label selection from the sidebar.
-
-        Args:
-            event: The option selected event containing the label choice.
-        """
-        option_text = str(event.option.prompt)
-        # Extract label name (remove count)
-        lbl_name = option_text.rsplit(" (", 1)[0]
-
-        if lbl_name == "All":
-            self.selected_label = None
-        else:
-            self.selected_label = lbl_name
-
-        self._update_table()
-
-    @on(DataTable.RowSelected, "#files-table")
-    def on_row_selected(self, event: DataTable.RowSelected) -> None:
-        """
-        Handle file row selection (Enter key on table row).
-
-        Opens the file detail screen for the selected audio file.
-
-        Args:
-            event: The row selected event containing the row key.
-        """
-        if event.row_key:
-            file_path = str(event.row_key.value)
-            # Find the file info
-            for f in self._all_audio_files:
-                if str(f.path) == file_path:
-                    self.push_screen(FileDetailScreen(f))
-                    break
-
-    def action_quit(self) -> None:
-        """Quit the application and return to the shell."""
-        self.exit()
-
-    def action_help(self) -> None:
-        """Display the help screen with keyboard shortcuts."""
-        self.push_screen(HelpScreen())
-
-    def action_refresh(self) -> None:
-        """Refresh the file list by rescanning the directory."""
-        self.load_data()
-        self.notify("Refreshing...", severity="information")
-
-    def action_search(self) -> None:
-        """Focus the search input field."""
-        self.query_one("#search-input", Input).focus()
-
-    def action_clear_search(self) -> None:
-        """Clear the search term and label filter."""
-        search_input = self.query_one("#search-input", Input)
-        search_input.value = ""
-        self.search_term = ""
-        self.selected_label = None
-        self._update_table()
-
-    def _get_selected_file(self) -> Optional[AudioFileInfo]:
-        """
-        Get the currently selected file from the data table.
-
-        Returns:
-            The AudioFileInfo for the selected row, or None if no selection.
-        """
-        table = self.query_one("#files-table", DataTable)
-        if table.cursor_row is not None and table.row_count > 0:
-            try:
-                rows = list(table.ordered_rows)
-                if 0 <= table.cursor_row < len(rows):
-                    row_key = rows[table.cursor_row].key
-                    file_path = str(row_key.value)
-                    for f in self._all_audio_files:
-                        if str(f.path) == file_path:
-                            return f
-            except (IndexError, AttributeError):
-                pass
-        return None
-
-    def action_play(self) -> None:
-        """Play the currently selected audio file."""
-        file_info = self._get_selected_file()
-        if file_info:
-            screen = FileDetailScreen(file_info)
-            screen._play_audio()
-
-    def action_spectrogram(self) -> None:
-        """Generate and display a spectrogram for the selected file."""
-        file_info = self._get_selected_file()
-        if file_info:
-            screen = FileDetailScreen(file_info)
-            screen._show_spectrogram()
+    def action_show_help(self) -> None:
+        """Show help information."""
+        output = self.query_one(CommandOutput)
+        output.clear_output()
+        output.write_output("[bold]bioamla Command Browser Help[/]\n")
+        output.write_output("Navigation:")
+        output.write_output("  Arrow keys - Navigate tree")
+        output.write_output("  Enter      - Select command / Expand group")
+        output.write_output("  Tab        - Move between fields")
+        output.write_output("")
+        output.write_output("Actions:")
+        output.write_output("  r          - Run current command")
+        output.write_output("  c          - Copy command to clipboard")
+        output.write_output("  /          - Search commands")
+        output.write_output("  ?          - Show this help")
+        output.write_output("  q          - Quit")
+        output.write_output("  Escape     - Focus tree")
 
 
-def run_explorer(directory: str) -> None:
-    """
-    Run the dataset explorer TUI application.
+def run_explorer(directory: str | None = None) -> None:
+    """Launch the command browser TUI.
 
     Args:
-        directory: Path to the directory to explore
+        directory: Ignored (kept for backwards compatibility)
     """
-    app = DatasetExplorer(directory)
+    app = CommandBrowser()
     app.run()
+
+
+# Keep the old function name for compatibility
+run_dashboard = run_explorer
+
+
+if __name__ == "__main__":
+    run_explorer()
