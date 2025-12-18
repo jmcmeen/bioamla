@@ -84,10 +84,15 @@ def config_show(ctx):
     else:
         console.print("[dim]Source: defaults (no config file found)[/dim]\n")
 
-    for section_name in ['audio', 'visualize', 'analysis', 'batch', 'output', 'progress']:
+    # Show all configuration sections
+    sections = [
+        'project', 'audio', 'visualize', 'models', 'inference', 'training',
+        'analysis', 'batch', 'output', 'progress', 'logging'
+    ]
+    for section_name in sections:
         section = getattr(config_obj, section_name, {})
         if section:
-            console.print(f"[bold blue][{section_name}][/bold blue]")
+            console.print(f"[bold blue]\\[{section_name}][/bold blue]")
             for key, value in section.items():
                 console.print(f"  {key} = {value}")
             console.print()
@@ -233,34 +238,338 @@ def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
     click.echo(f"Successfully purged {deleted_count} items, freed {_format_size(freed_space)}.")
 
 
-@cli.command()
-@click.argument('directory', required=True)
-def explore(directory: str):
-    """
-    Launch interactive TUI dashboard for exploring audio datasets.
+@config.command('deps')
+@click.option('--install', 'do_install', is_flag=True,
+              help='Install missing system dependencies')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt')
+def config_deps(do_install: bool, yes: bool):
+    """Check or install system dependencies (FFmpeg, libsndfile, PortAudio).
 
-    Browse audio files, view metadata, play audio, and generate spectrograms
-    in an interactive terminal interface.
+    These system libraries are required for full bioamla functionality:
 
     \b
-    Keyboard shortcuts:
-      ↑/↓, j/k    Navigate file list
-      Enter       View file details
-      p           Play selected audio
-      s           Generate spectrogram
-      r           Refresh file list
-      /           Search files
-      ?           Show help
-      q           Quit
-    """
-    import os
+      - FFmpeg: Audio format conversion (MP3, FLAC, etc.)
+      - libsndfile: Audio file I/O
+      - PortAudio: Real-time audio recording
 
-    if not os.path.isdir(directory):
-        click.echo(f"Error: '{directory}' is not a valid directory", err=True)
+    \b
+    Examples:
+        bioamla config deps              # Check dependencies
+        bioamla config deps --install    # Install missing dependencies
+        bioamla config deps --install -y # Install without confirmation
+    """
+    from bioamla.deps import check_all_dependencies, detect_os, get_full_install_command, run_install
+    from bioamla.progress import console
+
+    os_type = detect_os()
+    deps = check_all_dependencies()
+
+    # Display status
+    console.print("\n[bold]System Dependencies[/bold]")
+    console.print(f"[dim]Detected OS: {os_type}[/dim]\n")
+
+    all_installed = True
+    missing_deps = []
+
+    for dep in deps:
+        if dep.installed:
+            version_str = f" (v{dep.version})" if dep.version else ""
+            console.print(f"[green]✓[/green] {dep.name}{version_str}")
+            console.print(f"  [dim]{dep.description} - {dep.required_for}[/dim]")
+        else:
+            all_installed = False
+            missing_deps.append(dep)
+            console.print(f"[red]✗[/red] {dep.name} [red]not installed[/red]")
+            console.print(f"  [dim]{dep.description} - {dep.required_for}[/dim]")
+            if dep.install_hint:
+                console.print(f"  [yellow]Install: {dep.install_hint}[/yellow]")
+
+    console.print()
+
+    if all_installed:
+        console.print("[green]All system dependencies are installed![/green]")
+        return
+
+    # Show combined install command
+    full_command = get_full_install_command(os_type)
+    if full_command and not do_install:
+        console.print("[bold]To install all missing dependencies:[/bold]")
+        console.print(f"  {full_command}")
+        console.print()
+        console.print("[dim]Or run: bioamla config deps --install[/dim]")
+
+    # Install if requested
+    if do_install:
+        console.print()
+        if not yes:
+            if not click.confirm("Install missing system dependencies?"):
+                click.echo("Aborted.")
+                return
+
+        console.print("\n[bold]Installing dependencies...[/bold]")
+        success, message = run_install(os_type)
+
+        if success:
+            console.print(f"[green]{message}[/green]")
+            # Re-check to confirm
+            console.print("\n[bold]Verifying installation...[/bold]")
+            deps = check_all_dependencies()
+            for dep in deps:
+                if dep.installed:
+                    console.print(f"[green]✓[/green] {dep.name}")
+                else:
+                    console.print(f"[red]✗[/red] {dep.name}")
+        else:
+            console.print(f"[red]{message}[/red]")
+            raise SystemExit(1)
+
+
+# =============================================================================
+# Project Command Group
+# =============================================================================
+
+@cli.group()
+def project():
+    """Project management commands."""
+    pass
+
+
+@project.command('init')
+@click.argument('path', required=False, default='.')
+@click.option('--name', '-n', help='Project name (defaults to directory name)')
+@click.option('--description', '-d', default='', help='Project description')
+@click.option('--template', '-t', default='default',
+              type=click.Choice(['default', 'minimal', 'research', 'production']),
+              help='Configuration template to use')
+@click.option('--config', '-c', 'config_file', type=click.Path(exists=True),
+              help='Custom config file to use as base')
+@click.option('--force', '-f', is_flag=True, help='Overwrite existing project')
+def project_init(path, name, description, template, config_file, force):
+    """
+    Initialize a new bioamla project.
+
+    Creates a .bioamla directory with configuration files.
+
+    \b
+    Templates:
+      default     - Balanced settings for general use
+      minimal     - Minimal config, most values use defaults
+      research    - Detailed logging, reproducibility focused
+      production  - Optimized for batch processing
+
+    \b
+    Examples:
+      bioamla project init                    # Current directory
+      bioamla project init ./my-project       # Specific directory
+      bioamla project init -n "Frog Study"    # With custom name
+      bioamla project init -t research        # Research template
+    """
+    from pathlib import Path
+
+    from bioamla.progress import print_error, print_success, print_warning
+    from bioamla.project import PROJECT_MARKER, create_project
+
+    project_path = Path(path).resolve()
+
+    # Check for existing project
+    if (project_path / PROJECT_MARKER).exists():
+        if not force:
+            print_error(f"Project already exists at {project_path}")
+            click.echo("Use --force to reinitialize.")
+            raise SystemExit(1)
+        print_warning("Reinitializing existing project...")
+
+    # Create project
+    try:
+        info = create_project(
+            path=project_path,
+            name=name,
+            description=description,
+            template=template,
+            config_file=Path(config_file) if config_file else None,
+        )
+        print_success(f"Created bioamla project: {info.name}")
+        click.echo(f"  Location: {info.root}")
+        click.echo(f"  Config: {info.config_path}")
+        click.echo(f"\nNext steps:")
+        click.echo(f"  cd {project_path}")
+        click.echo(f"  bioamla config show")
+    except Exception as e:
+        print_error(f"Failed to create project: {e}")
         raise SystemExit(1)
 
-    from bioamla.tui import run_explorer
-    run_explorer(directory)
+
+@project.command('status')
+def project_status():
+    """Show current project status and information."""
+    from bioamla.progress import console
+    from bioamla.project import load_project
+
+    info = load_project()
+
+    if not info:
+        click.echo("Not in a bioamla project.")
+        click.echo("Run 'bioamla project init' to create one.")
+        return
+
+    console.print(f"\n[bold]Project: {info.name}[/bold]")
+    console.print(f"[dim]Version: {info.version}[/dim]")
+    if info.description:
+        console.print(f"[dim]{info.description}[/dim]")
+    console.print(f"\n  Root: {info.root}")
+    console.print(f"  Config: {info.config_path}")
+    console.print(f"  Logs: {info.logs_path}")
+
+
+@project.command('config')
+@click.argument('action', type=click.Choice(['show', 'edit', 'reset']))
+@click.pass_context
+def project_config(ctx, action):
+    """Manage project configuration."""
+    from bioamla.project import load_project
+
+    info = load_project()
+
+    if not info:
+        click.echo("Not in a bioamla project.")
+        raise SystemExit(1)
+
+    if action == 'show':
+        # Reuse existing config show logic
+        ctx.invoke(config_show)
+    elif action == 'edit':
+        # Open config in editor
+        import os
+        editor = os.environ.get('EDITOR', 'nano')
+        os.system(f'{editor} {info.config_path}')
+    elif action == 'reset':
+        # Reset to template defaults
+        click.echo("Reset project config to defaults? [y/N] ", nl=False)
+        if click.getchar().lower() == 'y':
+            from bioamla.project import _get_template_content, _customize_template
+            template_content = _get_template_content('default')
+            customized = _customize_template(template_content, info.name, info.description)
+            info.config_path.write_text(customized)
+            click.echo("\nConfig reset to defaults.")
+        else:
+            click.echo("\nCancelled.")
+
+
+# =============================================================================
+# Log Command Group
+# =============================================================================
+
+@cli.group()
+def log():
+    """Command history and logging."""
+    pass
+
+
+@log.command('show')
+@click.option('--limit', '-n', default=20, help='Number of entries to show')
+@click.option('--command', '-c', 'cmd_filter', help='Filter by command name')
+@click.option('--all', 'show_all', is_flag=True, help='Show all entries')
+def log_show(limit, cmd_filter, show_all):
+    """Show command history."""
+    from bioamla.command_log import CommandLogger
+    from bioamla.progress import console
+
+    logger = CommandLogger()
+
+    if not logger.is_available():
+        click.echo("Command logging requires a bioamla project.")
+        click.echo("Run 'bioamla project init' to create one.")
+        return
+
+    entries = logger.get_history(
+        limit=None if show_all else limit,
+        command_filter=cmd_filter,
+    )
+
+    if not entries:
+        click.echo("No command history found.")
+        return
+
+    console.print(f"\n[bold]Command History[/bold] ({len(entries)} entries)\n")
+
+    for entry in entries:
+        status = "[green]✓[/green]" if entry.exit_code == 0 else "[red]✗[/red]"
+        duration = f"{entry.duration_seconds:.2f}s"
+        args_str = ' '.join(entry.args[:3])
+        if len(entry.args) > 3:
+            args_str += ' ...'
+        console.print(f"{status} {entry.timestamp[:19]}  {entry.command} {args_str}  [{duration}]")
+
+
+@log.command('search')
+@click.argument('query')
+def log_search(query):
+    """Search command history."""
+    from bioamla.command_log import CommandLogger
+    from bioamla.progress import console
+
+    logger = CommandLogger()
+
+    if not logger.is_available():
+        click.echo("Not in a bioamla project.")
+        return
+
+    results = logger.search(query)
+
+    if not results:
+        click.echo(f"No matches for '{query}'")
+        return
+
+    console.print(f"\n[bold]Search Results[/bold] ({len(results)} matches)\n")
+    for entry in results[:20]:
+        status = "[green]✓[/green]" if entry.exit_code == 0 else "[red]✗[/red]"
+        console.print(f"{status} {entry.timestamp[:19]}  {entry.command} {' '.join(entry.args)}")
+
+
+@log.command('clear')
+@click.confirmation_option(prompt='Clear all command history?')
+def log_clear():
+    """Clear command history."""
+    from bioamla.command_log import CommandLogger
+
+    logger = CommandLogger()
+
+    if not logger.is_available():
+        click.echo("Not in a bioamla project.")
+        return
+
+    count = logger.clear()
+    click.echo(f"Cleared {count} log entries.")
+
+
+@log.command('stats')
+def log_stats():
+    """Show command history statistics."""
+    from bioamla.command_log import CommandLogger
+    from bioamla.progress import console
+
+    logger = CommandLogger()
+
+    if not logger.is_available():
+        click.echo("Not in a bioamla project.")
+        return
+
+    stats = logger.get_stats()
+
+    if stats['total_commands'] == 0:
+        click.echo("No command history found.")
+        return
+
+    console.print(f"\n[bold]Command Statistics[/bold]\n")
+    console.print(f"  Total commands: {stats['total_commands']}")
+    console.print(f"  [green]Successful:[/green] {stats['successful_commands']}")
+    console.print(f"  [red]Failed:[/red] {stats['failed_commands']}")
+
+    if stats['command_counts']:
+        console.print(f"\n[bold]Commands by frequency:[/bold]")
+        sorted_cmds = sorted(stats['command_counts'].items(), key=lambda x: x[1], reverse=True)
+        for cmd, count in sorted_cmds[:10]:
+            console.print(f"  {cmd}: {count}")
 
 
 # =============================================================================
@@ -302,8 +611,8 @@ def evaluate():
 @click.option('--resample-freq', default=16000, type=int, help='Resampling frequency')
 @click.option('--batch', is_flag=True, default=False, help='Run batch inference on a directory of audio files')
 @click.option('--output-csv', default='output.csv', help='Output CSV file name (batch mode only)')
-@click.option('--clip-seconds', default=1, type=int, help='Duration of audio clips in seconds (batch mode only)')
-@click.option('--overlap-seconds', default=0, type=int, help='Overlap between clips in seconds (batch mode only)')
+@click.option('--segment-duration', default=1, type=int, help='Duration of audio segments in seconds (batch mode only)')
+@click.option('--segment-overlap', default=0, type=int, help='Overlap between segments in seconds (batch mode only)')
 @click.option('--restart/--no-restart', default=False, help='Whether to restart from existing results (batch mode only)')
 @click.option('--batch-size', default=8, type=int, help='Number of segments to process in parallel (default: 8, batch mode only)')
 @click.option('--fp16/--no-fp16', default=False, help='Use half-precision (FP16) for faster GPU inference (batch mode only)')
@@ -315,8 +624,8 @@ def ast_predict(
     resample_freq: int,
     batch: bool,
     output_csv: str,
-    clip_seconds: int,
-    overlap_seconds: int,
+    segment_duration: int,
+    segment_overlap: int,
     restart: bool,
     batch_size: int,
     fp16: bool,
@@ -349,8 +658,8 @@ def ast_predict(
             output_csv=output_csv,
             model_path=model_path,
             resample_freq=resample_freq,
-            clip_seconds=clip_seconds,
-            overlap_seconds=overlap_seconds,
+            segment_duration=segment_duration,
+            segment_overlap=segment_overlap,
             restart=restart,
             batch_size=batch_size,
             fp16=fp16,
@@ -368,8 +677,8 @@ def _run_batch_inference(
     output_csv: str,
     model_path: str,
     resample_freq: int,
-    clip_seconds: int,
-    overlap_seconds: int,
+    segment_duration: int,
+    segment_overlap: int,
     restart: bool,
     batch_size: int,
     fp16: bool,
@@ -391,6 +700,12 @@ def _run_batch_inference(
     from bioamla.utils import file_exists, get_files_by_extension
 
     output_csv = os.path.join(directory, output_csv)
+
+    # Create parent directory if it doesn't exist
+    output_dir = os.path.dirname(output_csv)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
     print("Output csv: " + output_csv)
 
     wave_files = get_files_by_extension(directory=directory, extensions=['.wav'], recursive=True)
@@ -447,6 +762,10 @@ def _run_batch_inference(
         num_workers=workers
     )
 
+    # Pre-load feature extractor before timing starts
+    from bioamla.ast import get_cached_feature_extractor
+    feature_extractor = get_cached_feature_extractor()
+
     start_time = time.time()
     time_string = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time))
     print("Start batch inference at " + time_string)
@@ -455,10 +774,11 @@ def _run_batch_inference(
         wave_files=wave_files,
         model=model,
         freq=resample_freq,
-        clip_seconds=clip_seconds,
-        overlap_seconds=overlap_seconds,
+        segment_duration=segment_duration,
+        segment_overlap=segment_overlap,
         output_csv=output_csv,
-        config=config
+        config=config,
+        feature_extractor=feature_extractor
     )
 
     end_time = time.time()
@@ -570,6 +890,10 @@ def ast_train(
             print(f"MLflow integration enabled, reporting to: {report_to}")
         except ImportError:
             print("Warning: MLflow not installed. Install with 'pip install mlflow' to enable MLflow tracking.")
+
+    # Convert comma-separated report_to string to a list for TrainingArguments
+    if report_to and "," in report_to:
+        report_to = [r.strip() for r in report_to.split(",")]
 
     dataset = load_dataset(train_dataset, split=split)
 
@@ -1040,7 +1364,7 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
         bioamla models embed audio.wav --model-type ast --model-path my_model -o embeddings.npy
 
     Batch mode:
-        bioamla models embed ./audio --batch --model-type ast --model-path my_model -o embeddings.npz
+        bioamla models embed ./audio --batch --model-type ast --model-path my_model -o embeddings.npy
     """
     from pathlib import Path
 
@@ -1074,21 +1398,34 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
         if not quiet:
             click.echo(f"Extracting embeddings from {len(audio_files)} files...")
 
-        embeddings_dict = {}
+        embeddings_list = []
+        filepaths_list = []
         for i, filepath in enumerate(audio_files):
             try:
                 emb = model.extract_embeddings(filepath, layer=layer)
-                embeddings_dict[filepath] = emb
+                # Flatten to 1D if needed (take mean if multiple time steps)
+                if emb.ndim > 1:
+                    emb = emb.mean(axis=0) if emb.shape[0] > 1 else emb.squeeze()
+                embeddings_list.append(emb)
+                filepaths_list.append(filepath)
                 if not quiet:
                     click.echo(f"[{i+1}/{len(audio_files)}] {filepath}: shape {emb.shape}")
             except Exception as e:
                 if not quiet:
                     click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
 
-        np.savez(output, **{str(i): v for i, v in enumerate(embeddings_dict.values())},
-                 filepaths=list(embeddings_dict.keys()))
+        # Stack into 2D array (samples x features) for clustering compatibility
+        embeddings = np.vstack(embeddings_list)
+        np.save(output, embeddings)
+
+        # Save filepaths mapping separately
+        filepaths_output = str(output).replace('.npy', '_filepaths.txt')
+        with open(filepaths_output, 'w') as f:
+            f.write('\n'.join(filepaths_list))
+
         if not quiet:
             click.echo(f"\nEmbeddings saved to {output}")
+            click.echo(f"Filepaths saved to {filepaths_output}")
 
     else:
         if not Path(path).exists():
@@ -1417,44 +1754,113 @@ def audio_denoise(path, output, batch, method, strength, quiet):
 @audio.command('segment')
 @click.argument('path')
 @click.option('--output', '-o', required=True, help='Output directory for segments')
+@click.option('--batch', is_flag=True, help='Process all audio files in directory')
 @click.option('--silence-threshold', default=-40, type=float, help='Silence threshold in dB (default: -40)')
 @click.option('--min-silence', default=0.3, type=float, help='Min silence duration in seconds (default: 0.3)')
 @click.option('--min-segment', default=0.5, type=float, help='Min segment duration in seconds (default: 0.5)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
-def audio_segment(path, output, silence_threshold, min_silence, min_segment, quiet):
+def audio_segment(path, output, batch, silence_threshold, min_silence, min_segment, quiet):
     """Split audio on silence into separate files."""
     from pathlib import Path
 
     from bioamla.signal import load_audio, save_audio, split_audio_on_silence
+    from bioamla.utils import get_audio_files
 
     path = Path(path)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
 
     if not path.exists():
-        click.echo(f"Error: File not found: {path}")
+        click.echo(f"Error: Path not found: {path}")
         raise SystemExit(1)
 
-    audio, sr = load_audio(str(path))
-    chunks = split_audio_on_silence(
-        audio, sr,
-        silence_threshold_db=silence_threshold,
-        min_silence_duration=min_silence,
-        min_segment_duration=min_segment
-    )
+    def segment_file(audio_path, output_dir):
+        """Segment a single audio file."""
+        audio, sr = load_audio(str(audio_path))
+        chunks = split_audio_on_silence(
+            audio, sr,
+            silence_threshold_db=silence_threshold,
+            min_silence_duration=min_silence,
+            min_segment_duration=min_segment
+        )
 
-    if not chunks:
-        click.echo("No segments found")
-        return
+        if not chunks:
+            return 0
 
-    stem = path.stem
-    for i, (chunk, start, end) in enumerate(chunks):
-        out_path = output / f"{stem}_seg{i+1:03d}_{start:.2f}-{end:.2f}s.wav"
-        save_audio(str(out_path), chunk, sr)
+        stem = audio_path.stem
+        for i, (chunk, start, end) in enumerate(chunks):
+            out_path = output_dir / f"{stem}_seg{i+1:03d}_{start:.2f}-{end:.2f}s.wav"
+            save_audio(str(out_path), chunk, sr)
+            if not quiet:
+                click.echo(f"  Created: {out_path}")
+
+        return len(chunks)
+
+    if batch or path.is_dir():
+        # Batch mode: process all files in directory
+        audio_files = get_audio_files(str(path), recursive=True)
+        if not audio_files:
+            click.echo(f"No audio files found in {path}")
+            raise SystemExit(1)
+
+        total_segments = 0
+        files_processed = 0
+        files_failed = 0
+
         if not quiet:
-            click.echo(f"  Created: {out_path}")
+            from bioamla.progress import ProgressBar, print_error, print_success
 
-    click.echo(f"Created {len(chunks)} segments in {output}")
+            with ProgressBar(
+                total=len(audio_files),
+                description="Segmenting audio files",
+            ) as progress:
+                for audio_file in audio_files:
+                    audio_path = Path(audio_file)
+                    # Preserve directory structure in output
+                    try:
+                        rel_path = audio_path.parent.relative_to(path)
+                        file_output_dir = output / rel_path
+                    except ValueError:
+                        file_output_dir = output
+
+                    file_output_dir.mkdir(parents=True, exist_ok=True)
+
+                    try:
+                        num_segments = segment_file(audio_path, file_output_dir)
+                        total_segments += num_segments
+                        files_processed += 1
+                    except Exception as e:
+                        files_failed += 1
+                    progress.advance()
+
+            if files_failed > 0:
+                print_error(f"Processed {files_processed} files, created {total_segments} segments, {files_failed} failed")
+            else:
+                print_success(f"Processed {files_processed} files, created {total_segments} segments")
+        else:
+            for audio_file in audio_files:
+                audio_path = Path(audio_file)
+                try:
+                    rel_path = audio_path.parent.relative_to(path)
+                    file_output_dir = output / rel_path
+                except ValueError:
+                    file_output_dir = output
+
+                file_output_dir.mkdir(parents=True, exist_ok=True)
+
+                try:
+                    num_segments = segment_file(audio_path, file_output_dir)
+                    total_segments += num_segments
+                    files_processed += 1
+                except Exception:
+                    files_failed += 1
+    else:
+        # Single file mode
+        num_segments = segment_file(path, output)
+        if num_segments == 0:
+            click.echo("No segments found")
+        else:
+            click.echo(f"Created {num_segments} segments in {output}")
 
 
 @audio.command('detect-events')
@@ -1604,19 +2010,35 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
             click.echo("No audio files found")
             raise SystemExit(1)
 
-        if not quiet:
-            click.echo(f"Found {len(audio_files)} audio files to analyze")
-
         analyses = []
-        for i, filepath in enumerate(audio_files):
-            try:
-                analysis = analyze_audio(filepath, silence_threshold_db=silence_threshold)
-                analyses.append(analysis)
-                if not quiet:
-                    click.echo(f"[{i+1}/{len(audio_files)}] Analyzed: {filepath}")
-            except Exception as e:
-                if not quiet:
-                    click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
+        errors = []
+
+        if not quiet:
+            from bioamla.progress import ProgressBar, print_success, print_error
+
+            with ProgressBar(
+                total=len(audio_files),
+                description="Analyzing audio files",
+            ) as progress:
+                for filepath in audio_files:
+                    try:
+                        analysis = analyze_audio(filepath, silence_threshold_db=silence_threshold)
+                        analyses.append(analysis)
+                    except Exception as e:
+                        errors.append((filepath, str(e)))
+                    progress.advance()
+
+            if errors:
+                print_error(f"Analyzed {len(analyses)} files, {len(errors)} failed")
+            else:
+                print_success(f"Analyzed {len(analyses)} files")
+        else:
+            for filepath in audio_files:
+                try:
+                    analysis = analyze_audio(filepath, silence_threshold_db=silence_threshold)
+                    analyses.append(analysis)
+                except Exception:
+                    pass
 
         if output_format == 'json':
             result = {
@@ -2008,46 +2430,83 @@ def inat_download(
 
 
 @services_inat.command('search')
+@click.option('--species', default=None, help='Filter by species name (scientific or common)')
+@click.option('--taxon-id', type=int, default=None, help='Filter by taxon ID (e.g., 20979 for Amphibia)')
 @click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
 @click.option('--project-id', default=None, help='Filter by iNaturalist project ID or slug')
-@click.option('--taxon-id', type=int, default=None, help='Filter by parent taxon ID (e.g., 20979 for Amphibia)')
 @click.option('--quality-grade', default='research', help='Quality grade: research, needs_id, or casual')
+@click.option('--has-sounds', is_flag=True, help='Only show observations with sounds')
+@click.option('--limit', type=int, default=20, help='Maximum number of results')
 @click.option('--output', '-o', default=None, help='Output file path for CSV (optional)')
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def inat_search(
+    species: str,
+    taxon_id: int,
     place_id: int,
     project_id: str,
-    taxon_id: int,
     quality_grade: str,
+    has_sounds: bool,
+    limit: int,
     output: str,
     quiet: bool
 ):
-    """Search for taxa with observations in a place or project."""
-    from bioamla.inat import get_taxa
+    """Search for iNaturalist observations."""
+    from bioamla.inat import search_inat_sounds
 
-    if not place_id and not project_id:
-        raise click.UsageError("At least one of --place-id or --project-id must be provided")
+    if not species and not taxon_id and not place_id and not project_id:
+        raise click.UsageError("At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)")
 
-    taxa = get_taxa(
-        place_id=place_id,
-        project_id=project_id,
-        quality_grade=quality_grade,
+    results = search_inat_sounds(
         taxon_id=taxon_id,
-        verbose=not quiet
+        taxon_name=species,
+        place_id=place_id,
+        quality_grade=quality_grade,
+        per_page=limit
     )
+
+    if not results:
+        click.echo("No observations found matching the search criteria.")
+        return
 
     if output:
         import csv
         with open(output, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=['taxon_id', 'name', 'common_name', 'observation_count'])
+            fieldnames = ['observation_id', 'scientific_name', 'common_name', 'sound_count', 'observed_on', 'location', 'url']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            writer.writerows(taxa)
-        click.echo(f"Saved {len(taxa)} taxa to {output}")
+            for obs in results:
+                taxon = obs.get('taxon', {})
+                observed_on_raw = obs.get('observed_on', '')
+                if hasattr(observed_on_raw, 'strftime'):
+                    observed_on = observed_on_raw.strftime('%Y-%m-%d')
+                else:
+                    observed_on = str(observed_on_raw) if observed_on_raw else ''
+                writer.writerow({
+                    'observation_id': obs.get('id'),
+                    'scientific_name': taxon.get('name', ''),
+                    'common_name': taxon.get('preferred_common_name', ''),
+                    'sound_count': len(obs.get('sounds', [])),
+                    'observed_on': observed_on,
+                    'location': obs.get('place_guess', ''),
+                    'url': f"https://www.inaturalist.org/observations/{obs.get('id')}"
+                })
+        click.echo(f"Saved {len(results)} observations to {output}")
     else:
-        click.echo(f"\n{'Taxon ID':<12} {'Scientific Name':<30} {'Common Name':<25} {'Obs Count':<10}")
-        click.echo("-" * 80)
-        for t in taxa:
-            click.echo(f"{t['taxon_id']:<12} {t['name']:<30} {t['common_name']:<25} {t['observation_count']:<10}")
+        click.echo(f"\nFound {len(results)} observations with sounds:\n")
+        click.echo(f"{'ID':<12} {'Species':<30} {'Sounds':<8} {'Date':<12} {'Location':<30}")
+        click.echo("-" * 95)
+        for obs in results:
+            taxon = obs.get('taxon', {})
+            obs_id = obs.get('id', '')
+            name = taxon.get('name', 'Unknown')[:28]
+            sound_count = len(obs.get('sounds', []))
+            observed_on_raw = obs.get('observed_on', '')
+            if hasattr(observed_on_raw, 'strftime'):
+                observed_on = observed_on_raw.strftime('%Y-%m-%d')
+            else:
+                observed_on = str(observed_on_raw)[:10] if observed_on_raw else ''
+            location = (obs.get('place_guess', '') or '')[:28]
+            click.echo(f"{obs_id:<12} {name:<30} {sound_count:<8} {observed_on:<12} {location:<30}")
 
 
 @services_inat.command('stats')
@@ -3396,7 +3855,11 @@ def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_fr
         # Single file
         try:
             indices_result = compute_indices_from_file(path_obj, **kwargs)
-            results = [{"filepath": str(path_obj), "success": True, **indices_result.to_dict()}]
+            # Build result with filepath first, success last for better CSV column order
+            result = {"filepath": str(path_obj)}
+            result.update(indices_result.to_dict())
+            result["success"] = True
+            results = [result]
         except Exception as e:
             click.echo(f"Error processing {path}: {e}")
             raise SystemExit(1)
@@ -3748,15 +4211,18 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
     """Detect sounds using band-limited energy detection.
 
     Filters audio to a frequency band and detects regions where energy
-    exceeds the threshold.
+    exceeds the threshold. Accepts a single audio file or a directory
+    of audio files.
 
     Examples:
         bioamla detect energy recording.wav --low-freq 1000 --high-freq 4000
-        bioamla detect energy forest.wav -l 2000 -h 8000 -t -25 -o detections.csv
+        bioamla detect energy ./recordings/ -l 2000 -h 8000 -t -25 -o detections.csv
     """
     import json as json_lib
+    from pathlib import Path as PathLib
 
     from bioamla.detection import BandLimitedEnergyDetector, export_detections
+    from bioamla.utils import get_audio_files
 
     detector = BandLimitedEnergyDetector(
         low_freq=low_freq,
@@ -3765,34 +4231,63 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
         min_duration=min_duration,
     )
 
-    detections = detector.detect_from_file(path)
+    path_obj = PathLib(path)
+    all_detections = []
+
+    if path_obj.is_dir():
+        audio_files = get_audio_files(str(path_obj), recursive=True)
+        if not audio_files:
+            click.echo(f"No audio files found in {path}")
+            return
+
+        from bioamla.progress import ProgressBar, print_success
+
+        with ProgressBar(
+            total=len(audio_files),
+            description="Detecting energy patterns",
+        ) as progress:
+            for audio_file in audio_files:
+                file_detections = detector.detect_from_file(audio_file)
+                for d in file_detections:
+                    d.metadata['source_file'] = audio_file
+                all_detections.extend(file_detections)
+                progress.advance()
+
+        print_success(f"Processed {len(audio_files)} files")
+    else:
+        all_detections = detector.detect_from_file(path)
+        for d in all_detections:
+            d.metadata['source_file'] = str(path_obj)
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
-        export_detections(detections, output, format=fmt)
-        click.echo(f"Saved {len(detections)} detections to {output}")
+        export_detections(all_detections, output, format=fmt)
+        click.echo(f"Saved {len(all_detections)} detections to {output}")
     elif output_format == 'json':
-        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
     elif output_format == 'csv':
         import csv
         import sys
 
-        if detections:
-            fieldnames = list(detections[0].to_dict().keys())
+        if all_detections:
+            fieldnames = list(all_detections[0].to_dict().keys())
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
             writer.writeheader()
-            for d in detections:
+            for d in all_detections:
                 writer.writerow(d.to_dict())
         else:
             click.echo("No detections found.")
     else:
-        click.echo(f"Found {len(detections)} detections:\n")
-        for i, d in enumerate(detections, 1):
+        click.echo(f"Found {len(all_detections)} detections:\n")
+        for i, d in enumerate(all_detections, 1):
+            source = d.metadata.get('source_file', '')
+            if source:
+                source = f" [{PathLib(source).name}]"
             click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                      f"(confidence: {d.confidence:.2f})")
+                      f"(confidence: {d.confidence:.2f}){source}")
 
     if not output and output_format == 'table':
-        click.echo(f"\nTotal: {len(detections)} detections")
+        click.echo(f"\nTotal: {len(all_detections)} detections")
 
 
 @detect.command('ribbit')
@@ -3814,14 +4309,17 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
 
     RIBBIT detects repetitive vocalizations by analyzing the autocorrelation
     of the spectrogram. Effective for frog calls, insect sounds, etc.
+    Accepts a single audio file or a directory of audio files.
 
     Examples:
         bioamla detect ribbit frog_pond.wav --pulse-rate 10 --low-freq 500 --high-freq 3000
-        bioamla detect ribbit cricket.wav -p 50 --tolerance 0.3
+        bioamla detect ribbit ./recordings/ -p 50 --tolerance 0.3
     """
     import json as json_lib
+    from pathlib import Path as PathLib
 
     from bioamla.detection import RibbitDetector, export_detections
+    from bioamla.utils import get_audio_files
 
     detector = RibbitDetector(
         pulse_rate_hz=pulse_rate,
@@ -3832,34 +4330,63 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
         min_score=min_score,
     )
 
-    detections = detector.detect_from_file(path)
+    path_obj = PathLib(path)
+    all_detections = []
+
+    if path_obj.is_dir():
+        audio_files = get_audio_files(str(path_obj), recursive=True)
+        if not audio_files:
+            click.echo(f"No audio files found in {path}")
+            return
+
+        from bioamla.progress import ProgressBar, print_success
+
+        with ProgressBar(
+            total=len(audio_files),
+            description="Detecting RIBBIT patterns",
+        ) as progress:
+            for audio_file in audio_files:
+                file_detections = detector.detect_from_file(audio_file)
+                for d in file_detections:
+                    d.metadata['source_file'] = audio_file
+                all_detections.extend(file_detections)
+                progress.advance()
+
+        print_success(f"Processed {len(audio_files)} files")
+    else:
+        all_detections = detector.detect_from_file(path)
+        for d in all_detections:
+            d.metadata['source_file'] = str(path_obj)
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
-        export_detections(detections, output, format=fmt)
-        click.echo(f"Saved {len(detections)} detections to {output}")
+        export_detections(all_detections, output, format=fmt)
+        click.echo(f"Saved {len(all_detections)} detections to {output}")
     elif output_format == 'json':
-        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
     elif output_format == 'csv':
         import csv
         import sys
 
-        if detections:
-            fieldnames = list(detections[0].to_dict().keys())
+        if all_detections:
+            fieldnames = list(all_detections[0].to_dict().keys())
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
             writer.writeheader()
-            for d in detections:
+            for d in all_detections:
                 writer.writerow(d.to_dict())
         else:
             click.echo("No detections found.")
     else:
-        click.echo(f"Found {len(detections)} periodic call detections:\n")
-        for i, d in enumerate(detections, 1):
+        click.echo(f"Found {len(all_detections)} periodic call detections:\n")
+        for i, d in enumerate(all_detections, 1):
+            source = d.metadata.get('source_file', '')
+            if source:
+                source = f" [{PathLib(source).name}]"
             click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                      f"(score: {d.confidence:.2f}, pulse_rate: {d.metadata.get('pulse_rate_hz', 'N/A')}Hz)")
+                      f"(score: {d.confidence:.2f}, pulse_rate: {d.metadata.get('pulse_rate_hz', 'N/A')}Hz){source}")
 
     if not output and output_format == 'table':
-        click.echo(f"\nTotal: {len(detections)} detections")
+        click.echo(f"\nTotal: {len(all_detections)} detections")
 
 
 @detect.command('peaks')
@@ -3879,15 +4406,20 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
 
     Uses CWT for robust peak detection in audio energy envelope.
     Can detect individual peaks or sequences of peaks.
+    Accepts a single audio file or a directory of audio files.
 
     Examples:
         bioamla detect peaks recording.wav --snr 3.0
-        bioamla detect peaks calls.wav --sequences --min-peaks 5
+        bioamla detect peaks ./recordings/ --sequences --min-peaks 5
         bioamla detect peaks forest.wav -l 2000 -h 8000 --sequences
     """
     import json as json_lib
+    from pathlib import Path as PathLib
+
+    import librosa
 
     from bioamla.detection import CWTPeakDetector, export_detections
+    from bioamla.utils import get_audio_files
 
     detector = CWTPeakDetector(
         snr_threshold=snr,
@@ -3896,49 +4428,155 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
         high_freq=high_freq,
     )
 
-    import librosa
-    audio, sample_rate = librosa.load(path, sr=None, mono=True)
+    path_obj = PathLib(path)
+
+    if path_obj.is_dir():
+        audio_files = get_audio_files(str(path_obj), recursive=True)
+        if not audio_files:
+            click.echo(f"No audio files found in {path}")
+            return
+    else:
+        audio_files = [str(path_obj)]
 
     if sequences:
-        detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
+        all_detections = []
+
+        if len(audio_files) > 1:
+            from bioamla.progress import ProgressBar, print_success
+
+            with ProgressBar(
+                total=len(audio_files),
+                description="Detecting peak sequences",
+            ) as progress:
+                for audio_file in audio_files:
+                    audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+                    file_detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
+                    for d in file_detections:
+                        d.metadata['source_file'] = audio_file
+                    all_detections.extend(file_detections)
+                    progress.advance()
+
+            print_success(f"Processed {len(audio_files)} files")
+        else:
+            for audio_file in audio_files:
+                audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+                file_detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
+                for d in file_detections:
+                    d.metadata['source_file'] = audio_file
+                all_detections.extend(file_detections)
 
         if output:
             fmt = "json" if output.endswith(".json") else "csv"
-            export_detections(detections, output, format=fmt)
-            click.echo(f"Saved {len(detections)} sequence detections to {output}")
+            export_detections(all_detections, output, format=fmt)
+            click.echo(f"Saved {len(all_detections)} sequence detections to {output}")
         elif output_format == 'json':
-            click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+            click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
+        elif output_format == 'csv':
+            import csv
+            import sys
+
+            if all_detections:
+                fieldnames = list(all_detections[0].to_dict().keys())
+                writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+                writer.writeheader()
+                for d in all_detections:
+                    writer.writerow(d.to_dict())
+            else:
+                click.echo("No detections found.")
         else:
-            click.echo(f"Found {len(detections)} peak sequences:\n")
-            for i, d in enumerate(detections, 1):
+            click.echo(f"Found {len(all_detections)} peak sequences:\n")
+            for i, d in enumerate(all_detections, 1):
                 n_peaks = d.metadata.get('n_peaks', 0)
                 interval = d.metadata.get('mean_interval', 0)
+                source = d.metadata.get('source_file', '')
+                if source:
+                    source = f" [{PathLib(source).name}]"
                 click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                          f"({n_peaks} peaks, mean interval: {interval:.3f}s)")
+                          f"({n_peaks} peaks, mean interval: {interval:.3f}s){source}")
+
+        if not output and output_format == 'table':
+            click.echo(f"\nTotal: {len(all_detections)} sequences")
     else:
-        peaks = detector.detect(audio, sample_rate)
+        all_peaks = []
+
+        if len(audio_files) > 1:
+            from bioamla.progress import ProgressBar, print_success
+
+            with ProgressBar(
+                total=len(audio_files),
+                description="Detecting peaks",
+            ) as progress:
+                for audio_file in audio_files:
+                    audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+                    file_peaks = detector.detect(audio, sample_rate)
+                    for p in file_peaks:
+                        p.source_file = audio_file
+                    all_peaks.extend(file_peaks)
+                    progress.advance()
+
+            print_success(f"Processed {len(audio_files)} files")
+        else:
+            for audio_file in audio_files:
+                audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+                file_peaks = detector.detect(audio, sample_rate)
+                for p in file_peaks:
+                    p.source_file = audio_file
+                all_peaks.extend(file_peaks)
 
         if output:
             import csv
+            fieldnames = ['time', 'amplitude', 'width', 'prominence']
+            if len(audio_files) > 1:
+                fieldnames.append('source_file')
             with open(output, 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=['time', 'amplitude', 'width', 'prominence'])
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
-                for p in peaks:
-                    writer.writerow(p.to_dict())
-            click.echo(f"Saved {len(peaks)} peaks to {output}")
+                for p in all_peaks:
+                    row = p.to_dict()
+                    if len(audio_files) > 1:
+                        row['source_file'] = getattr(p, 'source_file', '')
+                    writer.writerow(row)
+            click.echo(f"Saved {len(all_peaks)} peaks to {output}")
         elif output_format == 'json':
-            click.echo(json_lib.dumps([p.to_dict() for p in peaks], indent=2))
-        else:
-            click.echo(f"Found {len(peaks)} peaks:\n")
-            for i, p in enumerate(peaks[:20], 1):  # Show first 20
-                click.echo(f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, "
-                          f"width: {p.width:.3f}s)")
-            if len(peaks) > 20:
-                click.echo(f"... and {len(peaks) - 20} more peaks")
+            peak_dicts = []
+            for p in all_peaks:
+                d = p.to_dict()
+                if len(audio_files) > 1:
+                    d['source_file'] = getattr(p, 'source_file', '')
+                peak_dicts.append(d)
+            click.echo(json_lib.dumps(peak_dicts, indent=2))
+        elif output_format == 'csv':
+            import csv
+            import sys
 
-    if not output and output_format == 'table':
-        n = len(detections) if sequences else len(peaks)
-        click.echo(f"\nTotal: {n} {'sequences' if sequences else 'peaks'}")
+            if all_peaks:
+                fieldnames = ['time', 'amplitude', 'width', 'prominence']
+                if len(audio_files) > 1:
+                    fieldnames.append('source_file')
+                writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+                writer.writeheader()
+                for p in all_peaks:
+                    row = p.to_dict()
+                    if len(audio_files) > 1:
+                        row['source_file'] = getattr(p, 'source_file', '')
+                    writer.writerow(row)
+            else:
+                click.echo("No peaks found.")
+        else:
+            click.echo(f"Found {len(all_peaks)} peaks:\n")
+            for i, p in enumerate(all_peaks[:20], 1):  # Show first 20
+                source = getattr(p, 'source_file', '')
+                if source and len(audio_files) > 1:
+                    source = f" [{PathLib(source).name}]"
+                else:
+                    source = ''
+                click.echo(f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, "
+                          f"width: {p.width:.3f}s){source}")
+            if len(all_peaks) > 20:
+                click.echo(f"... and {len(all_peaks) - 20} more peaks")
+
+        if not output and output_format == 'table':
+            click.echo(f"\nTotal: {len(all_peaks)} peaks")
 
 
 @detect.command('accelerating')
@@ -3959,15 +4597,18 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
     """Detect accelerating or decelerating call patterns.
 
     Identifies vocalizations with increasing or decreasing pulse rates,
-    common in many frog and insect species.
+    common in many frog and insect species. Accepts a single audio file
+    or a directory of audio files.
 
     Examples:
         bioamla detect accelerating tree_frog.wav --acceleration 2.0
-        bioamla detect accelerating chorus.wav -a 1.5 -d 1.5 -l 1000 -h 4000
+        bioamla detect accelerating ./recordings/ -a 1.5 -d 1.5 -l 1000 -h 4000
     """
     import json as json_lib
+    from pathlib import Path as PathLib
 
     from bioamla.detection import AcceleratingPatternDetector, export_detections
+    from bioamla.utils import get_audio_files
 
     detector = AcceleratingPatternDetector(
         min_pulses=min_pulses,
@@ -3978,39 +4619,68 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
         window_duration=window,
     )
 
-    detections = detector.detect_from_file(path)
+    path_obj = PathLib(path)
+    all_detections = []
+
+    if path_obj.is_dir():
+        audio_files = get_audio_files(str(path_obj), recursive=True)
+        if not audio_files:
+            click.echo(f"No audio files found in {path}")
+            return
+
+        from bioamla.progress import ProgressBar, print_success
+
+        with ProgressBar(
+            total=len(audio_files),
+            description="Detecting accelerating patterns",
+        ) as progress:
+            for audio_file in audio_files:
+                file_detections = detector.detect_from_file(audio_file)
+                for d in file_detections:
+                    d.metadata['source_file'] = audio_file
+                all_detections.extend(file_detections)
+                progress.advance()
+
+        print_success(f"Processed {len(audio_files)} files")
+    else:
+        all_detections = detector.detect_from_file(path)
+        for d in all_detections:
+            d.metadata['source_file'] = str(path_obj)
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
-        export_detections(detections, output, format=fmt)
-        click.echo(f"Saved {len(detections)} detections to {output}")
+        export_detections(all_detections, output, format=fmt)
+        click.echo(f"Saved {len(all_detections)} detections to {output}")
     elif output_format == 'json':
-        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
     elif output_format == 'csv':
         import csv
         import sys
 
-        if detections:
-            fieldnames = list(detections[0].to_dict().keys())
+        if all_detections:
+            fieldnames = list(all_detections[0].to_dict().keys())
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
             writer.writeheader()
-            for d in detections:
+            for d in all_detections:
                 writer.writerow(d.to_dict())
         else:
             click.echo("No detections found.")
     else:
-        click.echo(f"Found {len(detections)} pattern detections:\n")
-        for i, d in enumerate(detections, 1):
+        click.echo(f"Found {len(all_detections)} pattern detections:\n")
+        for i, d in enumerate(all_detections, 1):
             pattern = d.metadata.get('pattern_type', 'unknown')
             ratio = d.metadata.get('acceleration_ratio', 1.0)
             init_rate = d.metadata.get('initial_rate', 0)
             final_rate = d.metadata.get('final_rate', 0)
-            click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s")
+            source = d.metadata.get('source_file', '')
+            if source:
+                source = f" [{PathLib(source).name}]"
+            click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s{source}")
             click.echo(f"   Pattern: {pattern}, ratio: {ratio:.2f}x")
             click.echo(f"   Rate: {init_rate:.1f} -> {final_rate:.1f} Hz")
 
     if not output and output_format == 'table':
-        click.echo(f"\nTotal: {len(detections)} detections")
+        click.echo(f"\nTotal: {len(all_detections)} detections")
 
 
 @detect.command('batch')
@@ -4549,6 +5219,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
     LABELS_FILE: Path to numpy file with cluster labels (.npy)
     """
     import json
+    from pathlib import Path
 
     import numpy as np
 
@@ -4569,8 +5240,22 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
+        # Convert numpy types to Python native types for JSON serialization
+        def convert_numpy(obj):
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {k: convert_numpy(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy(v) for v in obj]
+            return obj
+
         with open(output, 'w') as f:
-            json.dump(analysis, f, indent=2)
+            json.dump(convert_numpy(analysis), f, indent=2)
         if not quiet:
             click.echo(f"Saved analysis to: {output}")
 
@@ -4883,6 +5568,208 @@ def models_ensemble(model_dirs, output: str, strategy: str, weights):
 
     click.echo(f"Ensemble configuration saved to: {output}")
     click.echo("Note: Load individual models and combine using bioamla.ml.Ensemble")
+
+
+# =============================================================================
+# Examples Command Group
+# =============================================================================
+
+@cli.group()
+def examples():
+    """Access example workflow scripts.
+
+    Example workflows demonstrate bioamla capabilities and can be copied
+    to your project directory for customization.
+
+    \b
+    Examples:
+        bioamla examples list              # List all examples
+        bioamla examples show 01           # Show example content
+        bioamla examples copy 01 ./        # Copy example to directory
+        bioamla examples copy-all ./       # Copy all examples
+    """
+    pass
+
+
+@examples.command('list')
+def examples_list():
+    """List all available example workflows."""
+    from bioamla.examples import list_examples
+    from bioamla.progress import console
+    from rich.table import Table
+
+    table = Table(title="Available Example Workflows", show_header=True)
+    table.add_column("ID", style="cyan", width=4)
+    table.add_column("Title", style="bold")
+    table.add_column("Description")
+
+    for example_id, title, description in list_examples():
+        table.add_row(example_id, title, description)
+
+    console.print(table)
+    console.print("\n[dim]Use 'bioamla examples show <ID>' to view an example[/dim]")
+    console.print("[dim]Use 'bioamla examples copy <ID> <dir>' to copy to a directory[/dim]")
+
+
+@examples.command('show')
+@click.argument('example_id')
+def examples_show(example_id: str):
+    """Show the content of an example workflow.
+
+    EXAMPLE_ID: The example ID (e.g., 00, 01, 02) or filename
+    """
+    from bioamla.examples import EXAMPLES, get_example_content
+    from bioamla.progress import console
+    from rich.syntax import Syntax
+
+    try:
+        content = get_example_content(example_id)
+        if example_id in EXAMPLES:
+            filename = EXAMPLES[example_id][0]
+            title = EXAMPLES[example_id][1]
+        else:
+            filename = f"{example_id}.sh"
+            title = example_id
+
+        console.print(f"\n[bold]{title}[/bold] ({filename})\n")
+        syntax = Syntax(content, "bash", theme="monokai", line_numbers=True)
+        console.print(syntax)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+
+@examples.command('copy')
+@click.argument('example_id')
+@click.argument('output_dir', type=click.Path())
+@click.option('--force', '-f', is_flag=True, help='Overwrite existing files')
+def examples_copy(example_id: str, output_dir: str, force: bool):
+    """Copy an example workflow to a directory.
+
+    EXAMPLE_ID: The example ID (e.g., 00, 01, 02)
+    OUTPUT_DIR: Directory to copy the example to
+    """
+    from pathlib import Path
+
+    from bioamla.examples import EXAMPLES, get_example_content
+
+    try:
+        content = get_example_content(example_id)
+        filename = EXAMPLES[example_id][0]
+    except (ValueError, KeyError) as e:
+        raise click.ClickException(f"Example not found: {example_id}")
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    dest_file = output_path / filename
+    if dest_file.exists() and not force:
+        raise click.ClickException(
+            f"File already exists: {dest_file}\nUse --force to overwrite"
+        )
+
+    dest_file.write_text(content)
+    dest_file.chmod(0o755)  # Make executable
+
+    click.echo(f"Copied {filename} to {dest_file}")
+
+
+@examples.command('copy-all')
+@click.argument('output_dir', type=click.Path())
+@click.option('--force', '-f', is_flag=True, help='Overwrite existing files')
+def examples_copy_all(output_dir: str, force: bool):
+    """Copy all example workflows to a directory.
+
+    OUTPUT_DIR: Directory to copy examples to
+    """
+    from pathlib import Path
+
+    from bioamla.examples import get_all_example_files, get_example_content
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    copied = 0
+    skipped = 0
+
+    for example_id, filename in get_all_example_files():
+        dest_file = output_path / filename
+        if dest_file.exists() and not force:
+            click.echo(f"Skipped {filename} (already exists)")
+            skipped += 1
+            continue
+
+        content = get_example_content(example_id)
+        dest_file.write_text(content)
+        dest_file.chmod(0o755)  # Make executable
+        click.echo(f"Copied {filename}")
+        copied += 1
+
+    click.echo(f"\nCopied {copied} examples to {output_path}")
+    if skipped:
+        click.echo(f"Skipped {skipped} existing files (use --force to overwrite)")
+
+
+@examples.command('info')
+@click.argument('example_id')
+def examples_info(example_id: str):
+    """Show detailed information about an example.
+
+    EXAMPLE_ID: The example ID (e.g., 00, 01, 02)
+    """
+    from bioamla.examples import EXAMPLES, get_example_content
+    from bioamla.progress import console
+
+    if example_id not in EXAMPLES:
+        raise click.ClickException(f"Example not found: {example_id}")
+
+    filename, title, description = EXAMPLES[example_id]
+    content = get_example_content(example_id)
+
+    # Extract purpose and features from the script header
+    lines = content.split('\n')
+    purpose_lines = []
+    features_lines = []
+    in_purpose = False
+    in_features = False
+
+    for line in lines:
+        if 'PURPOSE:' in line:
+            in_purpose = True
+            purpose_lines.append(line.split('PURPOSE:')[1].strip())
+        elif 'FEATURES DEMONSTRATED:' in line:
+            in_purpose = False
+            in_features = True
+        elif in_purpose and line.strip().startswith('#'):
+            text = line.strip('#').strip()
+            if text and not any(x in text for x in ['INPUT:', 'OUTPUT:', '===', 'FEATURES']):
+                purpose_lines.append(text)
+            else:
+                in_purpose = False
+        elif in_features and line.strip().startswith('#'):
+            text = line.strip('#').strip()
+            if text.startswith('-'):
+                features_lines.append(text)
+            elif text and not any(x in text for x in ['INPUT:', 'OUTPUT:', '===']):
+                continue
+            else:
+                in_features = False
+
+    console.print(f"\n[bold cyan]Example {example_id}: {title}[/bold cyan]")
+    console.print(f"[dim]File: {filename}[/dim]\n")
+    console.print(f"[bold]Description:[/bold] {description}\n")
+
+    if purpose_lines:
+        console.print("[bold]Purpose:[/bold]")
+        console.print("  " + " ".join(purpose_lines) + "\n")
+
+    if features_lines:
+        console.print("[bold]Features demonstrated:[/bold]")
+        for feature in features_lines:
+            console.print(f"  {feature}")
+
+    # Count lines and commands
+    command_count = sum(1 for line in lines if line.strip().startswith('bioamla '))
+    console.print(f"\n[dim]Lines: {len(lines)}, bioamla commands: {command_count}[/dim]")
 
 
 if __name__ == '__main__':

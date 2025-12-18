@@ -45,7 +45,6 @@ Submodules:
     - signal: Audio signal processing
     - torchaudio: Audio processing utilities
     - training: AST model training
-    - tui: Text User Interface
     - visualize: Audio visualization
     - wildlife_acoustics: Wildlife Acoustics integration
 
@@ -58,6 +57,6 @@ Import from specific submodules as needed:
     from bioamla.realtime import LiveRecorder, RealtimeSpectrogram
     from bioamla.integrations import EBirdClient, PostgreSQLExporter
 
-Version: 0.0.50
+Version: 0.1.0
 """
-__version__ = "0.0.50"
+__version__ = "0.1.0"

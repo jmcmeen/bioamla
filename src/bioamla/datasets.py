@@ -512,11 +512,15 @@ def batch_convert_audio(
         # Change extension for output
         output_path = output_dir / rel_path.with_suffix(f".{target_format}")
 
-        # Skip if already in target format
+        # Copy if already in target format (ensures files end up in output dir)
         if source_ext == target_format:
             stats["files_skipped"] += 1
+            # Create parent directory if needed
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            # Copy the file to output directory
+            shutil.copy2(str(audio_path), str(output_path))
             if verbose:
-                print(f"  Skipped (same format): {audio_path.name}")
+                print(f"  Copied (same format): {audio_path.name}")
             continue
 
         try:
