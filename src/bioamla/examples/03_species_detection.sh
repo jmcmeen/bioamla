@@ -20,7 +20,7 @@
 set -e  # Exit on error
 
 # Configuration
-AUDIO_DIR="./survey_recordings"
+AUDIO_DIR="${1:-./raw_recordings}"
 OUTPUT_DIR="./detections"
 
 echo "=== Species Detection Workflow ==="
