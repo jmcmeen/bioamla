@@ -45,7 +45,7 @@ echo "Step 1: Downloading audio from iNaturalist..."
 bioamla services inat download "${PROJECT_DIR}/frogs_dataset" \
     --taxon-ids "24268,65982,23930,24263,65979,66002,66012,60341,64968,64977,24256" \
     --quality-grade research \
-    --obs-per-taxon 100
+    --obs-per-taxon 5
 
 # Step 2: Convert all audio files to WAV format
 echo ""
@@ -58,7 +58,7 @@ echo "Step 3: Training AST model..."
 bioamla models train ast \
     --training-dir "${PROJECT_DIR}/frogs_model" \
     --train-dataset "${PROJECT_DIR}/frogs_dataset" \
-    --num-train-epochs 25 \
+    --num-train-epochs 3 \
     --per-device-train-batch-size 8 \
     --gradient-accumulation-steps 2 \
     --learning-rate 5e-5 \

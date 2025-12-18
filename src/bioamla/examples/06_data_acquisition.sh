@@ -49,7 +49,7 @@ bioamla services inat search \
     --species "$SPECIES_SCIENTIFIC" \
     --quality-grade research \
     --has-sounds \
-    --limit 20
+    --limit 5
 
 # Step 3: Download audio from iNaturalist
 echo ""
@@ -57,7 +57,7 @@ echo "Step 3: Downloading from iNaturalist..."
 bioamla services inat download "$OUTPUT_DIR/inat" \
     --taxon-name "$SPECIES_SCIENTIFIC" \
     --quality-grade research \
-    --obs-per-taxon 50
+    --obs-per-taxon 5
 
 # Step 4: Search Xeno-canto for bird recordings
 echo ""
@@ -66,7 +66,7 @@ BIRD_SPECIES="Turdus migratorius"
 bioamla services xc search \
     --species "$BIRD_SPECIES" \
     --quality A \
-    --max-results 20 \
+    --max-results 5 \
     --format table
 
 # Step 5: Download from Xeno-canto
@@ -75,9 +75,9 @@ echo "Step 5: Downloading from Xeno-canto..."
 bioamla services xc download \
     --species "$BIRD_SPECIES" \
     --quality A \
-    --max-recordings 30 \
+    --max-recordings 5 \
     --output-dir "$OUTPUT_DIR/xeno_canto" \
-    --delay 1.0
+    --delay 0.5
 
 # Step 6: Search Macaulay Library
 echo ""
@@ -85,7 +85,7 @@ echo "Step 6: Searching Macaulay Library..."
 bioamla services ml search \
     --scientific-name "$BIRD_SPECIES" \
     --min-rating 4 \
-    --max-results 20 \
+    --max-results 5 \
     --format table
 
 # Step 7: Download from Macaulay Library
@@ -94,7 +94,7 @@ echo "Step 7: Downloading from Macaulay Library..."
 bioamla services ml download \
     --scientific-name "$BIRD_SPECIES" \
     --min-rating 4 \
-    --max-recordings 20 \
+    --max-recordings 5 \
     --output-dir "$OUTPUT_DIR/macaulay"
 
 # Step 8: Convert all downloads to consistent format

@@ -51,7 +51,7 @@ bioamla models train ast \
     --training-dir "$OUTPUT_DIR" \
     --train-dataset "DBD-research-group/BirdSet" \
     --split "$SUBSET" \
-    --num-train-epochs 20 \
+    --num-train-epochs 3 \
     --per-device-train-batch-size 4 \
     --gradient-accumulation-steps 4 \
     --learning-rate 3e-5 \
