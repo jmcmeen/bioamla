@@ -5117,8 +5117,22 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
+        # Convert numpy types to Python native types for JSON serialization
+        def convert_numpy(obj):
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {k: convert_numpy(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy(v) for v in obj]
+            return obj
+
         with open(output, 'w') as f:
-            json.dump(analysis, f, indent=2)
+            json.dump(convert_numpy(analysis), f, indent=2)
         if not quiet:
             click.echo(f"Saved analysis to: {output}")
 
