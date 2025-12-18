@@ -62,11 +62,10 @@ bioamla models train ast \
     --per-device-train-batch-size 8 \
     --gradient-accumulation-steps 2 \
     --learning-rate 5e-5 \
-    --warmup-ratio 0.1 \
     --fp16 \
     --dataloader-num-workers 4 \
     --save-strategy epoch \
-    --evaluation-strategy epoch \
+    --eval-strategy epoch \
     --load-best-model-at-end \
     --mlflow-experiment-name "bioamla-training"
 
@@ -93,8 +92,8 @@ bioamla models convert \
 echo ""
 echo "Step 5: (Example) Pushing model to HuggingFace Hub..."
 echo "   bioamla services hf push-model \\"
-echo "       --model-path \"$OUTPUT_DIR/ast_model/best_model\" \\"
-echo "       --repo-name \"your-username/$MODEL_NAME\" \\"
+echo "       \"$OUTPUT_DIR/ast_model/best_model\" \\"
+echo "       \"your-username/$MODEL_NAME\" \\"
 echo "       --private"
 
 echo ""
