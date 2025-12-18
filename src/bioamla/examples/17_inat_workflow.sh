@@ -65,7 +65,7 @@ bioamla models train ast \
     --fp16 \
     --dataloader-num-workers 4 \
     --save-strategy epoch \
-    --evaluation-strategy epoch \
+    --eval-strategy epoch \
     --load-best-model-at-end
 
 # Step 4: Test with pre-built dataset from HuggingFace

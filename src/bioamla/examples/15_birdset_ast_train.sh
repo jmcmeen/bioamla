@@ -50,16 +50,15 @@ echo "Training on DBD-research-group/BirdSet ($SUBSET subset)..."
 bioamla models train ast \
     --training-dir "$OUTPUT_DIR" \
     --train-dataset "DBD-research-group/BirdSet" \
-    --dataset-config "$SUBSET" \
+    --split "$SUBSET" \
     --num-train-epochs 20 \
     --per-device-train-batch-size 4 \
     --gradient-accumulation-steps 4 \
     --learning-rate 3e-5 \
-    --warmup-ratio 0.1 \
     --fp16 \
     --dataloader-num-workers 4 \
     --save-strategy epoch \
-    --evaluation-strategy epoch \
+    --eval-strategy epoch \
     --load-best-model-at-end \
     --mlflow-experiment-name "birdset-$SUBSET"
 

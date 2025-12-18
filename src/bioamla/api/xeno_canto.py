@@ -34,8 +34,66 @@ from bioamla.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Xeno-canto API base URL
-XC_API_URL = "https://xeno-canto.org/api/2/recordings"
+# Xeno-canto API base URL (v3 requires API key)
+XC_API_URL = "https://xeno-canto.org/api/3/recordings"
+
+# API key for authentication (can be set via environment variable or set_api_key())
+_api_key: str | None = None
+
+
+def set_api_key(key: str) -> None:
+    """
+    Set the Xeno-canto API key for authentication.
+
+    As of API v3, an API key is required for all requests.
+    Get your API key from your Xeno-canto account page:
+    https://xeno-canto.org/account
+
+    Args:
+        key: Your Xeno-canto API key.
+
+    Example:
+        >>> from bioamla.api import xeno_canto
+        >>> xeno_canto.set_api_key("your-api-key-here")
+    """
+    global _api_key
+    _api_key = key
+
+
+def get_api_key() -> str | None:
+    """
+    Get the current API key.
+
+    Returns the API key from (in order of priority):
+    1. set_api_key() (runtime setting)
+    2. XC_API_KEY environment variable
+    3. bioamla config file ([api] xc_api_key)
+
+    Returns:
+        The API key or None if not set.
+    """
+    import os
+
+    # Check runtime setting first
+    if _api_key:
+        return _api_key
+
+    # Check environment variable
+    env_key = os.environ.get("XC_API_KEY")
+    if env_key:
+        return env_key
+
+    # Check config file
+    try:
+        from bioamla.config import get_config
+        config = get_config()
+        config_key = config.get("api", "xc_api_key")
+        if config_key:
+            return config_key
+    except Exception:
+        pass
+
+    return None
 
 # Default rate limit: 1 request per second (be respectful to the API)
 _rate_limiter = RateLimiter(requests_per_second=1.0, burst_size=2)
@@ -256,15 +314,27 @@ def search(
     if not query_str:
         raise ValueError("At least one search parameter is required")
 
+    # Check for API key (required for v3)
+    api_key = get_api_key()
+    if not api_key:
+        raise ValueError(
+            "Xeno-canto API key required. Set via:\n"
+            "  - Environment variable: XC_API_KEY\n"
+            "  - Python: xeno_canto.set_api_key('your-key')\n"
+            "  - CLI: bioamla config set xc_api_key <your-key>\n"
+            "Get your API key at: https://xeno-canto.org/account"
+        )
+
     all_recordings: List[XCRecording] = []
     current_page = page
     total_pages = 1
 
     while current_page <= total_pages:
         params = {"query": query_str, "page": current_page}
+        headers = {"X-API-Key": api_key}
 
         try:
-            response = _client.get(XC_API_URL, params=params, use_cache=use_cache)
+            response = _client.get(XC_API_URL, params=params, headers=headers, use_cache=use_cache)
         except Exception as e:
             logger.error(f"Xeno-canto API error: {e}")
             raise
@@ -301,8 +371,14 @@ def get_recording(recording_id: str) -> Optional[XCRecording]:
     Returns:
         XCRecording object or None if not found.
     """
+    api_key = get_api_key()
+    if not api_key:
+        logger.error("Xeno-canto API key required. Set XC_API_KEY environment variable.")
+        return None
+
     try:
-        response = _client.get(XC_API_URL, params={"query": f"nr:{recording_id}"})
+        headers = {"X-API-Key": api_key}
+        response = _client.get(XC_API_URL, params={"query": f"nr:{recording_id}"}, headers=headers)
         recordings = response.get("recordings", [])
         if recordings:
             return XCRecording.from_api_response(recordings[0])
@@ -479,8 +555,13 @@ def get_species_recordings_count(species: str) -> int:
     Returns:
         Number of recordings available.
     """
+    api_key = get_api_key()
+    if not api_key:
+        return 0
+
     try:
-        response = _client.get(XC_API_URL, params={"query": species})
+        headers = {"X-API-Key": api_key}
+        response = _client.get(XC_API_URL, params={"query": species}, headers=headers)
         return int(response.get("numRecordings", 0))
     except Exception:
         return 0

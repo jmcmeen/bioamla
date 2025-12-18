@@ -23,57 +23,35 @@ set -e
 # Configuration
 PROJECT_NAME="frog_acoustic_study"
 PROJECT_DIR="./${PROJECT_NAME}"
-AUDIO_INPUT="${PROJECT_DIR}/frog_recordings"
+INPUT_DIR="${PROJECT_DIR}/raw_recordings"
 MODEL_PATH="${1:-bioamla/scp-frogs}"
 OUTPUT_DIR="${PROJECT_DIR}/frog_predictions"
 
 echo "=== SCP Frogs AST Inference Workflow ==="
-echo "Input: $AUDIO_INPUT"
+echo "Input: $INPUT_DIR"
 echo "Model: $MODEL_PATH"
 echo ""
 
-mkdir -p "$OUTPUT_DIR"
-
-# Single file inference
-if [ -f "$AUDIO_INPUT" ]; then
-    echo "Running single file inference..."
-    bioamla models predict ast "$AUDIO_INPUT" \
-        --model-path "$MODEL_PATH" \
-        --top-k 5
-
-# Batch inference on directory
-elif [ -d "$AUDIO_INPUT" ]; then
-    echo "Running batch inference on directory..."
-    bioamla models predict ast "$AUDIO_INPUT" \
-        --batch \
-        --model-path "$MODEL_PATH" \
-        --output "$OUTPUT_DIR/predictions.csv" \
-        --top-k 5 \
-        --threshold 0.1 \
-        --segment-duration 5.0 \
-        --segment-overlap 1.0
-
-    echo ""
-    echo "Predictions saved to: $OUTPUT_DIR/predictions.csv"
-
-    # Generate summary
-    echo ""
-    echo "Generating prediction summary..."
-    bioamla annotation summary \
-        --path "$OUTPUT_DIR/predictions.csv" \
-        --file-format csv \
-        --output-json "$OUTPUT_DIR/summary.json"
-else
-    echo "Error: $AUDIO_INPUT is not a valid file or directory"
-    echo ""
-    echo "Usage: $0 <audio_file_or_directory> [model_path]"
-    echo ""
-    echo "Examples:"
-    echo "  $0 ./recording.wav"
-    echo "  $0 ./field_recordings/"
-    echo "  $0 ./field_recordings/ bioamla/scp-frogs"
+# Check if input directory exists
+if [ ! -d "$INPUT_DIR" ]; then
+    echo "Error: Input directory '$INPUT_DIR' does not exist."
+    echo "Create the directory and add audio files first."
+    echo "See 00_starting_a_project.sh to set up a project structure."
     exit 1
 fi
+
+mkdir -p "$OUTPUT_DIR"
+
+echo "Running batch inference..."
+bioamla models predict ast "$INPUT_DIR" \
+    --batch \
+    --model-path "$MODEL_PATH" \
+    --output "$OUTPUT_DIR/predictions.csv" \
+    --top-k 5 \
+    --threshold 0.1
+
+echo ""
+echo "Predictions saved to: $OUTPUT_DIR/predictions.csv"
 
 echo ""
 echo "=== Inference Complete ==="
