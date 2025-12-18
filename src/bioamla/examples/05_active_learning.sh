@@ -34,13 +34,12 @@ echo ""
 mkdir -p "$OUTPUT_DIR"
 
 # Step 1: Initialize active learning session
-# The predictions CSV should have columns: file_path, predicted_label, confidence
+# The predictions CSV should have columns: filepath, start_time, end_time, predicted_label, confidence
 echo "Step 1: Initializing active learning session..."
 bioamla learn init \
-    --predictions "$PREDICTIONS_FILE" \
-    --output-state "$STATE_FILE" \
-    --strategy entropy \
-    --diversity-weight 0.3
+    "$PREDICTIONS_FILE" \
+    "$STATE_FILE" \
+    --strategy entropy
 
 # Step 2: Query samples for annotation
 # Entropy strategy selects samples where the model is most uncertain
