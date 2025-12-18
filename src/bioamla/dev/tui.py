@@ -31,7 +31,7 @@ from textual.widgets import (
 from textual.widgets.tree import TreeNode
 
 if TYPE_CHECKING:
-    from bioamla.tui_commands import CommandInfo, GroupInfo, OptionInfo
+    from bioamla.dev.tui_commands import CommandInfo, GroupInfo, OptionInfo
 
 
 # =============================================================================
@@ -45,7 +45,7 @@ class CommandTree(Tree):
     class CommandSelected(Message):
         """Message sent when a command is selected."""
 
-        def __init__(self, command_info: "CommandInfo") -> None:
+        def __init__(self, command_info: CommandInfo) -> None:
             self.command_info = command_info
             super().__init__()
 
@@ -56,11 +56,11 @@ class CommandTree(Tree):
         classes: str | None = None,
     ) -> None:
         super().__init__("bioamla", name=name, id=id, classes=classes)
-        self.command_map: dict[str, "CommandInfo"] = {}
+        self.command_map: dict[str, CommandInfo] = {}
 
     def on_mount(self) -> None:
         """Build the command tree on mount."""
-        from bioamla.tui_commands import CommandInfo, GroupInfo, get_command_tree
+        from bioamla.dev.tui_commands import get_command_tree
 
         tree = get_command_tree()
         self._add_nodes(self.root, tree)
@@ -69,10 +69,10 @@ class CommandTree(Tree):
     def _add_nodes(
         self,
         parent: TreeNode,
-        items: dict[str, "GroupInfo | CommandInfo"],
+        items: dict[str, GroupInfo | CommandInfo],
     ) -> None:
         """Recursively add nodes to the tree."""
-        from bioamla.tui_commands import CommandInfo, GroupInfo
+        from bioamla.dev.tui_commands import GroupInfo
 
         for name, item in items.items():
             if isinstance(item, GroupInfo):
@@ -89,7 +89,7 @@ class CommandTree(Tree):
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         """Handle node selection."""
-        from bioamla.tui_commands import CommandInfo
+        from bioamla.dev.tui_commands import CommandInfo
 
         if isinstance(event.node.data, CommandInfo):
             self.post_message(self.CommandSelected(event.node.data))
@@ -185,7 +185,7 @@ class CommandForm(ScrollableContainer):
     }
     """
 
-    current_command: reactive["CommandInfo | None"] = reactive(None)
+    current_command: reactive[CommandInfo | None] = reactive(None)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -198,12 +198,12 @@ class CommandForm(ScrollableContainer):
             id="form-placeholder",
         )
 
-    def watch_current_command(self, command: "CommandInfo | None") -> None:
+    def watch_current_command(self, command: CommandInfo | None) -> None:
         """Update the form when command changes."""
         if command:
             self._build_form(command)
 
-    def _build_form(self, command: "CommandInfo") -> None:
+    def _build_form(self, command: CommandInfo) -> None:
         """Build the form for a command."""
         self.argument_fields.clear()
         self.option_fields.clear()
@@ -258,7 +258,7 @@ class CommandForm(ScrollableContainer):
             required=arg.required,
         )
 
-    def _create_option_field(self, opt: "OptionInfo") -> FormField:
+    def _create_option_field(self, opt: OptionInfo) -> FormField:
         """Create a form field for an option."""
         if opt.is_flag:
             widget = Switch(value=bool(opt.default), id=f"opt-{opt.name}")
@@ -407,7 +407,7 @@ class CommandBrowser(App):
         Binding("escape", "focus_tree", "Tree"),
     ]
 
-    current_command: reactive["CommandInfo | None"] = reactive(None)
+    current_command: reactive[CommandInfo | None] = reactive(None)
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -443,7 +443,7 @@ class CommandBrowser(App):
         if not self.current_command:
             return
 
-        from bioamla.tui_commands import build_command_string
+        from bioamla.dev.tui_commands import build_command_string
 
         form = self.query_one(CommandForm)
         cmd_str = build_command_string(
@@ -467,7 +467,7 @@ class CommandBrowser(App):
         if not self.current_command:
             return
 
-        from bioamla.tui_commands import build_command_string
+        from bioamla.dev.tui_commands import build_command_string
 
         form = self.query_one(CommandForm)
         cmd_str = build_command_string(
@@ -523,7 +523,7 @@ class CommandBrowser(App):
         if not self.current_command:
             return
 
-        from bioamla.tui_commands import build_command_string
+        from bioamla.dev.tui_commands import build_command_string
 
         form = self.query_one(CommandForm)
         cmd_str = build_command_string(
