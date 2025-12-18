@@ -35,7 +35,7 @@ bioamla devices
 bioamla models train ast \
     --training-dir "${PROJECT_DIR}/esc50_model" \
     --train-dataset "ashraq/esc50" \
-    --num-train-epochs 10 \
+    --num-train-epochs 3 \
     --per-device-train-batch-size 8 \
     --gradient-accumulation-steps 2 \
     --learning-rate 5e-5 \

@@ -38,7 +38,7 @@ echo "Training on bioamla/scp-frogs-inat-v1 dataset..."
 bioamla models train ast \
     --training-dir "${PROJECT_DIR}/scp_frogs_model" \
     --train-dataset "bioamla/scp-frogs-inat-v1" \
-    --num-train-epochs 25 \
+    --num-train-epochs 3 \
     --per-device-train-batch-size 8 \
     --gradient-accumulation-steps 2 \
     --learning-rate 5e-5 \
