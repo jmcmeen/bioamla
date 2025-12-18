@@ -142,6 +142,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "max_history": 1000,
         "rotate_size_mb": 10,
     },
+    "api": {
+        "xc_api_key": None,  # Xeno-canto API key (or set XC_API_KEY env var)
+        "inat_api_token": None,  # iNaturalist API token (optional)
+    },
 }
 
 # Standard config file locations
@@ -182,6 +186,7 @@ class Config:
     output: Dict[str, Any] = field(default_factory=dict)
     progress: Dict[str, Any] = field(default_factory=dict)
     logging: Dict[str, Any] = field(default_factory=dict)
+    api: Dict[str, Any] = field(default_factory=dict)
     _source: Optional[str] = None
 
     def get(self, section: str, key: str, default: Any = None) -> Any:
@@ -211,6 +216,7 @@ class Config:
             "output": self.output,
             "progress": self.progress,
             "logging": self.logging,
+            "api": self.api,
         }
 
     @classmethod
@@ -228,6 +234,7 @@ class Config:
             output=data.get("output", {}),
             progress=data.get("progress", {}),
             logging=data.get("logging", {}),
+            api=data.get("api", {}),
             _source=source,
         )
 

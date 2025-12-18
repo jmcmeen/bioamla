@@ -1833,38 +1833,57 @@ def audio_segment(path, output, batch, silence_threshold, min_silence, min_segme
             click.echo(f"No audio files found in {path}")
             raise SystemExit(1)
 
-        if not quiet:
-            click.echo(f"Found {len(audio_files)} audio files to segment")
-
         total_segments = 0
         files_processed = 0
         files_failed = 0
 
-        for audio_file in audio_files:
-            audio_path = Path(audio_file)
-            # Preserve directory structure in output
-            try:
-                rel_path = audio_path.parent.relative_to(path)
-                file_output_dir = output / rel_path
-            except ValueError:
-                file_output_dir = output
+        if not quiet:
+            from bioamla.progress import ProgressBar, print_error, print_success
 
-            file_output_dir.mkdir(parents=True, exist_ok=True)
+            with ProgressBar(
+                total=len(audio_files),
+                description="Segmenting audio files",
+            ) as progress:
+                for audio_file in audio_files:
+                    audio_path = Path(audio_file)
+                    # Preserve directory structure in output
+                    try:
+                        rel_path = audio_path.parent.relative_to(path)
+                        file_output_dir = output / rel_path
+                    except ValueError:
+                        file_output_dir = output
 
-            try:
-                num_segments = segment_file(audio_path, file_output_dir)
-                total_segments += num_segments
-                files_processed += 1
-                if not quiet and num_segments > 0:
-                    click.echo(f"  {audio_path.name}: {num_segments} segments")
-                elif not quiet:
-                    click.echo(f"  {audio_path.name}: no segments found")
-            except Exception as e:
-                files_failed += 1
-                if not quiet:
-                    click.echo(f"  Failed: {audio_path.name} - {e}")
+                    file_output_dir.mkdir(parents=True, exist_ok=True)
 
-        click.echo(f"Processed {files_processed} files, created {total_segments} segments, {files_failed} failed")
+                    try:
+                        num_segments = segment_file(audio_path, file_output_dir)
+                        total_segments += num_segments
+                        files_processed += 1
+                    except Exception as e:
+                        files_failed += 1
+                    progress.advance()
+
+            if files_failed > 0:
+                print_error(f"Processed {files_processed} files, created {total_segments} segments, {files_failed} failed")
+            else:
+                print_success(f"Processed {files_processed} files, created {total_segments} segments")
+        else:
+            for audio_file in audio_files:
+                audio_path = Path(audio_file)
+                try:
+                    rel_path = audio_path.parent.relative_to(path)
+                    file_output_dir = output / rel_path
+                except ValueError:
+                    file_output_dir = output
+
+                file_output_dir.mkdir(parents=True, exist_ok=True)
+
+                try:
+                    num_segments = segment_file(audio_path, file_output_dir)
+                    total_segments += num_segments
+                    files_processed += 1
+                except Exception:
+                    files_failed += 1
     else:
         # Single file mode
         num_segments = segment_file(path, output)
@@ -2021,19 +2040,35 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
             click.echo("No audio files found")
             raise SystemExit(1)
 
-        if not quiet:
-            click.echo(f"Found {len(audio_files)} audio files to analyze")
-
         analyses = []
-        for i, filepath in enumerate(audio_files):
-            try:
-                analysis = analyze_audio(filepath, silence_threshold_db=silence_threshold)
-                analyses.append(analysis)
-                if not quiet:
-                    click.echo(f"[{i+1}/{len(audio_files)}] Analyzed: {filepath}")
-            except Exception as e:
-                if not quiet:
-                    click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
+        errors = []
+
+        if not quiet:
+            from bioamla.progress import ProgressBar, print_success, print_error
+
+            with ProgressBar(
+                total=len(audio_files),
+                description="Analyzing audio files",
+            ) as progress:
+                for filepath in audio_files:
+                    try:
+                        analysis = analyze_audio(filepath, silence_threshold_db=silence_threshold)
+                        analyses.append(analysis)
+                    except Exception as e:
+                        errors.append((filepath, str(e)))
+                    progress.advance()
+
+            if errors:
+                print_error(f"Analyzed {len(analyses)} files, {len(errors)} failed")
+            else:
+                print_success(f"Analyzed {len(analyses)} files")
+        else:
+            for filepath in audio_files:
+                try:
+                    analysis = analyze_audio(filepath, silence_threshold_db=silence_threshold)
+                    analyses.append(analysis)
+                except Exception:
+                    pass
 
         if output_format == 'json':
             result = {
@@ -4234,11 +4269,21 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
         if not audio_files:
             click.echo(f"No audio files found in {path}")
             return
-        for audio_file in audio_files:
-            file_detections = detector.detect_from_file(audio_file)
-            for d in file_detections:
-                d.metadata['source_file'] = audio_file
-            all_detections.extend(file_detections)
+
+        from bioamla.progress import ProgressBar, print_success
+
+        with ProgressBar(
+            total=len(audio_files),
+            description="Detecting energy patterns",
+        ) as progress:
+            for audio_file in audio_files:
+                file_detections = detector.detect_from_file(audio_file)
+                for d in file_detections:
+                    d.metadata['source_file'] = audio_file
+                all_detections.extend(file_detections)
+                progress.advance()
+
+        print_success(f"Processed {len(audio_files)} files")
     else:
         all_detections = detector.detect_from_file(path)
         for d in all_detections:
@@ -4323,11 +4368,21 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
         if not audio_files:
             click.echo(f"No audio files found in {path}")
             return
-        for audio_file in audio_files:
-            file_detections = detector.detect_from_file(audio_file)
-            for d in file_detections:
-                d.metadata['source_file'] = audio_file
-            all_detections.extend(file_detections)
+
+        from bioamla.progress import ProgressBar, print_success
+
+        with ProgressBar(
+            total=len(audio_files),
+            description="Detecting RIBBIT patterns",
+        ) as progress:
+            for audio_file in audio_files:
+                file_detections = detector.detect_from_file(audio_file)
+                for d in file_detections:
+                    d.metadata['source_file'] = audio_file
+                all_detections.extend(file_detections)
+                progress.advance()
+
+        print_success(f"Processed {len(audio_files)} files")
     else:
         all_detections = detector.detect_from_file(path)
         for d in all_detections:
@@ -4415,12 +4470,30 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
 
     if sequences:
         all_detections = []
-        for audio_file in audio_files:
-            audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
-            file_detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
-            for d in file_detections:
-                d.metadata['source_file'] = audio_file
-            all_detections.extend(file_detections)
+
+        if len(audio_files) > 1:
+            from bioamla.progress import ProgressBar, print_success
+
+            with ProgressBar(
+                total=len(audio_files),
+                description="Detecting peak sequences",
+            ) as progress:
+                for audio_file in audio_files:
+                    audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+                    file_detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
+                    for d in file_detections:
+                        d.metadata['source_file'] = audio_file
+                    all_detections.extend(file_detections)
+                    progress.advance()
+
+            print_success(f"Processed {len(audio_files)} files")
+        else:
+            for audio_file in audio_files:
+                audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+                file_detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
+                for d in file_detections:
+                    d.metadata['source_file'] = audio_file
+                all_detections.extend(file_detections)
 
         if output:
             fmt = "json" if output.endswith(".json") else "csv"
@@ -4455,12 +4528,30 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
             click.echo(f"\nTotal: {len(all_detections)} sequences")
     else:
         all_peaks = []
-        for audio_file in audio_files:
-            audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
-            file_peaks = detector.detect(audio, sample_rate)
-            for p in file_peaks:
-                p.source_file = audio_file
-            all_peaks.extend(file_peaks)
+
+        if len(audio_files) > 1:
+            from bioamla.progress import ProgressBar, print_success
+
+            with ProgressBar(
+                total=len(audio_files),
+                description="Detecting peaks",
+            ) as progress:
+                for audio_file in audio_files:
+                    audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+                    file_peaks = detector.detect(audio, sample_rate)
+                    for p in file_peaks:
+                        p.source_file = audio_file
+                    all_peaks.extend(file_peaks)
+                    progress.advance()
+
+            print_success(f"Processed {len(audio_files)} files")
+        else:
+            for audio_file in audio_files:
+                audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+                file_peaks = detector.detect(audio, sample_rate)
+                for p in file_peaks:
+                    p.source_file = audio_file
+                all_peaks.extend(file_peaks)
 
         if output:
             import csv
@@ -4566,11 +4657,21 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
         if not audio_files:
             click.echo(f"No audio files found in {path}")
             return
-        for audio_file in audio_files:
-            file_detections = detector.detect_from_file(audio_file)
-            for d in file_detections:
-                d.metadata['source_file'] = audio_file
-            all_detections.extend(file_detections)
+
+        from bioamla.progress import ProgressBar, print_success
+
+        with ProgressBar(
+            total=len(audio_files),
+            description="Detecting accelerating patterns",
+        ) as progress:
+            for audio_file in audio_files:
+                file_detections = detector.detect_from_file(audio_file)
+                for d in file_detections:
+                    d.metadata['source_file'] = audio_file
+                all_detections.extend(file_detections)
+                progress.advance()
+
+        print_success(f"Processed {len(audio_files)} files")
     else:
         all_detections = detector.detect_from_file(path)
         for d in all_detections:

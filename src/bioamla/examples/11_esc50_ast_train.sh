@@ -39,11 +39,10 @@ bioamla models train ast \
     --per-device-train-batch-size 8 \
     --gradient-accumulation-steps 2 \
     --learning-rate 5e-5 \
-    --warmup-ratio 0.1 \
     --fp16 \
     --dataloader-num-workers 4 \
     --save-strategy epoch \
-    --evaluation-strategy epoch \
+    --eval-strategy epoch \
     --load-best-model-at-end \
     --mlflow-experiment-name "esc50-ast"
 
