@@ -3785,7 +3785,11 @@ def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_fr
         # Single file
         try:
             indices_result = compute_indices_from_file(path_obj, **kwargs)
-            results = [{"filepath": str(path_obj), "success": True, **indices_result.to_dict()}]
+            # Build result with filepath first, success last for better CSV column order
+            result = {"filepath": str(path_obj)}
+            result.update(indices_result.to_dict())
+            result["success"] = True
+            results = [result]
         except Exception as e:
             click.echo(f"Error processing {path}: {e}")
             raise SystemExit(1)
