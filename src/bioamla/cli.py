@@ -4141,15 +4141,18 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
     """Detect sounds using band-limited energy detection.
 
     Filters audio to a frequency band and detects regions where energy
-    exceeds the threshold.
+    exceeds the threshold. Accepts a single audio file or a directory
+    of audio files.
 
     Examples:
         bioamla detect energy recording.wav --low-freq 1000 --high-freq 4000
-        bioamla detect energy forest.wav -l 2000 -h 8000 -t -25 -o detections.csv
+        bioamla detect energy ./recordings/ -l 2000 -h 8000 -t -25 -o detections.csv
     """
     import json as json_lib
+    from pathlib import Path as PathLib
 
     from bioamla.detection import BandLimitedEnergyDetector, export_detections
+    from bioamla.utils import get_audio_files
 
     detector = BandLimitedEnergyDetector(
         low_freq=low_freq,
@@ -4158,34 +4161,53 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
         min_duration=min_duration,
     )
 
-    detections = detector.detect_from_file(path)
+    path_obj = PathLib(path)
+    all_detections = []
+
+    if path_obj.is_dir():
+        audio_files = get_audio_files(str(path_obj), recursive=True)
+        if not audio_files:
+            click.echo(f"No audio files found in {path}")
+            return
+        for audio_file in audio_files:
+            file_detections = detector.detect_from_file(audio_file)
+            for d in file_detections:
+                d.metadata['source_file'] = audio_file
+            all_detections.extend(file_detections)
+    else:
+        all_detections = detector.detect_from_file(path)
+        for d in all_detections:
+            d.metadata['source_file'] = str(path_obj)
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
-        export_detections(detections, output, format=fmt)
-        click.echo(f"Saved {len(detections)} detections to {output}")
+        export_detections(all_detections, output, format=fmt)
+        click.echo(f"Saved {len(all_detections)} detections to {output}")
     elif output_format == 'json':
-        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
     elif output_format == 'csv':
         import csv
         import sys
 
-        if detections:
-            fieldnames = list(detections[0].to_dict().keys())
+        if all_detections:
+            fieldnames = list(all_detections[0].to_dict().keys())
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
             writer.writeheader()
-            for d in detections:
+            for d in all_detections:
                 writer.writerow(d.to_dict())
         else:
             click.echo("No detections found.")
     else:
-        click.echo(f"Found {len(detections)} detections:\n")
-        for i, d in enumerate(detections, 1):
+        click.echo(f"Found {len(all_detections)} detections:\n")
+        for i, d in enumerate(all_detections, 1):
+            source = d.metadata.get('source_file', '')
+            if source:
+                source = f" [{PathLib(source).name}]"
             click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                      f"(confidence: {d.confidence:.2f})")
+                      f"(confidence: {d.confidence:.2f}){source}")
 
     if not output and output_format == 'table':
-        click.echo(f"\nTotal: {len(detections)} detections")
+        click.echo(f"\nTotal: {len(all_detections)} detections")
 
 
 @detect.command('ribbit')
@@ -4207,14 +4229,17 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
 
     RIBBIT detects repetitive vocalizations by analyzing the autocorrelation
     of the spectrogram. Effective for frog calls, insect sounds, etc.
+    Accepts a single audio file or a directory of audio files.
 
     Examples:
         bioamla detect ribbit frog_pond.wav --pulse-rate 10 --low-freq 500 --high-freq 3000
-        bioamla detect ribbit cricket.wav -p 50 --tolerance 0.3
+        bioamla detect ribbit ./recordings/ -p 50 --tolerance 0.3
     """
     import json as json_lib
+    from pathlib import Path as PathLib
 
     from bioamla.detection import RibbitDetector, export_detections
+    from bioamla.utils import get_audio_files
 
     detector = RibbitDetector(
         pulse_rate_hz=pulse_rate,
@@ -4225,34 +4250,53 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
         min_score=min_score,
     )
 
-    detections = detector.detect_from_file(path)
+    path_obj = PathLib(path)
+    all_detections = []
+
+    if path_obj.is_dir():
+        audio_files = get_audio_files(str(path_obj), recursive=True)
+        if not audio_files:
+            click.echo(f"No audio files found in {path}")
+            return
+        for audio_file in audio_files:
+            file_detections = detector.detect_from_file(audio_file)
+            for d in file_detections:
+                d.metadata['source_file'] = audio_file
+            all_detections.extend(file_detections)
+    else:
+        all_detections = detector.detect_from_file(path)
+        for d in all_detections:
+            d.metadata['source_file'] = str(path_obj)
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
-        export_detections(detections, output, format=fmt)
-        click.echo(f"Saved {len(detections)} detections to {output}")
+        export_detections(all_detections, output, format=fmt)
+        click.echo(f"Saved {len(all_detections)} detections to {output}")
     elif output_format == 'json':
-        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
     elif output_format == 'csv':
         import csv
         import sys
 
-        if detections:
-            fieldnames = list(detections[0].to_dict().keys())
+        if all_detections:
+            fieldnames = list(all_detections[0].to_dict().keys())
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
             writer.writeheader()
-            for d in detections:
+            for d in all_detections:
                 writer.writerow(d.to_dict())
         else:
             click.echo("No detections found.")
     else:
-        click.echo(f"Found {len(detections)} periodic call detections:\n")
-        for i, d in enumerate(detections, 1):
+        click.echo(f"Found {len(all_detections)} periodic call detections:\n")
+        for i, d in enumerate(all_detections, 1):
+            source = d.metadata.get('source_file', '')
+            if source:
+                source = f" [{PathLib(source).name}]"
             click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                      f"(score: {d.confidence:.2f}, pulse_rate: {d.metadata.get('pulse_rate_hz', 'N/A')}Hz)")
+                      f"(score: {d.confidence:.2f}, pulse_rate: {d.metadata.get('pulse_rate_hz', 'N/A')}Hz){source}")
 
     if not output and output_format == 'table':
-        click.echo(f"\nTotal: {len(detections)} detections")
+        click.echo(f"\nTotal: {len(all_detections)} detections")
 
 
 @detect.command('peaks')
@@ -4272,15 +4316,20 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
 
     Uses CWT for robust peak detection in audio energy envelope.
     Can detect individual peaks or sequences of peaks.
+    Accepts a single audio file or a directory of audio files.
 
     Examples:
         bioamla detect peaks recording.wav --snr 3.0
-        bioamla detect peaks calls.wav --sequences --min-peaks 5
+        bioamla detect peaks ./recordings/ --sequences --min-peaks 5
         bioamla detect peaks forest.wav -l 2000 -h 8000 --sequences
     """
     import json as json_lib
+    from pathlib import Path as PathLib
+
+    import librosa
 
     from bioamla.detection import CWTPeakDetector, export_detections
+    from bioamla.utils import get_audio_files
 
     detector = CWTPeakDetector(
         snr_threshold=snr,
@@ -4289,49 +4338,119 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
         high_freq=high_freq,
     )
 
-    import librosa
-    audio, sample_rate = librosa.load(path, sr=None, mono=True)
+    path_obj = PathLib(path)
+
+    if path_obj.is_dir():
+        audio_files = get_audio_files(str(path_obj), recursive=True)
+        if not audio_files:
+            click.echo(f"No audio files found in {path}")
+            return
+    else:
+        audio_files = [str(path_obj)]
 
     if sequences:
-        detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
+        all_detections = []
+        for audio_file in audio_files:
+            audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+            file_detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
+            for d in file_detections:
+                d.metadata['source_file'] = audio_file
+            all_detections.extend(file_detections)
 
         if output:
             fmt = "json" if output.endswith(".json") else "csv"
-            export_detections(detections, output, format=fmt)
-            click.echo(f"Saved {len(detections)} sequence detections to {output}")
+            export_detections(all_detections, output, format=fmt)
+            click.echo(f"Saved {len(all_detections)} sequence detections to {output}")
         elif output_format == 'json':
-            click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+            click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
+        elif output_format == 'csv':
+            import csv
+            import sys
+
+            if all_detections:
+                fieldnames = list(all_detections[0].to_dict().keys())
+                writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+                writer.writeheader()
+                for d in all_detections:
+                    writer.writerow(d.to_dict())
+            else:
+                click.echo("No detections found.")
         else:
-            click.echo(f"Found {len(detections)} peak sequences:\n")
-            for i, d in enumerate(detections, 1):
+            click.echo(f"Found {len(all_detections)} peak sequences:\n")
+            for i, d in enumerate(all_detections, 1):
                 n_peaks = d.metadata.get('n_peaks', 0)
                 interval = d.metadata.get('mean_interval', 0)
+                source = d.metadata.get('source_file', '')
+                if source:
+                    source = f" [{PathLib(source).name}]"
                 click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                          f"({n_peaks} peaks, mean interval: {interval:.3f}s)")
+                          f"({n_peaks} peaks, mean interval: {interval:.3f}s){source}")
+
+        if not output and output_format == 'table':
+            click.echo(f"\nTotal: {len(all_detections)} sequences")
     else:
-        peaks = detector.detect(audio, sample_rate)
+        all_peaks = []
+        for audio_file in audio_files:
+            audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+            file_peaks = detector.detect(audio, sample_rate)
+            for p in file_peaks:
+                p.source_file = audio_file
+            all_peaks.extend(file_peaks)
 
         if output:
             import csv
+            fieldnames = ['time', 'amplitude', 'width', 'prominence']
+            if len(audio_files) > 1:
+                fieldnames.append('source_file')
             with open(output, 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=['time', 'amplitude', 'width', 'prominence'])
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
-                for p in peaks:
-                    writer.writerow(p.to_dict())
-            click.echo(f"Saved {len(peaks)} peaks to {output}")
+                for p in all_peaks:
+                    row = p.to_dict()
+                    if len(audio_files) > 1:
+                        row['source_file'] = getattr(p, 'source_file', '')
+                    writer.writerow(row)
+            click.echo(f"Saved {len(all_peaks)} peaks to {output}")
         elif output_format == 'json':
-            click.echo(json_lib.dumps([p.to_dict() for p in peaks], indent=2))
-        else:
-            click.echo(f"Found {len(peaks)} peaks:\n")
-            for i, p in enumerate(peaks[:20], 1):  # Show first 20
-                click.echo(f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, "
-                          f"width: {p.width:.3f}s)")
-            if len(peaks) > 20:
-                click.echo(f"... and {len(peaks) - 20} more peaks")
+            peak_dicts = []
+            for p in all_peaks:
+                d = p.to_dict()
+                if len(audio_files) > 1:
+                    d['source_file'] = getattr(p, 'source_file', '')
+                peak_dicts.append(d)
+            click.echo(json_lib.dumps(peak_dicts, indent=2))
+        elif output_format == 'csv':
+            import csv
+            import sys
 
-    if not output and output_format == 'table':
-        n = len(detections) if sequences else len(peaks)
-        click.echo(f"\nTotal: {n} {'sequences' if sequences else 'peaks'}")
+            if all_peaks:
+                fieldnames = ['time', 'amplitude', 'width', 'prominence']
+                if len(audio_files) > 1:
+                    fieldnames.append('source_file')
+                writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+                writer.writeheader()
+                for p in all_peaks:
+                    row = p.to_dict()
+                    if len(audio_files) > 1:
+                        row['source_file'] = getattr(p, 'source_file', '')
+                    writer.writerow(row)
+            else:
+                click.echo("No peaks found.")
+        else:
+            click.echo(f"Found {len(all_peaks)} peaks:\n")
+            for i, p in enumerate(all_peaks[:20], 1):  # Show first 20
+                source = getattr(p, 'source_file', '')
+                if source and len(audio_files) > 1:
+                    source = f" [{PathLib(source).name}]"
+                else:
+                    source = ''
+                click.echo(f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, "
+                          f"width: {p.width:.3f}s){source}")
+            if len(all_peaks) > 20:
+                click.echo(f"... and {len(all_peaks) - 20} more peaks")
+
+        if not output and output_format == 'table':
+            click.echo(f"\nTotal: {len(all_peaks)} peaks")
 
 
 @detect.command('accelerating')
@@ -4352,15 +4471,18 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
     """Detect accelerating or decelerating call patterns.
 
     Identifies vocalizations with increasing or decreasing pulse rates,
-    common in many frog and insect species.
+    common in many frog and insect species. Accepts a single audio file
+    or a directory of audio files.
 
     Examples:
         bioamla detect accelerating tree_frog.wav --acceleration 2.0
-        bioamla detect accelerating chorus.wav -a 1.5 -d 1.5 -l 1000 -h 4000
+        bioamla detect accelerating ./recordings/ -a 1.5 -d 1.5 -l 1000 -h 4000
     """
     import json as json_lib
+    from pathlib import Path as PathLib
 
     from bioamla.detection import AcceleratingPatternDetector, export_detections
+    from bioamla.utils import get_audio_files
 
     detector = AcceleratingPatternDetector(
         min_pulses=min_pulses,
@@ -4371,39 +4493,58 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
         window_duration=window,
     )
 
-    detections = detector.detect_from_file(path)
+    path_obj = PathLib(path)
+    all_detections = []
+
+    if path_obj.is_dir():
+        audio_files = get_audio_files(str(path_obj), recursive=True)
+        if not audio_files:
+            click.echo(f"No audio files found in {path}")
+            return
+        for audio_file in audio_files:
+            file_detections = detector.detect_from_file(audio_file)
+            for d in file_detections:
+                d.metadata['source_file'] = audio_file
+            all_detections.extend(file_detections)
+    else:
+        all_detections = detector.detect_from_file(path)
+        for d in all_detections:
+            d.metadata['source_file'] = str(path_obj)
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
-        export_detections(detections, output, format=fmt)
-        click.echo(f"Saved {len(detections)} detections to {output}")
+        export_detections(all_detections, output, format=fmt)
+        click.echo(f"Saved {len(all_detections)} detections to {output}")
     elif output_format == 'json':
-        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
     elif output_format == 'csv':
         import csv
         import sys
 
-        if detections:
-            fieldnames = list(detections[0].to_dict().keys())
+        if all_detections:
+            fieldnames = list(all_detections[0].to_dict().keys())
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
             writer.writeheader()
-            for d in detections:
+            for d in all_detections:
                 writer.writerow(d.to_dict())
         else:
             click.echo("No detections found.")
     else:
-        click.echo(f"Found {len(detections)} pattern detections:\n")
-        for i, d in enumerate(detections, 1):
+        click.echo(f"Found {len(all_detections)} pattern detections:\n")
+        for i, d in enumerate(all_detections, 1):
             pattern = d.metadata.get('pattern_type', 'unknown')
             ratio = d.metadata.get('acceleration_ratio', 1.0)
             init_rate = d.metadata.get('initial_rate', 0)
             final_rate = d.metadata.get('final_rate', 0)
-            click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s")
+            source = d.metadata.get('source_file', '')
+            if source:
+                source = f" [{PathLib(source).name}]"
+            click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s{source}")
             click.echo(f"   Pattern: {pattern}, ratio: {ratio:.2f}x")
             click.echo(f"   Rate: {init_rate:.1f} -> {final_rate:.1f} Hz")
 
     if not output and output_format == 'table':
-        click.echo(f"\nTotal: {len(detections)} detections")
+        click.echo(f"\nTotal: {len(all_detections)} detections")
 
 
 @detect.command('batch')
