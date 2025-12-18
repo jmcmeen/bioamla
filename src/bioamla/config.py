@@ -109,8 +109,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "use_fp16": False,
         "top_k": 5,
         "min_confidence": 0.01,
-        "clip_seconds": 10,
-        "overlap_seconds": 0,
+        "segment_duration": 10,
+        "segment_overlap": 0,
     },
     "training": {
         "learning_rate": 5.0e-5,
