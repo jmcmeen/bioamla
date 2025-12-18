@@ -359,8 +359,8 @@ class TestWaveFileBatchInference:
                 wave_files=["test1.wav", "test2.wav"],
                 model=mock_model,
                 freq=16000,
-                clip_seconds=1,
-                overlap_seconds=0,
+                segment_duration=1,
+                segment_overlap=0,
                 output_csv=str(output_csv),
                 config=config
             )
@@ -388,8 +388,8 @@ class TestWaveFileBatchInference:
                 wave_files=["test1.wav"],
                 model=mock_model,
                 freq=16000,
-                clip_seconds=1,
-                overlap_seconds=0,
+                segment_duration=1,
+                segment_overlap=0,
                 output_csv=str(output_csv),
                 config=config
             )
