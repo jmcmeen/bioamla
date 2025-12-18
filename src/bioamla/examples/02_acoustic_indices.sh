@@ -109,14 +109,16 @@ else
         --temporal
 fi
 
-# Step 3: Temporal analysis - track indices over time within recordings
-echo ""
-echo "Step 3: Computing temporal variation of indices..."
-bioamla indices temporal "$AUDIO_DIR" \
-    --window 10.0 \
-    --hop 5.0 \
-    --output "$OUTPUT_DIR/temporal_indices.csv" \
-    --format csv
+# Step 3: Temporal analysis - track indices over time within a recording
+if [ -n "$SAMPLE_FILE" ]; then
+    echo ""
+    echo "Step 3: Computing temporal variation of indices on sample file..."
+    bioamla indices temporal "$SAMPLE_FILE" \
+        --window 10.0 \
+        --hop 5.0 \
+        --output "$OUTPUT_DIR/temporal_indices.csv" \
+        --format csv
+fi
 
 echo ""
 echo "=== Acoustic Indices Analysis Complete ==="
