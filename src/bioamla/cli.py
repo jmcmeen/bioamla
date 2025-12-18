@@ -730,6 +730,12 @@ def _run_batch_inference(
     from bioamla.utils import file_exists, get_files_by_extension
 
     output_csv = os.path.join(directory, output_csv)
+
+    # Create parent directory if it doesn't exist
+    output_dir = os.path.dirname(output_csv)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
     print("Output csv: " + output_csv)
 
     wave_files = get_files_by_extension(directory=directory, extensions=['.wav'], recursive=True)
@@ -786,6 +792,10 @@ def _run_batch_inference(
         num_workers=workers
     )
 
+    # Pre-load feature extractor before timing starts
+    from bioamla.ast import get_cached_feature_extractor
+    feature_extractor = get_cached_feature_extractor()
+
     start_time = time.time()
     time_string = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time))
     print("Start batch inference at " + time_string)
@@ -797,7 +807,8 @@ def _run_batch_inference(
         segment_duration=segment_duration,
         segment_overlap=segment_overlap,
         output_csv=output_csv,
-        config=config
+        config=config,
+        feature_extractor=feature_extractor
     )
 
     end_time = time.time()

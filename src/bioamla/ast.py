@@ -76,7 +76,8 @@ def wave_file_batch_inference(
     segment_duration: int,
     segment_overlap: int,
     output_csv: str,
-    config: Optional[InferenceConfig] = None
+    config: Optional[InferenceConfig] = None,
+    feature_extractor: Optional[ASTFeatureExtractor] = None
 ) -> None:
     """
     Perform batch inference on multiple audio files using an AST model.
@@ -93,6 +94,7 @@ def wave_file_batch_inference(
         segment_overlap (int): Overlap between consecutive segments in seconds
         output_csv (str): Path to output CSV file for results
         config (InferenceConfig): Optional configuration for performance optimizations
+        feature_extractor (ASTFeatureExtractor): Optional pre-loaded feature extractor
 
     Returns:
         None: Results are written directly to the CSV file
@@ -104,7 +106,8 @@ def wave_file_batch_inference(
     if config is None:
         config = InferenceConfig()
 
-    feature_extractor = get_cached_feature_extractor()
+    if feature_extractor is None:
+        feature_extractor = get_cached_feature_extractor()
     device = next(model.parameters()).device
 
     if config.num_workers > 1:
