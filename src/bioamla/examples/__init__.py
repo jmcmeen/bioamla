@@ -106,6 +106,12 @@ EXAMPLES = {
         "iNaturalist Workflow",
         "Download from iNaturalist, train model, run inference",
     ),
+    # Testing utility
+    "99": (
+        "99_run_all.sh",
+        "Run All Examples",
+        "Execute all example scripts in numeric order for testing",
+    ),
 }
 
 

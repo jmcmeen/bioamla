@@ -31,7 +31,8 @@
 set -e  # Exit on error
 
 # Configuration
-PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
 
 # Choose your dataset
 # Option 1: ESC-50 environmental sounds

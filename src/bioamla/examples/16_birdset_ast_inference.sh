@@ -22,9 +22,10 @@
 set -e
 
 # Configuration
-PROJECT_DIR="${PROJECT_DIR:-./my_project}"
-AUDIO_INPUT="${1:-${PROJECT_DIR}/bird_recordings}"
-MODEL_PATH="${2:-MIT/ast-finetuned-audioset-10-10-0.4593}"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
+AUDIO_INPUT="${PROJECT_DIR}/bird_recordings"
+MODEL_PATH="${1:-MIT/ast-finetuned-audioset-10-10-0.4593}"
 OUTPUT_DIR="${PROJECT_DIR}/bird_predictions"
 
 echo "=== BirdSet AST Inference Workflow ==="

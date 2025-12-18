@@ -30,7 +30,8 @@
 set -e
 
 # Configuration
-PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
 SUBSET="${1:-HSN}"  # Default to High SNR subset
 OUTPUT_DIR="${PROJECT_DIR}/birdset_model_${SUBSET}"
 

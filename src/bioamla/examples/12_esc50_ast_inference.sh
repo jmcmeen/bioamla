@@ -25,9 +25,10 @@
 set -e
 
 # Configuration
-PROJECT_DIR="${PROJECT_DIR:-./my_project}"
-AUDIO_INPUT="${1:-${PROJECT_DIR}/test_audio}"  # Directory or file to classify
-MODEL_PATH="${2:-bioamla/ast-esc50}"  # Use HuggingFace model by default
+PROJECT_NAME="frog_acoustic_study"
+PROJECT_DIR="./${PROJECT_NAME}"
+AUDIO_INPUT="${PROJECT_DIR}/test_audio"  # Directory or file to classify
+MODEL_PATH="${1:-bioamla/ast-esc50}"  # Use HuggingFace model by default
 OUTPUT_DIR="${PROJECT_DIR}/esc50_predictions"
 
 echo "=== ESC-50 AST Inference Workflow ==="
