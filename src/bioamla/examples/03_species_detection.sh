@@ -50,7 +50,7 @@ bioamla detect ribbit "$AUDIO_DIR" \
     --low-freq 500 \
     --high-freq 4000 \
     --window 2.0 \
-    --threshold 0.3 \
+    --min-score 0.3 \
     --output "$OUTPUT_DIR/ribbit_detections.csv" \
     --format csv
 
@@ -64,7 +64,8 @@ bioamla detect peaks "$AUDIO_DIR" \
     --min-distance 0.05 \
     --low-freq 1000 \
     --high-freq 5000 \
-    --sequences 3 \
+    --sequences \
+    --min-peaks 3 \
     --output "$OUTPUT_DIR/peak_detections.csv" \
     --format csv
 
