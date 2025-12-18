@@ -25,7 +25,8 @@ set -e  # Exit on error
 
 # Configuration
 AUDIO_DIR="${1:-./raw_recordings}"
-OUTPUT_DIR="./predictions"
+OUTPUT_SUBDIR="predictions"
+OUTPUT_DIR="$AUDIO_DIR/$OUTPUT_SUBDIR"
 
 # Choose your model based on use case:
 # General audio classification (birds, frogs, music, speech, etc.)
@@ -39,6 +40,8 @@ echo "=== Batch Inference Workflow ==="
 echo "Input directory: $AUDIO_DIR"
 echo ""
 
+# Note: The CLI creates the output directory automatically, but we create it
+# here for commands that don't (like embed, annotation convert, etc.)
 mkdir -p "$OUTPUT_DIR"
 
 # Step 1: Quick audio file inventory
@@ -51,7 +54,7 @@ echo "Step 2: Running batch inference with AudioSet model..."
 bioamla models predict ast "$AUDIO_DIR" \
     --batch \
     --model-path "$MODEL_AUDIOSET" \
-    --output-csv "$OUTPUT_DIR/audioset_predictions.csv" \
+    --output-csv "$OUTPUT_SUBDIR/audioset_predictions.csv" \
     --segment-duration 5 \
     --segment-overlap 1
 
@@ -61,7 +64,9 @@ echo "Step 3: Running inference with ESC-50 model..."
 bioamla models predict ast "$AUDIO_DIR" \
     --batch \
     --model-path "$MODEL_ESC50" \
-    --output-csv "$OUTPUT_DIR/esc50_predictions.csv"
+    --output-csv "$OUTPUT_SUBDIR/esc50_predictions.csv" \
+    --segment-duration 5 \
+    --segment-overlap 1
 
 # Step 4: Run inference with frog species model
 echo ""
@@ -69,7 +74,9 @@ echo "Step 4: Running inference with frog species model..."
 bioamla models predict ast "$AUDIO_DIR" \
     --batch \
     --model-path "$MODEL_FROGS" \
-    --output-csv "$OUTPUT_DIR/frog_predictions.csv"
+    --output-csv "$OUTPUT_SUBDIR/frog_predictions.csv" \
+    --segment-duration 5 \
+    --segment-overlap 1
 
 # Step 5: Extract embeddings for clustering analysis
 echo ""
@@ -80,23 +87,6 @@ bioamla models embed "$AUDIO_DIR" \
     --output "$OUTPUT_DIR/embeddings.npy" \
     --batch
 
-# Step 6: Convert annotation format (for use with Raven Pro)
-echo ""
-echo "Step 6: Converting prediction format to Raven..."
-bioamla annotation convert \
-    "$OUTPUT_DIR/audioset_predictions.csv" \
-    "$OUTPUT_DIR/predictions_raven.txt" \
-    --from csv \
-    --to raven
-
-# Step 7: Generate prediction summary
-echo ""
-echo "Step 7: Generating prediction summary..."
-bioamla annotation summary \
-    --path "$OUTPUT_DIR/audioset_predictions.csv" \
-    --file-format csv \
-    --output-json "$OUTPUT_DIR/prediction_summary.json"
-
 echo ""
 echo "=== Batch Inference Complete ==="
 echo "Results saved to: $OUTPUT_DIR/"
@@ -106,15 +96,11 @@ echo "  - audioset_predictions.csv: General audio classification (527 classes)"
 echo "  - esc50_predictions.csv: Environmental sound classification (50 classes)"
 echo "  - frog_predictions.csv: Frog species classification"
 echo "  - embeddings.npy: Audio embeddings for clustering"
-echo "  - predictions_raven.txt: Raven-compatible format"
-echo "  - prediction_summary.json: Summary statistics"
 echo ""
 echo "CSV output columns:"
-echo "  - file_path: Path to audio file"
-echo "  - start_time, end_time: Segment boundaries"
-echo "  - predicted_label: Top prediction"
-echo "  - confidence: Prediction confidence (0-1)"
-echo "  - top_k_labels: Top-k predictions with scores"
+echo "  - filepath: Path to audio file"
+echo "  - start, stop: Segment boundaries (in samples)"
+echo "  - prediction: Top prediction label"
 echo ""
 echo "Additional analysis:"
 echo "  - Cluster embeddings: bioamla cluster reduce --embeddings embeddings.npy ..."
