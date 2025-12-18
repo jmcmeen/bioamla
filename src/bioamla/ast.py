@@ -73,8 +73,8 @@ def wave_file_batch_inference(
     wave_files: list,
     model: AutoModelForAudioClassification,
     freq: int,
-    clip_seconds: int,
-    overlap_seconds: int,
+    segment_duration: int,
+    segment_overlap: int,
     output_csv: str,
     config: Optional[InferenceConfig] = None
 ) -> None:
@@ -89,8 +89,8 @@ def wave_file_batch_inference(
         wave_files (list): List of file paths to audio files to process
         model (AutoModelForAudioClassification): Pre-trained AST model for inference
         freq (int): Target sampling frequency for audio preprocessing
-        clip_seconds (int): Duration of each audio segment in seconds
-        overlap_seconds (int): Overlap between consecutive segments in seconds
+        segment_duration (int): Duration of each audio segment in seconds
+        segment_overlap (int): Overlap between consecutive segments in seconds
         output_csv (str): Path to output CSV file for results
         config (InferenceConfig): Optional configuration for performance optimizations
 
@@ -109,12 +109,12 @@ def wave_file_batch_inference(
 
     if config.num_workers > 1:
         _batch_inference_parallel(
-            wave_files, model, freq, clip_seconds, overlap_seconds,
+            wave_files, model, freq, segment_duration, segment_overlap,
             output_csv, config, feature_extractor, device
         )
     else:
         _batch_inference_sequential(
-            wave_files, model, freq, clip_seconds, overlap_seconds,
+            wave_files, model, freq, segment_duration, segment_overlap,
             output_csv, config, feature_extractor, device
         )
 
@@ -123,8 +123,8 @@ def _batch_inference_sequential(
     wave_files: list,
     model: AutoModelForAudioClassification,
     freq: int,
-    clip_seconds: int,
-    overlap_seconds: int,
+    segment_duration: int,
+    segment_overlap: int,
     output_csv: str,
     config: InferenceConfig,
     feature_extractor: ASTFeatureExtractor,
@@ -133,7 +133,7 @@ def _batch_inference_sequential(
     """Sequential batch inference processing."""
     for filepath in wave_files:
         df = segmented_wave_file_inference(
-            filepath, model, freq, clip_seconds, overlap_seconds,
+            filepath, model, freq, segment_duration, segment_overlap,
             config=config, feature_extractor=feature_extractor, device=device
         )
         df.to_csv(output_csv, mode='a', header=False, index=False)
@@ -143,8 +143,8 @@ def _batch_inference_parallel(
     wave_files: list,
     model: AutoModelForAudioClassification,
     freq: int,
-    clip_seconds: int,
-    overlap_seconds: int,
+    segment_duration: int,
+    segment_overlap: int,
     output_csv: str,
     config: InferenceConfig,
     feature_extractor: ASTFeatureExtractor,
@@ -156,7 +156,7 @@ def _batch_inference_parallel(
         """Load and preprocess a single file."""
         waveform, orig_freq = load_waveform_tensor(filepath)
         waveform = resample_waveform_tensor(waveform, orig_freq, freq)
-        segments = split_waveform_tensor(waveform, freq, clip_seconds, overlap_seconds)
+        segments = split_waveform_tensor(waveform, freq, segment_duration, segment_overlap)
         return filepath, segments
 
     with ThreadPoolExecutor(max_workers=config.num_workers) as executor:
@@ -176,8 +176,8 @@ def segmented_wave_file_inference(
     filepath: str,
     model: AutoModelForAudioClassification,
     freq: int,
-    clip_seconds: int,
-    overlap_seconds: int,
+    segment_duration: int,
+    segment_overlap: int,
     config: Optional[InferenceConfig] = None,
     feature_extractor: Optional[ASTFeatureExtractor] = None,
     device: Optional[torch.device] = None
@@ -193,8 +193,8 @@ def segmented_wave_file_inference(
         filepath (str): Path to the audio file to process
         model (AutoModelForAudioClassification): Pre-trained AST model
         freq (int): Target sampling frequency for preprocessing
-        clip_seconds (int): Duration of each segment in seconds
-        overlap_seconds (int): Overlap between consecutive segments in seconds
+        segment_duration (int): Duration of each segment in seconds
+        segment_overlap (int): Overlap between consecutive segments in seconds
         config (InferenceConfig): Optional configuration for performance optimizations
         feature_extractor (ASTFeatureExtractor): Optional cached feature extractor
         device (torch.device): Optional device for inference
@@ -214,7 +214,7 @@ def segmented_wave_file_inference(
 
     waveform, orig_freq = load_waveform_tensor(filepath)
     waveform = resample_waveform_tensor(waveform, orig_freq, freq)
-    segments = split_waveform_tensor(waveform, freq, clip_seconds, overlap_seconds)
+    segments = split_waveform_tensor(waveform, freq, segment_duration, segment_overlap)
 
     if config.batch_size > 1:
         rows = _process_segments_batched(

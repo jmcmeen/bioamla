@@ -641,8 +641,8 @@ def evaluate():
 @click.option('--resample-freq', default=16000, type=int, help='Resampling frequency')
 @click.option('--batch', is_flag=True, default=False, help='Run batch inference on a directory of audio files')
 @click.option('--output-csv', default='output.csv', help='Output CSV file name (batch mode only)')
-@click.option('--clip-seconds', default=1, type=int, help='Duration of audio clips in seconds (batch mode only)')
-@click.option('--overlap-seconds', default=0, type=int, help='Overlap between clips in seconds (batch mode only)')
+@click.option('--segment-duration', default=1, type=int, help='Duration of audio segments in seconds (batch mode only)')
+@click.option('--segment-overlap', default=0, type=int, help='Overlap between segments in seconds (batch mode only)')
 @click.option('--restart/--no-restart', default=False, help='Whether to restart from existing results (batch mode only)')
 @click.option('--batch-size', default=8, type=int, help='Number of segments to process in parallel (default: 8, batch mode only)')
 @click.option('--fp16/--no-fp16', default=False, help='Use half-precision (FP16) for faster GPU inference (batch mode only)')
@@ -654,8 +654,8 @@ def ast_predict(
     resample_freq: int,
     batch: bool,
     output_csv: str,
-    clip_seconds: int,
-    overlap_seconds: int,
+    segment_duration: int,
+    segment_overlap: int,
     restart: bool,
     batch_size: int,
     fp16: bool,
@@ -688,8 +688,8 @@ def ast_predict(
             output_csv=output_csv,
             model_path=model_path,
             resample_freq=resample_freq,
-            clip_seconds=clip_seconds,
-            overlap_seconds=overlap_seconds,
+            segment_duration=segment_duration,
+            segment_overlap=segment_overlap,
             restart=restart,
             batch_size=batch_size,
             fp16=fp16,
@@ -707,8 +707,8 @@ def _run_batch_inference(
     output_csv: str,
     model_path: str,
     resample_freq: int,
-    clip_seconds: int,
-    overlap_seconds: int,
+    segment_duration: int,
+    segment_overlap: int,
     restart: bool,
     batch_size: int,
     fp16: bool,
@@ -794,8 +794,8 @@ def _run_batch_inference(
         wave_files=wave_files,
         model=model,
         freq=resample_freq,
-        clip_seconds=clip_seconds,
-        overlap_seconds=overlap_seconds,
+        segment_duration=segment_duration,
+        segment_overlap=segment_overlap,
         output_csv=output_csv,
         config=config
     )
