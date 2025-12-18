@@ -32,13 +32,16 @@
 
 set -e
 
+# Configuration
+PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+
 echo "=== iNaturalist Dataset Workflow ==="
 echo ""
 
 # Step 1: Download audio observations from iNaturalist
 # These are South Carolina frog species taxon IDs
 echo "Step 1: Downloading audio from iNaturalist..."
-bioamla services inat download ./frogs_dataset \
+bioamla services inat download "${PROJECT_DIR}/frogs_dataset" \
     --taxon-ids "24268,65982,23930,24263,65979,66002,66012,60341,64968,64977,24256" \
     --quality-grade research \
     --obs-per-taxon 100
@@ -46,14 +49,14 @@ bioamla services inat download ./frogs_dataset \
 # Step 2: Convert all audio files to WAV format
 echo ""
 echo "Step 2: Converting audio to WAV format..."
-bioamla audio convert ./frogs_dataset wav
+bioamla audio convert "${PROJECT_DIR}/frogs_dataset" wav
 
 # Step 3: Fine-tune an AST model on the downloaded dataset
 echo ""
 echo "Step 3: Training AST model..."
 bioamla models train ast \
-    --training-dir ./frogs_model \
-    --train-dataset ./frogs_dataset \
+    --training-dir "${PROJECT_DIR}/frogs_model" \
+    --train-dataset "${PROJECT_DIR}/frogs_dataset" \
     --num-train-epochs 25 \
     --per-device-train-batch-size 8 \
     --gradient-accumulation-steps 2 \
@@ -69,17 +72,17 @@ echo ""
 echo "Step 4: Testing with bioamla/scp-frogs-small dataset..."
 bioamla models predict ast "bioamla/scp-frogs-small" \
     --batch \
-    --model-path ./frogs_model/best_model \
-    --output ./frogs_predictions.csv \
+    --model-path "${PROJECT_DIR}/frogs_model/best_model" \
+    --output "${PROJECT_DIR}/frogs_predictions.csv" \
     --top-k 5
 
 echo ""
 echo "=== Workflow Complete ==="
 echo ""
 echo "Created files:"
-echo "  ./frogs_dataset/     - Downloaded iNaturalist audio"
-echo "  ./frogs_model/       - Trained model directory"
-echo "  ./frogs_predictions.csv - Test predictions"
+echo "  ${PROJECT_DIR}/frogs_dataset/     - Downloaded iNaturalist audio"
+echo "  ${PROJECT_DIR}/frogs_model/       - Trained model directory"
+echo "  ${PROJECT_DIR}/frogs_predictions.csv - Test predictions"
 echo ""
 echo "Alternative: Use pre-built resources from HuggingFace:"
 echo "  Dataset: bioamla/scp-frogs-inat-v1"

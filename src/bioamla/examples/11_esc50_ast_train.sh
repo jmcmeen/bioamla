@@ -19,6 +19,9 @@
 
 set -e
 
+# Configuration
+PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+
 echo "=== ESC-50 AST Training Workflow ==="
 echo ""
 
@@ -29,7 +32,7 @@ bioamla devices
 # Train AST model on ESC-50
 # The dataset will be automatically downloaded from HuggingFace
 bioamla models train ast \
-    --training-dir "./esc50_model" \
+    --training-dir "${PROJECT_DIR}/esc50_model" \
     --train-dataset "ashraq/esc50" \
     --num-train-epochs 10 \
     --per-device-train-batch-size 8 \
@@ -45,10 +48,10 @@ bioamla models train ast \
 
 echo ""
 echo "=== Training Complete ==="
-echo "Model saved to: ./esc50_model/best_model"
+echo "Model saved to: ${PROJECT_DIR}/esc50_model/best_model"
 echo ""
 echo "To run inference with this model:"
-echo "  bioamla models predict ast <audio_file> --model-path ./esc50_model/best_model"
+echo "  bioamla models predict ast <audio_file> --model-path ${PROJECT_DIR}/esc50_model/best_model"
 echo ""
 echo "Or use the pre-trained bioamla/ast-esc50 model from HuggingFace:"
 echo "  bioamla models predict ast <audio_file> --model-path bioamla/ast-esc50"

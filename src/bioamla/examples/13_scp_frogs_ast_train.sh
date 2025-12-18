@@ -22,6 +22,9 @@
 
 set -e
 
+# Configuration
+PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+
 echo "=== SCP Frogs AST Training Workflow ==="
 echo ""
 
@@ -32,7 +35,7 @@ bioamla devices
 # Option 1: Train on full dataset (recommended for production)
 echo "Training on bioamla/scp-frogs-inat-v1 dataset..."
 bioamla models train ast \
-    --training-dir "./scp_frogs_model" \
+    --training-dir "${PROJECT_DIR}/scp_frogs_model" \
     --train-dataset "bioamla/scp-frogs-inat-v1" \
     --num-train-epochs 25 \
     --per-device-train-batch-size 8 \
@@ -48,10 +51,10 @@ bioamla models train ast \
 
 echo ""
 echo "=== Training Complete ==="
-echo "Model saved to: ./scp_frogs_model/best_model"
+echo "Model saved to: ${PROJECT_DIR}/scp_frogs_model/best_model"
 echo ""
 echo "To run inference:"
-echo "  bioamla models predict ast <audio_file> --model-path ./scp_frogs_model/best_model"
+echo "  bioamla models predict ast <audio_file> --model-path ${PROJECT_DIR}/scp_frogs_model/best_model"
 echo ""
 echo "Or use the pre-trained model from HuggingFace:"
 echo "  bioamla models predict ast <audio_file> --model-path bioamla/scp-frogs"

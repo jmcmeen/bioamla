@@ -20,8 +20,9 @@
 set -e  # Exit on error
 
 # Configuration
-AUDIO_DIR="${1:-./raw_recordings}"
-OUTPUT_DIR="./discovery_results"
+PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+AUDIO_DIR="${1:-${PROJECT_DIR}/raw_recordings}"
+OUTPUT_DIR="${PROJECT_DIR}/discovery_results"
 MODEL_PATH="MIT/ast-finetuned-audioset-10-10-0.4593"
 
 echo "=== Clustering and Sound Discovery Workflow ==="

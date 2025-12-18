@@ -30,7 +30,10 @@
 
 set -e  # Exit on error
 
-# Configuration - choose your dataset
+# Configuration
+PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+
+# Choose your dataset
 # Option 1: ESC-50 environmental sounds
 DATASET="ashraq/esc50"
 # Option 2: Frog species
@@ -38,7 +41,7 @@ DATASET="ashraq/esc50"
 # Option 3: Quick test with small dataset
 # DATASET="bioamla/scp-frogs-small"
 
-OUTPUT_DIR="./trained_models"
+OUTPUT_DIR="${PROJECT_DIR}/trained_models"
 MODEL_NAME="species_classifier"
 
 echo "=== Model Training and Evaluation Workflow ==="
