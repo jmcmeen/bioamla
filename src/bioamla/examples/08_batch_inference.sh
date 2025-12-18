@@ -24,7 +24,7 @@
 set -e  # Exit on error
 
 # Configuration
-AUDIO_DIR="${1:-./recordings_to_classify}"
+AUDIO_DIR="${1:-./raw_recordings}"
 OUTPUT_DIR="./predictions"
 
 # Choose your model based on use case:
@@ -51,11 +51,9 @@ echo "Step 2: Running batch inference with AudioSet model..."
 bioamla models predict ast "$AUDIO_DIR" \
     --batch \
     --model-path "$MODEL_AUDIOSET" \
-    --output "$OUTPUT_DIR/audioset_predictions.csv" \
-    --top-k 5 \
-    --threshold 0.1 \
-    --segment-duration 5.0 \
-    --segment-overlap 1.0
+    --output-csv "$OUTPUT_DIR/audioset_predictions.csv" \
+    --clip-seconds 5 \
+    --overlap-seconds 1
 
 # Step 3: Run inference with ESC-50 model (environmental sounds)
 echo ""
@@ -63,9 +61,7 @@ echo "Step 3: Running inference with ESC-50 model..."
 bioamla models predict ast "$AUDIO_DIR" \
     --batch \
     --model-path "$MODEL_ESC50" \
-    --output "$OUTPUT_DIR/esc50_predictions.csv" \
-    --top-k 5 \
-    --threshold 0.1
+    --output-csv "$OUTPUT_DIR/esc50_predictions.csv"
 
 # Step 4: Run inference with frog species model
 echo ""
@@ -73,9 +69,7 @@ echo "Step 4: Running inference with frog species model..."
 bioamla models predict ast "$AUDIO_DIR" \
     --batch \
     --model-path "$MODEL_FROGS" \
-    --output "$OUTPUT_DIR/frog_predictions.csv" \
-    --top-k 5 \
-    --threshold 0.1
+    --output-csv "$OUTPUT_DIR/frog_predictions.csv"
 
 # Step 5: Extract embeddings for clustering analysis
 echo ""
