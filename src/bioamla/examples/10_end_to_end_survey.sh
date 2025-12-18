@@ -29,8 +29,9 @@
 set -e  # Exit on error
 
 # Configuration
+PROJECT_DIR="${PROJECT_DIR:-./my_project}"
 PROJECT_NAME="wetland_survey_2024"
-RAW_DATA="${1:-./raw_field_recordings}"
+RAW_DATA="${1:-${PROJECT_DIR}/raw_field_recordings}"
 
 echo "=============================================="
 echo "  End-to-End Wildlife Survey Workflow"

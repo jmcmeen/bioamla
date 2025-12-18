@@ -21,8 +21,9 @@
 set -e  # Exit on error
 
 # Configuration
-AUDIO_DIR="${1:-./raw_recordings}"
-OUTPUT_DIR="./indices_results"
+PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+AUDIO_DIR="${1:-${PROJECT_DIR}/raw_recordings}"
+OUTPUT_DIR="${PROJECT_DIR}/indices_results"
 
 echo "=== Acoustic Indices Analysis Workflow ==="
 echo ""

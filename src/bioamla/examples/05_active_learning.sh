@@ -21,9 +21,10 @@
 set -e  # Exit on error
 
 # Configuration
-PREDICTIONS_FILE="./predictions.csv"
-STATE_FILE="./active_learning_state.json"
-OUTPUT_DIR="./active_learning"
+PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+PREDICTIONS_FILE="${PROJECT_DIR}/predictions.csv"
+STATE_FILE="${PROJECT_DIR}/active_learning_state.json"
+OUTPUT_DIR="${PROJECT_DIR}/active_learning"
 BATCH_SIZE=20
 
 echo "=== Active Learning Annotation Workflow ==="

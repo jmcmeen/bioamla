@@ -30,8 +30,9 @@
 set -e
 
 # Configuration
+PROJECT_DIR="${PROJECT_DIR:-./my_project}"
 SUBSET="${1:-HSN}"  # Default to High SNR subset
-OUTPUT_DIR="./birdset_model_${SUBSET}"
+OUTPUT_DIR="${PROJECT_DIR}/birdset_model_${SUBSET}"
 
 echo "=== BirdSet AST Training Workflow ==="
 echo "Subset: $SUBSET"

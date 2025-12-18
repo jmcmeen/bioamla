@@ -20,8 +20,9 @@
 set -e  # Exit on error
 
 # Configuration
-INPUT_DIR="${1:-./raw_recordings}"
-OUTPUT_DIR="./processed_audio"
+PROJECT_DIR="frog_acoustic_study"
+INPUT_DIR="${PROJECT_DIR}/raw_recordings"
+OUTPUT_DIR="${PROJECT_DIR}/processed_audio"
 SAMPLE_RATE=22050
 TARGET_DB=-20
 

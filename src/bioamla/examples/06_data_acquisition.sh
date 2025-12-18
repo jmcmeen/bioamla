@@ -20,7 +20,8 @@
 set -e  # Exit on error
 
 # Configuration
-OUTPUT_DIR="./acquired_data"
+PROJECT_DIR="${PROJECT_DIR:-./my_project}"
+OUTPUT_DIR="${PROJECT_DIR}/acquired_data"
 SPECIES_COMMON="American Bullfrog"
 SPECIES_SCIENTIFIC="Lithobates catesbeianus"
 
