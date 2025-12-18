@@ -50,9 +50,7 @@ echo "Running batch inference..."
 bioamla models predict ast "$INPUT_DIR" \
     --batch \
     --model-path "$MODEL_PATH" \
-    --output "$OUTPUT_DIR/predictions.csv" \
-    --top-k 5 \
-    --threshold 0.1
+    --output-csv "$OUTPUT_DIR/predictions.csv"
 
 echo ""
 echo "Predictions saved to: $OUTPUT_DIR/predictions.csv"
