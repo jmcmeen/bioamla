@@ -324,36 +324,6 @@ def config_deps(do_install: bool, yes: bool):
             raise SystemExit(1)
 
 
-@cli.command()
-@click.argument('directory', required=True)
-def explore(directory: str):
-    """
-    Launch interactive TUI dashboard for exploring audio datasets.
-
-    Browse audio files, view metadata, play audio, and generate spectrograms
-    in an interactive terminal interface.
-
-    \b
-    Keyboard shortcuts:
-      ↑/↓, j/k    Navigate file list
-      Enter       View file details
-      p           Play selected audio
-      s           Generate spectrogram
-      r           Refresh file list
-      /           Search files
-      ?           Show help
-      q           Quit
-    """
-    import os
-
-    if not os.path.isdir(directory):
-        click.echo(f"Error: '{directory}' is not a valid directory", err=True)
-        raise SystemExit(1)
-
-    from bioamla.tui import run_explorer
-    run_explorer(directory)
-
-
 # =============================================================================
 # Project Command Group
 # =============================================================================
