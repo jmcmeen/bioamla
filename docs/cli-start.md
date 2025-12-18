@@ -50,7 +50,7 @@ bioamla models predict ast ./audio/ --top-k 10 --min-confidence 0.1
 bioamla models predict ast ./data/ --recursive
 
 # Segment long recordings
-bioamla models predict ast ./audio/ --clip-seconds 10 --overlap-seconds 2
+bioamla models predict ast ./audio/ --segment-duration 10 --segment-overlap 2
 
 # Adjust batch size for memory management
 bioamla models predict ast ./audio/ --batch-size 4
@@ -239,8 +239,8 @@ default_ast_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
 batch_size = 8
 top_k = 5
 min_confidence = 0.01
-clip_seconds = 10
-overlap_seconds = 0
+segment_duration = 10
+segment_overlap = 0
 
 [training]
 learning_rate = 5.0e-5
