@@ -52,8 +52,8 @@ bioamla models predict ast "$AUDIO_DIR" \
     --batch \
     --model-path "$MODEL_AUDIOSET" \
     --output-csv "$OUTPUT_DIR/audioset_predictions.csv" \
-    --clip-seconds 5 \
-    --overlap-seconds 1
+    --segment-duration 5 \
+    --segment-overlap 1
 
 # Step 3: Run inference with ESC-50 model (environmental sounds)
 echo ""
