@@ -38,16 +38,35 @@ from bioamla.models.responses import PredictionResult as APIPredictionResult
 from bioamla.models.config import DefaultConfig
 
 
+def _ensure_models_registered():
+    """Import model modules to trigger @register_model decorators."""
+    # These imports register the models via @register_model decorator
+    from bioamla.models import ast_model  # noqa: F401
+    from bioamla.models import birdnet  # noqa: F401
+    from bioamla.models import opensoundscape  # noqa: F401
+
+
 def __getattr__(name):
     """Lazy import to avoid circular dependencies."""
     # Base classes and utilities
     if name in (
         "AudioDataset", "BaseAudioModel", "BatchPredictionResult",
         "ModelBackend", "ModelConfig", "PredictionResult",
-        "create_dataloader", "get_model_class", "list_models", "register_model"
+        "create_dataloader", "register_model"
     ):
         from bioamla.models import base
         return getattr(base, name)
+
+    # These functions need models registered first
+    if name == "list_models":
+        _ensure_models_registered()
+        from bioamla.models import base
+        return base.list_models
+
+    if name == "get_model_class":
+        _ensure_models_registered()
+        from bioamla.models import base
+        return base.get_model_class
 
     # Model implementations
     if name == "ASTModel":
@@ -125,6 +144,7 @@ def load_model(
         >>> model = load_model("ast", "MIT/ast-finetuned-audioset-10-10-0.4593")
         >>> results = model.predict("audio.wav")
     """
+    _ensure_models_registered()
     from bioamla.models.base import get_model_class
     model_class = get_model_class(model_type)
     model = model_class(config)

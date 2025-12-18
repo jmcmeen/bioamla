@@ -1379,7 +1379,7 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
         bioamla models embed audio.wav --model-type ast --model-path my_model -o embeddings.npy
 
     Batch mode:
-        bioamla models embed ./audio --batch --model-type ast --model-path my_model -o embeddings.npz
+        bioamla models embed ./audio --batch --model-type ast --model-path my_model -o embeddings.npy
     """
     from pathlib import Path
 
@@ -1413,21 +1413,34 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
         if not quiet:
             click.echo(f"Extracting embeddings from {len(audio_files)} files...")
 
-        embeddings_dict = {}
+        embeddings_list = []
+        filepaths_list = []
         for i, filepath in enumerate(audio_files):
             try:
                 emb = model.extract_embeddings(filepath, layer=layer)
-                embeddings_dict[filepath] = emb
+                # Flatten to 1D if needed (take mean if multiple time steps)
+                if emb.ndim > 1:
+                    emb = emb.mean(axis=0) if emb.shape[0] > 1 else emb.squeeze()
+                embeddings_list.append(emb)
+                filepaths_list.append(filepath)
                 if not quiet:
                     click.echo(f"[{i+1}/{len(audio_files)}] {filepath}: shape {emb.shape}")
             except Exception as e:
                 if not quiet:
                     click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
 
-        np.savez(output, **{str(i): v for i, v in enumerate(embeddings_dict.values())},
-                 filepaths=list(embeddings_dict.keys()))
+        # Stack into 2D array (samples x features) for clustering compatibility
+        embeddings = np.vstack(embeddings_list)
+        np.save(output, embeddings)
+
+        # Save filepaths mapping separately
+        filepaths_output = str(output).replace('.npy', '_filepaths.txt')
+        with open(filepaths_output, 'w') as f:
+            f.write('\n'.join(filepaths_list))
+
         if not quiet:
             click.echo(f"\nEmbeddings saved to {output}")
+            click.echo(f"Filepaths saved to {filepaths_output}")
 
     else:
         if not Path(path).exists():
@@ -5083,6 +5096,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
     LABELS_FILE: Path to numpy file with cluster labels (.npy)
     """
     import json
+    from pathlib import Path
 
     import numpy as np
 
