@@ -569,7 +569,7 @@ def log_search(query):
     console.print(f"\n[bold]Search Results[/bold] ({len(results)} matches)\n")
     for entry in results[:20]:
         status = "[green]✓[/green]" if entry.exit_code == 0 else "[red]✗[/red]"
-        console.print(f"{status} {entry.timestamp[:19]}  {entry.command} {' '.join(entry.args)}")
+        console.print(f"{status} {entry.timestamp[:19]}  {entry.command}")
 
 
 @log.command('clear')
