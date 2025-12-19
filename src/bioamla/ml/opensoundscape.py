@@ -17,14 +17,14 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
-from bioamla.models.base import (
+from bioamla.ml.base import (
     BaseAudioModel,
     ModelBackend,
     ModelConfig,
     PredictionResult,
     register_model,
 )
-from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
+from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
 
 class SpectrogramCNN(nn.Module):

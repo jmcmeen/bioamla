@@ -21,6 +21,7 @@ from bioamla.audio.audio import (
     get_audio_info,
     analyze_audio,
     detect_silence,
+    summarize_analysis,
 )
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "get_audio_info",
     "analyze_audio",
     "detect_silence",
+    "summarize_analysis",
 ]

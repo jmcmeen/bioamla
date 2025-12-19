@@ -27,23 +27,23 @@ Example:
 """
 
 # API response models (safe to import, no circular deps)
-from bioamla.models.responses import (
+from bioamla.ml.responses import (
     AudioClassificationResponse,
     Base64AudioRequest,
     ErrorResponse,
 )
-from bioamla.models.responses import PredictionResult as APIPredictionResult
+from bioamla.ml.responses import PredictionResult as APIPredictionResult
 
 # Config (safe, no circular deps)
-from bioamla.models.config import DefaultConfig
+from bioamla.ml.config import DefaultConfig
 
 
 def _ensure_models_registered():
     """Import model modules to trigger @register_model decorators."""
     # These imports register the models via @register_model decorator
-    from bioamla.models import ast_model  # noqa: F401
-    from bioamla.models import birdnet  # noqa: F401
-    from bioamla.models import opensoundscape  # noqa: F401
+    from bioamla.ml import ast_model  # noqa: F401
+    from bioamla.ml import birdnet  # noqa: F401
+    from bioamla.ml import opensoundscape  # noqa: F401
 
 
 def __getattr__(name):
@@ -54,34 +54,34 @@ def __getattr__(name):
         "ModelBackend", "ModelConfig", "PredictionResult",
         "create_dataloader", "register_model"
     ):
-        from bioamla.models import base
+        from bioamla.ml import base
         return getattr(base, name)
 
     # These functions need models registered first
     if name == "list_models":
         _ensure_models_registered()
-        from bioamla.models import base
+        from bioamla.ml import base
         return base.list_models
 
     if name == "get_model_class":
         _ensure_models_registered()
-        from bioamla.models import base
+        from bioamla.ml import base
         return base.get_model_class
 
     # Model implementations
     if name == "ASTModel":
-        from bioamla.models.ast_model import ASTModel
+        from bioamla.ml.ast_model import ASTModel
         return ASTModel
     if name in ("BirdNETModel", "BirdNETEncoder"):
-        from bioamla.models import birdnet
+        from bioamla.ml import birdnet
         return getattr(birdnet, name)
     if name in ("OpenSoundscapeModel", "SpectrogramCNN"):
-        from bioamla.models import opensoundscape
+        from bioamla.ml import opensoundscape
         return getattr(opensoundscape, name)
 
     # Training utilities
     if name in ("ModelTrainer", "SpectrogramDataset", "TrainingConfig", "TrainingMetrics", "train_model"):
-        from bioamla.models import trainer
+        from bioamla.ml import trainer
         return getattr(trainer, name)
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -145,7 +145,7 @@ def load_model(
         >>> results = model.predict("audio.wav")
     """
     _ensure_models_registered()
-    from bioamla.models.base import get_model_class
+    from bioamla.ml.base import get_model_class
     model_class = get_model_class(model_type)
     model = model_class(config)
     model.load(model_path, **kwargs)
@@ -177,7 +177,7 @@ def predict_file(
     Returns:
         List of prediction results.
     """
-    from bioamla.models.base import ModelConfig
+    from bioamla.ml.base import ModelConfig
     config = ModelConfig(
         min_confidence=min_confidence,
         top_k=top_k,

@@ -27,20 +27,22 @@ from typing import Any, List, Optional, Union
 import requests
 from pyinaturalist import get_observation_species_counts, get_observations
 
-from bioamla.core.files import BinaryFile, TextFile
-from bioamla.core.fileutils import (
+import logging
+
+from bioamla.files import (
+    BinaryFile,
+    TextFile,
     get_extension_from_content_type,
     get_extension_from_url,
     sanitize_filename,
 )
-from bioamla.core.logging import get_logger
 from bioamla.core.metadata import (
     get_existing_observation_ids,
     read_metadata_csv,
     write_metadata_csv,
 )
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def load_taxon_ids_from_csv(csv_path: Union[str, Path]) -> List[int]:

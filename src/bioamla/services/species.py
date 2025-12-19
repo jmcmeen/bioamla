@@ -37,11 +37,12 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from bioamla.core.base_api import APICache, APIClient, RateLimiter
-from bioamla.core.files import TextFile
-from bioamla.core.logging import get_logger
+import logging
 
-logger = get_logger(__name__)
+from bioamla.core.base_api import APICache, APIClient, RateLimiter
+from bioamla.files import TextFile
+
+logger = logging.getLogger(__name__)
 
 # API endpoints
 EBIRD_TAXONOMY_URL = "https://api.ebird.org/v2/ref/taxonomy/ebird"

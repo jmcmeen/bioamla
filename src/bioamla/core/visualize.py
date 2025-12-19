@@ -26,7 +26,7 @@ import librosa.display
 import matplotlib.pyplot as plt
 import numpy as np
 
-from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
+from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
 VisualizationType = Literal["stft", "mel", "mfcc", "waveform"]
 WindowType = Literal["hann", "hamming", "blackman", "bartlett", "rectangular", "kaiser"]

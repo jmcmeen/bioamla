@@ -23,7 +23,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from bioamla.core.files import TextFile
+from bioamla.files import TextFile
 
 logger = logging.getLogger(__name__)
 

@@ -14,14 +14,14 @@ import numpy as np
 import torch
 from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
-from bioamla.models.base import (
+from bioamla.ml.base import (
     BaseAudioModel,
     ModelBackend,
     ModelConfig,
     PredictionResult,
     register_model,
 )
-from bioamla.core.torchaudio import (
+from bioamla.audio.torchaudio import (
     load_waveform_tensor,
     resample_waveform_tensor,
     split_waveform_tensor,

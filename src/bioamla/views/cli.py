@@ -3,7 +3,7 @@ from typing import Dict, Optional
 import click
 
 from bioamla.core.config import get_config, load_config, set_config
-from bioamla.core.files import TextFile
+from bioamla.files import TextFile
 
 class ConfigContext:
     """Context object to hold configuration."""
@@ -683,7 +683,7 @@ def ast_predict(
             workers=workers
         )
     else:
-        from bioamla.core.ast import wav_ast_inference
+        from bioamla.detection.ast import wav_ast_inference
         prediction = wav_ast_inference(path, model_path, resample_freq)
         click.echo(f"{prediction}")
 
@@ -708,7 +708,7 @@ def _run_batch_inference(
     import pandas as pd
     import torch
 
-    from bioamla.core.ast import (
+    from bioamla.detection.ast import (
         InferenceConfig,
         load_pretrained_ast_model,
         wave_file_batch_inference,
@@ -779,7 +779,7 @@ def _run_batch_inference(
     )
 
     # Pre-load feature extractor before timing starts
-    from bioamla.core.ast import get_cached_feature_extractor
+    from bioamla.detection.ast import get_cached_feature_extractor
     feature_extractor = get_cached_feature_extractor()
 
     start_time = time.time()
@@ -2006,7 +2006,7 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
     import json
     from pathlib import Path
 
-    from bioamla.core.audio.audio import (
+    from bioamla.audio.audio import (
         analyze_audio,
         summarize_analysis,
     )
@@ -4237,7 +4237,7 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.core.detection import BandLimitedEnergyDetector, export_detections
+    from bioamla.detection import BandLimitedEnergyDetector, export_detections
     from bioamla.utils import get_audio_files
 
     detector = BandLimitedEnergyDetector(
@@ -4334,7 +4334,7 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.core.detection import RibbitDetector, export_detections
+    from bioamla.detection import RibbitDetector, export_detections
     from bioamla.utils import get_audio_files
 
     detector = RibbitDetector(
@@ -4434,7 +4434,7 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
 
     import librosa
 
-    from bioamla.core.detection import CWTPeakDetector, export_detections
+    from bioamla.detection import CWTPeakDetector, export_detections
     from bioamla.utils import get_audio_files
 
     detector = CWTPeakDetector(
@@ -4623,7 +4623,7 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.core.detection import AcceleratingPatternDetector, export_detections
+    from bioamla.detection import AcceleratingPatternDetector, export_detections
     from bioamla.utils import get_audio_files
 
     detector = AcceleratingPatternDetector(
@@ -4717,7 +4717,7 @@ def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
     """
     from pathlib import Path as PathLib
 
-    from bioamla.core.detection import (
+    from bioamla.detection import (
         AcceleratingPatternDetector,
         BandLimitedEnergyDetector,
         CWTPeakDetector,

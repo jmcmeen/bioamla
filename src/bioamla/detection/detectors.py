@@ -42,11 +42,12 @@ import numpy as np
 from scipy import ndimage, signal as scipy_signal
 from scipy.signal import find_peaks
 
-from bioamla.core.files import TextFile
-from bioamla.core.logging import get_logger
-from bioamla.core.signal import bandpass_filter
+import logging
 
-logger = get_logger(__name__)
+from bioamla.files import TextFile
+from bioamla.audio.signal import bandpass_filter
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     # Data classes

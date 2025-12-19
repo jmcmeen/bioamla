@@ -21,8 +21,8 @@ from torch.optim import Adam, AdamW, SGD
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau, StepLR
 from torch.utils.data import DataLoader, Dataset
 
-from bioamla.core.files import TextFile
-from bioamla.models.base import BaseAudioModel, ModelConfig
+from bioamla.files import TextFile
+from bioamla.ml.base import BaseAudioModel, ModelConfig
 
 
 @dataclass
@@ -146,7 +146,7 @@ class SpectrogramDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
-        from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
+        from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
         filepath, label = self.samples[idx]
 
@@ -259,7 +259,7 @@ class ModelTrainer:
         """
         # Create model if not provided
         if model is None:
-            from bioamla.models.opensoundscape import SpectrogramCNN
+            from bioamla.ml.opensoundscape import SpectrogramCNN
 
             self.model = SpectrogramCNN(
                 num_classes=len(self.config.class_names),
