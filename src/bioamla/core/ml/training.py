@@ -415,7 +415,7 @@ class ASTTrainer:
             dict: Training results
         """
         import evaluate
-        from bioamla.utils import create_directory
+        from bioamla.core.utils import create_directory
         from transformers import Trainer, TrainingArguments
 
         if self.model is None:

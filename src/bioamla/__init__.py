@@ -48,7 +48,7 @@ Version: 0.1.1
 __version__ = "0.1.1"
 
 # Re-export commonly used utilities for convenience
-from bioamla.utils import (
+from bioamla.core.utils import (
     SUPPORTED_AUDIO_EXTENSIONS,
     get_audio_files,
     get_files_by_extension,

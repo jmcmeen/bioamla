@@ -21,6 +21,8 @@ set -e  # Exit on error
 
 # Configuration - customize these for your study
 PROJECT_NAME="frog_acoustic_study"
+
+
 PROJECT_DIR="./${PROJECT_NAME}"
 
 echo "=============================================="
@@ -58,7 +60,8 @@ echo ""
 bioamla project init "$PROJECT_DIR" \
     --name "$PROJECT_NAME" \
     --description "Acoustic monitoring study initialized with bioamla" \
-    --template research
+    --template research \
+    --force
 
 # Step 5: Enter project directory and verify
 echo ""
@@ -139,3 +142,4 @@ echo "Get help anytime:"
 echo "  bioamla --help           # General help"
 echo "  bioamla <command> --help # Command-specific help"
 echo "  bioamla examples show 01 # View example scripts"
+

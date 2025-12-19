@@ -22,10 +22,13 @@ set -e  # Exit on error
 # Configuration
 PROJECT_NAME="frog_acoustic_study"
 PROJECT_DIR="./${PROJECT_NAME}"
-INPUT_DIR="${PROJECT_DIR}/raw_recordings"
+INPUT_DIR="${PROJECT_DIR}/raw_recordings/scp_small"
 OUTPUT_DIR="${PROJECT_DIR}/processed_audio"
 SAMPLE_RATE=22050
 TARGET_DB=-20
+
+bioamla dataset download "https://www.bioamla.org/datasets/scp_small.zip" $PROJECT_DIR/raw_recordings/
+bioamla dataset unzip $PROJECT_DIR/raw_recordings/scp_small.zip $PROJECT_DIR/raw_recordings/
 
 echo "=== Audio Preprocessing Workflow ==="
 echo "Input directory: $INPUT_DIR"

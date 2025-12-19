@@ -228,7 +228,7 @@ def batch_augment(
             - files_failed: Number of files that failed
             - output_dir: Path to output directory
     """
-    from bioamla.utils import get_files_by_extension
+    from bioamla.core.utils import get_files_by_extension
 
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)

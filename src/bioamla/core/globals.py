@@ -8,4 +8,4 @@ and other package-wide settings.
 
 """
 
-from bioamla.utils import SUPPORTED_AUDIO_EXTENSIONS
+from bioamla.core.utils import SUPPORTED_AUDIO_EXTENSIONS
