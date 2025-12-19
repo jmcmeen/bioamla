@@ -1,3 +1,5 @@
+import sys
+import time
 from typing import Dict, Optional
 
 import click
@@ -5,10 +7,13 @@ import click
 from bioamla.core.config import get_config, load_config, set_config
 from bioamla.core.files import TextFile
 
+
 class ConfigContext:
     """Context object to hold configuration."""
     def __init__(self):
         self.config = None
+        self.start_time = None
+        self.command_args = None
 
 
 pass_config = click.make_pass_decorator(ConfigContext, ensure=True)
@@ -26,11 +31,54 @@ def cli(ctx, config_path: Optional[str]):
     - ~/.config/bioamla/config.toml
     """
     ctx.ensure_object(ConfigContext)
+    # Capture start time and args for command logging
+    ctx.obj.start_time = time.time()
+    ctx.obj.command_args = sys.argv[1:] if len(sys.argv) > 1 else []
+
     if config_path:
         ctx.obj.config = load_config(config_path)
         set_config(ctx.obj.config)
     else:
         ctx.obj.config = get_config()
+
+
+@cli.result_callback()
+@click.pass_context
+def log_command_result(ctx, result, **kwargs):
+    """Log command execution after completion."""
+    from bioamla.core.command_log import CommandLogger, create_command_entry
+    from bioamla.core.project import is_in_project
+
+    # Only log if in a project
+    if not is_in_project():
+        return result
+
+    # Get timing info
+    duration = 0.0
+    if ctx.obj and ctx.obj.start_time:
+        duration = time.time() - ctx.obj.start_time
+
+    # Build command string from invoked subcommand
+    command_parts = []
+    if ctx.invoked_subcommand:
+        command_parts.append(ctx.invoked_subcommand)
+
+    # Get full command from sys.argv
+    args = ctx.obj.command_args if ctx.obj else []
+
+    # Create and log entry
+    entry = create_command_entry(
+        command=" ".join(["bioamla"] + args),
+        args=args,
+        kwargs={},
+        exit_code=0,  # If we got here, command succeeded
+        duration_seconds=duration,
+    )
+
+    logger = CommandLogger()
+    logger.log_command(entry)
+
+    return result
 
 
 # =============================================================================
@@ -496,10 +544,7 @@ def log_show(limit, cmd_filter, show_all):
     for entry in entries:
         status = "[green]✓[/green]" if entry.exit_code == 0 else "[red]✗[/red]"
         duration = f"{entry.duration_seconds:.2f}s"
-        args_str = ' '.join(entry.args[:3])
-        if len(entry.args) > 3:
-            args_str += ' ...'
-        console.print(f"{status} {entry.timestamp[:19]}  {entry.command} {args_str}  [{duration}]")
+        console.print(f"{status} {entry.timestamp[:19]}  {entry.command}  [{duration}]")
 
 
 @log.command('search')
