@@ -31,7 +31,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from bioamla.core.files import TextFile
+from bioamla.files import TextFile
 
 
 @dataclass
@@ -291,13 +291,13 @@ def evaluate_directory(
     """
     import torch
 
-    from bioamla.core.ast import (
+    from bioamla.detection.ast import (
         ast_predict,
         extract_features,
         get_cached_feature_extractor,
         load_pretrained_ast_model,
     )
-    from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
+    from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
     audio_dir = Path(audio_dir)
     if not audio_dir.exists():

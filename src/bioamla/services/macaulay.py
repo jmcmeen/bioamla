@@ -35,12 +35,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from bioamla.core.base_api import APICache, APIClient, RateLimiter
-from bioamla.core.files import TextFile
-from bioamla.core.fileutils import sanitize_filename
-from bioamla.core.logging import get_logger
+import logging
 
-logger = get_logger(__name__)
+from bioamla.core.base_api import APICache, APIClient, RateLimiter
+from bioamla.files import TextFile, sanitize_filename
+
+logger = logging.getLogger(__name__)
 
 # Macaulay Library / eBird API endpoints
 ML_SEARCH_URL = "https://search.macaulaylibrary.org/api/v1/search"
