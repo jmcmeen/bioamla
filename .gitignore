@@ -1,12 +1,5 @@
 # custom ignores
-data
-test.py
-dist.sh
-increment_version.sh
-pyproject.toml.backup
-dvenv.sh
-install.sh
-local_dev
+
 
 
 # Byte-compiled / optimized / DLL files
