@@ -43,8 +43,8 @@ from scipy import ndimage, signal as scipy_signal
 from scipy.signal import find_peaks
 
 from bioamla.core.files import TextFile
-from bioamla.logging import get_logger
-from bioamla.signal import bandpass_filter
+from bioamla.core.logging import get_logger
+from bioamla.core.signal import bandpass_filter
 
 logger = get_logger(__name__)
 

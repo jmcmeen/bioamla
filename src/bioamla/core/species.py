@@ -37,9 +37,9 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from bioamla.base_api import APICache, APIClient, RateLimiter
+from bioamla.core.base_api import APICache, APIClient, RateLimiter
 from bioamla.core.files import TextFile
-from bioamla.logging import get_logger
+from bioamla.core.logging import get_logger
 
 logger = get_logger(__name__)
 

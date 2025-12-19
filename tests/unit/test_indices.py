@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
 
-from bioamla.indices import (
+from bioamla.core.indices import (
     AcousticIndices,
     compute_aci,
     compute_adi,

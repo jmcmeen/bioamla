@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from bioamla.views.cli import cli
-from bioamla.evaluate import EvaluationResult
+from bioamla.core.evaluate import EvaluationResult
 
 
 @pytest.fixture

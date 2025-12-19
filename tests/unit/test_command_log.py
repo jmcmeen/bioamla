@@ -5,14 +5,14 @@ import pytest
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from bioamla.command_log import (
+from bioamla.core.command_log import (
     CommandLogger,
     CommandEntry,
     create_command_entry,
     LOG_FILENAME,
     LOGS_DIR,
 )
-from bioamla.project import create_project, PROJECT_MARKER
+from bioamla.core.project import create_project, PROJECT_MARKER
 
 
 class TestCommandEntry:

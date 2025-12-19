@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bioamla.augment import (
+from bioamla.core.augment import (
     AugmentationConfig,
     augment_audio,
     augment_file,

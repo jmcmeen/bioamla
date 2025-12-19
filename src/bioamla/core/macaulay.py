@@ -35,10 +35,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from bioamla.base_api import APICache, APIClient, RateLimiter
+from bioamla.core.base_api import APICache, APIClient, RateLimiter
 from bioamla.core.files import TextFile
-from bioamla.fileutils import sanitize_filename
-from bioamla.logging import get_logger
+from bioamla.core.fileutils import sanitize_filename
+from bioamla.core.logging import get_logger
 
 logger = get_logger(__name__)
 

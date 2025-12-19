@@ -495,7 +495,7 @@ def get_config_locations(include_project: bool = True) -> List[Path]:
     # Project config (highest priority after explicit path)
     if include_project:
         try:
-            from bioamla.project import find_project_root, PROJECT_MARKER
+            from bioamla.core.project import find_project_root, PROJECT_MARKER
 
             project_root = find_project_root()
             if project_root:
@@ -575,7 +575,7 @@ def is_in_project() -> bool:
         True if in a bioamla project, False otherwise
     """
     try:
-        from bioamla.project import is_in_project as _is_in_project
+        from bioamla.core.project import is_in_project as _is_in_project
 
         return _is_in_project()
     except ImportError:
@@ -590,7 +590,7 @@ def get_project_root() -> Optional[Path]:
         Path to project root, or None if not in a project
     """
     try:
-        from bioamla.project import find_project_root
+        from bioamla.core.project import find_project_root
 
         return find_project_root()
     except ImportError:

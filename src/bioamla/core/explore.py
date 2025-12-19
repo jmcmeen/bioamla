@@ -13,8 +13,8 @@ from typing import Dict, List, Optional, Tuple
 
 import torchaudio
 
-from bioamla.globals import SUPPORTED_AUDIO_EXTENSIONS
-from bioamla.metadata import read_metadata_csv
+from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
+from bioamla.core.metadata import read_metadata_csv
 
 
 @dataclass

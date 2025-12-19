@@ -15,7 +15,7 @@ class TestEBirdObservation:
 
     def test_creation(self):
         """Test creating observation."""
-        from bioamla.integrations import EBirdObservation
+        from bioamla.core.integrations import EBirdObservation
 
         obs = EBirdObservation(
             species_code="carwre",
@@ -35,7 +35,7 @@ class TestEBirdObservation:
 
     def test_to_dict(self):
         """Test conversion to dictionary."""
-        from bioamla.integrations import EBirdObservation
+        from bioamla.core.integrations import EBirdObservation
 
         obs = EBirdObservation(
             species_code="carwre",
@@ -54,7 +54,7 @@ class TestEBirdObservation:
 
     def test_from_api_response(self):
         """Test creating from API response."""
-        from bioamla.integrations import EBirdObservation
+        from bioamla.core.integrations import EBirdObservation
 
         api_data = {
             "speciesCode": "carwre",
@@ -83,7 +83,7 @@ class TestEBirdChecklist:
 
     def test_creation(self):
         """Test creating checklist."""
-        from bioamla.integrations import EBirdChecklist
+        from bioamla.core.integrations import EBirdChecklist
 
         checklist = EBirdChecklist(
             submission_id="S123456",
@@ -101,7 +101,7 @@ class TestEBirdChecklist:
 
     def test_to_dict(self):
         """Test conversion to dictionary."""
-        from bioamla.integrations import EBirdChecklist, EBirdObservation
+        from bioamla.core.integrations import EBirdChecklist, EBirdObservation
 
         obs = EBirdObservation(
             species_code="carwre",
@@ -133,14 +133,14 @@ class TestEBirdClient:
 
     def test_initialization(self):
         """Test client initialization."""
-        from bioamla.integrations import EBirdClient
+        from bioamla.core.integrations import EBirdClient
 
         client = EBirdClient(api_key="test_key")
         assert client.api_key == "test_key"
 
     def test_get_session_creates_session(self):
         """Test session creation."""
-        from bioamla.integrations import EBirdClient
+        from bioamla.core.integrations import EBirdClient
 
         # Test that session is created and headers are set
         client = EBirdClient(api_key="test_key")
@@ -155,7 +155,7 @@ class TestEBirdClient:
 
     def test_get_session_import_error(self):
         """Test error when requests not installed."""
-        from bioamla.integrations import EBirdClient
+        from bioamla.core.integrations import EBirdClient
 
         client = EBirdClient(api_key="test_key")
 
@@ -168,7 +168,7 @@ class TestEBirdClient:
     @patch("bioamla.integrations.EBirdClient._request")
     def test_get_recent_observations(self, mock_request):
         """Test getting recent observations."""
-        from bioamla.integrations import EBirdClient
+        from bioamla.core.integrations import EBirdClient
 
         mock_request.return_value = [
             {
@@ -190,7 +190,7 @@ class TestEBirdClient:
     @patch("bioamla.integrations.EBirdClient._request")
     def test_get_recent_observations_by_species(self, mock_request):
         """Test getting recent observations filtered by species."""
-        from bioamla.integrations import EBirdClient
+        from bioamla.core.integrations import EBirdClient
 
         mock_request.return_value = []
 
@@ -203,7 +203,7 @@ class TestEBirdClient:
     @patch("bioamla.integrations.EBirdClient._request")
     def test_get_nearby_observations(self, mock_request):
         """Test getting nearby observations."""
-        from bioamla.integrations import EBirdClient
+        from bioamla.core.integrations import EBirdClient
 
         mock_request.return_value = []
 
@@ -224,7 +224,7 @@ class TestEBirdClient:
     @patch("bioamla.integrations.EBirdClient._request")
     def test_get_species_list(self, mock_request):
         """Test getting species list."""
-        from bioamla.integrations import EBirdClient
+        from bioamla.core.integrations import EBirdClient
 
         mock_request.return_value = ["carwre", "norcar", "eastow"]
 
@@ -236,7 +236,7 @@ class TestEBirdClient:
     @patch("bioamla.integrations.EBirdClient._request")
     def test_get_taxonomy(self, mock_request):
         """Test getting taxonomy."""
-        from bioamla.integrations import EBirdClient
+        from bioamla.core.integrations import EBirdClient
 
         mock_request.return_value = [
             {"speciesCode": "carwre", "comName": "Carolina Wren"}
@@ -250,7 +250,7 @@ class TestEBirdClient:
     @patch("bioamla.integrations.EBirdClient._request")
     def test_get_hotspots(self, mock_request):
         """Test getting hotspots."""
-        from bioamla.integrations import EBirdClient
+        from bioamla.core.integrations import EBirdClient
 
         mock_request.return_value = [
             {"locId": "L12345", "locName": "Test Hotspot"}
@@ -264,7 +264,7 @@ class TestEBirdClient:
     @patch("bioamla.integrations.EBirdClient._request")
     def test_get_checklist(self, mock_request):
         """Test getting checklist details."""
-        from bioamla.integrations import EBirdClient
+        from bioamla.core.integrations import EBirdClient
 
         mock_request.return_value = {
             "subId": "S123456",
@@ -297,7 +297,7 @@ class TestEBirdClient:
     @patch("bioamla.integrations.EBirdClient.get_nearby_observations")
     def test_validate_species_for_location(self, mock_nearby):
         """Test validating species for location."""
-        from bioamla.integrations import EBirdClient, EBirdObservation
+        from bioamla.core.integrations import EBirdClient, EBirdObservation
 
         mock_nearby.return_value = [
             EBirdObservation(
@@ -332,7 +332,7 @@ class TestEBirdClient:
     @patch("bioamla.integrations.EBirdClient.get_nearby_observations")
     def test_validate_species_not_found(self, mock_nearby):
         """Test validation when species not found."""
-        from bioamla.integrations import EBirdClient, EBirdObservation
+        from bioamla.core.integrations import EBirdClient, EBirdObservation
 
         mock_nearby.return_value = [
             EBirdObservation(
@@ -362,7 +362,7 @@ class TestMatchDetectionsToEbird:
     @patch("bioamla.integrations.EBirdClient.get_nearby_observations")
     def test_basic_matching(self, mock_nearby):
         """Test basic detection matching."""
-        from bioamla.integrations import EBirdClient, EBirdObservation, match_detections_to_ebird
+        from bioamla.core.integrations import EBirdClient, EBirdObservation, match_detections_to_ebird
 
         mock_nearby.return_value = [
             EBirdObservation(
@@ -395,7 +395,7 @@ class TestMatchDetectionsToEbird:
     @patch("bioamla.integrations.EBirdClient.get_nearby_observations")
     def test_matching_with_species_mapping(self, mock_nearby):
         """Test matching with custom species mapping."""
-        from bioamla.integrations import EBirdClient, EBirdObservation, match_detections_to_ebird
+        from bioamla.core.integrations import EBirdClient, EBirdObservation, match_detections_to_ebird
 
         mock_nearby.return_value = [
             EBirdObservation(
@@ -429,7 +429,7 @@ class TestDatabaseConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from bioamla.integrations import DatabaseConfig
+        from bioamla.core.integrations import DatabaseConfig
 
         config = DatabaseConfig()
         assert config.host == "localhost"
@@ -438,7 +438,7 @@ class TestDatabaseConfig:
 
     def test_connection_string(self):
         """Test connection string generation."""
-        from bioamla.integrations import DatabaseConfig
+        from bioamla.core.integrations import DatabaseConfig
 
         config = DatabaseConfig(
             host="db.example.com",
@@ -456,7 +456,7 @@ class TestPostgreSQLExporter:
 
     def test_initialization_with_config(self):
         """Test initialization with config."""
-        from bioamla.integrations import PostgreSQLExporter, DatabaseConfig
+        from bioamla.core.integrations import PostgreSQLExporter, DatabaseConfig
 
         config = DatabaseConfig(database="testdb")
         exporter = PostgreSQLExporter(config=config)
@@ -465,7 +465,7 @@ class TestPostgreSQLExporter:
 
     def test_initialization_with_connection_string(self):
         """Test initialization with connection string."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         conn_str = "postgresql://user:pass@localhost/mydb"
         exporter = PostgreSQLExporter(connection_string=conn_str)
@@ -474,7 +474,7 @@ class TestPostgreSQLExporter:
 
     def test_get_engine_import_error(self):
         """Test error when sqlalchemy not installed."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         exporter = PostgreSQLExporter(connection_string="postgresql://localhost/test")
 
@@ -487,7 +487,7 @@ class TestPostgreSQLExporter:
     @patch("bioamla.integrations.PostgreSQLExporter._get_connection")
     def test_create_tables(self, mock_get_conn):
         """Test table creation."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -504,7 +504,7 @@ class TestPostgreSQLExporter:
     @patch("bioamla.integrations.PostgreSQLExporter._get_connection")
     def test_export_detections(self, mock_get_conn):
         """Test exporting detections."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -538,7 +538,7 @@ class TestPostgreSQLExporter:
     @patch("bioamla.integrations.PostgreSQLExporter._get_connection")
     def test_export_annotations(self, mock_get_conn):
         """Test exporting annotations."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -563,7 +563,7 @@ class TestPostgreSQLExporter:
     @patch("bioamla.integrations.PostgreSQLExporter._get_connection")
     def test_export_audio_file(self, mock_get_conn):
         """Test exporting audio file metadata."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -587,7 +587,7 @@ class TestPostgreSQLExporter:
     @patch("bioamla.integrations.PostgreSQLExporter._get_connection")
     def test_export_species_observation(self, mock_get_conn):
         """Test exporting species observation."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -611,7 +611,7 @@ class TestPostgreSQLExporter:
     @patch("bioamla.integrations.PostgreSQLExporter._get_connection")
     def test_query_detections(self, mock_get_conn):
         """Test querying detections."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -634,7 +634,7 @@ class TestPostgreSQLExporter:
     @patch("bioamla.integrations.PostgreSQLExporter._get_connection")
     def test_get_statistics(self, mock_get_conn):
         """Test getting statistics."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -666,7 +666,7 @@ class TestPostgreSQLExporter:
     @patch("bioamla.integrations.PostgreSQLExporter._get_connection")
     def test_export_to_csv(self, mock_get_conn, tmp_path):
         """Test exporting to CSV."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -692,7 +692,7 @@ class TestPostgreSQLExporter:
 
     def test_close(self):
         """Test closing connections."""
-        from bioamla.integrations import PostgreSQLExporter
+        from bioamla.core.integrations import PostgreSQLExporter
 
         mock_conn = MagicMock()
         mock_engine = MagicMock()
@@ -715,7 +715,7 @@ class TestExportDetectionsToPostgres:
     @patch("bioamla.integrations.PostgreSQLExporter")
     def test_export_with_create_tables(self, mock_exporter_class):
         """Test export with table creation."""
-        from bioamla.integrations import export_detections_to_postgres
+        from bioamla.core.integrations import export_detections_to_postgres
 
         mock_exporter = MagicMock()
         mock_exporter.export_detections.return_value = 5
@@ -736,7 +736,7 @@ class TestExportDetectionsToPostgres:
     @patch("bioamla.integrations.PostgreSQLExporter")
     def test_export_without_create_tables(self, mock_exporter_class):
         """Test export without table creation."""
-        from bioamla.integrations import export_detections_to_postgres
+        from bioamla.core.integrations import export_detections_to_postgres
 
         mock_exporter = MagicMock()
         mock_exporter.export_detections.return_value = 3

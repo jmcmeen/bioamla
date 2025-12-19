@@ -146,7 +146,7 @@ class SpectrogramDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
-        from bioamla.torchaudio import load_waveform_tensor, resample_waveform_tensor
+        from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
         filepath, label = self.samples[idx]
 

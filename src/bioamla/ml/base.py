@@ -391,7 +391,7 @@ class AudioDataset(Dataset):
         return len(self.filepaths)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, str]:
-        from bioamla.torchaudio import load_waveform_tensor, resample_waveform_tensor
+        from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
         filepath = self.filepaths[idx]
         waveform, sr = load_waveform_tensor(filepath)

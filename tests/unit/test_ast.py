@@ -18,7 +18,7 @@ class TestLoadPretrainedAstModel:
         with patch("bioamla.ast.AutoModelForAudioClassification") as mock_model:
             mock_model.from_pretrained.return_value = MagicMock()
 
-            from bioamla.ast import load_pretrained_ast_model
+            from bioamla.core.ast import load_pretrained_ast_model
             load_pretrained_ast_model(str(model_dir))
 
             mock_model.from_pretrained.assert_called_once_with(
@@ -33,7 +33,7 @@ class TestLoadPretrainedAstModel:
         with patch("bioamla.ast.AutoModelForAudioClassification") as mock_model:
             mock_model.from_pretrained.return_value = MagicMock()
 
-            from bioamla.ast import load_pretrained_ast_model
+            from bioamla.core.ast import load_pretrained_ast_model
             load_pretrained_ast_model("./models/my_ast")
 
             mock_model.from_pretrained.assert_called_once_with(
@@ -48,7 +48,7 @@ class TestLoadPretrainedAstModel:
         with patch("bioamla.ast.AutoModelForAudioClassification") as mock_model:
             mock_model.from_pretrained.return_value = MagicMock()
 
-            from bioamla.ast import load_pretrained_ast_model
+            from bioamla.core.ast import load_pretrained_ast_model
             load_pretrained_ast_model("../models/my_ast")
 
             mock_model.from_pretrained.assert_called_once_with(
@@ -63,7 +63,7 @@ class TestLoadPretrainedAstModel:
         with patch("bioamla.ast.AutoModelForAudioClassification") as mock_model:
             mock_model.from_pretrained.return_value = MagicMock()
 
-            from bioamla.ast import load_pretrained_ast_model
+            from bioamla.core.ast import load_pretrained_ast_model
             load_pretrained_ast_model("MIT/ast-finetuned-audioset-10-10-0.4593")
 
             mock_model.from_pretrained.assert_called_once_with(
@@ -77,7 +77,7 @@ class TestLoadPretrainedAstModel:
         with patch("bioamla.ast.AutoModelForAudioClassification") as mock_model:
             mock_model.from_pretrained.return_value = MagicMock()
 
-            from bioamla.ast import load_pretrained_ast_model
+            from bioamla.core.ast import load_pretrained_ast_model
             load_pretrained_ast_model("facebook/wav2vec2-base")
 
             mock_model.from_pretrained.assert_called_once_with(
@@ -91,7 +91,7 @@ class TestLoadPretrainedAstModel:
         with patch("bioamla.ast.AutoModelForAudioClassification") as mock_model:
             mock_model.from_pretrained.return_value = MagicMock()
 
-            from bioamla.ast import load_pretrained_ast_model
+            from bioamla.core.ast import load_pretrained_ast_model
             load_pretrained_ast_model("bert-base-uncased")
 
             mock_model.from_pretrained.assert_called_once_with(
@@ -105,7 +105,7 @@ class TestLoadPretrainedAstModel:
         with patch("bioamla.ast.AutoModelForAudioClassification") as mock_model:
             mock_model.from_pretrained.return_value = MagicMock()
 
-            from bioamla.ast import load_pretrained_ast_model
+            from bioamla.core.ast import load_pretrained_ast_model
             load_pretrained_ast_model("bert-base-uncased", use_fp16=True)
 
             mock_model.from_pretrained.assert_called_once_with(
@@ -124,7 +124,7 @@ class TestLoadPretrainedAstModel:
             with patch("torch.compile") as mock_compile:
                 mock_compile.return_value = mock_model_instance
 
-                from bioamla.ast import load_pretrained_ast_model
+                from bioamla.core.ast import load_pretrained_ast_model
                 load_pretrained_ast_model("bert-base-uncased", use_compile=True)
 
                 mock_compile.assert_called_once_with(mock_model_instance)
@@ -135,7 +135,7 @@ class TestInferenceConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from bioamla.ast import InferenceConfig
+        from bioamla.core.ast import InferenceConfig
 
         config = InferenceConfig()
         assert config.batch_size == 8
@@ -145,7 +145,7 @@ class TestInferenceConfig:
 
     def test_custom_values(self):
         """Test custom configuration values."""
-        from bioamla.ast import InferenceConfig
+        from bioamla.core.ast import InferenceConfig
 
         config = InferenceConfig(
             batch_size=16,
@@ -168,7 +168,7 @@ class TestCachedFeatureExtractor:
             mock_instance = MagicMock()
             mock_extractor.return_value = mock_instance
 
-            from bioamla.ast import get_cached_feature_extractor
+            from bioamla.core.ast import get_cached_feature_extractor
             get_cached_feature_extractor.cache_clear()
 
             result = get_cached_feature_extractor()
@@ -182,7 +182,7 @@ class TestCachedFeatureExtractor:
             mock_instance = MagicMock()
             mock_extractor.return_value = mock_instance
 
-            from bioamla.ast import get_cached_feature_extractor
+            from bioamla.core.ast import get_cached_feature_extractor
             get_cached_feature_extractor.cache_clear()
 
             result1 = get_cached_feature_extractor()
@@ -197,7 +197,7 @@ class TestCachedFeatureExtractor:
             mock_instance = MagicMock()
             mock_extractor.from_pretrained.return_value = mock_instance
 
-            from bioamla.ast import get_cached_feature_extractor
+            from bioamla.core.ast import get_cached_feature_extractor
             get_cached_feature_extractor.cache_clear()
 
             result = get_cached_feature_extractor("my/model")
@@ -214,7 +214,7 @@ class TestCachedFeatureExtractor:
                 "Can't load feature extractor for 'bioamla/scp-frogs'"
             )
 
-            from bioamla.ast import get_cached_feature_extractor
+            from bioamla.core.ast import get_cached_feature_extractor
             get_cached_feature_extractor.cache_clear()
 
             result = get_cached_feature_extractor("bioamla/scp-frogs")
@@ -236,7 +236,7 @@ class TestExtractFeatures:
 
         waveform = torch.randn(1, 16000)
 
-        from bioamla.ast import extract_features
+        from bioamla.core.ast import extract_features
         result = extract_features(
             waveform,
             sample_rate=16000,
@@ -261,7 +261,7 @@ class TestAstPredict:
 
         input_values = torch.randn(1, 100)
 
-        from bioamla.ast import ast_predict
+        from bioamla.core.ast import ast_predict
         result = ast_predict(input_values, mock_model)
 
         assert result == "class_b"
@@ -284,7 +284,7 @@ class TestAstPredictBatch:
 
         input_values = torch.randn(3, 100)
 
-        from bioamla.ast import ast_predict_batch
+        from bioamla.core.ast import ast_predict_batch
         result = ast_predict_batch(input_values, mock_model)
 
         assert result == ["class_a", "class_b", "class_c"]
@@ -307,7 +307,7 @@ class TestProcessSegmentsBatched:
         mock_inputs.input_values = torch.zeros(1, 100)
         mock_extractor.return_value = mock_inputs
 
-        from bioamla.ast import InferenceConfig, _process_segments_batched
+        from bioamla.core.ast import InferenceConfig, _process_segments_batched
 
         segments = [
             (torch.randn(1, 16000), 0, 16000),
@@ -339,7 +339,7 @@ class TestWaveFileBatchInference:
 
     def test_uses_config_for_batching(self, temp_dir):
         """Test that inference config is used correctly."""
-        from bioamla.ast import InferenceConfig
+        from bioamla.core.ast import InferenceConfig
 
         config = InferenceConfig(batch_size=4, num_workers=1)
 
@@ -354,7 +354,7 @@ class TestWaveFileBatchInference:
                 columns=['filepath', 'start', 'stop', 'prediction']
             )
 
-            from bioamla.ast import wave_file_batch_inference
+            from bioamla.core.ast import wave_file_batch_inference
             wave_file_batch_inference(
                 wave_files=["test1.wav", "test2.wav"],
                 model=mock_model,
@@ -369,7 +369,7 @@ class TestWaveFileBatchInference:
 
     def test_parallel_inference_uses_threadpool(self, temp_dir):
         """Test that parallel inference uses ThreadPoolExecutor."""
-        from bioamla.ast import InferenceConfig
+        from bioamla.core.ast import InferenceConfig
 
         config = InferenceConfig(batch_size=4, num_workers=4)
 
@@ -383,7 +383,7 @@ class TestWaveFileBatchInference:
             mock_executor.return_value.__enter__.return_value = mock_executor_instance
             mock_executor_instance.map.return_value = iter([])
 
-            from bioamla.ast import wave_file_batch_inference
+            from bioamla.core.ast import wave_file_batch_inference
             wave_file_batch_inference(
                 wave_files=["test1.wav"],
                 model=mock_model,

@@ -26,7 +26,7 @@ import librosa.display
 import matplotlib.pyplot as plt
 import numpy as np
 
-from bioamla.torchaudio import load_waveform_tensor, resample_waveform_tensor
+from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
 VisualizationType = Literal["stft", "mel", "mfcc", "waveform"]
 WindowType = Literal["hann", "hamming", "blackman", "bartlett", "rectangular", "kaiser"]
@@ -582,7 +582,7 @@ def batch_generate_spectrograms(
 
     # Use Rich progress bar if requested
     if use_rich_progress and verbose:
-        from bioamla.progress import ProgressBar, print_error, print_success
+        from bioamla.core.progress import ProgressBar, print_error, print_success
 
         with ProgressBar(
             total=len(audio_files),

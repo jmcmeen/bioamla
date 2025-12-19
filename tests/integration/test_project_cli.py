@@ -5,7 +5,7 @@ from click.testing import CliRunner
 from pathlib import Path
 
 from bioamla.views.cli import cli
-from bioamla.project import PROJECT_MARKER
+from bioamla.core.project import PROJECT_MARKER
 
 
 @pytest.fixture

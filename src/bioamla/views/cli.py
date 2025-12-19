@@ -2,7 +2,7 @@ from typing import Dict, Optional
 
 import click
 
-from bioamla.config import get_config, load_config, set_config
+from bioamla.core.config import get_config, load_config, set_config
 from bioamla.core.files import TextFile
 
 class ConfigContext:
@@ -48,7 +48,7 @@ def cli(ctx, config_path: Optional[str]):
 @cli.command()
 def devices():
     """Display comprehensive device information including CUDA and GPU details."""
-    from bioamla.diagnostics import get_device_info
+    from bioamla.core.diagnostics import get_device_info
     device_info = get_device_info()
 
     click.echo("Devices:")
@@ -62,7 +62,7 @@ def devices():
 @cli.command()
 def version():
     """Display the current version of the bioamla package."""
-    from bioamla.diagnostics import get_bioamla_version
+    from bioamla.core.diagnostics import get_bioamla_version
     from bioamla.core.uow import SqlUnitOfWork
     from bioamla.core.entity import CommandLogItem
 
@@ -90,7 +90,7 @@ def config():
 @click.pass_context
 def config_show(ctx):
     """Show current configuration."""
-    from bioamla.progress import console
+    from bioamla.core.progress import console
 
     config_obj = ctx.obj.config if ctx.obj else get_config()
 
@@ -121,8 +121,8 @@ def config_init(output, force):
     """Create a default configuration file."""
     from pathlib import Path
 
-    from bioamla.config import create_default_config_file
-    from bioamla.progress import print_error, print_success
+    from bioamla.core.config import create_default_config_file
+    from bioamla.core.progress import print_error, print_success
 
     path = Path(output)
     if path.exists() and not force:
@@ -137,8 +137,8 @@ def config_init(output, force):
 @config.command('path')
 def config_path():
     """Show configuration file search paths."""
-    from bioamla.config import CONFIG_LOCATIONS, find_config_file
-    from bioamla.progress import console
+    from bioamla.core.config import CONFIG_LOCATIONS, find_config_file
+    from bioamla.core.progress import console
 
     console.print("\n[bold]Configuration File Search Paths[/bold]\n")
     console.print("Files are searched in order (first found wins):\n")
@@ -274,8 +274,8 @@ def config_deps(do_install: bool, yes: bool):
         bioamla config deps --install    # Install missing dependencies
         bioamla config deps --install -y # Install without confirmation
     """
-    from bioamla.deps import check_all_dependencies, detect_os, get_full_install_command, run_install
-    from bioamla.progress import console
+    from bioamla.core.deps import check_all_dependencies, detect_os, get_full_install_command, run_install
+    from bioamla.core.progress import console
 
     os_type = detect_os()
     deps = check_all_dependencies()
@@ -382,8 +382,8 @@ def project_init(path, name, description, template, config_file, force):
     """
     from pathlib import Path
 
-    from bioamla.progress import print_error, print_success, print_warning
-    from bioamla.project import PROJECT_MARKER, create_project
+    from bioamla.core.progress import print_error, print_success, print_warning
+    from bioamla.core.project import PROJECT_MARKER, create_project
 
     project_path = Path(path).resolve()
 
@@ -418,8 +418,8 @@ def project_init(path, name, description, template, config_file, force):
 @project.command('status')
 def project_status():
     """Show current project status and information."""
-    from bioamla.progress import console
-    from bioamla.project import load_project
+    from bioamla.core.progress import console
+    from bioamla.core.project import load_project
 
     info = load_project()
 
@@ -442,7 +442,7 @@ def project_status():
 @click.pass_context
 def project_config(ctx, action):
     """Manage project configuration."""
-    from bioamla.project import load_project
+    from bioamla.core.project import load_project
 
     info = load_project()
 
@@ -462,7 +462,7 @@ def project_config(ctx, action):
         # Reset to template defaults
         click.echo("Reset project config to defaults? [y/N] ", nl=False)
         if click.getchar().lower() == 'y':
-            from bioamla.project import _get_template_content, _customize_template
+            from bioamla.core.project import _get_template_content, _customize_template
             template_content = _get_template_content('default')
             customized = _customize_template(template_content, info.name, info.description)
             info.config_path.write_text(customized)
@@ -487,8 +487,8 @@ def log():
 @click.option('--all', 'show_all', is_flag=True, help='Show all entries')
 def log_show(limit, cmd_filter, show_all):
     """Show command history."""
-    from bioamla.command_log import CommandLogger
-    from bioamla.progress import console
+    from bioamla.core.command_log import CommandLogger
+    from bioamla.core.progress import console
 
     logger = CommandLogger()
 
@@ -521,8 +521,8 @@ def log_show(limit, cmd_filter, show_all):
 @click.argument('query')
 def log_search(query):
     """Search command history."""
-    from bioamla.command_log import CommandLogger
-    from bioamla.progress import console
+    from bioamla.core.command_log import CommandLogger
+    from bioamla.core.progress import console
 
     logger = CommandLogger()
 
@@ -546,7 +546,7 @@ def log_search(query):
 @click.confirmation_option(prompt='Clear all command history?')
 def log_clear():
     """Clear command history."""
-    from bioamla.command_log import CommandLogger
+    from bioamla.core.command_log import CommandLogger
 
     logger = CommandLogger()
 
@@ -561,8 +561,8 @@ def log_clear():
 @log.command('stats')
 def log_stats():
     """Show command history statistics."""
-    from bioamla.command_log import CommandLogger
-    from bioamla.progress import console
+    from bioamla.core.command_log import CommandLogger
+    from bioamla.core.progress import console
 
     logger = CommandLogger()
 
@@ -683,7 +683,7 @@ def ast_predict(
             workers=workers
         )
     else:
-        from bioamla.ast import wav_ast_inference
+        from bioamla.core.ast import wav_ast_inference
         prediction = wav_ast_inference(path, model_path, resample_freq)
         click.echo(f"{prediction}")
 
@@ -708,7 +708,7 @@ def _run_batch_inference(
     import pandas as pd
     import torch
 
-    from bioamla.ast import (
+    from bioamla.core.ast import (
         InferenceConfig,
         load_pretrained_ast_model,
         wave_file_batch_inference,
@@ -779,7 +779,7 @@ def _run_batch_inference(
     )
 
     # Pre-load feature extractor before timing starts
-    from bioamla.ast import get_cached_feature_extractor
+    from bioamla.core.ast import get_cached_feature_extractor
     feature_extractor = get_cached_feature_extractor()
 
     start_time = time.time()
@@ -1183,7 +1183,7 @@ def ast_evaluate(
     """
     from pathlib import Path as PathLib
 
-    from bioamla.evaluate import (
+    from bioamla.core.evaluate import (
         evaluate_directory,
         format_metrics_report,
         save_evaluation_results,
@@ -1655,7 +1655,7 @@ def audio_convert(
 
     if dataset:
         # Legacy dataset mode with metadata.csv
-        from bioamla.datasets import convert_filetype
+        from bioamla.core.datasets import convert_filetype
 
         stats = convert_filetype(
             dataset_path=path,
@@ -1670,7 +1670,7 @@ def audio_convert(
 
     elif batch:
         # Batch convert directory
-        from bioamla.datasets import batch_convert_audio
+        from bioamla.core.datasets import batch_convert_audio
 
         if output is None:
             output = str(Path(path)) + f"_{target_format}"
@@ -1696,7 +1696,7 @@ def audio_convert(
 
     else:
         # Single file conversion
-        from bioamla.datasets import convert_audio_file
+        from bioamla.core.datasets import convert_audio_file
 
         input_path = Path(path)
         if not input_path.exists():
@@ -1726,7 +1726,7 @@ def audio_convert(
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet):
     """Apply frequency filter to audio files."""
-    from bioamla.signal import (
+    from bioamla.core.signal import (
         bandpass_filter,
         highpass_filter,
         lowpass_filter,
@@ -1759,7 +1759,7 @@ def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet)
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_denoise(path, output, batch, method, strength, quiet):
     """Apply noise reduction to audio files."""
-    from bioamla.signal import spectral_denoise
+    from bioamla.core.signal import spectral_denoise
 
     def processor(audio, sr):
         return spectral_denoise(audio, sr, noise_reduce_factor=strength)
@@ -1779,7 +1779,7 @@ def audio_segment(path, output, batch, silence_threshold, min_silence, min_segme
     """Split audio on silence into separate files."""
     from pathlib import Path
 
-    from bioamla.signal import load_audio, save_audio, split_audio_on_silence
+    from bioamla.core.signal import load_audio, save_audio, split_audio_on_silence
     from bioamla.utils import get_audio_files
 
     path = Path(path)
@@ -1824,7 +1824,7 @@ def audio_segment(path, output, batch, silence_threshold, min_silence, min_segme
         files_failed = 0
 
         if not quiet:
-            from bioamla.progress import ProgressBar, print_error, print_success
+            from bioamla.core.progress import ProgressBar, print_error, print_success
 
             with ProgressBar(
                 total=len(audio_files),
@@ -1888,7 +1888,7 @@ def audio_detect_events(path, output, quiet):
     import csv
     from pathlib import Path
 
-    from bioamla.signal import detect_onsets, load_audio
+    from bioamla.core.signal import detect_onsets, load_audio
 
     path = Path(path)
     if not path.exists():
@@ -1920,7 +1920,7 @@ def audio_detect_events(path, output, quiet):
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_normalize(path, output, batch, target_db, peak, quiet):
     """Normalize audio loudness."""
-    from bioamla.signal import normalize_loudness, peak_normalize
+    from bioamla.core.signal import normalize_loudness, peak_normalize
 
     def processor(audio, sr):
         if peak:
@@ -1939,7 +1939,7 @@ def audio_normalize(path, output, batch, target_db, peak, quiet):
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_resample(path, output, batch, rate, quiet):
     """Resample audio to a different sample rate."""
-    from bioamla.signal import resample_audio
+    from bioamla.core.signal import resample_audio
 
     def processor(audio, sr):
         return resample_audio(audio, sr, rate)
@@ -1958,7 +1958,7 @@ def audio_resample(path, output, batch, rate, quiet):
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
     """Trim audio by time or remove silence."""
-    from bioamla.signal import trim_audio, trim_silence
+    from bioamla.core.signal import trim_audio, trim_silence
 
     if not silence and start is None and end is None:
         click.echo("Error: Must specify --start/--end or use --silence")
@@ -2030,7 +2030,7 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
         errors = []
 
         if not quiet:
-            from bioamla.progress import ProgressBar, print_success, print_error
+            from bioamla.core.progress import ProgressBar, print_success, print_error
 
             with ProgressBar(
                 total=len(audio_files),
@@ -2171,7 +2171,7 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
     """Helper to run signal processing on file or directory."""
     from pathlib import Path
 
-    from bioamla.signal import batch_process, load_audio, save_audio
+    from bioamla.core.signal import batch_process, load_audio, save_audio
 
     path = Path(path)
 
@@ -2285,7 +2285,7 @@ def audio_visualize(
     """
     import os
 
-    from bioamla.visualize import batch_generate_spectrograms, generate_spectrogram
+    from bioamla.core.visualize import batch_generate_spectrograms, generate_spectrogram
 
     if batch:
         # Batch mode: process directory
@@ -2407,7 +2407,7 @@ def inat_download(
     quiet: bool
 ):
     """Download audio observations from iNaturalist."""
-    from bioamla.inat import download_inat_audio
+    from bioamla.core.inat import download_inat_audio
 
     taxon_ids_list = None
     if taxon_ids:
@@ -2467,7 +2467,7 @@ def inat_search(
     quiet: bool
 ):
     """Search for iNaturalist observations."""
-    from bioamla.inat import search_inat_sounds
+    from bioamla.core.inat import search_inat_sounds
 
     if not species and not taxon_id and not place_id and not project_id:
         raise click.UsageError("At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)")
@@ -2537,7 +2537,7 @@ def inat_stats(
     """Get statistics for an iNaturalist project."""
     import json
 
-    from bioamla.inat import get_project_stats
+    from bioamla.core.inat import get_project_stats
 
     stats = get_project_stats(
         project_id=project_id,
@@ -2591,7 +2591,7 @@ def dataset_merge(
     quiet: bool
 ):
     """Merge multiple audio datasets into a single dataset."""
-    from bioamla.datasets import merge_datasets as do_merge
+    from bioamla.core.datasets import merge_datasets as do_merge
 
     stats = do_merge(
         dataset_paths=list(dataset_paths),
@@ -2633,7 +2633,7 @@ def dataset_license(
     """
     from pathlib import Path as PathLib
 
-    from bioamla.license import (
+    from bioamla.core.license import (
         generate_license_for_dataset,
         generate_licenses_for_directory,
     )
@@ -2779,7 +2779,7 @@ def dataset_augment(
         --pitch-shift: Change pitch without changing speed (semitones)
         --gain: Random volume adjustment (dB)
     """
-    from bioamla.augment import AugmentationConfig, batch_augment
+    from bioamla.core.augment import AugmentationConfig, batch_augment
 
     # Build configuration from options
     config = AugmentationConfig(
@@ -3067,7 +3067,7 @@ def annotation_convert(input_file, output_file, from_format, to_format, label_co
     """
     from pathlib import Path
 
-    from bioamla.annotations import (
+    from bioamla.core.annotations import (
         load_csv_annotations,
         load_raven_selection_table,
         save_csv_annotations,
@@ -3128,7 +3128,7 @@ def annotation_summary(path, file_format, output_json):
     import json
     from pathlib import Path
 
-    from bioamla.annotations import (
+    from bioamla.core.annotations import (
         load_csv_annotations,
         load_raven_selection_table,
         summarize_annotations,
@@ -3192,7 +3192,7 @@ def annotation_remap(input_file, output_file, mapping, keep_unmapped, quiet):
     """
     from pathlib import Path
 
-    from bioamla.annotations import (
+    from bioamla.core.annotations import (
         load_csv_annotations,
         load_label_mapping,
         load_raven_selection_table,
@@ -3258,7 +3258,7 @@ def annotation_filter(input_file, output_file, include, exclude, min_duration, m
     """
     from pathlib import Path
 
-    from bioamla.annotations import (
+    from bioamla.core.annotations import (
         filter_labels,
         load_csv_annotations,
         load_raven_selection_table,
@@ -3332,7 +3332,7 @@ def annotation_generate_labels(
 
     import numpy as np
 
-    from bioamla.annotations import (
+    from bioamla.core.annotations import (
         create_label_map,
         generate_clip_labels,
         get_unique_labels,
@@ -3492,7 +3492,7 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
     """
     import json as json_lib
 
-    from bioamla import xeno_canto
+    from bioamla.core import xeno_canto
 
     try:
         results = xeno_canto.search(
@@ -3549,7 +3549,7 @@ def xc_download(species, genus, country, quality, max_recordings, output_dir, de
         bioamla api xc-download --species "Turdus migratorius" --quality A -n 5
         bioamla api xc-download --genus Strix --country "United States" -o ./owls
     """
-    from bioamla import xeno_canto
+    from bioamla.core import xeno_canto
 
     click.echo("Searching Xeno-canto...")
 
@@ -3608,7 +3608,7 @@ def ml_search(species_code, scientific_name, region, min_rating, max_results, ou
     """
     import json as json_lib
 
-    from bioamla import macaulay
+    from bioamla.core import macaulay
 
     try:
         results = macaulay.search(
@@ -3656,7 +3656,7 @@ def ml_download(species_code, scientific_name, region, min_rating, max_recording
         bioamla api ml-download --species-code amerob --min-rating 4 -n 5
         bioamla api ml-download --scientific-name "Strix varia" -o ./owls
     """
-    from bioamla import macaulay
+    from bioamla.core import macaulay
 
     click.echo("Searching Macaulay Library...")
 
@@ -3711,7 +3711,7 @@ def species_lookup(name, to_common, to_scientific, info):
         bioamla api species "American Robin" --to-scientific
         bioamla api species "amerob" --info
     """
-    from bioamla import species
+    from bioamla.core import species
 
     if info:
         result = species.get_species_info(name)
@@ -3759,7 +3759,7 @@ def species_search(query, limit):
         bioamla api species-search robin
         bioamla api species-search "barred" --limit 5
     """
-    from bioamla import species
+    from bioamla.core import species
 
     results = species.search(query, limit=limit)
 
@@ -3790,19 +3790,19 @@ def clear_cache(clear_all, xc, ml, species):
     total = 0
 
     if clear_all or xc:
-        from bioamla import xeno_canto
+        from bioamla.core import xeno_canto
         count = xeno_canto.clear_cache()
         click.echo(f"Cleared {count} Xeno-canto cache entries")
         total += count
 
     if clear_all or ml:
-        from bioamla import macaulay
+        from bioamla.core import macaulay
         count = macaulay.clear_cache()
         click.echo(f"Cleared {count} Macaulay Library cache entries")
         total += count
 
     if clear_all or species:
-        from bioamla import species as species_mod
+        from bioamla.core import species as species_mod
         count = species_mod.clear_cache()
         click.echo(f"Cleared {count} species cache entries")
         total += count
@@ -3852,7 +3852,7 @@ def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_fr
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.indices import batch_compute_indices, compute_indices_from_file
+    from bioamla.core.indices import batch_compute_indices, compute_indices_from_file
 
     path_obj = PathLib(path)
 
@@ -3954,7 +3954,7 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
 
     import librosa
 
-    from bioamla.indices import temporal_indices
+    from bioamla.core.indices import temporal_indices
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4024,7 +4024,7 @@ def indices_aci(path, min_freq, max_freq, n_fft):
     """
     import librosa
 
-    from bioamla.indices import compute_aci
+    from bioamla.core.indices import compute_aci
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4057,7 +4057,7 @@ def indices_adi(path, max_freq, freq_step, db_threshold):
     """
     import librosa
 
-    from bioamla.indices import compute_adi
+    from bioamla.core.indices import compute_adi
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4087,7 +4087,7 @@ def indices_aei(path, max_freq, freq_step, db_threshold):
     """
     import librosa
 
-    from bioamla.indices import compute_aei
+    from bioamla.core.indices import compute_aei
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4116,7 +4116,7 @@ def indices_bio(path, min_freq, max_freq):
     """
     import librosa
 
-    from bioamla.indices import compute_bio
+    from bioamla.core.indices import compute_bio
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4146,7 +4146,7 @@ def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
     """
     import librosa
 
-    from bioamla.indices import compute_ndsi
+    from bioamla.core.indices import compute_ndsi
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4183,7 +4183,7 @@ def indices_entropy(path, spectral, temporal):
     """
     import librosa
 
-    from bioamla.indices import spectral_entropy, temporal_entropy
+    from bioamla.core.indices import spectral_entropy, temporal_entropy
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4237,7 +4237,7 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.detection import BandLimitedEnergyDetector, export_detections
+    from bioamla.core.detection import BandLimitedEnergyDetector, export_detections
     from bioamla.utils import get_audio_files
 
     detector = BandLimitedEnergyDetector(
@@ -4256,7 +4256,7 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
             click.echo(f"No audio files found in {path}")
             return
 
-        from bioamla.progress import ProgressBar, print_success
+        from bioamla.core.progress import ProgressBar, print_success
 
         with ProgressBar(
             total=len(audio_files),
@@ -4334,7 +4334,7 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.detection import RibbitDetector, export_detections
+    from bioamla.core.detection import RibbitDetector, export_detections
     from bioamla.utils import get_audio_files
 
     detector = RibbitDetector(
@@ -4355,7 +4355,7 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
             click.echo(f"No audio files found in {path}")
             return
 
-        from bioamla.progress import ProgressBar, print_success
+        from bioamla.core.progress import ProgressBar, print_success
 
         with ProgressBar(
             total=len(audio_files),
@@ -4434,7 +4434,7 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
 
     import librosa
 
-    from bioamla.detection import CWTPeakDetector, export_detections
+    from bioamla.core.detection import CWTPeakDetector, export_detections
     from bioamla.utils import get_audio_files
 
     detector = CWTPeakDetector(
@@ -4458,7 +4458,7 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
         all_detections = []
 
         if len(audio_files) > 1:
-            from bioamla.progress import ProgressBar, print_success
+            from bioamla.core.progress import ProgressBar, print_success
 
             with ProgressBar(
                 total=len(audio_files),
@@ -4516,7 +4516,7 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
         all_peaks = []
 
         if len(audio_files) > 1:
-            from bioamla.progress import ProgressBar, print_success
+            from bioamla.core.progress import ProgressBar, print_success
 
             with ProgressBar(
                 total=len(audio_files),
@@ -4623,7 +4623,7 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.detection import AcceleratingPatternDetector, export_detections
+    from bioamla.core.detection import AcceleratingPatternDetector, export_detections
     from bioamla.utils import get_audio_files
 
     detector = AcceleratingPatternDetector(
@@ -4644,7 +4644,7 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
             click.echo(f"No audio files found in {path}")
             return
 
-        from bioamla.progress import ProgressBar, print_success
+        from bioamla.core.progress import ProgressBar, print_success
 
         with ProgressBar(
             total=len(audio_files),
@@ -4717,7 +4717,7 @@ def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
     """
     from pathlib import Path as PathLib
 
-    from bioamla.detection import (
+    from bioamla.core.detection import (
         AcceleratingPatternDetector,
         BandLimitedEnergyDetector,
         CWTPeakDetector,
@@ -4797,7 +4797,7 @@ def learn_init(predictions_csv: str, output_state: str, strategy: str,
     """
     import csv
 
-    from bioamla.active_learning import (
+    from bioamla.core.active_learning import (
         ActiveLearner,
         HybridSampler,
         RandomSampler,
@@ -4867,7 +4867,7 @@ def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: b
     import json
     from pathlib import Path
 
-    from bioamla.active_learning import (
+    from bioamla.core.active_learning import (
         ActiveLearner,
         UncertaintySampler,
     )
@@ -4936,7 +4936,7 @@ def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet:
     """
     import csv
 
-    from bioamla.active_learning import ActiveLearner, UncertaintySampler
+    from bioamla.core.active_learning import ActiveLearner, UncertaintySampler
 
     # Load learner
     sampler = UncertaintySampler(strategy='entropy')
@@ -4974,7 +4974,7 @@ def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet:
 @click.argument('state_file', type=click.Path(exists=True))
 def learn_status(state_file: str):
     """Show status of active learning session."""
-    from bioamla.active_learning import (
+    from bioamla.core.active_learning import (
         ActiveLearner,
         UncertaintySampler,
         summarize_annotation_session,
@@ -5014,7 +5014,7 @@ def learn_status(state_file: str):
 @click.option('--quiet', '-q', is_flag=True, help='Suppress output')
 def learn_export(state_file: str, output_file: str, fmt: str, quiet: bool):
     """Export labeled samples from active learning session."""
-    from bioamla.active_learning import ActiveLearner, UncertaintySampler, export_annotations
+    from bioamla.core.active_learning import ActiveLearner, UncertaintySampler, export_annotations
 
     sampler = UncertaintySampler(strategy='entropy')
     learner = ActiveLearner.load_state(state_file, sampler=sampler)
@@ -5046,7 +5046,7 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
     import csv
     from pathlib import Path
 
-    from bioamla.active_learning import (
+    from bioamla.core.active_learning import (
         ActiveLearner,
         HybridSampler,
         RandomSampler,
@@ -5167,7 +5167,7 @@ def cluster_reduce(embeddings_file: str, output: str, method: str,
     """
     import numpy as np
 
-    from bioamla.clustering import reduce_dimensions
+    from bioamla.core.clustering import reduce_dimensions
 
     embeddings = np.load(embeddings_file)
 
@@ -5199,7 +5199,7 @@ def cluster_cluster(embeddings_file: str, output: str, method: str,
     """
     import numpy as np
 
-    from bioamla.clustering import AudioClusterer, ClusteringConfig
+    from bioamla.core.clustering import AudioClusterer, ClusteringConfig
 
     embeddings = np.load(embeddings_file)
 
@@ -5239,7 +5239,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
 
     import numpy as np
 
-    from bioamla.clustering import analyze_clusters
+    from bioamla.core.clustering import analyze_clusters
 
     embeddings = np.load(embeddings_file)
     labels = np.load(labels_file)
@@ -5292,7 +5292,7 @@ def cluster_novelty(embeddings_file: str, output: str, method: str,
     """
     import numpy as np
 
-    from bioamla.clustering import discover_novel_sounds
+    from bioamla.core.clustering import discover_novel_sounds
 
     embeddings = np.load(embeddings_file)
     known_labels = np.load(labels) if labels else None
@@ -5330,7 +5330,7 @@ def realtime():
 @realtime.command('devices')
 def realtime_devices():
     """List available audio input devices."""
-    from bioamla.realtime import list_audio_devices
+    from bioamla.core.realtime import list_audio_devices
 
     devices = list_audio_devices()
 
@@ -5346,7 +5346,7 @@ def realtime_devices():
 @click.option('--output', '-o', help='Output file to save recording')
 def realtime_test(duration: float, device: int, output: str):
     """Test audio recording from microphone."""
-    from bioamla.realtime import test_recording
+    from bioamla.core.realtime import test_recording
 
     click.echo(f"Recording for {duration} seconds...")
     audio = test_recording(duration=duration, device=device)
@@ -5382,7 +5382,7 @@ def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, dist
 
     SPECIES_CODE: eBird species code (e.g., 'carwre' for Carolina Wren)
     """
-    from bioamla.integrations import EBirdClient
+    from bioamla.core.integrations import EBirdClient
 
     client = EBirdClient(api_key=api_key)
     result = client.validate_species_for_location(
@@ -5415,7 +5415,7 @@ def ebird_nearby(lat: float, lng: float, api_key: str, distance: float,
     """Get recent eBird observations near a location."""
     import csv
 
-    from bioamla.integrations import EBirdClient
+    from bioamla.core.integrations import EBirdClient
 
     client = EBirdClient(api_key=api_key)
     observations = client.get_nearby_observations(
@@ -5467,7 +5467,7 @@ def pg_export(detections_file: str, connection: str, detector: str,
     """
     import json
 
-    from bioamla.integrations import PostgreSQLExporter
+    from bioamla.core.integrations import PostgreSQLExporter
 
     with TextFile(detections_file, mode='r', encoding='utf-8') as f:
         detections = json.load(f.handle)
@@ -5491,7 +5491,7 @@ def pg_export(detections_file: str, connection: str, detector: str,
               help='PostgreSQL connection string')
 def pg_stats(connection: str):
     """Show PostgreSQL database statistics."""
-    from bioamla.integrations import PostgreSQLExporter
+    from bioamla.core.integrations import PostgreSQLExporter
 
     exporter = PostgreSQLExporter(connection_string=connection)
     stats = exporter.get_statistics()
@@ -5611,7 +5611,7 @@ def examples():
 def examples_list():
     """List all available example workflows."""
     from bioamla.examples import list_examples
-    from bioamla.progress import console
+    from bioamla.core.progress import console
     from rich.table import Table
 
     table = Table(title="Available Example Workflows", show_header=True)
@@ -5635,7 +5635,7 @@ def examples_show(example_id: str):
     EXAMPLE_ID: The example ID (e.g., 00, 01, 02) or filename
     """
     from bioamla.examples import EXAMPLES, get_example_content
-    from bioamla.progress import console
+    from bioamla.core.progress import console
     from rich.syntax import Syntax
 
     try:
@@ -5733,7 +5733,7 @@ def examples_info(example_id: str):
     EXAMPLE_ID: The example ID (e.g., 00, 01, 02)
     """
     from bioamla.examples import EXAMPLES, get_example_content
-    from bioamla.progress import console
+    from bioamla.core.progress import console
 
     if example_id not in EXAMPLES:
         raise click.ClickException(f"Example not found: {example_id}")

@@ -21,7 +21,7 @@ from bioamla.models.base import (
     PredictionResult,
     register_model,
 )
-from bioamla.torchaudio import (
+from bioamla.core.torchaudio import (
     load_waveform_tensor,
     resample_waveform_tensor,
     split_waveform_tensor,

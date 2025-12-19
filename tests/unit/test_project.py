@@ -4,7 +4,7 @@ import pytest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from bioamla.project import (
+from bioamla.core.project import (
     find_project_root,
     is_in_project,
     create_project,
