@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 @dataclass
-class Sample:
+class ActiveLearningSample:
     """
     Represents a sample in the active learning pool.
 
@@ -81,7 +81,7 @@ class Sample:
         return hash(self.id)
 
     def __eq__(self, other):
-        if isinstance(other, Sample):
+        if isinstance(other, ActiveLearningSample):
             return self.id == other.id
         return False
 
@@ -100,7 +100,7 @@ class Sample:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Sample":
+    def from_dict(cls, data: Dict[str, Any]) -> "ActiveLearningSample":
         """Create a Sample from a dictionary."""
         return cls(
             id=data["id"],
@@ -206,7 +206,7 @@ class SamplingStrategy(ABC):
     """Base class for sampling strategies."""
 
     @abstractmethod
-    def score(self, samples: List[Sample]) -> np.ndarray:
+    def score(self, samples: List[ActiveLearningSample]) -> np.ndarray:
         """
         Compute informativeness scores for samples.
 
@@ -220,10 +220,10 @@ class SamplingStrategy(ABC):
 
     def select(
         self,
-        samples: List[Sample],
+        samples: List[ActiveLearningSample],
         n_samples: int,
         exclude_ids: Optional[set] = None
-    ) -> List[Sample]:
+    ) -> List[ActiveLearningSample]:
         """
         Select the most informative samples.
 
@@ -273,7 +273,7 @@ class UncertaintySampler(SamplingStrategy):
             raise ValueError(f"Unknown strategy: {strategy}")
         self.strategy = strategy
 
-    def score(self, samples: List[Sample]) -> np.ndarray:
+    def score(self, samples: List[ActiveLearningSample]) -> np.ndarray:
         """Compute uncertainty scores for samples."""
         scores = np.zeros(len(samples))
 
@@ -324,7 +324,7 @@ class DiversitySampler(SamplingStrategy):
             raise ValueError(f"Unknown method: {method}")
         self.method = method
 
-    def score(self, samples: List[Sample]) -> np.ndarray:
+    def score(self, samples: List[ActiveLearningSample]) -> np.ndarray:
         """
         Compute diversity scores.
 
@@ -347,10 +347,10 @@ class DiversitySampler(SamplingStrategy):
 
     def select(
         self,
-        samples: List[Sample],
+        samples: List[ActiveLearningSample],
         n_samples: int,
         exclude_ids: Optional[set] = None
-    ) -> List[Sample]:
+    ) -> List[ActiveLearningSample]:
         """Select diverse samples using greedy farthest-first traversal."""
         if exclude_ids:
             samples = [s for s in samples if s.id not in exclude_ids]
@@ -394,7 +394,7 @@ class DiversitySampler(SamplingStrategy):
 
         return [samples[i] for i in selected_indices]
 
-    def _get_features(self, samples: List[Sample]) -> Optional[np.ndarray]:
+    def _get_features(self, samples: List[ActiveLearningSample]) -> Optional[np.ndarray]:
         """Extract features from samples."""
         features = []
         for sample in samples:
@@ -435,7 +435,7 @@ class HybridSampler(SamplingStrategy):
         self.diversity_sampler = DiversitySampler(method=diversity_method)
         self.uncertainty_ratio = uncertainty_ratio
 
-    def score(self, samples: List[Sample]) -> np.ndarray:
+    def score(self, samples: List[ActiveLearningSample]) -> np.ndarray:
         """Compute hybrid scores (uncertainty weighted by diversity)."""
         uncertainty_scores = self.uncertainty_sampler.score(samples)
         diversity_scores = self.diversity_sampler.score(samples)
@@ -452,10 +452,10 @@ class HybridSampler(SamplingStrategy):
 
     def select(
         self,
-        samples: List[Sample],
+        samples: List[ActiveLearningSample],
         n_samples: int,
         exclude_ids: Optional[set] = None
-    ) -> List[Sample]:
+    ) -> List[ActiveLearningSample]:
         """Select samples using two-stage approach."""
         if exclude_ids:
             samples = [s for s in samples if s.id not in exclude_ids]
@@ -482,7 +482,7 @@ class RandomSampler(SamplingStrategy):
         """Initialize random sampler with optional seed."""
         self.rng = np.random.default_rng(seed)
 
-    def score(self, samples: List[Sample]) -> np.ndarray:
+    def score(self, samples: List[ActiveLearningSample]) -> np.ndarray:
         """Return random scores."""
         return self.rng.random(len(samples))
 
@@ -521,7 +521,7 @@ class QueryByCommittee(SamplingStrategy):
         """Clear all committee predictions."""
         self.committee_predictions = []
 
-    def score(self, samples: List[Sample]) -> np.ndarray:
+    def score(self, samples: List[ActiveLearningSample]) -> np.ndarray:
         """Compute disagreement scores."""
         scores = np.zeros(len(samples))
 
@@ -584,7 +584,7 @@ class BalancedSampler(SamplingStrategy):
         """Update class counts."""
         self.class_counts = class_counts.copy()
 
-    def score(self, samples: List[Sample]) -> np.ndarray:
+    def score(self, samples: List[ActiveLearningSample]) -> np.ndarray:
         """Score samples inversely by class frequency."""
         scores = np.zeros(len(samples))
 
@@ -625,7 +625,7 @@ class ActiveLearner:
     def __init__(
         self,
         sampler: Optional[SamplingStrategy] = None,
-        prediction_fn: Optional[Callable[[List[Sample]], List[Sample]]] = None,
+        prediction_fn: Optional[Callable[[List[ActiveLearningSample]], List[ActiveLearningSample]]] = None,
         state: Optional[ActiveLearningState] = None
     ):
         """
@@ -640,11 +640,11 @@ class ActiveLearner:
         self.prediction_fn = prediction_fn
         self.state = state or ActiveLearningState()
 
-        self.labeled_pool: Dict[str, Sample] = {}
-        self.unlabeled_pool: Dict[str, Sample] = {}
+        self.labeled_pool: Dict[str, ActiveLearningSample] = {}
+        self.unlabeled_pool: Dict[str, ActiveLearningSample] = {}
         self.annotation_history: List[AnnotationRecord] = []
 
-    def add_unlabeled(self, samples: List[Sample]) -> None:
+    def add_unlabeled(self, samples: List[ActiveLearningSample]) -> None:
         """
         Add samples to the unlabeled pool.
 
@@ -658,7 +658,7 @@ class ActiveLearner:
         self.state.total_unlabeled = len(self.unlabeled_pool)
         logger.info(f"Added {len(samples)} samples to unlabeled pool")
 
-    def add_labeled(self, samples: List[Sample]) -> None:
+    def add_labeled(self, samples: List[ActiveLearningSample]) -> None:
         """
         Add pre-labeled samples (e.g., initial seed set).
 
@@ -683,7 +683,7 @@ class ActiveLearner:
         self,
         n_samples: int = 10,
         update_predictions: bool = True
-    ) -> List[Sample]:
+    ) -> List[ActiveLearningSample]:
         """
         Query the most informative samples for annotation.
 
@@ -723,7 +723,7 @@ class ActiveLearner:
 
     def teach(
         self,
-        sample: Sample,
+        sample: ActiveLearningSample,
         label: str,
         annotator: str = "unknown",
         duration_seconds: Optional[float] = None,
@@ -768,7 +768,7 @@ class ActiveLearner:
 
     def teach_batch(
         self,
-        annotations: List[Tuple[Sample, str]],
+        annotations: List[Tuple[ActiveLearningSample, str]],
         annotator: str = "unknown"
     ) -> None:
         """
@@ -797,11 +797,11 @@ class ActiveLearner:
             "queries_made": len(self.state.query_history),
         }
 
-    def get_labeled_samples(self) -> List[Sample]:
+    def get_labeled_samples(self) -> List[ActiveLearningSample]:
         """Get all labeled samples."""
         return list(self.labeled_pool.values())
 
-    def get_unlabeled_samples(self) -> List[Sample]:
+    def get_unlabeled_samples(self) -> List[ActiveLearningSample]:
         """Get all unlabeled samples."""
         return list(self.unlabeled_pool.values())
 
@@ -873,11 +873,11 @@ class ActiveLearner:
 
         # Restore pools
         learner.labeled_pool = {
-            k: Sample.from_dict(v)
+            k: ActiveLearningSample.from_dict(v)
             for k, v in state_dict.get("labeled_pool", {}).items()
         }
         learner.unlabeled_pool = {
-            k: Sample.from_dict(v)
+            k: ActiveLearningSample.from_dict(v)
             for k, v in state_dict.get("unlabeled_pool", {}).items()
         }
 
@@ -912,7 +912,7 @@ class AnnotationQueue:
     - Export/import functionality
     """
 
-    samples: List[Sample] = field(default_factory=list)
+    samples: List[ActiveLearningSample] = field(default_factory=list)
     current_index: int = 0
     completed: List[str] = field(default_factory=list)
     skipped: List[str] = field(default_factory=list)
@@ -920,7 +920,7 @@ class AnnotationQueue:
     def __len__(self) -> int:
         return len(self.samples)
 
-    def add(self, samples: List[Sample], priority: bool = False) -> None:
+    def add(self, samples: List[ActiveLearningSample], priority: bool = False) -> None:
         """
         Add samples to the queue.
 
@@ -933,18 +933,18 @@ class AnnotationQueue:
         else:
             self.samples.extend(samples)
 
-    def current(self) -> Optional[Sample]:
+    def current(self) -> Optional[ActiveLearningSample]:
         """Get the current sample to annotate."""
         if self.current_index < len(self.samples):
             return self.samples[self.current_index]
         return None
 
-    def next(self) -> Optional[Sample]:
+    def next(self) -> Optional[ActiveLearningSample]:
         """Move to and return the next sample."""
         self.current_index += 1
         return self.current()
 
-    def previous(self) -> Optional[Sample]:
+    def previous(self) -> Optional[ActiveLearningSample]:
         """Move to and return the previous sample."""
         if self.current_index > 0:
             self.current_index -= 1
@@ -1018,7 +1018,7 @@ class Oracle(ABC):
     """
 
     @abstractmethod
-    def annotate(self, sample: Sample) -> str:
+    def annotate(self, sample: ActiveLearningSample) -> str:
         """
         Get annotation for a sample.
 
@@ -1030,7 +1030,7 @@ class Oracle(ABC):
         """
         pass
 
-    def annotate_batch(self, samples: List[Sample]) -> List[str]:
+    def annotate_batch(self, samples: List[ActiveLearningSample]) -> List[str]:
         """
         Annotate multiple samples.
 
@@ -1069,7 +1069,7 @@ class SimulatedOracle(Oracle):
         self.labels = labels or list(set(ground_truth.values()))
         self.rng = np.random.default_rng()
 
-    def annotate(self, sample: Sample) -> str:
+    def annotate(self, sample: ActiveLearningSample) -> str:
         """Get (possibly noisy) label for sample."""
         if sample.id not in self.ground_truth:
             raise ValueError(f"No ground truth for sample {sample.id}")
@@ -1088,7 +1088,7 @@ class SimulatedOracle(Oracle):
 class CallbackOracle(Oracle):
     """Oracle that uses a callback function for annotation."""
 
-    def __init__(self, callback: Callable[[Sample], str]):
+    def __init__(self, callback: Callable[[ActiveLearningSample], str]):
         """
         Initialize callback oracle.
 
@@ -1097,7 +1097,7 @@ class CallbackOracle(Oracle):
         """
         self.callback = callback
 
-    def annotate(self, sample: Sample) -> str:
+    def annotate(self, sample: ActiveLearningSample) -> str:
         """Get label using callback."""
         return self.callback(sample)
 
@@ -1113,7 +1113,7 @@ def create_samples_from_predictions(
     end_col: str = "end_time",
     label_col: str = "predicted_label",
     confidence_col: str = "confidence"
-) -> List[Sample]:
+) -> List[ActiveLearningSample]:
     """
     Create Sample objects from a predictions CSV file.
 
@@ -1141,7 +1141,7 @@ def create_samples_from_predictions(
             # Create unique ID
             sample_id = f"{Path(filepath).stem}_{start_time:.2f}_{end_time:.2f}"
 
-            sample = Sample(
+            sample = ActiveLearningSample(
                 id=sample_id,
                 filepath=filepath,
                 start_time=start_time,

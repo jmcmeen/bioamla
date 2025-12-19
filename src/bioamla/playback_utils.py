@@ -167,7 +167,7 @@ class AudioPlayer:
             on_complete: Optional callback when playback completes
             on_position_change: Optional callback for position updates
         """
-        from bioamla.utils.audio import load_audio
+        from bioamla.utils.audio_utils import load_audio
 
         audio, sr = load_audio(filepath, mono=False)
         self.load(audio, sr, on_complete, on_position_change)
