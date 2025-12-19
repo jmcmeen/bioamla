@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-from bioamla.core.files import TextFile
+from bioamla.files import TextFile
 
 logger = logging.getLogger(__name__)
 

@@ -27,7 +27,7 @@ import pandas as pd
 import torch
 from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
-from bioamla.core.torchaudio import (
+from bioamla.audio.torchaudio import (
     load_waveform_tensor,
     resample_waveform_tensor,
     split_waveform_tensor,

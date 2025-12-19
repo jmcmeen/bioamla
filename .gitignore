@@ -218,3 +218,5 @@ scp_small/output.csv
 scp_frogs_eval.zip
 *.db
 /.vscode
+claude.md
+bioamla_magpy_unified_development_plan.md

@@ -57,6 +57,6 @@ Import from specific submodules as needed:
     from bioamla.realtime import LiveRecorder, RealtimeSpectrogram
     from bioamla.integrations import EBirdClient, PostgreSQLExporter
 
-Version: 0.1.0
+Version: 0.1.1
 """
-__version__ = "0.1.0"
+__version__ = "0.1.1"

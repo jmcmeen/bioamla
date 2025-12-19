@@ -22,7 +22,7 @@ import numpy as np
 import soundfile as sf
 from scipy import signal as scipy_signal
 
-from bioamla.core.torchaudio import load_waveform_tensor
+from bioamla.audio.torchaudio import load_waveform_tensor
 
 # =============================================================================
 # Filter Functions
