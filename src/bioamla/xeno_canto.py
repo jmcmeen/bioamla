@@ -28,7 +28,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from bioamla.api.base import APICache, APIClient, RateLimiter
+from bioamla.base_api import APICache, APIClient, RateLimiter
+from bioamla.core.files import TextFile
 from bioamla.fileutils import sanitize_filename
 from bioamla.logging import get_logger
 
@@ -529,8 +530,8 @@ def download_recordings(
     # Write metadata
     if create_metadata and metadata_rows:
         metadata_path = output_dir / "metadata.csv"
-        with open(metadata_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=metadata_rows[0].keys())
+        with TextFile(metadata_path, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f.handle, fieldnames=metadata_rows[0].keys())
             writer.writeheader()
             writer.writerows(metadata_rows)
         stats["metadata_file"] = str(metadata_path)

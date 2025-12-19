@@ -37,7 +37,8 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from bioamla.api.base import APICache, APIClient, RateLimiter
+from bioamla.base_api import APICache, APIClient, RateLimiter
+from bioamla.core.files import TextFile
 from bioamla.logging import get_logger
 
 logger = get_logger(__name__)
@@ -494,12 +495,12 @@ def export_taxonomy(
     records = list(species.values())
 
     if format == "json":
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(records, f, indent=2)
+        with TextFile(output_path, mode="w", encoding="utf-8") as f:
+            json.dump(records, f.handle, indent=2)
     else:
         if records:
-            with open(output_path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=records[0].keys())
+            with TextFile(output_path, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f.handle, fieldnames=records[0].keys())
                 writer.writeheader()
                 writer.writerows(records)
 

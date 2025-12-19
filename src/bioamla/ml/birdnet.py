@@ -17,6 +17,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from bioamla.core.files import TextFile
 from bioamla.models.base import (
     BaseAudioModel,
     ModelBackend,
@@ -156,8 +157,8 @@ class BirdNETModel(BaseAudioModel):
         path = Path(path)
 
         if path.suffix == ".json":
-            with open(path) as f:
-                data = json.load(f)
+            with TextFile(path, mode="r") as f:
+                data = json.load(f.handle)
                 if isinstance(data, list):
                     self.species_list = data
                 elif isinstance(data, dict):
@@ -165,8 +166,8 @@ class BirdNETModel(BaseAudioModel):
                     self.species_list = list(data.values())
         else:
             # Text file with one label per line
-            with open(path) as f:
-                self.species_list = [line.strip() for line in f if line.strip()]
+            with TextFile(path, mode="r") as f:
+                self.species_list = [line.strip() for line in f.handle if line.strip()]
 
         # Setup label mappings
         if not self.id2label:
@@ -383,8 +384,8 @@ class BirdNETModel(BaseAudioModel):
         }
 
         if species_file:
-            with open(species_file) as f:
-                data = json.load(f)
+            with TextFile(species_file, mode="r") as f:
+                data = json.load(f.handle)
                 self.geography_filter["species"] = data.get("species", [])
 
     def _get_allowed_species(self) -> List[str]:

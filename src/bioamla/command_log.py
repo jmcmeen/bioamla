@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
+from bioamla.core.files import TextFile
 from bioamla.project import find_project_root, PROJECT_MARKER
 
 LOGS_DIR = "logs"
@@ -107,7 +108,7 @@ class CommandLogger:
 
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(self._log_path, "a", encoding="utf-8") as f:
+        with TextFile(self._log_path, mode="a", encoding="utf-8") as f:
             f.write(entry.to_json() + "\n")
 
     def get_history(
@@ -157,8 +158,8 @@ class CommandLogger:
         if not self._log_path or not self._log_path.exists():
             return
 
-        with open(self._log_path, "r", encoding="utf-8") as f:
-            for line in f:
+        with TextFile(self._log_path, mode="r", encoding="utf-8") as f:
+            for line in f.handle:
                 line = line.strip()
                 if line:
                     try:

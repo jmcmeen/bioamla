@@ -67,6 +67,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from bioamla.core.files import BinaryFile, TextFile
+
 logger = logging.getLogger(__name__)
 
 # Use tomli for Python < 3.11, tomllib for Python >= 3.11
@@ -263,8 +265,8 @@ def load_toml(filepath: Union[str, Path]) -> Dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Configuration file not found: {filepath}")
 
-    with open(path, "rb") as f:
-        return tomllib.load(f)
+    with BinaryFile(path, mode="rb") as f:
+        return tomllib.load(f.handle)
 
 
 def save_toml(config: Dict[str, Any], filepath: Union[str, Path]) -> str:
@@ -297,7 +299,7 @@ def save_toml(config: Dict[str, Any], filepath: Union[str, Path]) -> str:
                     lines.append(f"{key} = [{items}]")
             lines.append("")
 
-    with open(path, "w") as f:
+    with TextFile(path, mode="w") as f:
         f.write("\n".join(lines))
 
     return str(path)

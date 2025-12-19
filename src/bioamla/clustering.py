@@ -24,6 +24,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
+from bioamla.core.files import TextFile
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -1027,8 +1029,8 @@ def export_clusters(
 
     # Save manifest
     manifest_path = output_path / "manifest.json"
-    with open(manifest_path, "w") as f:
-        json.dump(manifest, f, indent=2)
+    with TextFile(manifest_path, mode="w") as f:
+        json.dump(manifest, f.handle, indent=2)
 
     logger.info(f"Exported clusters to {output_dir}")
     return str(output_path)

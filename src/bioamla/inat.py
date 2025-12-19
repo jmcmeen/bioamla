@@ -27,6 +27,7 @@ from typing import Any, List, Optional, Union
 import requests
 from pyinaturalist import get_observation_species_counts, get_observations
 
+from bioamla.core.files import BinaryFile, TextFile
 from bioamla.fileutils import (
     get_extension_from_content_type,
     get_extension_from_url,
@@ -71,8 +72,8 @@ def load_taxon_ids_from_csv(csv_path: Union[str, Path]) -> List[int]:
 
     taxon_ids: List[int] = []
 
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+    with TextFile(csv_path, mode="r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f.handle)
 
         if reader.fieldnames is None or "taxon_id" not in reader.fieldnames:
             raise ValueError(
@@ -671,7 +672,7 @@ def _download_file(url: str, filepath: Path, verbose: bool = True) -> bool:
             if ext and not str(filepath).lower().endswith(ext):
                 filepath = filepath.with_suffix(ext)
 
-        with open(filepath, "wb") as f:
+        with BinaryFile(filepath, mode="wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
 

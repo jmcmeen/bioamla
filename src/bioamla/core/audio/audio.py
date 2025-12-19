@@ -1,26 +1,3 @@
-"""
-Audio Analysis
-==============
-
-This module provides basic audio analysis functions for extracting
-audio features and statistics.
-
-Features:
-- Duration, sample rate, channel count extraction
-- RMS amplitude and dBFS calculation
-- Peak frequency detection
-- Basic frequency statistics (min, max, mean, dominant)
-- Silence/sound detection by amplitude threshold
-
-Example:
-    >>> from bioamla.analysis import analyze_audio, get_audio_info
-    >>> info = get_audio_info("audio.wav")
-    >>> print(f"Duration: {info.duration:.2f}s, Sample rate: {info.sample_rate}Hz")
-
-    >>> analysis = analyze_audio("audio.wav")
-    >>> print(f"RMS: {analysis.rms_amplitude:.4f}, Peak freq: {analysis.peak_frequency:.1f}Hz")
-"""
-
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
