@@ -96,13 +96,13 @@ def _get_template_content(template: str) -> str:
 
     try:
         # Python 3.9+
-        files = resources.files("bioamla.templates")
+        files = resources.files("bioamla._internal.templates")
         template_file = files.joinpath(f"{template}.toml")
         return template_file.read_text()
     except (AttributeError, TypeError, FileNotFoundError):
         # Python 3.8 fallback or file not found
         try:
-            return resources.read_text("bioamla.templates", f"{template}.toml")
+            return resources.read_text("bioamla._internal.templates", f"{template}.toml")
         except (FileNotFoundError, TypeError):
             pass
 
