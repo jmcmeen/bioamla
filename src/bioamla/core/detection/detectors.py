@@ -44,7 +44,7 @@ from scipy.signal import find_peaks
 
 import logging
 
-from bioamla.files import TextFile
+from bioamla.core.files import TextFile
 from bioamla.audio.signal import bandpass_filter
 
 logger = logging.getLogger(__name__)

@@ -18,7 +18,7 @@ from typing import List, Optional, Set
 import pandas as pd
 from bioamla.core.utils import get_audio_files
 
-from bioamla.files.paths import sanitize_filename
+from bioamla.core.files.paths import sanitize_filename
 from bioamla.services.species import find_species_name
 from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
 from bioamla.core.logging import get_logger

@@ -17,7 +17,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from bioamla.files import TextFile
+from bioamla.core.files import TextFile
 from bioamla.ml.base import (
     BaseAudioModel,
     ModelBackend,

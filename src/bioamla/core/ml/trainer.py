@@ -21,7 +21,7 @@ from torch.optim import Adam, AdamW, SGD
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau, StepLR
 from torch.utils.data import DataLoader, Dataset
 
-from bioamla.files import TextFile
+from bioamla.core.files import TextFile
 from bioamla.ml.base import BaseAudioModel, ModelConfig
 
 

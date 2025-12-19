@@ -3,7 +3,7 @@ from typing import Dict, Optional
 import click
 
 from bioamla.core.config import get_config, load_config, set_config
-from bioamla.files import TextFile
+from bioamla.core.files import TextFile
 
 class ConfigContext:
     """Context object to hold configuration."""

@@ -29,7 +29,7 @@ from pyinaturalist import get_observation_species_counts, get_observations
 
 import logging
 
-from bioamla.files import (
+from bioamla.core.files import (
     BinaryFile,
     TextFile,
     get_extension_from_content_type,
