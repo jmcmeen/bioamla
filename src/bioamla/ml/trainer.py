@@ -21,6 +21,7 @@ from torch.optim import Adam, AdamW, SGD
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau, StepLR
 from torch.utils.data import DataLoader, Dataset
 
+from bioamla.core.files import TextFile
 from bioamla.models.base import BaseAudioModel, ModelConfig
 
 
@@ -535,8 +536,8 @@ class ModelTrainer:
     def _save_training_history(self, path: Path) -> None:
         """Save training history to JSON."""
         history_data = [m.to_dict() for m in self.history]
-        with open(path, "w") as f:
-            json.dump(history_data, f, indent=2)
+        with TextFile(path, mode="w") as f:
+            json.dump(history_data, f.handle, indent=2)
 
 
 def train_model(

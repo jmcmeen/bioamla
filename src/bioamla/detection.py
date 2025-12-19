@@ -42,6 +42,7 @@ import numpy as np
 from scipy import ndimage, signal as scipy_signal
 from scipy.signal import find_peaks
 
+from bioamla.core.files import TextFile
 from bioamla.logging import get_logger
 from bioamla.signal import bandpass_filter
 
@@ -1224,19 +1225,19 @@ def export_detections(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     if format == "json":
-        with open(output_path, "w") as f:
-            json.dump([d.to_dict() for d in detections], f, indent=2)
+        with TextFile(output_path, mode="w") as f:
+            json.dump([d.to_dict() for d in detections], f.handle, indent=2)
     else:
         if detections:
             fieldnames = list(detections[0].to_dict().keys())
-            with open(output_path, "w", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
+            with TextFile(output_path, mode="w", newline="") as f:
+                writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
                 writer.writeheader()
                 for d in detections:
                     writer.writerow(d.to_dict())
         else:
             # Write empty file with header
-            with open(output_path, "w", newline="") as f:
+            with TextFile(output_path, mode="w", newline="") as f:
                 f.write("start_time,end_time,confidence,duration,frequency_low,frequency_high,label\n")
 
     return output_path

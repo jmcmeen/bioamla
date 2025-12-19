@@ -31,6 +31,8 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from bioamla.core.files import TextFile
+
 
 @dataclass
 class EvaluationResult:
@@ -462,8 +464,8 @@ def save_evaluation_results(
             "per_class_metrics": result.per_class_metrics,
             "confusion_matrix": result.confusion_matrix.tolist(),
         }
-        with open(output_path, "w") as f:
-            json.dump(data, f, indent=2)
+        with TextFile(output_path, mode="w") as f:
+            json.dump(data, f.handle, indent=2)
 
     elif format == "csv":
         # Save per-class metrics as CSV
@@ -482,7 +484,7 @@ def save_evaluation_results(
 
     elif format == "txt":
         report = format_metrics_report(result)
-        with open(output_path, "w") as f:
+        with TextFile(output_path, mode="w") as f:
             f.write(report)
 
     else:

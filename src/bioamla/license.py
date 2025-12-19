@@ -10,6 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from bioamla.core.files import TextFile
+
 
 def read_template_file(template_path: Path) -> str:
     """
@@ -24,7 +26,7 @@ def read_template_file(template_path: Path) -> str:
     Raises:
         FileNotFoundError: If template file does not exist
     """
-    with open(template_path, 'r', encoding='utf-8') as f:
+    with TextFile(template_path, mode='r', encoding='utf-8') as f:
         return f.read()
 
 
@@ -45,13 +47,13 @@ def parse_csv_file(csv_path: Path) -> list[dict[str, str]]:
     required_fields = ['file_name', 'attr_id', 'attr_lic', 'attr_url', 'attr_note']
     attributions = []
 
-    with open(csv_path, 'r', encoding='utf-8', newline='') as csvfile:
-        sample = csvfile.readline()
-        csvfile.seek(0)
+    with TextFile(csv_path, mode='r', encoding='utf-8', newline='') as f:
+        sample = f.handle.readline()
+        f.handle.seek(0)
         sniffer = csv.Sniffer()
         delimiter = sniffer.sniff(sample).delimiter
 
-        reader = csv.DictReader(csvfile, delimiter=delimiter)
+        reader = csv.DictReader(f.handle, delimiter=delimiter)
 
         if not reader.fieldnames:
             raise ValueError("CSV file appears to be empty or invalid")
@@ -126,7 +128,7 @@ def generate_license_file(
     Raises:
         OSError: If unable to write output file
     """
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with TextFile(output_path, mode='w', encoding='utf-8') as f:
         if template_content:
             f.write(template_content)
             if not template_content.endswith('\n'):
@@ -173,13 +175,13 @@ def validate_csv_structure(csv_path: Path) -> dict[str, bool | list[str] | int]:
     """
     required_fields = ['file_name', 'attr_id', 'attr_lic', 'attr_url', 'attr_note']
 
-    with open(csv_path, 'r', encoding='utf-8', newline='') as csvfile:
-        sample = csvfile.readline()
-        csvfile.seek(0)
+    with TextFile(csv_path, mode='r', encoding='utf-8', newline='') as f:
+        sample = f.handle.readline()
+        f.handle.seek(0)
         sniffer = csv.Sniffer()
         delimiter = sniffer.sniff(sample).delimiter
 
-        reader = csv.DictReader(csvfile, delimiter=delimiter)
+        reader = csv.DictReader(f.handle, delimiter=delimiter)
         field_names = list(reader.fieldnames or [])
 
         rows = list(reader)

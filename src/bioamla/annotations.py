@@ -30,6 +30,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 
+from bioamla.core.files import TextFile
+
 logger = logging.getLogger(__name__)
 
 
@@ -348,9 +350,9 @@ def load_raven_selection_table(
 
     annotations = []
 
-    with open(path, "r", newline="", encoding=encoding) as f:
+    with TextFile(path, mode="r", newline="", encoding=encoding) as f:
         # Raven uses tab-delimited format
-        reader = csv.DictReader(f, delimiter="\t")
+        reader = csv.DictReader(f.handle, delimiter="\t")
 
         # Auto-detect label column if not specified
         if label_column is None:
@@ -446,8 +448,8 @@ def save_raven_selection_table(
             custom_cols.update(ann.custom_fields.keys())
         columns.extend(sorted(custom_cols))
 
-    with open(path, "w", newline="", encoding=encoding) as f:
-        writer = csv.DictWriter(f, fieldnames=columns, delimiter="\t")
+    with TextFile(path, mode="w", newline="", encoding=encoding) as f:
+        writer = csv.DictWriter(f.handle, fieldnames=columns, delimiter="\t")
         writer.writeheader()
 
         for i, ann in enumerate(annotations, start=1):
@@ -515,8 +517,8 @@ def load_csv_annotations(
 
     annotations = []
 
-    with open(path, "r", newline="", encoding=encoding) as f:
-        reader = csv.DictReader(f)
+    with TextFile(path, mode="r", newline="", encoding=encoding) as f:
+        reader = csv.DictReader(f.handle)
 
         for row in reader:
             try:
@@ -598,8 +600,8 @@ def save_csv_annotations(
             custom_cols.update(ann.custom_fields.keys())
         columns.extend(sorted(custom_cols))
 
-    with open(path, "w", newline="", encoding=encoding) as f:
-        writer = csv.DictWriter(f, fieldnames=columns)
+    with TextFile(path, mode="w", newline="", encoding=encoding) as f:
+        writer = csv.DictWriter(f.handle, fieldnames=columns)
         writer.writeheader()
 
         for ann in annotations:
@@ -896,8 +898,8 @@ def load_label_mapping(filepath: str, encoding: str = "utf-8") -> Dict[str, str]
 
     mapping = {}
 
-    with open(path, "r", newline="", encoding=encoding) as f:
-        reader = csv.DictReader(f)
+    with TextFile(path, mode="r", newline="", encoding=encoding) as f:
+        reader = csv.DictReader(f.handle)
         for row in reader:
             source = row.get("source", "").strip()
             target = row.get("target", "").strip()
@@ -927,8 +929,8 @@ def save_label_mapping(
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(path, "w", newline="", encoding=encoding) as f:
-        writer = csv.DictWriter(f, fieldnames=["source", "target"])
+    with TextFile(path, mode="w", newline="", encoding=encoding) as f:
+        writer = csv.DictWriter(f.handle, fieldnames=["source", "target"])
         writer.writeheader()
         for source, target in sorted(mapping.items()):
             writer.writerow({"source": source, "target": target})

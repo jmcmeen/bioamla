@@ -29,6 +29,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+from bioamla.core.files import TextFile
+
 logger = logging.getLogger(__name__)
 
 
@@ -520,8 +522,8 @@ class LabelHierarchy:
 
         hierarchy = cls()
 
-        with open(filepath, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
+        with TextFile(filepath, mode="r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f.handle)
 
             for row in reader:
                 parent = None
@@ -541,16 +543,16 @@ class LabelHierarchy:
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2)
+        with TextFile(path, mode="w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f.handle, indent=2)
 
         return str(path)
 
     @classmethod
     def load(cls, filepath: str) -> "LabelHierarchy":
         """Load hierarchy from JSON file."""
-        with open(filepath, encoding="utf-8") as f:
-            data = json.load(f)
+        with TextFile(filepath, mode="r", encoding="utf-8") as f:
+            data = json.load(f.handle)
         return cls.from_dict(data)
 
 
@@ -1056,8 +1058,8 @@ class Ensemble:
             "weights": self.weights,
             "strategy": type(self.strategy).__name__,
         }
-        with open(path / "config.json", "w") as f:
-            json.dump(config, f, indent=2)
+        with TextFile(path / "config.json", mode="w") as f:
+            json.dump(config, f.handle, indent=2)
 
         return str(path)
 

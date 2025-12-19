@@ -3,6 +3,7 @@ from typing import Dict, Optional
 import click
 
 from bioamla.config import get_config, load_config, set_config
+from bioamla.core.files import TextFile
 
 class ConfigContext:
     """Context object to hold configuration."""
@@ -1328,8 +1329,8 @@ def predict_generic(
         if output:
             output_path = Path(output)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, 'w', newline='') as f:
-                writer = csv.writer(f)
+            with TextFile(output_path, mode='w', newline='') as f:
+                writer = csv.writer(f.handle)
                 writer.writerow(['filepath', 'start_time', 'end_time', 'label', 'confidence'])
                 for r in all_results:
                     writer.writerow([r.filepath, f"{r.start_time:.3f}", f"{r.end_time:.3f}",
@@ -1350,8 +1351,8 @@ def predict_generic(
         results = model.predict(path)
 
         if output:
-            with open(output, 'w', newline='') as f:
-                writer = csv.writer(f)
+            with TextFile(output, mode='w', newline='') as f:
+                writer = csv.writer(f.handle)
                 writer.writerow(['filepath', 'start_time', 'end_time', 'label', 'confidence'])
                 for r in results:
                     writer.writerow([r.filepath, f"{r.start_time:.3f}", f"{r.end_time:.3f}",
@@ -1435,7 +1436,7 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
 
         # Save filepaths mapping separately
         filepaths_output = str(output).replace('.npy', '_filepaths.txt')
-        with open(filepaths_output, 'w') as f:
+        with TextFile(filepaths_output, mode='w') as f:
             f.write('\n'.join(filepaths_list))
 
         if not quiet:
@@ -1900,8 +1901,8 @@ def audio_detect_events(path, output, quiet):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output, 'w', newline='') as f:
-        writer = csv.writer(f)
+    with TextFile(output, mode='w', newline='') as f:
+        writer = csv.writer(f.handle)
         writer.writerow(['time', 'strength'])
         for event in events:
             writer.writerow([f"{event.time:.4f}", f"{event.strength:.4f}"])
@@ -2005,7 +2006,7 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
     import json
     from pathlib import Path
 
-    from bioamla.services.helpers.analysis import (
+    from bioamla.core.audio.audio import (
         analyze_audio,
         summarize_analysis,
     )
@@ -2061,8 +2062,8 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
                 "files": [a.to_dict() for a in analyses]
             }
             if output:
-                with open(output, 'w') as f:
-                    json.dump(result, f, indent=2)
+                with TextFile(output, mode='w') as f:
+                    json.dump(result, f.handle, indent=2)
                 click.echo(f"Results saved to {output}")
             else:
                 click.echo(json.dumps(result, indent=2))
@@ -2070,8 +2071,8 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
         elif output_format == 'csv':
             import csv
             output_path = output or "analysis_results.csv"
-            with open(output_path, 'w', newline='') as f:
-                writer = csv.writer(f)
+            with TextFile(output_path, mode='w', newline='') as f:
+                writer = csv.writer(f.handle)
                 writer.writerow([
                     'file_path', 'duration', 'sample_rate', 'channels',
                     'rms', 'rms_db', 'peak', 'peak_db',
@@ -2127,8 +2128,8 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
         if output_format == 'json':
             result = analysis.to_dict()
             if output:
-                with open(output, 'w') as f:
-                    json.dump(result, f, indent=2)
+                with TextFile(output, mode='w', encoding='utf-8') as f:
+                    json.dump(result, f.handle, indent=2)
                 click.echo(f"Results saved to {output}")
             else:
                 click.echo(json.dumps(result, indent=2))
@@ -2485,9 +2486,9 @@ def inat_search(
 
     if output:
         import csv
-        with open(output, 'w', newline='', encoding='utf-8') as f:
+        with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
             fieldnames = ['observation_id', 'scientific_name', 'common_name', 'sound_count', 'observed_on', 'location', 'url']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
             for obs in results:
                 taxon = obs.get('taxon', {})
@@ -2544,8 +2545,8 @@ def inat_stats(
     )
 
     if output:
-        with open(output, 'w', encoding='utf-8') as f:
-            json.dump(stats, f, indent=2)
+        with TextFile(output, mode='w', encoding='utf-8') as f:
+            json.dump(stats, f.handle, indent=2)
         click.echo(f"Saved project stats to {output}")
     elif quiet:
         click.echo(json.dumps(stats, indent=2))
@@ -3387,15 +3388,15 @@ def annotation_generate_labels(
         # Also save label map
         label_map_file = output_path.with_suffix('.labels.csv')
         import csv
-        with open(label_map_file, 'w', newline='') as f:
-            writer = csv.writer(f)
+        with TextFile(label_map_file, mode='w', newline='') as f:
+            writer = csv.writer(f.handle)
             writer.writerow(['label', 'index'])
             for label, idx in sorted(label_map.items(), key=lambda x: x[1]):
                 writer.writerow([label, idx])
     else:
         import csv
-        with open(output_file, 'w', newline='') as f:
-            writer = csv.writer(f)
+        with TextFile(output_file, mode='w', newline='') as f:
+            writer = csv.writer(f.handle)
             # Header: clip_start, clip_end, then each label
             header = ['clip_start', 'clip_end'] + sorted(label_map.keys(), key=lambda x: label_map[x])
             writer.writerow(header)
@@ -3491,7 +3492,7 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
     """
     import json as json_lib
 
-    from bioamla.api import xeno_canto
+    from bioamla import xeno_canto
 
     try:
         results = xeno_canto.search(
@@ -3548,7 +3549,7 @@ def xc_download(species, genus, country, quality, max_recordings, output_dir, de
         bioamla api xc-download --species "Turdus migratorius" --quality A -n 5
         bioamla api xc-download --genus Strix --country "United States" -o ./owls
     """
-    from bioamla.api import xeno_canto
+    from bioamla import xeno_canto
 
     click.echo("Searching Xeno-canto...")
 
@@ -3607,7 +3608,7 @@ def ml_search(species_code, scientific_name, region, min_rating, max_results, ou
     """
     import json as json_lib
 
-    from bioamla.api import macaulay
+    from bioamla import macaulay
 
     try:
         results = macaulay.search(
@@ -3655,7 +3656,7 @@ def ml_download(species_code, scientific_name, region, min_rating, max_recording
         bioamla api ml-download --species-code amerob --min-rating 4 -n 5
         bioamla api ml-download --scientific-name "Strix varia" -o ./owls
     """
-    from bioamla.api import macaulay
+    from bioamla import macaulay
 
     click.echo("Searching Macaulay Library...")
 
@@ -3710,7 +3711,7 @@ def species_lookup(name, to_common, to_scientific, info):
         bioamla api species "American Robin" --to-scientific
         bioamla api species "amerob" --info
     """
-    from bioamla.api import species
+    from bioamla import species
 
     if info:
         result = species.get_species_info(name)
@@ -3758,7 +3759,7 @@ def species_search(query, limit):
         bioamla api species-search robin
         bioamla api species-search "barred" --limit 5
     """
-    from bioamla.api import species
+    from bioamla import species
 
     results = species.search(query, limit=limit)
 
@@ -3789,19 +3790,19 @@ def clear_cache(clear_all, xc, ml, species):
     total = 0
 
     if clear_all or xc:
-        from bioamla.api import xeno_canto
+        from bioamla import xeno_canto
         count = xeno_canto.clear_cache()
         click.echo(f"Cleared {count} Xeno-canto cache entries")
         total += count
 
     if clear_all or ml:
-        from bioamla.api import macaulay
+        from bioamla import macaulay
         count = macaulay.clear_cache()
         click.echo(f"Cleared {count} Macaulay Library cache entries")
         total += count
 
     if clear_all or species:
-        from bioamla.api import species as species_mod
+        from bioamla import species as species_mod
         count = species_mod.clear_cache()
         click.echo(f"Cleared {count} species cache entries")
         total += count
@@ -3902,8 +3903,8 @@ def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_fr
         if successful:
             fieldnames = list(successful[0].keys())
             if output:
-                with open(output, 'w', newline='', encoding='utf-8') as f:
-                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
+                    writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
                     writer.writeheader()
                     writer.writerows(successful)
                 click.echo(f"Results saved to {output}")
@@ -3986,8 +3987,8 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
 
         fieldnames = list(results[0].keys())
         if output:
-            with open(output, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
+            with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(results)
             click.echo(f"Results saved to {output}")
@@ -4543,8 +4544,8 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
             fieldnames = ['time', 'amplitude', 'width', 'prominence']
             if len(audio_files) > 1:
                 fieldnames.append('source_file')
-            with open(output, 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
+            with TextFile(output, mode='w', newline='') as f:
+                writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
                 writer.writeheader()
                 for p in all_peaks:
                     row = p.to_dict()
@@ -4824,8 +4825,8 @@ def learn_init(predictions_csv: str, output_state: str, strategy: str,
     # Load pre-labeled samples if provided
     if labeled_csv:
         labeled_samples = []
-        with open(labeled_csv, newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
+        with TextFile(labeled_csv, mode='r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f.handle)
             for row in reader:
                 sample_id = row.get('id') or row.get('sample_id')
                 label = row.get('label')
@@ -4872,8 +4873,8 @@ def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: b
     )
 
     # Load state to determine sampler type
-    with open(state_file) as f:
-        state_data = json.load(f)
+    with TextFile(state_file, mode='r', encoding='utf-8') as f:
+        state_data = json.load(f.handle)
 
     # Default to entropy sampler
     sampler = UncertaintySampler(strategy='entropy')
@@ -4899,10 +4900,10 @@ def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: b
     # Save query results
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        with open(output, 'w', newline='', encoding='utf-8') as f:
+        with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
             fieldnames = ['id', 'filepath', 'start_time', 'end_time',
                          'predicted_label', 'confidence', 'label']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
             for sample in queried:
                 writer.writerow({
@@ -4943,8 +4944,8 @@ def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet:
 
     # Read annotations
     annotations_imported = 0
-    with open(annotations_csv, newline='', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
+    with TextFile(annotations_csv, mode='r', newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f.handle)
         for row in reader:
             sample_id = row.get('id') or row.get('sample_id')
             label = row.get('label', '').strip()
@@ -5056,8 +5057,8 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
 
     # Load ground truth
     ground_truth = {}
-    with open(ground_truth_csv, newline='', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
+    with TextFile(ground_truth_csv, mode='r', newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f.handle)
         for row in reader:
             sample_id = row.get('id') or row.get('sample_id')
             label = row.get('label', '').strip()
@@ -5131,9 +5132,9 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
     # Save results
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        with open(output, 'w', newline='', encoding='utf-8') as f:
+        with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
             fieldnames = ['iteration', 'total_labeled', 'total_unlabeled']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(results)
 
@@ -5269,8 +5270,8 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
                 return [convert_numpy(v) for v in obj]
             return obj
 
-        with open(output, 'w') as f:
-            json.dump(convert_numpy(analysis), f, indent=2)
+        with TextFile(output, mode='w', encoding='utf-8') as f:
+            json.dump(convert_numpy(analysis), f.handle, indent=2)
         if not quiet:
             click.echo(f"Saved analysis to: {output}")
 
@@ -5435,8 +5436,8 @@ def ebird_nearby(lat: float, lng: float, api_key: str, distance: float,
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        with open(output, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=['species_code', 'common_name', 'scientific_name',
+        with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f.handle, fieldnames=['species_code', 'common_name', 'scientific_name',
                                                     'location_name', 'observation_date', 'how_many'])
             writer.writeheader()
             for obs in observations:
@@ -5468,8 +5469,8 @@ def pg_export(detections_file: str, connection: str, detector: str,
 
     from bioamla.integrations import PostgreSQLExporter
 
-    with open(detections_file) as f:
-        detections = json.load(f)
+    with TextFile(detections_file, mode='r', encoding='utf-8') as f:
+        detections = json.load(f.handle)
 
     exporter = PostgreSQLExporter(connection_string=connection)
 

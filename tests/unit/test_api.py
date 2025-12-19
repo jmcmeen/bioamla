@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bioamla.api.base import APICache, APIClient, RateLimiter, cached, rate_limited
+from bioamla.base_api import APICache, APIClient, RateLimiter, cached, rate_limited
 
 
 class TestRateLimiter:
@@ -296,7 +296,7 @@ class TestXenoCanto:
 
     def test_xc_recording_from_api_response(self):
         """Test creating XCRecording from API data."""
-        from bioamla.api.xeno_canto import XCRecording
+        from bioamla.xeno_canto import XCRecording
 
         data = {
             "id": "12345",
@@ -330,7 +330,7 @@ class TestXenoCanto:
 
     def test_xc_recording_to_dict(self):
         """Test converting XCRecording to dictionary."""
-        from bioamla.api.xeno_canto import XCRecording
+        from bioamla.xeno_canto import XCRecording
 
         recording = XCRecording(
             id="12345",
@@ -348,7 +348,7 @@ class TestXenoCanto:
     @patch("bioamla.api.xeno_canto._client")
     def test_search_requires_parameters(self, mock_client):
         """Test search raises error without parameters."""
-        from bioamla.api.xeno_canto import search
+        from bioamla.xeno_canto import search
 
         with pytest.raises(ValueError, match="At least one search parameter"):
             search()
@@ -359,7 +359,7 @@ class TestMacaulayLibrary:
 
     def test_ml_asset_from_api_response(self):
         """Test creating MLAsset from API data."""
-        from bioamla.api.macaulay import MLAsset
+        from bioamla.macaulay import MLAsset
 
         data = {
             "assetId": "123456",
@@ -387,7 +387,7 @@ class TestMacaulayLibrary:
 
     def test_ml_asset_to_dict(self):
         """Test converting MLAsset to dictionary."""
-        from bioamla.api.macaulay import MLAsset
+        from bioamla.macaulay import MLAsset
 
         asset = MLAsset(
             asset_id="123456",
@@ -406,7 +406,7 @@ class TestMacaulayLibrary:
     @patch("bioamla.api.macaulay._client")
     def test_search_requires_filter(self, mock_client):
         """Test search raises error without filters."""
-        from bioamla.api.macaulay import search
+        from bioamla.macaulay import search
 
         with pytest.raises(ValueError, match="At least one search filter"):
             search()
@@ -417,7 +417,7 @@ class TestSpecies:
 
     def test_species_info_to_dict(self):
         """Test SpeciesInfo to_dict method."""
-        from bioamla.api.species import SpeciesInfo
+        from bioamla.species import SpeciesInfo
 
         info = SpeciesInfo(
             scientific_name="Turdus migratorius",
@@ -437,7 +437,7 @@ class TestSpecies:
 
     def test_normalize_name(self):
         """Test name normalization."""
-        from bioamla.api.species import _normalize_name
+        from bioamla.species import _normalize_name
 
         assert _normalize_name("Turdus migratorius") == "turdus migratorius"
         assert _normalize_name("American Robin") == "american robin"
@@ -448,7 +448,7 @@ class TestSpecies:
     @patch("bioamla.api.species._taxonomy_loaded", False)
     def test_scientific_to_common_cache_lookup(self):
         """Test scientific_to_common uses cache."""
-        from bioamla.api import species
+        from bioamla import species
 
         # Pre-populate cache
         species._taxonomy_cache["turdus migratorius"] = {
@@ -465,7 +465,7 @@ class TestSpecies:
     @patch("bioamla.api.species._taxonomy_loaded", False)
     def test_common_to_scientific_cache_lookup(self):
         """Test common_to_scientific uses cache."""
-        from bioamla.api import species
+        from bioamla import species
 
         # Pre-populate cache
         species._taxonomy_cache["american robin"] = {
@@ -480,7 +480,7 @@ class TestSpecies:
 
     def test_batch_convert(self):
         """Test batch_convert function."""
-        from bioamla.api.species import batch_convert, _taxonomy_cache, _normalize_name
+        from bioamla.species import batch_convert, _taxonomy_cache, _normalize_name
 
         # Pre-populate cache
         _taxonomy_cache[_normalize_name("Turdus migratorius")] = {
@@ -492,7 +492,7 @@ class TestSpecies:
             "common_name": "Barred Owl",
         }
 
-        from bioamla.api import species
+        from bioamla import species
         species._taxonomy_loaded = True
 
         results = batch_convert(

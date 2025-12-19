@@ -16,6 +16,8 @@ import warnings
 from pathlib import Path
 from typing import List, Optional, Set, Tuple
 
+from bioamla.core.files import TextFile
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,8 +71,8 @@ def read_metadata_csv(filepath: Path) -> Tuple[List[dict], Set[str]]:
         return rows, fieldnames
 
     try:
-        with open(filepath, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
+        with TextFile(filepath, mode="r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f.handle)
             fieldnames = set(reader.fieldnames or [])
             rows = list(reader)
         logger.debug(f"Read {len(rows)} rows from {filepath}")
@@ -111,8 +113,8 @@ def write_metadata_csv(
         else:
             # When not merging, empty rows means clear the file
             logger.debug("Writing empty metadata file (clearing existing)")
-            with open(filepath, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=REQUIRED_FIELDS)
+            with TextFile(filepath, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f.handle, fieldnames=REQUIRED_FIELDS)
                 writer.writeheader()
             return 0
 
@@ -197,8 +199,8 @@ def write_metadata_csv(
         normalized_rows.append(normalized_row)
 
     # Write to file
-    with open(filepath, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=final_fieldnames)
+    with TextFile(filepath, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f.handle, fieldnames=final_fieldnames)
         writer.writeheader()
         writer.writerows(normalized_rows)
 

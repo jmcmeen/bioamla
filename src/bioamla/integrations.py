@@ -23,6 +23,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from bioamla.core.files import TextFile
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -932,8 +934,8 @@ class PostgreSQLExporter:
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
+        with TextFile(output_file, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f.handle)
             writer.writerow(columns)
 
             for row in cursor.fetchall():

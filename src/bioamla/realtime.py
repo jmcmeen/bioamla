@@ -28,6 +28,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from bioamla.core.files import TextFile
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -340,8 +342,8 @@ class LiveRecorder:
 
             # Save metadata
             meta_path = filepath.with_suffix(".json")
-            with open(meta_path, "w") as f:
-                json.dump(event.to_dict(), f, indent=2)
+            with TextFile(meta_path, mode="w", encoding="utf-8") as f:
+                json.dump(event.to_dict(), f.handle, indent=2)
 
         except Exception as e:
             logger.error(f"Error saving detection: {e}")

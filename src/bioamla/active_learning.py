@@ -40,6 +40,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
+from bioamla.core.files import TextFile
+
 logger = logging.getLogger(__name__)
 
 
@@ -838,8 +840,8 @@ class ActiveLearner:
             "annotation_history": [r.to_dict() for r in self.annotation_history],
         }
 
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(state_dict, f, indent=2)
+        with TextFile(path, mode="w", encoding="utf-8") as f:
+            json.dump(state_dict, f.handle, indent=2)
 
         logger.info(f"Saved active learning state to {filepath}")
         return str(path)
@@ -862,8 +864,8 @@ class ActiveLearner:
         Returns:
             ActiveLearner instance with loaded state
         """
-        with open(filepath, "r", encoding="utf-8") as f:
-            state_dict = json.load(f)
+        with TextFile(filepath, mode="r", encoding="utf-8") as f:
+            state_dict = json.load(f.handle)
 
         learner = cls(
             sampler=sampler,
@@ -977,10 +979,10 @@ class AnnotationQueue:
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(path, "w", newline="", encoding="utf-8") as f:
+        with TextFile(path, mode="w", newline="", encoding="utf-8") as f:
             fieldnames = ["id", "filepath", "start_time", "end_time",
                          "predicted_label", "confidence", "status"]
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
 
             for sample in self.samples:
@@ -1130,8 +1132,8 @@ def create_samples_from_predictions(
     """
     samples = []
 
-    with open(predictions_csv, "r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+    with TextFile(predictions_csv, mode="r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f.handle)
 
         for i, row in enumerate(reader):
             filepath = row.get(filepath_col, "")
@@ -1177,10 +1179,10 @@ def export_annotations(
     labeled_samples = learner.get_labeled_samples()
 
     if format == "csv":
-        with open(path, "w", newline="", encoding="utf-8") as f:
+        with TextFile(path, mode="w", newline="", encoding="utf-8") as f:
             fieldnames = ["id", "filepath", "start_time", "end_time", "label",
                          "predicted_label", "confidence"]
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
 
             for sample in labeled_samples:

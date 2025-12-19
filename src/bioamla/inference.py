@@ -29,6 +29,8 @@ from typing import Any, Dict, List, Optional, Union
 import torch
 from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
+from bioamla.core.files import TextFile
+
 from bioamla.device import get_device
 from bioamla.logging import get_logger
 from bioamla.torchaudio import (
@@ -275,8 +277,8 @@ def run_batch_inference(config: BatchInferenceConfig) -> Dict[str, Any]:
     fieldnames = ["filepath", "start_time", "end_time", "predicted_label", "confidence"]
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+    with TextFile(output_path, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
         writer.writeheader()
 
     # Process files
@@ -292,8 +294,8 @@ def run_batch_inference(config: BatchInferenceConfig) -> Dict[str, Any]:
             )
 
             # Append to CSV
-            with open(output_path, "a", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
+            with TextFile(output_path, mode="a", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
                 for result in results:
                     writer.writerow({
                         "filepath": result.filepath,

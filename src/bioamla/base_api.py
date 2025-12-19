@@ -26,6 +26,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from bioamla.core.files import BinaryFile, TextFile
 from bioamla.logging import get_logger
 
 logger = get_logger(__name__)
@@ -186,8 +187,8 @@ class APICache:
             return None
 
         try:
-            with open(meta_path) as f:
-                meta = json.load(f)
+            with TextFile(meta_path, mode="r") as f:
+                meta = json.load(f.handle)
 
             # Check expiration
             if time.time() > meta.get("expires_at", 0):
@@ -195,8 +196,8 @@ class APICache:
                 return None
 
             # Load cached data
-            with open(cache_path, "rb") as f:
-                return pickle.load(f)
+            with BinaryFile(cache_path, mode="rb") as f:
+                return pickle.load(f.handle)
 
         except (json.JSONDecodeError, pickle.PickleError, OSError) as e:
             logger.warning(f"Cache read error for {key}: {e}")
@@ -224,8 +225,8 @@ class APICache:
                 self._maybe_clean()
 
                 # Write cache data
-                with open(cache_path, "wb") as f:
-                    pickle.dump(value, f)
+                with BinaryFile(cache_path, mode="wb") as f:
+                    pickle.dump(value, f.handle)
 
                 # Write metadata
                 meta = {
@@ -233,8 +234,8 @@ class APICache:
                     "created_at": time.time(),
                     "expires_at": time.time() + ttl,
                 }
-                with open(meta_path, "w") as f:
-                    json.dump(meta, f)
+                with TextFile(meta_path, mode="w") as f:
+                    json.dump(meta, f.handle)
 
             except (pickle.PickleError, OSError) as e:
                 logger.warning(f"Cache write error for {key}: {e}")
@@ -284,8 +285,8 @@ class APICache:
         now = time.time()
         for meta_path in self.cache_dir.glob("*.meta"):
             try:
-                with open(meta_path) as f:
-                    meta = json.load(f)
+                with TextFile(meta_path, mode="r") as f:
+                    meta = json.load(f.handle)
                 if now > meta.get("expires_at", 0):
                     cache_path = meta_path.with_suffix(".cache")
                     if cache_path.exists():
@@ -304,8 +305,8 @@ class APICache:
             entries = []
             for meta_path in self.cache_dir.glob("*.meta"):
                 try:
-                    with open(meta_path) as f:
-                        meta = json.load(f)
+                    with TextFile(meta_path, mode="r") as f:
+                        meta = json.load(f.handle)
                     cache_path = meta_path.with_suffix(".cache")
                     if cache_path.exists():
                         entries.append((meta.get("created_at", 0), cache_path, meta_path))
@@ -507,7 +508,7 @@ class APIClient:
 
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(filepath, "wb") as f:
+        with BinaryFile(filepath, mode="wb") as f:
             for chunk in response.iter_content(chunk_size=chunk_size):
                 f.write(chunk)
                 downloaded += len(chunk)
