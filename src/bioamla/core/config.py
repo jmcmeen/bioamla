@@ -61,13 +61,12 @@ Example configuration file (bioamla.toml):
 """
 
 import logging
-import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from bioamla.core.files import BinaryFile, TextFile
+from bioamla.files import BinaryFile, TextFile
 
 logger = logging.getLogger(__name__)
 
