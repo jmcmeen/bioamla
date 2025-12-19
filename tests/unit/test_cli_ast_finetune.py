@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from bioamla.cli import _count_files, _get_folder_size, _is_large_folder, cli
+from bioamla.views.cli import _count_files, _get_folder_size, _is_large_folder, cli
 
 
 @pytest.fixture

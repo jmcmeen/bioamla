@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from bioamla.cli import cli
+from bioamla.views.cli import cli
 
 
 @pytest.fixture

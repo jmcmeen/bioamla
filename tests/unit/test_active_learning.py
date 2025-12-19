@@ -20,7 +20,7 @@ from bioamla.active_learning import (
     HybridSampler,
     QueryByCommittee,
     RandomSampler,
-    Sample,
+    ActiveLearningSample,
     SimulatedOracle,
     UncertaintySampler,
     compute_sample_uncertainty,
@@ -39,7 +39,7 @@ class TestSample:
 
     def test_basic_sample(self):
         """Test creating a basic sample."""
-        sample = Sample(
+        sample = ActiveLearningSample(
             id="test_001",
             filepath="/path/to/audio.wav",
             start_time=0.0,
@@ -54,7 +54,7 @@ class TestSample:
     def test_sample_with_predictions(self):
         """Test sample with model predictions."""
         probs = np.array([0.1, 0.3, 0.6])
-        sample = Sample(
+        sample = ActiveLearningSample(
             id="test_002",
             filepath="/path/to/audio.wav",
             predicted_label="class_c",
@@ -67,9 +67,9 @@ class TestSample:
 
     def test_sample_hash_and_eq(self):
         """Test sample hashing and equality."""
-        sample1 = Sample(id="test_001", filepath="/path/1.wav")
-        sample2 = Sample(id="test_001", filepath="/path/2.wav")
-        sample3 = Sample(id="test_002", filepath="/path/1.wav")
+        sample1 = ActiveLearningSample(id="test_001", filepath="/path/1.wav")
+        sample2 = ActiveLearningSample(id="test_001", filepath="/path/2.wav")
+        sample3 = ActiveLearningSample(id="test_002", filepath="/path/1.wav")
 
         assert sample1 == sample2  # Same ID
         assert sample1 != sample3  # Different ID
@@ -77,7 +77,7 @@ class TestSample:
 
     def test_sample_to_dict(self):
         """Test converting sample to dictionary."""
-        sample = Sample(
+        sample = ActiveLearningSample(
             id="test_001",
             filepath="/path/to/audio.wav",
             start_time=1.0,
@@ -104,7 +104,7 @@ class TestSample:
             "label": "frog",
             "confidence": 0.9,
         }
-        sample = Sample.from_dict(data)
+        sample = ActiveLearningSample.from_dict(data)
 
         assert sample.id == "test_001"
         assert sample.filepath == "/path/to/audio.wav"
@@ -199,11 +199,11 @@ class TestUncertaintySampler:
     def _create_samples_with_probs(self) -> list:
         """Create test samples with probability distributions."""
         samples = [
-            Sample(id="high_conf", filepath="a.wav",
+            ActiveLearningSample(id="high_conf", filepath="a.wav",
                   probabilities=np.array([0.9, 0.05, 0.05])),  # High confidence
-            Sample(id="low_conf", filepath="b.wav",
+            ActiveLearningSample(id="low_conf", filepath="b.wav",
                   probabilities=np.array([0.4, 0.35, 0.25])),  # Low confidence
-            Sample(id="uniform", filepath="c.wav",
+            ActiveLearningSample(id="uniform", filepath="c.wav",
                   probabilities=np.array([0.33, 0.34, 0.33])),  # Most uncertain
         ]
         return samples
@@ -261,9 +261,9 @@ class TestUncertaintySampler:
         """Test using confidence when probabilities unavailable."""
         sampler = UncertaintySampler(strategy="entropy")
         samples = [
-            Sample(id="s1", filepath="a.wav", confidence=0.9),
-            Sample(id="s2", filepath="b.wav", confidence=0.5),
-            Sample(id="s3", filepath="c.wav", confidence=0.3),
+            ActiveLearningSample(id="s1", filepath="a.wav", confidence=0.9),
+            ActiveLearningSample(id="s2", filepath="b.wav", confidence=0.5),
+            ActiveLearningSample(id="s3", filepath="c.wav", confidence=0.3),
         ]
 
         scores = sampler.score(samples)
@@ -278,13 +278,13 @@ class TestDiversitySampler:
     def _create_samples_with_features(self) -> list:
         """Create test samples with features."""
         samples = [
-            Sample(id="s1", filepath="a.wav",
+            ActiveLearningSample(id="s1", filepath="a.wav",
                   features=np.array([0.0, 0.0])),  # Origin
-            Sample(id="s2", filepath="b.wav",
+            ActiveLearningSample(id="s2", filepath="b.wav",
                   features=np.array([1.0, 0.0])),  # Far from origin
-            Sample(id="s3", filepath="c.wav",
+            ActiveLearningSample(id="s3", filepath="c.wav",
                   features=np.array([0.0, 1.0])),  # Far from origin
-            Sample(id="s4", filepath="d.wav",
+            ActiveLearningSample(id="s4", filepath="d.wav",
                   features=np.array([5.0, 5.0])),  # Farthest from origin
         ]
         return samples
@@ -313,8 +313,8 @@ class TestDiversitySampler:
         """Test random fallback when no features available."""
         sampler = DiversitySampler(method="greedy")
         samples = [
-            Sample(id="s1", filepath="a.wav"),
-            Sample(id="s2", filepath="b.wav"),
+            ActiveLearningSample(id="s1", filepath="a.wav"),
+            ActiveLearningSample(id="s2", filepath="b.wav"),
         ]
 
         scores = sampler.score(samples)
@@ -324,9 +324,9 @@ class TestDiversitySampler:
         """Test using probabilities as features when no explicit features."""
         sampler = DiversitySampler(method="greedy")
         samples = [
-            Sample(id="s1", filepath="a.wav",
+            ActiveLearningSample(id="s1", filepath="a.wav",
                   probabilities=np.array([0.9, 0.1])),
-            Sample(id="s2", filepath="b.wav",
+            ActiveLearningSample(id="s2", filepath="b.wav",
                   probabilities=np.array([0.1, 0.9])),
         ]
 
@@ -346,10 +346,10 @@ class TestHybridSampler:
         )
 
         samples = [
-            Sample(id="s1", filepath="a.wav",
+            ActiveLearningSample(id="s1", filepath="a.wav",
                   probabilities=np.array([0.9, 0.05, 0.05]),
                   features=np.array([0.0, 0.0])),
-            Sample(id="s2", filepath="b.wav",
+            ActiveLearningSample(id="s2", filepath="b.wav",
                   probabilities=np.array([0.33, 0.34, 0.33]),
                   features=np.array([5.0, 5.0])),
         ]
@@ -362,7 +362,7 @@ class TestHybridSampler:
         sampler = HybridSampler(uncertainty_ratio=0.5)
 
         samples = [
-            Sample(id=f"s{i}", filepath=f"{i}.wav",
+            ActiveLearningSample(id=f"s{i}", filepath=f"{i}.wav",
                   probabilities=np.random.dirichlet([1, 1, 1]),
                   features=np.random.randn(5))
             for i in range(20)
@@ -378,14 +378,14 @@ class TestRandomSampler:
     def test_random_selection(self):
         """Test random sample selection."""
         sampler = RandomSampler(seed=42)
-        samples = [Sample(id=f"s{i}", filepath=f"{i}.wav") for i in range(10)]
+        samples = [ActiveLearningSample(id=f"s{i}", filepath=f"{i}.wav") for i in range(10)]
 
         selected = sampler.select(samples, n_samples=3)
         assert len(selected) == 3
 
     def test_reproducibility_with_seed(self):
         """Test that same seed gives same results."""
-        samples = [Sample(id=f"s{i}", filepath=f"{i}.wav") for i in range(10)]
+        samples = [ActiveLearningSample(id=f"s{i}", filepath=f"{i}.wav") for i in range(10)]
 
         sampler1 = RandomSampler(seed=42)
         sampler2 = RandomSampler(seed=42)
@@ -420,8 +420,8 @@ class TestQueryByCommittee:
         })
 
         samples = [
-            Sample(id="agree", filepath="a.wav"),
-            Sample(id="disagree", filepath="b.wav"),
+            ActiveLearningSample(id="agree", filepath="a.wav"),
+            ActiveLearningSample(id="disagree", filepath="b.wav"),
         ]
 
         scores = sampler.score(samples)
@@ -448,8 +448,8 @@ class TestBalancedSampler:
         sampler = BalancedSampler(class_counts={"bird": 100, "frog": 10})
 
         samples = [
-            Sample(id="s1", filepath="a.wav", predicted_label="bird"),
-            Sample(id="s2", filepath="b.wav", predicted_label="frog"),
+            ActiveLearningSample(id="s1", filepath="a.wav", predicted_label="bird"),
+            ActiveLearningSample(id="s2", filepath="b.wav", predicted_label="frog"),
         ]
 
         scores = sampler.score(samples)
@@ -477,8 +477,8 @@ class TestActiveLearner:
         """Test adding samples to unlabeled pool."""
         learner = ActiveLearner()
         samples = [
-            Sample(id="s1", filepath="a.wav"),
-            Sample(id="s2", filepath="b.wav"),
+            ActiveLearningSample(id="s1", filepath="a.wav"),
+            ActiveLearningSample(id="s2", filepath="b.wav"),
         ]
 
         learner.add_unlabeled(samples)
@@ -491,8 +491,8 @@ class TestActiveLearner:
         """Test adding pre-labeled samples."""
         learner = ActiveLearner()
         samples = [
-            Sample(id="s1", filepath="a.wav", label="bird"),
-            Sample(id="s2", filepath="b.wav", label="frog"),
+            ActiveLearningSample(id="s1", filepath="a.wav", label="bird"),
+            ActiveLearningSample(id="s2", filepath="b.wav", label="frog"),
         ]
 
         learner.add_labeled(samples)
@@ -506,7 +506,7 @@ class TestActiveLearner:
         learner = ActiveLearner(sampler=RandomSampler(seed=42))
 
         samples = [
-            Sample(id=f"s{i}", filepath=f"{i}.wav",
+            ActiveLearningSample(id=f"s{i}", filepath=f"{i}.wav",
                   confidence=np.random.rand())
             for i in range(20)
         ]
@@ -521,7 +521,7 @@ class TestActiveLearner:
     def test_teach(self):
         """Test teaching (recording annotation)."""
         learner = ActiveLearner()
-        sample = Sample(id="s1", filepath="a.wav")
+        sample = ActiveLearningSample(id="s1", filepath="a.wav")
         learner.add_unlabeled([sample])
 
         learner.teach(sample, label="bird", annotator="user1")
@@ -536,8 +536,8 @@ class TestActiveLearner:
         """Test teaching multiple samples."""
         learner = ActiveLearner()
         samples = [
-            Sample(id="s1", filepath="a.wav"),
-            Sample(id="s2", filepath="b.wav"),
+            ActiveLearningSample(id="s1", filepath="a.wav"),
+            ActiveLearningSample(id="s2", filepath="b.wav"),
         ]
         learner.add_unlabeled(samples)
 
@@ -551,8 +551,8 @@ class TestActiveLearner:
     def test_get_statistics(self):
         """Test getting statistics."""
         learner = ActiveLearner()
-        learner.add_labeled([Sample(id="s1", filepath="a.wav", label="bird")])
-        learner.add_unlabeled([Sample(id="s2", filepath="b.wav")])
+        learner.add_labeled([ActiveLearningSample(id="s1", filepath="a.wav", label="bird")])
+        learner.add_unlabeled([ActiveLearningSample(id="s2", filepath="b.wav")])
 
         stats = learner.get_statistics()
 
@@ -563,8 +563,8 @@ class TestActiveLearner:
     def test_save_and_load_state(self, tmp_path):
         """Test saving and loading state."""
         learner = ActiveLearner()
-        learner.add_labeled([Sample(id="s1", filepath="a.wav", label="bird")])
-        learner.add_unlabeled([Sample(id="s2", filepath="b.wav")])
+        learner.add_labeled([ActiveLearningSample(id="s1", filepath="a.wav", label="bird")])
+        learner.add_unlabeled([ActiveLearningSample(id="s2", filepath="b.wav")])
         learner.state.iteration = 5
 
         state_file = tmp_path / "al_state.json"
@@ -598,8 +598,8 @@ class TestAnnotationQueue:
         """Test adding samples to queue."""
         queue = AnnotationQueue()
         samples = [
-            Sample(id="s1", filepath="a.wav"),
-            Sample(id="s2", filepath="b.wav"),
+            ActiveLearningSample(id="s1", filepath="a.wav"),
+            ActiveLearningSample(id="s2", filepath="b.wav"),
         ]
 
         queue.add(samples)
@@ -609,8 +609,8 @@ class TestAnnotationQueue:
     def test_add_priority(self):
         """Test adding samples with priority."""
         queue = AnnotationQueue()
-        queue.add([Sample(id="s1", filepath="a.wav")])
-        queue.add([Sample(id="s2", filepath="b.wav")], priority=True)
+        queue.add([ActiveLearningSample(id="s1", filepath="a.wav")])
+        queue.add([ActiveLearningSample(id="s2", filepath="b.wav")], priority=True)
 
         current = queue.current()
         assert current.id == "s2"  # Priority sample should be first
@@ -619,9 +619,9 @@ class TestAnnotationQueue:
         """Test queue navigation."""
         queue = AnnotationQueue()
         samples = [
-            Sample(id="s1", filepath="a.wav"),
-            Sample(id="s2", filepath="b.wav"),
-            Sample(id="s3", filepath="c.wav"),
+            ActiveLearningSample(id="s1", filepath="a.wav"),
+            ActiveLearningSample(id="s2", filepath="b.wav"),
+            ActiveLearningSample(id="s3", filepath="c.wav"),
         ]
         queue.add(samples)
 
@@ -633,7 +633,7 @@ class TestAnnotationQueue:
     def test_mark_completed(self):
         """Test marking samples as completed."""
         queue = AnnotationQueue()
-        queue.add([Sample(id="s1", filepath="a.wav")])
+        queue.add([ActiveLearningSample(id="s1", filepath="a.wav")])
 
         queue.mark_completed("s1")
 
@@ -642,7 +642,7 @@ class TestAnnotationQueue:
     def test_get_progress(self):
         """Test getting queue progress."""
         queue = AnnotationQueue()
-        samples = [Sample(id=f"s{i}", filepath=f"{i}.wav") for i in range(10)]
+        samples = [ActiveLearningSample(id=f"s{i}", filepath=f"{i}.wav") for i in range(10)]
         queue.add(samples)
 
         queue.mark_completed("s0")
@@ -660,8 +660,8 @@ class TestAnnotationQueue:
         """Test exporting queue to CSV."""
         queue = AnnotationQueue()
         samples = [
-            Sample(id="s1", filepath="a.wav", predicted_label="bird", confidence=0.9),
-            Sample(id="s2", filepath="b.wav", predicted_label="frog", confidence=0.7),
+            ActiveLearningSample(id="s1", filepath="a.wav", predicted_label="bird", confidence=0.9),
+            ActiveLearningSample(id="s2", filepath="b.wav", predicted_label="frog", confidence=0.7),
         ]
         queue.add(samples)
         queue.mark_completed("s1")
@@ -690,8 +690,8 @@ class TestSimulatedOracle:
         ground_truth = {"s1": "bird", "s2": "frog"}
         oracle = SimulatedOracle(ground_truth=ground_truth)
 
-        sample1 = Sample(id="s1", filepath="a.wav")
-        sample2 = Sample(id="s2", filepath="b.wav")
+        sample1 = ActiveLearningSample(id="s1", filepath="a.wav")
+        sample2 = ActiveLearningSample(id="s2", filepath="b.wav")
 
         assert oracle.annotate(sample1) == "bird"
         assert oracle.annotate(sample2) == "frog"
@@ -699,7 +699,7 @@ class TestSimulatedOracle:
     def test_missing_ground_truth_raises(self):
         """Test that missing ground truth raises error."""
         oracle = SimulatedOracle(ground_truth={"s1": "bird"})
-        sample = Sample(id="unknown", filepath="x.wav")
+        sample = ActiveLearningSample(id="unknown", filepath="x.wav")
 
         with pytest.raises(ValueError):
             oracle.annotate(sample)
@@ -713,7 +713,7 @@ class TestSimulatedOracle:
             labels=["bird", "frog"]
         )
 
-        sample = Sample(id="s1", filepath="a.wav")
+        sample = ActiveLearningSample(id="s1", filepath="a.wav")
         label = oracle.annotate(sample)
 
         # With 100% noise rate, should not return true label
@@ -725,9 +725,9 @@ class TestSimulatedOracle:
         oracle = SimulatedOracle(ground_truth=ground_truth)
 
         samples = [
-            Sample(id="s1", filepath="a.wav"),
-            Sample(id="s2", filepath="b.wav"),
-            Sample(id="s3", filepath="c.wav"),
+            ActiveLearningSample(id="s1", filepath="a.wav"),
+            ActiveLearningSample(id="s2", filepath="b.wav"),
+            ActiveLearningSample(id="s3", filepath="c.wav"),
         ]
 
         labels = oracle.annotate_batch(samples)
@@ -740,11 +740,11 @@ class TestCallbackOracle:
 
     def test_callback_oracle(self):
         """Test oracle with callback function."""
-        def my_annotator(sample: Sample) -> str:
+        def my_annotator(sample: ActiveLearningSample) -> str:
             return f"label_for_{sample.id}"
 
         oracle = CallbackOracle(callback=my_annotator)
-        sample = Sample(id="test123", filepath="a.wav")
+        sample = ActiveLearningSample(id="test123", filepath="a.wav")
 
         label = oracle.annotate(sample)
         assert label == "label_for_test123"
@@ -800,8 +800,8 @@ class TestUtilityFunctions:
         """Test exporting annotations to CSV."""
         learner = ActiveLearner()
         learner.add_labeled([
-            Sample(id="s1", filepath="a.wav", start_time=0, end_time=5, label="bird"),
-            Sample(id="s2", filepath="b.wav", start_time=0, end_time=5, label="frog"),
+            ActiveLearningSample(id="s1", filepath="a.wav", start_time=0, end_time=5, label="bird"),
+            ActiveLearningSample(id="s2", filepath="b.wav", start_time=0, end_time=5, label="frog"),
         ])
 
         csv_path = tmp_path / "annotations.csv"
@@ -818,12 +818,12 @@ class TestUtilityFunctions:
         """Test summarizing annotation session."""
         learner = ActiveLearner()
         learner.add_labeled([
-            Sample(id="s1", filepath="a.wav", label="bird"),
-            Sample(id="s2", filepath="b.wav", label="bird"),
-            Sample(id="s3", filepath="c.wav", label="frog"),
+            ActiveLearningSample(id="s1", filepath="a.wav", label="bird"),
+            ActiveLearningSample(id="s2", filepath="b.wav", label="bird"),
+            ActiveLearningSample(id="s3", filepath="c.wav", label="frog"),
         ])
         learner.add_unlabeled([
-            Sample(id="s4", filepath="d.wav"),
+            ActiveLearningSample(id="s4", filepath="d.wav"),
         ])
 
         # Add some annotation records with timing
@@ -860,7 +860,7 @@ class TestActiveLearningLoop:
         samples = []
         for i in range(100):
             probs = np.random.dirichlet([1, 1])  # Random probs for bird/frog
-            samples.append(Sample(
+            samples.append(ActiveLearningSample(
                 id=f"s{i}",
                 filepath=f"{i}.wav",
                 probabilities=probs,
@@ -899,7 +899,7 @@ class TestActiveLearningLoop:
         for i in range(100):
             probs = np.random.dirichlet([1, 1])
             features = np.random.randn(10)
-            samples.append(Sample(
+            samples.append(ActiveLearningSample(
                 id=f"s{i}",
                 filepath=f"{i}.wav",
                 probabilities=probs,
@@ -923,7 +923,7 @@ class TestActiveLearningLoop:
         oracle = SimulatedOracle(ground_truth=ground_truth)
 
         learner1 = ActiveLearner(sampler=RandomSampler(seed=42))
-        samples = [Sample(id=f"s{i}", filepath=f"{i}.wav") for i in range(50)]
+        samples = [ActiveLearningSample(id=f"s{i}", filepath=f"{i}.wav") for i in range(50)]
         learner1.add_unlabeled(samples)
 
         # First batch

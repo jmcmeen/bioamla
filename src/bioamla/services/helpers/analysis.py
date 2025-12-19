@@ -201,6 +201,7 @@ class AudioAnalysis:
             "silence": self.silence.to_dict(),
         }
 
+   
 
 # =============================================================================
 # Basic Audio Information

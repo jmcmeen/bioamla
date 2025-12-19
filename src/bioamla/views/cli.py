@@ -4,7 +4,6 @@ import click
 
 from bioamla.config import get_config, load_config, set_config
 
-
 class ConfigContext:
     """Context object to hold configuration."""
     def __init__(self):
@@ -12,6 +11,13 @@ class ConfigContext:
 
 
 pass_config = click.make_pass_decorator(ConfigContext, ensure=True)
+
+from sqlmodel import Session, create_engine, SQLModel
+
+sqlite_file_name = "database.db"
+sqlite_url = f"sqlite:///{sqlite_file_name}"
+connect_args = {"check_same_thread": False}
+engine = create_engine(sqlite_url, echo=True, connect_args=connect_args)
 
 
 @click.group()
@@ -52,12 +58,21 @@ def devices():
     for device in device_info['devices']:
         click.echo(f'  - Index: {device["index"]}, Name: {device["name"]}')
 
-
 @cli.command()
 def version():
     """Display the current version of the bioamla package."""
     from bioamla.diagnostics import get_bioamla_version
+    from bioamla.core.uow import SqlUnitOfWork
+    from bioamla.core.entity import CommandLogItem
+
+    with Session(engine) as session:
+        uow = SqlUnitOfWork(session)
+        uow.command_log_items.add(CommandLogItem(name="version"))
+        uow.commit()
+
     click.echo(f"bioamla v{get_bioamla_version()}")
+
+
 
 
 # =============================================================================
@@ -1990,7 +2005,7 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
     import json
     from pathlib import Path
 
-    from bioamla.analysis import (
+    from bioamla.services.helpers.analysis import (
         analyze_audio,
         summarize_analysis,
     )

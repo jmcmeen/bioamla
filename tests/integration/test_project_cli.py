@@ -4,7 +4,7 @@ import pytest
 from click.testing import CliRunner
 from pathlib import Path
 
-from bioamla.cli import cli
+from bioamla.views.cli import cli
 from bioamla.project import PROJECT_MARKER
 
 

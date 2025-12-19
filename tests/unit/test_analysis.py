@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from bioamla.analysis import (
+from bioamla.services.helpers.analysis import (
     AmplitudeStats,
     AudioAnalysis,
     AudioInfo,
