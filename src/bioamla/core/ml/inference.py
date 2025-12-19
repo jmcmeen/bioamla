@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional, Union
 import torch
 from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
-from bioamla.files import TextFile
+from bioamla.core.files import TextFile
 
 from bioamla.core.device import get_device
 from bioamla.core.logging import get_logger

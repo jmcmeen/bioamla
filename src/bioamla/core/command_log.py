@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
-from bioamla.files import TextFile
+from bioamla.core.files import TextFile
 from bioamla.core.project import find_project_root, PROJECT_MARKER
 
 LOGS_DIR = "logs"

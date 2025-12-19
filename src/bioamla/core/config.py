@@ -66,7 +66,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from bioamla.files import BinaryFile, TextFile
+from bioamla.core.files import BinaryFile, TextFile
 
 logger = logging.getLogger(__name__)
 

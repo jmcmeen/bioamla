@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional, Union
 import logging
 
 from bioamla.core.base_api import APICache, APIClient, RateLimiter
-from bioamla.files import TextFile, sanitize_filename
+from bioamla.core.files import TextFile, sanitize_filename
 
 logger = logging.getLogger(__name__)
 

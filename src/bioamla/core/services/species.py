@@ -40,7 +40,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import logging
 
 from bioamla.core.base_api import APICache, APIClient, RateLimiter
-from bioamla.files import TextFile
+from bioamla.core.files import TextFile
 
 logger = logging.getLogger(__name__)
 

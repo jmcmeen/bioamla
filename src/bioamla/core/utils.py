@@ -14,7 +14,7 @@ from typing import List, Optional, Union
 from pathlib import Path
 
 # Re-export from files package
-from bioamla.files import (
+from bioamla.core.files import (
     get_files_by_extension,
     file_exists,
     directory_exists,
