@@ -22,7 +22,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau, StepL
 from torch.utils.data import DataLoader, Dataset
 
 from bioamla.core.files import TextFile
-from bioamla.ml.base import BaseAudioModel, ModelConfig
+from bioamla.core.ml.base import BaseAudioModel, ModelConfig
 
 
 @dataclass
@@ -146,7 +146,7 @@ class SpectrogramDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
-        from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
+        from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
         filepath, label = self.samples[idx]
 

@@ -16,7 +16,7 @@ import torchaudio
 from bioamla.core.utils import get_files_by_extension
 from torchaudio.transforms import Resample
 
-from bioamla.ml.config import DefaultConfig
+from bioamla.core.ml.config import DefaultConfig
 
 
 def get_wav_info(filepath: str):

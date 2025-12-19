@@ -18,7 +18,7 @@ from typing import Optional, Union
 import torch
 from torch import nn
 
-from bioamla.core.logging import get_logger
+from bioamla.core.logger import get_logger
 
 logger = get_logger(__name__)
 

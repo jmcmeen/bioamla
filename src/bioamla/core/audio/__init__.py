@@ -12,7 +12,7 @@ This package provides core audio functionality including:
 - Audio playback utilities
 """
 
-from bioamla.audio.audio import (
+from bioamla.core.audio.audio import (
     AudioInfo,
     AmplitudeStats,
     FrequencyStats,

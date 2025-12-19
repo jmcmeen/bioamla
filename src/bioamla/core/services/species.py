@@ -460,6 +460,37 @@ def validate_name(name: str) -> bool:
     return get_species_info(name) is not None
 
 
+def find_species_name(category: str, all_categories: set) -> str:
+    """
+    Find the species name for a given category.
+
+    If the category is a subspecies (e.g., "Lithobates sphenocephalus utricularius"),
+    this will return the matching species name (e.g., "Lithobates sphenocephalus")
+    if it exists in the set of all categories.
+
+    Args:
+        category: The category name to check
+        all_categories: Set of all known category names
+
+    Returns:
+        The shortest matching species name, or the original category if no match
+    """
+    if not category:
+        return category
+
+    # Find all categories that are prefixes of this category
+    matching_species = [
+        c for c in all_categories
+        if category.startswith(c) and c != category
+    ]
+
+    if matching_species:
+        # Return the shortest matching species (most general)
+        return min(matching_species, key=len)
+
+    return category
+
+
 def export_taxonomy(
     output_path: Union[str, Path],
     format: str = "csv",
