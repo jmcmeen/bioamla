@@ -18,14 +18,14 @@ import torch
 import torch.nn as nn
 
 from bioamla.core.files import TextFile
-from bioamla.ml.base import (
+from bioamla.core.ml.base import (
     BaseAudioModel,
     ModelBackend,
     ModelConfig,
     PredictionResult,
     register_model,
 )
-from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
+from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
 
 @register_model("birdnet")

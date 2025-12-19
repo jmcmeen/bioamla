@@ -713,7 +713,7 @@ def ast_predict(
             workers=workers
         )
     else:
-        from bioamla.detection.ast import wav_ast_inference
+        from bioamla.core.detection.ast import wav_ast_inference
         prediction = wav_ast_inference(path, model_path, resample_freq)
         click.echo(f"{prediction}")
 
@@ -738,7 +738,7 @@ def _run_batch_inference(
     import pandas as pd
     import torch
 
-    from bioamla.detection.ast import (
+    from bioamla.core.detection.ast import (
         InferenceConfig,
         load_pretrained_ast_model,
         wave_file_batch_inference,
@@ -809,7 +809,7 @@ def _run_batch_inference(
     )
 
     # Pre-load feature extractor before timing starts
-    from bioamla.detection.ast import get_cached_feature_extractor
+    from bioamla.core.detection.ast import get_cached_feature_extractor
     feature_extractor = get_cached_feature_extractor()
 
     start_time = time.time()
@@ -1756,7 +1756,7 @@ def audio_convert(
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet):
     """Apply frequency filter to audio files."""
-    from bioamla.core.signal import (
+    from bioamla.core.audio.signal import (
         bandpass_filter,
         highpass_filter,
         lowpass_filter,
@@ -1789,7 +1789,7 @@ def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet)
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_denoise(path, output, batch, method, strength, quiet):
     """Apply noise reduction to audio files."""
-    from bioamla.core.signal import spectral_denoise
+    from bioamla.core.audio.signal import spectral_denoise
 
     def processor(audio, sr):
         return spectral_denoise(audio, sr, noise_reduce_factor=strength)
@@ -1809,7 +1809,7 @@ def audio_segment(path, output, batch, silence_threshold, min_silence, min_segme
     """Split audio on silence into separate files."""
     from pathlib import Path
 
-    from bioamla.core.signal import load_audio, save_audio, split_audio_on_silence
+    from bioamla.core.audio.signal import load_audio, save_audio, split_audio_on_silence
     from bioamla.core.utils import get_audio_files
 
     path = Path(path)
@@ -1918,7 +1918,7 @@ def audio_detect_events(path, output, quiet):
     import csv
     from pathlib import Path
 
-    from bioamla.core.signal import detect_onsets, load_audio
+    from bioamla.core.audio.signal import detect_onsets, load_audio
 
     path = Path(path)
     if not path.exists():
@@ -1950,7 +1950,7 @@ def audio_detect_events(path, output, quiet):
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_normalize(path, output, batch, target_db, peak, quiet):
     """Normalize audio loudness."""
-    from bioamla.core.signal import normalize_loudness, peak_normalize
+    from bioamla.core.audio.signal import normalize_loudness, peak_normalize
 
     def processor(audio, sr):
         if peak:
@@ -1969,7 +1969,7 @@ def audio_normalize(path, output, batch, target_db, peak, quiet):
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_resample(path, output, batch, rate, quiet):
     """Resample audio to a different sample rate."""
-    from bioamla.core.signal import resample_audio
+    from bioamla.core.audio.signal import resample_audio
 
     def processor(audio, sr):
         return resample_audio(audio, sr, rate)
@@ -1988,7 +1988,7 @@ def audio_resample(path, output, batch, rate, quiet):
 @click.option('--quiet', is_flag=True, help='Suppress progress output')
 def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
     """Trim audio by time or remove silence."""
-    from bioamla.core.signal import trim_audio, trim_silence
+    from bioamla.core.audio.signal import trim_audio, trim_silence
 
     if not silence and start is None and end is None:
         click.echo("Error: Must specify --start/--end or use --silence")
@@ -2036,7 +2036,7 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
     import json
     from pathlib import Path
 
-    from bioamla.audio.audio import (
+    from bioamla.core.audio.audio import (
         analyze_audio,
         summarize_analysis,
     )
@@ -2201,7 +2201,7 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
     """Helper to run signal processing on file or directory."""
     from pathlib import Path
 
-    from bioamla.core.signal import batch_process, load_audio, save_audio
+    from bioamla.core.audio.signal import batch_process, load_audio, save_audio
 
     path = Path(path)
 
@@ -5640,7 +5640,7 @@ def examples():
 @examples.command('list')
 def examples_list():
     """List all available example workflows."""
-    from bioamla.examples import list_examples
+    from bioamla._internal.examples import list_examples
     from bioamla.core.progress import console
     from rich.table import Table
 
@@ -5664,7 +5664,7 @@ def examples_show(example_id: str):
 
     EXAMPLE_ID: The example ID (e.g., 00, 01, 02) or filename
     """
-    from bioamla.examples import EXAMPLES, get_example_content
+    from bioamla._internal.examples import EXAMPLES, get_example_content
     from bioamla.core.progress import console
     from rich.syntax import Syntax
 
@@ -5696,7 +5696,7 @@ def examples_copy(example_id: str, output_dir: str, force: bool):
     """
     from pathlib import Path
 
-    from bioamla.examples import EXAMPLES, get_example_content
+    from bioamla._internal.examples import EXAMPLES, get_example_content
 
     try:
         content = get_example_content(example_id)
@@ -5729,7 +5729,7 @@ def examples_copy_all(output_dir: str, force: bool):
     """
     from pathlib import Path
 
-    from bioamla.examples import get_all_example_files, get_example_content
+    from bioamla._internal.examples import get_all_example_files, get_example_content
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -5762,7 +5762,7 @@ def examples_info(example_id: str):
 
     EXAMPLE_ID: The example ID (e.g., 00, 01, 02)
     """
-    from bioamla.examples import EXAMPLES, get_example_content
+    from bioamla._internal.examples import EXAMPLES, get_example_content
     from bioamla.core.progress import console
 
     if example_id not in EXAMPLES:

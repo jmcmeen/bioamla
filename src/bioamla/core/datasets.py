@@ -19,9 +19,9 @@ import pandas as pd
 from bioamla.core.utils import get_audio_files
 
 from bioamla.core.files.paths import sanitize_filename
-from bioamla.services.species import find_species_name
+from bioamla.core.services.species import find_species_name
 from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
-from bioamla.core.logging import get_logger
+from bioamla.core.logger import get_logger
 from bioamla.core.metadata import (
     read_metadata_csv,
     write_metadata_csv,

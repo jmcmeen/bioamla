@@ -297,7 +297,7 @@ def evaluate_directory(
         get_cached_feature_extractor,
         load_pretrained_ast_model,
     )
-    from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
+    from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
     audio_dir = Path(audio_dir)
     if not audio_dir.exists():
