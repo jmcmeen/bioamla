@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bioamla.datasets import convert_filetype
-from bioamla.metadata import read_metadata_csv
+from bioamla.core.datasets import convert_filetype
+from bioamla.core.metadata import read_metadata_csv
 
 
 def write_test_metadata(csv_path: Path, rows: list):

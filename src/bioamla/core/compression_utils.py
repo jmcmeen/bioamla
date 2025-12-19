@@ -11,7 +11,7 @@ import zipfile
 from pathlib import Path
 from typing import List
 
-from bioamla.files_utils import create_directory
+from bioamla.core.files_utils import create_directory
 
 
 def extract_zip_file(zip_path: str, output_dir: str) -> str:

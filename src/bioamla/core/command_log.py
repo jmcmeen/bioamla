@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
 from bioamla.core.files import TextFile
-from bioamla.project import find_project_root, PROJECT_MARKER
+from bioamla.core.project import find_project_root, PROJECT_MARKER
 
 LOGS_DIR = "logs"
 LOG_FILENAME = "command_history.jsonl"

@@ -6,7 +6,7 @@ import csv
 
 import pytest
 
-from bioamla.inat import load_taxon_ids_from_csv
+from bioamla.core.inat import load_taxon_ids_from_csv
 
 
 class TestLoadTaxonIdsFromCsv:

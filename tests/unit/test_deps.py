@@ -5,7 +5,7 @@ Unit tests for the deps module (system dependency checking).
 import pytest
 from unittest.mock import patch, MagicMock
 
-from bioamla.deps import (
+from bioamla.core.deps import (
     DependencyStatus,
     detect_os,
     check_ffmpeg,

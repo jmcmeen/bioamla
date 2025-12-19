@@ -17,7 +17,7 @@ class TestRecordingConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from bioamla.realtime import RecordingConfig
+        from bioamla.core.realtime import RecordingConfig
 
         config = RecordingConfig()
         assert config.sample_rate == 16000
@@ -27,7 +27,7 @@ class TestRecordingConfig:
 
     def test_custom_values(self):
         """Test custom configuration values."""
-        from bioamla.realtime import RecordingConfig
+        from bioamla.core.realtime import RecordingConfig
 
         config = RecordingConfig(
             sample_rate=44100,
@@ -44,7 +44,7 @@ class TestDetectionEvent:
 
     def test_creation(self):
         """Test creating detection event."""
-        from bioamla.realtime import DetectionEvent
+        from bioamla.core.realtime import DetectionEvent
 
         event = DetectionEvent(
             timestamp=datetime.now(),
@@ -60,7 +60,7 @@ class TestDetectionEvent:
 
     def test_to_dict(self):
         """Test conversion to dictionary."""
-        from bioamla.realtime import DetectionEvent
+        from bioamla.core.realtime import DetectionEvent
 
         now = datetime.now()
         event = DetectionEvent(
@@ -83,7 +83,7 @@ class TestDetectionEvent:
 
     def test_with_audio_segment(self):
         """Test event with audio segment."""
-        from bioamla.realtime import DetectionEvent
+        from bioamla.core.realtime import DetectionEvent
 
         audio = np.random.randn(16000).astype(np.float32)
         event = DetectionEvent(
@@ -104,7 +104,7 @@ class TestAudioRecorder:
 
     def test_initialization(self):
         """Test recorder initialization."""
-        from bioamla.realtime import AudioRecorder, RecordingConfig
+        from bioamla.core.realtime import AudioRecorder, RecordingConfig
 
         config = RecordingConfig(sample_rate=16000)
         recorder = AudioRecorder(config)
@@ -115,7 +115,7 @@ class TestAudioRecorder:
 
     def test_get_sounddevice_import_error(self):
         """Test error when sounddevice not installed."""
-        from bioamla.realtime import AudioRecorder
+        from bioamla.core.realtime import AudioRecorder
 
         recorder = AudioRecorder()
 
@@ -128,7 +128,7 @@ class TestAudioRecorder:
     @patch("bioamla.realtime.AudioRecorder._get_sounddevice")
     def test_start_creates_buffer(self, mock_sd):
         """Test that start creates audio buffer."""
-        from bioamla.realtime import AudioRecorder, RecordingConfig
+        from bioamla.core.realtime import AudioRecorder, RecordingConfig
 
         mock_stream = MagicMock()
         mock_sd.return_value.InputStream.return_value = mock_stream
@@ -146,7 +146,7 @@ class TestAudioRecorder:
     @patch("bioamla.realtime.AudioRecorder._get_sounddevice")
     def test_stop(self, mock_sd):
         """Test stopping recording."""
-        from bioamla.realtime import AudioRecorder
+        from bioamla.core.realtime import AudioRecorder
 
         mock_stream = MagicMock()
         mock_sd.return_value.InputStream.return_value = mock_stream
@@ -161,7 +161,7 @@ class TestAudioRecorder:
 
     def test_get_buffer_not_recording(self):
         """Test getting buffer when not recording."""
-        from bioamla.realtime import AudioRecorder
+        from bioamla.core.realtime import AudioRecorder
 
         recorder = AudioRecorder()
         recorder.audio_buffer = np.zeros(16000)
@@ -172,7 +172,7 @@ class TestAudioRecorder:
 
     def test_get_buffer_partial(self):
         """Test getting partial buffer."""
-        from bioamla.realtime import AudioRecorder, RecordingConfig
+        from bioamla.core.realtime import AudioRecorder, RecordingConfig
 
         config = RecordingConfig(sample_rate=16000, buffer_seconds=10.0)
         recorder = AudioRecorder(config)
@@ -188,7 +188,7 @@ class TestLiveRecorder:
 
     def test_initialization(self):
         """Test live recorder initialization."""
-        from bioamla.realtime import LiveRecorder
+        from bioamla.core.realtime import LiveRecorder
 
         recorder = LiveRecorder(detection_interval=2.0)
 
@@ -198,7 +198,7 @@ class TestLiveRecorder:
 
     def test_add_callback(self):
         """Test adding detection callback."""
-        from bioamla.realtime import LiveRecorder
+        from bioamla.core.realtime import LiveRecorder
 
         recorder = LiveRecorder()
         callback = MagicMock()
@@ -209,7 +209,7 @@ class TestLiveRecorder:
     @patch("bioamla.realtime.AudioRecorder._get_sounddevice")
     def test_start_creates_output_dir(self, mock_sd, tmp_path):
         """Test that start creates output directory."""
-        from bioamla.realtime import LiveRecorder
+        from bioamla.core.realtime import LiveRecorder
 
         mock_stream = MagicMock()
         mock_sd.return_value.InputStream.return_value = mock_stream
@@ -226,7 +226,7 @@ class TestLiveRecorder:
 
     def test_get_recent_detections_empty(self):
         """Test getting detections when empty."""
-        from bioamla.realtime import LiveRecorder
+        from bioamla.core.realtime import LiveRecorder
 
         recorder = LiveRecorder()
         detections = recorder.get_recent_detections()
@@ -235,7 +235,7 @@ class TestLiveRecorder:
 
     def test_get_recent_detections_filtered_by_label(self):
         """Test filtering detections by label."""
-        from bioamla.realtime import LiveRecorder, DetectionEvent
+        from bioamla.core.realtime import LiveRecorder, DetectionEvent
 
         recorder = LiveRecorder()
         recorder.detections = [
@@ -266,7 +266,7 @@ class TestSpectrogramConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from bioamla.realtime import SpectrogramConfig
+        from bioamla.core.realtime import SpectrogramConfig
 
         config = SpectrogramConfig()
         assert config.sample_rate == 16000
@@ -277,7 +277,7 @@ class TestSpectrogramConfig:
 
     def test_custom_values(self):
         """Test custom configuration values."""
-        from bioamla.realtime import SpectrogramConfig
+        from bioamla.core.realtime import SpectrogramConfig
 
         config = SpectrogramConfig(
             sample_rate=22050,
@@ -294,7 +294,7 @@ class TestRealtimeSpectrogram:
 
     def test_initialization(self):
         """Test spectrogram initialization."""
-        from bioamla.realtime import RealtimeSpectrogram, SpectrogramConfig
+        from bioamla.core.realtime import RealtimeSpectrogram, SpectrogramConfig
 
         config = SpectrogramConfig(n_mels=64)
         spectrogram = RealtimeSpectrogram(config=config)
@@ -304,7 +304,7 @@ class TestRealtimeSpectrogram:
 
     def test_hz_to_mel(self):
         """Test Hz to mel conversion."""
-        from bioamla.realtime import RealtimeSpectrogram
+        from bioamla.core.realtime import RealtimeSpectrogram
 
         spectrogram = RealtimeSpectrogram()
         mel_1000 = spectrogram._hz_to_mel(1000)
@@ -313,7 +313,7 @@ class TestRealtimeSpectrogram:
 
     def test_mel_to_hz(self):
         """Test mel to Hz conversion."""
-        from bioamla.realtime import RealtimeSpectrogram
+        from bioamla.core.realtime import RealtimeSpectrogram
 
         spectrogram = RealtimeSpectrogram()
         hz = spectrogram._mel_to_hz(np.array([1000]))
@@ -322,7 +322,7 @@ class TestRealtimeSpectrogram:
 
     def test_compute_spectrogram(self):
         """Test spectrogram computation."""
-        from bioamla.realtime import RealtimeSpectrogram, SpectrogramConfig
+        from bioamla.core.realtime import RealtimeSpectrogram, SpectrogramConfig
 
         config = SpectrogramConfig(
             sample_rate=16000,
@@ -340,7 +340,7 @@ class TestRealtimeSpectrogram:
 
     def test_get_current_spectrogram_none(self):
         """Test getting spectrogram when none computed."""
-        from bioamla.realtime import RealtimeSpectrogram
+        from bioamla.core.realtime import RealtimeSpectrogram
 
         spectrogram = RealtimeSpectrogram()
         result = spectrogram.get_current_spectrogram()
@@ -353,7 +353,7 @@ class TestMonitoringConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from bioamla.realtime import MonitoringConfig
+        from bioamla.core.realtime import MonitoringConfig
 
         config = MonitoringConfig()
         assert config.detection_threshold == 0.5
@@ -363,7 +363,7 @@ class TestMonitoringConfig:
 
     def test_custom_values(self):
         """Test custom configuration values."""
-        from bioamla.realtime import MonitoringConfig
+        from bioamla.core.realtime import MonitoringConfig
 
         config = MonitoringConfig(
             detection_threshold=0.8,
@@ -379,7 +379,7 @@ class TestContinuousMonitor:
 
     def test_initialization(self):
         """Test monitor initialization."""
-        from bioamla.realtime import ContinuousMonitor, MonitoringConfig
+        from bioamla.core.realtime import ContinuousMonitor, MonitoringConfig
 
         detector = MagicMock()
         config = MonitoringConfig(detection_threshold=0.7)
@@ -389,7 +389,7 @@ class TestContinuousMonitor:
 
     def test_add_alert_callback(self):
         """Test adding alert callback."""
-        from bioamla.realtime import ContinuousMonitor
+        from bioamla.core.realtime import ContinuousMonitor
 
         detector = MagicMock()
         monitor = ContinuousMonitor(detector=detector)
@@ -401,7 +401,7 @@ class TestContinuousMonitor:
 
     def test_get_statistics_empty(self):
         """Test getting statistics when empty."""
-        from bioamla.realtime import ContinuousMonitor
+        from bioamla.core.realtime import ContinuousMonitor
 
         detector = MagicMock()
         monitor = ContinuousMonitor(detector=detector)
@@ -417,7 +417,7 @@ class TestAudioStreamProcessor:
 
     def test_initialization(self):
         """Test stream processor initialization."""
-        from bioamla.realtime import AudioStreamProcessor
+        from bioamla.core.realtime import AudioStreamProcessor
 
         processor = AudioStreamProcessor(sample_rate=22050, chunk_size=2048)
 
@@ -428,7 +428,7 @@ class TestAudioStreamProcessor:
 
     def test_add_processor(self):
         """Test adding processor to pipeline."""
-        from bioamla.realtime import AudioStreamProcessor
+        from bioamla.core.realtime import AudioStreamProcessor
 
         processor = AudioStreamProcessor()
 
@@ -442,7 +442,7 @@ class TestAudioStreamProcessor:
 
     def test_add_output_callback(self):
         """Test adding output callback."""
-        from bioamla.realtime import AudioStreamProcessor
+        from bioamla.core.realtime import AudioStreamProcessor
 
         processor = AudioStreamProcessor()
         callback = MagicMock()
@@ -454,7 +454,7 @@ class TestAudioStreamProcessor:
 
     def test_processor_chaining(self):
         """Test method chaining for adding processors."""
-        from bioamla.realtime import AudioStreamProcessor
+        from bioamla.core.realtime import AudioStreamProcessor
 
         def processor1(x):
             return x
@@ -478,7 +478,7 @@ class TestUtilityFunctions:
 
     def test_list_audio_devices_import_error(self):
         """Test error when sounddevice not installed."""
-        from bioamla.realtime import list_audio_devices
+        from bioamla.core.realtime import list_audio_devices
 
         with patch.dict("sys.modules", {"sounddevice": None}):
             with pytest.raises(ImportError, match="sounddevice"):
@@ -493,7 +493,7 @@ class TestUtilityFunctions:
     @patch("bioamla.realtime.sd", create=True)
     def test_get_default_input_device(self, mock_sd):
         """Test getting default input device."""
-        from bioamla.realtime import get_default_input_device
+        from bioamla.core.realtime import get_default_input_device
 
         # Should return None when sounddevice not available
         with patch("bioamla.realtime.get_default_input_device") as mock_func:
@@ -512,7 +512,7 @@ class TestLiveRecorderIntegration:
     @patch("bioamla.realtime.AudioRecorder._get_sounddevice")
     def test_detection_callback_called(self, mock_sd, tmp_path):
         """Test that detection callback is called."""
-        from bioamla.realtime import LiveRecorder, DetectionEvent
+        from bioamla.core.realtime import LiveRecorder, DetectionEvent
 
         # Setup mock
         mock_stream = MagicMock()

@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bioamla.detection import (
+from bioamla.core.detection import (
     Detection,
     PeakDetection,
     BandLimitedEnergyDetector,

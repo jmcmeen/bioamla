@@ -291,13 +291,13 @@ def evaluate_directory(
     """
     import torch
 
-    from bioamla.ast import (
+    from bioamla.core.ast import (
         ast_predict,
         extract_features,
         get_cached_feature_extractor,
         load_pretrained_ast_model,
     )
-    from bioamla.torchaudio import load_waveform_tensor, resample_waveform_tensor
+    from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
     audio_dir = Path(audio_dir)
     if not audio_dir.exists():

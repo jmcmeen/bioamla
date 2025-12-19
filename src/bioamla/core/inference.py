@@ -31,9 +31,9 @@ from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
 from bioamla.core.files import TextFile
 
-from bioamla.device import get_device
-from bioamla.logging import get_logger
-from bioamla.torchaudio import (
+from bioamla.core.device import get_device
+from bioamla.core.logging import get_logger
+from bioamla.core.torchaudio import (
     load_waveform_tensor,
     resample_waveform_tensor,
     split_waveform_tensor,

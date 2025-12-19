@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from bioamla.config import (
+from bioamla.core.config import (
     Config,
     DEFAULT_CONFIG,
     _migrate_deprecated_keys,

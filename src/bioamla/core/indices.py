@@ -37,7 +37,7 @@ import librosa
 import numpy as np
 from scipy import signal as scipy_signal
 
-from bioamla.logging import get_logger
+from bioamla.core.logging import get_logger
 
 logger = get_logger(__name__)
 

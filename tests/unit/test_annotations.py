@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bioamla.annotations import (
+from bioamla.core.annotations import (
     Annotation,
     AnnotationSet,
     annotations_to_one_hot,

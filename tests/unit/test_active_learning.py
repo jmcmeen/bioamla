@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bioamla.active_learning import (
+from bioamla.core.active_learning import (
     ActiveLearner,
     ActiveLearningState,
     AnnotationQueue,

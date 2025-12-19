@@ -15,7 +15,7 @@ class TestReductionConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from bioamla.clustering import ReductionConfig
+        from bioamla.core.clustering import ReductionConfig
 
         config = ReductionConfig()
         assert config.method == "umap"
@@ -25,7 +25,7 @@ class TestReductionConfig:
 
     def test_custom_values(self):
         """Test custom configuration values."""
-        from bioamla.clustering import ReductionConfig
+        from bioamla.core.clustering import ReductionConfig
 
         config = ReductionConfig(
             method="tsne",
@@ -42,7 +42,7 @@ class TestReduceDimensions:
 
     def test_reduce_pca(self):
         """Test PCA reduction."""
-        from bioamla.clustering import reduce_dimensions
+        from bioamla.core.clustering import reduce_dimensions
 
         embeddings = np.random.randn(100, 256)
         reduced = reduce_dimensions(embeddings, method="pca", n_components=2)
@@ -51,7 +51,7 @@ class TestReduceDimensions:
 
     def test_reduce_pca_3d(self):
         """Test PCA reduction to 3D."""
-        from bioamla.clustering import reduce_dimensions
+        from bioamla.core.clustering import reduce_dimensions
 
         embeddings = np.random.randn(50, 128)
         reduced = reduce_dimensions(embeddings, method="pca", n_components=3)
@@ -60,7 +60,7 @@ class TestReduceDimensions:
 
     def test_reduce_tsne(self):
         """Test t-SNE reduction."""
-        from bioamla.clustering import reduce_dimensions
+        from bioamla.core.clustering import reduce_dimensions
 
         embeddings = np.random.randn(50, 64)
         reduced = reduce_dimensions(embeddings, method="tsne", n_components=2)
@@ -69,7 +69,7 @@ class TestReduceDimensions:
 
     def test_reduce_with_config(self):
         """Test reduction with config object."""
-        from bioamla.clustering import ReductionConfig, reduce_dimensions
+        from bioamla.core.clustering import ReductionConfig, reduce_dimensions
 
         config = ReductionConfig(method="pca", n_components=2)
         embeddings = np.random.randn(100, 256)
@@ -79,7 +79,7 @@ class TestReduceDimensions:
 
     def test_reduce_invalid_method(self):
         """Test error on invalid method."""
-        from bioamla.clustering import reduce_dimensions
+        from bioamla.core.clustering import reduce_dimensions
 
         embeddings = np.random.randn(100, 256)
         with pytest.raises(ValueError, match="Unknown reduction method"):
@@ -91,7 +91,7 @@ class TestIncrementalReducer:
 
     def test_fit_transform_pca(self):
         """Test fit_transform with PCA."""
-        from bioamla.clustering import IncrementalReducer
+        from bioamla.core.clustering import IncrementalReducer
 
         reducer = IncrementalReducer(method="pca", n_components=2)
         embeddings = np.random.randn(100, 256)
@@ -103,7 +103,7 @@ class TestIncrementalReducer:
 
     def test_transform_after_fit(self):
         """Test transform on new data after fitting."""
-        from bioamla.clustering import IncrementalReducer
+        from bioamla.core.clustering import IncrementalReducer
 
         reducer = IncrementalReducer(method="pca", n_components=2)
         train_embeddings = np.random.randn(100, 256)
@@ -116,7 +116,7 @@ class TestIncrementalReducer:
 
     def test_transform_before_fit_raises(self):
         """Test error when transforming before fitting."""
-        from bioamla.clustering import IncrementalReducer
+        from bioamla.core.clustering import IncrementalReducer
 
         reducer = IncrementalReducer(method="pca", n_components=2)
         embeddings = np.random.randn(20, 256)
@@ -126,7 +126,7 @@ class TestIncrementalReducer:
 
     def test_invalid_method_for_incremental(self):
         """Test error on unsupported method for incremental."""
-        from bioamla.clustering import IncrementalReducer
+        from bioamla.core.clustering import IncrementalReducer
 
         reducer = IncrementalReducer(method="tsne", n_components=2)
         embeddings = np.random.randn(100, 256)
@@ -140,7 +140,7 @@ class TestClusteringConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from bioamla.clustering import ClusteringConfig
+        from bioamla.core.clustering import ClusteringConfig
 
         config = ClusteringConfig()
         assert config.method == "hdbscan"
@@ -149,7 +149,7 @@ class TestClusteringConfig:
 
     def test_custom_values(self):
         """Test custom configuration values."""
-        from bioamla.clustering import ClusteringConfig
+        from bioamla.core.clustering import ClusteringConfig
 
         config = ClusteringConfig(
             method="kmeans",
@@ -164,7 +164,7 @@ class TestAudioClusterer:
 
     def test_kmeans_clustering(self):
         """Test k-means clustering."""
-        from bioamla.clustering import AudioClusterer, ClusteringConfig
+        from bioamla.core.clustering import AudioClusterer, ClusteringConfig
 
         config = ClusteringConfig(method="kmeans", n_clusters=3)
         clusterer = AudioClusterer(config=config)
@@ -178,7 +178,7 @@ class TestAudioClusterer:
 
     def test_kmeans_predict(self):
         """Test k-means predict on new data."""
-        from bioamla.clustering import AudioClusterer, ClusteringConfig
+        from bioamla.core.clustering import AudioClusterer, ClusteringConfig
 
         config = ClusteringConfig(method="kmeans", n_clusters=3)
         clusterer = AudioClusterer(config=config)
@@ -192,7 +192,7 @@ class TestAudioClusterer:
 
     def test_dbscan_clustering(self):
         """Test DBSCAN clustering."""
-        from bioamla.clustering import AudioClusterer, ClusteringConfig
+        from bioamla.core.clustering import AudioClusterer, ClusteringConfig
 
         # Use larger eps and create very well-separated clusters
         config = ClusteringConfig(method="dbscan", eps=2.0, min_samples=3)
@@ -212,7 +212,7 @@ class TestAudioClusterer:
 
     def test_agglomerative_clustering(self):
         """Test agglomerative clustering."""
-        from bioamla.clustering import AudioClusterer, ClusteringConfig
+        from bioamla.core.clustering import AudioClusterer, ClusteringConfig
 
         config = ClusteringConfig(method="agglomerative", n_clusters=4)
         clusterer = AudioClusterer(config=config)
@@ -225,7 +225,7 @@ class TestAudioClusterer:
 
     def test_get_cluster_centers(self):
         """Test computing cluster centers."""
-        from bioamla.clustering import AudioClusterer, ClusteringConfig
+        from bioamla.core.clustering import AudioClusterer, ClusteringConfig
 
         config = ClusteringConfig(method="kmeans", n_clusters=3)
         clusterer = AudioClusterer(config=config)
@@ -238,7 +238,7 @@ class TestAudioClusterer:
 
     def test_get_cluster_stats(self):
         """Test getting cluster statistics."""
-        from bioamla.clustering import AudioClusterer, ClusteringConfig
+        from bioamla.core.clustering import AudioClusterer, ClusteringConfig
 
         config = ClusteringConfig(method="kmeans", n_clusters=3)
         clusterer = AudioClusterer(config=config)
@@ -255,7 +255,7 @@ class TestAudioClusterer:
 
     def test_invalid_method(self):
         """Test error on invalid method."""
-        from bioamla.clustering import AudioClusterer
+        from bioamla.core.clustering import AudioClusterer
 
         clusterer = AudioClusterer(method="invalid")
         embeddings = np.random.randn(100, 64)
@@ -269,7 +269,7 @@ class TestFindOptimalClusters:
 
     def test_silhouette_method(self):
         """Test silhouette method."""
-        from bioamla.clustering import find_optimal_clusters
+        from bioamla.core.clustering import find_optimal_clusters
 
         # Create well-separated clusters
         cluster1 = np.random.randn(50, 32) + np.array([10] * 32)
@@ -283,7 +283,7 @@ class TestFindOptimalClusters:
 
     def test_elbow_method(self):
         """Test elbow method."""
-        from bioamla.clustering import find_optimal_clusters
+        from bioamla.core.clustering import find_optimal_clusters
 
         embeddings = np.random.randn(100, 32)
         k = find_optimal_clusters(embeddings, method="elbow", k_range=(2, 8))
@@ -296,7 +296,7 @@ class TestClusterSimilarity:
 
     def test_compute_cluster_similarity_cosine(self):
         """Test cosine similarity computation."""
-        from bioamla.clustering import compute_cluster_similarity
+        from bioamla.core.clustering import compute_cluster_similarity
 
         embeddings = np.random.randn(100, 64)
         labels = np.array([0] * 50 + [1] * 50)
@@ -308,7 +308,7 @@ class TestClusterSimilarity:
 
     def test_compute_cluster_similarity_euclidean(self):
         """Test euclidean similarity computation."""
-        from bioamla.clustering import compute_cluster_similarity
+        from bioamla.core.clustering import compute_cluster_similarity
 
         embeddings = np.random.randn(100, 64)
         labels = np.array([0] * 50 + [1] * 50)
@@ -321,7 +321,7 @@ class TestClusterSimilarity:
 
     def test_compute_cluster_similarity_with_noise(self):
         """Test similarity with noise points."""
-        from bioamla.clustering import compute_cluster_similarity
+        from bioamla.core.clustering import compute_cluster_similarity
 
         embeddings = np.random.randn(110, 64)
         labels = np.array([0] * 50 + [1] * 50 + [-1] * 10)  # -1 is noise
@@ -337,7 +337,7 @@ class TestSortBySimilarity:
 
     def test_nearest_neighbor_sorting(self):
         """Test nearest neighbor sorting."""
-        from bioamla.clustering import sort_by_similarity
+        from bioamla.core.clustering import sort_by_similarity
 
         embeddings = np.array([
             [0, 0],
@@ -353,7 +353,7 @@ class TestSortBySimilarity:
 
     def test_nearest_neighbor_with_reference(self):
         """Test sorting with reference point."""
-        from bioamla.clustering import sort_by_similarity
+        from bioamla.core.clustering import sort_by_similarity
 
         embeddings = np.array([
             [0, 0],
@@ -371,7 +371,7 @@ class TestSortBySimilarity:
 
     def test_spectral_sorting(self):
         """Test spectral sorting."""
-        from bioamla.clustering import sort_by_similarity
+        from bioamla.core.clustering import sort_by_similarity
 
         embeddings = np.random.randn(50, 32)
         sorted_indices = sort_by_similarity(embeddings, method="spectral")
@@ -385,7 +385,7 @@ class TestSortClustersBySimilarity:
 
     def test_basic_sorting(self):
         """Test basic cluster sorting."""
-        from bioamla.clustering import sort_clusters_by_similarity
+        from bioamla.core.clustering import sort_clusters_by_similarity
 
         embeddings = np.random.randn(100, 64)
         labels = np.array([0] * 25 + [1] * 25 + [2] * 25 + [3] * 25)
@@ -397,7 +397,7 @@ class TestSortClustersBySimilarity:
 
     def test_sorting_with_reference(self):
         """Test sorting with reference cluster."""
-        from bioamla.clustering import sort_clusters_by_similarity
+        from bioamla.core.clustering import sort_clusters_by_similarity
 
         embeddings = np.random.randn(100, 64)
         labels = np.array([0] * 25 + [1] * 25 + [2] * 25 + [3] * 25)
@@ -410,7 +410,7 @@ class TestSortClustersBySimilarity:
 
     def test_sorting_excludes_noise(self):
         """Test that noise cluster is excluded."""
-        from bioamla.clustering import sort_clusters_by_similarity
+        from bioamla.core.clustering import sort_clusters_by_similarity
 
         embeddings = np.random.randn(110, 64)
         labels = np.array([0] * 50 + [1] * 50 + [-1] * 10)
@@ -426,7 +426,7 @@ class TestNoveltyDetector:
 
     def test_distance_based_detection(self):
         """Test distance-based novelty detection."""
-        from bioamla.clustering import NoveltyDetector
+        from bioamla.core.clustering import NoveltyDetector
 
         # Create known clusters
         known_embeddings = np.random.randn(100, 64)
@@ -445,7 +445,7 @@ class TestNoveltyDetector:
 
     def test_distance_based_without_labels(self):
         """Test distance-based detection without labels."""
-        from bioamla.clustering import NoveltyDetector
+        from bioamla.core.clustering import NoveltyDetector
 
         embeddings = np.random.randn(100, 64)
 
@@ -459,7 +459,7 @@ class TestNoveltyDetector:
 
     def test_isolation_forest_detection(self):
         """Test isolation forest novelty detection."""
-        from bioamla.clustering import NoveltyDetector
+        from bioamla.core.clustering import NoveltyDetector
 
         embeddings = np.random.randn(100, 64)
 
@@ -473,7 +473,7 @@ class TestNoveltyDetector:
 
     def test_lof_detection(self):
         """Test local outlier factor detection."""
-        from bioamla.clustering import NoveltyDetector
+        from bioamla.core.clustering import NoveltyDetector
 
         embeddings = np.random.randn(100, 64)
 
@@ -487,7 +487,7 @@ class TestNoveltyDetector:
 
     def test_get_novel_samples(self):
         """Test getting novel sample indices."""
-        from bioamla.clustering import NoveltyDetector
+        from bioamla.core.clustering import NoveltyDetector
 
         # Known data clustered together
         known_embeddings = np.zeros((100, 64)) + np.random.randn(100, 64) * 0.1
@@ -511,7 +511,7 @@ class TestDiscoverNovelSounds:
 
     def test_basic_discovery(self):
         """Test basic novel sound discovery."""
-        from bioamla.clustering import discover_novel_sounds
+        from bioamla.core.clustering import discover_novel_sounds
 
         embeddings = np.random.randn(100, 64)
         is_novel = discover_novel_sounds(embeddings)
@@ -521,7 +521,7 @@ class TestDiscoverNovelSounds:
 
     def test_discovery_with_known_labels(self):
         """Test discovery with known labels."""
-        from bioamla.clustering import discover_novel_sounds
+        from bioamla.core.clustering import discover_novel_sounds
 
         embeddings = np.random.randn(100, 64)
         labels = np.array([0] * 50 + [-1] * 50)  # 50 known, 50 unknown
@@ -532,7 +532,7 @@ class TestDiscoverNovelSounds:
 
     def test_discovery_with_scores(self):
         """Test discovery returning scores."""
-        from bioamla.clustering import discover_novel_sounds
+        from bioamla.core.clustering import discover_novel_sounds
 
         embeddings = np.random.randn(100, 64)
         is_novel, scores = discover_novel_sounds(embeddings, return_scores=True)
@@ -546,7 +546,7 @@ class TestAnalyzeClusters:
 
     def test_basic_analysis(self):
         """Test basic cluster analysis."""
-        from bioamla.clustering import analyze_clusters
+        from bioamla.core.clustering import analyze_clusters
 
         embeddings = np.random.randn(100, 64)
         labels = np.array([0] * 50 + [1] * 50)
@@ -561,7 +561,7 @@ class TestAnalyzeClusters:
 
     def test_analysis_with_noise(self):
         """Test analysis with noise points."""
-        from bioamla.clustering import analyze_clusters
+        from bioamla.core.clustering import analyze_clusters
 
         embeddings = np.random.randn(110, 64)
         labels = np.array([0] * 50 + [1] * 50 + [-1] * 10)
@@ -573,7 +573,7 @@ class TestAnalyzeClusters:
 
     def test_analysis_with_metadata(self):
         """Test analysis with metadata."""
-        from bioamla.clustering import analyze_clusters
+        from bioamla.core.clustering import analyze_clusters
 
         embeddings = np.random.randn(10, 64)
         labels = np.array([0] * 5 + [1] * 5)
@@ -589,7 +589,7 @@ class TestExportClusters:
 
     def test_export_manifest_only(self, tmp_path):
         """Test exporting manifest without copying files."""
-        from bioamla.clustering import export_clusters
+        from bioamla.core.clustering import export_clusters
 
         labels = np.array([0, 0, 1, 1, -1])
         filepaths = ["a.wav", "b.wav", "c.wav", "d.wav", "e.wav"]

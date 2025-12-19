@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bioamla.visualize import (
+from bioamla.core.visualize import (
     batch_generate_spectrograms,
     compute_mel_spectrogram,
     compute_stft,

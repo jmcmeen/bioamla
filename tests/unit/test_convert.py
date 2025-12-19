@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bioamla.datasets import (
+from bioamla.core.datasets import (
     batch_convert_audio,
     convert_audio_file,
 )

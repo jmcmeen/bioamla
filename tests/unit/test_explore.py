@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bioamla.explore import (
+from bioamla.core.explore import (
     AudioFileInfo,
     DatasetInfo,
     filter_audio_files,

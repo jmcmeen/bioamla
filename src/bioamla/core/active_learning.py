@@ -1198,7 +1198,7 @@ def export_annotations(
 
     elif format == "raven":
         # Export as Raven selection table
-        from bioamla.annotations import Annotation, save_raven_selection_table
+        from bioamla.core.annotations import Annotation, save_raven_selection_table
 
         annotations = []
         for sample in labeled_samples:

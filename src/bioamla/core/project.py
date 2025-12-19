@@ -231,7 +231,7 @@ def load_project(path: Optional[Path] = None) -> Optional[ProjectInfo]:
         )
 
     # Load project info from config
-    from bioamla.config import load_toml
+    from bioamla.core.config import load_toml
 
     try:
         config_data = load_toml(config_path)
