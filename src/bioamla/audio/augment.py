@@ -26,7 +26,7 @@ from audiomentations import (
     TimeStretch,
 )
 
-from bioamla.core.torchaudio import load_waveform_tensor
+from bioamla.audio.torchaudio import load_waveform_tensor
 
 
 @dataclass

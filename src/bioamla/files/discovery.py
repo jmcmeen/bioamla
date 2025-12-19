@@ -1,22 +1,19 @@
 """
-File System Operations
-======================
+File Discovery
+==============
 
-Utility functions for file system operations including directory management,
-file existence checks, and file downloads.
+File discovery and existence checking utilities.
 """
 
 import logging
-import os
 from pathlib import Path
-from typing import List, Optional
-from urllib.request import urlretrieve
+from typing import List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 
 def get_files_by_extension(
-    directory: str,
+    directory: Union[str, Path],
     extensions: Optional[List[str]] = None,
     recursive: bool = True
 ) -> List[str]:
@@ -57,21 +54,7 @@ def get_files_by_extension(
     return sorted(files)
 
 
-def create_directory(path: str) -> str:
-    """
-    Create a directory and all parent directories if they don't exist.
-
-    Args:
-        path: Path to the directory to create
-
-    Returns:
-        The path that was created
-    """
-    Path(path).mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def file_exists(path: str) -> bool:
+def file_exists(path: Union[str, Path]) -> bool:
     """
     Check if a file exists.
 
@@ -84,7 +67,7 @@ def file_exists(path: str) -> bool:
     return Path(path).is_file()
 
 
-def directory_exists(path: str) -> bool:
+def directory_exists(path: Union[str, Path]) -> bool:
     """
     Check if a directory exists.
 
@@ -97,28 +80,16 @@ def directory_exists(path: str) -> bool:
     return Path(path).is_dir()
 
 
-def download_file(url: str, output_path: str, show_progress: bool = True) -> str:
+def create_directory(path: Union[str, Path]) -> Path:
     """
-    Download a file from a URL.
+    Create a directory and all parent directories if they don't exist.
 
     Args:
-        url: URL to download from
-        output_path: Path to save the downloaded file
-        show_progress: If True, print download progress
+        path: Path to the directory to create
 
     Returns:
-        Path to the downloaded file
+        The path that was created as a Path object
     """
-    output_dir = os.path.dirname(output_path)
-    if output_dir:
-        create_directory(output_dir)
-
-    if show_progress:
-        print(f"Downloading {url} to {output_path}")
-
-    urlretrieve(url, output_path)
-
-    if show_progress:
-        print(f"Download complete: {output_path}")
-
-    return output_path
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
