@@ -16,9 +16,10 @@ from pathlib import Path
 from typing import List, Optional, Set
 
 import pandas as pd
-from bioamla.utils import get_audio_files
+from bioamla.core.utils import get_audio_files
 
-from bioamla.core.fileutils import find_species_name, sanitize_filename
+from bioamla.files.paths import sanitize_filename
+from bioamla.services.species import find_species_name
 from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
 from bioamla.core.logging import get_logger
 from bioamla.core.metadata import (
@@ -99,7 +100,7 @@ def load_local_dataset(audio_folder_path: str):
     """
     from datasets import load_dataset
 
-    from bioamla.utils import directory_exists
+    from bioamla.core.utils import directory_exists
 
     if not directory_exists(audio_folder_path):
         raise ValueError(f"The audio folder {audio_folder_path} does not exist")
@@ -555,7 +556,7 @@ def _get_converter(source_ext: str, target_format: str):
     Returns:
         Converter function or None if not available
     """
-    from bioamla import utils as utils_module
+    from bioamla.core import utils as utils_module
 
     converter_name = f"{source_ext}_to_{target_format}"
     return getattr(utils_module, converter_name, None)

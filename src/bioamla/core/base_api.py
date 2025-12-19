@@ -26,7 +26,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from bioamla.core.files import BinaryFile, TextFile
+from bioamla.files import BinaryFile, TextFile
 from bioamla.core.logging import get_logger
 
 logger = get_logger(__name__)

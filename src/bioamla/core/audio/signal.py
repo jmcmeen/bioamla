@@ -583,7 +583,7 @@ def batch_process(
     Returns:
         Statistics dict
     """
-    from bioamla.utils import get_files_by_extension
+    from bioamla.core.utils import get_files_by_extension
 
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)

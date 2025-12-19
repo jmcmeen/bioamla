@@ -698,7 +698,7 @@ def _run_batch_inference(
         load_pretrained_ast_model,
         wave_file_batch_inference,
     )
-    from bioamla.utils import file_exists, get_files_by_extension
+    from bioamla.core.utils import file_exists, get_files_by_extension
 
     output_csv = os.path.join(directory, output_csv)
 
@@ -870,7 +870,7 @@ def ast_train(
         TrainingArguments,
     )
 
-    from bioamla.utils import create_directory
+    from bioamla.core.utils import create_directory
 
     output_dir = training_dir + "/runs"
     logging_dir = training_dir + "/logs"
@@ -1261,7 +1261,7 @@ def predict_generic(
     from pathlib import Path
 
     from bioamla.models import ModelConfig, load_model
-    from bioamla.utils import get_audio_files
+    from bioamla.core.utils import get_audio_files
 
     config = ModelConfig(
         sample_rate=sample_rate,
@@ -1372,7 +1372,7 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
     import numpy as np
 
     from bioamla.models import ModelConfig, load_model
-    from bioamla.utils import get_audio_files
+    from bioamla.core.utils import get_audio_files
 
     config = ModelConfig(sample_rate=sample_rate)
 
@@ -1583,7 +1583,7 @@ def audio():
 @click.argument('filepath', required=False, default='.')
 def audio_list(filepath: str):
     """List audio files in a directory."""
-    from bioamla.utils import get_audio_files
+    from bioamla.core.utils import get_audio_files
     try:
         if filepath == '.':
             import os
@@ -1602,7 +1602,7 @@ def audio_list(filepath: str):
 @click.argument('filepath')
 def audio_info(filepath: str):
     """Display metadata from an audio file."""
-    from bioamla.utils import get_wav_metadata
+    from bioamla.core.utils import get_wav_metadata
     metadata = get_wav_metadata(filepath)
     click.echo(f"{metadata}")
 
@@ -1765,7 +1765,7 @@ def audio_segment(path, output, batch, silence_threshold, min_silence, min_segme
     from pathlib import Path
 
     from bioamla.core.signal import load_audio, save_audio, split_audio_on_silence
-    from bioamla.utils import get_audio_files
+    from bioamla.core.utils import get_audio_files
 
     path = Path(path)
     output = Path(output)
@@ -1995,7 +1995,7 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
         analyze_audio,
         summarize_analysis,
     )
-    from bioamla.utils import get_audio_files
+    from bioamla.core.utils import get_audio_files
 
     path = Path(path)
 
@@ -2838,7 +2838,7 @@ def dataset_download(url: str, output_dir: str):
     import os
     from urllib.parse import urlparse
 
-    from bioamla.utils import download_file
+    from bioamla.core.utils import download_file
 
     if output_dir == '.':
         output_dir = os.getcwd()
@@ -2862,7 +2862,7 @@ def dataset_unzip(file_path: str, output_path: str):
         bioamla dataset unzip dataset.zip ./extracted
         bioamla dataset unzip archive.zip
     """
-    from bioamla.utils import extract_zip_file
+    from bioamla.core.utils import extract_zip_file
     import os
     if output_path == '.':
         output_path = os.getcwd()
@@ -2882,7 +2882,7 @@ def dataset_zip(source_path: str, output_file: str):
     """
     import os
 
-    from bioamla.utils import create_zip_file, zip_directory
+    from bioamla.core.utils import create_zip_file, zip_directory
 
     if os.path.isdir(source_path):
         zip_directory(source_path, output_file)
@@ -4223,7 +4223,7 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
     from pathlib import Path as PathLib
 
     from bioamla.detection import BandLimitedEnergyDetector, export_detections
-    from bioamla.utils import get_audio_files
+    from bioamla.core.utils import get_audio_files
 
     detector = BandLimitedEnergyDetector(
         low_freq=low_freq,
@@ -4320,7 +4320,7 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
     from pathlib import Path as PathLib
 
     from bioamla.detection import RibbitDetector, export_detections
-    from bioamla.utils import get_audio_files
+    from bioamla.core.utils import get_audio_files
 
     detector = RibbitDetector(
         pulse_rate_hz=pulse_rate,
@@ -4420,7 +4420,7 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
     import librosa
 
     from bioamla.detection import CWTPeakDetector, export_detections
-    from bioamla.utils import get_audio_files
+    from bioamla.core.utils import get_audio_files
 
     detector = CWTPeakDetector(
         snr_threshold=snr,
@@ -4609,7 +4609,7 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
     from pathlib import Path as PathLib
 
     from bioamla.detection import AcceleratingPatternDetector, export_detections
-    from bioamla.utils import get_audio_files
+    from bioamla.core.utils import get_audio_files
 
     detector = AcceleratingPatternDetector(
         min_pulses=min_pulses,
