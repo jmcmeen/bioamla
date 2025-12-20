@@ -189,7 +189,7 @@ class RibbitController(BaseController):
             return ControllerResult.fail(error)
 
         # Start run tracking
-        run_id = self._start_run(
+        self._start_run(
             name=f"RIBBIT batch detection: {directory}",
             action="ribbit",
             input_path=directory,

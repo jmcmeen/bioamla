@@ -478,7 +478,7 @@ def project_init(path, name, description, template, config_file, force):
         click.echo("  bioamla config show")
     except Exception as e:
         print_error(f"Failed to create project: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @project.command("status")
@@ -1033,7 +1033,6 @@ def ast_train(
     logging_dir = training_dir + "/logs"
     best_model_path = training_dir + "/best_model"
 
-    mlflow_run = None
     if mlflow_tracking_uri or mlflow_experiment_name:
         try:
             import mlflow
@@ -1074,11 +1073,11 @@ def ast_train(
         dataset = load_dataset(train_dataset, split=split)
 
     if isinstance(dataset, Dataset):
-        class_names = sorted(list(set(dataset[category_label_column])))
+        class_names = sorted(set(dataset[category_label_column]))
     elif isinstance(dataset, DatasetDict):
         first_split_name = list(dataset.keys())[0]
         first_split = dataset[first_split_name]
-        class_names = sorted(list(set(first_split[category_label_column])))
+        class_names = sorted(set(first_split[category_label_column]))
     else:
         raise TypeError("Dataset must be a Dataset or DatasetDict instance")
 
@@ -1109,7 +1108,7 @@ def ast_train(
         return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
     label2id = {name: idx for idx, name in enumerate(class_names)}
-    id2label = {idx: name for idx, name in enumerate(class_names)}
+    dict(enumerate(class_names))
 
     test_size = 0.2
     if isinstance(dataset, Dataset):
@@ -1424,10 +1423,10 @@ def ast_evaluate(
 
     except FileNotFoundError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except ValueError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @models.command("list")
@@ -1506,7 +1505,7 @@ def predict_generic(
         model = load_model(model_type, model_path, config, use_fp16=fp16)
     except Exception as e:
         click.echo(f"Error loading model: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if batch:
         path = Path(path)
@@ -1629,7 +1628,7 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
         model = load_model(model_type, model_path, config)
     except Exception as e:
         click.echo(f"Error loading model: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if batch:
         path = Path(path)
@@ -1779,7 +1778,7 @@ def train_cnn(
         click.echo(f"\nTraining complete! Model saved to {output_dir}")
     except Exception as e:
         click.echo(f"Training error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @models.command("convert")
@@ -1815,7 +1814,7 @@ def models_convert(input_path, output_path, output_format, model_type):
         click.echo(f"Model saved to {result}")
     except Exception as e:
         click.echo(f"Conversion error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @models.command("info")
@@ -1842,7 +1841,7 @@ def models_info(model_path, model_type):
             )
     except Exception as e:
         click.echo(f"Error loading model: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 # =============================================================================
@@ -1960,10 +1959,10 @@ def audio_convert(
                 click.echo(f"Converted {stats['files_converted']} files to {output}")
         except FileNotFoundError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
         except ValueError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
     else:
         # Single file conversion
@@ -1983,7 +1982,7 @@ def audio_convert(
                 click.echo(f"Converted: {result}")
         except ValueError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
 
 @audio.command("filter")
@@ -2438,7 +2437,7 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
             analysis = analyze_audio(str(path), silence_threshold_db=silence_threshold)
         except Exception as e:
             click.echo(f"Error analyzing file: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
         if output_format == "json":
             result = analysis.to_dict()
@@ -2508,7 +2507,7 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
                 click.echo(f"Processed {stats['files_processed']} files to {stats['output_dir']}")
         except FileNotFoundError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
     else:
         if not path.exists():
             click.echo(f"Error: File not found: {path}")
@@ -2527,7 +2526,7 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
                 click.echo(f"Saved: {output}")
         except Exception as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
 
 # =============================================================================
@@ -2692,10 +2691,10 @@ def audio_visualize(
                 click.echo(f"Generated {viz_type} spectrogram: {result}")
         except FileNotFoundError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
         except Exception as e:
             click.echo(f"Error generating spectrogram: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
 
 # =============================================================================
@@ -3069,7 +3068,7 @@ def dataset_license(
             )
         except FileNotFoundError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
         if stats["datasets_found"] == 0:
             click.echo("No datasets found (no directories with metadata.csv)")
@@ -3118,7 +3117,7 @@ def dataset_license(
             )
         except (FileNotFoundError, ValueError) as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
         if not quiet:
             click.echo(f"License file generated: {stats['output_path']}")
@@ -3249,10 +3248,10 @@ def dataset_augment(
             )
     except FileNotFoundError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"Error during augmentation: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @dataset.command("download")
@@ -3342,7 +3341,7 @@ def _get_folder_size(path: str, limit: int | None = None) -> int:
     import os
 
     total_size = 0
-    for dirpath, dirnames, filenames in os.walk(path):
+    for dirpath, _dirnames, filenames in os.walk(path):
         for filename in filenames:
             filepath = os.path.join(dirpath, filename)
             if os.path.isfile(filepath):
@@ -3365,7 +3364,7 @@ def _count_files(path: str, limit: int | None = None) -> int:
     import os
 
     count = 0
-    for dirpath, dirnames, filenames in os.walk(path):
+    for _dirpath, _dirnames, filenames in os.walk(path):
         count += len(filenames)
         if limit is not None and count > limit:
             return count
@@ -3451,7 +3450,7 @@ def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str):
     except Exception as e:
         click.echo(f"Error pushing to HuggingFace Hub: {e}")
         click.echo("Make sure you are logged in with 'huggingface-cli login'.")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 # =============================================================================
@@ -3930,7 +3929,7 @@ def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str)
     except Exception as e:
         click.echo(f"Error pushing to HuggingFace Hub: {e}")
         click.echo("Make sure you are logged in with 'huggingface-cli login'.")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 # --- Xeno-canto subgroup ---
@@ -3976,10 +3975,10 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
         )
     except ValueError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"API error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if not results:
         click.echo("No recordings found.")
@@ -4035,10 +4034,10 @@ def xc_download(species, genus, country, quality, max_recordings, output_dir, de
         )
     except ValueError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"API error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if not results:
         click.echo("No recordings found.")
@@ -4098,10 +4097,10 @@ def ml_search(species_code, scientific_name, region, min_rating, max_results, ou
         )
     except ValueError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"API error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if not results:
         click.echo("No recordings found.")
@@ -4148,10 +4147,10 @@ def ml_download(species_code, scientific_name, region, min_rating, max_recording
         )
     except ValueError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"API error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if not results:
         click.echo("No recordings found.")
@@ -4374,7 +4373,7 @@ def indices_compute(
             results = [result]
         except Exception as e:
             click.echo(f"Error processing {path}: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
     else:
         # Directory - find audio files
         audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
@@ -4465,7 +4464,7 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     duration = len(audio) / sample_rate
 
@@ -4538,7 +4537,7 @@ def indices_aci(path, min_freq, max_freq, n_fft):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     kwargs = {"n_fft": n_fft, "min_freq": min_freq}
     if max_freq:
@@ -4571,7 +4570,7 @@ def indices_adi(path, max_freq, freq_step, db_threshold):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     adi = compute_adi(
         audio, sample_rate, max_freq=max_freq, freq_step=freq_step, db_threshold=db_threshold
@@ -4602,7 +4601,7 @@ def indices_aei(path, max_freq, freq_step, db_threshold):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     aei = compute_aei(
         audio, sample_rate, max_freq=max_freq, freq_step=freq_step, db_threshold=db_threshold
@@ -4632,7 +4631,7 @@ def indices_bio(path, min_freq, max_freq):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     bio = compute_bio(audio, sample_rate, min_freq=min_freq, max_freq=max_freq)
     click.echo(f"BIO: {bio:.2f}")
@@ -4662,7 +4661,7 @@ def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     ndsi, anthro, bio = compute_ndsi(
         audio,
@@ -4700,7 +4699,7 @@ def indices_entropy(path, spectral, temporal):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     # Default to both if neither specified
     if not spectral and not temporal:
@@ -5452,7 +5451,7 @@ def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: b
 
     # Load state to determine sampler type
     with TextFile(state_file, mode="r", encoding="utf-8") as f:
-        state_data = json.load(f.handle)
+        json.load(f.handle)
 
     # Default to entropy sampler
     sampler = UncertaintySampler(strategy="entropy")
@@ -6055,6 +6054,7 @@ def ebird_nearby(
 ):
     """Get recent eBird observations near a location."""
     import csv
+    from pathlib import Path
 
     from bioamla.core.integrations import EBirdClient
 
@@ -6202,13 +6202,13 @@ def train_spec(
     )
 
     if model == "cnn":
-        classifier = CNNClassifier(n_classes=n_classes)
+        CNNClassifier(n_classes=n_classes)
     elif model == "crnn":
-        classifier = CRNNClassifier(n_classes=n_classes)
+        CRNNClassifier(n_classes=n_classes)
     else:
-        classifier = AttentionClassifier(n_classes=n_classes)
+        AttentionClassifier(n_classes=n_classes)
 
-    config = TrainerConfig(
+    TrainerConfig(
         epochs=epochs,
         batch_size=batch_size,
         learning_rate=lr,
@@ -6325,7 +6325,7 @@ def examples_show(example_id: str):
         syntax = Syntax(content, "bash", theme="monokai", line_numbers=True)
         console.print(syntax)
     except ValueError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
 
 @examples.command("copy")
@@ -6345,8 +6345,8 @@ def examples_copy(example_id: str, output_dir: str, force: bool):
     try:
         content = get_example_content(example_id)
         filename = EXAMPLES[example_id][0]
-    except (ValueError, KeyError):
-        raise click.ClickException(f"Example not found: {example_id}")
+    except (ValueError, KeyError) as e:
+        raise click.ClickException(f"Example not found: {example_id}") from e
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)

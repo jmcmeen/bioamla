@@ -1079,7 +1079,7 @@ class SimulatedOracle(Oracle):
 
         # Optionally add noise
         if self.noise_rate > 0 and self.rng.random() < self.noise_rate:
-            other_labels = [l for l in self.labels if l != true_label]
+            other_labels = [label for label in self.labels if label != true_label]
             if other_labels:
                 return self.rng.choice(other_labels)
 
@@ -1135,7 +1135,7 @@ def create_samples_from_predictions(
     with TextFile(predictions_csv, mode="r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f.handle)
 
-        for i, row in enumerate(reader):
+        for _i, row in enumerate(reader):
             filepath = row.get(filepath_col, "")
             start_time = float(row.get(start_col, 0))
             end_time = float(row.get(end_col, 0))

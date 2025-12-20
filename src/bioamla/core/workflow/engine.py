@@ -457,7 +457,7 @@ class WorkflowEngine:
         """Normalize audio files."""
         from bioamla.controllers.audio_transform import AudioTransformController
 
-        controller = AudioTransformController()
+        AudioTransformController()
         # This would need implementation based on your controller
         return {"message": "Normalize action executed"}
 

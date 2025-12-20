@@ -465,7 +465,7 @@ class RibbitDetector:
 
         # Convert lag to time
         time_per_frame = hop_length / sample_rate
-        lags_time = np.arange(len(autocorr)) * time_per_frame
+        np.arange(len(autocorr)) * time_per_frame
 
         # Expected period and tolerance
         expected_period = 1.0 / self.pulse_rate_hz
@@ -531,7 +531,7 @@ class RibbitDetector:
         if audio.ndim > 1:
             audio = audio.mean(axis=0)
 
-        duration = len(audio) / sample_rate
+        len(audio) / sample_rate
         window_samples = int(self.window_duration * sample_rate)
         hop_samples = int(self.hop_duration * sample_rate)
 
@@ -1081,7 +1081,7 @@ class AcceleratingPatternDetector:
         if audio.ndim > 1:
             audio = audio.mean(axis=0)
 
-        duration = len(audio) / sample_rate
+        len(audio) / sample_rate
         window_samples = int(self.window_duration * sample_rate)
         hop_samples = int(self.hop_duration * sample_rate)
 
