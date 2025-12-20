@@ -7,6 +7,7 @@ Models:
     - Recording: Audio file record with metadata
     - Annotation: Time-frequency annotation (detection or manual label)
     - Detection: Model prediction result
+    - Run: Analysis run with full provenance tracking
 """
 
 from datetime import datetime
@@ -240,3 +241,72 @@ class DetectionUpdate(SQLModel):
     confidence: Optional[float] = None
     verified: Optional[bool] = None
     verified_label: Optional[str] = None
+
+
+# =============================================================================
+# Run Model
+# =============================================================================
+
+
+class RunBase(SQLModel):
+    """
+    Shared run properties.
+
+    Represents an analysis run (prediction, embedding, clustering, indices, etc.)
+    with full provenance tracking.
+    """
+
+    name: str = Field(max_length=255, index=True)
+    action: str = Field(max_length=50, index=True)  # predict, embed, cluster, indices, ribbit
+    status: str = Field(default="running", max_length=20, index=True)  # running, completed, failed
+
+    # Timing
+    started_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = Field(default=None)
+    duration_seconds: Optional[float] = Field(default=None)
+
+    # Input/Output
+    input_path: Optional[str] = Field(default=None, max_length=2048)
+    output_path: Optional[str] = Field(default=None, max_length=2048)
+
+    # Controller and configuration
+    controller: Optional[str] = Field(default=None, max_length=100)
+    parameters: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+
+    # Results
+    results: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    output_files: Optional[List[str]] = Field(default=None, sa_column=Column(JSON))
+
+    # Error tracking
+    error_message: Optional[str] = Field(default=None)
+
+
+class Run(RunBase, table=True):
+    """Run database model."""
+
+    __tablename__ = "runs"
+
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    project_id: Optional[UUID] = Field(default=None, foreign_key="projects.id", index=True)
+
+    # Relationships
+    project: Optional[Project] = Relationship()
+
+
+class RunCreate(RunBase):
+    """Schema for creating a run."""
+
+    project_id: Optional[UUID] = None
+
+
+class RunUpdate(SQLModel):
+    """Schema for updating a run (all fields optional)."""
+
+    name: Optional[str] = None
+    status: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    duration_seconds: Optional[float] = None
+    output_path: Optional[str] = None
+    results: Optional[Dict[str, Any]] = None
+    output_files: Optional[List[str]] = None
+    error_message: Optional[str] = None
