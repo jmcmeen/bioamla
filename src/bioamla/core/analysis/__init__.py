@@ -8,7 +8,7 @@ Analysis domain for bioacoustic data including:
 - Dataset exploration utilities
 """
 
-from bioamla.analysis.indices import (
+from bioamla.core.analysis.indices import (
     AcousticIndices,
     compute_aci,
     compute_adi,

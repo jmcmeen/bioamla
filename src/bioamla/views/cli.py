@@ -941,7 +941,20 @@ def ast_train(
     if report_to and "," in report_to:
         report_to = [r.strip() for r in report_to.split(",")]
 
-    dataset = load_dataset(train_dataset, split=split)
+    # Handle dataset loading
+    # Format: "owner/repo" or "owner/repo:config" for datasets with configurations
+    # Use samuelstevens/BirdSet for bird sound datasets (Parquet format, works with datasets 4.x+)
+    if ":" in train_dataset:
+        dataset_name, config_name = train_dataset.rsplit(":", 1)
+        dataset = load_dataset(dataset_name, config_name, split=split)
+    elif "BirdSet" in train_dataset:
+        # BirdSet datasets have configurations for different subsets
+        # Recommend samuelstevens/BirdSet which is in Parquet format
+        click.echo("Note: BirdSet detected. Use format 'samuelstevens/BirdSet:HSN' to specify subset.")
+        click.echo("Available subsets: HSN, NBP, NES, PER")
+        dataset = load_dataset(train_dataset, "HSN", split=split)
+    else:
+        dataset = load_dataset(train_dataset, split=split)
 
     if isinstance(dataset, Dataset):
         class_names = sorted(list(set(dataset[category_label_column])))
@@ -2437,7 +2450,7 @@ def inat_download(
     quiet: bool
 ):
     """Download audio observations from iNaturalist."""
-    from bioamla.core.inat import download_inat_audio
+    from bioamla.core.services.inaturalist import download_inat_audio
 
     taxon_ids_list = None
     if taxon_ids:
@@ -2497,7 +2510,7 @@ def inat_search(
     quiet: bool
 ):
     """Search for iNaturalist observations."""
-    from bioamla.core.inat import search_inat_sounds
+    from bioamla.core.services.inaturalist import search_inat_sounds
 
     if not species and not taxon_id and not place_id and not project_id:
         raise click.UsageError("At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)")
@@ -2567,7 +2580,7 @@ def inat_stats(
     """Get statistics for an iNaturalist project."""
     import json
 
-    from bioamla.core.inat import get_project_stats
+    from bioamla.core.services.inaturalist import get_project_stats
 
     stats = get_project_stats(
         project_id=project_id,
@@ -3741,7 +3754,7 @@ def species_lookup(name, to_common, to_scientific, info):
         bioamla api species "American Robin" --to-scientific
         bioamla api species "amerob" --info
     """
-    from bioamla.core import species
+    from bioamla.core.services import species
 
     if info:
         result = species.get_species_info(name)
@@ -3882,7 +3895,7 @@ def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_fr
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.core.indices import batch_compute_indices, compute_indices_from_file
+    from bioamla.core.analysis.indices import batch_compute_indices, compute_indices_from_file
 
     path_obj = PathLib(path)
 
@@ -3984,7 +3997,7 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
 
     import librosa
 
-    from bioamla.core.indices import temporal_indices
+    from bioamla.core.analysis.indices import temporal_indices
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4054,7 +4067,7 @@ def indices_aci(path, min_freq, max_freq, n_fft):
     """
     import librosa
 
-    from bioamla.core.indices import compute_aci
+    from bioamla.core.analysis.indices import compute_aci
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4087,7 +4100,7 @@ def indices_adi(path, max_freq, freq_step, db_threshold):
     """
     import librosa
 
-    from bioamla.core.indices import compute_adi
+    from bioamla.core.analysis.indices import compute_adi
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4117,7 +4130,7 @@ def indices_aei(path, max_freq, freq_step, db_threshold):
     """
     import librosa
 
-    from bioamla.core.indices import compute_aei
+    from bioamla.core.analysis.indices import compute_aei
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4146,7 +4159,7 @@ def indices_bio(path, min_freq, max_freq):
     """
     import librosa
 
-    from bioamla.core.indices import compute_bio
+    from bioamla.core.analysis.indices import compute_bio
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4176,7 +4189,7 @@ def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
     """
     import librosa
 
-    from bioamla.core.indices import compute_ndsi
+    from bioamla.core.analysis.indices import compute_ndsi
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4213,7 +4226,7 @@ def indices_entropy(path, spectral, temporal):
     """
     import librosa
 
-    from bioamla.core.indices import spectral_entropy, temporal_entropy
+    from bioamla.core.analysis.indices import spectral_entropy, temporal_entropy
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -4267,7 +4280,7 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.detection import BandLimitedEnergyDetector, export_detections
+    from bioamla.core.detection import BandLimitedEnergyDetector, export_detections
     from bioamla.core.utils import get_audio_files
 
     detector = BandLimitedEnergyDetector(
@@ -4364,7 +4377,7 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.detection import RibbitDetector, export_detections
+    from bioamla.core.detection import RibbitDetector, export_detections
     from bioamla.core.utils import get_audio_files
 
     detector = RibbitDetector(
@@ -4464,7 +4477,7 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
 
     import librosa
 
-    from bioamla.detection import CWTPeakDetector, export_detections
+    from bioamla.core.detection import CWTPeakDetector, export_detections
     from bioamla.core.utils import get_audio_files
 
     detector = CWTPeakDetector(
@@ -4653,7 +4666,7 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.detection import AcceleratingPatternDetector, export_detections
+    from bioamla.core.detection import AcceleratingPatternDetector, export_detections
     from bioamla.core.utils import get_audio_files
 
     detector = AcceleratingPatternDetector(
@@ -4747,7 +4760,7 @@ def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
     """
     from pathlib import Path as PathLib
 
-    from bioamla.detection import (
+    from bioamla.core.detection import (
         AcceleratingPatternDetector,
         BandLimitedEnergyDetector,
         CWTPeakDetector,
