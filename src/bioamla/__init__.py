@@ -23,40 +23,47 @@ Key Features:
 - eBird API integration
 - PostgreSQL database export
 
-Submodules:
-    - ast: Audio Spectrogram Transformer model processing
-    - augment: Audio data augmentation
-    - clustering: Embedding clustering, dimensionality reduction, novelty detection
-    - datasets: Dataset management and validation
-    - device: Device management for PyTorch operations
-    - diagnostics: System diagnostics and information
-    - evaluate: Model evaluation utilities
-    - explore: Data exploration tools
-    - fileutils: File utility functions
-    - globals: Global constants
-    - inat: iNaturalist audio data importing
-    - inference: AST model inference
-    - integrations: External API integrations (eBird, PostgreSQL)
-    - license: License management
-    - logging: Logging configuration
-    - metadata: Metadata management
-    - ml: Advanced ML (custom classifiers, hierarchical classification, ensembles)
-    - realtime: Real-time audio recording and spectrogram streaming
-    - signal: Audio signal processing
-    - torchaudio: Audio processing utilities
-    - training: AST model training
-    - visualize: Audio visualization
-    - wildlife_acoustics: Wildlife Acoustics integration
+Package Structure:
+    - audio: Audio processing (analysis, signal processing, torchaudio utilities)
+    - analysis: Acoustic analysis (indices, clustering, exploration)
+    - detection: Detection algorithms (AST inference, energy detectors, RIBBIT)
+    - files: File operations (I/O, paths, downloads, discovery)
+    - models: Model inference and evaluation
+    - ml: Machine learning models (AST, BirdNET, OpenSoundscape wrappers)
+    - services: External service integrations (iNaturalist, Xeno-canto, Macaulay, eBird)
+    - core: Legacy core functionality (config, visualization, etc.)
 
 Note: Heavy dependencies (torch, transformers) are imported lazily in submodules.
 Import from specific submodules as needed:
-    from bioamla.metadata import read_metadata_csv
-    from bioamla.device import get_device
-    from bioamla.clustering import reduce_dimensions, AudioClusterer
-    from bioamla.ml import Ensemble, HierarchicalClassifier
-    from bioamla.realtime import LiveRecorder, RealtimeSpectrogram
-    from bioamla.integrations import EBirdClient, PostgreSQLExporter
+    from bioamla.audio import analyze_audio, AudioInfo
+    from bioamla.detection import BandLimitedEnergyDetector, RibbitDetector
+    from bioamla.detection.ast import wav_ast_inference, load_pretrained_ast_model
+    from bioamla.files import TextFile, get_files_by_extension
+    from bioamla.ml import load_model, ASTModel
+    from bioamla.services import search_inaturalist, download_xeno_canto
+    from bioamla.utils import get_audio_files, SUPPORTED_AUDIO_EXTENSIONS
 
-Version: 0.1.0
+Version: 0.1.1
 """
-__version__ = "0.1.0"
+__version__ = "0.1.1"
+
+# Re-export commonly used utilities for convenience
+from bioamla.core.utils import (
+    SUPPORTED_AUDIO_EXTENSIONS,
+    get_audio_files,
+    get_files_by_extension,
+    file_exists,
+    directory_exists,
+    create_directory,
+)
+
+__all__ = [
+    "__version__",
+    # Utilities
+    "SUPPORTED_AUDIO_EXTENSIONS",
+    "get_audio_files",
+    "get_files_by_extension",
+    "file_exists",
+    "directory_exists",
+    "create_directory",
+]

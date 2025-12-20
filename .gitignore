@@ -1,12 +1,5 @@
 # custom ignores
-data
-test.py
-dist.sh
-increment_version.sh
-pyproject.toml.backup
-dvenv.sh
-install.sh
-local_dev
+
 
 
 # Byte-compiled / optimized / DLL files
@@ -204,24 +197,4 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-/.claude
-/runs
-/logs
-/model
-/src/bioamla/local_dev
-/logs
-/best_model
-*.m4a
-*.wav
-/dev_data
-/examples/dev_data
-/scp-frogs
-scp_small.zip
-*.mp3
-/frogs_dataset
-/frogs_out
-scp_small/output.csv
-/scp_frogs_eval
-scp_frogs_eval.zip
-*.db
 /.vscode
