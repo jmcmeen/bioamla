@@ -1848,6 +1848,28 @@ def models_info(model_path, model_type):
 # Audio Command Group
 # =============================================================================
 
+# Shared controller instance for undo/redo support across audio commands
+# This allows the undo/redo history to persist across multiple CLI invocations
+# within the same session (e.g., when using the CLI interactively)
+_audio_file_controller = None
+
+
+def _get_audio_file_controller():
+    """Get or create the shared AudioFileController instance."""
+    global _audio_file_controller
+    if _audio_file_controller is None:
+        from bioamla.controllers.audio_file import AudioFileController
+
+        _audio_file_controller = AudioFileController()
+    return _audio_file_controller
+
+
+def _get_audio_transform_controller():
+    """Get the AudioTransformController."""
+    from bioamla.controllers.audio_transform import AudioTransformController
+
+    return AudioTransformController()
+
 
 @cli.group()
 def audio():
@@ -2488,14 +2510,19 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
 
 
 def _run_signal_processing(path, output, batch, processor, quiet, operation, output_sr=None):
-    """Helper to run signal processing on file or directory."""
+    """Helper to run signal processing on file or directory.
+
+    Uses AudioFileController for undo support on single file operations.
+    Batch operations use the direct signal processing functions.
+    """
     from pathlib import Path
 
-    from bioamla.core.audio.signal import batch_process, load_audio, save_audio
+    from bioamla.core.audio.signal import batch_process
 
     path = Path(path)
 
     if batch:
+        # Batch mode: use direct signal processing (no undo support for batch)
         if output is None:
             output = str(path) + f"_{operation}"
 
@@ -2509,6 +2536,7 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
             click.echo(f"Error: {e}")
             raise SystemExit(1) from e
     else:
+        # Single file mode: use controllers for undo support
         if not path.exists():
             click.echo(f"Error: File not found: {path}")
             raise SystemExit(1)
@@ -2517,16 +2545,132 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
             output = str(path.with_stem(path.stem + f"_{operation}"))
 
         try:
-            audio, sr = load_audio(str(path))
-            processed = processor(audio, sr)
-            if output_sr:
-                sr = output_sr
-            save_audio(output, processed, sr)
+            file_ctrl = _get_audio_file_controller()
+
+            # Create a transform function that returns (processed_audio, sample_rate)
+            def transform(audio, sr):
+                processed = processor(audio, sr)
+                return processed, output_sr if output_sr else sr
+
+            # Use write_with_transform for undo support
+            result = file_ctrl.write_with_transform(
+                str(path), output, transform, transform_name=operation
+            )
+
+            if not result.success:
+                click.echo(f"Error: {result.error}")
+                raise SystemExit(1)
+
             if not quiet:
                 click.echo(f"Saved: {output}")
+                if file_ctrl.can_undo:
+                    click.echo("(Use 'bioamla audio undo' to revert)")
         except Exception as e:
             click.echo(f"Error: {e}")
             raise SystemExit(1) from e
+
+
+# =============================================================================
+# Audio Undo/Redo Commands
+# =============================================================================
+
+
+@audio.command("undo")
+@click.option("--quiet", is_flag=True, help="Suppress output")
+def audio_undo(quiet):
+    """Undo the last audio file operation.
+
+    Reverts the most recent audio file operation (resample, normalize, filter,
+    trim, denoise). This restores the previous state of the output file.
+
+    Note: Undo history is maintained within the current CLI session.
+    Batch operations cannot be undone.
+
+    Examples:
+        bioamla audio resample recording.wav --rate 16000
+        bioamla audio undo  # Reverts the resample operation
+    """
+    file_ctrl = _get_audio_file_controller()
+
+    if not file_ctrl.can_undo:
+        click.echo("Nothing to undo")
+        raise SystemExit(1)
+
+    result = file_ctrl.undo()
+
+    if result.success:
+        if not quiet:
+            click.echo(f"Undone: {result.message}")
+            if file_ctrl.can_undo:
+                click.echo(f"({len(file_ctrl.undo_history)} operations remaining in history)")
+    else:
+        click.echo(f"Undo failed: {result.error}")
+        raise SystemExit(1)
+
+
+@audio.command("redo")
+@click.option("--quiet", is_flag=True, help="Suppress output")
+def audio_redo(quiet):
+    """Redo the last undone audio file operation.
+
+    Re-applies the most recently undone audio file operation.
+
+    Note: Redo history is cleared when a new operation is performed.
+
+    Examples:
+        bioamla audio undo
+        bioamla audio redo  # Re-applies the undone operation
+    """
+    file_ctrl = _get_audio_file_controller()
+
+    if not file_ctrl.can_redo:
+        click.echo("Nothing to redo")
+        raise SystemExit(1)
+
+    result = file_ctrl.redo()
+
+    if result.success:
+        if not quiet:
+            click.echo(f"Redone: {result.message}")
+    else:
+        click.echo(f"Redo failed: {result.error}")
+        raise SystemExit(1)
+
+
+@audio.command("history")
+@click.option("--clear", is_flag=True, help="Clear the operation history")
+def audio_history(clear):
+    """Show or clear the audio operation history.
+
+    Displays a list of undoable operations performed in the current session.
+
+    Examples:
+        bioamla audio history        # Show operation history
+        bioamla audio history --clear  # Clear the history
+    """
+    file_ctrl = _get_audio_file_controller()
+
+    if clear:
+        file_ctrl.clear_history()
+        click.echo("History cleared")
+        return
+
+    history = file_ctrl.undo_history
+
+    if not history:
+        click.echo("No operations in history")
+        return
+
+    click.echo("Audio Operation History")
+    click.echo("=" * 50)
+    for i, description in enumerate(reversed(history), 1):
+        marker = " (most recent)" if i == 1 else ""
+        click.echo(f"  {i}. {description}{marker}")
+
+    click.echo()
+    click.echo(f"Total: {len(history)} operations")
+    if file_ctrl.can_undo:
+        click.echo("Use 'bioamla audio undo' to revert the most recent operation")
 
 
 # =============================================================================
@@ -2695,6 +2839,218 @@ def audio_visualize(
         except Exception as e:
             click.echo(f"Error generating spectrogram: {e}")
             raise SystemExit(1) from e
+
+
+# =============================================================================
+# Workflow Command Group
+# =============================================================================
+
+
+@cli.group()
+def workflow():
+    """Workflow execution and management.
+
+    Workflows are TOML-based pipelines that define a sequence of operations
+    to be executed on audio files. They support variables, dependencies,
+    and can be exported to shell scripts.
+    """
+    pass
+
+
+@workflow.command("run")
+@click.argument("workflow_path", type=click.Path(exists=True))
+@click.option(
+    "--var",
+    "-v",
+    multiple=True,
+    help="Set workflow variable (format: key=value)",
+)
+@click.option(
+    "--validate/--no-validate",
+    default=True,
+    help="Validate workflow before execution (default: yes)",
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def workflow_run(workflow_path, var, validate, quiet):
+    """Execute a workflow from a TOML file.
+
+    Runs all steps defined in the workflow file in the correct order,
+    respecting dependencies between steps.
+
+    Examples:
+        bioamla workflow run preprocessing.toml
+        bioamla workflow run analysis.toml -v input_dir=./audio -v output_dir=./results
+    """
+    from bioamla.controllers.workflow import WorkflowController
+
+    controller = WorkflowController()
+
+    # Parse variables
+    variables = {}
+    for v in var:
+        if "=" in v:
+            key, value = v.split("=", 1)
+            variables[key] = value
+        else:
+            click.echo(f"Warning: Invalid variable format '{v}', expected key=value")
+
+    # Set up progress callback
+    if not quiet:
+
+        def progress_callback(step_name, current, total, status):
+            click.echo(f"[{current}/{total}] {step_name}: {status}")
+
+        controller.set_execution_progress_callback(progress_callback)
+
+    # Execute workflow
+    result = controller.execute(workflow_path, variables=variables, validate_first=validate)
+
+    if result.success:
+        data = result.data
+        click.echo()
+        click.echo("Workflow completed successfully")
+        click.echo(f"  Workflow: {data.workflow_name}")
+        click.echo(f"  Status: {data.status}")
+        click.echo(f"  Duration: {data.total_duration:.2f}s")
+        click.echo(f"  Steps completed: {data.steps_completed}")
+        if data.steps_failed > 0:
+            click.echo(f"  Steps failed: {data.steps_failed}")
+    else:
+        click.echo(f"Workflow failed: {result.error}")
+        raise SystemExit(1)
+
+
+@workflow.command("validate")
+@click.argument("workflow_path", type=click.Path(exists=True))
+@click.option("--strict", is_flag=True, help="Treat warnings as errors")
+def workflow_validate(workflow_path, strict):
+    """Validate a workflow TOML file.
+
+    Checks the workflow for syntax errors, missing dependencies,
+    unknown actions, and invalid parameters.
+
+    Examples:
+        bioamla workflow validate my_workflow.toml
+        bioamla workflow validate my_workflow.toml --strict
+    """
+    from bioamla.controllers.workflow import WorkflowController
+
+    controller = WorkflowController()
+    result = controller.validate(workflow_path, strict=strict)
+
+    if result.success:
+        data = result.data
+        if data.valid:
+            click.echo("Workflow is valid")
+            if data.num_warnings > 0:
+                click.echo(f"\nWarnings ({data.num_warnings}):")
+                for warning in data.warnings:
+                    click.echo(f"  - {warning}")
+        else:
+            click.echo("Workflow validation failed")
+            click.echo(f"\nErrors ({data.num_errors}):")
+            for error in data.errors:
+                click.echo(f"  - {error}")
+            if data.num_warnings > 0:
+                click.echo(f"\nWarnings ({data.num_warnings}):")
+                for warning in data.warnings:
+                    click.echo(f"  - {warning}")
+            raise SystemExit(1)
+    else:
+        click.echo(f"Validation error: {result.error}")
+        raise SystemExit(1)
+
+
+@workflow.command("export")
+@click.argument("workflow_path", type=click.Path(exists=True))
+@click.option("--output", "-o", required=True, help="Output shell script path")
+@click.option("--quiet", is_flag=True, help="Suppress output")
+def workflow_export(workflow_path, output, quiet):
+    """Export a workflow to a shell script.
+
+    Converts the workflow TOML file to an executable shell script
+    that can be run without bioamla installed.
+
+    Examples:
+        bioamla workflow export preprocessing.toml -o run_preprocessing.sh
+    """
+    from bioamla.controllers.workflow import WorkflowController
+
+    controller = WorkflowController()
+    result = controller.export_to_shell(workflow_path, output_path=output)
+
+    if result.success:
+        if not quiet:
+            click.echo(f"Exported workflow to: {output}")
+    else:
+        click.echo(f"Export failed: {result.error}")
+        raise SystemExit(1)
+
+
+@workflow.command("list-actions")
+def workflow_list_actions():
+    """List all available workflow actions.
+
+    Shows the actions that can be used in workflow step definitions.
+    """
+    from bioamla.controllers.workflow import WorkflowController
+
+    controller = WorkflowController()
+    result = controller.list_actions()
+
+    if result.success:
+        actions = sorted(result.data)
+        click.echo("Available Workflow Actions")
+        click.echo("=" * 50)
+
+        # Group by category
+        categories = {}
+        for action in actions:
+            if "." in action:
+                category, name = action.split(".", 1)
+            else:
+                category, name = "other", action
+            categories.setdefault(category, []).append(action)
+
+        for category in sorted(categories.keys()):
+            click.echo(f"\n{category}:")
+            for action in sorted(categories[category]):
+                click.echo(f"  - {action}")
+
+        click.echo(f"\nTotal: {len(actions)} actions")
+    else:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+
+@workflow.command("example")
+@click.option("--output", "-o", default=None, help="Output file path (default: stdout)")
+def workflow_example(output):
+    """Show an example workflow TOML file.
+
+    Displays a sample workflow that demonstrates the workflow format
+    and available options.
+
+    Examples:
+        bioamla workflow example                   # Print to stdout
+        bioamla workflow example -o my_workflow.toml  # Save to file
+    """
+    from bioamla.controllers.workflow import WorkflowController
+
+    controller = WorkflowController()
+    result = controller.get_example_workflow()
+
+    if result.success:
+        if output:
+            from pathlib import Path
+
+            Path(output).write_text(result.data)
+            click.echo(f"Example workflow saved to: {output}")
+        else:
+            click.echo(result.data)
+    else:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
 
 
 # =============================================================================
