@@ -18,7 +18,7 @@
 #   - ashraq/esc50: Environmental sounds (50 classes, 2000 clips)
 #   - bioamla/scp-frogs-inat-v1: Frog species from iNaturalist
 #   - bioamla/scp-frogs-small: Small frog dataset for testing
-#   - DBD-research-group/BirdSet: Bird sounds (~10,000 species)
+#   - samuelstevens/BirdSet: Bird sounds (subsets: HSN, NBP, NES, PER)
 #
 # AVAILABLE MODELS (HuggingFace):
 #   - MIT/ast-finetuned-audioset-10-10-0.4593: Base AST model

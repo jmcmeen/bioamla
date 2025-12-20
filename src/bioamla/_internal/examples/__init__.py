@@ -94,7 +94,7 @@ EXAMPLES = {
     "15": (
         "15_birdset_ast_train.sh",
         "BirdSet Training",
-        "Train AST on BirdSet bird sounds (DBD-research-group/BirdSet)",
+        "Train AST on BirdSet bird sounds (samuelstevens/BirdSet)",
     ),
     "16": (
         "16_birdset_ast_inference.sh",

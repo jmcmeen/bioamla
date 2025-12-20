@@ -10,7 +10,7 @@
 #   - ./birdset_model_HSN/best_model (locally trained on BirdSet HSN)
 #   - DBD-research-group/Bird-MAE-Base (specialized bird encoder)
 #
-# TEST DATA: DBD-research-group/BirdSet (any subset for evaluation)
+# TEST DATA: samuelstevens/BirdSet (subsets: HSN, NBP, NES, PER)
 #
 # USE CASES:
 #   - Bird species identification from field recordings
@@ -47,9 +47,7 @@ echo "Running batch inference..."
 bioamla models predict ast "$INPUT_DIR" \
     --batch \
     --model-path "$MODEL_PATH" \
-    --output "$OUTPUT_DIR/predictions.csv" \
-    --top-k 10 \
-    --threshold 0.05
+    --output-csv "$OUTPUT_DIR/predictions.csv"
 
 echo ""
 echo "Predictions saved to: $OUTPUT_DIR/predictions.csv"
