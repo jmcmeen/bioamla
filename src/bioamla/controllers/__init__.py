@@ -57,6 +57,14 @@ from .audio_transform import AudioTransformController
 from .base import BaseController, ControllerResult
 from .clustering import ClusteringController
 from .embedding import EmbeddingController
+from .inaturalist import (
+    INaturalistController,
+    SearchResult as INatSearchResult,
+    DownloadResult as INatDownloadResult,
+    TaxonInfo,
+    ProjectStats,
+    ObservationInfo,
+)
 from .indices import BatchIndicesResult, IndicesController, IndicesResult
 from .inference import InferenceController
 from .pipeline import PipelineController, PipelineProgress, PipelineResult
@@ -84,6 +92,13 @@ __all__ = [
     "RibbitController",
     "DetectionSummary",
     "BatchDetectionSummary",
+    # iNaturalist
+    "INaturalistController",
+    "INatSearchResult",
+    "INatDownloadResult",
+    "TaxonInfo",
+    "ProjectStats",
+    "ObservationInfo",
     # Pipeline
     "PipelineController",
     "PipelineResult",

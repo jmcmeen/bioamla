@@ -27,11 +27,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .base import BaseController, ControllerResult
+from .base import BaseController, ControllerResult, ToDictMixin
 
 
 @dataclass
-class WorkflowSummary:
+class WorkflowSummary(ToDictMixin):
     """Summary of a parsed workflow."""
 
     name: str
@@ -44,7 +44,7 @@ class WorkflowSummary:
 
 
 @dataclass
-class ExecutionSummary:
+class ExecutionSummary(ToDictMixin):
     """Summary of workflow execution."""
 
     workflow_name: str
@@ -58,7 +58,7 @@ class ExecutionSummary:
 
 
 @dataclass
-class ValidationSummary:
+class ValidationSummary(ToDictMixin):
     """Summary of workflow validation."""
 
     valid: bool
