@@ -34,7 +34,8 @@ def get_bioamla_version() -> str:
                                                  or not found in the Python
                                                  environment.
     """
-    return importlib.metadata.version('bioamla')
+    return importlib.metadata.version("bioamla")
+
 
 def get_package_versions() -> Dict[str, str]:
     """
@@ -61,7 +62,8 @@ def get_package_versions() -> Dict[str, str]:
         environment, not just bioamla dependencies. For large environments,
         this may return hundreds of packages.
     """
-    return {dist.metadata['Name']: dist.version for dist in importlib.metadata.distributions()}
+    return {dist.metadata["Name"]: dist.version for dist in importlib.metadata.distributions()}
+
 
 def get_device_info() -> Dict[str, Any]:
     """
@@ -90,17 +92,14 @@ def get_device_info() -> Dict[str, Any]:
         will be False even if CUDA devices are physically present.
     """
     device_info = {
-        'cuda_available': torch.cuda.is_available(),
-        'current_device': torch.cuda.current_device() if torch.cuda.is_available() else None,
-        'device_count': torch.cuda.device_count() if torch.cuda.is_available() else 0,
-        'devices': []
+        "cuda_available": torch.cuda.is_available(),
+        "current_device": torch.cuda.current_device() if torch.cuda.is_available() else None,
+        "device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+        "devices": [],
     }
 
     if torch.cuda.is_available():
         for i in range(torch.cuda.device_count()):
-            device_info['devices'].append({
-                'index': i,
-                'name': torch.cuda.get_device_name(i)
-            })
+            device_info["devices"].append({"index": i, "name": torch.cuda.get_device_name(i)})
 
     return device_info

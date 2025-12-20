@@ -16,16 +16,16 @@ from pathlib import Path
 from typing import List, Optional, Set
 
 import pandas as pd
-from bioamla.core.utils import get_audio_files
 
 from bioamla.core.files.paths import sanitize_filename
-from bioamla.core.services.species import find_species_name
 from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
 from bioamla.core.logger import get_logger
 from bioamla.core.metadata import (
     read_metadata_csv,
     write_metadata_csv,
 )
+from bioamla.core.services.species import find_species_name
+from bioamla.core.utils import get_audio_files
 
 logger = get_logger(__name__)
 
@@ -46,7 +46,8 @@ def count_audio_files(audio_folder_path: str) -> int:
     audio_files = get_audio_files(audio_folder_path, SUPPORTED_AUDIO_EXTENSIONS)
     return len(audio_files)
 
-def validate_metadata(audio_folder_path: str, metadata_csv_filename: str = 'metadata.csv') -> bool:
+
+def validate_metadata(audio_folder_path: str, metadata_csv_filename: str = "metadata.csv") -> bool:
     """
     Validate that metadata CSV file matches the audio files in a directory.
 
@@ -71,15 +72,18 @@ def validate_metadata(audio_folder_path: str, metadata_csv_filename: str = 'meta
     num_audio_files = count_audio_files(audio_folder_path)
     num_metadata_files = len(metadata_df)
     if num_audio_files != num_metadata_files:
-        raise ValueError(f"The number of audio files in the audio folder ({num_audio_files}) does not match the number of files in the metadata.csv file ({num_metadata_files})")
+        raise ValueError(
+            f"The number of audio files in the audio folder ({num_audio_files}) does not match the number of files in the metadata.csv file ({num_metadata_files})"
+        )
 
     # Check that all audio files are in metadata
     audio_files = get_audio_files(audio_folder_path, SUPPORTED_AUDIO_EXTENSIONS)
     for audio_file in audio_files:
-        if audio_file not in metadata_df['file_name'].tolist():
+        if audio_file not in metadata_df["file_name"].tolist():
             raise ValueError(f"The audio file {audio_file} is not in the metadata.csv file")
 
     return True
+
 
 def load_local_dataset(audio_folder_path: str):
     """
@@ -119,7 +123,7 @@ def merge_datasets(
     skip_existing: bool = True,
     organize_by_category: bool = True,
     target_format: Optional[str] = None,
-    verbose: bool = True
+    verbose: bool = True,
 ) -> dict:
     """
     Merge multiple audio datasets into a single dataset.
@@ -196,7 +200,7 @@ def merge_datasets(
         "files_converted": 0,
         "datasets_merged": 0,
         "output_dir": str(output_path.absolute()),
-        "metadata_file": str(output_path / metadata_filename)
+        "metadata_file": str(output_path / metadata_filename),
     }
 
     # Track all metadata rows and existing files
@@ -320,7 +324,9 @@ def merge_datasets(
                                 print(f"  Error converting {source_filename}: {e}")
                     else:
                         if verbose:
-                            print(f"  Warning: No converter for {source_ext} -> {target_format}, copying instead: {source_filename}")
+                            print(
+                                f"  Warning: No converter for {source_ext} -> {target_format}, copying instead: {source_filename}"
+                            )
                         shutil.copy2(source_file_path, dest_file_path)
                         files_copied_from_source += 1
                         if dest_filename not in existing_filenames:
@@ -360,7 +366,7 @@ def merge_datasets(
             output_metadata_path,
             all_metadata_rows,
             all_fieldnames,
-            merge_existing=False  # Already merged above
+            merge_existing=False,  # Already merged above
         )
 
     stats["total_files"] = len(all_metadata_rows)
@@ -426,6 +432,7 @@ def convert_audio_file(
     # If same format, just copy
     if source_ext == target_format:
         import shutil
+
         output_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(str(input_path), str(output_path))
         return str(output_path)
@@ -493,12 +500,22 @@ def batch_convert_audio(
     if not audio_files:
         if verbose:
             print(f"No audio files found in {input_dir}")
-        return {"files_converted": 0, "files_skipped": 0, "files_failed": 0, "output_dir": str(output_dir)}
+        return {
+            "files_converted": 0,
+            "files_skipped": 0,
+            "files_failed": 0,
+            "output_dir": str(output_dir),
+        }
 
     if verbose:
         print(f"Found {len(audio_files)} audio files to convert")
 
-    stats = {"files_converted": 0, "files_skipped": 0, "files_failed": 0, "output_dir": str(output_dir)}
+    stats = {
+        "files_converted": 0,
+        "files_skipped": 0,
+        "files_failed": 0,
+        "output_dir": str(output_dir),
+    }
 
     for audio_path in audio_files:
         audio_path = Path(audio_path)
@@ -540,7 +557,9 @@ def batch_convert_audio(
                 print(f"  Failed: {audio_path} - {e}")
 
     if verbose:
-        print(f"Converted {stats['files_converted']} files, {stats['files_skipped']} skipped, {stats['files_failed']} failed")
+        print(
+            f"Converted {stats['files_converted']} files, {stats['files_skipped']} skipped, {stats['files_failed']} failed"
+        )
 
     return stats
 
@@ -567,7 +586,7 @@ def convert_filetype(
     target_format: str,
     metadata_filename: str = "metadata.csv",
     keep_original: bool = False,
-    verbose: bool = True
+    verbose: bool = True,
 ) -> dict:
     """
     Convert all audio files in a dataset to a specified format.
@@ -628,7 +647,7 @@ def convert_filetype(
         "files_converted": 0,
         "files_skipped": 0,
         "files_failed": 0,
-        "target_format": target_format
+        "target_format": target_format,
     }
 
     # Read metadata
@@ -662,7 +681,9 @@ def convert_filetype(
         converter = _get_converter(source_ext, target_format)
         if converter is None:
             if verbose:
-                print(f"  Warning: No converter for {source_ext} -> {target_format}, removing: {file_name}")
+                print(
+                    f"  Warning: No converter for {source_ext} -> {target_format}, removing: {file_name}"
+                )
             stats["files_failed"] += 1
             # Delete the source file since it can't be converted
             if source_path.exists():

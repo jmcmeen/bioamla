@@ -35,6 +35,7 @@ Usage:
     manager.execute(cmd)
     manager.undo()  # Reverts the operation
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime

@@ -21,6 +21,7 @@ class DefaultConfig:
         MIN_CONFIDENCE (float): Minimum confidence threshold for predictions
         TOP_K (int): Default number of top predictions to return
     """
+
     MODEL_NAME = "MIT/ast-finetuned-audioset-10-10-0.4593"
     SAMPLE_RATE = 16000
     MAX_AUDIO_LENGTH = 30  # seconds

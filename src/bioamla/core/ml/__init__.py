@@ -27,6 +27,8 @@ Example:
 """
 
 # API response models (safe to import, no circular deps)
+# Config (safe, no circular deps)
+from bioamla.core.ml.config import DefaultConfig
 from bioamla.core.ml.responses import (
     AudioClassificationResponse,
     Base64AudioRequest,
@@ -34,57 +36,75 @@ from bioamla.core.ml.responses import (
 )
 from bioamla.core.ml.responses import PredictionResult as APIPredictionResult
 
-# Config (safe, no circular deps)
-from bioamla.core.ml.config import DefaultConfig
-
 
 def _ensure_models_registered():
     """Import model modules to trigger @register_model decorators."""
     # These imports register the models via @register_model decorator
-    from bioamla.core.ml import ast_model  # noqa: F401
-    from bioamla.core.ml import birdnet  # noqa: F401
-    from bioamla.core.ml import opensoundscape  # noqa: F401
+    from bioamla.core.ml import (
+        ast_model,  # noqa: F401
+        birdnet,  # noqa: F401
+        opensoundscape,  # noqa: F401
+    )
 
 
 def __getattr__(name):
     """Lazy import to avoid circular dependencies."""
     # Base classes and utilities
     if name in (
-        "AudioDataset", "BaseAudioModel", "BatchPredictionResult",
-        "ModelBackend", "ModelConfig", "PredictionResult",
-        "create_dataloader", "register_model"
+        "AudioDataset",
+        "BaseAudioModel",
+        "BatchPredictionResult",
+        "ModelBackend",
+        "ModelConfig",
+        "PredictionResult",
+        "create_dataloader",
+        "register_model",
     ):
         from bioamla.core.ml import base
+
         return getattr(base, name)
 
     # These functions need models registered first
     if name == "list_models":
         _ensure_models_registered()
         from bioamla.core.ml import base
+
         return base.list_models
 
     if name == "get_model_class":
         _ensure_models_registered()
         from bioamla.core.ml import base
+
         return base.get_model_class
 
     # Model implementations
     if name == "ASTModel":
         from bioamla.core.ml.ast_model import ASTModel
+
         return ASTModel
     if name in ("BirdNETModel", "BirdNETEncoder"):
         from bioamla.core.ml import birdnet
+
         return getattr(birdnet, name)
     if name in ("OpenSoundscapeModel", "SpectrogramCNN"):
         from bioamla.core.ml import opensoundscape
+
         return getattr(opensoundscape, name)
 
     # Training utilities
-    if name in ("ModelTrainer", "SpectrogramDataset", "TrainingConfig", "TrainingMetrics", "train_model"):
+    if name in (
+        "ModelTrainer",
+        "SpectrogramDataset",
+        "TrainingConfig",
+        "TrainingMetrics",
+        "train_model",
+    ):
         from bioamla.core.ml import trainer
+
         return getattr(trainer, name)
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     # Base classes
@@ -121,10 +141,7 @@ __all__ = [
 
 
 def load_model(
-    model_type: str,
-    model_path: str,
-    config: "ModelConfig" = None,
-    **kwargs
+    model_type: str, model_path: str, config: "ModelConfig" = None, **kwargs
 ) -> "BaseAudioModel":
     """
     Load a model by type and path.
@@ -146,6 +163,7 @@ def load_model(
     """
     _ensure_models_registered()
     from bioamla.ml.base import get_model_class
+
     model_class = get_model_class(model_type)
     model = model_class(config)
     model.load(model_path, **kwargs)
@@ -158,7 +176,7 @@ def predict_file(
     model_path: str = "MIT/ast-finetuned-audioset-10-10-0.4593",
     min_confidence: float = 0.0,
     top_k: int = 1,
-    **kwargs
+    **kwargs,
 ) -> list:
     """
     Quick prediction on a single file.
@@ -178,6 +196,7 @@ def predict_file(
         List of prediction results.
     """
     from bioamla.ml.base import ModelConfig
+
     config = ModelConfig(
         min_confidence=min_confidence,
         top_k=top_k,
@@ -192,7 +211,7 @@ def extract_embeddings(
     model_type: str = "ast",
     model_path: str = "MIT/ast-finetuned-audioset-10-10-0.4593",
     layer: str = None,
-    **kwargs
+    **kwargs,
 ):
     """
     Extract embeddings from an audio file.

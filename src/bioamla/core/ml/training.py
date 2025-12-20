@@ -118,33 +118,32 @@ def create_audio_augmentations(config: Optional[AugmentationConfig] = None) -> C
     if config is None:
         config = AugmentationConfig()
 
-    return Compose([
-        AddGaussianSNR(min_snr_db=config.min_snr_db, max_snr_db=config.max_snr_db),
-        Gain(min_gain_db=config.min_gain_db, max_gain_db=config.max_gain_db),
-        GainTransition(
-            min_gain_db=config.min_gain_db,
-            max_gain_db=config.max_gain_db,
-            min_duration=0.01,
-            max_duration=0.3,
-            duration_unit="fraction"
-        ),
-        ClippingDistortion(
-            min_percentile_threshold=config.min_percentile_threshold,
-            max_percentile_threshold=config.max_percentile_threshold,
-            p=config.clipping_probability
-        ),
-        TimeStretch(min_rate=config.min_rate, max_rate=config.max_rate),
-        PitchShift(min_semitones=config.min_semitones, max_semitones=config.max_semitones),
-    ], p=config.probability, shuffle=True)
+    return Compose(
+        [
+            AddGaussianSNR(min_snr_db=config.min_snr_db, max_snr_db=config.max_snr_db),
+            Gain(min_gain_db=config.min_gain_db, max_gain_db=config.max_gain_db),
+            GainTransition(
+                min_gain_db=config.min_gain_db,
+                max_gain_db=config.max_gain_db,
+                min_duration=0.01,
+                max_duration=0.3,
+                duration_unit="fraction",
+            ),
+            ClippingDistortion(
+                min_percentile_threshold=config.min_percentile_threshold,
+                max_percentile_threshold=config.max_percentile_threshold,
+                p=config.clipping_probability,
+            ),
+            TimeStretch(min_rate=config.min_rate, max_rate=config.max_rate),
+            PitchShift(min_semitones=config.min_semitones, max_semitones=config.max_semitones),
+        ],
+        p=config.probability,
+        shuffle=True,
+    )
 
 
 def compute_metrics(
-    eval_pred,
-    accuracy_metric,
-    precision_metric,
-    recall_metric,
-    f1_metric,
-    average: str = "macro"
+    eval_pred, accuracy_metric, precision_metric, recall_metric, f1_metric, average: str = "macro"
 ) -> Dict[str, float]:
     """
     Compute evaluation metrics for AST model training.
@@ -165,31 +164,24 @@ def compute_metrics(
 
     # Compute metrics
     accuracy_result = accuracy_metric.compute(
-        predictions=predictions,
-        references=eval_pred.label_ids
+        predictions=predictions, references=eval_pred.label_ids
     )
     metrics: Dict[str, float] = accuracy_result if accuracy_result else {}
 
     precision_result = precision_metric.compute(
-        predictions=predictions,
-        references=eval_pred.label_ids,
-        average=average
+        predictions=predictions, references=eval_pred.label_ids, average=average
     )
     if precision_result:
         metrics.update(precision_result)
 
     recall_result = recall_metric.compute(
-        predictions=predictions,
-        references=eval_pred.label_ids,
-        average=average
+        predictions=predictions, references=eval_pred.label_ids, average=average
     )
     if recall_result:
         metrics.update(recall_result)
 
     f1_result = f1_metric.compute(
-        predictions=predictions,
-        references=eval_pred.label_ids,
-        average=average
+        predictions=predictions, references=eval_pred.label_ids, average=average
     )
     if f1_result:
         metrics.update(f1_result)
@@ -198,10 +190,7 @@ def compute_metrics(
 
 
 def calculate_dataset_statistics(
-    dataset,
-    feature_extractor,
-    preprocess_fn,
-    model_input_name: str
+    dataset, feature_extractor, preprocess_fn, model_input_name: str
 ) -> tuple:
     """
     Calculate mean and standard deviation for dataset normalization.
@@ -247,9 +236,7 @@ class ASTTrainer:
     """
 
     def __init__(
-        self,
-        config: TrainingConfig,
-        augmentation_config: Optional[AugmentationConfig] = None
+        self, config: TrainingConfig, augmentation_config: Optional[AugmentationConfig] = None
     ):
         """
         Initialize the trainer.
@@ -281,20 +268,18 @@ class ASTTrainer:
 
         # Get target value - class name mappings
         if isinstance(dataset, Dataset):
-            selected_data = dataset.select_columns([
-                self.config.category_id_column,
-                self.config.category_label_column
-            ])
+            selected_data = dataset.select_columns(
+                [self.config.category_id_column, self.config.category_label_column]
+            )
             df = pd.DataFrame(selected_data.to_dict())
             unique_indices = np.unique(df[self.config.category_id_column], return_index=True)[1]
             class_names = df.iloc[unique_indices][self.config.category_label_column].to_list()
         elif isinstance(dataset, DatasetDict):
             first_split_name = list(dataset.keys())[0]
             first_split = dataset[first_split_name]
-            selected_data = first_split.select_columns([
-                self.config.category_id_column,
-                self.config.category_label_column
-            ])
+            selected_data = first_split.select_columns(
+                [self.config.category_id_column, self.config.category_label_column]
+            )
             df = pd.DataFrame(selected_data.to_dict())
             unique_indices = np.unique(df[self.config.category_id_column], return_index=True)[1]
             class_names = df.iloc[unique_indices][self.config.category_label_column].to_list()
@@ -344,9 +329,7 @@ class ASTTrainer:
         # Preprocessing functions
         def preprocess_audio(batch):
             wavs = [audio["array"] for audio in batch["input_values"]]
-            inputs = self.feature_extractor(
-                wavs, sampling_rate=sampling_rate, return_tensors="pt"
-            )
+            inputs = self.feature_extractor(wavs, sampling_rate=sampling_rate, return_tensors="pt")
             return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
         def preprocess_audio_with_transforms(batch):
@@ -354,9 +337,7 @@ class ASTTrainer:
                 self.audio_augmentations(audio["array"], sample_rate=sampling_rate)
                 for audio in batch["input_values"]
             ]
-            inputs = self.feature_extractor(
-                wavs, sampling_rate=sampling_rate, return_tensors="pt"
-            )
+            inputs = self.feature_extractor(wavs, sampling_rate=sampling_rate, return_tensors="pt")
             return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
         # Cast and rename audio column
@@ -369,10 +350,7 @@ class ASTTrainer:
         self.feature_extractor.do_normalize = False
         if isinstance(dataset, DatasetDict) and "train" in dataset:
             mean, std = calculate_dataset_statistics(
-                dataset["train"],
-                self.feature_extractor,
-                preprocess_audio,
-                model_input_name
+                dataset["train"], self.feature_extractor, preprocess_audio, model_input_name
             )
             self.feature_extractor.mean = mean
             self.feature_extractor.std = std
@@ -384,7 +362,9 @@ class ASTTrainer:
         # Apply transforms
         if isinstance(dataset, DatasetDict):
             if "train" in dataset:
-                dataset["train"].set_transform(preprocess_audio_with_transforms, output_all_columns=False)
+                dataset["train"].set_transform(
+                    preprocess_audio_with_transforms, output_all_columns=False
+                )
             if "test" in dataset:
                 dataset["test"].set_transform(preprocess_audio, output_all_columns=False)
         else:
@@ -399,9 +379,7 @@ class ASTTrainer:
         config.id2label = {v: k for k, v in label2id.items()}
 
         self.model = ASTForAudioClassification.from_pretrained(
-            self.config.base_model,
-            config=config,
-            ignore_mismatched_sizes=True
+            self.config.base_model, config=config, ignore_mismatched_sizes=True
         )
         self.model.init_weights()
 
@@ -415,8 +393,9 @@ class ASTTrainer:
             dict: Training results
         """
         import evaluate
-        from bioamla.core.utils import create_directory
         from transformers import Trainer, TrainingArguments
+
+        from bioamla.core.utils import create_directory
 
         if self.model is None:
             self.setup()
@@ -435,9 +414,7 @@ class ASTTrainer:
         average = "macro" if self.model.config.num_labels > 2 else "binary"
 
         def metrics_fn(eval_pred):
-            return compute_metrics(
-                eval_pred, accuracy, precision, recall, f1, average
-            )
+            return compute_metrics(eval_pred, accuracy, precision, recall, f1, average)
 
         # Configure training arguments
         training_args = TrainingArguments(
@@ -455,7 +432,7 @@ class ASTTrainer:
             load_best_model_at_end=self.config.load_best_model_at_end,
             metric_for_best_model=self.config.metric_for_best_model,
             logging_strategy=self.config.logging_strategy,
-            logging_steps=self.config.logging_steps
+            logging_steps=self.config.logging_steps,
         )
 
         # Create trainer
@@ -479,5 +456,5 @@ class ASTTrainer:
         return {
             "training_loss": result.training_loss,
             "metrics": result.metrics,
-            "model_path": str(best_model_path)
+            "model_path": str(best_model_path),
         }

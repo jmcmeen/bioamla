@@ -29,15 +29,14 @@ from typing import Any, Dict, List, Optional, Union
 import torch
 from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
-from bioamla.core.files import TextFile
-
-from bioamla.core.device import get_device
-from bioamla.core.logger import get_logger
 from bioamla.core.audio.torchaudio import (
     load_waveform_tensor,
     resample_waveform_tensor,
     split_waveform_tensor,
 )
+from bioamla.core.device import get_device
+from bioamla.core.files import TextFile
+from bioamla.core.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -81,7 +80,7 @@ class ASTInference:
         self,
         model_path: str,
         sample_rate: int = 16000,
-        device: Optional[Union[str, torch.device]] = None
+        device: Optional[Union[str, torch.device]] = None,
     ):
         """
         Initialize the inference engine.
@@ -100,9 +99,7 @@ class ASTInference:
 
         # Load model and feature extractor
         logger.info(f"Loading model from {model_path}")
-        self.model = AutoModelForAudioClassification.from_pretrained(
-            model_path, device_map="auto"
-        )
+        self.model = AutoModelForAudioClassification.from_pretrained(model_path, device_map="auto")
         self.feature_extractor = ASTFeatureExtractor.from_pretrained(model_path)
 
         # Get label mapping
@@ -111,11 +108,7 @@ class ASTInference:
 
         logger.info(f"Model loaded with {len(self.id2label)} classes")
 
-    def predict(
-        self,
-        audio_path: str,
-        return_logits: bool = False
-    ) -> PredictionResult:
+    def predict(self, audio_path: str, return_logits: bool = False) -> PredictionResult:
         """
         Run inference on a single audio file.
 
@@ -153,15 +146,11 @@ class ASTInference:
             end_time=duration,
             predicted_label=predicted_label,
             confidence=confidence,
-            logits=logits.cpu().tolist() if return_logits else None
+            logits=logits.cpu().tolist() if return_logits else None,
         )
 
     def predict_segments(
-        self,
-        audio_path: str,
-        clip_length: int = 10,
-        overlap: int = 0,
-        return_logits: bool = False
+        self, audio_path: str, clip_length: int = 10, overlap: int = 0, return_logits: bool = False
     ) -> List[PredictionResult]:
         """
         Run inference on audio file in segments.
@@ -203,14 +192,16 @@ class ASTInference:
             start_time = start_sample / self.sample_rate
             end_time = end_sample / self.sample_rate
 
-            results.append(PredictionResult(
-                filepath=audio_path,
-                start_time=start_time,
-                end_time=end_time,
-                predicted_label=predicted_label,
-                confidence=confidence,
-                logits=logits.cpu().tolist() if return_logits else None
-            ))
+            results.append(
+                PredictionResult(
+                    filepath=audio_path,
+                    start_time=start_time,
+                    end_time=end_time,
+                    predicted_label=predicted_label,
+                    confidence=confidence,
+                    logits=logits.cpu().tolist() if return_logits else None,
+                )
+            )
 
         return results
 
@@ -221,10 +212,7 @@ class ASTInference:
 
         # Extract features
         inputs = self.feature_extractor(
-            waveform_np,
-            sampling_rate=self.sample_rate,
-            padding="max_length",
-            return_tensors="pt"
+            waveform_np, sampling_rate=self.sample_rate, padding="max_length", return_tensors="pt"
         )
 
         # Move to device
@@ -260,17 +248,14 @@ def run_batch_inference(config: BatchInferenceConfig) -> Dict[str, Any]:
         print(f"Found {len(audio_files)} audio files")
 
     # Initialize inference engine
-    inference = ASTInference(
-        model_path=config.model_path,
-        sample_rate=config.sample_rate
-    )
+    inference = ASTInference(model_path=config.model_path, sample_rate=config.sample_rate)
 
     stats = {
         "total_files": len(audio_files),
         "total_segments": 0,
         "files_processed": 0,
         "files_failed": 0,
-        "output_csv": str(output_path)
+        "output_csv": str(output_path),
     }
 
     # Initialize CSV
@@ -288,22 +273,22 @@ def run_batch_inference(config: BatchInferenceConfig) -> Dict[str, Any]:
 
         try:
             results = inference.predict_segments(
-                audio_file,
-                clip_length=config.clip_length,
-                overlap=config.overlap
+                audio_file, clip_length=config.clip_length, overlap=config.overlap
             )
 
             # Append to CSV
             with TextFile(output_path, mode="a", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
                 for result in results:
-                    writer.writerow({
-                        "filepath": result.filepath,
-                        "start_time": result.start_time,
-                        "end_time": result.end_time,
-                        "predicted_label": result.predicted_label,
-                        "confidence": result.confidence
-                    })
+                    writer.writerow(
+                        {
+                            "filepath": result.filepath,
+                            "start_time": result.start_time,
+                            "end_time": result.end_time,
+                            "predicted_label": result.predicted_label,
+                            "confidence": result.confidence,
+                        }
+                    )
 
             stats["total_segments"] += len(results)
             stats["files_processed"] += 1

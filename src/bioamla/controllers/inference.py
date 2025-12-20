@@ -8,12 +8,13 @@ Controller for ML model inference operations.
 Orchestrates between CLI/API views and core ML inference functions.
 Handles model loading, batch processing, and output formatting.
 """
+
 import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .base import BaseController, BatchProgress, ControllerResult
+from .base import BaseController, ControllerResult
 
 
 @dataclass
@@ -224,21 +225,25 @@ class InferenceController(BaseController):
             if output_csv and all_predictions:
                 with TextFile(output_csv, mode="w", newline="") as f:
                     writer = csv.writer(f.handle)
-                    writer.writerow([
-                        "filepath",
-                        "start_time",
-                        "end_time",
-                        "predicted_label",
-                        "confidence",
-                    ])
+                    writer.writerow(
+                        [
+                            "filepath",
+                            "start_time",
+                            "end_time",
+                            "predicted_label",
+                            "confidence",
+                        ]
+                    )
                     for pred in all_predictions:
-                        writer.writerow([
-                            pred.filepath,
-                            f"{pred.start_time:.3f}",
-                            f"{pred.end_time:.3f}",
-                            pred.predicted_label,
-                            f"{pred.confidence:.4f}",
-                        ])
+                        writer.writerow(
+                            [
+                                pred.filepath,
+                                f"{pred.start_time:.3f}",
+                                f"{pred.end_time:.3f}",
+                                pred.predicted_label,
+                                f"{pred.confidence:.4f}",
+                            ]
+                        )
 
             summary = InferenceSummary(
                 total_files=len(files),

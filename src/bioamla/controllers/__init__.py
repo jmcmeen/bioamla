@@ -49,14 +49,15 @@ Usage:
     # Undo the save
     file_ctrl.undo()
 """
-from .base import BaseController, ControllerResult
-from .audio import AudioController  # Legacy controller for CLI compatibility
-from .audio_file import AudioFileController, AudioData
-from .audio_transform import AudioTransformController
-from .inference import InferenceController
-from .pipeline import PipelineController, PipelineResult, PipelineProgress
-from .indices import IndicesController, IndicesResult, BatchIndicesResult
+
 from .annotation_controller import AnnotationController, AnnotationResult, ClipExtractionResult
+from .audio import AudioController  # Legacy controller for CLI compatibility
+from .audio_file import AudioData, AudioFileController
+from .audio_transform import AudioTransformController
+from .base import BaseController, ControllerResult
+from .indices import BatchIndicesResult, IndicesController, IndicesResult
+from .inference import InferenceController
+from .pipeline import PipelineController, PipelineProgress, PipelineResult
 
 __all__ = [
     # Base

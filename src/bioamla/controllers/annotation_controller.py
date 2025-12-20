@@ -15,20 +15,21 @@ This controller bridges the core annotation system (bioamla.core.annotations)
 with the database layer (bioamla.database) and provides a clean interface
 for CLI and GUI applications.
 """
+
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import numpy as np
 
-from bioamla.controllers.base import BaseController, BatchProgress, ControllerResult
+from bioamla.controllers.base import BaseController, ControllerResult
 from bioamla.core.annotations import (
     Annotation as CoreAnnotation,
-    AnnotationSet,
+)
+from bioamla.core.annotations import (
     load_csv_annotations,
     load_raven_selection_table,
     save_csv_annotations,
@@ -164,9 +165,7 @@ class AnnotationController(BaseController):
             summary = summarize_annotations(annotations)
 
             return ControllerResult.ok(
-                data=AnnotationResult(
-                    annotations=annotations, file_path=filepath, summary=summary
-                ),
+                data=AnnotationResult(annotations=annotations, file_path=filepath, summary=summary),
                 message=f"Imported {len(annotations)} annotations from Raven table",
                 count=len(annotations),
             )
@@ -223,9 +222,7 @@ class AnnotationController(BaseController):
             summary = summarize_annotations(annotations)
 
             return ControllerResult.ok(
-                data=AnnotationResult(
-                    annotations=annotations, file_path=filepath, summary=summary
-                ),
+                data=AnnotationResult(annotations=annotations, file_path=filepath, summary=summary),
                 message=f"Imported {len(annotations)} annotations from CSV",
                 count=len(annotations),
             )
@@ -544,9 +541,7 @@ class AnnotationController(BaseController):
             ControllerResult containing list of annotations
         """
         try:
-            db_annotations = uow.annotations.get_by_recording(
-                recording_id, skip=skip, limit=limit
-            )
+            db_annotations = uow.annotations.get_by_recording(recording_id, skip=skip, limit=limit)
 
             annotations = [self._db_to_core_annotation(a) for a in db_annotations]
 
@@ -804,9 +799,7 @@ class AnnotationController(BaseController):
 
             # Persist to database if UoW provided
             if uow and recording_id:
-                self._persist_annotations(
-                    all_annotations, recording_id, "import", directory, uow
-                )
+                self._persist_annotations(all_annotations, recording_id, "import", directory, uow)
 
             summary = summarize_annotations(all_annotations)
 

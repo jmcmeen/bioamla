@@ -249,15 +249,11 @@ def scan_directory(
 
         # Count by label
         if file_info.label:
-            dataset_info.labels[file_info.label] = (
-                dataset_info.labels.get(file_info.label, 0) + 1
-            )
+            dataset_info.labels[file_info.label] = dataset_info.labels.get(file_info.label, 0) + 1
 
         # Count by split
         if file_info.split:
-            dataset_info.splits[file_info.split] = (
-                dataset_info.splits.get(file_info.split, 0) + 1
-            )
+            dataset_info.splits[file_info.split] = dataset_info.splits.get(file_info.split, 0) + 1
 
     return audio_files, dataset_info
 
@@ -375,13 +371,15 @@ def filter_audio_files(
 
     if min_duration is not None:
         result = [
-            f for f in result
+            f
+            for f in result
             if f.duration_seconds is not None and f.duration_seconds >= min_duration
         ]
 
     if max_duration is not None:
         result = [
-            f for f in result
+            f
+            for f in result
             if f.duration_seconds is not None and f.duration_seconds <= max_duration
         ]
 

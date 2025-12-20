@@ -284,10 +284,7 @@ def run_install(os_type: Optional[str] = None) -> tuple[bool, str]:
 
     # Check for required privileges on macOS (Homebrew doesn't need sudo)
     if os_type != "macos" and not _has_sudo():
-        return False, (
-            f"Installation requires sudo privileges.\n"
-            f"Please run: {command}"
-        )
+        return False, (f"Installation requires sudo privileges.\nPlease run: {command}")
 
     try:
         # Split command for subprocess

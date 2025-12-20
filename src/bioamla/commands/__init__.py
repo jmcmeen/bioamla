@@ -36,6 +36,7 @@ Usage:
     result = manager.execute(MyCommand())
     manager.undo()
 """
+
 from .base import (
     Command,
     CommandInfo,

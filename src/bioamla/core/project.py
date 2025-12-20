@@ -11,7 +11,7 @@ project configuration, logs, and metadata.
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 PROJECT_MARKER = ".bioamla"
 CONFIG_FILENAME = "config.toml"

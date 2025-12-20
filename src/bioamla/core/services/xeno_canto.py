@@ -23,12 +23,11 @@ Example:
 """
 
 import csv
+import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-
-import logging
 
 from bioamla.core.base_api import APICache, APIClient, RateLimiter
 from bioamla.core.files import TextFile, sanitize_filename
@@ -87,6 +86,7 @@ def get_api_key() -> str | None:
     # Check config file
     try:
         from bioamla.core.config import get_config
+
         config = get_config()
         config_key = config.get("api", "xc_api_key")
         if config_key:
@@ -95,6 +95,7 @@ def get_api_key() -> str | None:
         pass
 
     return None
+
 
 # Default rate limit: 1 request per second (be respectful to the API)
 _rate_limiter = RateLimiter(requests_per_second=1.0, burst_size=2)
@@ -491,7 +492,9 @@ def download_recordings(
 
     for i, recording in enumerate(recordings, 1):
         if verbose:
-            print(f"[{i}/{len(recordings)}] Downloading XC{recording.id} - {recording.scientific_name}")
+            print(
+                f"[{i}/{len(recordings)}] Downloading XC{recording.id} - {recording.scientific_name}"
+            )
 
         result = download_recording(
             recording,
@@ -503,24 +506,26 @@ def download_recordings(
             stats["downloaded"] += 1
             relative_path = result.relative_to(output_dir)
 
-            metadata_rows.append({
-                "file_name": str(relative_path),
-                "xc_id": recording.id,
-                "scientific_name": recording.scientific_name,
-                "common_name": recording.common_name,
-                "recordist": recording.recordist,
-                "country": recording.country,
-                "location": recording.location,
-                "latitude": recording.latitude,
-                "longitude": recording.longitude,
-                "quality": recording.quality,
-                "sound_type": recording.sound_type,
-                "date": recording.date,
-                "length": recording.length,
-                "license": recording.license,
-                "url": recording.url,
-                "remarks": recording.remarks,
-            })
+            metadata_rows.append(
+                {
+                    "file_name": str(relative_path),
+                    "xc_id": recording.id,
+                    "scientific_name": recording.scientific_name,
+                    "common_name": recording.common_name,
+                    "recordist": recording.recordist,
+                    "country": recording.country,
+                    "location": recording.location,
+                    "latitude": recording.latitude,
+                    "longitude": recording.longitude,
+                    "quality": recording.quality,
+                    "sound_type": recording.sound_type,
+                    "date": recording.date,
+                    "length": recording.length,
+                    "license": recording.license,
+                    "url": recording.url,
+                    "remarks": recording.remarks,
+                }
+            )
         else:
             stats["failed"] += 1
 
@@ -537,7 +542,7 @@ def download_recordings(
         stats["metadata_file"] = str(metadata_path)
 
     if verbose:
-        print(f"\nDownload complete!")
+        print("\nDownload complete!")
         print(f"  Downloaded: {stats['downloaded']}/{stats['total']}")
         print(f"  Failed: {stats['failed']}")
         if stats["metadata_file"]:

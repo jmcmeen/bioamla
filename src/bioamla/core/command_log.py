@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
 from bioamla.core.files import TextFile
-from bioamla.core.project import find_project_root, PROJECT_MARKER
+from bioamla.core.project import PROJECT_MARKER, find_project_root
 
 LOGS_DIR = "logs"
 LOG_FILENAME = "command_history.jsonl"
@@ -78,9 +78,7 @@ class CommandLogger:
         self._log_path: Optional[Path] = None
 
         if self.project_root:
-            self._log_path = (
-                self.project_root / PROJECT_MARKER / LOGS_DIR / LOG_FILENAME
-            )
+            self._log_path = self.project_root / PROJECT_MARKER / LOGS_DIR / LOG_FILENAME
 
     @property
     def log_path(self) -> Optional[Path]:
@@ -137,9 +135,7 @@ class CommandLogger:
                 continue
             if since:
                 try:
-                    entry_time = datetime.fromisoformat(
-                        entry.timestamp.replace("Z", "+00:00")
-                    )
+                    entry_time = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
                     if entry_time < since:
                         continue
                 except ValueError:

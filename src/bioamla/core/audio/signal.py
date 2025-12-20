@@ -13,6 +13,7 @@ Supported operations:
 - resample: Sample rate conversion
 - trim: Trim audio by time
 """
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -27,6 +28,7 @@ from bioamla.core.audio.torchaudio import load_waveform_tensor
 # =============================================================================
 # Filter Functions
 # =============================================================================
+
 
 def bandpass_filter(
     audio: np.ndarray,
@@ -57,9 +59,11 @@ def bandpass_filter(
     high = max(0.001, min(high, 0.999))
 
     if low >= high:
-        raise ValueError(f"Low frequency ({low_freq}) must be less than high frequency ({high_freq})")
+        raise ValueError(
+            f"Low frequency ({low_freq}) must be less than high frequency ({high_freq})"
+        )
 
-    b, a = scipy_signal.butter(order, [low, high], btype='band')
+    b, a = scipy_signal.butter(order, [low, high], btype="band")
     filtered = scipy_signal.filtfilt(b, a, audio)
 
     return filtered.astype(np.float32)
@@ -87,7 +91,7 @@ def lowpass_filter(
     normalized_cutoff = cutoff_freq / nyquist
     normalized_cutoff = max(0.001, min(normalized_cutoff, 0.999))
 
-    b, a = scipy_signal.butter(order, normalized_cutoff, btype='low')
+    b, a = scipy_signal.butter(order, normalized_cutoff, btype="low")
     filtered = scipy_signal.filtfilt(b, a, audio)
 
     return filtered.astype(np.float32)
@@ -115,7 +119,7 @@ def highpass_filter(
     normalized_cutoff = cutoff_freq / nyquist
     normalized_cutoff = max(0.001, min(normalized_cutoff, 0.999))
 
-    b, a = scipy_signal.butter(order, normalized_cutoff, btype='high')
+    b, a = scipy_signal.butter(order, normalized_cutoff, btype="high")
     filtered = scipy_signal.filtfilt(b, a, audio)
 
     return filtered.astype(np.float32)
@@ -124,6 +128,7 @@ def highpass_filter(
 # =============================================================================
 # Denoise Functions
 # =============================================================================
+
 
 def spectral_denoise(
     audio: np.ndarray,
@@ -174,9 +179,11 @@ def spectral_denoise(
 # Segment Functions
 # =============================================================================
 
+
 @dataclass
 class AudioSegment:
     """Represents a segment of audio."""
+
     start_time: float
     end_time: float
     start_sample: int
@@ -221,12 +228,14 @@ def segment_on_silence(
 
     for start_sample, end_sample in intervals:
         if end_sample - start_sample >= min_samples:
-            segments.append(AudioSegment(
-                start_time=start_sample / sample_rate,
-                end_time=end_sample / sample_rate,
-                start_sample=start_sample,
-                end_sample=end_sample,
-            ))
+            segments.append(
+                AudioSegment(
+                    start_time=start_sample / sample_rate,
+                    end_time=end_sample / sample_rate,
+                    start_sample=start_sample,
+                    end_sample=end_sample,
+                )
+            )
 
     return segments
 
@@ -252,13 +261,12 @@ def split_audio_on_silence(
         List of tuples (audio_chunk, start_time, end_time)
     """
     segments = segment_on_silence(
-        audio, sample_rate, silence_threshold_db,
-        min_silence_duration, min_segment_duration
+        audio, sample_rate, silence_threshold_db, min_silence_duration, min_segment_duration
     )
 
     chunks = []
     for seg in segments:
-        chunk = audio[seg.start_sample:seg.end_sample]
+        chunk = audio[seg.start_sample : seg.end_sample]
         chunks.append((chunk, seg.start_time, seg.end_time))
 
     return chunks
@@ -268,9 +276,11 @@ def split_audio_on_silence(
 # Event Detection Functions
 # =============================================================================
 
+
 @dataclass
 class AudioEvent:
     """Represents a detected audio event."""
+
     time: float
     strength: float
 
@@ -326,6 +336,7 @@ def detect_onsets(
 # Normalization Functions
 # =============================================================================
 
+
 def normalize_loudness(
     audio: np.ndarray,
     sample_rate: int,
@@ -343,7 +354,7 @@ def normalize_loudness(
         Normalized audio as numpy array
     """
     # Calculate current RMS
-    rms = np.sqrt(np.mean(audio ** 2))
+    rms = np.sqrt(np.mean(audio**2))
 
     if rms == 0:
         return audio
@@ -392,6 +403,7 @@ def peak_normalize(
 # Resample Functions
 # =============================================================================
 
+
 def resample_audio(
     audio: np.ndarray,
     orig_sr: int,
@@ -419,6 +431,7 @@ def resample_audio(
 # =============================================================================
 # Trim Functions
 # =============================================================================
+
 
 def trim_audio(
     audio: np.ndarray,
@@ -489,6 +502,7 @@ def trim_silence(
 # =============================================================================
 # File Processing Functions
 # =============================================================================
+
 
 def load_audio(filepath: str) -> Tuple[np.ndarray, int]:
     """

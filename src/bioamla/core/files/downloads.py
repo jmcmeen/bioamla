@@ -74,11 +74,7 @@ def get_extension_from_content_type(content_type: str) -> str:
     return mapping.get(content_type, "")
 
 
-def download_file(
-    url: str,
-    output_path: Union[str, Path],
-    show_progress: bool = True
-) -> Path:
+def download_file(url: str, output_path: Union[str, Path], show_progress: bool = True) -> Path:
     """
     Download a file from a URL.
 

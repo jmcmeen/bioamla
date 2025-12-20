@@ -9,7 +9,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, IO, Optional, Union
+from typing import IO, Any, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -157,9 +157,7 @@ class TextFile(File):
         super().__post_init__()
         valid_modes = {"r", "w", "a", "r+", "w+", "a+", "x", "x+"}
         if self.mode not in valid_modes:
-            raise ValueError(
-                f"Invalid text mode '{self.mode}'. Must be one of {valid_modes}"
-            )
+            raise ValueError(f"Invalid text mode '{self.mode}'. Must be one of {valid_modes}")
 
     def open(self) -> "TextFile":
         """
@@ -183,8 +181,8 @@ class TextFile(File):
             logger.debug(f"Opened text file: {self.path}")
         except FileNotFoundError:
             raise FileNotFoundError(f"Text file not found: {self.path}")
-        except IOError as e:
-            raise IOError(f"Cannot open text file {self.path}: {e}")
+        except OSError as e:
+            raise OSError(f"Cannot open text file {self.path}: {e}")
 
         return self
 
@@ -209,9 +207,9 @@ class TextFile(File):
             IOError: If file is not open for reading
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         if "r" not in self.mode and "+" not in self.mode:
-            raise IOError(f"File is not open for reading: {self.path}")
+            raise OSError(f"File is not open for reading: {self.path}")
 
         return self._handle.read(size)
 
@@ -226,9 +224,9 @@ class TextFile(File):
             IOError: If file is not open for reading
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         if "r" not in self.mode and "+" not in self.mode:
-            raise IOError(f"File is not open for reading: {self.path}")
+            raise OSError(f"File is not open for reading: {self.path}")
 
         return self._handle.readline()
 
@@ -243,9 +241,9 @@ class TextFile(File):
             IOError: If file is not open for reading
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         if "r" not in self.mode and "+" not in self.mode:
-            raise IOError(f"File is not open for reading: {self.path}")
+            raise OSError(f"File is not open for reading: {self.path}")
 
         return self._handle.readlines()
 
@@ -264,9 +262,9 @@ class TextFile(File):
             TypeError: If content is not a string
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         if "r" == self.mode:
-            raise IOError(f"File is not open for writing: {self.path}")
+            raise OSError(f"File is not open for writing: {self.path}")
         if not isinstance(content, str):
             raise TypeError(f"Content must be str, not {type(content).__name__}")
 
@@ -283,9 +281,9 @@ class TextFile(File):
             IOError: If file is not open for writing
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         if "r" == self.mode:
-            raise IOError(f"File is not open for writing: {self.path}")
+            raise OSError(f"File is not open for writing: {self.path}")
 
         self._handle.writelines(lines)
 
@@ -306,7 +304,7 @@ class TextFile(File):
             New cursor position
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         return self._handle.seek(offset, whence)
 
     def tell(self) -> int:
@@ -317,7 +315,7 @@ class TextFile(File):
             Current position in the file
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         return self._handle.tell()
 
 
@@ -352,9 +350,7 @@ class BinaryFile(File):
         super().__post_init__()
         valid_modes = {"rb", "wb", "ab", "r+b", "w+b", "a+b", "xb", "x+b"}
         if self.mode not in valid_modes:
-            raise ValueError(
-                f"Invalid binary mode '{self.mode}'. Must be one of {valid_modes}"
-            )
+            raise ValueError(f"Invalid binary mode '{self.mode}'. Must be one of {valid_modes}")
 
     def open(self) -> "BinaryFile":
         """
@@ -376,8 +372,8 @@ class BinaryFile(File):
             logger.debug(f"Opened binary file: {self.path}")
         except FileNotFoundError:
             raise FileNotFoundError(f"Binary file not found: {self.path}")
-        except IOError as e:
-            raise IOError(f"Cannot open binary file {self.path}: {e}")
+        except OSError as e:
+            raise OSError(f"Cannot open binary file {self.path}: {e}")
 
         return self
 
@@ -402,9 +398,9 @@ class BinaryFile(File):
             IOError: If file is not open for reading
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         if "r" not in self.mode and "+" not in self.mode:
-            raise IOError(f"File is not open for reading: {self.path}")
+            raise OSError(f"File is not open for reading: {self.path}")
 
         return self._handle.read(size)
 
@@ -423,13 +419,11 @@ class BinaryFile(File):
             TypeError: If content is not bytes
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         if self.mode == "rb":
-            raise IOError(f"File is not open for writing: {self.path}")
+            raise OSError(f"File is not open for writing: {self.path}")
         if not isinstance(content, (bytes, bytearray)):
-            raise TypeError(
-                f"Content must be bytes or bytearray, not {type(content).__name__}"
-            )
+            raise TypeError(f"Content must be bytes or bytearray, not {type(content).__name__}")
 
         return self._handle.write(content)
 
@@ -450,7 +444,7 @@ class BinaryFile(File):
             New cursor position
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         return self._handle.seek(offset, whence)
 
     def tell(self) -> int:
@@ -461,7 +455,7 @@ class BinaryFile(File):
             Current position in the file
         """
         if not self.is_open:
-            raise IOError(f"File is not open: {self.path}")
+            raise OSError(f"File is not open: {self.path}")
         return self._handle.tell()
 
 
@@ -488,9 +482,7 @@ def read_text(filepath: Union[str, Path], encoding: str = "utf-8") -> str:
         return f.read()
 
 
-def write_text(
-    filepath: Union[str, Path], content: str, encoding: str = "utf-8"
-) -> int:
+def write_text(filepath: Union[str, Path], content: str, encoding: str = "utf-8") -> int:
     """
     Write content to a text file.
 
@@ -544,9 +536,7 @@ def write_binary(filepath: Union[str, Path], content: bytes) -> int:
         return f.write(content)
 
 
-def append_text(
-    filepath: Union[str, Path], content: str, encoding: str = "utf-8"
-) -> int:
+def append_text(filepath: Union[str, Path], content: str, encoding: str = "utf-8") -> int:
     """
     Append content to a text file.
 

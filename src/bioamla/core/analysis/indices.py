@@ -29,15 +29,13 @@ Example:
     >>> print(f"NDSI: {indices['ndsi']:.3f}")
 """
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import librosa
 import numpy as np
-from scipy import signal as scipy_signal
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -184,9 +182,7 @@ def compute_aci(
     if max_freq is None:
         max_freq = sample_rate / 2
 
-    spectrogram, frequencies, _ = _compute_spectrogram(
-        audio, sample_rate, n_fft, hop_length
-    )
+    spectrogram, frequencies, _ = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
 
     # Get frequency band indices
     freq_indices = _get_frequency_band_indices(frequencies, min_freq, max_freq)
@@ -271,9 +267,7 @@ def compute_adi(
     Example:
         >>> adi = compute_adi(audio, 22050, max_freq=10000, freq_step=1000)
     """
-    spectrogram, frequencies, _ = _compute_spectrogram(
-        audio, sample_rate, n_fft, hop_length
-    )
+    spectrogram, frequencies, _ = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
 
     # Convert to dB
     spectrogram_db = librosa.amplitude_to_db(spectrogram, ref=np.max)
@@ -355,9 +349,7 @@ def compute_aei(
     Example:
         >>> aei = compute_aei(audio, 22050, max_freq=10000)
     """
-    spectrogram, frequencies, _ = _compute_spectrogram(
-        audio, sample_rate, n_fft, hop_length
-    )
+    spectrogram, frequencies, _ = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
 
     # Convert to dB
     spectrogram_db = librosa.amplitude_to_db(spectrogram, ref=np.max)
@@ -437,9 +429,7 @@ def compute_bio(
     Example:
         >>> bio = compute_bio(audio, 22050, min_freq=2000, max_freq=11000)
     """
-    spectrogram, frequencies, _ = _compute_spectrogram(
-        audio, sample_rate, n_fft, hop_length
-    )
+    spectrogram, frequencies, _ = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
 
     # Get frequency band indices
     freq_indices = _get_frequency_band_indices(frequencies, min_freq, max_freq)
@@ -511,9 +501,7 @@ def compute_ndsi(
         >>> ndsi, anthro, bio = compute_ndsi(audio, 22050)
         >>> print(f"NDSI: {ndsi:.3f}, Anthrophony: {anthro:.3f}, Biophony: {bio:.3f}")
     """
-    spectrogram, frequencies, _ = _compute_spectrogram(
-        audio, sample_rate, n_fft, hop_length
-    )
+    spectrogram, frequencies, _ = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
 
     # Get anthrophony frequency indices (typically 1-2 kHz)
     anthro_indices = _get_frequency_band_indices(frequencies, anthro_min, anthro_max)
@@ -587,26 +575,40 @@ def compute_all_indices(
 
     # Compute ACI
     aci = compute_aci(
-        audio, sample_rate, n_fft, hop_length,
-        min_freq=aci_min_freq, max_freq=aci_max_freq
+        audio, sample_rate, n_fft, hop_length, min_freq=aci_min_freq, max_freq=aci_max_freq
     )
 
     # Compute ADI
     adi = compute_adi(
-        audio, sample_rate, n_fft, hop_length,
-        max_freq=adi_max_freq, freq_step=adi_freq_step, db_threshold=db_threshold
+        audio,
+        sample_rate,
+        n_fft,
+        hop_length,
+        max_freq=adi_max_freq,
+        freq_step=adi_freq_step,
+        db_threshold=db_threshold,
     )
 
     # Compute AEI
     aei = compute_aei(
-        audio, sample_rate, n_fft, hop_length,
-        max_freq=adi_max_freq, freq_step=adi_freq_step, db_threshold=db_threshold
+        audio,
+        sample_rate,
+        n_fft,
+        hop_length,
+        max_freq=adi_max_freq,
+        freq_step=adi_freq_step,
+        db_threshold=db_threshold,
     )
 
     # Compute BIO
     bio = compute_bio(
-        audio, sample_rate, n_fft, hop_length,
-        min_freq=bio_min_freq, max_freq=bio_max_freq, db_threshold=db_threshold
+        audio,
+        sample_rate,
+        n_fft,
+        hop_length,
+        min_freq=bio_min_freq,
+        max_freq=bio_max_freq,
+        db_threshold=db_threshold,
     )
 
     # Compute NDSI
@@ -687,11 +689,13 @@ def batch_compute_indices(
         except Exception as e:
             if verbose:
                 print(f"  Error: {e}")
-            results.append({
-                "filepath": str(filepath),
-                "success": False,
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "filepath": str(filepath),
+                    "success": False,
+                    "error": str(e),
+                }
+            )
 
     return results
 
@@ -739,7 +743,7 @@ def temporal_indices(
     position = 0
 
     while position + window_samples <= total_samples:
-        window = audio[position:position + window_samples]
+        window = audio[position : position + window_samples]
         start_time = position / sample_rate
         end_time = (position + window_samples) / sample_rate
 
@@ -782,7 +786,7 @@ def spectral_entropy(
     spectrogram, _, _ = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
 
     # Calculate power spectrum
-    power_spectrum = np.mean(spectrogram ** 2, axis=1)
+    power_spectrum = np.mean(spectrogram**2, axis=1)
 
     # Normalize to probability distribution
     total_power = np.sum(power_spectrum)
@@ -825,7 +829,7 @@ def temporal_entropy(
     spectrogram, _, _ = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
 
     # Calculate energy envelope over time
-    energy = np.sum(spectrogram ** 2, axis=0)
+    energy = np.sum(spectrogram**2, axis=0)
 
     # Normalize to probability distribution
     total_energy = np.sum(energy)

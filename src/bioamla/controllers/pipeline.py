@@ -36,6 +36,7 @@ Usage:
     # Undo entire pipeline (if supported)
     pipeline.undo()
 """
+
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -122,7 +123,9 @@ class PipelineState:
             status=PipelineStatus(data["status"]),
             current_step_index=data["current_step_index"],
             step_results=data["step_results"],
-            started_at=datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None,
+            started_at=datetime.fromisoformat(data["started_at"])
+            if data.get("started_at")
+            else None,
             paused_at=datetime.fromisoformat(data["paused_at"]) if data.get("paused_at") else None,
             intermediate_data=None,
         )
@@ -358,9 +361,7 @@ class PipelineController(BaseController):
         for step in self._steps:
             for dep_name in step.depends_on:
                 if dep_name not in self._step_map:
-                    raise ValueError(
-                        f"Step '{step.name}' depends on unknown step '{dep_name}'"
-                    )
+                    raise ValueError(f"Step '{step.name}' depends on unknown step '{dep_name}'")
                 graph[dep_name].add(step.name)
                 in_degree[step.name] += 1
 
@@ -498,9 +499,7 @@ class PipelineController(BaseController):
 
             # Collect warnings
             if result.warnings:
-                progress.warnings.extend(
-                    [f"{step.name}: {w}" for w in result.warnings]
-                )
+                progress.warnings.extend([f"{step.name}: {w}" for w in result.warnings])
 
             # Use result data as input for next step (unless skipped with no data)
             if result.data is not None:
@@ -549,7 +548,9 @@ class PipelineController(BaseController):
             id=self._id,
             name=self._name,
             status=self._status,
-            current_step_index=self._current_progress.current_step_index if self._current_progress else 0,
+            current_step_index=self._current_progress.current_step_index
+            if self._current_progress
+            else 0,
             step_results=step_results_dict,
             started_at=self._started_at,
             paused_at=datetime.utcnow() if self._status == PipelineStatus.PAUSED else None,
@@ -589,7 +590,7 @@ class PipelineController(BaseController):
             ControllerResult with loaded PipelineState
         """
         try:
-            with open(path, "r") as f:
+            with open(path) as f:
                 data = json.load(f)
             state = PipelineState.from_dict(data)
             return ControllerResult.ok(
@@ -656,11 +657,7 @@ class PipelineController(BaseController):
                 for step in self._steps
             ],
             "completed_steps": sum(
-                1 for step in self._steps
-                if step.info.status == StepStatus.COMPLETED
+                1 for step in self._steps if step.info.status == StepStatus.COMPLETED
             ),
-            "failed_steps": sum(
-                1 for step in self._steps
-                if step.info.status == StepStatus.FAILED
-            ),
+            "failed_steps": sum(1 for step in self._steps if step.info.status == StepStatus.FAILED),
         }

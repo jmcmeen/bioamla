@@ -63,8 +63,7 @@ def get_device_string(prefer_cuda: bool = True) -> str:
 
 
 def move_to_device(
-    model: nn.Module,
-    device: Optional[Union[str, torch.device]] = None
+    model: nn.Module, device: Optional[Union[str, torch.device]] = None
 ) -> nn.Module:
     """
     Move a model to the specified device.
@@ -135,15 +134,12 @@ def get_device_info() -> dict:
         "cuda_available": torch.cuda.is_available(),
         "current_device": get_current_device_index(),
         "device_count": get_device_count(),
-        "devices": []
+        "devices": [],
     }
 
     if torch.cuda.is_available():
         for i in range(torch.cuda.device_count()):
-            device_info["devices"].append({
-                "index": i,
-                "name": torch.cuda.get_device_name(i)
-            })
+            device_info["devices"].append({"index": i, "name": torch.cuda.get_device_name(i)})
 
     return device_info
 

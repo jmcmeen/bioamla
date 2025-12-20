@@ -1,5 +1,6 @@
 # database/repositories/detection.py
 """Detection repository for database operations."""
+
 from typing import List, Optional
 from uuid import UUID
 
@@ -113,9 +114,8 @@ class DetectionRepository(BaseRepository[Detection, DetectionCreate, DetectionUp
         """Get distinct predicted labels."""
         from sqlalchemy import distinct
 
-        statement = (
-            select(distinct(Detection.predicted_label))
-            .where(Detection.confidence >= min_confidence)
+        statement = select(distinct(Detection.predicted_label)).where(
+            Detection.confidence >= min_confidence
         )
         return list(self.session.exec(statement).all())
 
