@@ -794,7 +794,7 @@ class AnnotationController(BaseController):
 
             # Flatten all annotations
             all_annotations = []
-            for filename, annotations in all_annotations_dict.items():
+            for _filename, annotations in all_annotations_dict.items():
                 all_annotations.extend(annotations)
 
             # Persist to database if UoW provided
