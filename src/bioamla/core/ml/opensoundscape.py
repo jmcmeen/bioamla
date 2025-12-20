@@ -220,7 +220,7 @@ class OpenSoundscapeModel(BaseAudioModel):
 
         # Setup label mappings
         if class_names:
-            instance.id2label = {i: name for i, name in enumerate(class_names)}
+            instance.id2label = dict(enumerate(class_names))
         else:
             instance.id2label = {i: f"class_{i}" for i in range(num_classes)}
         instance.label2id = {v: k for k, v in instance.id2label.items()}

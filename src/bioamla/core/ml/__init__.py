@@ -28,6 +28,8 @@ Example:
 
 # API response models (safe to import, no circular deps)
 # Config (safe, no circular deps)
+# Import base classes for type annotations (safe, no circular deps)
+from bioamla.core.ml.base import BaseAudioModel, ModelConfig
 from bioamla.core.ml.responses import (
     AudioClassificationResponse,
     Base64AudioRequest,

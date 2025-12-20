@@ -780,11 +780,11 @@ class PostgresStorage(BaseStorage):
                     self._init_db()
                     self._initialized = True
 
-            except ImportError:
+            except ImportError as err:
                 raise ImportError(
                     "PostgreSQL support requires psycopg2. "
                     "Install with: pip install psycopg2-binary"
-                )
+                ) from err
 
         return self._connection
 

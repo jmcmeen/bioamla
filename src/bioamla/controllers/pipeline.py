@@ -450,7 +450,7 @@ class PipelineController(BaseController):
         self._cancelled = False
 
         # Start run tracking
-        run_id = self._start_run(
+        self._start_run(
             name=f"Pipeline: {self._name}",
             action="pipeline",
             parameters={

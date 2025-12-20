@@ -203,11 +203,11 @@ class EmbeddingExtractor:
                 )
                 self._model = BirdNETModel(config=model_config)
                 self._model.load(self.config.model_path)
-            except ImportError:
+            except ImportError as err:
                 raise ImportError(
                     "BirdNET support requires additional dependencies. "
                     "Install with: pip install birdnetlib"
-                )
+                ) from err
 
         else:
             raise ValueError(f"Unknown model type: {model_type}")
@@ -559,8 +559,8 @@ def save_embeddings(
             df["filepath"] = filepaths
             df.to_parquet(str(output_path))
             logger.info(f"Saved embeddings to {output_path}")
-        except ImportError:
-            raise ImportError("pandas and pyarrow required for parquet format")
+        except ImportError as err:
+            raise ImportError("pandas and pyarrow required for parquet format") from err
 
     elif format == "csv":
         try:
@@ -571,8 +571,8 @@ def save_embeddings(
             df["filepath"] = filepaths
             df.to_csv(str(output_path), index=False)
             logger.info(f"Saved embeddings to {output_path}")
-        except ImportError:
-            raise ImportError("pandas required for CSV format")
+        except ImportError as err:
+            raise ImportError("pandas required for CSV format") from err
 
     else:
         raise ValueError(f"Unknown format: {format}")
