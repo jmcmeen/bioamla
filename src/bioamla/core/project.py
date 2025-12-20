@@ -4,8 +4,13 @@ Project Management
 
 Handles bioamla project discovery, creation, and management.
 
-A bioamla project is denoted by a `.bioamla/` directory marker which contains
-project configuration, logs, and metadata.
+A bioamla project is denoted by a `.bioamla/` directory marker which contains:
+- config.toml: Project configuration
+- models.toml: Registered models
+- datasets.toml: Registered datasets
+- logs/: Command history and logs
+- runs/: Analysis run history and results
+- cache/: Embeddings, model cache, temp files
 """
 
 from dataclasses import dataclass, field
@@ -16,7 +21,15 @@ from typing import Optional
 PROJECT_MARKER = ".bioamla"
 CONFIG_FILENAME = "config.toml"
 MODELS_FILENAME = "models.toml"
+DATASETS_FILENAME = "datasets.toml"
 LOGS_DIR = "logs"
+RUNS_DIR = "runs"
+CACHE_DIR = "cache"
+
+# Cache subdirectories
+CACHE_EMBEDDINGS = "embeddings"
+CACHE_MODELS = "models"
+CACHE_TEMP = "temp"
 
 
 @dataclass
@@ -28,12 +41,38 @@ class ProjectInfo:
     version: str
     created: datetime
     description: str = ""
+
+    # Paths (computed in __post_init__)
     config_path: Path = field(init=False)
+    models_path: Path = field(init=False)
+    datasets_path: Path = field(init=False)
     logs_path: Path = field(init=False)
+    runs_path: Path = field(init=False)
+    cache_path: Path = field(init=False)
 
     def __post_init__(self):
-        self.config_path = self.root / PROJECT_MARKER / CONFIG_FILENAME
-        self.logs_path = self.root / PROJECT_MARKER / LOGS_DIR
+        project_dir = self.root / PROJECT_MARKER
+        self.config_path = project_dir / CONFIG_FILENAME
+        self.models_path = project_dir / MODELS_FILENAME
+        self.datasets_path = project_dir / DATASETS_FILENAME
+        self.logs_path = project_dir / LOGS_DIR
+        self.runs_path = project_dir / RUNS_DIR
+        self.cache_path = project_dir / CACHE_DIR
+
+    @property
+    def embeddings_cache(self) -> Path:
+        """Path to embeddings cache directory."""
+        return self.cache_path / CACHE_EMBEDDINGS
+
+    @property
+    def models_cache(self) -> Path:
+        """Path to models cache directory."""
+        return self.cache_path / CACHE_MODELS
+
+    @property
+    def temp_cache(self) -> Path:
+        """Path to temporary files cache."""
+        return self.cache_path / CACHE_TEMP
 
 
 def find_project_root(start_path: Optional[Path] = None) -> Optional[Path]:
@@ -137,6 +176,51 @@ def _customize_template(content: str, name: str, description: str = "") -> str:
     return content
 
 
+def _create_models_toml(path: Path, project_name: str) -> None:
+    """Create initial models.toml file."""
+    content = f'''# Bioamla Models Registry - {project_name}
+# Registered models for this project
+
+# Default model for inference
+[defaults]
+inference = "MIT/ast-finetuned-audioset-10-10-0.4593"
+embedding = ""
+
+# Registered models
+# Add models with: bioamla models register <name> <path_or_id>
+#
+# [models.<name>]
+# id = "huggingface/model-id"  # or local path
+# type = "ast"                  # ast, birdnet, custom
+# description = "Model description"
+# registered = "2024-01-01T00:00:00Z"
+'''
+    path.write_text(content)
+
+
+def _create_datasets_toml(path: Path, project_name: str) -> None:
+    """Create initial datasets.toml file."""
+    content = f'''# Bioamla Datasets Registry - {project_name}
+# Registered datasets for this project
+
+# Default dataset paths
+[defaults]
+audio_dir = "audio"
+output_dir = "output"
+
+# Registered datasets
+# Add datasets with: bioamla dataset register <name> <path>
+#
+# [datasets.<name>]
+# path = "./audio/dataset_name"
+# source = "inaturalist"        # inaturalist, xeno_canto, macaulay, local
+# description = "Dataset description"
+# registered = "2024-01-01T00:00:00Z"
+# metadata = "metadata.csv"     # relative to dataset path
+'''
+    path.write_text(content)
+
+
 def create_project(
     path: Path,
     name: Optional[str] = None,
@@ -147,7 +231,13 @@ def create_project(
     """
     Create a new bioamla project.
 
-    Creates a .bioamla directory with configuration files and logs directory.
+    Creates a .bioamla directory with full project structure:
+    - config.toml: Project configuration
+    - models.toml: Model registry
+    - datasets.toml: Dataset registry
+    - logs/: Command history
+    - runs/: Analysis results
+    - cache/: Embeddings, models, temp files
 
     Args:
         path: Directory to create project in
@@ -175,8 +265,13 @@ def create_project(
     project_dir = path / PROJECT_MARKER
     project_dir.mkdir(exist_ok=True)
 
-    logs_dir = project_dir / LOGS_DIR
-    logs_dir.mkdir(exist_ok=True)
+    # Create subdirectories
+    (project_dir / LOGS_DIR).mkdir(exist_ok=True)
+    (project_dir / RUNS_DIR).mkdir(exist_ok=True)
+    (project_dir / CACHE_DIR).mkdir(exist_ok=True)
+    (project_dir / CACHE_DIR / CACHE_EMBEDDINGS).mkdir(exist_ok=True)
+    (project_dir / CACHE_DIR / CACHE_MODELS).mkdir(exist_ok=True)
+    (project_dir / CACHE_DIR / CACHE_TEMP).mkdir(exist_ok=True)
 
     # Create config file
     config_path = project_dir / CONFIG_FILENAME
@@ -191,6 +286,16 @@ def create_project(
         template_content = _get_template_content(template)
         customized_content = _customize_template(template_content, name, description)
         config_path.write_text(customized_content)
+
+    # Create models.toml if it doesn't exist
+    models_path = project_dir / MODELS_FILENAME
+    if not models_path.exists():
+        _create_models_toml(models_path, name)
+
+    # Create datasets.toml if it doesn't exist
+    datasets_path = project_dir / DATASETS_FILENAME
+    if not datasets_path.exists():
+        _create_datasets_toml(datasets_path, name)
 
     # Create project info
     now = datetime.now(timezone.utc)

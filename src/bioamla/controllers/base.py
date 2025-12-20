@@ -174,10 +174,185 @@ class BaseController:
     - File discovery and validation
     - Batch processing with progress
     - Error handling and result formatting
+    - Run tracking in project repository
     """
 
     def __init__(self):
         self._progress_callback: Optional[ProgressCallback] = None
+        self._current_run_id: Optional[str] = None
+
+    def _start_run(
+        self,
+        name: str,
+        action: str,
+        input_path: str = "",
+        output_path: str = "",
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """
+        Start a new run in the project repository.
+
+        Args:
+            name: Run name/description
+            action: Action being performed (e.g., 'predict', 'embed', 'indices')
+            input_path: Input file/directory
+            output_path: Output file/directory
+            parameters: Run parameters
+
+        Returns:
+            Run ID if in a project, None otherwise
+        """
+        try:
+            from bioamla.core.project import load_project
+            import json
+            import uuid
+            from datetime import datetime
+
+            info = load_project()
+            if info is None:
+                return None
+
+            # Generate run ID
+            run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
+
+            # Create run directory
+            run_dir = info.runs_path / run_id
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            # Save run metadata
+            run_data = {
+                "run_id": run_id,
+                "name": name,
+                "started": datetime.now().isoformat(),
+                "status": "running",
+                "action": action,
+                "input_path": input_path,
+                "output_path": output_path,
+                "parameters": parameters or {},
+                "controller": self.__class__.__name__,
+            }
+            metadata_path = run_dir / "run.json"
+            metadata_path.write_text(json.dumps(run_data, indent=2))
+
+            self._current_run_id = run_id
+            return run_id
+
+        except Exception:
+            return None
+
+    def _complete_run(
+        self,
+        run_id: Optional[str] = None,
+        status: str = "completed",
+        results: Optional[Dict[str, Any]] = None,
+        output_files: Optional[List[str]] = None,
+    ) -> bool:
+        """
+        Mark a run as complete.
+
+        Args:
+            run_id: Run ID (defaults to current run)
+            status: Final status (completed, failed, cancelled)
+            results: Run results/summary
+            output_files: List of output file paths
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            from bioamla.core.project import load_project
+            import json
+            from datetime import datetime
+
+            run_id = run_id or self._current_run_id
+            if run_id is None:
+                return False
+
+            info = load_project()
+            if info is None:
+                return False
+
+            run_dir = info.runs_path / run_id
+            metadata_path = run_dir / "run.json"
+
+            if not metadata_path.exists():
+                return False
+
+            # Load existing metadata
+            run_data = json.loads(metadata_path.read_text())
+
+            # Update
+            run_data["completed"] = datetime.now().isoformat()
+            run_data["status"] = status
+            if results:
+                run_data["results"] = results
+            if output_files:
+                run_data["output_files"] = output_files
+
+            # Calculate duration
+            from datetime import datetime as dt
+            started = dt.fromisoformat(run_data["started"])
+            completed = dt.fromisoformat(run_data["completed"])
+            run_data["duration_seconds"] = (completed - started).total_seconds()
+
+            # Save
+            metadata_path.write_text(json.dumps(run_data, indent=2))
+
+            if run_id == self._current_run_id:
+                self._current_run_id = None
+
+            return True
+
+        except Exception:
+            return False
+
+    def _save_run_artifact(
+        self,
+        filename: str,
+        data: Any,
+        run_id: Optional[str] = None,
+    ) -> Optional[Path]:
+        """
+        Save an artifact to the run directory.
+
+        Args:
+            filename: Name of the file to save
+            data: Data to save (dict for JSON, str for text)
+            run_id: Run ID (defaults to current run)
+
+        Returns:
+            Path to saved file, or None if failed
+        """
+        try:
+            from bioamla.core.project import load_project
+            import json
+
+            run_id = run_id or self._current_run_id
+            if run_id is None:
+                return None
+
+            info = load_project()
+            if info is None:
+                return None
+
+            run_dir = info.runs_path / run_id
+            if not run_dir.exists():
+                return None
+
+            file_path = run_dir / filename
+
+            if isinstance(data, dict):
+                file_path.write_text(json.dumps(data, indent=2))
+            elif isinstance(data, str):
+                file_path.write_text(data)
+            else:
+                # Try to serialize as JSON
+                file_path.write_text(json.dumps(data, indent=2, default=str))
+
+            return file_path
+
+        except Exception:
+            return None
 
     def set_progress_callback(self, callback: ProgressCallback) -> None:
         """Set a callback for progress updates during batch operations."""

@@ -62,12 +62,21 @@ from .inaturalist import (
     SearchResult as INatSearchResult,
     DownloadResult as INatDownloadResult,
     TaxonInfo,
-    ProjectStats,
+    ProjectStats as INatProjectStats,
     ObservationInfo,
 )
 from .indices import BatchIndicesResult, IndicesController, IndicesResult
 from .inference import InferenceController
 from .pipeline import PipelineController, PipelineProgress, PipelineResult
+from .project import (
+    ProjectController,
+    ProjectSummary,
+    ProjectStatistics,
+    ConfigSummary,
+    ModelInfo,
+    DatasetInfo,
+    RunInfo,
+)
 from .ribbit import RibbitController, DetectionSummary, BatchDetectionSummary
 from .workflow import WorkflowController, WorkflowSummary, ExecutionSummary, ValidationSummary
 
@@ -97,12 +106,20 @@ __all__ = [
     "INatSearchResult",
     "INatDownloadResult",
     "TaxonInfo",
-    "ProjectStats",
+    "INatProjectStats",
     "ObservationInfo",
     # Pipeline
     "PipelineController",
     "PipelineResult",
     "PipelineProgress",
+    # Project
+    "ProjectController",
+    "ProjectSummary",
+    "ProjectStatistics",
+    "ConfigSummary",
+    "ModelInfo",
+    "DatasetInfo",
+    "RunInfo",
     # Workflow
     "WorkflowController",
     "WorkflowSummary",
