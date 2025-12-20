@@ -29,7 +29,7 @@ Example:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
 from .base import BaseController, ControllerResult, ToDictMixin
 
@@ -286,12 +286,12 @@ class INaturalistController(BaseController):
             Result with download statistics
         """
         try:
+            from pyinaturalist import get_observations
+
+            from bioamla.core.files import sanitize_filename
             from bioamla.core.services.inaturalist import (
-                get_observation_sounds,
                 _download_file,
             )
-            from bioamla.core.files import sanitize_filename
-            from pyinaturalist import get_observations
 
             output_path = Path(output_dir)
             output_path.mkdir(parents=True, exist_ok=True)

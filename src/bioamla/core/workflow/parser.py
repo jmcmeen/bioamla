@@ -347,7 +347,7 @@ def render_workflow(
         New Workflow with rendered templates
     """
     try:
-        from jinja2 import Environment, BaseLoader, UndefinedError
+        from jinja2 import BaseLoader, Environment, UndefinedError
     except ImportError:
         logger.warning(
             "Jinja2 not installed, skipping template rendering. Install with: pip install jinja2"

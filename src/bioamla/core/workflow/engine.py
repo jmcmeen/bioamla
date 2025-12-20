@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID, uuid4
 
 from bioamla.core.logger import get_logger
@@ -381,7 +381,7 @@ class WorkflowEngine:
     ) -> bool:
         """Evaluate a condition string."""
         try:
-            from jinja2 import Environment, BaseLoader
+            from jinja2 import BaseLoader, Environment
 
             env = Environment(loader=BaseLoader())
 
@@ -508,8 +508,9 @@ class WorkflowEngine:
         params: Dict[str, Any],
     ) -> Any:
         """Cluster embeddings."""
-        from bioamla.controllers.clustering import ClusteringController
         import numpy as np
+
+        from bioamla.controllers.clustering import ClusteringController
 
         controller = ClusteringController()
 

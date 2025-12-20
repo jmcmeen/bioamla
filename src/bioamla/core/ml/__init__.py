@@ -28,7 +28,6 @@ Example:
 
 # API response models (safe to import, no circular deps)
 # Config (safe, no circular deps)
-from bioamla.core.ml.config import DefaultConfig
 from bioamla.core.ml.responses import (
     AudioClassificationResponse,
     Base64AudioRequest,
@@ -162,7 +161,7 @@ def load_model(
         >>> results = model.predict("audio.wav")
     """
     _ensure_models_registered()
-    from bioamla.ml.base import get_model_class
+    from bioamla.core.ml.base import get_model_class
 
     model_class = get_model_class(model_type)
     model = model_class(config)
@@ -195,7 +194,7 @@ def predict_file(
     Returns:
         List of prediction results.
     """
-    from bioamla.ml.base import ModelConfig
+    from bioamla.core.ml.base import ModelConfig
 
     config = ModelConfig(
         min_confidence=min_confidence,

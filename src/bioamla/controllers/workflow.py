@@ -319,8 +319,8 @@ class WorkflowController(BaseController):
             return ControllerResult.fail(error)
 
         try:
-            from bioamla.core.workflow.parser import parse_workflow
             from bioamla.core.workflow.engine import ExecutionStatus
+            from bioamla.core.workflow.parser import parse_workflow
 
             workflow = parse_workflow(filepath)
 
