@@ -99,123 +99,152 @@ class MetadataRegistry:
             return
 
         # Base fields - always required for any audio dataset
-        cls.register("base", [
-            FieldDef("file_name", "Relative path to audio file", required=True),
-            FieldDef("split", "Dataset split (train, test, val)", required=True, default="train"),
-            FieldDef("target", "Numeric target/label ID", required=True),
-            FieldDef("label", "Label/class name (e.g., species)", required=True),
-        ])
+        cls.register(
+            "base",
+            [
+                FieldDef("file_name", "Relative path to audio file", required=True),
+                FieldDef(
+                    "split", "Dataset split (train, test, val)", required=True, default="train"
+                ),
+                FieldDef("target", "Numeric target/label ID", required=True),
+                FieldDef("label", "Label/class name (e.g., species)", required=True),
+            ],
+        )
 
         # Attribution fields - for proper crediting
-        cls.register("attribution", [
-            FieldDef("attr_id", "Attribution identifier (observer/recordist)"),
-            FieldDef("attr_lic", "License code"),
-            FieldDef("attr_url", "URL to original source"),
-            FieldDef("attr_note", "Additional attribution notes"),
-        ])
+        cls.register(
+            "attribution",
+            [
+                FieldDef("attr_id", "Attribution identifier (observer/recordist)"),
+                FieldDef("attr_lic", "License code"),
+                FieldDef("attr_url", "URL to original source"),
+                FieldDef("attr_note", "Additional attribution notes"),
+            ],
+        )
 
         # iNaturalist-specific fields
-        cls.register("inaturalist", [
-            FieldDef("observation_id", "iNaturalist observation ID", dtype="int"),
-            FieldDef("sound_id", "iNaturalist sound ID", dtype="int"),
-            FieldDef("common_name", "Common name of species"),
-            FieldDef("taxon_id", "iNaturalist taxon ID", dtype="int"),
-            FieldDef("observed_on", "Date of observation"),
-            FieldDef("location", "GPS coordinates (lat,lon)"),
-            FieldDef("place_guess", "Human-readable location"),
-            FieldDef("observer", "Observer username"),
-            FieldDef("quality_grade", "Quality grade (research, needs_id, casual)"),
-            FieldDef("observation_url", "URL to observation page"),
-        ])
+        cls.register(
+            "inaturalist",
+            [
+                FieldDef("observation_id", "iNaturalist observation ID", dtype="int"),
+                FieldDef("sound_id", "iNaturalist sound ID", dtype="int"),
+                FieldDef("common_name", "Common name of species"),
+                FieldDef("taxon_id", "iNaturalist taxon ID", dtype="int"),
+                FieldDef("observed_on", "Date of observation"),
+                FieldDef("location", "GPS coordinates (lat,lon)"),
+                FieldDef("place_guess", "Human-readable location"),
+                FieldDef("observer", "Observer username"),
+                FieldDef("quality_grade", "Quality grade (research, needs_id, casual)"),
+                FieldDef("observation_url", "URL to observation page"),
+            ],
+        )
 
         # Xeno-canto-specific fields
-        cls.register("xeno_canto", [
-            FieldDef("xc_id", "Xeno-canto recording ID", dtype="int"),
-            FieldDef("common_name", "Common name of species"),
-            FieldDef("genus", "Genus name"),
-            FieldDef("species", "Species epithet"),
-            FieldDef("subspecies", "Subspecies name"),
-            FieldDef("recordist", "Recordist name"),
-            FieldDef("country", "Country of recording"),
-            FieldDef("locality", "Recording locality"),
-            FieldDef("latitude", "Latitude", dtype="float"),
-            FieldDef("longitude", "Longitude", dtype="float"),
-            FieldDef("elevation", "Elevation in meters", dtype="int"),
-            FieldDef("vocalization_type", "Type of vocalization (song, call, etc.)"),
-            FieldDef("quality", "Quality rating (A, B, C, D, E)"),
-            FieldDef("length", "Recording length in seconds", dtype="float"),
-            FieldDef("sample_rate", "Sample rate in Hz", dtype="int"),
-            FieldDef("bitrate", "Bitrate in kbps", dtype="int"),
-            FieldDef("xc_url", "URL to Xeno-canto page"),
-            FieldDef("download_url", "Direct download URL"),
-            FieldDef("recording_date", "Date of recording"),
-            FieldDef("recording_time", "Time of recording"),
-            FieldDef("remarks", "Recordist remarks"),
-        ])
+        cls.register(
+            "xeno_canto",
+            [
+                FieldDef("xc_id", "Xeno-canto recording ID", dtype="int"),
+                FieldDef("common_name", "Common name of species"),
+                FieldDef("genus", "Genus name"),
+                FieldDef("species", "Species epithet"),
+                FieldDef("subspecies", "Subspecies name"),
+                FieldDef("recordist", "Recordist name"),
+                FieldDef("country", "Country of recording"),
+                FieldDef("locality", "Recording locality"),
+                FieldDef("latitude", "Latitude", dtype="float"),
+                FieldDef("longitude", "Longitude", dtype="float"),
+                FieldDef("elevation", "Elevation in meters", dtype="int"),
+                FieldDef("vocalization_type", "Type of vocalization (song, call, etc.)"),
+                FieldDef("quality", "Quality rating (A, B, C, D, E)"),
+                FieldDef("length", "Recording length in seconds", dtype="float"),
+                FieldDef("sample_rate", "Sample rate in Hz", dtype="int"),
+                FieldDef("bitrate", "Bitrate in kbps", dtype="int"),
+                FieldDef("xc_url", "URL to Xeno-canto page"),
+                FieldDef("download_url", "Direct download URL"),
+                FieldDef("recording_date", "Date of recording"),
+                FieldDef("recording_time", "Time of recording"),
+                FieldDef("remarks", "Recordist remarks"),
+            ],
+        )
 
         # Macaulay Library-specific fields
-        cls.register("macaulay", [
-            FieldDef("ml_catalog_id", "Macaulay Library catalog ID"),
-            FieldDef("common_name", "Common name of species"),
-            FieldDef("scientific_name", "Scientific name"),
-            FieldDef("recordist", "Recordist name"),
-            FieldDef("country", "Country of recording"),
-            FieldDef("state_province", "State or province"),
-            FieldDef("county", "County or district"),
-            FieldDef("locality", "Specific locality"),
-            FieldDef("latitude", "Latitude", dtype="float"),
-            FieldDef("longitude", "Longitude", dtype="float"),
-            FieldDef("recording_date", "Date of recording"),
-            FieldDef("duration", "Duration in seconds", dtype="float"),
-            FieldDef("ml_url", "URL to Macaulay Library page"),
-        ])
+        cls.register(
+            "macaulay",
+            [
+                FieldDef("ml_catalog_id", "Macaulay Library catalog ID"),
+                FieldDef("common_name", "Common name of species"),
+                FieldDef("scientific_name", "Scientific name"),
+                FieldDef("recordist", "Recordist name"),
+                FieldDef("country", "Country of recording"),
+                FieldDef("state_province", "State or province"),
+                FieldDef("county", "County or district"),
+                FieldDef("locality", "Specific locality"),
+                FieldDef("latitude", "Latitude", dtype="float"),
+                FieldDef("longitude", "Longitude", dtype="float"),
+                FieldDef("recording_date", "Date of recording"),
+                FieldDef("duration", "Duration in seconds", dtype="float"),
+                FieldDef("ml_url", "URL to Macaulay Library page"),
+            ],
+        )
 
         # Acoustic analysis fields
-        cls.register("acoustic", [
-            FieldDef("duration", "Duration in seconds", dtype="float"),
-            FieldDef("sample_rate", "Sample rate in Hz", dtype="int"),
-            FieldDef("channels", "Number of channels", dtype="int"),
-            FieldDef("bit_depth", "Bit depth", dtype="int"),
-            FieldDef("aci", "Acoustic Complexity Index", dtype="float"),
-            FieldDef("adi", "Acoustic Diversity Index", dtype="float"),
-            FieldDef("aei", "Acoustic Evenness Index", dtype="float"),
-            FieldDef("bio", "Bioacoustic Index", dtype="float"),
-            FieldDef("ndsi", "Normalized Difference Soundscape Index", dtype="float"),
-            FieldDef("h_spectral", "Spectral entropy", dtype="float"),
-            FieldDef("h_temporal", "Temporal entropy", dtype="float"),
-        ])
+        cls.register(
+            "acoustic",
+            [
+                FieldDef("duration", "Duration in seconds", dtype="float"),
+                FieldDef("sample_rate", "Sample rate in Hz", dtype="int"),
+                FieldDef("channels", "Number of channels", dtype="int"),
+                FieldDef("bit_depth", "Bit depth", dtype="int"),
+                FieldDef("aci", "Acoustic Complexity Index", dtype="float"),
+                FieldDef("adi", "Acoustic Diversity Index", dtype="float"),
+                FieldDef("aei", "Acoustic Evenness Index", dtype="float"),
+                FieldDef("bio", "Bioacoustic Index", dtype="float"),
+                FieldDef("ndsi", "Normalized Difference Soundscape Index", dtype="float"),
+                FieldDef("h_spectral", "Spectral entropy", dtype="float"),
+                FieldDef("h_temporal", "Temporal entropy", dtype="float"),
+            ],
+        )
 
         # Detection/inference fields
-        cls.register("detection", [
-            FieldDef("start_time", "Detection start time in seconds", dtype="float"),
-            FieldDef("end_time", "Detection end time in seconds", dtype="float"),
-            FieldDef("confidence", "Detection confidence score", dtype="float"),
-            FieldDef("predicted_label", "Model prediction"),
-            FieldDef("model_name", "Name of detection model"),
-            FieldDef("model_version", "Version of detection model"),
-        ])
+        cls.register(
+            "detection",
+            [
+                FieldDef("start_time", "Detection start time in seconds", dtype="float"),
+                FieldDef("end_time", "Detection end time in seconds", dtype="float"),
+                FieldDef("confidence", "Detection confidence score", dtype="float"),
+                FieldDef("predicted_label", "Model prediction"),
+                FieldDef("model_name", "Name of detection model"),
+                FieldDef("model_version", "Version of detection model"),
+            ],
+        )
 
         # Embedding fields
-        cls.register("embedding", [
-            FieldDef("embedding_model", "Model used for embedding"),
-            FieldDef("embedding_dim", "Embedding dimensionality", dtype="int"),
-            FieldDef("embedding_path", "Path to embedding file"),
-            FieldDef("cluster_id", "Cluster assignment", dtype="int"),
-            FieldDef("cluster_distance", "Distance to cluster center", dtype="float"),
-        ])
+        cls.register(
+            "embedding",
+            [
+                FieldDef("embedding_model", "Model used for embedding"),
+                FieldDef("embedding_dim", "Embedding dimensionality", dtype="int"),
+                FieldDef("embedding_path", "Path to embedding file"),
+                FieldDef("cluster_id", "Cluster assignment", dtype="int"),
+                FieldDef("cluster_distance", "Distance to cluster center", dtype="float"),
+            ],
+        )
 
         # Annotation fields
-        cls.register("annotation", [
-            FieldDef("annotation_id", "Unique annotation ID"),
-            FieldDef("annotator", "Name or ID of annotator"),
-            FieldDef("annotation_date", "Date of annotation"),
-            FieldDef("annotation_type", "Type (bbox, segment, point, tag)"),
-            FieldDef("start_time", "Start time in seconds", dtype="float"),
-            FieldDef("end_time", "End time in seconds", dtype="float"),
-            FieldDef("low_freq", "Low frequency in Hz", dtype="float"),
-            FieldDef("high_freq", "High frequency in Hz", dtype="float"),
-            FieldDef("notes", "Annotation notes"),
-        ])
+        cls.register(
+            "annotation",
+            [
+                FieldDef("annotation_id", "Unique annotation ID"),
+                FieldDef("annotator", "Name or ID of annotator"),
+                FieldDef("annotation_date", "Date of annotation"),
+                FieldDef("annotation_type", "Type (bbox, segment, point, tag)"),
+                FieldDef("start_time", "Start time in seconds", dtype="float"),
+                FieldDef("end_time", "End time in seconds", dtype="float"),
+                FieldDef("low_freq", "Low frequency in Hz", dtype="float"),
+                FieldDef("high_freq", "High frequency in Hz", dtype="float"),
+                FieldDef("notes", "Annotation notes"),
+            ],
+        )
 
         cls._initialized = True
 

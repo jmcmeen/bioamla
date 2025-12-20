@@ -196,9 +196,7 @@ class Workflow:
         for name, deps in graph.items():
             missing = deps - available
             if missing:
-                raise ValueError(
-                    f"Step '{name}' depends on unknown steps: {missing}"
-                )
+                raise ValueError(f"Step '{name}' depends on unknown steps: {missing}")
 
         # Topological sort (Kahn's algorithm)
         in_degree = {name: len(deps) for name, deps in graph.items()}
@@ -278,8 +276,7 @@ def parse_workflow(
     """
     if tomllib is None:
         raise ImportError(
-            "TOML support requires tomli for Python < 3.11. "
-            "Install with: pip install tomli"
+            "TOML support requires tomli for Python < 3.11. Install with: pip install tomli"
         )
 
     filepath = Path(filepath)
@@ -320,8 +317,7 @@ def parse_workflow_string(
     """
     if tomllib is None:
         raise ImportError(
-            "TOML support requires tomli for Python < 3.11. "
-            "Install with: pip install tomli"
+            "TOML support requires tomli for Python < 3.11. Install with: pip install tomli"
         )
 
     data = tomllib.loads(content)
@@ -354,8 +350,7 @@ def render_workflow(
         from jinja2 import Environment, BaseLoader, UndefinedError
     except ImportError:
         logger.warning(
-            "Jinja2 not installed, skipping template rendering. "
-            "Install with: pip install jinja2"
+            "Jinja2 not installed, skipping template rendering. Install with: pip install jinja2"
         )
         return workflow
 
@@ -366,6 +361,7 @@ def render_workflow(
 
     # Add environment variables
     import os
+
     for key, env_var in workflow.env.items():
         context[key] = os.environ.get(env_var, "")
 
@@ -401,19 +397,21 @@ def render_workflow(
         else:
             rendered_condition = step.condition
 
-        rendered_steps.append(WorkflowStep(
-            name=step.name,
-            action=step.action,
-            params=rendered_params,
-            depends_on=step.depends_on,
-            condition=rendered_condition,
-            enabled=step.enabled,
-            description=step.description,
-            on_error=step.on_error,
-            timeout=step.timeout,
-            retry=step.retry,
-            metadata=step.metadata,
-        ))
+        rendered_steps.append(
+            WorkflowStep(
+                name=step.name,
+                action=step.action,
+                params=rendered_params,
+                depends_on=step.depends_on,
+                condition=rendered_condition,
+                enabled=step.enabled,
+                description=step.description,
+                on_error=step.on_error,
+                timeout=step.timeout,
+                retry=step.retry,
+                metadata=step.metadata,
+            )
+        )
 
     return Workflow(
         name=workflow.name,
@@ -525,8 +523,9 @@ def _format_toml_value(key: str, value: Any) -> str:
             items = ", ".join(str(v) for v in value)
             return f"{key} = [{items}]"
     elif isinstance(value, dict):
-        items = ", ".join(f'{k} = "{v}"' if isinstance(v, str) else f"{k} = {v}"
-                         for k, v in value.items())
+        items = ", ".join(
+            f'{k} = "{v}"' if isinstance(v, str) else f"{k} = {v}" for k, v in value.items()
+        )
         return f"{key} = {{ {items} }}"
     else:
         return f'{key} = "{value}"'

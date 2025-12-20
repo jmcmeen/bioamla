@@ -337,8 +337,7 @@ class WorkflowController(BaseController):
 
             # Count skipped steps
             steps_skipped = sum(
-                1 for r in result.step_results
-                if r.status == ExecutionStatus.SKIPPED
+                1 for r in result.step_results if r.status == ExecutionStatus.SKIPPED
             )
 
             # Collect errors
@@ -359,9 +358,7 @@ class WorkflowController(BaseController):
             )
 
             if result.success:
-                message = (
-                    f"Workflow completed successfully in {result.total_duration_seconds:.2f}s"
-                )
+                message = f"Workflow completed successfully in {result.total_duration_seconds:.2f}s"
             else:
                 message = f"Workflow failed: {result.error}"
 
@@ -396,8 +393,7 @@ class WorkflowController(BaseController):
             result = engine.execute(workflow, variables=variables)
 
             steps_skipped = sum(
-                1 for r in result.step_results
-                if r.status == ExecutionStatus.SKIPPED
+                1 for r in result.step_results if r.status == ExecutionStatus.SKIPPED
             )
 
             errors = []
@@ -621,7 +617,7 @@ class WorkflowController(BaseController):
         Returns:
             Result with example TOML content
         """
-        example = '''[workflow]
+        example = """[workflow]
 name = "bioacoustic_analysis"
 description = "Example bioacoustic analysis workflow"
 version = "1.0.0"
@@ -671,7 +667,7 @@ depends_on = ["embed"]
 embeddings = "{{ output_dir }}/embeddings.npy"
 output = "{{ output_dir }}/clusters.json"
 method = "hdbscan"
-'''
+"""
         return ControllerResult.ok(
             data=example,
             message="Example workflow",

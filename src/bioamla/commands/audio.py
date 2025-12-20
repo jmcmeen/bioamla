@@ -347,9 +347,7 @@ class FilterCommand(Command, FileBackupMixin):
 
             # Apply filter based on type
             if self.filter_type == "bandpass":
-                filtered = bandpass_filter(
-                    audio, sr, self.low_freq, self.high_freq, self.order
-                )
+                filtered = bandpass_filter(audio, sr, self.low_freq, self.high_freq, self.order)
                 message = f"Applied bandpass filter {self.low_freq}-{self.high_freq}Hz"
             elif self.filter_type == "lowpass":
                 filtered = lowpass_filter(audio, sr, self.high_freq, self.order)
@@ -460,9 +458,7 @@ class TrimCommand(Command, FileBackupMixin):
                 self._backup_path = self._backup_file(self.output_path)
 
             # Trim
-            trimmed = trim_audio(
-                audio, sr, start_time=self.start_time, end_time=self.end_time
-            )
+            trimmed = trim_audio(audio, sr, start_time=self.start_time, end_time=self.end_time)
 
             # Ensure parent directory exists
             self.output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -643,9 +639,7 @@ class DenoiseCommand(Command, FileBackupMixin):
                 self._backup_path = self._backup_file(self.output_path)
 
             # Denoise
-            denoised = spectral_denoise(
-                audio, sr, noise_reduce_factor=self.strength
-            )
+            denoised = spectral_denoise(audio, sr, noise_reduce_factor=self.strength)
 
             # Ensure parent directory exists
             self.output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -874,10 +868,12 @@ class AudioProcessingPipeline:
 
     def resample(self, target_sample_rate: int) -> "AudioProcessingPipeline":
         """Add resample operation to pipeline."""
-        self._operations.append({
-            "type": "resample",
-            "target_sample_rate": target_sample_rate,
-        })
+        self._operations.append(
+            {
+                "type": "resample",
+                "target_sample_rate": target_sample_rate,
+            }
+        )
         return self
 
     def normalize(
@@ -887,45 +883,53 @@ class AudioProcessingPipeline:
         mode: str = "loudness",
     ) -> "AudioProcessingPipeline":
         """Add normalize operation to pipeline."""
-        self._operations.append({
-            "type": "normalize",
-            "target_db": target_db,
-            "target_peak": target_peak,
-            "mode": mode,
-        })
+        self._operations.append(
+            {
+                "type": "normalize",
+                "target_db": target_db,
+                "target_peak": target_peak,
+                "mode": mode,
+            }
+        )
         return self
 
     def bandpass(
         self, low_freq: float, high_freq: float, order: int = 5
     ) -> "AudioProcessingPipeline":
         """Add bandpass filter to pipeline."""
-        self._operations.append({
-            "type": "filter",
-            "filter_type": "bandpass",
-            "low_freq": low_freq,
-            "high_freq": high_freq,
-            "order": order,
-        })
+        self._operations.append(
+            {
+                "type": "filter",
+                "filter_type": "bandpass",
+                "low_freq": low_freq,
+                "high_freq": high_freq,
+                "order": order,
+            }
+        )
         return self
 
     def lowpass(self, high_freq: float, order: int = 5) -> "AudioProcessingPipeline":
         """Add lowpass filter to pipeline."""
-        self._operations.append({
-            "type": "filter",
-            "filter_type": "lowpass",
-            "high_freq": high_freq,
-            "order": order,
-        })
+        self._operations.append(
+            {
+                "type": "filter",
+                "filter_type": "lowpass",
+                "high_freq": high_freq,
+                "order": order,
+            }
+        )
         return self
 
     def highpass(self, low_freq: float, order: int = 5) -> "AudioProcessingPipeline":
         """Add highpass filter to pipeline."""
-        self._operations.append({
-            "type": "filter",
-            "filter_type": "highpass",
-            "low_freq": low_freq,
-            "order": order,
-        })
+        self._operations.append(
+            {
+                "type": "filter",
+                "filter_type": "highpass",
+                "low_freq": low_freq,
+                "order": order,
+            }
+        )
         return self
 
     def trim(
@@ -934,42 +938,52 @@ class AudioProcessingPipeline:
         end_time: Optional[float] = None,
     ) -> "AudioProcessingPipeline":
         """Add trim operation to pipeline."""
-        self._operations.append({
-            "type": "trim",
-            "start_time": start_time,
-            "end_time": end_time,
-        })
+        self._operations.append(
+            {
+                "type": "trim",
+                "start_time": start_time,
+                "end_time": end_time,
+            }
+        )
         return self
 
     def trim_silence(self, threshold_db: float = -40.0) -> "AudioProcessingPipeline":
         """Add trim silence operation to pipeline."""
-        self._operations.append({
-            "type": "trim_silence",
-            "threshold_db": threshold_db,
-        })
+        self._operations.append(
+            {
+                "type": "trim_silence",
+                "threshold_db": threshold_db,
+            }
+        )
         return self
 
     def denoise(self, strength: float = 1.0) -> "AudioProcessingPipeline":
         """Add denoise operation to pipeline."""
-        self._operations.append({
-            "type": "denoise",
-            "strength": strength,
-        })
+        self._operations.append(
+            {
+                "type": "denoise",
+                "strength": strength,
+            }
+        )
         return self
 
     def gain(self, gain_db: float) -> "AudioProcessingPipeline":
         """Add gain adjustment to pipeline."""
-        self._operations.append({
-            "type": "gain",
-            "gain_db": gain_db,
-        })
+        self._operations.append(
+            {
+                "type": "gain",
+                "gain_db": gain_db,
+            }
+        )
         return self
 
     def to_mono(self) -> "AudioProcessingPipeline":
         """Add mono conversion to pipeline."""
-        self._operations.append({
-            "type": "to_mono",
-        })
+        self._operations.append(
+            {
+                "type": "to_mono",
+            }
+        )
         return self
 
     def build(self) -> "PipelineCommand":
@@ -1070,9 +1084,7 @@ class PipelineCommand(Command, FileBackupMixin):
                     filter_type = op["filter_type"]
                     order = op.get("order", 5)
                     if filter_type == "bandpass":
-                        audio = bandpass_filter(
-                            audio, sr, op["low_freq"], op["high_freq"], order
-                        )
+                        audio = bandpass_filter(audio, sr, op["low_freq"], op["high_freq"], order)
                         applied.append(f"bandpass({op['low_freq']}-{op['high_freq']}Hz)")
                     elif filter_type == "lowpass":
                         audio = lowpass_filter(audio, sr, op["high_freq"], order)
@@ -1083,22 +1095,19 @@ class PipelineCommand(Command, FileBackupMixin):
 
                 elif op_type == "trim":
                     audio = trim_audio(
-                        audio, sr,
+                        audio,
+                        sr,
                         start_time=op.get("start_time"),
                         end_time=op.get("end_time"),
                     )
                     applied.append("trim")
 
                 elif op_type == "trim_silence":
-                    audio = trim_silence(
-                        audio, sr, threshold_db=op.get("threshold_db", -40.0)
-                    )
+                    audio = trim_silence(audio, sr, threshold_db=op.get("threshold_db", -40.0))
                     applied.append("trim_silence")
 
                 elif op_type == "denoise":
-                    audio = spectral_denoise(
-                        audio, sr, noise_reduce_factor=op.get("strength", 1.0)
-                    )
+                    audio = spectral_denoise(audio, sr, noise_reduce_factor=op.get("strength", 1.0))
                     applied.append("denoise")
 
                 elif op_type == "gain":

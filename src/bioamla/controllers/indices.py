@@ -385,10 +385,24 @@ class IndicesController(BaseController):
         """
         import soundfile as sf
 
+        # Start run tracking
+        run_id = self._start_run(
+            name=f"Batch indices: {input_path}",
+            action="indices",
+            input_path=input_path,
+            output_path=output_path or "",
+            parameters={
+                "recursive": recursive,
+                "include_entropy": include_entropy,
+                **kwargs,
+            },
+        )
+
         # Get audio files
         files = self._get_audio_files(input_path, recursive=recursive)
 
         if not files:
+            self._fail_run("No audio files found")
             return ControllerResult.fail(f"No audio files found in {input_path}")
 
         results = []
@@ -459,6 +473,16 @@ class IndicesController(BaseController):
             successful=successful,
             failed=failed,
             output_path=saved_path,
+        )
+
+        # Complete run with results
+        self._complete_run(
+            results={
+                "total_files": len(files),
+                "successful": successful,
+                "failed": failed,
+            },
+            output_files=[saved_path] if saved_path else None,
         )
 
         return ControllerResult.ok(

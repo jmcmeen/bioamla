@@ -174,12 +174,22 @@ class BaseController:
     - File discovery and validation
     - Batch processing with progress
     - Error handling and result formatting
-    - Run tracking in project repository
+    - Run tracking in project repository (supports JSON, SQLite, PostgreSQL)
     """
 
     def __init__(self):
         self._progress_callback: Optional[ProgressCallback] = None
         self._current_run_id: Optional[str] = None
+        self._storage = None
+
+    @property
+    def storage(self):
+        """Get the storage instance (lazy initialization)."""
+        if self._storage is None:
+            from bioamla.core.storage import get_storage
+
+            self._storage = get_storage()
+        return self._storage
 
     def _start_run(
         self,
@@ -202,43 +212,16 @@ class BaseController:
         Returns:
             Run ID if in a project, None otherwise
         """
-        try:
-            from bioamla.core.project import load_project
-            import json
-            import uuid
-            from datetime import datetime
-
-            info = load_project()
-            if info is None:
-                return None
-
-            # Generate run ID
-            run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
-
-            # Create run directory
-            run_dir = info.runs_path / run_id
-            run_dir.mkdir(parents=True, exist_ok=True)
-
-            # Save run metadata
-            run_data = {
-                "run_id": run_id,
-                "name": name,
-                "started": datetime.now().isoformat(),
-                "status": "running",
-                "action": action,
-                "input_path": input_path,
-                "output_path": output_path,
-                "parameters": parameters or {},
-                "controller": self.__class__.__name__,
-            }
-            metadata_path = run_dir / "run.json"
-            metadata_path.write_text(json.dumps(run_data, indent=2))
-
-            self._current_run_id = run_id
-            return run_id
-
-        except Exception:
-            return None
+        run_id = self.storage.create_run(
+            name=name,
+            action=action,
+            controller=self.__class__.__name__,
+            input_path=input_path,
+            output_path=output_path,
+            parameters=parameters,
+        )
+        self._current_run_id = run_id
+        return run_id
 
     def _complete_run(
         self,
@@ -259,52 +242,47 @@ class BaseController:
         Returns:
             True if successful, False otherwise
         """
-        try:
-            from bioamla.core.project import load_project
-            import json
-            from datetime import datetime
-
-            run_id = run_id or self._current_run_id
-            if run_id is None:
-                return False
-
-            info = load_project()
-            if info is None:
-                return False
-
-            run_dir = info.runs_path / run_id
-            metadata_path = run_dir / "run.json"
-
-            if not metadata_path.exists():
-                return False
-
-            # Load existing metadata
-            run_data = json.loads(metadata_path.read_text())
-
-            # Update
-            run_data["completed"] = datetime.now().isoformat()
-            run_data["status"] = status
-            if results:
-                run_data["results"] = results
-            if output_files:
-                run_data["output_files"] = output_files
-
-            # Calculate duration
-            from datetime import datetime as dt
-            started = dt.fromisoformat(run_data["started"])
-            completed = dt.fromisoformat(run_data["completed"])
-            run_data["duration_seconds"] = (completed - started).total_seconds()
-
-            # Save
-            metadata_path.write_text(json.dumps(run_data, indent=2))
-
-            if run_id == self._current_run_id:
-                self._current_run_id = None
-
-            return True
-
-        except Exception:
+        run_id = run_id or self._current_run_id
+        if run_id is None:
             return False
+
+        success = self.storage.update_run(
+            run_id=run_id,
+            status=status,
+            results=results,
+            output_files=output_files,
+        )
+
+        if success and run_id == self._current_run_id:
+            self._current_run_id = None
+
+        return success
+
+    def _fail_run(
+        self,
+        error_message: str,
+        run_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Mark a run as failed.
+
+        Args:
+            error_message: Error message
+            run_id: Run ID (defaults to current run)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        run_id = run_id or self._current_run_id
+        if run_id is None:
+            return False
+
+        success = self.storage.fail_run(run_id, error_message)
+
+        if success and run_id == self._current_run_id:
+            self._current_run_id = None
+
+        return success
 
     def _save_run_artifact(
         self,
@@ -323,36 +301,32 @@ class BaseController:
         Returns:
             Path to saved file, or None if failed
         """
-        try:
-            from bioamla.core.project import load_project
-            import json
-
-            run_id = run_id or self._current_run_id
-            if run_id is None:
-                return None
-
-            info = load_project()
-            if info is None:
-                return None
-
-            run_dir = info.runs_path / run_id
-            if not run_dir.exists():
-                return None
-
-            file_path = run_dir / filename
-
-            if isinstance(data, dict):
-                file_path.write_text(json.dumps(data, indent=2))
-            elif isinstance(data, str):
-                file_path.write_text(data)
-            else:
-                # Try to serialize as JSON
-                file_path.write_text(json.dumps(data, indent=2, default=str))
-
-            return file_path
-
-        except Exception:
+        run_id = run_id or self._current_run_id
+        if run_id is None:
             return None
+
+        return self.storage.save_artifact(run_id, filename, data)
+
+    def _get_run_artifact(
+        self,
+        filename: str,
+        run_id: Optional[str] = None,
+    ) -> Optional[Any]:
+        """
+        Load an artifact from the run directory.
+
+        Args:
+            filename: Artifact filename
+            run_id: Run ID (defaults to current run)
+
+        Returns:
+            Loaded data or None
+        """
+        run_id = run_id or self._current_run_id
+        if run_id is None:
+            return None
+
+        return self.storage.get_artifact(run_id, filename)
 
     def set_progress_callback(self, callback: ProgressCallback) -> None:
         """Set a callback for progress updates during batch operations."""

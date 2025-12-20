@@ -631,13 +631,15 @@ class ProjectController(BaseController):
             models = []
 
             for name, data in models_data.get("models", {}).items():
-                models.append(ModelInfo(
-                    name=name,
-                    model_id=data.get("id", ""),
-                    model_type=data.get("type", "ast"),
-                    description=data.get("description", ""),
-                    registered=data.get("registered", ""),
-                ))
+                models.append(
+                    ModelInfo(
+                        name=name,
+                        model_id=data.get("id", ""),
+                        model_type=data.get("type", "ast"),
+                        description=data.get("description", ""),
+                        registered=data.get("registered", ""),
+                    )
+                )
 
             return ControllerResult.ok(
                 data=models,
@@ -745,14 +747,16 @@ class ProjectController(BaseController):
             datasets = []
 
             for name, data in datasets_data.get("datasets", {}).items():
-                datasets.append(DatasetInfo(
-                    name=name,
-                    path=data.get("path", ""),
-                    source=data.get("source", "local"),
-                    description=data.get("description", ""),
-                    registered=data.get("registered", ""),
-                    metadata_file=data.get("metadata", "metadata.csv"),
-                ))
+                datasets.append(
+                    DatasetInfo(
+                        name=name,
+                        path=data.get("path", ""),
+                        source=data.get("source", "local"),
+                        description=data.get("description", ""),
+                        registered=data.get("registered", ""),
+                        metadata_file=data.get("metadata", "metadata.csv"),
+                    )
+                )
 
             return ControllerResult.ok(
                 data=datasets,
@@ -941,18 +945,20 @@ class ProjectController(BaseController):
                 if status and run_data.get("status") != status:
                     continue
 
-                runs.append(RunInfo(
-                    run_id=run_data["run_id"],
-                    name=run_data["name"],
-                    started=run_data["started"],
-                    completed=run_data.get("completed"),
-                    status=run_data.get("status", "unknown"),
-                    action=run_data.get("action", ""),
-                    input_path=run_data.get("input_path", ""),
-                    output_path=run_data.get("output_path", ""),
-                    parameters=run_data.get("parameters", {}),
-                    results=run_data.get("results", {}),
-                ))
+                runs.append(
+                    RunInfo(
+                        run_id=run_data["run_id"],
+                        name=run_data["name"],
+                        started=run_data["started"],
+                        completed=run_data.get("completed"),
+                        status=run_data.get("status", "unknown"),
+                        action=run_data.get("action", ""),
+                        input_path=run_data.get("input_path", ""),
+                        output_path=run_data.get("output_path", ""),
+                        parameters=run_data.get("parameters", {}),
+                        results=run_data.get("results", {}),
+                    )
+                )
 
                 if len(runs) >= limit:
                     break

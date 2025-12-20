@@ -384,9 +384,7 @@ class INaturalistController(BaseController):
             Result with list of taxa
         """
         if not place_id and not project_id:
-            return ControllerResult.fail(
-                "At least one of place_id or project_id must be provided"
-            )
+            return ControllerResult.fail("At least one of place_id or project_id must be provided")
 
         try:
             from bioamla.core.services.inaturalist import get_taxa
@@ -445,12 +443,14 @@ class INaturalistController(BaseController):
                 )
                 writer.writeheader()
                 for taxon in taxa:
-                    writer.writerow({
-                        "taxon_id": taxon.taxon_id,
-                        "name": taxon.name,
-                        "common_name": taxon.common_name,
-                        "observation_count": taxon.observation_count,
-                    })
+                    writer.writerow(
+                        {
+                            "taxon_id": taxon.taxon_id,
+                            "name": taxon.name,
+                            "common_name": taxon.common_name,
+                            "observation_count": taxon.observation_count,
+                        }
+                    )
 
             return ControllerResult.ok(
                 data=str(output),

@@ -449,11 +449,22 @@ class PipelineController(BaseController):
         self._step_results.clear()
         self._cancelled = False
 
+        # Start run tracking
+        run_id = self._start_run(
+            name=f"Pipeline: {self._name}",
+            action="pipeline",
+            parameters={
+                "step_count": len(self._steps),
+                "step_names": [step.name for step in self._steps],
+            },
+        )
+
         # Resolve execution order
         try:
             ordered_steps = self._resolve_execution_order()
         except ValueError as e:
             self._status = PipelineStatus.FAILED
+            self._fail_run(str(e))
             return PipelineResult.fail(str(e))
 
         # Initialize progress
@@ -469,6 +480,7 @@ class PipelineController(BaseController):
         for i, step in enumerate(ordered_steps):
             if self._cancelled:
                 self._status = PipelineStatus.CANCELLED
+                self._fail_run("Pipeline cancelled")
                 return PipelineResult.fail(
                     "Pipeline cancelled",
                     step_results=self._step_results,
@@ -490,6 +502,7 @@ class PipelineController(BaseController):
                 progress.errors.append(f"{step.name}: {result.error}")
                 self._report_progress(progress)
 
+                self._fail_run(f"Step '{step.name}' failed: {result.error}")
                 return PipelineResult.fail(
                     f"Step '{step.name}' failed: {result.error}",
                     step_results=self._step_results,
@@ -514,6 +527,16 @@ class PipelineController(BaseController):
         self._report_progress(progress)
 
         duration = (datetime.utcnow() - self._started_at).total_seconds()
+
+        # Complete run with results
+        self._complete_run(
+            results={
+                "completed_steps": len(ordered_steps),
+                "total_steps": len(ordered_steps),
+                "duration_seconds": duration,
+                "step_names": [step.name for step in ordered_steps],
+            },
+        )
 
         return PipelineResult.ok(
             data=current_data,

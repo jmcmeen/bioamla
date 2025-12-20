@@ -278,6 +278,7 @@ class EmbeddingExtractor:
         if filepath:
             try:
                 import soundfile as sf
+
                 info = sf.info(filepath)
                 duration = info.duration
                 clip_dur = self.config.clip_duration
