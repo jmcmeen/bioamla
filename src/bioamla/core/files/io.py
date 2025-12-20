@@ -179,10 +179,10 @@ class TextFile(File):
                 self.path, mode=self.mode, encoding=self.encoding, newline=self.newline
             )
             logger.debug(f"Opened text file: {self.path}")
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Text file not found: {self.path}")
+        except FileNotFoundError as err:
+            raise FileNotFoundError(f"Text file not found: {self.path}") from err
         except OSError as e:
-            raise OSError(f"Cannot open text file {self.path}: {e}")
+            raise OSError(f"Cannot open text file {self.path}: {e}") from e
 
         return self
 
@@ -370,10 +370,10 @@ class BinaryFile(File):
         try:
             self._handle = open(self.path, mode=self.mode)
             logger.debug(f"Opened binary file: {self.path}")
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Binary file not found: {self.path}")
+        except FileNotFoundError as err:
+            raise FileNotFoundError(f"Binary file not found: {self.path}") from err
         except OSError as e:
-            raise OSError(f"Cannot open binary file {self.path}: {e}")
+            raise OSError(f"Cannot open binary file {self.path}: {e}") from e
 
         return self
 

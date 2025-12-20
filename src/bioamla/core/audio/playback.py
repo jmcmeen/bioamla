@@ -186,11 +186,11 @@ class AudioPlayer:
 
         try:
             import sounddevice as sd
-        except ImportError:
+        except ImportError as err:
             raise ImportError(
                 "sounddevice is required for audio playback. "
                 "Install it with: pip install sounddevice"
-            )
+            ) from err
 
         with self._lock:
             if self._state == PlaybackState.PLAYING:

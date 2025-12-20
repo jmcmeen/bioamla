@@ -1,0 +1,49 @@
+# Bird detection pipeline for field recordings
+# Preprocesses audio, runs AST inference, and outputs detections
+
+[pipeline]
+name = "bird_detection"
+description = "Automated bird species detection pipeline"
+version = "1.0.0"
+author = "bioamla"
+
+[variables]
+input_dir = { type = "path", required = true, description = "Directory containing audio files" }
+output_dir = { type = "path", default = "./bird_detections", description = "Output directory for results" }
+model_path = { type = "string", default = "MIT/ast-finetuned-audioset-10-10-0.4593", description = "Model path or HuggingFace ID" }
+sample_rate = { type = "integer", default = 16000, description = "Target sample rate for inference" }
+confidence_threshold = { type = "float", default = 0.5, description = "Minimum confidence for detections" }
+
+[[steps]]
+name = "resample"
+action = "audio.resample"
+description = "Resample audio to model input rate"
+params = { input = "{{ input_dir }}", output = "{{ output_dir }}/resampled", sample_rate = "{{ sample_rate }}" }
+
+[[steps]]
+name = "filter"
+action = "audio.filter"
+description = "Apply bandpass filter for bird frequency range"
+depends_on = ["resample"]
+params = { input = "{{ output_dir }}/resampled", output = "{{ output_dir }}/filtered", bandpass = "500,10000" }
+
+[[steps]]
+name = "normalize"
+action = "audio.normalize"
+description = "Normalize audio levels"
+depends_on = ["filter"]
+params = { input = "{{ output_dir }}/filtered", output = "{{ output_dir }}/normalized", target_db = -20 }
+
+[[steps]]
+name = "detect"
+action = "inference.predict"
+description = "Run bird detection model"
+depends_on = ["normalize"]
+params = { input = "{{ output_dir }}/normalized", output = "{{ output_dir }}/detections.csv", model = "{{ model_path }}" }
+
+[[steps]]
+name = "log_complete"
+action = "util.log"
+description = "Log completion"
+depends_on = ["detect"]
+params = { message = "Bird detection complete. Results in {{ output_dir }}/detections.csv" }

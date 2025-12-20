@@ -1,0 +1,42 @@
+# Embedding extraction and clustering for vocal repertoire discovery
+# Extracts embeddings, reduces dimensionality, and clusters similar sounds
+
+[pipeline]
+name = "embedding_clustering"
+description = "Vocal repertoire discovery through embedding clustering"
+version = "1.0.0"
+author = "bioamla"
+
+[variables]
+input_dir = { type = "path", required = true, description = "Directory containing audio segments" }
+output_dir = { type = "path", default = "./clustering_output", description = "Output directory for results" }
+model_path = { type = "string", default = "MIT/ast-finetuned-audioset-10-10-0.4593", description = "Model for embedding extraction" }
+cluster_method = { type = "string", default = "hdbscan", description = "Clustering method (hdbscan, kmeans)" }
+min_cluster_size = { type = "integer", default = 5, description = "Minimum cluster size for HDBSCAN" }
+
+[[steps]]
+name = "resample"
+action = "audio.resample"
+description = "Resample audio to model input rate"
+params = { input = "{{ input_dir }}", output = "{{ output_dir }}/resampled", sample_rate = 16000 }
+
+[[steps]]
+name = "embed"
+action = "inference.embed"
+description = "Extract embeddings from audio"
+depends_on = ["resample"]
+params = { input = "{{ output_dir }}/resampled", output = "{{ output_dir }}/embeddings.npy", model = "{{ model_path }}" }
+
+[[steps]]
+name = "cluster"
+action = "analysis.cluster"
+description = "Cluster embeddings to discover sound types"
+depends_on = ["embed"]
+params = { embeddings = "{{ output_dir }}/embeddings.npy", output = "{{ output_dir }}/clusters.json", method = "{{ cluster_method }}" }
+
+[[steps]]
+name = "log_complete"
+action = "util.log"
+description = "Log completion"
+depends_on = ["cluster"]
+params = { message = "Clustering complete. Results in {{ output_dir }}/clusters.json" }

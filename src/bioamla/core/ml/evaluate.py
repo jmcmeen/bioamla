@@ -422,8 +422,8 @@ def format_metrics_report(result: EvaluationResult, include_per_class: bool = Tr
     )
 
     # Add column headers
-    max_label_len = max(len(str(l)) for l in result.class_labels) if result.class_labels else 10
-    header = " " * (max_label_len + 2) + "  ".join(f"{l[:8]:>8}" for l in result.class_labels)
+    max_label_len = max(len(str(label)) for label in result.class_labels) if result.class_labels else 10
+    header = " " * (max_label_len + 2) + "  ".join(f"{label[:8]:>8}" for label in result.class_labels)
     lines.append(header)
 
     # Add rows

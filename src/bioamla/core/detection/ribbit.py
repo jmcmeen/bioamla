@@ -40,7 +40,6 @@ References:
 """
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -271,11 +270,11 @@ class RibbitDetector:
 
             self._ribbit = ribbit
             return self._ribbit
-        except ImportError:
+        except ImportError as err:
             raise ImportError(
                 "OpenSoundscape is required for RIBBIT detection. "
                 "Install with: pip install opensoundscape"
-            )
+            ) from err
 
     def detect(
         self,

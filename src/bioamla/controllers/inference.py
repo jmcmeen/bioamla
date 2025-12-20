@@ -176,7 +176,7 @@ class InferenceController(BaseController):
             return ControllerResult.fail(error)
 
         # Start run tracking
-        run_id = self._start_run(
+        self._start_run(
             name=f"Batch prediction: {directory}",
             action="predict",
             input_path=directory,
@@ -365,7 +365,7 @@ class InferenceController(BaseController):
             return ControllerResult.fail(error)
 
         # Start run tracking
-        run_id = self._start_run(
+        self._start_run(
             name=f"Batch embedding extraction: {directory}",
             action="embed",
             input_path=directory,

@@ -85,7 +85,7 @@ class DetectionRepository(BaseRepository[Detection, DetectionCreate, DetectionUp
         limit: int = 100,
     ) -> List[Detection]:
         """Get unverified detections."""
-        statement = select(Detection).where(Detection.verified == False)
+        statement = select(Detection).where(not Detection.verified)
         if recording_id:
             statement = statement.where(Detection.recording_id == recording_id)
         statement = statement.order_by(Detection.confidence.desc()).limit(limit)
@@ -97,7 +97,7 @@ class DetectionRepository(BaseRepository[Detection, DetectionCreate, DetectionUp
         limit: int = 100,
     ) -> List[Detection]:
         """Get verified detections."""
-        statement = select(Detection).where(Detection.verified == True)
+        statement = select(Detection).where(Detection.verified)
         if recording_id:
             statement = statement.where(Detection.recording_id == recording_id)
         statement = statement.limit(limit)

@@ -22,7 +22,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, Optional, TypeVar, Union
 
 import requests
 from requests.adapters import HTTPAdapter
