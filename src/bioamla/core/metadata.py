@@ -30,9 +30,9 @@ Use the MetadataRegistry to define and compose field schemas from different sour
 import csv
 import logging
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from bioamla.core.files import TextFile
 

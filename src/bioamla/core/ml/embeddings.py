@@ -193,8 +193,8 @@ class EmbeddingExtractor:
 
         elif model_type == "birdnet":
             try:
-                from bioamla.core.ml.birdnet import BirdNETModel
                 from bioamla.core.ml.base import ModelConfig
+                from bioamla.core.ml.birdnet import BirdNETModel
 
                 model_config = ModelConfig(
                     sample_rate=self.config.sample_rate,

@@ -58,27 +58,33 @@ from .base import BaseController, ControllerResult
 from .clustering import ClusteringController
 from .embedding import EmbeddingController
 from .inaturalist import (
-    INaturalistController,
-    SearchResult as INatSearchResult,
     DownloadResult as INatDownloadResult,
-    TaxonInfo,
-    ProjectStats as INatProjectStats,
+)
+from .inaturalist import (
+    INaturalistController,
     ObservationInfo,
+    TaxonInfo,
+)
+from .inaturalist import (
+    ProjectStats as INatProjectStats,
+)
+from .inaturalist import (
+    SearchResult as INatSearchResult,
 )
 from .indices import BatchIndicesResult, IndicesController, IndicesResult
 from .inference import InferenceController
 from .pipeline import PipelineController, PipelineProgress, PipelineResult
 from .project import (
-    ProjectController,
-    ProjectSummary,
-    ProjectStatistics,
     ConfigSummary,
-    ModelInfo,
     DatasetInfo,
+    ModelInfo,
+    ProjectController,
+    ProjectStatistics,
+    ProjectSummary,
     RunInfo,
 )
-from .ribbit import RibbitController, DetectionSummary, BatchDetectionSummary
-from .workflow import WorkflowController, WorkflowSummary, ExecutionSummary, ValidationSummary
+from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitController
+from .workflow import ExecutionSummary, ValidationSummary, WorkflowController, WorkflowSummary
 
 __all__ = [
     # Base
