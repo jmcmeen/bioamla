@@ -1,9 +1,9 @@
-# core/workflow/step.py
+# core/pipeline/step.py
 """
 Pipeline Step Base Class
 ========================
 
-Base class for pipeline steps that can be composed into multi-step workflows.
+Base class for pipeline steps that can be composed into multi-step pipelines.
 
 Each step defines:
 - Input/output type declarations
@@ -18,7 +18,7 @@ Steps are executed by the PipelineController, which handles:
 - State serialization
 
 Usage:
-    from bioamla.core.workflow.step import PipelineStep, StepResult
+    from bioamla.core.pipeline.step import PipelineStep, StepResult
 
     class NormalizeStep(PipelineStep[AudioData, AudioData]):
         name = "normalize"

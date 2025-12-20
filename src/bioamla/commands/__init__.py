@@ -63,16 +63,6 @@ Audio Command Example:
     manager.execute(pipeline.build())
 """
 
-from .base import (
-    Command,
-    CommandInfo,
-    CommandResult,
-    CommandStatus,
-    CompositeCommand,
-    FileBackupMixin,
-    UndoManager,
-)
-
 from .audio import (
     AudioProcessingPipeline,
     ConvertToMonoCommand,
@@ -84,6 +74,15 @@ from .audio import (
     ResampleCommand,
     TrimCommand,
     TrimSilenceCommand,
+)
+from .base import (
+    Command,
+    CommandInfo,
+    CommandResult,
+    CommandStatus,
+    CompositeCommand,
+    FileBackupMixin,
+    UndoManager,
 )
 
 __all__ = [

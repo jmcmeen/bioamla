@@ -338,7 +338,7 @@ def search(
     matches: List[Tuple[float, Dict[str, Any]]] = []
     seen: set = set()
 
-    for key, entry in _taxonomy_cache.items():
+    for _key, entry in _taxonomy_cache.items():
         sci_name = entry.get("scientific_name", "")
         if sci_name in seen:
             continue

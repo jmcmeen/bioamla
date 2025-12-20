@@ -58,27 +58,37 @@ from .base import BaseController, ControllerResult
 from .clustering import ClusteringController
 from .embedding import EmbeddingController
 from .inaturalist import (
-    INaturalistController,
-    SearchResult as INatSearchResult,
     DownloadResult as INatDownloadResult,
-    TaxonInfo,
-    ProjectStats as INatProjectStats,
+)
+from .inaturalist import (
+    INaturalistController,
     ObservationInfo,
+    TaxonInfo,
+)
+from .inaturalist import (
+    ProjectStats as INatProjectStats,
+)
+from .inaturalist import (
+    SearchResult as INatSearchResult,
 )
 from .indices import BatchIndicesResult, IndicesController, IndicesResult
 from .inference import InferenceController
-from .pipeline import PipelineController, PipelineProgress, PipelineResult
+from .pipeline import (
+    ExecutionSummary,
+    PipelineController,
+    PipelineSummary,
+    ValidationSummary,
+)
 from .project import (
-    ProjectController,
-    ProjectSummary,
-    ProjectStatistics,
     ConfigSummary,
-    ModelInfo,
     DatasetInfo,
+    ModelInfo,
+    ProjectController,
+    ProjectStatistics,
+    ProjectSummary,
     RunInfo,
 )
-from .ribbit import RibbitController, DetectionSummary, BatchDetectionSummary
-from .workflow import WorkflowController, WorkflowSummary, ExecutionSummary, ValidationSummary
+from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitController
 
 __all__ = [
     # Base
@@ -110,8 +120,9 @@ __all__ = [
     "ObservationInfo",
     # Pipeline
     "PipelineController",
-    "PipelineResult",
-    "PipelineProgress",
+    "PipelineSummary",
+    "ExecutionSummary",
+    "ValidationSummary",
     # Project
     "ProjectController",
     "ProjectSummary",
@@ -120,11 +131,6 @@ __all__ = [
     "ModelInfo",
     "DatasetInfo",
     "RunInfo",
-    # Workflow
-    "WorkflowController",
-    "WorkflowSummary",
-    "ExecutionSummary",
-    "ValidationSummary",
     # Analysis
     "IndicesController",
     "IndicesResult",
