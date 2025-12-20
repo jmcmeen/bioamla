@@ -1,9 +1,9 @@
-# core/workflow/engine.py
+# core/pipeline/engine.py
 """
-Workflow Execution Engine
+Pipeline Execution Engine
 =========================
 
-Executes TOML-defined workflows with support for:
+Executes TOML-defined pipelines with support for:
 - Dependency resolution and parallel execution
 - Progress tracking and callbacks
 - Error handling and retry logic
@@ -11,17 +11,17 @@ Executes TOML-defined workflows with support for:
 - Shell script export
 
 Example:
-    from bioamla.core.workflow.engine import WorkflowEngine
-    from bioamla.core.workflow.parser import parse_workflow
+    from bioamla.core.pipeline.engine import PipelineEngine
+    from bioamla.core.pipeline.parser import parse_pipeline
 
-    workflow = parse_workflow("workflow.toml")
-    engine = WorkflowEngine()
+    pipeline = parse_pipeline("pipeline.toml")
+    engine = PipelineEngine()
 
-    # Execute workflow
-    result = engine.execute(workflow)
+    # Execute pipeline
+    result = engine.execute(pipeline)
 
     # Export to shell script
-    script = engine.export_to_shell(workflow)
+    script = engine.export_to_shell(pipeline)
 """
 
 import time
@@ -34,12 +34,12 @@ from uuid import UUID, uuid4
 
 from bioamla.core.logger import get_logger
 
-from .parser import Workflow, WorkflowStep
+from .parser import Pipeline, PipelineStep
 
 logger = get_logger(__name__)
 
 __all__ = [
-    "WorkflowEngine",
+    "PipelineEngine",
     "ExecutionResult",
     "StepExecutionResult",
     "ExecutionStatus",
@@ -48,7 +48,7 @@ __all__ = [
 
 
 class ExecutionStatus(Enum):
-    """Status of workflow or step execution."""
+    """Status of pipeline or step execution."""
 
     PENDING = "pending"
     RUNNING = "running"
@@ -88,9 +88,9 @@ class StepExecutionResult:
 
 @dataclass
 class ExecutionResult:
-    """Result of workflow execution."""
+    """Result of pipeline execution."""
 
-    workflow_name: str
+    pipeline_name: str
     execution_id: UUID
     status: ExecutionStatus
     started_at: datetime
@@ -118,7 +118,7 @@ class ExecutionResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
-            "workflow_name": self.workflow_name,
+            "pipeline_name": self.pipeline_name,
             "execution_id": str(self.execution_id),
             "status": self.status.value,
             "started_at": self.started_at.isoformat(),
@@ -142,8 +142,8 @@ class ExecutionResult:
 class ExecutionContext:
     """Context passed to action handlers during execution."""
 
-    workflow: Workflow
-    step: WorkflowStep
+    pipeline: Pipeline
+    step: PipelineStep
     variables: Dict[str, Any]
     outputs: Dict[str, Any]
     execution_id: UUID
@@ -158,9 +158,9 @@ ActionHandler = Callable[[ExecutionContext, Dict[str, Any]], Any]
 ProgressCallback = Callable[[str, int, int, Optional[str]], None]
 
 
-class WorkflowEngine:
+class PipelineEngine:
     """
-    Engine for executing TOML-defined workflows.
+    Engine for executing TOML-defined pipelines.
 
     The engine provides:
     - Action registration for custom operations
@@ -171,7 +171,7 @@ class WorkflowEngine:
     """
 
     def __init__(self):
-        """Initialize the workflow engine."""
+        """Initialize the pipeline engine."""
         self._actions: Dict[str, ActionHandler] = {}
         self._progress_callback: Optional[ProgressCallback] = None
         self._cancelled = False
@@ -199,19 +199,19 @@ class WorkflowEngine:
         self._progress_callback = callback
 
     def cancel(self) -> None:
-        """Cancel workflow execution."""
+        """Cancel pipeline execution."""
         self._cancelled = True
 
     def execute(
         self,
-        workflow: Workflow,
+        pipeline: Pipeline,
         variables: Optional[Dict[str, Any]] = None,
     ) -> ExecutionResult:
         """
-        Execute a workflow.
+        Execute a pipeline.
 
         Args:
-            workflow: Workflow to execute
+            pipeline: Pipeline to execute
             variables: Override variables
 
         Returns:
@@ -222,16 +222,16 @@ class WorkflowEngine:
         started_at = datetime.utcnow()
 
         # Merge variables
-        all_variables = {**workflow.variables}
+        all_variables = {**pipeline.variables}
         if variables:
             all_variables.update(variables)
 
         # Get execution order
         try:
-            execution_order = workflow.get_execution_order()
+            execution_order = pipeline.get_execution_order()
         except ValueError as e:
             return ExecutionResult(
-                workflow_name=workflow.name,
+                pipeline_name=pipeline.name,
                 execution_id=execution_id,
                 status=ExecutionStatus.FAILED,
                 started_at=started_at,
@@ -251,7 +251,7 @@ class WorkflowEngine:
                 final_error = "Execution cancelled by user"
                 break
 
-            step = workflow.get_step(step_name)
+            step = pipeline.get_step(step_name)
             if step is None:
                 continue
 
@@ -261,7 +261,7 @@ class WorkflowEngine:
 
             # Create context
             context = ExecutionContext(
-                workflow=workflow,
+                pipeline=pipeline,
                 step=step,
                 variables=all_variables,
                 outputs=outputs,
@@ -297,7 +297,7 @@ class WorkflowEngine:
         total_duration = (completed_at - started_at).total_seconds()
 
         return ExecutionResult(
-            workflow_name=workflow.name,
+            pipeline_name=pipeline.name,
             execution_id=execution_id,
             status=final_status,
             started_at=started_at,
@@ -310,7 +310,7 @@ class WorkflowEngine:
 
     def _execute_step(
         self,
-        step: WorkflowStep,
+        step: PipelineStep,
         context: ExecutionContext,
     ) -> StepExecutionResult:
         """Execute a single step."""
@@ -454,36 +454,221 @@ class WorkflowEngine:
         context: ExecutionContext,
         params: Dict[str, Any],
     ) -> Any:
-        """Normalize audio files."""
-        from bioamla.controllers.audio_transform import AudioTransformController
+        """Normalize audio files.
 
-        AudioTransformController()
-        # This would need implementation based on your controller
-        return {"message": "Normalize action executed"}
+        Params:
+            input: Input file or directory path
+            output: Output file or directory path
+            target_db: Target loudness in dB (default: -20.0)
+            peak: Use peak normalization instead of RMS (default: false)
+        """
+        from bioamla.controllers.audio import AudioController
+
+        controller = AudioController()
+        input_path = Path(params.get("input", ""))
+        output_path = Path(params.get("output", ""))
+        target_db = float(params.get("target_db", -20.0))
+        peak = params.get("peak", False)
+
+        if input_path.is_dir():
+            # Batch processing
+            output_path.mkdir(parents=True, exist_ok=True)
+            audio_files = list(input_path.glob("**/*.wav")) + list(input_path.glob("**/*.mp3"))
+            processed = 0
+            for audio_file in audio_files:
+                rel_path = audio_file.relative_to(input_path)
+                out_file = output_path / rel_path
+                out_file.parent.mkdir(parents=True, exist_ok=True)
+                result = controller.normalize(
+                    str(audio_file), str(out_file), target_db=target_db, peak=peak
+                )
+                if result.success:
+                    processed += 1
+            return {"processed": processed, "total": len(audio_files)}
+        else:
+            # Single file
+            result = controller.normalize(
+                str(input_path), str(output_path), target_db=target_db, peak=peak
+            )
+            if not result.success:
+                raise RuntimeError(result.error)
+            return result.data
 
     def _action_audio_filter(
         self,
         context: ExecutionContext,
         params: Dict[str, Any],
     ) -> Any:
-        """Apply frequency filter to audio."""
-        return {"message": "Filter action executed"}
+        """Apply frequency filter to audio.
+
+        Params:
+            input: Input file or directory path
+            output: Output file or directory path
+            lowpass: Lowpass cutoff frequency in Hz (optional)
+            highpass: Highpass cutoff frequency in Hz (optional)
+            bandpass: Comma-separated low,high frequencies for bandpass (optional)
+            order: Filter order (default: 5)
+        """
+        from bioamla.controllers.audio import AudioController
+
+        controller = AudioController()
+        input_path = Path(params.get("input", ""))
+        output_path = Path(params.get("output", ""))
+        lowpass = params.get("lowpass")
+        highpass = params.get("highpass")
+        bandpass_str = params.get("bandpass")
+        order = int(params.get("order", 5))
+
+        # Parse bandpass if provided as string
+        bandpass = None
+        if bandpass_str:
+            if isinstance(bandpass_str, str):
+                parts = bandpass_str.split(",")
+                bandpass = (float(parts[0]), float(parts[1]))
+            elif isinstance(bandpass_str, (list, tuple)):
+                bandpass = (float(bandpass_str[0]), float(bandpass_str[1]))
+
+        if lowpass:
+            lowpass = float(lowpass)
+        if highpass:
+            highpass = float(highpass)
+
+        if input_path.is_dir():
+            # Batch processing
+            output_path.mkdir(parents=True, exist_ok=True)
+            audio_files = list(input_path.glob("**/*.wav")) + list(input_path.glob("**/*.mp3"))
+            processed = 0
+            for audio_file in audio_files:
+                rel_path = audio_file.relative_to(input_path)
+                out_file = output_path / rel_path
+                out_file.parent.mkdir(parents=True, exist_ok=True)
+                result = controller.filter_audio(
+                    str(audio_file),
+                    str(out_file),
+                    lowpass=lowpass,
+                    highpass=highpass,
+                    bandpass=bandpass,
+                    order=order,
+                )
+                if result.success:
+                    processed += 1
+            return {"processed": processed, "total": len(audio_files)}
+        else:
+            # Single file
+            result = controller.filter_audio(
+                str(input_path),
+                str(output_path),
+                lowpass=lowpass,
+                highpass=highpass,
+                bandpass=bandpass,
+                order=order,
+            )
+            if not result.success:
+                raise RuntimeError(result.error)
+            return result.data
 
     def _action_audio_trim(
         self,
         context: ExecutionContext,
         params: Dict[str, Any],
     ) -> Any:
-        """Trim audio files."""
-        return {"message": "Trim action executed"}
+        """Trim audio files.
+
+        Params:
+            input: Input file or directory path
+            output: Output file or directory path
+            start: Start time in seconds (optional)
+            end: End time in seconds (optional)
+            trim_silence: Trim silence from start/end (default: false)
+            silence_threshold_db: Silence threshold in dB (default: -40.0)
+        """
+        from bioamla.controllers.audio import AudioController
+
+        controller = AudioController()
+        input_path = Path(params.get("input", ""))
+        output_path = Path(params.get("output", ""))
+        start = params.get("start")
+        end = params.get("end")
+        trim_silence = params.get("trim_silence", False)
+        silence_threshold_db = float(params.get("silence_threshold_db", -40.0))
+
+        if start is not None:
+            start = float(start)
+        if end is not None:
+            end = float(end)
+
+        if input_path.is_dir():
+            # Batch processing
+            output_path.mkdir(parents=True, exist_ok=True)
+            audio_files = list(input_path.glob("**/*.wav")) + list(input_path.glob("**/*.mp3"))
+            processed = 0
+            for audio_file in audio_files:
+                rel_path = audio_file.relative_to(input_path)
+                out_file = output_path / rel_path
+                out_file.parent.mkdir(parents=True, exist_ok=True)
+                result = controller.trim(
+                    str(audio_file),
+                    str(out_file),
+                    start=start,
+                    end=end,
+                    trim_silence=trim_silence,
+                    silence_threshold_db=silence_threshold_db,
+                )
+                if result.success:
+                    processed += 1
+            return {"processed": processed, "total": len(audio_files)}
+        else:
+            # Single file
+            result = controller.trim(
+                str(input_path),
+                str(output_path),
+                start=start,
+                end=end,
+                trim_silence=trim_silence,
+                silence_threshold_db=silence_threshold_db,
+            )
+            if not result.success:
+                raise RuntimeError(result.error)
+            return result.data
 
     def _action_audio_denoise(
         self,
         context: ExecutionContext,
         params: Dict[str, Any],
     ) -> Any:
-        """Denoise audio files."""
-        return {"message": "Denoise action executed"}
+        """Denoise audio files.
+
+        Params:
+            input: Input file or directory path
+            output: Output file or directory path
+            strength: Noise reduction strength 0-2 (default: 1.0)
+        """
+        from bioamla.controllers.audio import AudioController
+
+        controller = AudioController()
+        input_path = Path(params.get("input", ""))
+        output_path = Path(params.get("output", ""))
+        strength = float(params.get("strength", 1.0))
+
+        if input_path.is_dir():
+            # Batch processing
+            output_path.mkdir(parents=True, exist_ok=True)
+            audio_files = list(input_path.glob("**/*.wav")) + list(input_path.glob("**/*.mp3"))
+            processed = 0
+            for audio_file in audio_files:
+                rel_path = audio_file.relative_to(input_path)
+                out_file = output_path / rel_path
+                out_file.parent.mkdir(parents=True, exist_ok=True)
+                result = controller.denoise(str(audio_file), str(out_file), strength=strength)
+                if result.success:
+                    processed += 1
+            return {"processed": processed, "total": len(audio_files)}
+        else:
+            # Single file
+            result = controller.denoise(str(input_path), str(output_path), strength=strength)
+            if not result.success:
+                raise RuntimeError(result.error)
+            return result.data
 
     def _action_analysis_indices(
         self,
@@ -626,14 +811,14 @@ class WorkflowEngine:
 
     def export_to_shell(
         self,
-        workflow: Workflow,
+        pipeline: Pipeline,
         output_path: Optional[str] = None,
     ) -> str:
         """
-        Export workflow to a shell script.
+        Export pipeline to a shell script.
 
         Args:
-            workflow: Workflow to export
+            pipeline: Pipeline to export
             output_path: Optional path to save script
 
         Returns:
@@ -641,8 +826,8 @@ class WorkflowEngine:
         """
         lines = [
             "#!/bin/bash",
-            f"# Workflow: {workflow.name}",
-            f"# Description: {workflow.description}",
+            f"# Pipeline: {pipeline.name}",
+            f"# Description: {pipeline.description}",
             f"# Generated: {datetime.utcnow().isoformat()}",
             "",
             "set -e  # Exit on error",
@@ -650,9 +835,9 @@ class WorkflowEngine:
         ]
 
         # Add variables
-        if workflow.variables:
+        if pipeline.variables:
             lines.append("# Variables")
-            for key, value in workflow.variables.items():
+            for key, value in pipeline.variables.items():
                 if isinstance(value, str):
                     lines.append(f'{key}="{value}"')
                 else:
@@ -660,10 +845,10 @@ class WorkflowEngine:
             lines.append("")
 
         # Add steps
-        execution_order = workflow.get_execution_order()
+        execution_order = pipeline.get_execution_order()
 
         for step_name in execution_order:
-            step = workflow.get_step(step_name)
+            step = pipeline.get_step(step_name)
             if step is None:
                 continue
 
@@ -686,7 +871,7 @@ class WorkflowEngine:
 
         return script
 
-    def _action_to_command(self, step: WorkflowStep) -> str:
+    def _action_to_command(self, step: PipelineStep) -> str:
         """Convert a step action to a bioamla CLI command."""
         action = step.action
         params = step.params

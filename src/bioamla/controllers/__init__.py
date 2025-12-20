@@ -73,7 +73,12 @@ from .inaturalist import (
 )
 from .indices import BatchIndicesResult, IndicesController, IndicesResult
 from .inference import InferenceController
-from .pipeline import PipelineController, PipelineProgress, PipelineResult
+from .pipeline import (
+    ExecutionSummary,
+    PipelineController,
+    PipelineSummary,
+    ValidationSummary,
+)
 from .project import (
     ConfigSummary,
     DatasetInfo,
@@ -84,7 +89,6 @@ from .project import (
     RunInfo,
 )
 from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitController
-from .workflow import ExecutionSummary, ValidationSummary, WorkflowController, WorkflowSummary
 
 __all__ = [
     # Base
@@ -116,8 +120,9 @@ __all__ = [
     "ObservationInfo",
     # Pipeline
     "PipelineController",
-    "PipelineResult",
-    "PipelineProgress",
+    "PipelineSummary",
+    "ExecutionSummary",
+    "ValidationSummary",
     # Project
     "ProjectController",
     "ProjectSummary",
@@ -126,11 +131,6 @@ __all__ = [
     "ModelInfo",
     "DatasetInfo",
     "RunInfo",
-    # Workflow
-    "WorkflowController",
-    "WorkflowSummary",
-    "ExecutionSummary",
-    "ValidationSummary",
     # Analysis
     "IndicesController",
     "IndicesResult",
