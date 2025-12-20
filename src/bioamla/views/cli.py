@@ -3222,13 +3222,13 @@ def pipeline_templates():
 @click.argument("name")
 @click.option("--output", "-o", default=None, help="Output file path (default: stdout)")
 def pipeline_template(name, output):
-    """View or copy a workflow template.
+    """View or copy a pipeline template.
 
-    Displays a built-in workflow template that can be customized for your needs.
+    Displays a built-in pipeline template that can be customized for your needs.
 
     Examples:
-        bioamla workflow template bird_detection
-        bioamla workflow template audio_preprocessing -o my_pipeline.toml
+        bioamla pipeline template bird_detection
+        bioamla pipeline template audio_preprocessing -o my_pipeline.toml
     """
     from pathlib import Path
 
