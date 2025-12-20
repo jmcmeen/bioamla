@@ -386,7 +386,7 @@ class IndicesController(BaseController):
         import soundfile as sf
 
         # Start run tracking
-        run_id = self._start_run(
+        self._start_run(
             name=f"Batch indices: {input_path}",
             action="indices",
             input_path=input_path,

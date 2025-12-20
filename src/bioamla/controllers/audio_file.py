@@ -354,8 +354,15 @@ class AudioFileController(BaseController):
     In-memory transforms should use AudioController, which produces AudioData
     objects that can then be saved through this controller.
 
+    Undo/redo operations require stateful mode (project_path must be provided).
+    In stateless mode, file operations still work but cannot be undone.
+
     Example:
+        # Stateless mode (no undo)
         file_ctrl = AudioFileController()
+
+        # Stateful mode (with undo support)
+        file_ctrl = AudioFileController(project_path="/path/to/project")
 
         # Open a file
         result = file_ctrl.open("recording.wav")
@@ -365,12 +372,12 @@ class AudioFileController(BaseController):
         # After processing with AudioController...
         save_result = file_ctrl.save(processed_audio, "output.wav")
 
-        # Undo the save
+        # Undo the save (only works in stateful mode)
         file_ctrl.undo()
     """
 
-    def __init__(self, max_undo_levels: int = 100):
-        super().__init__()
+    def __init__(self, project_path: Optional[str] = None, max_undo_levels: int = 100):
+        super().__init__(project_path=project_path)
         self._undo_manager = UndoManager(max_history=max_undo_levels)
         self._temp_dir: Optional[Path] = None
 
@@ -667,9 +674,16 @@ class AudioFileController(BaseController):
         """
         Undo the last file operation.
 
+        Requires stateful mode (--project flag in CLI).
+
         Returns:
             ControllerResult with undo status
         """
+        if not self.is_stateful:
+            return ControllerResult.fail(
+                "Undo requires --project flag to enable stateful mode"
+            )
+
         result = self._undo_manager.undo()
         if result is None:
             return ControllerResult.fail("Nothing to undo")
@@ -681,9 +695,16 @@ class AudioFileController(BaseController):
         """
         Redo the last undone operation.
 
+        Requires stateful mode (--project flag in CLI).
+
         Returns:
             ControllerResult with redo status
         """
+        if not self.is_stateful:
+            return ControllerResult.fail(
+                "Redo requires --project flag to enable stateful mode"
+            )
+
         result = self._undo_manager.redo()
         if result is None:
             return ControllerResult.fail("Nothing to redo")

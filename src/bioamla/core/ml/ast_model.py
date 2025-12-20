@@ -138,7 +138,7 @@ class ASTModel(BaseAudioModel):
 
         # Split into segments
         clip_samples = int(self.config.clip_duration * self.config.sample_rate)
-        overlap_samples = int(self.config.overlap * self.config.sample_rate)
+        int(self.config.overlap * self.config.sample_rate)
 
         if waveform.shape[1] <= clip_samples:
             # Single segment

@@ -9,12 +9,18 @@ from bioamla.core.files import TextFile
 
 
 class ConfigContext:
-    """Context object to hold configuration."""
+    """Context object to hold configuration and project context."""
 
     def __init__(self):
         self.config = None
         self.start_time = None
         self.command_args = None
+        self.project_path = None  # Injected project path (None = stateless)
+
+    @property
+    def is_stateful(self) -> bool:
+        """Check if running in stateful mode (project injected)."""
+        return self.project_path is not None
 
 
 pass_config = click.make_pass_decorator(ConfigContext, ensure=True)
@@ -24,9 +30,20 @@ pass_config = click.make_pass_decorator(ConfigContext, ensure=True)
 @click.option(
     "--config", "config_path", type=click.Path(exists=True), help="Path to TOML configuration file"
 )
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Project directory for logging/caching (enables stateful mode)",
+)
 @click.pass_context
-def cli(ctx, config_path: Optional[str]):
+def cli(ctx, config_path: Optional[str], project_path: Optional[str]):
     """Bioamla CLI - Bioacoustics and Machine Learning Applications
+
+    By default, commands run statelessly (no logging, caching, or undo).
+
+    To enable stateful mode with command history, run tracking, and undo:
+      bioamla --project /path/to/project <command>
 
     Configuration can be provided via:
     - --config option pointing to a TOML file
@@ -37,6 +54,7 @@ def cli(ctx, config_path: Optional[str]):
     # Capture start time and args for command logging
     ctx.obj.start_time = time.time()
     ctx.obj.command_args = sys.argv[1:] if len(sys.argv) > 1 else []
+    ctx.obj.project_path = project_path  # None = stateless, path = stateful
 
     if config_path:
         ctx.obj.config = load_config(config_path)
@@ -48,23 +66,17 @@ def cli(ctx, config_path: Optional[str]):
 @cli.result_callback()
 @click.pass_context
 def log_command_result(ctx, result, **kwargs):
-    """Log command execution after completion."""
+    """Log command execution after completion (only in stateful mode)."""
     from bioamla.core.command_log import CommandLogger, create_command_entry
-    from bioamla.core.project import is_in_project
 
-    # Only log if in a project
-    if not is_in_project():
+    # Only log if project was injected (stateful mode)
+    if not ctx.obj or not ctx.obj.is_stateful:
         return result
 
     # Get timing info
     duration = 0.0
-    if ctx.obj and ctx.obj.start_time:
+    if ctx.obj.start_time:
         duration = time.time() - ctx.obj.start_time
-
-    # Build command string from invoked subcommand
-    command_parts = []
-    if ctx.invoked_subcommand:
-        command_parts.append(ctx.invoked_subcommand)
 
     # Get full command from sys.argv
     args = ctx.obj.command_args if ctx.obj else []
@@ -78,7 +90,8 @@ def log_command_result(ctx, result, **kwargs):
         duration_seconds=duration,
     )
 
-    logger = CommandLogger()
+    # Log to the injected project
+    logger = CommandLogger(project_root=ctx.obj.project_path)
     logger.log_command(entry)
 
     return result
@@ -478,7 +491,7 @@ def project_init(path, name, description, template, config_file, force):
         click.echo("  bioamla config show")
     except Exception as e:
         print_error(f"Failed to create project: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @project.command("status")
@@ -785,10 +798,17 @@ def ast_predict(
             workers=workers,
         )
     else:
-        from bioamla.core.detection.ast import wav_ast_inference
+        from bioamla.controllers.inference import InferenceController
 
-        prediction = wav_ast_inference(path, model_path, resample_freq)
-        click.echo(f"{prediction}")
+        controller = InferenceController(model_path=model_path)
+        result = controller.predict(filepath=path)
+
+        if not result.success:
+            click.echo(f"Error: {result.error}")
+            raise SystemExit(1)
+
+        for pred in result.data:
+            click.echo(f"{pred.predicted_label} ({pred.confidence:.4f})")
 
 
 def _run_batch_inference(
@@ -1033,7 +1053,6 @@ def ast_train(
     logging_dir = training_dir + "/logs"
     best_model_path = training_dir + "/best_model"
 
-    mlflow_run = None
     if mlflow_tracking_uri or mlflow_experiment_name:
         try:
             import mlflow
@@ -1074,11 +1093,11 @@ def ast_train(
         dataset = load_dataset(train_dataset, split=split)
 
     if isinstance(dataset, Dataset):
-        class_names = sorted(list(set(dataset[category_label_column])))
+        class_names = sorted(set(dataset[category_label_column]))
     elif isinstance(dataset, DatasetDict):
         first_split_name = list(dataset.keys())[0]
         first_split = dataset[first_split_name]
-        class_names = sorted(list(set(first_split[category_label_column])))
+        class_names = sorted(set(first_split[category_label_column]))
     else:
         raise TypeError("Dataset must be a Dataset or DatasetDict instance")
 
@@ -1109,7 +1128,7 @@ def ast_train(
         return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
     label2id = {name: idx for idx, name in enumerate(class_names)}
-    id2label = {idx: name for idx, name in enumerate(class_names)}
+    dict(enumerate(class_names))
 
     test_size = 0.2
     if isinstance(dataset, Dataset):
@@ -1424,10 +1443,10 @@ def ast_evaluate(
 
     except FileNotFoundError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except ValueError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @models.command("list")
@@ -1506,7 +1525,7 @@ def predict_generic(
         model = load_model(model_type, model_path, config, use_fp16=fp16)
     except Exception as e:
         click.echo(f"Error loading model: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if batch:
         path = Path(path)
@@ -1629,7 +1648,7 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
         model = load_model(model_type, model_path, config)
     except Exception as e:
         click.echo(f"Error loading model: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if batch:
         path = Path(path)
@@ -1779,7 +1798,7 @@ def train_cnn(
         click.echo(f"\nTraining complete! Model saved to {output_dir}")
     except Exception as e:
         click.echo(f"Training error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @models.command("convert")
@@ -1815,7 +1834,7 @@ def models_convert(input_path, output_path, output_format, model_type):
         click.echo(f"Model saved to {result}")
     except Exception as e:
         click.echo(f"Conversion error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @models.command("info")
@@ -1842,12 +1861,42 @@ def models_info(model_path, model_type):
             )
     except Exception as e:
         click.echo(f"Error loading model: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 # =============================================================================
 # Audio Command Group
 # =============================================================================
+
+# Shared controller instance for undo/redo support across audio commands
+# This allows the undo/redo history to persist across multiple CLI invocations
+# within the same session (e.g., when using the CLI interactively)
+# Key is project_path (None for stateless, path string for stateful)
+_audio_file_controllers: Dict[Optional[str], object] = {}
+
+
+def _get_audio_file_controller(project_path: Optional[str] = None):
+    """Get or create the shared AudioFileController instance for a project.
+
+    Args:
+        project_path: Project path for stateful mode, None for stateless.
+
+    Returns:
+        AudioFileController instance for the given project context.
+    """
+    global _audio_file_controllers
+    if project_path not in _audio_file_controllers:
+        from bioamla.controllers.audio_file import AudioFileController
+
+        _audio_file_controllers[project_path] = AudioFileController(project_path=project_path)
+    return _audio_file_controllers[project_path]
+
+
+def _get_audio_transform_controller():
+    """Get the AudioTransformController."""
+    from bioamla.controllers.audio_transform import AudioTransformController
+
+    return AudioTransformController()
 
 
 @cli.group()
@@ -1960,10 +2009,10 @@ def audio_convert(
                 click.echo(f"Converted {stats['files_converted']} files to {output}")
         except FileNotFoundError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
         except ValueError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
     else:
         # Single file conversion
@@ -1983,7 +2032,7 @@ def audio_convert(
                 click.echo(f"Converted: {result}")
         except ValueError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
 
 @audio.command("filter")
@@ -1995,7 +2044,8 @@ def audio_convert(
 @click.option("--highpass", default=None, type=float, help="Highpass cutoff frequency in Hz")
 @click.option("--order", default=5, type=int, help="Filter order (default: 5)")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet):
+@click.pass_context
+def audio_filter(ctx, path, output, batch, bandpass, lowpass, highpass, order, quiet):
     """Apply frequency filter to audio files."""
     from bioamla.core.audio.signal import (
         bandpass_filter,
@@ -2018,7 +2068,9 @@ def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet)
             return highpass_filter(audio, sr, highpass, order)
         return audio
 
-    _run_signal_processing(path, output, batch, processor, quiet, "filter")
+    _run_signal_processing(
+        path, output, batch, processor, quiet, "filter", project_path=ctx.obj.project_path
+    )
 
 
 @audio.command("denoise")
@@ -2032,14 +2084,17 @@ def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet)
     "--strength", default=1.0, type=float, help="Noise reduction strength (0-2, default: 1.0)"
 )
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def audio_denoise(path, output, batch, method, strength, quiet):
+@click.pass_context
+def audio_denoise(ctx, path, output, batch, method, strength, quiet):
     """Apply noise reduction to audio files."""
     from bioamla.core.audio.signal import spectral_denoise
 
     def processor(audio, sr):
         return spectral_denoise(audio, sr, noise_reduce_factor=strength)
 
-    _run_signal_processing(path, output, batch, processor, quiet, "denoise")
+    _run_signal_processing(
+        path, output, batch, processor, quiet, "denoise", project_path=ctx.obj.project_path
+    )
 
 
 @audio.command("segment")
@@ -2204,7 +2259,8 @@ def audio_detect_events(path, output, quiet):
 @click.option("--target-db", default=-20, type=float, help="Target loudness in dB (default: -20)")
 @click.option("--peak", is_flag=True, help="Use peak normalization instead of RMS")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def audio_normalize(path, output, batch, target_db, peak, quiet):
+@click.pass_context
+def audio_normalize(ctx, path, output, batch, target_db, peak, quiet):
     """Normalize audio loudness."""
     from bioamla.core.audio.signal import normalize_loudness, peak_normalize
 
@@ -2214,7 +2270,9 @@ def audio_normalize(path, output, batch, target_db, peak, quiet):
             return peak_normalize(audio, target_peak=min(target_linear, 0.99))
         return normalize_loudness(audio, sr, target_db=target_db)
 
-    _run_signal_processing(path, output, batch, processor, quiet, "normalize")
+    _run_signal_processing(
+        path, output, batch, processor, quiet, "normalize", project_path=ctx.obj.project_path
+    )
 
 
 @audio.command("resample")
@@ -2223,14 +2281,18 @@ def audio_normalize(path, output, batch, target_db, peak, quiet):
 @click.option("--batch", is_flag=True, help="Process all files in directory")
 @click.option("--rate", required=True, type=int, help="Target sample rate in Hz")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def audio_resample(path, output, batch, rate, quiet):
+@click.pass_context
+def audio_resample(ctx, path, output, batch, rate, quiet):
     """Resample audio to a different sample rate."""
     from bioamla.core.audio.signal import resample_audio
 
     def processor(audio, sr):
         return resample_audio(audio, sr, rate)
 
-    _run_signal_processing(path, output, batch, processor, quiet, "resample", output_sr=rate)
+    _run_signal_processing(
+        path, output, batch, processor, quiet, "resample", output_sr=rate,
+        project_path=ctx.obj.project_path
+    )
 
 
 @audio.command("trim")
@@ -2244,7 +2306,8 @@ def audio_resample(path, output, batch, rate, quiet):
     "--threshold", default=-40, type=float, help="Silence threshold in dB (for --silence)"
 )
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
+@click.pass_context
+def audio_trim(ctx, path, output, batch, start, end, silence, threshold, quiet):
     """Trim audio by time or remove silence."""
     from bioamla.core.audio.signal import trim_audio, trim_silence
 
@@ -2257,7 +2320,9 @@ def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
             return trim_silence(audio, sr, threshold_db=threshold)
         return trim_audio(audio, sr, start_time=start, end_time=end)
 
-    _run_signal_processing(path, output, batch, processor, quiet, "trim")
+    _run_signal_processing(
+        path, output, batch, processor, quiet, "trim", project_path=ctx.obj.project_path
+    )
 
 
 @audio.command("analyze")
@@ -2438,7 +2503,7 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
             analysis = analyze_audio(str(path), silence_threshold_db=silence_threshold)
         except Exception as e:
             click.echo(f"Error analyzing file: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
         if output_format == "json":
             result = analysis.to_dict()
@@ -2488,15 +2553,32 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
                 click.echo(f"  Sound segments: {len(analysis.silence.sound_segments)}")
 
 
-def _run_signal_processing(path, output, batch, processor, quiet, operation, output_sr=None):
-    """Helper to run signal processing on file or directory."""
+def _run_signal_processing(
+    path, output, batch, processor, quiet, operation, output_sr=None, project_path=None
+):
+    """Helper to run signal processing on file or directory.
+
+    Uses AudioFileController for undo support on single file operations.
+    Batch operations use the direct signal processing functions.
+
+    Args:
+        path: Input file or directory path
+        output: Output file or directory path
+        batch: Whether to process all files in directory
+        processor: Function to process audio (audio, sr) -> processed_audio
+        quiet: Whether to suppress output
+        operation: Name of the operation for undo history
+        output_sr: Output sample rate (optional)
+        project_path: Project path for stateful mode (enables undo)
+    """
     from pathlib import Path
 
-    from bioamla.core.audio.signal import batch_process, load_audio, save_audio
+    from bioamla.core.audio.signal import batch_process
 
     path = Path(path)
 
     if batch:
+        # Batch mode: use direct signal processing (no undo support for batch)
         if output is None:
             output = str(path) + f"_{operation}"
 
@@ -2508,8 +2590,9 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
                 click.echo(f"Processed {stats['files_processed']} files to {stats['output_dir']}")
         except FileNotFoundError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
     else:
+        # Single file mode: use controllers for undo support
         if not path.exists():
             click.echo(f"Error: File not found: {path}")
             raise SystemExit(1)
@@ -2518,16 +2601,153 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
             output = str(path.with_stem(path.stem + f"_{operation}"))
 
         try:
-            audio, sr = load_audio(str(path))
-            processed = processor(audio, sr)
-            if output_sr:
-                sr = output_sr
-            save_audio(output, processed, sr)
+            file_ctrl = _get_audio_file_controller(project_path)
+
+            # Create a transform function that returns (processed_audio, sample_rate)
+            def transform(audio, sr):
+                processed = processor(audio, sr)
+                return processed, output_sr if output_sr else sr
+
+            # Use write_with_transform for undo support
+            result = file_ctrl.write_with_transform(
+                str(path), output, transform, transform_name=operation
+            )
+
+            if not result.success:
+                click.echo(f"Error: {result.error}")
+                raise SystemExit(1)
+
             if not quiet:
                 click.echo(f"Saved: {output}")
+                if file_ctrl.is_stateful and file_ctrl.can_undo:
+                    click.echo("(Use 'bioamla --project <path> audio undo' to revert)")
         except Exception as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
+
+
+# =============================================================================
+# Audio Undo/Redo Commands
+# =============================================================================
+
+
+@audio.command("undo")
+@click.option("--quiet", is_flag=True, help="Suppress output")
+@click.pass_context
+def audio_undo(ctx, quiet):
+    """Undo the last audio file operation.
+
+    Reverts the most recent audio file operation (resample, normalize, filter,
+    trim, denoise). This restores the previous state of the output file.
+
+    Requires --project flag to enable stateful mode with undo support.
+    Batch operations cannot be undone.
+
+    Examples:
+        bioamla --project . audio resample recording.wav --rate 16000
+        bioamla --project . audio undo  # Reverts the resample operation
+    """
+    file_ctrl = _get_audio_file_controller(ctx.obj.project_path)
+
+    if not file_ctrl.is_stateful:
+        click.echo("Error: Undo requires --project flag to enable stateful mode")
+        click.echo("Example: bioamla --project . audio undo")
+        raise SystemExit(1)
+
+    if not file_ctrl.can_undo:
+        click.echo("Nothing to undo")
+        raise SystemExit(1)
+
+    result = file_ctrl.undo()
+
+    if result.success:
+        if not quiet:
+            click.echo(f"Undone: {result.message}")
+            if file_ctrl.can_undo:
+                click.echo(f"({len(file_ctrl.undo_history)} operations remaining in history)")
+    else:
+        click.echo(f"Undo failed: {result.error}")
+        raise SystemExit(1)
+
+
+@audio.command("redo")
+@click.option("--quiet", is_flag=True, help="Suppress output")
+@click.pass_context
+def audio_redo(ctx, quiet):
+    """Redo the last undone audio file operation.
+
+    Re-applies the most recently undone audio file operation.
+
+    Requires --project flag to enable stateful mode with redo support.
+    Redo history is cleared when a new operation is performed.
+
+    Examples:
+        bioamla --project . audio undo
+        bioamla --project . audio redo  # Re-applies the undone operation
+    """
+    file_ctrl = _get_audio_file_controller(ctx.obj.project_path)
+
+    if not file_ctrl.is_stateful:
+        click.echo("Error: Redo requires --project flag to enable stateful mode")
+        click.echo("Example: bioamla --project . audio redo")
+        raise SystemExit(1)
+
+    if not file_ctrl.can_redo:
+        click.echo("Nothing to redo")
+        raise SystemExit(1)
+
+    result = file_ctrl.redo()
+
+    if result.success:
+        if not quiet:
+            click.echo(f"Redone: {result.message}")
+    else:
+        click.echo(f"Redo failed: {result.error}")
+        raise SystemExit(1)
+
+
+@audio.command("history")
+@click.option("--clear", is_flag=True, help="Clear the operation history")
+@click.pass_context
+def audio_history(ctx, clear):
+    """Show or clear the audio operation history.
+
+    Displays a list of undoable operations performed in the current session.
+
+    Requires --project flag to enable stateful mode with history tracking.
+
+    Examples:
+        bioamla --project . audio history        # Show operation history
+        bioamla --project . audio history --clear  # Clear the history
+    """
+    file_ctrl = _get_audio_file_controller(ctx.obj.project_path)
+
+    if not file_ctrl.is_stateful:
+        click.echo("Error: History requires --project flag to enable stateful mode")
+        click.echo("Example: bioamla --project . audio history")
+        raise SystemExit(1)
+
+    if clear:
+        file_ctrl.clear_history()
+        click.echo("History cleared")
+        return
+
+    history = file_ctrl.undo_history
+
+    if not history:
+        click.echo("No operations in history")
+        return
+
+    click.echo("Audio Operation History")
+    click.echo("=" * 50)
+    for i, description in enumerate(reversed(history), 1):
+        marker = " (most recent)" if i == 1 else ""
+        click.echo(f"  {i}. {description}{marker}")
+
+    click.echo()
+    click.echo(f"Total: {len(history)} operations")
+    if file_ctrl.can_undo:
+        click.echo("Use 'bioamla --project <path> audio undo' to revert the most recent operation")
 
 
 # =============================================================================
@@ -2692,10 +2912,341 @@ def audio_visualize(
                 click.echo(f"Generated {viz_type} spectrogram: {result}")
         except FileNotFoundError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
         except Exception as e:
             click.echo(f"Error generating spectrogram: {e}")
+            raise SystemExit(1) from e
+
+
+# =============================================================================
+# Pipeline Command Group
+# =============================================================================
+
+
+@cli.group()
+def pipeline():
+    """Pipeline execution and management.
+
+    Pipelines are TOML-based definitions that define a sequence of operations
+    to be executed on audio files. They support variables, dependencies,
+    and can be exported to shell scripts.
+    """
+    pass
+
+
+@pipeline.command("run")
+@click.argument("pipeline_path", type=click.Path(exists=True))
+@click.option(
+    "--var",
+    "-v",
+    multiple=True,
+    help="Set pipeline variable (format: key=value)",
+)
+@click.option(
+    "--validate/--no-validate",
+    default=True,
+    help="Validate pipeline before execution (default: yes)",
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def pipeline_run(pipeline_path, var, validate, quiet):
+    """Execute a pipeline from a TOML file.
+
+    Runs all steps defined in the pipeline file in the correct order,
+    respecting dependencies between steps.
+
+    Examples:
+        bioamla workflow run preprocessing.toml
+        bioamla workflow run analysis.toml -v input_dir=./audio -v output_dir=./results
+    """
+    from bioamla.controllers.pipeline import PipelineController
+
+    controller = PipelineController()
+
+    # Parse variables
+    variables = {}
+    for v in var:
+        if "=" in v:
+            key, value = v.split("=", 1)
+            variables[key] = value
+        else:
+            click.echo(f"Warning: Invalid variable format '{v}', expected key=value")
+
+    # Set up progress callback with Rich progress bar
+    if not quiet:
+        try:
+            from rich.console import Console
+            from rich.progress import (
+                BarColumn,
+                Progress,
+                SpinnerColumn,
+                TaskProgressColumn,
+                TextColumn,
+                TimeElapsedColumn,
+            )
+
+            console = Console()
+            progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.fields[step_name]}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                TimeElapsedColumn(),
+                TextColumn("[dim]{task.fields[status]}"),
+                console=console,
+                transient=False,
+            )
+
+            # Track progress state
+            progress_state = {"task_id": None, "started": False}
+
+            def progress_callback(step_name, current, total, status):
+                if not progress_state["started"]:
+                    progress.start()
+                    progress_state["started"] = True
+                    progress_state["task_id"] = progress.add_task(
+                        "workflow", total=total, step_name=step_name, status=status
+                    )
+                else:
+                    progress.update(
+                        progress_state["task_id"],
+                        completed=current,
+                        step_name=step_name,
+                        status=status,
+                    )
+
+            controller.set_execution_progress_callback(progress_callback)
+
+            # Execute workflow
+            result = controller.execute(
+                pipeline_path, variables=variables, validate_first=validate
+            )
+
+            # Stop progress bar
+            if progress_state["started"]:
+                progress.stop()
+
+        except ImportError:
+            # Fallback to simple output if Rich not available
+
+            def progress_callback(step_name, current, total, status):
+                click.echo(f"[{current}/{total}] {step_name}: {status}")
+
+            controller.set_execution_progress_callback(progress_callback)
+            result = controller.execute(
+                pipeline_path, variables=variables, validate_first=validate
+            )
+    else:
+        # Quiet mode - no progress output
+        result = controller.execute(
+            pipeline_path, variables=variables, validate_first=validate
+        )
+
+    if result.success:
+        data = result.data
+        click.echo()
+        click.echo("Pipeline completed successfully")
+        click.echo(f"  Workflow: {data.workflow_name}")
+        click.echo(f"  Status: {data.status}")
+        click.echo(f"  Duration: {data.total_duration:.2f}s")
+        click.echo(f"  Steps completed: {data.steps_completed}")
+        if data.steps_failed > 0:
+            click.echo(f"  Steps failed: {data.steps_failed}")
+    else:
+        click.echo(f"Pipeline failed: {result.error}")
+        raise SystemExit(1)
+
+
+@pipeline.command("validate")
+@click.argument("pipeline_path", type=click.Path(exists=True))
+@click.option("--strict", is_flag=True, help="Treat warnings as errors")
+def pipeline_validate(pipeline_path, strict):
+    """Validate a pipeline TOML file.
+
+    Checks the pipeline for syntax errors, missing dependencies,
+    unknown actions, and invalid parameters.
+
+    Examples:
+        bioamla workflow validate my_pipeline.toml
+        bioamla workflow validate my_pipeline.toml --strict
+    """
+    from bioamla.controllers.pipeline import PipelineController
+
+    controller = PipelineController()
+    result = controller.validate(pipeline_path, strict=strict)
+
+    if result.success:
+        data = result.data
+        if data.valid:
+            click.echo("Pipeline is valid")
+            if data.num_warnings > 0:
+                click.echo(f"\nWarnings ({data.num_warnings}):")
+                for warning in data.warnings:
+                    click.echo(f"  - {warning}")
+        else:
+            click.echo("Pipeline validation failed")
+            click.echo(f"\nErrors ({data.num_errors}):")
+            for error in data.errors:
+                click.echo(f"  - {error}")
+            if data.num_warnings > 0:
+                click.echo(f"\nWarnings ({data.num_warnings}):")
+                for warning in data.warnings:
+                    click.echo(f"  - {warning}")
             raise SystemExit(1)
+    else:
+        click.echo(f"Validation error: {result.error}")
+        raise SystemExit(1)
+
+
+@pipeline.command("export")
+@click.argument("pipeline_path", type=click.Path(exists=True))
+@click.option("--output", "-o", required=True, help="Output shell script path")
+@click.option("--quiet", is_flag=True, help="Suppress output")
+def pipeline_export(pipeline_path, output, quiet):
+    """Export a pipeline to a shell script.
+
+    Converts the pipeline TOML file to an executable shell script
+    that can be run without bioamla installed.
+
+    Examples:
+        bioamla workflow export preprocessing.toml -o run_preprocessing.sh
+    """
+    from bioamla.controllers.pipeline import PipelineController
+
+    controller = PipelineController()
+    result = controller.export_to_shell(pipeline_path, output_path=output)
+
+    if result.success:
+        if not quiet:
+            click.echo(f"Exported pipeline to: {output}")
+    else:
+        click.echo(f"Export failed: {result.error}")
+        raise SystemExit(1)
+
+
+@pipeline.command("list-actions")
+def pipeline_list_actions():
+    """List all available pipeline actions.
+
+    Shows the actions that can be used in pipeline step definitions.
+    """
+    from bioamla.controllers.pipeline import PipelineController
+
+    controller = PipelineController()
+    result = controller.list_actions()
+
+    if result.success:
+        actions = sorted(result.data)
+        click.echo("Available Pipeline Actions")
+        click.echo("=" * 50)
+
+        # Group by category
+        categories = {}
+        for action in actions:
+            if "." in action:
+                category, _ = action.split(".", 1)
+            else:
+                category = "other"
+            categories.setdefault(category, []).append(action)
+
+        for category in sorted(categories.keys()):
+            click.echo(f"\n{category}:")
+            for action in sorted(categories[category]):
+                click.echo(f"  - {action}")
+
+        click.echo(f"\nTotal: {len(actions)} actions")
+    else:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+
+@pipeline.command("example")
+@click.option("--output", "-o", default=None, help="Output file path (default: stdout)")
+def pipeline_example(output):
+    """Show an example pipeline TOML file.
+
+    Displays a sample pipeline that demonstrates the pipeline format
+    and available options.
+
+    Examples:
+        bioamla pipeline example                   # Print to stdout
+        bioamla pipeline example -o my_pipeline.toml  # Save to file
+    """
+    from bioamla.controllers.pipeline import PipelineController
+
+    controller = PipelineController()
+    result = controller.get_example_pipeline()
+
+    if result.success:
+        if output:
+            from pathlib import Path
+
+            Path(output).write_text(result.data)
+            click.echo(f"Example pipeline saved to: {output}")
+        else:
+            click.echo(result.data)
+    else:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+
+@pipeline.command("templates")
+def pipeline_templates():
+    """List available pipeline templates.
+
+    Shows all built-in pipeline templates that can be used as starting
+    points for your own workflows.
+
+    Examples:
+        bioamla pipeline templates
+    """
+    from bioamla._internal.pipelines import list_pipeline_templates
+
+    templates = list_pipeline_templates()
+
+    if not templates:
+        click.echo("No pipeline templates found.")
+        return
+
+    click.echo("Available pipeline templates:\n")
+    for template in templates:
+        click.echo(f"  {template['name']}")
+        if template["description"]:
+            click.echo(f"    {template['description']}")
+        click.echo()
+
+    click.echo(f"Use 'bioamla pipeline template <name>' to view a template")
+    click.echo(f"Use 'bioamla pipeline template <name> -o file.toml' to copy")
+
+
+@pipeline.command("template")
+@click.argument("name")
+@click.option("--output", "-o", default=None, help="Output file path (default: stdout)")
+def pipeline_template(name, output):
+    """View or copy a pipeline template.
+
+    Displays a built-in pipeline template that can be customized for your needs.
+
+    Examples:
+        bioamla pipeline template bird_detection
+        bioamla pipeline template audio_preprocessing -o my_pipeline.toml
+    """
+    from pathlib import Path
+
+    from bioamla._internal.pipelines import get_pipeline_template
+
+    try:
+        content = get_pipeline_template(name)
+
+        if output:
+            Path(output).write_text(content)
+            click.echo(f"Pipeline template '{name}' saved to: {output}")
+        else:
+            click.echo(content)
+
+    except FileNotFoundError:
+        click.echo(f"Template not found: {name}")
+        click.echo("Use 'bioamla pipeline templates' to list available templates")
+        raise SystemExit(1)
 
 
 # =============================================================================
@@ -2791,7 +3342,7 @@ def inat_download(
     quiet: bool,
 ):
     """Download audio observations from iNaturalist."""
-    from bioamla.core.services.inaturalist import download_inat_audio
+    from bioamla.controllers.inaturalist import INaturalistController
 
     taxon_ids_list = None
     if taxon_ids:
@@ -2805,7 +3356,8 @@ def inat_download(
     if sound_license:
         sound_license_list = [lic.strip() for lic in sound_license.split(",")]
 
-    stats = download_inat_audio(
+    controller = INaturalistController()
+    result = controller.download(
         output_dir=output_dir,
         taxon_ids=taxon_ids_list,
         taxon_csv=taxon_csv,
@@ -2819,14 +3371,22 @@ def inat_download(
         d2=end_date,
         obs_per_taxon=obs_per_taxon,
         organize_by_taxon=organize_by_taxon,
-        include_inat_metadata=include_inat_metadata,
+        include_metadata=include_inat_metadata,
         file_extensions=extensions_list,
-        delay_between_downloads=delay,
-        verbose=not quiet,
     )
 
-    if quiet:
-        click.echo(f"Downloaded {stats['total_sounds']} audio files to {stats['output_dir']}")
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    if not quiet:
+        click.echo(f"Downloaded {result.data.total_sounds} audio files to {result.data.output_dir}")
+        if result.data.skipped_existing > 0:
+            click.echo(f"  Skipped {result.data.skipped_existing} existing files")
+        if result.data.failed_downloads > 0:
+            click.echo(f"  Failed: {result.data.failed_downloads}")
+    else:
+        click.echo(f"Downloaded {result.data.total_sounds} audio files to {result.data.output_dir}")
 
 
 @services_inat.command("search")
@@ -2857,14 +3417,15 @@ def inat_search(
     quiet: bool,
 ):
     """Search for iNaturalist observations."""
-    from bioamla.core.services.inaturalist import search_inat_sounds
+    from bioamla.controllers.inaturalist import INaturalistController
 
     if not species and not taxon_id and not place_id and not project_id:
         raise click.UsageError(
             "At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)"
         )
 
-    results = search_inat_sounds(
+    controller = INaturalistController()
+    result = controller.search(
         taxon_id=taxon_id,
         taxon_name=species,
         place_id=place_id,
@@ -2872,7 +3433,12 @@ def inat_search(
         per_page=limit,
     )
 
-    if not results:
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    observations = result.data.observations
+    if not observations:
         click.echo("No observations found matching the search criteria.")
         return
 
@@ -2891,7 +3457,7 @@ def inat_search(
             ]
             writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
-            for obs in results:
+            for obs in observations:
                 taxon = obs.get("taxon", {})
                 observed_on_raw = obs.get("observed_on", "")
                 if hasattr(observed_on_raw, "strftime"):
@@ -2909,12 +3475,12 @@ def inat_search(
                         "url": f"https://www.inaturalist.org/observations/{obs.get('id')}",
                     }
                 )
-        click.echo(f"Saved {len(results)} observations to {output}")
+        click.echo(f"Saved {len(observations)} observations to {output}")
     else:
-        click.echo(f"\nFound {len(results)} observations with sounds:\n")
+        click.echo(f"\nFound {len(observations)} observations with sounds:\n")
         click.echo(f"{'ID':<12} {'Species':<30} {'Sounds':<8} {'Date':<12} {'Location':<30}")
         click.echo("-" * 95)
-        for obs in results:
+        for obs in observations:
             taxon = obs.get("taxon", {})
             obs_id = obs.get("id", "")
             name = taxon.get("name", "Unknown")[:28]
@@ -2936,27 +3502,34 @@ def inat_stats(project_id: str, output: str, quiet: bool):
     """Get statistics for an iNaturalist project."""
     import json
 
-    from bioamla.core.services.inaturalist import get_project_stats
+    from bioamla.controllers.inaturalist import INaturalistController
 
-    stats = get_project_stats(project_id=project_id, verbose=not quiet)
+    controller = INaturalistController()
+    result = controller.get_project_stats(project_id=project_id)
+
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    stats = result.data
 
     if output:
         with TextFile(output, mode="w", encoding="utf-8") as f:
-            json.dump(stats, f.handle, indent=2)
+            json.dump(stats.to_dict(), f.handle, indent=2)
         click.echo(f"Saved project stats to {output}")
     elif quiet:
-        click.echo(json.dumps(stats, indent=2))
+        click.echo(json.dumps(stats.to_dict(), indent=2))
     else:
-        click.echo(f"\nProject: {stats['title']}")
-        click.echo(f"URL: {stats['url']}")
-        click.echo(f"Type: {stats['project_type']}")
-        if stats["place"]:
-            click.echo(f"Place: {stats['place']}")
-        click.echo(f"Created: {stats['created_at']}")
+        click.echo(f"\nProject: {stats.title}")
+        click.echo(f"URL: {stats.url}")
+        click.echo(f"Type: {stats.project_type}")
+        if stats.place:
+            click.echo(f"Place: {stats.place}")
+        click.echo(f"Created: {stats.created_at}")
         click.echo("\nStatistics:")
-        click.echo(f"  Observations: {stats['observation_count']}")
-        click.echo(f"  Species: {stats['species_count']}")
-        click.echo(f"  Observers: {stats['observers_count']}")
+        click.echo(f"  Observations: {stats.observation_count}")
+        click.echo(f"  Species: {stats.species_count}")
+        click.echo(f"  Observers: {stats.observers_count}")
 
 
 # =============================================================================
@@ -3069,7 +3642,7 @@ def dataset_license(
             )
         except FileNotFoundError as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
         if stats["datasets_found"] == 0:
             click.echo("No datasets found (no directories with metadata.csv)")
@@ -3118,7 +3691,7 @@ def dataset_license(
             )
         except (FileNotFoundError, ValueError) as e:
             click.echo(f"Error: {e}")
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
         if not quiet:
             click.echo(f"License file generated: {stats['output_path']}")
@@ -3249,10 +3822,10 @@ def dataset_augment(
             )
     except FileNotFoundError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"Error during augmentation: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @dataset.command("download")
@@ -3342,7 +3915,7 @@ def _get_folder_size(path: str, limit: int | None = None) -> int:
     import os
 
     total_size = 0
-    for dirpath, dirnames, filenames in os.walk(path):
+    for dirpath, _dirnames, filenames in os.walk(path):
         for filename in filenames:
             filepath = os.path.join(dirpath, filename)
             if os.path.isfile(filepath):
@@ -3365,7 +3938,7 @@ def _count_files(path: str, limit: int | None = None) -> int:
     import os
 
     count = 0
-    for dirpath, dirnames, filenames in os.walk(path):
+    for _dirpath, _dirnames, filenames in os.walk(path):
         count += len(filenames)
         if limit is not None and count > limit:
             return count
@@ -3451,7 +4024,7 @@ def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str):
     except Exception as e:
         click.echo(f"Error pushing to HuggingFace Hub: {e}")
         click.echo("Make sure you are logged in with 'huggingface-cli login'.")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 # =============================================================================
@@ -3930,7 +4503,7 @@ def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str)
     except Exception as e:
         click.echo(f"Error pushing to HuggingFace Hub: {e}")
         click.echo("Make sure you are logged in with 'huggingface-cli login'.")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 # --- Xeno-canto subgroup ---
@@ -3976,10 +4549,10 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
         )
     except ValueError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"API error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if not results:
         click.echo("No recordings found.")
@@ -4035,10 +4608,10 @@ def xc_download(species, genus, country, quality, max_recordings, output_dir, de
         )
     except ValueError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"API error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if not results:
         click.echo("No recordings found.")
@@ -4098,10 +4671,10 @@ def ml_search(species_code, scientific_name, region, min_rating, max_results, ou
         )
     except ValueError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"API error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if not results:
         click.echo("No recordings found.")
@@ -4148,10 +4721,10 @@ def ml_download(species_code, scientific_name, region, min_rating, max_recording
         )
     except ValueError as e:
         click.echo(f"Error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"API error: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if not results:
         click.echo("No recordings found.")
@@ -4322,7 +4895,9 @@ def indices():
 @click.option("--bio-max-freq", default=8000.0, type=float, help="BIO maximum frequency (Hz)")
 @click.option("--db-threshold", default=-50.0, type=float, help="dB threshold for ADI/AEI")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@click.pass_context
 def indices_compute(
+    ctx,
     path,
     output,
     output_format,
@@ -4348,11 +4923,12 @@ def indices_compute(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.core.analysis.indices import batch_compute_indices, compute_indices_from_file
+    from bioamla.controllers.audio_file import AudioFileController
+    from bioamla.controllers.indices import IndicesController
 
     path_obj = PathLib(path)
 
-    # Build kwargs
+    # Build kwargs for index calculations
     kwargs = {
         "n_fft": n_fft,
         "aci_min_freq": aci_min_freq,
@@ -4363,28 +4939,49 @@ def indices_compute(
     if aci_max_freq:
         kwargs["aci_max_freq"] = aci_max_freq
 
+    # Get project path from context for stateful mode
+    project_path = ctx.obj.project_path if ctx.obj else None
+    indices_ctrl = IndicesController()
+
     if path_obj.is_file():
-        # Single file
-        try:
-            indices_result = compute_indices_from_file(path_obj, **kwargs)
-            # Build result with filepath first, success last for better CSV column order
-            result = {"filepath": str(path_obj)}
-            result.update(indices_result.to_dict())
-            result["success"] = True
-            results = [result]
-        except Exception as e:
-            click.echo(f"Error processing {path}: {e}")
+        # Single file mode - use controller
+        file_ctrl = AudioFileController(project_path=project_path)
+        load_result = file_ctrl.open(str(path_obj))
+
+        if not load_result.success:
+            click.echo(f"Error loading {path}: {load_result.error}")
             raise SystemExit(1)
+
+        calc_result = indices_ctrl.calculate(load_result.data, include_entropy=True, **kwargs)
+
+        if not calc_result.success:
+            click.echo(f"Error computing indices: {calc_result.error}")
+            raise SystemExit(1)
+
+        result = {"filepath": str(path_obj)}
+        result.update(calc_result.data.to_dict())
+        result["success"] = True
+        results = [result]
     else:
-        # Directory - find audio files
-        audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
-        files = [f for f in path_obj.rglob("*") if f.suffix.lower() in audio_extensions]
+        # Directory - use batch processing
+        batch_result = indices_ctrl.calculate_batch(
+            str(path_obj),
+            output_path=output if output else None,
+            recursive=True,
+            include_entropy=True,
+            **kwargs,
+        )
 
-        if not files:
-            click.echo(f"No audio files found in {path}")
+        if not batch_result.success:
+            click.echo(f"Error: {batch_result.error}")
             raise SystemExit(1)
 
-        results = batch_compute_indices(files, verbose=not quiet, **kwargs)
+        results = batch_result.data.results
+
+        # If output was specified and saved by controller, inform user
+        if output and batch_result.data.output_path:
+            click.echo(f"Results saved to {batch_result.data.output_path}")
+            return
 
     # Filter successful results for output
     successful = [r for r in results if r.get("success", False)]
@@ -4418,9 +5015,10 @@ def indices_compute(
                 click.echo(f"  AEI:  {r['aei']:.3f}")
                 click.echo(f"  BIO:  {r['bio']:.2f}")
                 click.echo(f"  NDSI: {r['ndsi']:.3f}")
-                if r.get("anthrophony"):
-                    click.echo(f"  Anthrophony: {r['anthrophony']:.2f}")
-                    click.echo(f"  Biophony: {r['biophony']:.2f}")
+                if r.get("h_spectral"):
+                    click.echo(f"  H (spectral): {r['h_spectral']:.3f}")
+                if r.get("h_temporal"):
+                    click.echo(f"  H (temporal): {r['h_temporal']:.3f}")
             else:
                 click.echo(
                     f"\n{r.get('filepath', 'Unknown')}: Error - {r.get('error', 'Unknown error')}"
@@ -4445,7 +5043,8 @@ def indices_compute(
     help="Output format",
 )
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def indices_temporal(path, window, hop, output, output_format, quiet):
+@click.pass_context
+def indices_temporal(ctx, path, window, hop, output, output_format, quiet):
     """Compute acoustic indices over time windows.
 
     Useful for analyzing how soundscape characteristics change over time
@@ -4457,29 +5056,39 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
     """
     import json as json_lib
 
-    import librosa
+    from bioamla.controllers.audio_file import AudioFileController
+    from bioamla.controllers.indices import IndicesController
 
-    from bioamla.core.analysis.indices import temporal_indices
+    # Get project path from context for stateful mode
+    project_path = ctx.obj.project_path if ctx.obj else None
+    file_ctrl = AudioFileController(project_path=project_path)
+    indices_ctrl = IndicesController()
 
-    try:
-        audio, sample_rate = librosa.load(path, sr=None, mono=True)
-    except Exception as e:
-        click.echo(f"Error loading audio: {e}")
+    # Load audio using controller
+    load_result = file_ctrl.open(path)
+    if not load_result.success:
+        click.echo(f"Error loading audio: {load_result.error}")
         raise SystemExit(1)
 
-    duration = len(audio) / sample_rate
+    audio_data = load_result.data
 
     if not quiet:
         click.echo(f"Processing {path}")
-        click.echo(f"Duration: {duration:.1f}s, Sample rate: {sample_rate} Hz")
+        click.echo(f"Duration: {audio_data.duration:.1f}s, Sample rate: {audio_data.sample_rate} Hz")
         click.echo(f"Window: {window}s, Hop: {hop or window}s")
 
-    results = temporal_indices(
-        audio,
-        sample_rate,
+    # Calculate temporal indices using controller
+    temporal_result = indices_ctrl.calculate_temporal(
+        audio_data,
         window_duration=window,
         hop_duration=hop,
     )
+
+    if not temporal_result.success:
+        click.echo(f"Error: {temporal_result.error}")
+        raise SystemExit(1)
+
+    results = temporal_result.data.windows
 
     if not results:
         click.echo("No complete windows in recording (audio shorter than window duration)")
@@ -4538,7 +5147,7 @@ def indices_aci(path, min_freq, max_freq, n_fft):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     kwargs = {"n_fft": n_fft, "min_freq": min_freq}
     if max_freq:
@@ -4571,7 +5180,7 @@ def indices_adi(path, max_freq, freq_step, db_threshold):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     adi = compute_adi(
         audio, sample_rate, max_freq=max_freq, freq_step=freq_step, db_threshold=db_threshold
@@ -4602,7 +5211,7 @@ def indices_aei(path, max_freq, freq_step, db_threshold):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     aei = compute_aei(
         audio, sample_rate, max_freq=max_freq, freq_step=freq_step, db_threshold=db_threshold
@@ -4632,7 +5241,7 @@ def indices_bio(path, min_freq, max_freq):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     bio = compute_bio(audio, sample_rate, min_freq=min_freq, max_freq=max_freq)
     click.echo(f"BIO: {bio:.2f}")
@@ -4662,7 +5271,7 @@ def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     ndsi, anthro, bio = compute_ndsi(
         audio,
@@ -4700,7 +5309,7 @@ def indices_entropy(path, spectral, temporal):
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
     except Exception as e:
         click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     # Default to both if neither specified
     if not spectral and not temporal:
@@ -5452,7 +6061,7 @@ def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: b
 
     # Load state to determine sampler type
     with TextFile(state_file, mode="r", encoding="utf-8") as f:
-        state_data = json.load(f.handle)
+        json.load(f.handle)
 
     # Default to entropy sampler
     sampler = UncertaintySampler(strategy="entropy")
@@ -6055,6 +6664,7 @@ def ebird_nearby(
 ):
     """Get recent eBird observations near a location."""
     import csv
+    from pathlib import Path
 
     from bioamla.core.integrations import EBirdClient
 
@@ -6202,13 +6812,13 @@ def train_spec(
     )
 
     if model == "cnn":
-        classifier = CNNClassifier(n_classes=n_classes)
+        CNNClassifier(n_classes=n_classes)
     elif model == "crnn":
-        classifier = CRNNClassifier(n_classes=n_classes)
+        CRNNClassifier(n_classes=n_classes)
     else:
-        classifier = AttentionClassifier(n_classes=n_classes)
+        AttentionClassifier(n_classes=n_classes)
 
-    config = TrainerConfig(
+    TrainerConfig(
         epochs=epochs,
         batch_size=batch_size,
         learning_rate=lr,
@@ -6264,9 +6874,9 @@ def models_ensemble(model_dirs, output: str, strategy: str, weights):
 
 @cli.group()
 def examples():
-    """Access example workflow scripts.
+    """Access example pipeline scripts.
 
-    Example workflows demonstrate bioamla capabilities and can be copied
+    Example pipelines demonstrate bioamla capabilities and can be copied
     to your project directory for customization.
 
     \b
@@ -6281,7 +6891,7 @@ def examples():
 
 @examples.command("list")
 def examples_list():
-    """List all available example workflows."""
+    """List all available example pipelines."""
     from rich.table import Table
 
     from bioamla._internal.examples import list_examples
@@ -6303,7 +6913,7 @@ def examples_list():
 @examples.command("show")
 @click.argument("example_id")
 def examples_show(example_id: str):
-    """Show the content of an example workflow.
+    """Show the content of an example pipeline.
 
     EXAMPLE_ID: The example ID (e.g., 00, 01, 02) or filename
     """
@@ -6325,7 +6935,7 @@ def examples_show(example_id: str):
         syntax = Syntax(content, "bash", theme="monokai", line_numbers=True)
         console.print(syntax)
     except ValueError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
 
 @examples.command("copy")
@@ -6333,7 +6943,7 @@ def examples_show(example_id: str):
 @click.argument("output_dir", type=click.Path())
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing files")
 def examples_copy(example_id: str, output_dir: str, force: bool):
-    """Copy an example workflow to a directory.
+    """Copy an example pipeline to a directory.
 
     EXAMPLE_ID: The example ID (e.g., 00, 01, 02)
     OUTPUT_DIR: Directory to copy the example to
@@ -6345,8 +6955,8 @@ def examples_copy(example_id: str, output_dir: str, force: bool):
     try:
         content = get_example_content(example_id)
         filename = EXAMPLES[example_id][0]
-    except (ValueError, KeyError):
-        raise click.ClickException(f"Example not found: {example_id}")
+    except (ValueError, KeyError) as e:
+        raise click.ClickException(f"Example not found: {example_id}") from e
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -6365,7 +6975,7 @@ def examples_copy(example_id: str, output_dir: str, force: bool):
 @click.argument("output_dir", type=click.Path())
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing files")
 def examples_copy_all(output_dir: str, force: bool):
-    """Copy all example workflows to a directory.
+    """Copy all example pipelines to a directory.
 
     OUTPUT_DIR: Directory to copy examples to
     """

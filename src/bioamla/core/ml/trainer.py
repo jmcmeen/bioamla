@@ -457,7 +457,7 @@ class ModelTrainer:
         correct = 0
         total = 0
 
-        for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+        for _batch_idx, (inputs, targets) in enumerate(self.train_loader):
             inputs = inputs.to(self.device)
             targets = targets.to(self.device)
 
@@ -526,7 +526,7 @@ class ModelTrainer:
                 "sample_rate": self.config.sample_rate,
                 "clip_duration": self.config.clip_duration,
             },
-            "id2label": {i: name for i, name in enumerate(self.config.class_names)},
+            "id2label": dict(enumerate(self.config.class_names)),
             "label2id": {name: i for i, name in enumerate(self.config.class_names)},
         }
 
