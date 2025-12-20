@@ -12,6 +12,18 @@ Components:
     - CommandResult: Structured result from command execution
     - FileBackupMixin: Helper for file backup/restore operations
 
+Audio Commands:
+    - ResampleCommand: Resample audio to different sample rate
+    - NormalizeCommand: Normalize audio amplitude (peak or loudness)
+    - FilterCommand: Apply frequency filters (lowpass, highpass, bandpass)
+    - TrimCommand: Trim audio to time range
+    - TrimSilenceCommand: Remove silence from audio
+    - DenoiseCommand: Apply spectral noise reduction
+    - GainCommand: Adjust audio volume
+    - ConvertToMonoCommand: Convert stereo to mono
+    - PipelineCommand: Execute a chain of audio operations
+    - AudioProcessingPipeline: Builder for audio pipelines
+
 Usage:
     from bioamla.commands import Command, UndoManager, CommandResult
 
@@ -35,6 +47,20 @@ Usage:
     manager = UndoManager()
     result = manager.execute(MyCommand())
     manager.undo()
+
+Audio Command Example:
+    from bioamla.commands import UndoManager, ResampleCommand, AudioProcessingPipeline
+
+    manager = UndoManager()
+
+    # Single operation
+    cmd = ResampleCommand("input.wav", "output.wav", 16000)
+    manager.execute(cmd)
+
+    # Pipeline of operations
+    pipeline = AudioProcessingPipeline("input.wav", "output.wav")
+    pipeline.resample(16000).bandpass(500, 8000).normalize()
+    manager.execute(pipeline.build())
 """
 
 from .base import (
@@ -47,7 +73,21 @@ from .base import (
     UndoManager,
 )
 
+from .audio import (
+    AudioProcessingPipeline,
+    ConvertToMonoCommand,
+    DenoiseCommand,
+    FilterCommand,
+    GainCommand,
+    NormalizeCommand,
+    PipelineCommand,
+    ResampleCommand,
+    TrimCommand,
+    TrimSilenceCommand,
+)
+
 __all__ = [
+    # Base
     "Command",
     "CommandInfo",
     "CommandResult",
@@ -55,4 +95,15 @@ __all__ = [
     "CompositeCommand",
     "FileBackupMixin",
     "UndoManager",
+    # Audio
+    "AudioProcessingPipeline",
+    "ConvertToMonoCommand",
+    "DenoiseCommand",
+    "FilterCommand",
+    "GainCommand",
+    "NormalizeCommand",
+    "PipelineCommand",
+    "ResampleCommand",
+    "TrimCommand",
+    "TrimSilenceCommand",
 ]
