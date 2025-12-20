@@ -10,17 +10,19 @@ Features:
 - Disk-based caching with TTL support
 - Automatic retry with exponential backoff
 - Unified HTTP client with timeout and error handling
+- @config_aware decorator for configuration-driven API methods
 """
 
 import functools
 import hashlib
+import inspect
 import json
 import pickle
 import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, TypeVar, Union
+from typing import Any, Callable, Dict, Optional, Tuple, TypeVar, Union
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -32,6 +34,232 @@ from bioamla.core.logger import get_logger
 logger = get_logger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+
+# =============================================================================
+# Configuration-Aware Decorator
+# =============================================================================
+
+
+def config_aware(
+    section: str,
+    mapping: Optional[Dict[str, str]] = None,
+) -> Callable[[F], F]:
+    """
+    Decorator to make API methods configuration-aware.
+
+    This decorator allows function parameters to automatically use
+    configuration values as defaults. When a parameter is not explicitly
+    provided (i.e., remains at its default value of None), the decorator
+    looks up the corresponding configuration key and uses that value.
+
+    Args:
+        section: Configuration section to read from (e.g., "audio", "inference")
+        mapping: Optional mapping of parameter names to config keys.
+                 If not provided, parameter names are used as config keys.
+
+    Returns:
+        Decorated function that pulls defaults from configuration
+
+    Example:
+        @config_aware("audio")
+        def process_audio(
+            filepath: str,
+            sample_rate: Optional[int] = None,
+            mono: Optional[bool] = None,
+        ) -> AudioData:
+            # If sample_rate is None, it will be read from config.audio.sample_rate
+            # If mono is None, it will be read from config.audio.mono
+            ...
+
+        # With custom mapping
+        @config_aware("inference", mapping={"num_results": "top_k"})
+        def predict(
+            audio_path: str,
+            num_results: Optional[int] = None,  # Maps to config.inference.top_k
+        ):
+            ...
+
+    Notes:
+        - Only parameters with None defaults are candidates for config lookup
+        - Explicit parameter values always override configuration values
+        - If a config key is not found, the original default (None) is preserved
+        - The decorator inspects function signature to find configurable params
+    """
+
+    def decorator(func: F) -> F:
+        # Get function signature for parameter inspection
+        sig = inspect.signature(func)
+        params = sig.parameters
+
+        # Build list of configurable parameters (those with None defaults)
+        configurable_params: Dict[str, str] = {}
+        for param_name, param in params.items():
+            if param.default is None:
+                # Map parameter name to config key
+                config_key = (mapping or {}).get(param_name, param_name)
+                configurable_params[param_name] = config_key
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # Import config here to avoid circular imports
+            from bioamla.core.config import get_config
+
+            config = get_config()
+            section_config = getattr(config, section, {}) or {}
+
+            # Get bound arguments to see which were explicitly provided
+            try:
+                bound = sig.bind_partial(*args, **kwargs)
+            except TypeError:
+                # If binding fails, just call the function normally
+                return func(*args, **kwargs)
+
+            # Fill in configurable parameters that weren't explicitly provided
+            for param_name, config_key in configurable_params.items():
+                # Only fill if not already in kwargs and not in bound.arguments
+                if param_name not in bound.arguments:
+                    config_value = section_config.get(config_key)
+                    if config_value is not None:
+                        kwargs[param_name] = config_value
+                        logger.debug(
+                            f"Using config value for {param_name}: "
+                            f"[{section}].{config_key} = {config_value}"
+                        )
+
+            return func(*args, **kwargs)
+
+        return wrapper  # type: ignore
+
+    return decorator
+
+
+def config_aware_class(section: str) -> Callable[[type], type]:
+    """
+    Class decorator to make all public methods configuration-aware.
+
+    This decorator applies @config_aware to all public methods of a class,
+    allowing them to pull default values from the specified config section.
+
+    Args:
+        section: Configuration section to use for all methods
+
+    Returns:
+        Decorated class
+
+    Example:
+        @config_aware_class("audio")
+        class AudioProcessor:
+            def process(
+                self,
+                filepath: str,
+                sample_rate: Optional[int] = None,
+            ):
+                # sample_rate will come from config.audio.sample_rate if not provided
+                ...
+
+            def analyze(
+                self,
+                filepath: str,
+                n_fft: Optional[int] = None,
+            ):
+                # n_fft will come from config.audio.n_fft if not provided
+                ...
+    """
+
+    def decorator(cls: type) -> type:
+        for name in dir(cls):
+            if name.startswith("_"):
+                continue
+
+            method = getattr(cls, name)
+            if callable(method) and not isinstance(method, type):
+                # Apply config_aware to the method
+                wrapped = config_aware(section)(method)
+                setattr(cls, name, wrapped)
+
+        return cls
+
+    return decorator
+
+
+class ConfigAwareMixin:
+    """
+    Mixin class that provides configuration awareness to subclasses.
+
+    Subclasses can define a `_config_section` attribute to specify
+    which configuration section to use for default values.
+
+    Example:
+        class AudioProcessor(ConfigAwareMixin):
+            _config_section = "audio"
+
+            def process(self, sample_rate: Optional[int] = None):
+                # Get sample_rate from config if not provided
+                sample_rate = self._get_config_default("sample_rate", sample_rate)
+                ...
+    """
+
+    _config_section: str = ""
+
+    def _get_config_default(
+        self,
+        key: str,
+        value: Any,
+        section: Optional[str] = None,
+    ) -> Any:
+        """
+        Get a configuration default if value is None.
+
+        Args:
+            key: Configuration key to look up
+            value: Current value (if None, will be replaced by config value)
+            section: Optional section override (defaults to _config_section)
+
+        Returns:
+            The value if not None, otherwise the configuration value
+        """
+        if value is not None:
+            return value
+
+        from bioamla.core.config import get_config
+
+        config = get_config()
+        section_name = section or self._config_section
+        section_config = getattr(config, section_name, {}) or {}
+        config_value = section_config.get(key)
+
+        if config_value is not None:
+            logger.debug(f"Using config default for {key}: [{section_name}].{key} = {config_value}")
+
+        return config_value
+
+    def _get_config_defaults(
+        self,
+        section: Optional[str] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """
+        Get multiple configuration defaults at once.
+
+        Args:
+            section: Optional section override
+            **kwargs: Parameter name -> current value mappings
+
+        Returns:
+            Dictionary with config values filled in for None values
+
+        Example:
+            params = self._get_config_defaults(
+                sample_rate=sample_rate,  # None -> uses config
+                normalize=normalize,       # None -> uses config
+                mono=True,                # Explicit -> preserved
+            )
+        """
+        result = {}
+        for key, value in kwargs.items():
+            result[key] = self._get_config_default(key, value, section)
+        return result
 
 
 @dataclass
@@ -81,10 +309,7 @@ class RateLimiter:
         with self._lock:
             now = time.monotonic()
             elapsed = now - self._last_update
-            self._tokens = min(
-                self.burst_size,
-                self._tokens + elapsed * self.requests_per_second
-            )
+            self._tokens = min(self.burst_size, self._tokens + elapsed * self.requests_per_second)
             self._last_update = now
 
             if self._tokens >= tokens:
@@ -110,10 +335,7 @@ class RateLimiter:
         with self._lock:
             now = time.monotonic()
             elapsed = now - self._last_update
-            self._tokens = min(
-                self.burst_size,
-                self._tokens + elapsed * self.requests_per_second
-            )
+            self._tokens = min(self.burst_size, self._tokens + elapsed * self.requests_per_second)
             self._last_update = now
 
             if self._tokens >= tokens:
@@ -296,9 +518,7 @@ class APICache:
                 pass
 
         # Check total size
-        total_size = sum(
-            f.stat().st_size for f in self.cache_dir.glob("*.cache") if f.exists()
-        )
+        total_size = sum(f.stat().st_size for f in self.cache_dir.glob("*.cache") if f.exists())
 
         if total_size > self.max_size_bytes:
             # Remove oldest entries until under limit
@@ -551,7 +771,9 @@ def rate_limited(requests_per_second: float = 1.0) -> Callable[[F], F]:
         def wrapper(*args, **kwargs):
             limiter.acquire()
             return func(*args, **kwargs)
+
         return wrapper  # type: ignore
+
     return decorator
 
 
@@ -591,5 +813,7 @@ def cached(ttl: int = 3600, cache_dir: Optional[str] = None) -> Callable[[F], F]
             result = func(*args, **kwargs)
             cache.set(key, result)
             return result
+
         return wrapper  # type: ignore
+
     return decorator

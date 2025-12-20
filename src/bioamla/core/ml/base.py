@@ -26,6 +26,7 @@ from torch.utils.data import DataLoader, Dataset
 
 class ModelBackend(Enum):
     """Supported model backends."""
+
     AST = "ast"
     BIRDNET = "birdnet"
     OPENSOUNDSCAPE = "opensoundscape"
@@ -35,6 +36,7 @@ class ModelBackend(Enum):
 @dataclass
 class PredictionResult:
     """Result from a single prediction."""
+
     label: str
     confidence: float
     logits: Optional[np.ndarray] = None
@@ -62,6 +64,7 @@ class PredictionResult:
 @dataclass
 class BatchPredictionResult:
     """Results from batch prediction."""
+
     predictions: List[PredictionResult]
     total_files: int
     files_processed: int
@@ -82,6 +85,7 @@ class BatchPredictionResult:
 @dataclass
 class ModelConfig:
     """Base configuration for all models."""
+
     sample_rate: int = 16000
     clip_duration: float = 3.0
     overlap: float = 0.0
@@ -217,6 +221,7 @@ class BaseAudioModel(ABC):
             Batch prediction results.
         """
         import time
+
         start_time = time.time()
 
         predictions = []
@@ -311,7 +316,7 @@ class BaseAudioModel(ABC):
                 "sample_rate": self.config.sample_rate,
                 "clip_duration": self.config.clip_duration,
                 "backend": self.backend.value,
-            }
+            },
         }
 
         torch.save(state, path)
@@ -360,7 +365,9 @@ class BaseAudioModel(ABC):
         return self
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(backend={self.backend.value}, classes={self.num_classes})"
+        return (
+            f"{self.__class__.__name__}(backend={self.backend.value}, classes={self.num_classes})"
+        )
 
 
 class AudioDataset(Dataset):
@@ -451,9 +458,11 @@ _MODEL_REGISTRY: Dict[str, type] = {}
 
 def register_model(name: str):
     """Decorator to register a model class."""
+
     def decorator(cls):
         _MODEL_REGISTRY[name] = cls
         return cls
+
     return decorator
 
 

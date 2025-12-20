@@ -10,6 +10,7 @@ from bioamla.core.files import TextFile
 
 class ConfigContext:
     """Context object to hold configuration."""
+
     def __init__(self):
         self.config = None
         self.start_time = None
@@ -18,9 +19,11 @@ class ConfigContext:
 
 pass_config = click.make_pass_decorator(ConfigContext, ensure=True)
 
+
 @click.group()
-@click.option('--config', 'config_path', type=click.Path(exists=True),
-              help='Path to TOML configuration file')
+@click.option(
+    "--config", "config_path", type=click.Path(exists=True), help="Path to TOML configuration file"
+)
 @click.pass_context
 def cli(ctx, config_path: Optional[str]):
     """Bioamla CLI - Bioacoustics and Machine Learning Applications
@@ -85,19 +88,22 @@ def log_command_result(ctx, result, **kwargs):
 # Top-level utility commands
 # =============================================================================
 
+
 @cli.command()
 def devices():
     """Display comprehensive device information including CUDA and GPU details."""
     from bioamla.core.diagnostics import get_device_info
+
     device_info = get_device_info()
 
     click.echo("Devices:")
-    click.echo(f'CUDA available: {device_info["cuda_available"]}')
-    click.echo(f'Current device: {device_info["current_device"]}')
-    click.echo(f'Device count: {device_info["device_count"]}')
+    click.echo(f"CUDA available: {device_info['cuda_available']}")
+    click.echo(f"Current device: {device_info['current_device']}")
+    click.echo(f"Device count: {device_info['device_count']}")
 
-    for device in device_info['devices']:
-        click.echo(f'  - Index: {device["index"]}, Name: {device["name"]}')
+    for device in device_info["devices"]:
+        click.echo(f"  - Index: {device['index']}, Name: {device['name']}")
+
 
 @cli.command()
 def version():
@@ -107,11 +113,10 @@ def version():
     click.echo(f"bioamla v{get_bioamla_version()}")
 
 
-
-
 # =============================================================================
 # Config Command Group
 # =============================================================================
+
 
 @cli.group()
 def config():
@@ -119,7 +124,7 @@ def config():
     pass
 
 
-@config.command('show')
+@config.command("show")
 @click.pass_context
 def config_show(ctx):
     """Show current configuration."""
@@ -135,8 +140,17 @@ def config_show(ctx):
 
     # Show all configuration sections
     sections = [
-        'project', 'audio', 'visualize', 'models', 'inference', 'training',
-        'analysis', 'batch', 'output', 'progress', 'logging'
+        "project",
+        "audio",
+        "visualize",
+        "models",
+        "inference",
+        "training",
+        "analysis",
+        "batch",
+        "output",
+        "progress",
+        "logging",
     ]
     for section_name in sections:
         section = getattr(config_obj, section_name, {})
@@ -147,9 +161,9 @@ def config_show(ctx):
             console.print()
 
 
-@config.command('init')
-@click.option('--output', '-o', default='bioamla.toml', help='Output file path')
-@click.option('--force', '-f', is_flag=True, help='Overwrite existing file')
+@config.command("init")
+@click.option("--output", "-o", default="bioamla.toml", help="Output file path")
+@click.option("--force", "-f", is_flag=True, help="Overwrite existing file")
 def config_init(output, force):
     """Create a default configuration file."""
     from pathlib import Path
@@ -167,7 +181,7 @@ def config_init(output, force):
     print_success(f"Created configuration file: {output}")
 
 
-@config.command('path')
+@config.command("path")
 def config_path():
     """Show configuration file search paths."""
     from bioamla.core.config import CONFIG_LOCATIONS, find_config_file
@@ -180,8 +194,10 @@ def config_path():
 
     for i, location in enumerate(CONFIG_LOCATIONS, 1):
         exists = location.exists()
-        status = "[green]✓ ACTIVE[/green]" if location == active_config else (
-            "[dim]exists[/dim]" if exists else "[dim]not found[/dim]"
+        status = (
+            "[green]✓ ACTIVE[/green]"
+            if location == active_config
+            else ("[dim]exists[/dim]" if exists else "[dim]not found[/dim]")
         )
         console.print(f"  {i}. {location} {status}")
 
@@ -190,18 +206,20 @@ def config_path():
 
 def _format_size(size_bytes: int) -> str:
     """Format bytes into human-readable size."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size_bytes < 1024:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024
     return f"{size_bytes:.1f} PB"
 
 
-@config.command('purge')
-@click.option('--models', is_flag=True, help='Purge cached models')
-@click.option('--datasets', is_flag=True, help='Purge cached datasets')
-@click.option('--all', 'purge_all', is_flag=True, help='Purge all cached data (models and datasets)')
-@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt')
+@config.command("purge")
+@click.option("--models", is_flag=True, help="Purge cached models")
+@click.option("--datasets", is_flag=True, help="Purge cached datasets")
+@click.option(
+    "--all", "purge_all", is_flag=True, help="Purge all cached data (models and datasets)"
+)
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
     """Purge cached HuggingFace Hub data from local storage.
 
@@ -270,6 +288,7 @@ def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
     freed_space = 0
 
     from huggingface_hub import constants
+
     cache_path = Path(constants.HF_HUB_CACHE)
 
     for repo in models_to_delete + datasets_to_delete:
@@ -287,10 +306,9 @@ def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
     click.echo(f"Successfully purged {deleted_count} items, freed {_format_size(freed_space)}.")
 
 
-@config.command('deps')
-@click.option('--install', 'do_install', is_flag=True,
-              help='Install missing system dependencies')
-@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt')
+@config.command("deps")
+@click.option("--install", "do_install", is_flag=True, help="Install missing system dependencies")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 def config_deps(do_install: bool, yes: bool):
     """Check or install system dependencies (FFmpeg, libsndfile, PortAudio).
 
@@ -307,7 +325,12 @@ def config_deps(do_install: bool, yes: bool):
         bioamla config deps --install    # Install missing dependencies
         bioamla config deps --install -y # Install without confirmation
     """
-    from bioamla.core.deps import check_all_dependencies, detect_os, get_full_install_command, run_install
+    from bioamla.core.deps import (
+        check_all_dependencies,
+        detect_os,
+        get_full_install_command,
+        run_install,
+    )
     from bioamla.core.progress import console
 
     os_type = detect_os()
@@ -377,22 +400,32 @@ def config_deps(do_install: bool, yes: bool):
 # Project Command Group
 # =============================================================================
 
+
 @cli.group()
 def project():
     """Project management commands."""
     pass
 
 
-@project.command('init')
-@click.argument('path', required=False, default='.')
-@click.option('--name', '-n', help='Project name (defaults to directory name)')
-@click.option('--description', '-d', default='', help='Project description')
-@click.option('--template', '-t', default='default',
-              type=click.Choice(['default', 'minimal', 'research', 'production']),
-              help='Configuration template to use')
-@click.option('--config', '-c', 'config_file', type=click.Path(exists=True),
-              help='Custom config file to use as base')
-@click.option('--force', '-f', is_flag=True, help='Overwrite existing project')
+@project.command("init")
+@click.argument("path", required=False, default=".")
+@click.option("--name", "-n", help="Project name (defaults to directory name)")
+@click.option("--description", "-d", default="", help="Project description")
+@click.option(
+    "--template",
+    "-t",
+    default="default",
+    type=click.Choice(["default", "minimal", "research", "production"]),
+    help="Configuration template to use",
+)
+@click.option(
+    "--config",
+    "-c",
+    "config_file",
+    type=click.Path(exists=True),
+    help="Custom config file to use as base",
+)
+@click.option("--force", "-f", is_flag=True, help="Overwrite existing project")
 def project_init(path, name, description, template, config_file, force):
     """
     Initialize a new bioamla project.
@@ -440,15 +473,15 @@ def project_init(path, name, description, template, config_file, force):
         print_success(f"Created bioamla project: {info.name}")
         click.echo(f"  Location: {info.root}")
         click.echo(f"  Config: {info.config_path}")
-        click.echo(f"\nNext steps:")
+        click.echo("\nNext steps:")
         click.echo(f"  cd {project_path}")
-        click.echo(f"  bioamla config show")
+        click.echo("  bioamla config show")
     except Exception as e:
         print_error(f"Failed to create project: {e}")
         raise SystemExit(1)
 
 
-@project.command('status')
+@project.command("status")
 def project_status():
     """Show current project status and information."""
     from bioamla.core.progress import console
@@ -470,8 +503,8 @@ def project_status():
     console.print(f"  Logs: {info.logs_path}")
 
 
-@project.command('config')
-@click.argument('action', type=click.Choice(['show', 'edit', 'reset']))
+@project.command("config")
+@click.argument("action", type=click.Choice(["show", "edit", "reset"]))
 @click.pass_context
 def project_config(ctx, action):
     """Manage project configuration."""
@@ -483,20 +516,22 @@ def project_config(ctx, action):
         click.echo("Not in a bioamla project.")
         raise SystemExit(1)
 
-    if action == 'show':
+    if action == "show":
         # Reuse existing config show logic
         ctx.invoke(config_show)
-    elif action == 'edit':
+    elif action == "edit":
         # Open config in editor
         import os
-        editor = os.environ.get('EDITOR', 'nano')
-        os.system(f'{editor} {info.config_path}')
-    elif action == 'reset':
+
+        editor = os.environ.get("EDITOR", "nano")
+        os.system(f"{editor} {info.config_path}")
+    elif action == "reset":
         # Reset to template defaults
         click.echo("Reset project config to defaults? [y/N] ", nl=False)
-        if click.getchar().lower() == 'y':
-            from bioamla.core.project import _get_template_content, _customize_template
-            template_content = _get_template_content('default')
+        if click.getchar().lower() == "y":
+            from bioamla.core.project import _customize_template, _get_template_content
+
+            template_content = _get_template_content("default")
             customized = _customize_template(template_content, info.name, info.description)
             info.config_path.write_text(customized)
             click.echo("\nConfig reset to defaults.")
@@ -508,16 +543,17 @@ def project_config(ctx, action):
 # Log Command Group
 # =============================================================================
 
+
 @cli.group()
 def log():
     """Command history and logging."""
     pass
 
 
-@log.command('show')
-@click.option('--limit', '-n', default=20, help='Number of entries to show')
-@click.option('--command', '-c', 'cmd_filter', help='Filter by command name')
-@click.option('--all', 'show_all', is_flag=True, help='Show all entries')
+@log.command("show")
+@click.option("--limit", "-n", default=20, help="Number of entries to show")
+@click.option("--command", "-c", "cmd_filter", help="Filter by command name")
+@click.option("--all", "show_all", is_flag=True, help="Show all entries")
 def log_show(limit, cmd_filter, show_all):
     """Show command history."""
     from bioamla.core.command_log import CommandLogger
@@ -547,8 +583,8 @@ def log_show(limit, cmd_filter, show_all):
         console.print(f"{status} {entry.timestamp[:19]}  {entry.command}  [{duration}]")
 
 
-@log.command('search')
-@click.argument('query')
+@log.command("search")
+@click.argument("query")
 def log_search(query):
     """Search command history."""
     from bioamla.core.command_log import CommandLogger
@@ -572,8 +608,8 @@ def log_search(query):
         console.print(f"{status} {entry.timestamp[:19]}  {entry.command}")
 
 
-@log.command('clear')
-@click.confirmation_option(prompt='Clear all command history?')
+@log.command("clear")
+@click.confirmation_option(prompt="Clear all command history?")
 def log_clear():
     """Clear command history."""
     from bioamla.core.command_log import CommandLogger
@@ -588,7 +624,7 @@ def log_clear():
     click.echo(f"Cleared {count} log entries.")
 
 
-@log.command('stats')
+@log.command("stats")
 def log_stats():
     """Show command history statistics."""
     from bioamla.core.command_log import CommandLogger
@@ -602,18 +638,18 @@ def log_stats():
 
     stats = logger.get_stats()
 
-    if stats['total_commands'] == 0:
+    if stats["total_commands"] == 0:
         click.echo("No command history found.")
         return
 
-    console.print(f"\n[bold]Command Statistics[/bold]\n")
+    console.print("\n[bold]Command Statistics[/bold]\n")
     console.print(f"  Total commands: {stats['total_commands']}")
     console.print(f"  [green]Successful:[/green] {stats['successful_commands']}")
     console.print(f"  [red]Failed:[/red] {stats['failed_commands']}")
 
-    if stats['command_counts']:
-        console.print(f"\n[bold]Commands by frequency:[/bold]")
-        sorted_cmds = sorted(stats['command_counts'].items(), key=lambda x: x[1], reverse=True)
+    if stats["command_counts"]:
+        console.print("\n[bold]Commands by frequency:[/bold]")
+        sorted_cmds = sorted(stats["command_counts"].items(), key=lambda x: x[1], reverse=True)
         for cmd, count in sorted_cmds[:10]:
             console.print(f"  {cmd}: {count}")
 
@@ -621,6 +657,7 @@ def log_stats():
 # =============================================================================
 # Models Command Group
 # =============================================================================
+
 
 @cli.group()
 def models():
@@ -651,19 +688,54 @@ def evaluate():
 # AST Commands (Audio Spectrogram Transformer)
 # =============================================================================
 
-@predict.command('ast')
-@click.argument('path')
-@click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for inference')
-@click.option('--resample-freq', default=16000, type=int, help='Resampling frequency')
-@click.option('--batch', is_flag=True, default=False, help='Run batch inference on a directory of audio files')
-@click.option('--output-csv', default='output.csv', help='Output CSV file name (batch mode only)')
-@click.option('--segment-duration', default=1, type=int, help='Duration of audio segments in seconds (batch mode only)')
-@click.option('--segment-overlap', default=0, type=int, help='Overlap between segments in seconds (batch mode only)')
-@click.option('--restart/--no-restart', default=False, help='Whether to restart from existing results (batch mode only)')
-@click.option('--batch-size', default=8, type=int, help='Number of segments to process in parallel (default: 8, batch mode only)')
-@click.option('--fp16/--no-fp16', default=False, help='Use half-precision (FP16) for faster GPU inference (batch mode only)')
-@click.option('--compile/--no-compile', default=False, help='Use torch.compile() for optimized inference (PyTorch 2.0+, batch mode only)')
-@click.option('--workers', default=1, type=int, help='Number of parallel workers for file loading (default: 1, batch mode only)')
+
+@predict.command("ast")
+@click.argument("path")
+@click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for inference")
+@click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
+@click.option(
+    "--batch", is_flag=True, default=False, help="Run batch inference on a directory of audio files"
+)
+@click.option("--output-csv", default="output.csv", help="Output CSV file name (batch mode only)")
+@click.option(
+    "--segment-duration",
+    default=1,
+    type=int,
+    help="Duration of audio segments in seconds (batch mode only)",
+)
+@click.option(
+    "--segment-overlap",
+    default=0,
+    type=int,
+    help="Overlap between segments in seconds (batch mode only)",
+)
+@click.option(
+    "--restart/--no-restart",
+    default=False,
+    help="Whether to restart from existing results (batch mode only)",
+)
+@click.option(
+    "--batch-size",
+    default=8,
+    type=int,
+    help="Number of segments to process in parallel (default: 8, batch mode only)",
+)
+@click.option(
+    "--fp16/--no-fp16",
+    default=False,
+    help="Use half-precision (FP16) for faster GPU inference (batch mode only)",
+)
+@click.option(
+    "--compile/--no-compile",
+    default=False,
+    help="Use torch.compile() for optimized inference (PyTorch 2.0+, batch mode only)",
+)
+@click.option(
+    "--workers",
+    default=1,
+    type=int,
+    help="Number of parallel workers for file loading (default: 1, batch mode only)",
+)
 def ast_predict(
     path: str,
     model_path: str,
@@ -676,7 +748,7 @@ def ast_predict(
     batch_size: int,
     fp16: bool,
     compile: bool,
-    workers: int
+    workers: int,
 ):
     """
     Perform prediction on audio file(s).
@@ -710,10 +782,11 @@ def ast_predict(
             batch_size=batch_size,
             fp16=fp16,
             compile=compile,
-            workers=workers
+            workers=workers,
         )
     else:
         from bioamla.core.detection.ast import wav_ast_inference
+
         prediction = wav_ast_inference(path, model_path, resample_freq)
         click.echo(f"{prediction}")
 
@@ -729,7 +802,7 @@ def _run_batch_inference(
     batch_size: int,
     fp16: bool,
     compile: bool,
-    workers: int
+    workers: int,
 ):
     """Run batch inference on a directory of audio files."""
     import os
@@ -754,7 +827,7 @@ def _run_batch_inference(
 
     print("Output csv: " + output_csv)
 
-    wave_files = get_files_by_extension(directory=directory, extensions=['.wav'], recursive=True)
+    wave_files = get_files_by_extension(directory=directory, extensions=[".wav"], recursive=True)
 
     if len(wave_files) == 0:
         print("No wave files found in directory: " + directory)
@@ -767,7 +840,7 @@ def _run_batch_inference(
         if file_exists(output_csv):
             print("file exists: " + output_csv)
             df = pd.read_csv(output_csv)
-            processed_files = set(df['filepath'])
+            processed_files = set(df["filepath"])
             print("Found " + str(len(processed_files)) + " processed files")
 
             print("Removing processed files from wave files")
@@ -780,19 +853,22 @@ def _run_batch_inference(
                 return
         else:
             print("creating new file: " + output_csv)
-            results = pd.DataFrame(columns=['filepath', 'start', 'stop', 'prediction'])
+            results = pd.DataFrame(columns=["filepath", "start", "stop", "prediction"])
             results.to_csv(output_csv, header=True, index=False)
     else:
         print("creating new file: " + output_csv)
-        results = pd.DataFrame(columns=['filepath', 'start', 'stop', 'prediction'])
+        results = pd.DataFrame(columns=["filepath", "start", "stop", "prediction"])
         results.to_csv(output_csv, header=True, index=False)
 
     print("Loading model: " + model_path)
-    print(f"Performance options: batch_size={batch_size}, fp16={fp16}, compile={compile}, workers={workers}")
+    print(
+        f"Performance options: batch_size={batch_size}, fp16={fp16}, compile={compile}, workers={workers}"
+    )
 
     model = load_pretrained_ast_model(model_path, use_fp16=fp16, use_compile=compile)
 
     from torch.nn import Module
+
     if not isinstance(model, Module):
         raise TypeError("Model must be a PyTorch Module")
 
@@ -802,14 +878,12 @@ def _run_batch_inference(
     print("Using device: " + device)
 
     config = InferenceConfig(
-        batch_size=batch_size,
-        use_fp16=fp16,
-        use_compile=compile,
-        num_workers=workers
+        batch_size=batch_size, use_fp16=fp16, use_compile=compile, num_workers=workers
     )
 
     # Pre-load feature extractor before timing starts
     from bioamla.core.detection.ast import get_cached_feature_extractor
+
     feature_extractor = get_cached_feature_extractor()
 
     start_time = time.time()
@@ -824,45 +898,83 @@ def _run_batch_inference(
         segment_overlap=segment_overlap,
         output_csv=output_csv,
         config=config,
-        feature_extractor=feature_extractor
+        feature_extractor=feature_extractor,
     )
 
     end_time = time.time()
     time_string = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end_time))
     print("End batch inference at " + time_string)
     elapsed = end_time - start_time
-    print(f"Elapsed time: {elapsed:.2f}s ({len(wave_files)/elapsed:.2f} files/sec)")
+    print(f"Elapsed time: {elapsed:.2f}s ({len(wave_files) / elapsed:.2f} files/sec)")
 
 
-@train.command('ast')
-@click.option('--training-dir', default='.', help='Directory to save training outputs')
-@click.option('--base-model', default='MIT/ast-finetuned-audioset-10-10-0.4593', help='Base model to fine-tune')
-@click.option('--train-dataset', default='bioamla/scp-frogs', help='Training dataset from HuggingFace Hub')
-@click.option('--split', default='train', help='Dataset split to use')
-@click.option('--category-id-column', default='target', help='Column name for category IDs')
-@click.option('--category-label-column', default='category', help='Column name for category labels')
-@click.option('--report-to', default='tensorboard', help='Where to report metrics')
-@click.option('--learning-rate', default=5.0e-5, type=float, help='Learning rate for training')
-@click.option('--push-to-hub/--no-push-to-hub', default=False, help='Whether to push model to HuggingFace Hub')
-@click.option('--num-train-epochs', default=1, type=int, help='Number of training epochs')
-@click.option('--per-device-train-batch-size', default=8, type=int, help='Training batch size per device')
-@click.option('--eval-strategy', default='epoch', help='Evaluation strategy')
-@click.option('--save-strategy', default='epoch', help='Model save strategy')
-@click.option('--eval-steps', default=1, type=int, help='Number of steps between evaluations')
-@click.option('--save-steps', default=1, type=int, help='Number of steps between saves')
-@click.option('--load-best-model-at-end/--no-load-best-model-at-end', default=True, help='Load best model at end of training')
-@click.option('--metric-for-best-model', default='accuracy', help='Metric to use for best model selection')
-@click.option('--logging-strategy', default='steps', help='Logging strategy')
-@click.option('--logging-steps', default=100, type=int, help='Number of steps between logging')
-@click.option('--fp16/--no-fp16', default=False, help='Use FP16 mixed precision training (for NVIDIA GPUs)')
-@click.option('--bf16/--no-bf16', default=False, help='Use BF16 mixed precision training (for Ampere+ GPUs)')
-@click.option('--gradient-accumulation-steps', default=1, type=int, help='Number of gradient accumulation steps')
-@click.option('--dataloader-num-workers', default=4, type=int, help='Number of dataloader workers')
-@click.option('--torch-compile/--no-torch-compile', default=False, help='Use torch.compile for faster training (PyTorch 2.0+)')
-@click.option('--finetune-mode', type=click.Choice(['full', 'feature-extraction']), default='full', help='Training mode: full (all layers) or feature-extraction (freeze base, train classifier only)')
-@click.option('--mlflow-tracking-uri', default=None, help='MLflow tracking server URI (e.g., http://localhost:5000)')
-@click.option('--mlflow-experiment-name', default=None, help='MLflow experiment name')
-@click.option('--mlflow-run-name', default=None, help='MLflow run name')
+@train.command("ast")
+@click.option("--training-dir", default=".", help="Directory to save training outputs")
+@click.option(
+    "--base-model",
+    default="MIT/ast-finetuned-audioset-10-10-0.4593",
+    help="Base model to fine-tune",
+)
+@click.option(
+    "--train-dataset", default="bioamla/scp-frogs", help="Training dataset from HuggingFace Hub"
+)
+@click.option("--split", default="train", help="Dataset split to use")
+@click.option("--category-id-column", default="target", help="Column name for category IDs")
+@click.option("--category-label-column", default="category", help="Column name for category labels")
+@click.option("--report-to", default="tensorboard", help="Where to report metrics")
+@click.option("--learning-rate", default=5.0e-5, type=float, help="Learning rate for training")
+@click.option(
+    "--push-to-hub/--no-push-to-hub", default=False, help="Whether to push model to HuggingFace Hub"
+)
+@click.option("--num-train-epochs", default=1, type=int, help="Number of training epochs")
+@click.option(
+    "--per-device-train-batch-size", default=8, type=int, help="Training batch size per device"
+)
+@click.option("--eval-strategy", default="epoch", help="Evaluation strategy")
+@click.option("--save-strategy", default="epoch", help="Model save strategy")
+@click.option("--eval-steps", default=1, type=int, help="Number of steps between evaluations")
+@click.option("--save-steps", default=1, type=int, help="Number of steps between saves")
+@click.option(
+    "--load-best-model-at-end/--no-load-best-model-at-end",
+    default=True,
+    help="Load best model at end of training",
+)
+@click.option(
+    "--metric-for-best-model", default="accuracy", help="Metric to use for best model selection"
+)
+@click.option("--logging-strategy", default="steps", help="Logging strategy")
+@click.option("--logging-steps", default=100, type=int, help="Number of steps between logging")
+@click.option(
+    "--fp16/--no-fp16", default=False, help="Use FP16 mixed precision training (for NVIDIA GPUs)"
+)
+@click.option(
+    "--bf16/--no-bf16", default=False, help="Use BF16 mixed precision training (for Ampere+ GPUs)"
+)
+@click.option(
+    "--gradient-accumulation-steps",
+    default=1,
+    type=int,
+    help="Number of gradient accumulation steps",
+)
+@click.option("--dataloader-num-workers", default=4, type=int, help="Number of dataloader workers")
+@click.option(
+    "--torch-compile/--no-torch-compile",
+    default=False,
+    help="Use torch.compile for faster training (PyTorch 2.0+)",
+)
+@click.option(
+    "--finetune-mode",
+    type=click.Choice(["full", "feature-extraction"]),
+    default="full",
+    help="Training mode: full (all layers) or feature-extraction (freeze base, train classifier only)",
+)
+@click.option(
+    "--mlflow-tracking-uri",
+    default=None,
+    help="MLflow tracking server URI (e.g., http://localhost:5000)",
+)
+@click.option("--mlflow-experiment-name", default=None, help="MLflow experiment name")
+@click.option("--mlflow-run-name", default=None, help="MLflow run name")
 def ast_train(
     training_dir: str,
     base_model: str,
@@ -891,7 +1003,7 @@ def ast_train(
     finetune_mode: str,
     mlflow_tracking_uri: str,
     mlflow_experiment_name: str,
-    mlflow_run_name: str
+    mlflow_run_name: str,
 ):
     """Fine-tune an AST model on a custom dataset."""
     import evaluate
@@ -925,6 +1037,7 @@ def ast_train(
     if mlflow_tracking_uri or mlflow_experiment_name:
         try:
             import mlflow
+
             if mlflow_tracking_uri:
                 mlflow.set_tracking_uri(mlflow_tracking_uri)
                 print(f"MLflow tracking URI: {mlflow_tracking_uri}")
@@ -935,7 +1048,9 @@ def ast_train(
                 report_to = f"{report_to},mlflow" if report_to else "mlflow"
             print(f"MLflow integration enabled, reporting to: {report_to}")
         except ImportError:
-            print("Warning: MLflow not installed. Install with 'pip install mlflow' to enable MLflow tracking.")
+            print(
+                "Warning: MLflow not installed. Install with 'pip install mlflow' to enable MLflow tracking."
+            )
 
     # Convert comma-separated report_to string to a list for TrainingArguments
     if report_to and "," in report_to:
@@ -950,7 +1065,9 @@ def ast_train(
     elif "BirdSet" in train_dataset:
         # BirdSet datasets have configurations for different subsets
         # Recommend samuelstevens/BirdSet which is in Parquet format
-        click.echo("Note: BirdSet detected. Use format 'samuelstevens/BirdSet:HSN' to specify subset.")
+        click.echo(
+            "Note: BirdSet detected. Use format 'samuelstevens/BirdSet:HSN' to specify subset."
+        )
         click.echo("Available subsets: HSN, NBP, NES, PER")
         dataset = load_dataset(train_dataset, "HSN", split=split)
     else:
@@ -998,32 +1115,45 @@ def ast_train(
     if isinstance(dataset, Dataset):
         try:
             dataset = dataset.train_test_split(
-                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels")
+                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels"
+            )
         except ValueError as e:
             print(f"Warning: Stratified split failed ({e}). Using regular split.")
-            dataset = dataset.train_test_split(
-                test_size=test_size, shuffle=True, seed=0)
+            dataset = dataset.train_test_split(test_size=test_size, shuffle=True, seed=0)
     elif isinstance(dataset, DatasetDict) and "test" not in dataset:
         train_data = dataset["train"]
         try:
             dataset = train_data.train_test_split(
-                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels")
+                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels"
+            )
         except ValueError as e:
             print(f"Warning: Stratified split failed ({e}). Using regular split.")
-            dataset = train_data.train_test_split(
-                test_size=test_size, shuffle=True, seed=0)
+            dataset = train_data.train_test_split(test_size=test_size, shuffle=True, seed=0)
 
-    audio_augmentations = Compose([
-        AddGaussianSNR(min_snr_db=10, max_snr_db=20),
-        Gain(min_gain_db=-6, max_gain_db=6),
-        GainTransition(min_gain_db=-6, max_gain_db=6, min_duration=0.01, max_duration=0.3, duration_unit="fraction"),
-        ClippingDistortion(min_percentile_threshold=0, max_percentile_threshold=30, p=0.5),
-        TimeStretch(min_rate=0.8, max_rate=1.2),
-        PitchShift(min_semitones=-4, max_semitones=4),
-    ], p=0.8, shuffle=True)
+    audio_augmentations = Compose(
+        [
+            AddGaussianSNR(min_snr_db=10, max_snr_db=20),
+            Gain(min_gain_db=-6, max_gain_db=6),
+            GainTransition(
+                min_gain_db=-6,
+                max_gain_db=6,
+                min_duration=0.01,
+                max_duration=0.3,
+                duration_unit="fraction",
+            ),
+            ClippingDistortion(min_percentile_threshold=0, max_percentile_threshold=30, p=0.5),
+            TimeStretch(min_rate=0.8, max_rate=1.2),
+            PitchShift(min_semitones=-4, max_semitones=4),
+        ],
+        p=0.8,
+        shuffle=True,
+    )
 
     def preprocess_audio_with_transforms(batch):
-        wavs = [audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE) for audio in batch["input_values"]]
+        wavs = [
+            audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE)
+            for audio in batch["input_values"]
+        ]
         inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
         return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
@@ -1096,7 +1226,9 @@ def ast_train(
 
     if isinstance(dataset, DatasetDict):
         if "train" in dataset:
-            dataset["train"].set_transform(preprocess_audio_with_transforms, output_all_columns=False)
+            dataset["train"].set_transform(
+                preprocess_audio_with_transforms, output_all_columns=False
+            )
         if "test" in dataset:
             dataset["test"].set_transform(preprocess_audio, output_all_columns=False)
     else:
@@ -1107,7 +1239,9 @@ def ast_train(
     config.label2id = label2id
     config.id2label = {v: k for k, v in label2id.items()}
 
-    model = ASTForAudioClassification.from_pretrained(pretrained_model, config=config, ignore_mismatched_sizes=True)
+    model = ASTForAudioClassification.from_pretrained(
+        pretrained_model, config=config, ignore_mismatched_sizes=True
+    )
     model.init_weights()
 
     if finetune_mode == "feature-extraction":
@@ -1116,7 +1250,9 @@ def ast_train(
             param.requires_grad = False
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         total_params = sum(p.numel() for p in model.parameters())
-        print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
+        print(
+            f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100 * trainable_params / total_params:.2f}%)"
+        )
     else:
         print("Full finetune mode: training all model layers")
 
@@ -1158,15 +1294,21 @@ def ast_train(
         accuracy_result = accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
         metrics: Dict[str, float] = accuracy_result if accuracy_result is not None else {}
 
-        precision_result = precision.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
+        precision_result = precision.compute(
+            predictions=predictions, references=eval_pred.label_ids, average=AVERAGE
+        )
         if precision_result is not None:
             metrics.update(precision_result)
 
-        recall_result = recall.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
+        recall_result = recall.compute(
+            predictions=predictions, references=eval_pred.label_ids, average=AVERAGE
+        )
         if recall_result is not None:
             metrics.update(recall_result)
 
-        f1_result = f1.compute(predictions=predictions, references=eval_pred.label_ids, average=AVERAGE)
+        f1_result = f1.compute(
+            predictions=predictions, references=eval_pred.label_ids, average=AVERAGE
+        )
         if f1_result is not None:
             metrics.update(f1_result)
 
@@ -1192,18 +1334,28 @@ def ast_train(
     trainer.save_model(best_model_path)
 
 
-@evaluate.command('ast')
-@click.argument('path')
-@click.option('--model-path', default='bioamla/scp-frogs', help='AST model to use for evaluation')
-@click.option('--ground-truth', '-g', required=True, help='Path to CSV file with ground truth labels')
-@click.option('--output', '-o', default=None, help='Output file for evaluation results')
-@click.option('--format', 'output_format', type=click.Choice(['json', 'csv', 'txt']), default='txt', help='Output format')
-@click.option('--file-column', default='file_name', help='Column name for file names in ground truth CSV')
-@click.option('--label-column', default='label', help='Column name for labels in ground truth CSV')
-@click.option('--resample-freq', default=16000, type=int, help='Resampling frequency')
-@click.option('--batch-size', default=8, type=int, help='Batch size for inference')
-@click.option('--fp16/--no-fp16', default=False, help='Use half-precision inference')
-@click.option('--quiet', is_flag=True, help='Only output metrics, suppress progress')
+@evaluate.command("ast")
+@click.argument("path")
+@click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for evaluation")
+@click.option(
+    "--ground-truth", "-g", required=True, help="Path to CSV file with ground truth labels"
+)
+@click.option("--output", "-o", default=None, help="Output file for evaluation results")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["json", "csv", "txt"]),
+    default="txt",
+    help="Output format",
+)
+@click.option(
+    "--file-column", default="file_name", help="Column name for file names in ground truth CSV"
+)
+@click.option("--label-column", default="label", help="Column name for labels in ground truth CSV")
+@click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
+@click.option("--batch-size", default=8, type=int, help="Batch size for inference")
+@click.option("--fp16/--no-fp16", default=False, help="Use half-precision inference")
+@click.option("--quiet", is_flag=True, help="Only output metrics, suppress progress")
 def ast_evaluate(
     path: str,
     model_path: str,
@@ -1278,33 +1430,49 @@ def ast_evaluate(
         raise SystemExit(1)
 
 
-@models.command('list')
+@models.command("list")
 def models_list():
     """List available model types."""
     from bioamla.models import list_models
+
     click.echo("Available model types:")
     for model_name in list_models():
         click.echo(f"  - {model_name}")
 
 
-@predict.command('generic')
-@click.argument('path')
-@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
-              default='ast', help='Model type to use')
-@click.option('--model-path', required=True, help='Path to model or HuggingFace identifier')
-@click.option('--output', '-o', default=None, help='Output CSV file')
-@click.option('--batch', is_flag=True, help='Process all files in directory')
-@click.option('--min-confidence', default=0.0, type=float, help='Minimum confidence threshold')
-@click.option('--top-k', default=1, type=int, help='Number of top predictions per segment')
-@click.option('--clip-duration', default=3.0, type=float, help='Clip duration in seconds')
-@click.option('--overlap', default=0.0, type=float, help='Overlap between clips in seconds')
-@click.option('--sample-rate', default=16000, type=int, help='Target sample rate')
-@click.option('--batch-size', default=8, type=int, help='Batch size for processing')
-@click.option('--fp16/--no-fp16', default=False, help='Use half-precision inference')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@predict.command("generic")
+@click.argument("path")
+@click.option(
+    "--model-type",
+    type=click.Choice(["ast", "birdnet", "opensoundscape"]),
+    default="ast",
+    help="Model type to use",
+)
+@click.option("--model-path", required=True, help="Path to model or HuggingFace identifier")
+@click.option("--output", "-o", default=None, help="Output CSV file")
+@click.option("--batch", is_flag=True, help="Process all files in directory")
+@click.option("--min-confidence", default=0.0, type=float, help="Minimum confidence threshold")
+@click.option("--top-k", default=1, type=int, help="Number of top predictions per segment")
+@click.option("--clip-duration", default=3.0, type=float, help="Clip duration in seconds")
+@click.option("--overlap", default=0.0, type=float, help="Overlap between clips in seconds")
+@click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
+@click.option("--batch-size", default=8, type=int, help="Batch size for processing")
+@click.option("--fp16/--no-fp16", default=False, help="Use half-precision inference")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def predict_generic(
-    path, model_type, model_path, output, batch, min_confidence,
-    top_k, clip_duration, overlap, sample_rate, batch_size, fp16, quiet
+    path,
+    model_type,
+    model_path,
+    output,
+    batch,
+    min_confidence,
+    top_k,
+    clip_duration,
+    overlap,
+    sample_rate,
+    batch_size,
+    fp16,
+    quiet,
 ):
     """Run predictions using an ML model (multi-model interface).
 
@@ -1318,8 +1486,8 @@ def predict_generic(
     import time
     from pathlib import Path
 
-    from bioamla.models import ModelConfig, load_model
     from bioamla.core.utils import get_audio_files
+    from bioamla.models import ModelConfig, load_model
 
     config = ModelConfig(
         sample_rate=sample_rate,
@@ -1362,22 +1530,31 @@ def predict_generic(
                 results = model.predict(filepath)
                 all_results.extend(results)
                 if not quiet:
-                    click.echo(f"[{i+1}/{len(audio_files)}] {filepath}: {len(results)} predictions")
+                    click.echo(
+                        f"[{i + 1}/{len(audio_files)}] {filepath}: {len(results)} predictions"
+                    )
             except Exception as e:
                 if not quiet:
-                    click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
+                    click.echo(f"[{i + 1}/{len(audio_files)}] Error: {filepath} - {e}")
 
         elapsed = time.time() - start_time
 
         if output:
             output_path = Path(output)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            with TextFile(output_path, mode='w', newline='') as f:
+            with TextFile(output_path, mode="w", newline="") as f:
                 writer = csv.writer(f.handle)
-                writer.writerow(['filepath', 'start_time', 'end_time', 'label', 'confidence'])
+                writer.writerow(["filepath", "start_time", "end_time", "label", "confidence"])
                 for r in all_results:
-                    writer.writerow([r.filepath, f"{r.start_time:.3f}", f"{r.end_time:.3f}",
-                                    r.label, f"{r.confidence:.4f}"])
+                    writer.writerow(
+                        [
+                            r.filepath,
+                            f"{r.start_time:.3f}",
+                            f"{r.end_time:.3f}",
+                            r.label,
+                            f"{r.confidence:.4f}",
+                        ]
+                    )
             if not quiet:
                 click.echo(f"\nResults saved to {output}")
 
@@ -1394,28 +1571,39 @@ def predict_generic(
         results = model.predict(path)
 
         if output:
-            with TextFile(output, mode='w', newline='') as f:
+            with TextFile(output, mode="w", newline="") as f:
                 writer = csv.writer(f.handle)
-                writer.writerow(['filepath', 'start_time', 'end_time', 'label', 'confidence'])
+                writer.writerow(["filepath", "start_time", "end_time", "label", "confidence"])
                 for r in results:
-                    writer.writerow([r.filepath, f"{r.start_time:.3f}", f"{r.end_time:.3f}",
-                                    r.label, f"{r.confidence:.4f}"])
+                    writer.writerow(
+                        [
+                            r.filepath,
+                            f"{r.start_time:.3f}",
+                            f"{r.end_time:.3f}",
+                            r.label,
+                            f"{r.confidence:.4f}",
+                        ]
+                    )
             click.echo(f"Results saved to {output}")
         else:
             for r in results:
                 click.echo(f"{r.start_time:.2f}-{r.end_time:.2f}s: {r.label} ({r.confidence:.3f})")
 
 
-@models.command('embed')
-@click.argument('path')
-@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
-              default='ast', help='Model type to use')
-@click.option('--model-path', required=True, help='Path to model or HuggingFace identifier')
-@click.option('--output', '-o', required=True, help='Output file (.npy or .npz)')
-@click.option('--batch', is_flag=True, help='Process all files in directory')
-@click.option('--layer', default=None, help='Layer to extract embeddings from')
-@click.option('--sample-rate', default=16000, type=int, help='Target sample rate')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@models.command("embed")
+@click.argument("path")
+@click.option(
+    "--model-type",
+    type=click.Choice(["ast", "birdnet", "opensoundscape"]),
+    default="ast",
+    help="Model type to use",
+)
+@click.option("--model-path", required=True, help="Path to model or HuggingFace identifier")
+@click.option("--output", "-o", required=True, help="Output file (.npy or .npz)")
+@click.option("--batch", is_flag=True, help="Process all files in directory")
+@click.option("--layer", default=None, help="Layer to extract embeddings from")
+@click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def models_embed(path, model_type, model_path, output, batch, layer, sample_rate, quiet):
     """Extract embeddings from audio using an ML model.
 
@@ -1429,8 +1617,8 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
 
     import numpy as np
 
-    from bioamla.models import ModelConfig, load_model
     from bioamla.core.utils import get_audio_files
+    from bioamla.models import ModelConfig, load_model
 
     config = ModelConfig(sample_rate=sample_rate)
 
@@ -1468,19 +1656,19 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
                 embeddings_list.append(emb)
                 filepaths_list.append(filepath)
                 if not quiet:
-                    click.echo(f"[{i+1}/{len(audio_files)}] {filepath}: shape {emb.shape}")
+                    click.echo(f"[{i + 1}/{len(audio_files)}] {filepath}: shape {emb.shape}")
             except Exception as e:
                 if not quiet:
-                    click.echo(f"[{i+1}/{len(audio_files)}] Error: {filepath} - {e}")
+                    click.echo(f"[{i + 1}/{len(audio_files)}] Error: {filepath} - {e}")
 
         # Stack into 2D array (samples x features) for clustering compatibility
         embeddings = np.vstack(embeddings_list)
         np.save(output, embeddings)
 
         # Save filepaths mapping separately
-        filepaths_output = str(output).replace('.npy', '_filepaths.txt')
-        with TextFile(filepaths_output, mode='w') as f:
-            f.write('\n'.join(filepaths_list))
+        filepaths_output = str(output).replace(".npy", "_filepaths.txt")
+        with TextFile(filepaths_output, mode="w") as f:
+            f.write("\n".join(filepaths_list))
 
         if not quiet:
             click.echo(f"\nEmbeddings saved to {output}")
@@ -1499,24 +1687,39 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
             click.echo(f"Saved to {output}")
 
 
-@train.command('cnn')
-@click.argument('train_dir')
-@click.option('--val-dir', default=None, help='Validation data directory')
-@click.option('--output-dir', '-o', default='./output', help='Output directory for model')
-@click.option('--classes', required=True, help='Comma-separated list of class names')
-@click.option('--architecture', type=click.Choice(['resnet18', 'resnet50']),
-              default='resnet18', help='Model architecture')
-@click.option('--epochs', default=10, type=int, help='Number of training epochs')
-@click.option('--batch-size', default=32, type=int, help='Batch size')
-@click.option('--learning-rate', default=1e-4, type=float, help='Learning rate')
-@click.option('--freeze-epochs', default=0, type=int, help='Epochs to keep backbone frozen')
-@click.option('--pretrained/--no-pretrained', default=True, help='Use ImageNet pretrained weights')
-@click.option('--fp16/--no-fp16', default=False, help='Use mixed precision training')
-@click.option('--sample-rate', default=16000, type=int, help='Target sample rate')
-@click.option('--clip-duration', default=3.0, type=float, help='Clip duration in seconds')
+@train.command("cnn")
+@click.argument("train_dir")
+@click.option("--val-dir", default=None, help="Validation data directory")
+@click.option("--output-dir", "-o", default="./output", help="Output directory for model")
+@click.option("--classes", required=True, help="Comma-separated list of class names")
+@click.option(
+    "--architecture",
+    type=click.Choice(["resnet18", "resnet50"]),
+    default="resnet18",
+    help="Model architecture",
+)
+@click.option("--epochs", default=10, type=int, help="Number of training epochs")
+@click.option("--batch-size", default=32, type=int, help="Batch size")
+@click.option("--learning-rate", default=1e-4, type=float, help="Learning rate")
+@click.option("--freeze-epochs", default=0, type=int, help="Epochs to keep backbone frozen")
+@click.option("--pretrained/--no-pretrained", default=True, help="Use ImageNet pretrained weights")
+@click.option("--fp16/--no-fp16", default=False, help="Use mixed precision training")
+@click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
+@click.option("--clip-duration", default=3.0, type=float, help="Clip duration in seconds")
 def train_cnn(
-    train_dir, val_dir, output_dir, classes, architecture, epochs,
-    batch_size, learning_rate, freeze_epochs, pretrained, fp16, sample_rate, clip_duration
+    train_dir,
+    val_dir,
+    output_dir,
+    classes,
+    architecture,
+    epochs,
+    batch_size,
+    learning_rate,
+    freeze_epochs,
+    pretrained,
+    fp16,
+    sample_rate,
+    clip_duration,
 ):
     """Train a custom CNN model using transfer learning.
 
@@ -1535,7 +1738,7 @@ def train_cnn(
     """
     from bioamla.models import ModelTrainer, TrainingConfig
 
-    class_names = [c.strip() for c in classes.split(',')]
+    class_names = [c.strip() for c in classes.split(",")]
 
     click.echo(f"Training {architecture} model with classes: {class_names}")
     click.echo(f"Training data: {train_dir}")
@@ -1579,13 +1782,22 @@ def train_cnn(
         raise SystemExit(1)
 
 
-@models.command('convert')
-@click.argument('input_path')
-@click.argument('output_path')
-@click.option('--format', 'output_format', type=click.Choice(['pt', 'onnx']),
-              default='onnx', help='Output format')
-@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
-              default='ast', help='Model type')
+@models.command("convert")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["pt", "onnx"]),
+    default="onnx",
+    help="Output format",
+)
+@click.option(
+    "--model-type",
+    type=click.Choice(["ast", "birdnet", "opensoundscape"]),
+    default="ast",
+    help="Model type",
+)
 def models_convert(input_path, output_path, output_format, model_type):
     """Convert model between formats (PyTorch to ONNX).
 
@@ -1606,10 +1818,14 @@ def models_convert(input_path, output_path, output_format, model_type):
         raise SystemExit(1)
 
 
-@models.command('info')
-@click.argument('model_path')
-@click.option('--model-type', type=click.Choice(['ast', 'birdnet', 'opensoundscape']),
-              default='ast', help='Model type')
+@models.command("info")
+@click.argument("model_path")
+@click.option(
+    "--model-type",
+    type=click.Choice(["ast", "birdnet", "opensoundscape"]),
+    default="ast",
+    help="Model type",
+)
 def models_info(model_path, model_type):
     """Display information about a model."""
     from bioamla.models import load_model
@@ -1620,8 +1836,10 @@ def models_info(model_path, model_type):
         click.echo(f"Backend: {model.backend.value}")
         click.echo(f"Classes: {model.num_classes}")
         if model.classes:
-            click.echo(f"Labels: {', '.join(model.classes[:10])}" +
-                      (f"... (+{len(model.classes)-10} more)" if len(model.classes) > 10 else ""))
+            click.echo(
+                f"Labels: {', '.join(model.classes[:10])}"
+                + (f"... (+{len(model.classes) - 10} more)" if len(model.classes) > 10 else "")
+            )
     except Exception as e:
         click.echo(f"Error loading model: {e}")
         raise SystemExit(1)
@@ -1631,20 +1849,23 @@ def models_info(model_path, model_type):
 # Audio Command Group
 # =============================================================================
 
+
 @cli.group()
 def audio():
     """Audio file utilities."""
     pass
 
 
-@audio.command('list')
-@click.argument('filepath', required=False, default='.')
+@audio.command("list")
+@click.argument("filepath", required=False, default=".")
 def audio_list(filepath: str):
     """List audio files in a directory."""
     from bioamla.core.utils import get_audio_files
+
     try:
-        if filepath == '.':
+        if filepath == ".":
             import os
+
             filepath = os.getcwd()
         audio_files = get_audio_files(filepath)
         if audio_files:
@@ -1656,25 +1877,32 @@ def audio_list(filepath: str):
         click.echo(f"An error occurred: {e}")
 
 
-@audio.command('info')
-@click.argument('filepath')
+@audio.command("info")
+@click.argument("filepath")
 def audio_info(filepath: str):
     """Display metadata from an audio file."""
     from bioamla.core.utils import get_wav_metadata
+
     metadata = get_wav_metadata(filepath)
     click.echo(f"{metadata}")
 
 
-@audio.command('convert')
-@click.argument('path')
-@click.argument('target_format')
-@click.option('--output', '-o', default=None, help='Output file or directory')
-@click.option('--batch', is_flag=True, help='Process all files in directory')
-@click.option('--dataset', is_flag=True, help='Convert dataset with metadata.csv (updates metadata)')
-@click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file (for --dataset mode)')
-@click.option('--keep-original', is_flag=True, help='Keep original files after conversion')
-@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@audio.command("convert")
+@click.argument("path")
+@click.argument("target_format")
+@click.option("--output", "-o", default=None, help="Output file or directory")
+@click.option("--batch", is_flag=True, help="Process all files in directory")
+@click.option(
+    "--dataset", is_flag=True, help="Convert dataset with metadata.csv (updates metadata)"
+)
+@click.option(
+    "--metadata-filename",
+    default="metadata.csv",
+    help="Name of metadata CSV file (for --dataset mode)",
+)
+@click.option("--keep-original", is_flag=True, help="Keep original files after conversion")
+@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories (batch mode)")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def audio_convert(
     path: str,
     target_format: str,
@@ -1684,7 +1912,7 @@ def audio_convert(
     metadata_filename: str,
     keep_original: bool,
     recursive: bool,
-    quiet: bool
+    quiet: bool,
 ):
     """Convert audio files to a different format.
 
@@ -1705,7 +1933,7 @@ def audio_convert(
             target_format=target_format,
             metadata_filename=metadata_filename,
             keep_original=keep_original,
-            verbose=not quiet
+            verbose=not quiet,
         )
 
         if quiet:
@@ -1725,7 +1953,7 @@ def audio_convert(
                 target_format=target_format,
                 recursive=recursive,
                 keep_original=keep_original,
-                verbose=not quiet
+                verbose=not quiet,
             )
 
             if quiet:
@@ -1758,15 +1986,15 @@ def audio_convert(
             raise SystemExit(1)
 
 
-@audio.command('filter')
-@click.argument('path')
-@click.option('--output', '-o', default=None, help='Output file or directory')
-@click.option('--batch', is_flag=True, help='Process all files in directory')
-@click.option('--bandpass', default=None, help='Bandpass filter range (e.g., "1000-8000")')
-@click.option('--lowpass', default=None, type=float, help='Lowpass cutoff frequency in Hz')
-@click.option('--highpass', default=None, type=float, help='Highpass cutoff frequency in Hz')
-@click.option('--order', default=5, type=int, help='Filter order (default: 5)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@audio.command("filter")
+@click.argument("path")
+@click.option("--output", "-o", default=None, help="Output file or directory")
+@click.option("--batch", is_flag=True, help="Process all files in directory")
+@click.option("--bandpass", default=None, help='Bandpass filter range (e.g., "1000-8000")')
+@click.option("--lowpass", default=None, type=float, help="Lowpass cutoff frequency in Hz")
+@click.option("--highpass", default=None, type=float, help="Highpass cutoff frequency in Hz")
+@click.option("--order", default=5, type=int, help="Filter order (default: 5)")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet):
     """Apply frequency filter to audio files."""
     from bioamla.core.audio.signal import (
@@ -1781,7 +2009,7 @@ def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet)
 
     def processor(audio, sr):
         if bandpass:
-            parts = bandpass.split('-')
+            parts = bandpass.split("-")
             low, high = float(parts[0]), float(parts[1])
             return bandpass_filter(audio, sr, low, high, order)
         elif lowpass:
@@ -1793,13 +2021,17 @@ def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet)
     _run_signal_processing(path, output, batch, processor, quiet, "filter")
 
 
-@audio.command('denoise')
-@click.argument('path')
-@click.option('--output', '-o', default=None, help='Output file or directory')
-@click.option('--batch', is_flag=True, help='Process all files in directory')
-@click.option('--method', type=click.Choice(['spectral']), default='spectral', help='Denoising method')
-@click.option('--strength', default=1.0, type=float, help='Noise reduction strength (0-2, default: 1.0)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@audio.command("denoise")
+@click.argument("path")
+@click.option("--output", "-o", default=None, help="Output file or directory")
+@click.option("--batch", is_flag=True, help="Process all files in directory")
+@click.option(
+    "--method", type=click.Choice(["spectral"]), default="spectral", help="Denoising method"
+)
+@click.option(
+    "--strength", default=1.0, type=float, help="Noise reduction strength (0-2, default: 1.0)"
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def audio_denoise(path, output, batch, method, strength, quiet):
     """Apply noise reduction to audio files."""
     from bioamla.core.audio.signal import spectral_denoise
@@ -1810,14 +2042,20 @@ def audio_denoise(path, output, batch, method, strength, quiet):
     _run_signal_processing(path, output, batch, processor, quiet, "denoise")
 
 
-@audio.command('segment')
-@click.argument('path')
-@click.option('--output', '-o', required=True, help='Output directory for segments')
-@click.option('--batch', is_flag=True, help='Process all audio files in directory')
-@click.option('--silence-threshold', default=-40, type=float, help='Silence threshold in dB (default: -40)')
-@click.option('--min-silence', default=0.3, type=float, help='Min silence duration in seconds (default: 0.3)')
-@click.option('--min-segment', default=0.5, type=float, help='Min segment duration in seconds (default: 0.5)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@audio.command("segment")
+@click.argument("path")
+@click.option("--output", "-o", required=True, help="Output directory for segments")
+@click.option("--batch", is_flag=True, help="Process all audio files in directory")
+@click.option(
+    "--silence-threshold", default=-40, type=float, help="Silence threshold in dB (default: -40)"
+)
+@click.option(
+    "--min-silence", default=0.3, type=float, help="Min silence duration in seconds (default: 0.3)"
+)
+@click.option(
+    "--min-segment", default=0.5, type=float, help="Min segment duration in seconds (default: 0.5)"
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def audio_segment(path, output, batch, silence_threshold, min_silence, min_segment, quiet):
     """Split audio on silence into separate files."""
     from pathlib import Path
@@ -1837,10 +2075,11 @@ def audio_segment(path, output, batch, silence_threshold, min_silence, min_segme
         """Segment a single audio file."""
         audio, sr = load_audio(str(audio_path))
         chunks = split_audio_on_silence(
-            audio, sr,
+            audio,
+            sr,
             silence_threshold_db=silence_threshold,
             min_silence_duration=min_silence,
-            min_segment_duration=min_segment
+            min_segment_duration=min_segment,
         )
 
         if not chunks:
@@ -1848,7 +2087,7 @@ def audio_segment(path, output, batch, silence_threshold, min_silence, min_segme
 
         stem = audio_path.stem
         for i, (chunk, start, end) in enumerate(chunks):
-            out_path = output_dir / f"{stem}_seg{i+1:03d}_{start:.2f}-{end:.2f}s.wav"
+            out_path = output_dir / f"{stem}_seg{i + 1:03d}_{start:.2f}-{end:.2f}s.wav"
             save_audio(str(out_path), chunk, sr)
             if not quiet:
                 click.echo(f"  Created: {out_path}")
@@ -1888,14 +2127,18 @@ def audio_segment(path, output, batch, silence_threshold, min_silence, min_segme
                         num_segments = segment_file(audio_path, file_output_dir)
                         total_segments += num_segments
                         files_processed += 1
-                    except Exception as e:
+                    except Exception:
                         files_failed += 1
                     progress.advance()
 
             if files_failed > 0:
-                print_error(f"Processed {files_processed} files, created {total_segments} segments, {files_failed} failed")
+                print_error(
+                    f"Processed {files_processed} files, created {total_segments} segments, {files_failed} failed"
+                )
             else:
-                print_success(f"Processed {files_processed} files, created {total_segments} segments")
+                print_success(
+                    f"Processed {files_processed} files, created {total_segments} segments"
+                )
         else:
             for audio_file in audio_files:
                 audio_path = Path(audio_file)
@@ -1922,10 +2165,10 @@ def audio_segment(path, output, batch, silence_threshold, min_silence, min_segme
             click.echo(f"Created {num_segments} segments in {output}")
 
 
-@audio.command('detect-events')
-@click.argument('path')
-@click.option('--output', '-o', required=True, help='Output CSV file for events')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@audio.command("detect-events")
+@click.argument("path")
+@click.option("--output", "-o", required=True, help="Output CSV file for events")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def audio_detect_events(path, output, quiet):
     """Detect onset events in audio and save to CSV."""
     import csv
@@ -1944,9 +2187,9 @@ def audio_detect_events(path, output, quiet):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    with TextFile(output, mode='w', newline='') as f:
+    with TextFile(output, mode="w", newline="") as f:
         writer = csv.writer(f.handle)
-        writer.writerow(['time', 'strength'])
+        writer.writerow(["time", "strength"])
         for event in events:
             writer.writerow([f"{event.time:.4f}", f"{event.strength:.4f}"])
 
@@ -1954,13 +2197,13 @@ def audio_detect_events(path, output, quiet):
         click.echo(f"Detected {len(events)} events, saved to {output}")
 
 
-@audio.command('normalize')
-@click.argument('path')
-@click.option('--output', '-o', default=None, help='Output file or directory')
-@click.option('--batch', is_flag=True, help='Process all files in directory')
-@click.option('--target-db', default=-20, type=float, help='Target loudness in dB (default: -20)')
-@click.option('--peak', is_flag=True, help='Use peak normalization instead of RMS')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@audio.command("normalize")
+@click.argument("path")
+@click.option("--output", "-o", default=None, help="Output file or directory")
+@click.option("--batch", is_flag=True, help="Process all files in directory")
+@click.option("--target-db", default=-20, type=float, help="Target loudness in dB (default: -20)")
+@click.option("--peak", is_flag=True, help="Use peak normalization instead of RMS")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def audio_normalize(path, output, batch, target_db, peak, quiet):
     """Normalize audio loudness."""
     from bioamla.core.audio.signal import normalize_loudness, peak_normalize
@@ -1974,12 +2217,12 @@ def audio_normalize(path, output, batch, target_db, peak, quiet):
     _run_signal_processing(path, output, batch, processor, quiet, "normalize")
 
 
-@audio.command('resample')
-@click.argument('path')
-@click.option('--output', '-o', default=None, help='Output file or directory')
-@click.option('--batch', is_flag=True, help='Process all files in directory')
-@click.option('--rate', required=True, type=int, help='Target sample rate in Hz')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@audio.command("resample")
+@click.argument("path")
+@click.option("--output", "-o", default=None, help="Output file or directory")
+@click.option("--batch", is_flag=True, help="Process all files in directory")
+@click.option("--rate", required=True, type=int, help="Target sample rate in Hz")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def audio_resample(path, output, batch, rate, quiet):
     """Resample audio to a different sample rate."""
     from bioamla.core.audio.signal import resample_audio
@@ -1990,15 +2233,17 @@ def audio_resample(path, output, batch, rate, quiet):
     _run_signal_processing(path, output, batch, processor, quiet, "resample", output_sr=rate)
 
 
-@audio.command('trim')
-@click.argument('path')
-@click.option('--output', '-o', default=None, help='Output file or directory')
-@click.option('--batch', is_flag=True, help='Process all files in directory')
-@click.option('--start', default=None, type=float, help='Start time in seconds')
-@click.option('--end', default=None, type=float, help='End time in seconds')
-@click.option('--silence', is_flag=True, help='Trim silence from start/end instead')
-@click.option('--threshold', default=-40, type=float, help='Silence threshold in dB (for --silence)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@audio.command("trim")
+@click.argument("path")
+@click.option("--output", "-o", default=None, help="Output file or directory")
+@click.option("--batch", is_flag=True, help="Process all files in directory")
+@click.option("--start", default=None, type=float, help="Start time in seconds")
+@click.option("--end", default=None, type=float, help="End time in seconds")
+@click.option("--silence", is_flag=True, help="Trim silence from start/end instead")
+@click.option(
+    "--threshold", default=-40, type=float, help="Silence threshold in dB (for --silence)"
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
     """Trim audio by time or remove silence."""
     from bioamla.core.audio.signal import trim_audio, trim_silence
@@ -2015,15 +2260,22 @@ def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
     _run_signal_processing(path, output, batch, processor, quiet, "trim")
 
 
-@audio.command('analyze')
-@click.argument('path')
-@click.option('--batch', is_flag=True, help='Analyze all audio files in directory')
-@click.option('--output', '-o', default=None, help='Output file for results (CSV or JSON)')
-@click.option('--format', 'output_format', type=click.Choice(['text', 'json', 'csv']), default='text',
-              help='Output format (default: text)')
-@click.option('--silence-threshold', default=-40, type=float, help='Silence detection threshold in dB')
-@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode)')
-@click.option('--quiet', is_flag=True, help='Suppress detailed output')
+@audio.command("analyze")
+@click.argument("path")
+@click.option("--batch", is_flag=True, help="Analyze all audio files in directory")
+@click.option("--output", "-o", default=None, help="Output file for results (CSV or JSON)")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json", "csv"]),
+    default="text",
+    help="Output format (default: text)",
+)
+@click.option(
+    "--silence-threshold", default=-40, type=float, help="Silence detection threshold in dB"
+)
+@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories (batch mode)")
+@click.option("--quiet", is_flag=True, help="Suppress detailed output")
 def audio_analyze(path, batch, output, output_format, silence_threshold, recursive, quiet):
     """Analyze audio files and display statistics.
 
@@ -2073,7 +2325,7 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
         errors = []
 
         if not quiet:
-            from bioamla.core.progress import ProgressBar, print_success, print_error
+            from bioamla.core.progress import ProgressBar, print_error, print_success
 
             with ProgressBar(
                 total=len(audio_files),
@@ -2099,45 +2351,59 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
                 except Exception:
                     pass
 
-        if output_format == 'json':
+        if output_format == "json":
             result = {
                 "summary": summarize_analysis(analyses),
-                "files": [a.to_dict() for a in analyses]
+                "files": [a.to_dict() for a in analyses],
             }
             if output:
-                with TextFile(output, mode='w') as f:
+                with TextFile(output, mode="w") as f:
                     json.dump(result, f.handle, indent=2)
                 click.echo(f"Results saved to {output}")
             else:
                 click.echo(json.dumps(result, indent=2))
 
-        elif output_format == 'csv':
+        elif output_format == "csv":
             import csv
+
             output_path = output or "analysis_results.csv"
-            with TextFile(output_path, mode='w', newline='') as f:
+            with TextFile(output_path, mode="w", newline="") as f:
                 writer = csv.writer(f.handle)
-                writer.writerow([
-                    'file_path', 'duration', 'sample_rate', 'channels',
-                    'rms', 'rms_db', 'peak', 'peak_db',
-                    'peak_frequency', 'spectral_centroid', 'bandwidth',
-                    'is_silent', 'silence_ratio'
-                ])
+                writer.writerow(
+                    [
+                        "file_path",
+                        "duration",
+                        "sample_rate",
+                        "channels",
+                        "rms",
+                        "rms_db",
+                        "peak",
+                        "peak_db",
+                        "peak_frequency",
+                        "spectral_centroid",
+                        "bandwidth",
+                        "is_silent",
+                        "silence_ratio",
+                    ]
+                )
                 for a in analyses:
-                    writer.writerow([
-                        a.file_path,
-                        f"{a.info.duration:.3f}",
-                        a.info.sample_rate,
-                        a.info.channels,
-                        f"{a.amplitude.rms:.6f}",
-                        f"{a.amplitude.rms_db:.2f}",
-                        f"{a.amplitude.peak:.6f}",
-                        f"{a.amplitude.peak_db:.2f}",
-                        f"{a.frequency.peak_frequency:.1f}",
-                        f"{a.frequency.spectral_centroid:.1f}",
-                        f"{a.frequency.bandwidth:.1f}",
-                        a.silence.is_silent,
-                        f"{a.silence.silence_ratio:.3f}"
-                    ])
+                    writer.writerow(
+                        [
+                            a.file_path,
+                            f"{a.info.duration:.3f}",
+                            a.info.sample_rate,
+                            a.info.channels,
+                            f"{a.amplitude.rms:.6f}",
+                            f"{a.amplitude.rms_db:.2f}",
+                            f"{a.amplitude.peak:.6f}",
+                            f"{a.amplitude.peak_db:.2f}",
+                            f"{a.frequency.peak_frequency:.1f}",
+                            f"{a.frequency.spectral_centroid:.1f}",
+                            f"{a.frequency.bandwidth:.1f}",
+                            a.silence.is_silent,
+                            f"{a.silence.silence_ratio:.3f}",
+                        ]
+                    )
             click.echo(f"Results saved to {output_path}")
 
         else:
@@ -2148,13 +2414,19 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
             click.echo(f"Files analyzed: {summary['total_files']}")
             click.echo(f"Total duration: {summary['total_duration']:.2f}s")
             click.echo(f"Average duration: {summary['avg_duration']:.2f}s")
-            click.echo(f"Duration range: {summary['min_duration']:.2f}s - {summary['max_duration']:.2f}s")
+            click.echo(
+                f"Duration range: {summary['min_duration']:.2f}s - {summary['max_duration']:.2f}s"
+            )
             click.echo("\nAmplitude (average):")
             click.echo(f"  RMS: {summary['avg_rms_db']:.1f} dBFS")
             click.echo(f"  Peak: {summary['avg_peak_db']:.1f} dBFS")
             click.echo(f"\nFrequency (average peak): {summary['avg_peak_frequency']:.1f} Hz")
-            click.echo(f"  Range: {summary['min_peak_frequency']:.1f} - {summary['max_peak_frequency']:.1f} Hz")
-            click.echo(f"\nSilent files: {summary['silent_file_count']} ({summary['silent_file_ratio']:.1%})")
+            click.echo(
+                f"  Range: {summary['min_peak_frequency']:.1f} - {summary['max_peak_frequency']:.1f} Hz"
+            )
+            click.echo(
+                f"\nSilent files: {summary['silent_file_count']} ({summary['silent_file_ratio']:.1%})"
+            )
 
     else:
         # Single file mode
@@ -2168,10 +2440,10 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
             click.echo(f"Error analyzing file: {e}")
             raise SystemExit(1)
 
-        if output_format == 'json':
+        if output_format == "json":
             result = analysis.to_dict()
             if output:
-                with TextFile(output, mode='w', encoding='utf-8') as f:
+                with TextFile(output, mode="w", encoding="utf-8") as f:
                     json.dump(result, f.handle, indent=2)
                 click.echo(f"Results saved to {output}")
             else:
@@ -2191,15 +2463,21 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
                 click.echo(f"  Format: {analysis.info.format}")
 
             click.echo("\nAmplitude:")
-            click.echo(f"  RMS: {analysis.amplitude.rms:.6f} ({analysis.amplitude.rms_db:.1f} dBFS)")
-            click.echo(f"  Peak: {analysis.amplitude.peak:.6f} ({analysis.amplitude.peak_db:.1f} dBFS)")
+            click.echo(
+                f"  RMS: {analysis.amplitude.rms:.6f} ({analysis.amplitude.rms_db:.1f} dBFS)"
+            )
+            click.echo(
+                f"  Peak: {analysis.amplitude.peak:.6f} ({analysis.amplitude.peak_db:.1f} dBFS)"
+            )
             click.echo(f"  Crest factor: {analysis.amplitude.crest_factor:.1f} dB")
 
             click.echo("\nFrequency:")
             click.echo(f"  Peak: {analysis.frequency.peak_frequency:.1f} Hz")
             click.echo(f"  Mean: {analysis.frequency.mean_frequency:.1f} Hz")
             click.echo(f"  Spectral centroid: {analysis.frequency.spectral_centroid:.1f} Hz")
-            click.echo(f"  Bandwidth: {analysis.frequency.min_frequency:.1f} - {analysis.frequency.max_frequency:.1f} Hz")
+            click.echo(
+                f"  Bandwidth: {analysis.frequency.min_frequency:.1f} - {analysis.frequency.max_frequency:.1f} Hz"
+            )
             click.echo(f"  Spectral rolloff: {analysis.frequency.spectral_rolloff:.1f} Hz")
 
             click.echo(f"\nSilence Detection (threshold: {silence_threshold} dB):")
@@ -2224,8 +2502,7 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
 
         try:
             stats = batch_process(
-                str(path), output, processor,
-                sample_rate=output_sr, verbose=not quiet
+                str(path), output, processor, sample_rate=output_sr, verbose=not quiet
             )
             if quiet:
                 click.echo(f"Processed {stats['files_processed']} files to {stats['output_dir']}")
@@ -2257,25 +2534,52 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
 # Visualize Command (under audio group)
 # =============================================================================
 
-@audio.command('visualize')
-@click.argument('path')
-@click.option('--output', '-o', default=None, help='Output file path (single file) or directory (batch with --batch)')
-@click.option('--batch', is_flag=True, default=False, help='Process all audio files in a directory')
-@click.option('--type', 'viz_type', type=click.Choice(['stft', 'mel', 'mfcc', 'waveform']), default='mel', help='Type of visualization')
-@click.option('--sample-rate', default=16000, type=int, help='Target sample rate for processing')
-@click.option('--n-fft', default=2048, type=int, help='FFT window size (256-8192)')
-@click.option('--hop-length', default=512, type=int, help='Samples between successive frames')
-@click.option('--n-mels', default=128, type=int, help='Number of mel bands (mel spectrogram only)')
-@click.option('--n-mfcc', default=40, type=int, help='Number of MFCCs (mfcc only)')
-@click.option('--window', type=click.Choice(['hann', 'hamming', 'blackman', 'bartlett', 'rectangular', 'kaiser']), default='hann', help='Window function for STFT')
-@click.option('--db-min', default=None, type=float, help='Minimum dB value for scaling')
-@click.option('--db-max', default=None, type=float, help='Maximum dB value for scaling')
-@click.option('--cmap', default='magma', help='Colormap for spectrogram visualizations')
-@click.option('--dpi', default=150, type=int, help='Output image resolution (dots per inch)')
-@click.option('--format', 'img_format', type=click.Choice(['png', 'jpg', 'jpeg']), default=None, help='Output image format (default: inferred from extension)')
-@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories (batch mode only)')
-@click.option('--progress/--no-progress', default=True, help='Show Rich progress bar (batch mode only)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+
+@audio.command("visualize")
+@click.argument("path")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output file path (single file) or directory (batch with --batch)",
+)
+@click.option("--batch", is_flag=True, default=False, help="Process all audio files in a directory")
+@click.option(
+    "--type",
+    "viz_type",
+    type=click.Choice(["stft", "mel", "mfcc", "waveform"]),
+    default="mel",
+    help="Type of visualization",
+)
+@click.option("--sample-rate", default=16000, type=int, help="Target sample rate for processing")
+@click.option("--n-fft", default=2048, type=int, help="FFT window size (256-8192)")
+@click.option("--hop-length", default=512, type=int, help="Samples between successive frames")
+@click.option("--n-mels", default=128, type=int, help="Number of mel bands (mel spectrogram only)")
+@click.option("--n-mfcc", default=40, type=int, help="Number of MFCCs (mfcc only)")
+@click.option(
+    "--window",
+    type=click.Choice(["hann", "hamming", "blackman", "bartlett", "rectangular", "kaiser"]),
+    default="hann",
+    help="Window function for STFT",
+)
+@click.option("--db-min", default=None, type=float, help="Minimum dB value for scaling")
+@click.option("--db-max", default=None, type=float, help="Maximum dB value for scaling")
+@click.option("--cmap", default="magma", help="Colormap for spectrogram visualizations")
+@click.option("--dpi", default=150, type=int, help="Output image resolution (dots per inch)")
+@click.option(
+    "--format",
+    "img_format",
+    type=click.Choice(["png", "jpg", "jpeg"]),
+    default=None,
+    help="Output image format (default: inferred from extension)",
+)
+@click.option(
+    "--recursive/--no-recursive", default=True, help="Search subdirectories (batch mode only)"
+)
+@click.option(
+    "--progress/--no-progress", default=True, help="Show Rich progress bar (batch mode only)"
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def audio_visualize(
     path: str,
     output: str,
@@ -2294,7 +2598,7 @@ def audio_visualize(
     img_format: str,
     recursive: bool,
     progress: bool,
-    quiet: bool
+    quiet: bool,
 ):
     """
     Generate spectrogram visualizations from audio files.
@@ -2356,7 +2660,9 @@ def audio_visualize(
         )
 
         if quiet:
-            click.echo(f"Generated {stats['files_processed']} spectrograms in {stats['output_dir']}")
+            click.echo(
+                f"Generated {stats['files_processed']} spectrograms in {stats['output_dir']}"
+            )
     else:
         # Single file mode
         if output is None:
@@ -2396,6 +2702,7 @@ def audio_visualize(
 # Services Command Group
 # =============================================================================
 
+
 @cli.group()
 def services():
     """External service integrations (Xeno-canto, Macaulay Library, iNaturalist, etc.)."""
@@ -2406,30 +2713,64 @@ def services():
 # iNaturalist subgroup (under services)
 # =============================================================================
 
-@services.group('inat')
+
+@services.group("inat")
 def services_inat():
     """iNaturalist observation database."""
     pass
 
 
-@services_inat.command('download')
-@click.argument('output_dir')
-@click.option('--taxon-ids', default=None, help='Comma-separated list of taxon IDs (e.g., "3" for birds, "3,20978" for multiple)')
-@click.option('--taxon-csv', default=None, type=click.Path(exists=True), help='Path to CSV file with taxon_id column')
-@click.option('--taxon-name', default=None, help='Filter by taxon name (e.g., "Aves" for birds)')
-@click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
-@click.option('--user-id', default=None, help='Filter by observer username')
-@click.option('--project-id', default=None, help='Filter by iNaturalist project ID or slug')
-@click.option('--quality-grade', default='research', help='Quality grade: research, needs_id, or casual')
-@click.option('--sound-license', default=None, help='Comma-separated list of sound licenses (e.g., "cc-by, cc-by-nc, cc0")')
-@click.option('--start-date', default=None, help='Start date for observations (YYYY-MM-DD)')
-@click.option('--end-date', default=None, help='End date for observations (YYYY-MM-DD)')
-@click.option('--obs-per-taxon', type=int, default=100, help='Number of observations to download per taxon ID')
-@click.option('--organize-by-taxon/--no-organize-by-taxon', default=True, help='Organize files into subdirectories by species')
-@click.option('--include-inat-metadata', is_flag=True, help='Include additional iNaturalist metadata fields in CSV')
-@click.option('--file-extensions', default=None, help='Comma-separated list of file extensions to filter (e.g., "wav,mp3")')
-@click.option('--delay', type=float, default=1.0, help='Delay between downloads in seconds (rate limiting)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@services_inat.command("download")
+@click.argument("output_dir")
+@click.option(
+    "--taxon-ids",
+    default=None,
+    help='Comma-separated list of taxon IDs (e.g., "3" for birds, "3,20978" for multiple)',
+)
+@click.option(
+    "--taxon-csv",
+    default=None,
+    type=click.Path(exists=True),
+    help="Path to CSV file with taxon_id column",
+)
+@click.option("--taxon-name", default=None, help='Filter by taxon name (e.g., "Aves" for birds)')
+@click.option(
+    "--place-id", type=int, default=None, help="Filter by place ID (e.g., 1 for United States)"
+)
+@click.option("--user-id", default=None, help="Filter by observer username")
+@click.option("--project-id", default=None, help="Filter by iNaturalist project ID or slug")
+@click.option(
+    "--quality-grade", default="research", help="Quality grade: research, needs_id, or casual"
+)
+@click.option(
+    "--sound-license",
+    default=None,
+    help='Comma-separated list of sound licenses (e.g., "cc-by, cc-by-nc, cc0")',
+)
+@click.option("--start-date", default=None, help="Start date for observations (YYYY-MM-DD)")
+@click.option("--end-date", default=None, help="End date for observations (YYYY-MM-DD)")
+@click.option(
+    "--obs-per-taxon", type=int, default=100, help="Number of observations to download per taxon ID"
+)
+@click.option(
+    "--organize-by-taxon/--no-organize-by-taxon",
+    default=True,
+    help="Organize files into subdirectories by species",
+)
+@click.option(
+    "--include-inat-metadata",
+    is_flag=True,
+    help="Include additional iNaturalist metadata fields in CSV",
+)
+@click.option(
+    "--file-extensions",
+    default=None,
+    help='Comma-separated list of file extensions to filter (e.g., "wav,mp3")',
+)
+@click.option(
+    "--delay", type=float, default=1.0, help="Delay between downloads in seconds (rate limiting)"
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def inat_download(
     output_dir: str,
     taxon_ids: str,
@@ -2447,7 +2788,7 @@ def inat_download(
     include_inat_metadata: bool,
     file_extensions: str,
     delay: float,
-    quiet: bool
+    quiet: bool,
 ):
     """Download audio observations from iNaturalist."""
     from bioamla.core.services.inaturalist import download_inat_audio
@@ -2481,23 +2822,29 @@ def inat_download(
         include_inat_metadata=include_inat_metadata,
         file_extensions=extensions_list,
         delay_between_downloads=delay,
-        verbose=not quiet
+        verbose=not quiet,
     )
 
     if quiet:
         click.echo(f"Downloaded {stats['total_sounds']} audio files to {stats['output_dir']}")
 
 
-@services_inat.command('search')
-@click.option('--species', default=None, help='Filter by species name (scientific or common)')
-@click.option('--taxon-id', type=int, default=None, help='Filter by taxon ID (e.g., 20979 for Amphibia)')
-@click.option('--place-id', type=int, default=None, help='Filter by place ID (e.g., 1 for United States)')
-@click.option('--project-id', default=None, help='Filter by iNaturalist project ID or slug')
-@click.option('--quality-grade', default='research', help='Quality grade: research, needs_id, or casual')
-@click.option('--has-sounds', is_flag=True, help='Only show observations with sounds')
-@click.option('--limit', type=int, default=20, help='Maximum number of results')
-@click.option('--output', '-o', default=None, help='Output file path for CSV (optional)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@services_inat.command("search")
+@click.option("--species", default=None, help="Filter by species name (scientific or common)")
+@click.option(
+    "--taxon-id", type=int, default=None, help="Filter by taxon ID (e.g., 20979 for Amphibia)"
+)
+@click.option(
+    "--place-id", type=int, default=None, help="Filter by place ID (e.g., 1 for United States)"
+)
+@click.option("--project-id", default=None, help="Filter by iNaturalist project ID or slug")
+@click.option(
+    "--quality-grade", default="research", help="Quality grade: research, needs_id, or casual"
+)
+@click.option("--has-sounds", is_flag=True, help="Only show observations with sounds")
+@click.option("--limit", type=int, default=20, help="Maximum number of results")
+@click.option("--output", "-o", default=None, help="Output file path for CSV (optional)")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def inat_search(
     species: str,
     taxon_id: int,
@@ -2507,20 +2854,22 @@ def inat_search(
     has_sounds: bool,
     limit: int,
     output: str,
-    quiet: bool
+    quiet: bool,
 ):
     """Search for iNaturalist observations."""
     from bioamla.core.services.inaturalist import search_inat_sounds
 
     if not species and not taxon_id and not place_id and not project_id:
-        raise click.UsageError("At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)")
+        raise click.UsageError(
+            "At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)"
+        )
 
     results = search_inat_sounds(
         taxon_id=taxon_id,
         taxon_name=species,
         place_id=place_id,
         quality_grade=quality_grade,
-        per_page=limit
+        per_page=limit,
     )
 
     if not results:
@@ -2529,66 +2878,70 @@ def inat_search(
 
     if output:
         import csv
-        with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
-            fieldnames = ['observation_id', 'scientific_name', 'common_name', 'sound_count', 'observed_on', 'location', 'url']
+
+        with TextFile(output, mode="w", newline="", encoding="utf-8") as f:
+            fieldnames = [
+                "observation_id",
+                "scientific_name",
+                "common_name",
+                "sound_count",
+                "observed_on",
+                "location",
+                "url",
+            ]
             writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
             for obs in results:
-                taxon = obs.get('taxon', {})
-                observed_on_raw = obs.get('observed_on', '')
-                if hasattr(observed_on_raw, 'strftime'):
-                    observed_on = observed_on_raw.strftime('%Y-%m-%d')
+                taxon = obs.get("taxon", {})
+                observed_on_raw = obs.get("observed_on", "")
+                if hasattr(observed_on_raw, "strftime"):
+                    observed_on = observed_on_raw.strftime("%Y-%m-%d")
                 else:
-                    observed_on = str(observed_on_raw) if observed_on_raw else ''
-                writer.writerow({
-                    'observation_id': obs.get('id'),
-                    'scientific_name': taxon.get('name', ''),
-                    'common_name': taxon.get('preferred_common_name', ''),
-                    'sound_count': len(obs.get('sounds', [])),
-                    'observed_on': observed_on,
-                    'location': obs.get('place_guess', ''),
-                    'url': f"https://www.inaturalist.org/observations/{obs.get('id')}"
-                })
+                    observed_on = str(observed_on_raw) if observed_on_raw else ""
+                writer.writerow(
+                    {
+                        "observation_id": obs.get("id"),
+                        "scientific_name": taxon.get("name", ""),
+                        "common_name": taxon.get("preferred_common_name", ""),
+                        "sound_count": len(obs.get("sounds", [])),
+                        "observed_on": observed_on,
+                        "location": obs.get("place_guess", ""),
+                        "url": f"https://www.inaturalist.org/observations/{obs.get('id')}",
+                    }
+                )
         click.echo(f"Saved {len(results)} observations to {output}")
     else:
         click.echo(f"\nFound {len(results)} observations with sounds:\n")
         click.echo(f"{'ID':<12} {'Species':<30} {'Sounds':<8} {'Date':<12} {'Location':<30}")
         click.echo("-" * 95)
         for obs in results:
-            taxon = obs.get('taxon', {})
-            obs_id = obs.get('id', '')
-            name = taxon.get('name', 'Unknown')[:28]
-            sound_count = len(obs.get('sounds', []))
-            observed_on_raw = obs.get('observed_on', '')
-            if hasattr(observed_on_raw, 'strftime'):
-                observed_on = observed_on_raw.strftime('%Y-%m-%d')
+            taxon = obs.get("taxon", {})
+            obs_id = obs.get("id", "")
+            name = taxon.get("name", "Unknown")[:28]
+            sound_count = len(obs.get("sounds", []))
+            observed_on_raw = obs.get("observed_on", "")
+            if hasattr(observed_on_raw, "strftime"):
+                observed_on = observed_on_raw.strftime("%Y-%m-%d")
             else:
-                observed_on = str(observed_on_raw)[:10] if observed_on_raw else ''
-            location = (obs.get('place_guess', '') or '')[:28]
+                observed_on = str(observed_on_raw)[:10] if observed_on_raw else ""
+            location = (obs.get("place_guess", "") or "")[:28]
             click.echo(f"{obs_id:<12} {name:<30} {sound_count:<8} {observed_on:<12} {location:<30}")
 
 
-@services_inat.command('stats')
-@click.argument('project_id')
-@click.option('--output', '-o', default=None, help='Output file path for JSON (optional)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output, print only JSON')
-def inat_stats(
-    project_id: str,
-    output: str,
-    quiet: bool
-):
+@services_inat.command("stats")
+@click.argument("project_id")
+@click.option("--output", "-o", default=None, help="Output file path for JSON (optional)")
+@click.option("--quiet", is_flag=True, help="Suppress progress output, print only JSON")
+def inat_stats(project_id: str, output: str, quiet: bool):
     """Get statistics for an iNaturalist project."""
     import json
 
     from bioamla.core.services.inaturalist import get_project_stats
 
-    stats = get_project_stats(
-        project_id=project_id,
-        verbose=not quiet
-    )
+    stats = get_project_stats(project_id=project_id, verbose=not quiet)
 
     if output:
-        with TextFile(output, mode='w', encoding='utf-8') as f:
+        with TextFile(output, mode="w", encoding="utf-8") as f:
             json.dump(stats, f.handle, indent=2)
         click.echo(f"Saved project stats to {output}")
     elif quiet:
@@ -2597,7 +2950,7 @@ def inat_stats(
         click.echo(f"\nProject: {stats['title']}")
         click.echo(f"URL: {stats['url']}")
         click.echo(f"Type: {stats['project_type']}")
-        if stats['place']:
+        if stats["place"]:
             click.echo(f"Place: {stats['place']}")
         click.echo(f"Created: {stats['created_at']}")
         click.echo("\nStatistics:")
@@ -2610,20 +2963,31 @@ def inat_stats(
 # Dataset Command Group
 # =============================================================================
 
+
 @cli.group()
 def dataset():
     """Dataset management commands."""
     pass
 
 
-@dataset.command('merge')
-@click.argument('output_dir')
-@click.argument('dataset_paths', nargs=-1, required=True)
-@click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file in each dataset')
-@click.option('--overwrite', is_flag=True, help='Overwrite existing files instead of skipping')
-@click.option('--no-organize', is_flag=True, help='Preserve original directory structure instead of organizing by category')
-@click.option('--target-format', default=None, help='Convert all audio files to this format (wav, mp3, flac, etc.)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@dataset.command("merge")
+@click.argument("output_dir")
+@click.argument("dataset_paths", nargs=-1, required=True)
+@click.option(
+    "--metadata-filename", default="metadata.csv", help="Name of metadata CSV file in each dataset"
+)
+@click.option("--overwrite", is_flag=True, help="Overwrite existing files instead of skipping")
+@click.option(
+    "--no-organize",
+    is_flag=True,
+    help="Preserve original directory structure instead of organizing by category",
+)
+@click.option(
+    "--target-format",
+    default=None,
+    help="Convert all audio files to this format (wav, mp3, flac, etc.)",
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def dataset_merge(
     output_dir: str,
     dataset_paths: tuple,
@@ -2631,7 +2995,7 @@ def dataset_merge(
     overwrite: bool,
     no_organize: bool,
     target_format: str,
-    quiet: bool
+    quiet: bool,
 ):
     """Merge multiple audio datasets into a single dataset."""
     from bioamla.core.datasets import merge_datasets as do_merge
@@ -2643,7 +3007,7 @@ def dataset_merge(
         skip_existing=not overwrite,
         organize_by_category=not no_organize,
         target_format=target_format,
-        verbose=not quiet
+        verbose=not quiet,
     )
 
     if quiet:
@@ -2653,20 +3017,19 @@ def dataset_merge(
         click.echo(msg)
 
 
-@dataset.command('license')
-@click.argument('path')
-@click.option('--template', '-t', default=None, help='Template file to prepend to the license file')
-@click.option('--output', '-o', default='LICENSE', help='Output filename for the license file')
-@click.option('--metadata-filename', default='metadata.csv', help='Name of metadata CSV file')
-@click.option('--batch', is_flag=True, help='Process all datasets in directory (each subdirectory with metadata.csv)')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@dataset.command("license")
+@click.argument("path")
+@click.option("--template", "-t", default=None, help="Template file to prepend to the license file")
+@click.option("--output", "-o", default="LICENSE", help="Output filename for the license file")
+@click.option("--metadata-filename", default="metadata.csv", help="Name of metadata CSV file")
+@click.option(
+    "--batch",
+    is_flag=True,
+    help="Process all datasets in directory (each subdirectory with metadata.csv)",
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def dataset_license(
-    path: str,
-    template: str,
-    output: str,
-    metadata_filename: str,
-    batch: bool,
-    quiet: bool
+    path: str, template: str, output: str, metadata_filename: str, batch: bool, quiet: bool
 ):
     """Generate license/attribution file from dataset metadata.
 
@@ -2702,13 +3065,13 @@ def dataset_license(
                 audio_dir=path_obj,
                 template_path=template_path,
                 output_filename=output,
-                metadata_filename=metadata_filename
+                metadata_filename=metadata_filename,
             )
         except FileNotFoundError as e:
             click.echo(f"Error: {e}")
             raise SystemExit(1)
 
-        if stats['datasets_found'] == 0:
+        if stats["datasets_found"] == 0:
             click.echo("No datasets found (no directories with metadata.csv)")
             raise SystemExit(1)
 
@@ -2717,15 +3080,19 @@ def dataset_license(
             click.echo(f"  Successful: {stats['datasets_processed']}")
             click.echo(f"  Failed: {stats['datasets_failed']}")
 
-            for result in stats['results']:
-                if result['status'] == 'success':
-                    click.echo(f"  - {result['dataset_name']}: {result['attributions_count']} attributions")
+            for result in stats["results"]:
+                if result["status"] == "success":
+                    click.echo(
+                        f"  - {result['dataset_name']}: {result['attributions_count']} attributions"
+                    )
                 else:
-                    click.echo(f"  - {result['dataset_name']}: FAILED - {result.get('error', 'Unknown error')}")
+                    click.echo(
+                        f"  - {result['dataset_name']}: FAILED - {result.get('error', 'Unknown error')}"
+                    )
         else:
             click.echo(f"Generated {stats['datasets_processed']} license files")
 
-        if stats['datasets_failed'] > 0:
+        if stats["datasets_failed"] > 0:
             raise SystemExit(1)
 
     else:
@@ -2747,7 +3114,7 @@ def dataset_license(
                 dataset_path=path_obj,
                 template_path=template_path,
                 output_filename=output,
-                metadata_filename=metadata_filename
+                metadata_filename=metadata_filename,
             )
         except (FileNotFoundError, ValueError) as e:
             click.echo(f"Error: {e}")
@@ -2765,30 +3132,35 @@ def dataset_license(
 # Augment Command (under dataset group)
 # =============================================================================
 
+
 def _parse_range(value: str) -> tuple:
     """Parse a range string like '0.8-1.2' or '-2,2' into (min, max)."""
-    if '-' in value and not value.startswith('-'):
-        parts = value.split('-')
+    if "-" in value and not value.startswith("-"):
+        parts = value.split("-")
         return float(parts[0]), float(parts[1])
-    elif ',' in value:
-        parts = value.split(',')
+    elif "," in value:
+        parts = value.split(",")
         return float(parts[0]), float(parts[1])
     else:
         val = float(value)
         return val, val
 
 
-@dataset.command('augment')
-@click.argument('input_dir')
-@click.option('--output', '-o', required=True, help='Output directory for augmented files')
-@click.option('--add-noise', default=None, help='Add Gaussian noise with SNR range (e.g., "3-30" dB)')
-@click.option('--time-stretch', default=None, help='Time stretch range (e.g., "0.8-1.2")')
-@click.option('--pitch-shift', default=None, help='Pitch shift range in semitones (e.g., "-2,2")')
-@click.option('--gain', default=None, help='Gain range in dB (e.g., "-12,12")')
-@click.option('--multiply', default=1, type=int, help='Number of augmented copies to create per file')
-@click.option('--sample-rate', default=16000, type=int, help='Target sample rate for output')
-@click.option('--recursive/--no-recursive', default=True, help='Search subdirectories')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@dataset.command("augment")
+@click.argument("input_dir")
+@click.option("--output", "-o", required=True, help="Output directory for augmented files")
+@click.option(
+    "--add-noise", default=None, help='Add Gaussian noise with SNR range (e.g., "3-30" dB)'
+)
+@click.option("--time-stretch", default=None, help='Time stretch range (e.g., "0.8-1.2")')
+@click.option("--pitch-shift", default=None, help='Pitch shift range in semitones (e.g., "-2,2")')
+@click.option("--gain", default=None, help='Gain range in dB (e.g., "-12,12")')
+@click.option(
+    "--multiply", default=1, type=int, help="Number of augmented copies to create per file"
+)
+@click.option("--sample-rate", default=16000, type=int, help="Target sample rate for output")
+@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def dataset_augment(
     input_dir: str,
     output: str,
@@ -2799,7 +3171,7 @@ def dataset_augment(
     multiply: int,
     sample_rate: int,
     recursive: bool,
-    quiet: bool
+    quiet: bool,
 ):
     """
     Augment audio files to expand training datasets.
@@ -2883,9 +3255,9 @@ def dataset_augment(
         raise SystemExit(1)
 
 
-@dataset.command('download')
-@click.argument('url', required=True)
-@click.argument('output_dir', required=False, default='.')
+@dataset.command("download")
+@click.argument("url", required=True)
+@click.argument("output_dir", required=False, default=".")
 def dataset_download(url: str, output_dir: str):
     """Download a file from the specified URL to the target directory.
 
@@ -2898,7 +3270,7 @@ def dataset_download(url: str, output_dir: str):
 
     from bioamla.core.utils import download_file
 
-    if output_dir == '.':
+    if output_dir == ".":
         output_dir = os.getcwd()
 
     parsed_url = urlparse(url)
@@ -2910,9 +3282,9 @@ def dataset_download(url: str, output_dir: str):
     download_file(url, output_path)
 
 
-@dataset.command('unzip')
-@click.argument('file_path')
-@click.argument('output_path', required=False, default='.')
+@dataset.command("unzip")
+@click.argument("file_path")
+@click.argument("output_path", required=False, default=".")
 def dataset_unzip(file_path: str, output_path: str):
     """Extract a ZIP archive to the specified output directory.
 
@@ -2920,17 +3292,19 @@ def dataset_unzip(file_path: str, output_path: str):
         bioamla dataset unzip dataset.zip ./extracted
         bioamla dataset unzip archive.zip
     """
-    from bioamla.core.utils import extract_zip_file
     import os
-    if output_path == '.':
+
+    from bioamla.core.utils import extract_zip_file
+
+    if output_path == ".":
         output_path = os.getcwd()
 
     extract_zip_file(file_path, output_path)
 
 
-@dataset.command('zip')
-@click.argument('source_path')
-@click.argument('output_file')
+@dataset.command("zip")
+@click.argument("source_path")
+@click.argument("output_file")
 def dataset_zip(source_path: str, output_file: str):
     """Create a ZIP archive from a file or directory.
 
@@ -2954,6 +3328,7 @@ def dataset_zip(source_path: str, output_file: str):
 # HuggingFace Hub Command Group
 # =============================================================================
 
+
 def _get_folder_size(path: str, limit: int | None = None) -> int:
     """Calculate the total size of a folder in bytes.
 
@@ -2965,6 +3340,7 @@ def _get_folder_size(path: str, limit: int | None = None) -> int:
         Total size in bytes, or a value > limit if short-circuited.
     """
     import os
+
     total_size = 0
     for dirpath, dirnames, filenames in os.walk(path):
         for filename in filenames:
@@ -2987,6 +3363,7 @@ def _count_files(path: str, limit: int | None = None) -> int:
         Total file count, or a value > limit if short-circuited.
     """
     import os
+
     count = 0
     for dirpath, dirnames, filenames in os.walk(path):
         count += len(filenames)
@@ -2995,7 +3372,9 @@ def _count_files(path: str, limit: int | None = None) -> int:
     return count
 
 
-def _is_large_folder(path: str, size_threshold_gb: float = 5.0, file_count_threshold: int = 1000) -> bool:
+def _is_large_folder(
+    path: str, size_threshold_gb: float = 5.0, file_count_threshold: int = 1000
+) -> bool:
     """
     Determine if a folder should be uploaded using upload_large_folder.
 
@@ -3018,23 +3397,20 @@ def _is_large_folder(path: str, size_threshold_gb: float = 5.0, file_count_thres
 
 
 # --- HuggingFace Hub subgroup ---
-@services.group('hf')
+@services.group("hf")
 def services_hf():
     """HuggingFace Hub model and dataset management."""
     pass
 
 
-@services_hf.command('push-model')
-@click.argument('path')
-@click.argument('repo_id')
-@click.option('--private/--public', default=False, help='Make the repository private (default: public)')
-@click.option('--commit-message', default=None, help='Custom commit message for the push')
-def hf_push_model(
-    path: str,
-    repo_id: str,
-    private: bool,
-    commit_message: str
-):
+@services_hf.command("push-model")
+@click.argument("path")
+@click.argument("repo_id")
+@click.option(
+    "--private/--public", default=False, help="Make the repository private (default: public)"
+)
+@click.option("--commit-message", default=None, help="Custom commit message for the push")
+def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str):
     """Push a model folder to the HuggingFace Hub.
 
     Uploads the entire contents of PATH folder to the Hub as a model.
@@ -3082,21 +3458,32 @@ def hf_push_model(
 # Annotation Command Group
 # =============================================================================
 
+
 @cli.group()
 def annotation():
     """Annotation management commands for audio datasets."""
     pass
 
 
-@annotation.command('convert')
-@click.argument('input_file')
-@click.argument('output_file')
-@click.option('--from', 'from_format', type=click.Choice(['raven', 'csv']), default=None,
-              help='Input format (auto-detected from extension if not specified)')
-@click.option('--to', 'to_format', type=click.Choice(['raven', 'csv']), default=None,
-              help='Output format (auto-detected from extension if not specified)')
-@click.option('--label-column', default=None, help='Column name for labels in input file')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@annotation.command("convert")
+@click.argument("input_file")
+@click.argument("output_file")
+@click.option(
+    "--from",
+    "from_format",
+    type=click.Choice(["raven", "csv"]),
+    default=None,
+    help="Input format (auto-detected from extension if not specified)",
+)
+@click.option(
+    "--to",
+    "to_format",
+    type=click.Choice(["raven", "csv"]),
+    default=None,
+    help="Output format (auto-detected from extension if not specified)",
+)
+@click.option("--label-column", default=None, help="Column name for labels in input file")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def annotation_convert(input_file, output_file, from_format, to_format, label_column, quiet):
     """Convert annotation files between formats.
 
@@ -3126,26 +3513,26 @@ def annotation_convert(input_file, output_file, from_format, to_format, label_co
 
     # Auto-detect input format
     if from_format is None:
-        if input_path.suffix.lower() == '.txt':
-            from_format = 'raven'
+        if input_path.suffix.lower() == ".txt":
+            from_format = "raven"
         else:
-            from_format = 'csv'
+            from_format = "csv"
 
     # Auto-detect output format
     if to_format is None:
-        if output_path.suffix.lower() == '.txt':
-            to_format = 'raven'
+        if output_path.suffix.lower() == ".txt":
+            to_format = "raven"
         else:
-            to_format = 'csv'
+            to_format = "csv"
 
     # Load annotations
-    if from_format == 'raven':
+    if from_format == "raven":
         annotations = load_raven_selection_table(input_file, label_column=label_column)
     else:
         annotations = load_csv_annotations(input_file)
 
     # Save annotations
-    if to_format == 'raven':
+    if to_format == "raven":
         save_raven_selection_table(annotations, output_file)
     else:
         save_csv_annotations(annotations, output_file)
@@ -3155,11 +3542,16 @@ def annotation_convert(input_file, output_file, from_format, to_format, label_co
         click.echo(f"Output: {output_file}")
 
 
-@annotation.command('summary')
-@click.argument('path')
-@click.option('--format', 'file_format', type=click.Choice(['raven', 'csv']), default=None,
-              help='Annotation format (auto-detected from extension if not specified)')
-@click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
+@annotation.command("summary")
+@click.argument("path")
+@click.option(
+    "--format",
+    "file_format",
+    type=click.Choice(["raven", "csv"]),
+    default=None,
+    help="Annotation format (auto-detected from extension if not specified)",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 def annotation_summary(path, file_format, output_json):
     """Display summary statistics for an annotation file.
 
@@ -3185,13 +3577,13 @@ def annotation_summary(path, file_format, output_json):
 
     # Auto-detect format
     if file_format is None:
-        if input_path.suffix.lower() == '.txt':
-            file_format = 'raven'
+        if input_path.suffix.lower() == ".txt":
+            file_format = "raven"
         else:
-            file_format = 'csv'
+            file_format = "csv"
 
     # Load annotations
-    if file_format == 'raven':
+    if file_format == "raven":
         annotations = load_raven_selection_table(path)
     else:
         annotations = load_csv_annotations(path)
@@ -3211,17 +3603,22 @@ def annotation_summary(path, file_format, output_json):
         click.echo(f"  Max: {summary['max_duration']:.2f}s")
         click.echo(f"  Mean: {summary['mean_duration']:.2f}s")
         click.echo("\nLabel counts:")
-        for label, count in sorted(summary['labels'].items()):
+        for label, count in sorted(summary["labels"].items()):
             click.echo(f"  {label}: {count}")
 
 
-@annotation.command('remap')
-@click.argument('input_file')
-@click.argument('output_file')
-@click.option('--mapping', '-m', required=True, help='Path to label mapping CSV (columns: source, target)')
-@click.option('--keep-unmapped/--drop-unmapped', default=True,
-              help='Keep or drop annotations with unmapped labels')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@annotation.command("remap")
+@click.argument("input_file")
+@click.argument("output_file")
+@click.option(
+    "--mapping", "-m", required=True, help="Path to label mapping CSV (columns: source, target)"
+)
+@click.option(
+    "--keep-unmapped/--drop-unmapped",
+    default=True,
+    help="Keep or drop annotations with unmapped labels",
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def annotation_remap(input_file, output_file, mapping, keep_unmapped, quiet):
     """Remap annotation labels using a mapping file.
 
@@ -3255,7 +3652,7 @@ def annotation_remap(input_file, output_file, mapping, keep_unmapped, quiet):
     label_mapping = load_label_mapping(mapping)
 
     # Detect format and load
-    if input_path.suffix.lower() == '.txt':
+    if input_path.suffix.lower() == ".txt":
         annotations = load_raven_selection_table(input_file)
         is_raven = True
     else:
@@ -3268,7 +3665,7 @@ def annotation_remap(input_file, output_file, mapping, keep_unmapped, quiet):
     remapped = remap_labels(annotations, label_mapping, keep_unmapped=keep_unmapped)
 
     # Save
-    if output_path.suffix.lower() == '.txt' or is_raven:
+    if output_path.suffix.lower() == ".txt" or is_raven:
         save_raven_selection_table(remapped, output_file)
     else:
         save_csv_annotations(remapped, output_file)
@@ -3278,14 +3675,14 @@ def annotation_remap(input_file, output_file, mapping, keep_unmapped, quiet):
         click.echo(f"Output: {output_file}")
 
 
-@annotation.command('filter')
-@click.argument('input_file')
-@click.argument('output_file')
-@click.option('--include', '-i', multiple=True, help='Labels to include (can specify multiple)')
-@click.option('--exclude', '-e', multiple=True, help='Labels to exclude (can specify multiple)')
-@click.option('--min-duration', type=float, default=None, help='Minimum duration in seconds')
-@click.option('--max-duration', type=float, default=None, help='Maximum duration in seconds')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@annotation.command("filter")
+@click.argument("input_file")
+@click.argument("output_file")
+@click.option("--include", "-i", multiple=True, help="Labels to include (can specify multiple)")
+@click.option("--exclude", "-e", multiple=True, help="Labels to exclude (can specify multiple)")
+@click.option("--min-duration", type=float, default=None, help="Minimum duration in seconds")
+@click.option("--max-duration", type=float, default=None, help="Maximum duration in seconds")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def annotation_filter(input_file, output_file, include, exclude, min_duration, max_duration, quiet):
     """Filter annotations by label or duration.
 
@@ -3317,7 +3714,7 @@ def annotation_filter(input_file, output_file, include, exclude, min_duration, m
         raise SystemExit(1)
 
     # Detect format and load
-    if input_path.suffix.lower() == '.txt':
+    if input_path.suffix.lower() == ".txt":
         annotations = load_raven_selection_table(input_file)
         is_raven = True
     else:
@@ -3338,7 +3735,7 @@ def annotation_filter(input_file, output_file, include, exclude, min_duration, m
         filtered = [a for a in filtered if a.duration <= max_duration]
 
     # Save
-    if output_path.suffix.lower() == '.txt' or is_raven:
+    if output_path.suffix.lower() == ".txt" or is_raven:
         save_raven_selection_table(filtered, output_file)
     else:
         save_csv_annotations(filtered, output_file)
@@ -3348,20 +3745,41 @@ def annotation_filter(input_file, output_file, include, exclude, min_duration, m
         click.echo(f"Output: {output_file}")
 
 
-@annotation.command('generate-labels')
-@click.argument('annotation_file')
-@click.argument('output_file')
-@click.option('--audio-duration', type=float, required=True, help='Total audio duration in seconds')
-@click.option('--clip-duration', type=float, required=True, help='Duration of each clip in seconds')
-@click.option('--hop-length', type=float, default=None, help='Hop length between clips (default: same as clip duration)')
-@click.option('--min-overlap', type=float, default=0.0, help='Minimum overlap ratio to assign label (0.0-1.0)')
-@click.option('--multi-label/--single-label', default=True, help='Generate multi-label or single-label output')
-@click.option('--format', 'output_format', type=click.Choice(['csv', 'numpy']), default='csv',
-              help='Output format for labels')
-@click.option('--quiet', is_flag=True, help='Suppress progress output')
+@annotation.command("generate-labels")
+@click.argument("annotation_file")
+@click.argument("output_file")
+@click.option("--audio-duration", type=float, required=True, help="Total audio duration in seconds")
+@click.option("--clip-duration", type=float, required=True, help="Duration of each clip in seconds")
+@click.option(
+    "--hop-length",
+    type=float,
+    default=None,
+    help="Hop length between clips (default: same as clip duration)",
+)
+@click.option(
+    "--min-overlap", type=float, default=0.0, help="Minimum overlap ratio to assign label (0.0-1.0)"
+)
+@click.option(
+    "--multi-label/--single-label", default=True, help="Generate multi-label or single-label output"
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["csv", "numpy"]),
+    default="csv",
+    help="Output format for labels",
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
 def annotation_generate_labels(
-    annotation_file, output_file, audio_duration, clip_duration,
-    hop_length, min_overlap, multi_label, output_format, quiet
+    annotation_file,
+    output_file,
+    audio_duration,
+    clip_duration,
+    hop_length,
+    min_overlap,
+    multi_label,
+    output_format,
+    quiet,
 ):
     """Generate clip-level labels from annotations.
 
@@ -3390,7 +3808,7 @@ def annotation_generate_labels(
         raise SystemExit(1)
 
     # Load annotations
-    if input_path.suffix.lower() == '.txt':
+    if input_path.suffix.lower() == ".txt":
         annotations = load_raven_selection_table(annotation_file)
     else:
         annotations = load_csv_annotations(annotation_file)
@@ -3415,8 +3833,12 @@ def annotation_generate_labels(
         clip_end = clip_start + clip_duration
 
         clip_labels = generate_clip_labels(
-            annotations, clip_start, clip_end, label_map,
-            min_overlap=min_overlap, multi_label=multi_label
+            annotations,
+            clip_start,
+            clip_end,
+            label_map,
+            min_overlap=min_overlap,
+            multi_label=multi_label,
         )
         all_labels.append(clip_labels)
 
@@ -3426,22 +3848,26 @@ def annotation_generate_labels(
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if output_format == 'numpy':
+    if output_format == "numpy":
         np.save(output_file, labels_array)
         # Also save label map
-        label_map_file = output_path.with_suffix('.labels.csv')
+        label_map_file = output_path.with_suffix(".labels.csv")
         import csv
-        with TextFile(label_map_file, mode='w', newline='') as f:
+
+        with TextFile(label_map_file, mode="w", newline="") as f:
             writer = csv.writer(f.handle)
-            writer.writerow(['label', 'index'])
+            writer.writerow(["label", "index"])
             for label, idx in sorted(label_map.items(), key=lambda x: x[1]):
                 writer.writerow([label, idx])
     else:
         import csv
-        with TextFile(output_file, mode='w', newline='') as f:
+
+        with TextFile(output_file, mode="w", newline="") as f:
             writer = csv.writer(f.handle)
             # Header: clip_start, clip_end, then each label
-            header = ['clip_start', 'clip_end'] + sorted(label_map.keys(), key=lambda x: label_map[x])
+            header = ["clip_start", "clip_end"] + sorted(
+                label_map.keys(), key=lambda x: label_map[x]
+            )
             writer.writerow(header)
 
             for i, clip_labels in enumerate(labels_array):
@@ -3456,17 +3882,14 @@ def annotation_generate_labels(
         click.echo(f"Output: {output_file}")
 
 
-@services_hf.command('push-dataset')
-@click.argument('path')
-@click.argument('repo_id')
-@click.option('--private/--public', default=False, help='Make the repository private (default: public)')
-@click.option('--commit-message', default=None, help='Custom commit message for the push')
-def hf_push_dataset(
-    path: str,
-    repo_id: str,
-    private: bool,
-    commit_message: str
-):
+@services_hf.command("push-dataset")
+@click.argument("path")
+@click.argument("repo_id")
+@click.option(
+    "--private/--public", default=False, help="Make the repository private (default: public)"
+)
+@click.option("--commit-message", default=None, help="Custom commit message for the push")
+def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str):
     """Push a dataset folder to the HuggingFace Hub.
 
     Uploads the entire contents of PATH folder to the Hub as a dataset.
@@ -3511,21 +3934,26 @@ def hf_push_dataset(
 
 
 # --- Xeno-canto subgroup ---
-@services.group('xc')
+@services.group("xc")
 def services_xc():
     """Xeno-canto bird recording database."""
     pass
 
 
-@services_xc.command('search')
-@click.option('--species', '-s', help='Species name (scientific or common)')
-@click.option('--genus', '-g', help='Genus name')
-@click.option('--country', '-c', help='Country name')
-@click.option('--quality', '-q', help='Recording quality (A, B, C, D, E)')
-@click.option('--type', 'sound_type', help='Sound type (song, call, etc.)')
-@click.option('--max-results', '-n', default=10, type=int, help='Maximum results')
-@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
-              default='table', help='Output format')
+@services_xc.command("search")
+@click.option("--species", "-s", help="Species name (scientific or common)")
+@click.option("--genus", "-g", help="Genus name")
+@click.option("--country", "-c", help="Country name")
+@click.option("--quality", "-q", help="Recording quality (A, B, C, D, E)")
+@click.option("--type", "sound_type", help="Sound type (song, call, etc.)")
+@click.option("--max-results", "-n", default=10, type=int, help="Maximum results")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json", "csv"]),
+    default="table",
+    help="Output format",
+)
 def xc_search(species, genus, country, quality, sound_type, max_results, output_format):
     """Search Xeno-canto for bird recordings.
 
@@ -3557,11 +3985,12 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
         click.echo("No recordings found.")
         return
 
-    if output_format == 'json':
+    if output_format == "json":
         click.echo(json_lib.dumps([r.to_dict() for r in results], indent=2))
-    elif output_format == 'csv':
+    elif output_format == "csv":
         import csv
         import sys
+
         writer = csv.DictWriter(sys.stdout, fieldnames=results[0].to_dict().keys())
         writer.writeheader()
         for r in results:
@@ -3577,14 +4006,14 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
             click.echo()
 
 
-@services_xc.command('download')
-@click.option('--species', '-s', help='Species name (scientific or common)')
-@click.option('--genus', '-g', help='Genus name')
-@click.option('--country', '-c', help='Country name')
-@click.option('--quality', '-q', default='A', help='Recording quality filter (default: A)')
-@click.option('--max-recordings', '-n', default=10, type=int, help='Maximum recordings to download')
-@click.option('--output-dir', '-o', default='./xc_recordings', help='Output directory')
-@click.option('--delay', default=1.0, type=float, help='Delay between downloads in seconds')
+@services_xc.command("download")
+@click.option("--species", "-s", help="Species name (scientific or common)")
+@click.option("--genus", "-g", help="Genus name")
+@click.option("--country", "-c", help="Country name")
+@click.option("--quality", "-q", default="A", help="Recording quality filter (default: A)")
+@click.option("--max-recordings", "-n", default=10, type=int, help="Maximum recordings to download")
+@click.option("--output-dir", "-o", default="./xc_recordings", help="Output directory")
+@click.option("--delay", default=1.0, type=float, help="Delay between downloads in seconds")
 def xc_download(species, genus, country, quality, max_recordings, output_dir, delay):
     """Download recordings from Xeno-canto.
 
@@ -3628,20 +4057,25 @@ def xc_download(species, genus, country, quality, max_recordings, output_dir, de
 
 
 # --- Macaulay Library subgroup ---
-@services.group('ml')
+@services.group("ml")
 def services_ml():
     """Macaulay Library audio recordings database."""
     pass
 
 
-@services_ml.command('search')
-@click.option('--species-code', '-s', help='eBird species code (e.g., amerob)')
-@click.option('--scientific-name', help='Scientific name')
-@click.option('--region', '-r', help='Region code (e.g., US-NY)')
-@click.option('--min-rating', default=0, type=int, help='Minimum quality rating (1-5)')
-@click.option('--max-results', '-n', default=10, type=int, help='Maximum results')
-@click.option('--format', 'output_format', type=click.Choice(['table', 'json']),
-              default='table', help='Output format')
+@services_ml.command("search")
+@click.option("--species-code", "-s", help="eBird species code (e.g., amerob)")
+@click.option("--scientific-name", help="Scientific name")
+@click.option("--region", "-r", help="Region code (e.g., US-NY)")
+@click.option("--min-rating", default=0, type=int, help="Minimum quality rating (1-5)")
+@click.option("--max-results", "-n", default=10, type=int, help="Maximum results")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
+)
 def ml_search(species_code, scientific_name, region, min_rating, max_results, output_format):
     """Search Macaulay Library for audio recordings.
 
@@ -3673,7 +4107,7 @@ def ml_search(species_code, scientific_name, region, min_rating, max_results, ou
         click.echo("No recordings found.")
         return
 
-    if output_format == 'json':
+    if output_format == "json":
         click.echo(json_lib.dumps([a.to_dict() for a in results], indent=2))
     else:
         click.echo(f"Found {len(results)} recordings:\n")
@@ -3685,13 +4119,13 @@ def ml_search(species_code, scientific_name, region, min_rating, max_results, ou
             click.echo()
 
 
-@services_ml.command('download')
-@click.option('--species-code', '-s', help='eBird species code (e.g., amerob)')
-@click.option('--scientific-name', help='Scientific name')
-@click.option('--region', '-r', help='Region code (e.g., US-NY)')
-@click.option('--min-rating', default=3, type=int, help='Minimum quality rating (default: 3)')
-@click.option('--max-recordings', '-n', default=10, type=int, help='Maximum recordings to download')
-@click.option('--output-dir', '-o', default='./ml_recordings', help='Output directory')
+@services_ml.command("download")
+@click.option("--species-code", "-s", help="eBird species code (e.g., amerob)")
+@click.option("--scientific-name", help="Scientific name")
+@click.option("--region", "-r", help="Region code (e.g., US-NY)")
+@click.option("--min-rating", default=3, type=int, help="Minimum quality rating (default: 3)")
+@click.option("--max-recordings", "-n", default=10, type=int, help="Maximum recordings to download")
+@click.option("--output-dir", "-o", default="./ml_recordings", help="Output directory")
 def ml_download(species_code, scientific_name, region, min_rating, max_recordings, output_dir):
     """Download recordings from Macaulay Library.
 
@@ -3735,17 +4169,17 @@ def ml_download(species_code, scientific_name, region, min_rating, max_recording
 
 
 # --- Species lookup subgroup ---
-@services.group('species')
+@services.group("species")
 def services_species():
     """Species name lookup and search."""
     pass
 
 
-@services_species.command('lookup')
-@click.argument('name')
-@click.option('--to-common', '-c', is_flag=True, help='Convert scientific to common name')
-@click.option('--to-scientific', '-s', is_flag=True, help='Convert common to scientific name')
-@click.option('--info', '-i', is_flag=True, help='Show full species information')
+@services_species.command("lookup")
+@click.argument("name")
+@click.option("--to-common", "-c", is_flag=True, help="Convert scientific to common name")
+@click.option("--to-scientific", "-s", is_flag=True, help="Convert common to scientific name")
+@click.option("--info", "-i", is_flag=True, help="Show full species information")
 def species_lookup(name, to_common, to_scientific, info):
     """Look up species names and convert between formats.
 
@@ -3792,9 +4226,9 @@ def species_lookup(name, to_common, to_scientific, info):
             raise SystemExit(1)
 
 
-@services_species.command('search')
-@click.argument('query')
-@click.option('--limit', '-n', default=10, type=int, help='Maximum results')
+@services_species.command("search")
+@click.argument("query")
+@click.option("--limit", "-n", default=10, type=int, help="Maximum results")
 def species_search(query, limit):
     """Fuzzy search for species by name.
 
@@ -3812,17 +4246,17 @@ def species_search(query, limit):
 
     click.echo(f"Found {len(results)} matching species:\n")
     for r in results:
-        score = r['score'] * 100
+        score = r["score"] * 100
         click.echo(f"{r['scientific_name']} - {r['common_name']}")
         click.echo(f"  Code: {r['species_code']} | Family: {r['family']} | Match: {score:.0f}%")
         click.echo()
 
 
-@services.command('clear-cache')
-@click.option('--all', 'clear_all', is_flag=True, help='Clear all API caches')
-@click.option('--xc', is_flag=True, help='Clear Xeno-canto cache')
-@click.option('--ml', is_flag=True, help='Clear Macaulay Library cache')
-@click.option('--species', is_flag=True, help='Clear species cache')
+@services.command("clear-cache")
+@click.option("--all", "clear_all", is_flag=True, help="Clear all API caches")
+@click.option("--xc", is_flag=True, help="Clear Xeno-canto cache")
+@click.option("--ml", is_flag=True, help="Clear Macaulay Library cache")
+@click.option("--species", is_flag=True, help="Clear species cache")
 def clear_cache(clear_all, xc, ml, species):
     """Clear API response caches.
 
@@ -3834,18 +4268,21 @@ def clear_cache(clear_all, xc, ml, species):
 
     if clear_all or xc:
         from bioamla.core import xeno_canto
+
         count = xeno_canto.clear_cache()
         click.echo(f"Cleared {count} Xeno-canto cache entries")
         total += count
 
     if clear_all or ml:
         from bioamla.core import macaulay
+
         count = macaulay.clear_cache()
         click.echo(f"Cleared {count} Macaulay Library cache entries")
         total += count
 
     if clear_all or species:
         from bioamla.core import species as species_mod
+
         count = species_mod.clear_cache()
         click.echo(f"Cleared {count} species cache entries")
         total += count
@@ -3861,26 +4298,42 @@ def clear_cache(clear_all, xc, ml, species):
 # Indices Command Group
 # =============================================================================
 
+
 @cli.group()
 def indices():
     """Acoustic indices for soundscape ecology analysis."""
     pass
 
 
-@indices.command('compute')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--output', '-o', type=click.Path(), help='Output CSV file for results')
-@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
-              default='table', help='Output format')
-@click.option('--n-fft', default=512, type=int, help='FFT window size')
-@click.option('--aci-min-freq', default=0.0, type=float, help='ACI minimum frequency (Hz)')
-@click.option('--aci-max-freq', default=None, type=float, help='ACI maximum frequency (Hz)')
-@click.option('--bio-min-freq', default=2000.0, type=float, help='BIO minimum frequency (Hz)')
-@click.option('--bio-max-freq', default=8000.0, type=float, help='BIO maximum frequency (Hz)')
-@click.option('--db-threshold', default=-50.0, type=float, help='dB threshold for ADI/AEI')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress progress output')
-def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_freq,
-                    bio_min_freq, bio_max_freq, db_threshold, quiet):
+@indices.command("compute")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--output", "-o", type=click.Path(), help="Output CSV file for results")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json", "csv"]),
+    default="table",
+    help="Output format",
+)
+@click.option("--n-fft", default=512, type=int, help="FFT window size")
+@click.option("--aci-min-freq", default=0.0, type=float, help="ACI minimum frequency (Hz)")
+@click.option("--aci-max-freq", default=None, type=float, help="ACI maximum frequency (Hz)")
+@click.option("--bio-min-freq", default=2000.0, type=float, help="BIO minimum frequency (Hz)")
+@click.option("--bio-max-freq", default=8000.0, type=float, help="BIO maximum frequency (Hz)")
+@click.option("--db-threshold", default=-50.0, type=float, help="dB threshold for ADI/AEI")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def indices_compute(
+    path,
+    output,
+    output_format,
+    n_fft,
+    aci_min_freq,
+    aci_max_freq,
+    bio_min_freq,
+    bio_max_freq,
+    db_threshold,
+    quiet,
+):
     """Compute acoustic indices for audio file(s).
 
     Computes ACI, ADI, AEI, BIO, and NDSI indices for soundscape ecology analysis.
@@ -3924,8 +4377,8 @@ def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_fr
             raise SystemExit(1)
     else:
         # Directory - find audio files
-        audio_extensions = {'.wav', '.mp3', '.flac', '.ogg', '.m4a'}
-        files = [f for f in path_obj.rglob('*') if f.suffix.lower() in audio_extensions]
+        audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+        files = [f for f in path_obj.rglob("*") if f.suffix.lower() in audio_extensions]
 
         if not files:
             click.echo(f"No audio files found in {path}")
@@ -3937,16 +4390,16 @@ def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_fr
     successful = [r for r in results if r.get("success", False)]
     failed = len(results) - len(successful)
 
-    if output_format == 'json':
+    if output_format == "json":
         click.echo(json_lib.dumps(results, indent=2))
-    elif output_format == 'csv' or output:
+    elif output_format == "csv" or output:
         import csv
         import sys
 
         if successful:
             fieldnames = list(successful[0].keys())
             if output:
-                with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
+                with TextFile(output, mode="w", newline="", encoding="utf-8") as f:
                     writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
                     writer.writeheader()
                     writer.writerows(successful)
@@ -3965,24 +4418,33 @@ def indices_compute(path, output, output_format, n_fft, aci_min_freq, aci_max_fr
                 click.echo(f"  AEI:  {r['aei']:.3f}")
                 click.echo(f"  BIO:  {r['bio']:.2f}")
                 click.echo(f"  NDSI: {r['ndsi']:.3f}")
-                if r.get('anthrophony'):
+                if r.get("anthrophony"):
                     click.echo(f"  Anthrophony: {r['anthrophony']:.2f}")
                     click.echo(f"  Biophony: {r['biophony']:.2f}")
             else:
-                click.echo(f"\n{r.get('filepath', 'Unknown')}: Error - {r.get('error', 'Unknown error')}")
+                click.echo(
+                    f"\n{r.get('filepath', 'Unknown')}: Error - {r.get('error', 'Unknown error')}"
+                )
 
     if not quiet:
-        click.echo(f"\nProcessed {len(results)} file(s): {len(successful)} successful, {failed} failed")
+        click.echo(
+            f"\nProcessed {len(results)} file(s): {len(successful)} successful, {failed} failed"
+        )
 
 
-@indices.command('temporal')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--window', '-w', default=60.0, type=float, help='Window duration in seconds')
-@click.option('--hop', default=None, type=float, help='Hop duration in seconds (default: window)')
-@click.option('--output', '-o', type=click.Path(), help='Output CSV file')
-@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
-              default='table', help='Output format')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress progress output')
+@indices.command("temporal")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--window", "-w", default=60.0, type=float, help="Window duration in seconds")
+@click.option("--hop", default=None, type=float, help="Hop duration in seconds (default: window)")
+@click.option("--output", "-o", type=click.Path(), help="Output CSV file")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json", "csv"]),
+    default="table",
+    help="Output format",
+)
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def indices_temporal(path, window, hop, output, output_format, quiet):
     """Compute acoustic indices over time windows.
 
@@ -4013,7 +4475,8 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
         click.echo(f"Window: {window}s, Hop: {hop or window}s")
 
     results = temporal_indices(
-        audio, sample_rate,
+        audio,
+        sample_rate,
         window_duration=window,
         hop_duration=hop,
     )
@@ -4022,15 +4485,15 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
         click.echo("No complete windows in recording (audio shorter than window duration)")
         raise SystemExit(1)
 
-    if output_format == 'json':
+    if output_format == "json":
         click.echo(json_lib.dumps(results, indent=2))
-    elif output_format == 'csv' or output:
+    elif output_format == "csv" or output:
         import csv
         import sys
 
         fieldnames = list(results[0].keys())
         if output:
-            with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
+            with TextFile(output, mode="w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(results)
@@ -4046,15 +4509,17 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
         click.echo("-" * 70)
         for r in results:
             time_str = f"{r['start_time']:.0f}-{r['end_time']:.0f}s"
-            click.echo(f"{time_str:>12}  {r['aci']:>8.2f}  {r['adi']:>6.3f}  "
-                      f"{r['aei']:>6.3f}  {r['bio']:>8.2f}  {r['ndsi']:>6.3f}")
+            click.echo(
+                f"{time_str:>12}  {r['aci']:>8.2f}  {r['adi']:>6.3f}  "
+                f"{r['aei']:>6.3f}  {r['bio']:>8.2f}  {r['ndsi']:>6.3f}"
+            )
 
 
-@indices.command('aci')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--min-freq', default=0.0, type=float, help='Minimum frequency (Hz)')
-@click.option('--max-freq', default=None, type=float, help='Maximum frequency (Hz)')
-@click.option('--n-fft', default=512, type=int, help='FFT window size')
+@indices.command("aci")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--min-freq", default=0.0, type=float, help="Minimum frequency (Hz)")
+@click.option("--max-freq", default=None, type=float, help="Maximum frequency (Hz)")
+@click.option("--n-fft", default=512, type=int, help="FFT window size")
 def indices_aci(path, min_freq, max_freq, n_fft):
     """Compute Acoustic Complexity Index (ACI) for an audio file.
 
@@ -4083,11 +4548,11 @@ def indices_aci(path, min_freq, max_freq, n_fft):
     click.echo(f"ACI: {aci:.2f}")
 
 
-@indices.command('adi')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--max-freq', default=10000.0, type=float, help='Maximum frequency (Hz)')
-@click.option('--freq-step', default=1000.0, type=float, help='Frequency band width (Hz)')
-@click.option('--db-threshold', default=-50.0, type=float, help='dB threshold')
+@indices.command("adi")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--max-freq", default=10000.0, type=float, help="Maximum frequency (Hz)")
+@click.option("--freq-step", default=1000.0, type=float, help="Frequency band width (Hz)")
+@click.option("--db-threshold", default=-50.0, type=float, help="dB threshold")
 def indices_adi(path, max_freq, freq_step, db_threshold):
     """Compute Acoustic Diversity Index (ADI) for an audio file.
 
@@ -4108,16 +4573,17 @@ def indices_adi(path, max_freq, freq_step, db_threshold):
         click.echo(f"Error loading audio: {e}")
         raise SystemExit(1)
 
-    adi = compute_adi(audio, sample_rate, max_freq=max_freq, freq_step=freq_step,
-                      db_threshold=db_threshold)
+    adi = compute_adi(
+        audio, sample_rate, max_freq=max_freq, freq_step=freq_step, db_threshold=db_threshold
+    )
     click.echo(f"ADI: {adi:.3f}")
 
 
-@indices.command('aei')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--max-freq', default=10000.0, type=float, help='Maximum frequency (Hz)')
-@click.option('--freq-step', default=1000.0, type=float, help='Frequency band width (Hz)')
-@click.option('--db-threshold', default=-50.0, type=float, help='dB threshold')
+@indices.command("aei")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--max-freq", default=10000.0, type=float, help="Maximum frequency (Hz)")
+@click.option("--freq-step", default=1000.0, type=float, help="Frequency band width (Hz)")
+@click.option("--db-threshold", default=-50.0, type=float, help="dB threshold")
 def indices_aei(path, max_freq, freq_step, db_threshold):
     """Compute Acoustic Evenness Index (AEI) for an audio file.
 
@@ -4138,15 +4604,16 @@ def indices_aei(path, max_freq, freq_step, db_threshold):
         click.echo(f"Error loading audio: {e}")
         raise SystemExit(1)
 
-    aei = compute_aei(audio, sample_rate, max_freq=max_freq, freq_step=freq_step,
-                      db_threshold=db_threshold)
+    aei = compute_aei(
+        audio, sample_rate, max_freq=max_freq, freq_step=freq_step, db_threshold=db_threshold
+    )
     click.echo(f"AEI: {aei:.3f}")
 
 
-@indices.command('bio')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--min-freq', default=2000.0, type=float, help='Minimum frequency (Hz)')
-@click.option('--max-freq', default=8000.0, type=float, help='Maximum frequency (Hz)')
+@indices.command("bio")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--min-freq", default=2000.0, type=float, help="Minimum frequency (Hz)")
+@click.option("--max-freq", default=8000.0, type=float, help="Maximum frequency (Hz)")
 def indices_bio(path, min_freq, max_freq):
     """Compute Bioacoustic Index (BIO) for an audio file.
 
@@ -4171,12 +4638,12 @@ def indices_bio(path, min_freq, max_freq):
     click.echo(f"BIO: {bio:.2f}")
 
 
-@indices.command('ndsi')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--anthro-min', default=1000.0, type=float, help='Anthrophony min frequency (Hz)')
-@click.option('--anthro-max', default=2000.0, type=float, help='Anthrophony max frequency (Hz)')
-@click.option('--bio-min', default=2000.0, type=float, help='Biophony min frequency (Hz)')
-@click.option('--bio-max', default=8000.0, type=float, help='Biophony max frequency (Hz)')
+@indices.command("ndsi")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--anthro-min", default=1000.0, type=float, help="Anthrophony min frequency (Hz)")
+@click.option("--anthro-max", default=2000.0, type=float, help="Anthrophony max frequency (Hz)")
+@click.option("--bio-min", default=2000.0, type=float, help="Biophony min frequency (Hz)")
+@click.option("--bio-max", default=8000.0, type=float, help="Biophony max frequency (Hz)")
 def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
     """Compute Normalized Difference Soundscape Index (NDSI) for an audio file.
 
@@ -4198,7 +4665,8 @@ def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
         raise SystemExit(1)
 
     ndsi, anthro, bio = compute_ndsi(
-        audio, sample_rate,
+        audio,
+        sample_rate,
         anthro_min=anthro_min,
         anthro_max=anthro_max,
         bio_min=bio_min,
@@ -4210,10 +4678,10 @@ def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
     click.echo(f"  Biophony ({bio_min:.0f}-{bio_max:.0f} Hz): {bio:.2f}")
 
 
-@indices.command('entropy')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--spectral', '-s', is_flag=True, help='Compute spectral entropy')
-@click.option('--temporal', '-t', is_flag=True, help='Compute temporal entropy')
+@indices.command("entropy")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--spectral", "-s", is_flag=True, help="Compute spectral entropy")
+@click.option("--temporal", "-t", is_flag=True, help="Compute temporal entropy")
 def indices_entropy(path, spectral, temporal):
     """Compute entropy-based acoustic indices for an audio file.
 
@@ -4251,21 +4719,27 @@ def indices_entropy(path, spectral, temporal):
 # Detection Command Group
 # =============================================================================
 
+
 @cli.group()
 def detect():
     """Advanced acoustic detection algorithms."""
     pass
 
 
-@detect.command('energy')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--low-freq', '-l', default=500.0, type=float, help='Low frequency bound (Hz)')
-@click.option('--high-freq', '-h', default=5000.0, type=float, help='High frequency bound (Hz)')
-@click.option('--threshold', '-t', default=-20.0, type=float, help='Detection threshold (dB)')
-@click.option('--min-duration', default=0.05, type=float, help='Minimum detection duration (s)')
-@click.option('--output', '-o', type=click.Path(), help='Output file for detections')
-@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
-              default='table', help='Output format')
+@detect.command("energy")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--low-freq", "-l", default=500.0, type=float, help="Low frequency bound (Hz)")
+@click.option("--high-freq", "-h", default=5000.0, type=float, help="High frequency bound (Hz)")
+@click.option("--threshold", "-t", default=-20.0, type=float, help="Detection threshold (dB)")
+@click.option("--min-duration", default=0.05, type=float, help="Minimum detection duration (s)")
+@click.option("--output", "-o", type=click.Path(), help="Output file for detections")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json", "csv"]),
+    default="table",
+    help="Output format",
+)
 def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, output_format):
     """Detect sounds using band-limited energy detection.
 
@@ -4308,7 +4782,7 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
             for audio_file in audio_files:
                 file_detections = detector.detect_from_file(audio_file)
                 for d in file_detections:
-                    d.metadata['source_file'] = audio_file
+                    d.metadata["source_file"] = audio_file
                 all_detections.extend(file_detections)
                 progress.advance()
 
@@ -4316,15 +4790,15 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
     else:
         all_detections = detector.detect_from_file(path)
         for d in all_detections:
-            d.metadata['source_file'] = str(path_obj)
+            d.metadata["source_file"] = str(path_obj)
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
         export_detections(all_detections, output, format=fmt)
         click.echo(f"Saved {len(all_detections)} detections to {output}")
-    elif output_format == 'json':
+    elif output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
-    elif output_format == 'csv':
+    elif output_format == "csv":
         import csv
         import sys
 
@@ -4339,31 +4813,45 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
     else:
         click.echo(f"Found {len(all_detections)} detections:\n")
         for i, d in enumerate(all_detections, 1):
-            source = d.metadata.get('source_file', '')
+            source = d.metadata.get("source_file", "")
             if source:
                 source = f" [{PathLib(source).name}]"
-            click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                      f"(confidence: {d.confidence:.2f}){source}")
+            click.echo(
+                f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
+                f"(confidence: {d.confidence:.2f}){source}"
+            )
 
-    if not output and output_format == 'table':
+    if not output and output_format == "table":
         click.echo(f"\nTotal: {len(all_detections)} detections")
 
 
-@detect.command('ribbit')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--pulse-rate', '-p', default=10.0, type=float,
-              help='Expected pulse rate in Hz (pulses per second)')
-@click.option('--tolerance', default=0.2, type=float,
-              help='Tolerance around expected pulse rate (fraction)')
-@click.option('--low-freq', '-l', default=500.0, type=float, help='Low frequency bound (Hz)')
-@click.option('--high-freq', '-h', default=5000.0, type=float, help='High frequency bound (Hz)')
-@click.option('--window', '-w', default=2.0, type=float, help='Analysis window duration (s)')
-@click.option('--min-score', default=0.3, type=float, help='Minimum detection score')
-@click.option('--output', '-o', type=click.Path(), help='Output file for detections')
-@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
-              default='table', help='Output format')
-def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
-                  min_score, output, output_format):
+@detect.command("ribbit")
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--pulse-rate",
+    "-p",
+    default=10.0,
+    type=float,
+    help="Expected pulse rate in Hz (pulses per second)",
+)
+@click.option(
+    "--tolerance", default=0.2, type=float, help="Tolerance around expected pulse rate (fraction)"
+)
+@click.option("--low-freq", "-l", default=500.0, type=float, help="Low frequency bound (Hz)")
+@click.option("--high-freq", "-h", default=5000.0, type=float, help="High frequency bound (Hz)")
+@click.option("--window", "-w", default=2.0, type=float, help="Analysis window duration (s)")
+@click.option("--min-score", default=0.3, type=float, help="Minimum detection score")
+@click.option("--output", "-o", type=click.Path(), help="Output file for detections")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json", "csv"]),
+    default="table",
+    help="Output format",
+)
+def detect_ribbit(
+    path, pulse_rate, tolerance, low_freq, high_freq, window, min_score, output, output_format
+):
     """Detect periodic calls using RIBBIT algorithm.
 
     RIBBIT detects repetitive vocalizations by analyzing the autocorrelation
@@ -4407,7 +4895,7 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
             for audio_file in audio_files:
                 file_detections = detector.detect_from_file(audio_file)
                 for d in file_detections:
-                    d.metadata['source_file'] = audio_file
+                    d.metadata["source_file"] = audio_file
                 all_detections.extend(file_detections)
                 progress.advance()
 
@@ -4415,15 +4903,15 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
     else:
         all_detections = detector.detect_from_file(path)
         for d in all_detections:
-            d.metadata['source_file'] = str(path_obj)
+            d.metadata["source_file"] = str(path_obj)
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
         export_detections(all_detections, output, format=fmt)
         click.echo(f"Saved {len(all_detections)} detections to {output}")
-    elif output_format == 'json':
+    elif output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
-    elif output_format == 'csv':
+    elif output_format == "csv":
         import csv
         import sys
 
@@ -4438,29 +4926,37 @@ def detect_ribbit(path, pulse_rate, tolerance, low_freq, high_freq, window,
     else:
         click.echo(f"Found {len(all_detections)} periodic call detections:\n")
         for i, d in enumerate(all_detections, 1):
-            source = d.metadata.get('source_file', '')
+            source = d.metadata.get("source_file", "")
             if source:
                 source = f" [{PathLib(source).name}]"
-            click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                      f"(score: {d.confidence:.2f}, pulse_rate: {d.metadata.get('pulse_rate_hz', 'N/A')}Hz){source}")
+            click.echo(
+                f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
+                f"(score: {d.confidence:.2f}, pulse_rate: {d.metadata.get('pulse_rate_hz', 'N/A')}Hz){source}"
+            )
 
-    if not output and output_format == 'table':
+    if not output and output_format == "table":
         click.echo(f"\nTotal: {len(all_detections)} detections")
 
 
-@detect.command('peaks')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--snr', default=2.0, type=float, help='Signal-to-noise ratio threshold')
-@click.option('--min-distance', default=0.01, type=float, help='Minimum peak distance (s)')
-@click.option('--low-freq', '-l', default=None, type=float, help='Low frequency bound (Hz)')
-@click.option('--high-freq', '-h', default=None, type=float, help='High frequency bound (Hz)')
-@click.option('--sequences', is_flag=True, help='Detect peak sequences instead of individual peaks')
-@click.option('--min-peaks', default=3, type=int, help='Minimum peaks for sequence detection')
-@click.option('--output', '-o', type=click.Path(), help='Output file for detections')
-@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
-              default='table', help='Output format')
-def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
-                 min_peaks, output, output_format):
+@detect.command("peaks")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--snr", default=2.0, type=float, help="Signal-to-noise ratio threshold")
+@click.option("--min-distance", default=0.01, type=float, help="Minimum peak distance (s)")
+@click.option("--low-freq", "-l", default=None, type=float, help="Low frequency bound (Hz)")
+@click.option("--high-freq", "-h", default=None, type=float, help="High frequency bound (Hz)")
+@click.option("--sequences", is_flag=True, help="Detect peak sequences instead of individual peaks")
+@click.option("--min-peaks", default=3, type=int, help="Minimum peaks for sequence detection")
+@click.option("--output", "-o", type=click.Path(), help="Output file for detections")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json", "csv"]),
+    default="table",
+    help="Output format",
+)
+def detect_peaks(
+    path, snr, min_distance, low_freq, high_freq, sequences, min_peaks, output, output_format
+):
     """Detect peaks using Continuous Wavelet Transform (CWT).
 
     Uses CWT for robust peak detection in audio energy envelope.
@@ -4509,9 +5005,11 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
             ) as progress:
                 for audio_file in audio_files:
                     audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
-                    file_detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
+                    file_detections = detector.detect_sequences(
+                        audio, sample_rate, min_peaks=min_peaks
+                    )
                     for d in file_detections:
-                        d.metadata['source_file'] = audio_file
+                        d.metadata["source_file"] = audio_file
                     all_detections.extend(file_detections)
                     progress.advance()
 
@@ -4521,16 +5019,16 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
                 audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
                 file_detections = detector.detect_sequences(audio, sample_rate, min_peaks=min_peaks)
                 for d in file_detections:
-                    d.metadata['source_file'] = audio_file
+                    d.metadata["source_file"] = audio_file
                 all_detections.extend(file_detections)
 
         if output:
             fmt = "json" if output.endswith(".json") else "csv"
             export_detections(all_detections, output, format=fmt)
             click.echo(f"Saved {len(all_detections)} sequence detections to {output}")
-        elif output_format == 'json':
+        elif output_format == "json":
             click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
-        elif output_format == 'csv':
+        elif output_format == "csv":
             import csv
             import sys
 
@@ -4545,15 +5043,17 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
         else:
             click.echo(f"Found {len(all_detections)} peak sequences:\n")
             for i, d in enumerate(all_detections, 1):
-                n_peaks = d.metadata.get('n_peaks', 0)
-                interval = d.metadata.get('mean_interval', 0)
-                source = d.metadata.get('source_file', '')
+                n_peaks = d.metadata.get("n_peaks", 0)
+                interval = d.metadata.get("mean_interval", 0)
+                source = d.metadata.get("source_file", "")
                 if source:
                     source = f" [{PathLib(source).name}]"
-                click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                          f"({n_peaks} peaks, mean interval: {interval:.3f}s){source}")
+                click.echo(
+                    f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
+                    f"({n_peaks} peaks, mean interval: {interval:.3f}s){source}"
+                )
 
-        if not output and output_format == 'table':
+        if not output and output_format == "table":
             click.echo(f"\nTotal: {len(all_detections)} sequences")
     else:
         all_peaks = []
@@ -4584,75 +5084,90 @@ def detect_peaks(path, snr, min_distance, low_freq, high_freq, sequences,
 
         if output:
             import csv
-            fieldnames = ['time', 'amplitude', 'width', 'prominence']
+
+            fieldnames = ["time", "amplitude", "width", "prominence"]
             if len(audio_files) > 1:
-                fieldnames.append('source_file')
-            with TextFile(output, mode='w', newline='') as f:
+                fieldnames.append("source_file")
+            with TextFile(output, mode="w", newline="") as f:
                 writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
                 writer.writeheader()
                 for p in all_peaks:
                     row = p.to_dict()
                     if len(audio_files) > 1:
-                        row['source_file'] = getattr(p, 'source_file', '')
+                        row["source_file"] = getattr(p, "source_file", "")
                     writer.writerow(row)
             click.echo(f"Saved {len(all_peaks)} peaks to {output}")
-        elif output_format == 'json':
+        elif output_format == "json":
             peak_dicts = []
             for p in all_peaks:
                 d = p.to_dict()
                 if len(audio_files) > 1:
-                    d['source_file'] = getattr(p, 'source_file', '')
+                    d["source_file"] = getattr(p, "source_file", "")
                 peak_dicts.append(d)
             click.echo(json_lib.dumps(peak_dicts, indent=2))
-        elif output_format == 'csv':
+        elif output_format == "csv":
             import csv
             import sys
 
             if all_peaks:
-                fieldnames = ['time', 'amplitude', 'width', 'prominence']
+                fieldnames = ["time", "amplitude", "width", "prominence"]
                 if len(audio_files) > 1:
-                    fieldnames.append('source_file')
+                    fieldnames.append("source_file")
                 writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
                 writer.writeheader()
                 for p in all_peaks:
                     row = p.to_dict()
                     if len(audio_files) > 1:
-                        row['source_file'] = getattr(p, 'source_file', '')
+                        row["source_file"] = getattr(p, "source_file", "")
                     writer.writerow(row)
             else:
                 click.echo("No peaks found.")
         else:
             click.echo(f"Found {len(all_peaks)} peaks:\n")
             for i, p in enumerate(all_peaks[:20], 1):  # Show first 20
-                source = getattr(p, 'source_file', '')
+                source = getattr(p, "source_file", "")
                 if source and len(audio_files) > 1:
                     source = f" [{PathLib(source).name}]"
                 else:
-                    source = ''
-                click.echo(f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, "
-                          f"width: {p.width:.3f}s){source}")
+                    source = ""
+                click.echo(
+                    f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, "
+                    f"width: {p.width:.3f}s){source}"
+                )
             if len(all_peaks) > 20:
                 click.echo(f"... and {len(all_peaks) - 20} more peaks")
 
-        if not output and output_format == 'table':
+        if not output and output_format == "table":
             click.echo(f"\nTotal: {len(all_peaks)} peaks")
 
 
-@detect.command('accelerating')
-@click.argument('path', type=click.Path(exists=True))
-@click.option('--min-pulses', default=5, type=int, help='Minimum pulses to detect pattern')
-@click.option('--acceleration', '-a', default=1.5, type=float,
-              help='Acceleration threshold (final_rate/initial_rate)')
-@click.option('--deceleration', '-d', default=None, type=float,
-              help='Deceleration threshold (optional)')
-@click.option('--low-freq', '-l', default=500.0, type=float, help='Low frequency bound (Hz)')
-@click.option('--high-freq', '-h', default=5000.0, type=float, help='High frequency bound (Hz)')
-@click.option('--window', '-w', default=3.0, type=float, help='Analysis window duration (s)')
-@click.option('--output', '-o', type=click.Path(), help='Output file for detections')
-@click.option('--format', 'output_format', type=click.Choice(['table', 'json', 'csv']),
-              default='table', help='Output format')
-def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
-                        high_freq, window, output, output_format):
+@detect.command("accelerating")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--min-pulses", default=5, type=int, help="Minimum pulses to detect pattern")
+@click.option(
+    "--acceleration",
+    "-a",
+    default=1.5,
+    type=float,
+    help="Acceleration threshold (final_rate/initial_rate)",
+)
+@click.option(
+    "--deceleration", "-d", default=None, type=float, help="Deceleration threshold (optional)"
+)
+@click.option("--low-freq", "-l", default=500.0, type=float, help="Low frequency bound (Hz)")
+@click.option("--high-freq", "-h", default=5000.0, type=float, help="High frequency bound (Hz)")
+@click.option("--window", "-w", default=3.0, type=float, help="Analysis window duration (s)")
+@click.option("--output", "-o", type=click.Path(), help="Output file for detections")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json", "csv"]),
+    default="table",
+    help="Output format",
+)
+def detect_accelerating(
+    path, min_pulses, acceleration, deceleration, low_freq, high_freq, window, output, output_format
+):
     """Detect accelerating or decelerating call patterns.
 
     Identifies vocalizations with increasing or decreasing pulse rates,
@@ -4696,7 +5211,7 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
             for audio_file in audio_files:
                 file_detections = detector.detect_from_file(audio_file)
                 for d in file_detections:
-                    d.metadata['source_file'] = audio_file
+                    d.metadata["source_file"] = audio_file
                 all_detections.extend(file_detections)
                 progress.advance()
 
@@ -4704,15 +5219,15 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
     else:
         all_detections = detector.detect_from_file(path)
         for d in all_detections:
-            d.metadata['source_file'] = str(path_obj)
+            d.metadata["source_file"] = str(path_obj)
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
         export_detections(all_detections, output, format=fmt)
         click.echo(f"Saved {len(all_detections)} detections to {output}")
-    elif output_format == 'json':
+    elif output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
-    elif output_format == 'csv':
+    elif output_format == "csv":
         import csv
         import sys
 
@@ -4727,30 +5242,40 @@ def detect_accelerating(path, min_pulses, acceleration, deceleration, low_freq,
     else:
         click.echo(f"Found {len(all_detections)} pattern detections:\n")
         for i, d in enumerate(all_detections, 1):
-            pattern = d.metadata.get('pattern_type', 'unknown')
-            ratio = d.metadata.get('acceleration_ratio', 1.0)
-            init_rate = d.metadata.get('initial_rate', 0)
-            final_rate = d.metadata.get('final_rate', 0)
-            source = d.metadata.get('source_file', '')
+            pattern = d.metadata.get("pattern_type", "unknown")
+            ratio = d.metadata.get("acceleration_ratio", 1.0)
+            init_rate = d.metadata.get("initial_rate", 0)
+            final_rate = d.metadata.get("final_rate", 0)
+            source = d.metadata.get("source_file", "")
             if source:
                 source = f" [{PathLib(source).name}]"
             click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s{source}")
             click.echo(f"   Pattern: {pattern}, ratio: {ratio:.2f}x")
             click.echo(f"   Rate: {init_rate:.1f} -> {final_rate:.1f} Hz")
 
-    if not output and output_format == 'table':
+    if not output and output_format == "table":
         click.echo(f"\nTotal: {len(all_detections)} detections")
 
 
-@detect.command('batch')
-@click.argument('directory', type=click.Path(exists=True))
-@click.option('--detector', '-d', type=click.Choice(['energy', 'ribbit', 'peaks', 'accelerating']),
-              default='energy', help='Detector type to use')
-@click.option('--output-dir', '-o', required=True, type=click.Path(),
-              help='Output directory for detection files')
-@click.option('--low-freq', '-l', default=500.0, type=float, help='Low frequency bound (Hz)')
-@click.option('--high-freq', '-h', default=5000.0, type=float, help='High frequency bound (Hz)')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress progress output')
+@detect.command("batch")
+@click.argument("directory", type=click.Path(exists=True))
+@click.option(
+    "--detector",
+    "-d",
+    type=click.Choice(["energy", "ribbit", "peaks", "accelerating"]),
+    default="energy",
+    help="Detector type to use",
+)
+@click.option(
+    "--output-dir",
+    "-o",
+    required=True,
+    type=click.Path(),
+    help="Output directory for detection files",
+)
+@click.option("--low-freq", "-l", default=500.0, type=float, help="Low frequency bound (Hz)")
+@click.option("--high-freq", "-h", default=5000.0, type=float, help="High frequency bound (Hz)")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
     """Run detection on all audio files in a directory.
 
@@ -4771,19 +5296,19 @@ def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
     )
 
     # Create detector
-    if detector == 'energy':
+    if detector == "energy":
         det = BandLimitedEnergyDetector(low_freq=low_freq, high_freq=high_freq)
-    elif detector == 'ribbit':
+    elif detector == "ribbit":
         det = RibbitDetector(low_freq=low_freq, high_freq=high_freq)
-    elif detector == 'peaks':
+    elif detector == "peaks":
         det = CWTPeakDetector(low_freq=low_freq, high_freq=high_freq)
     else:
         det = AcceleratingPatternDetector(low_freq=low_freq, high_freq=high_freq)
 
     # Find audio files
     directory_path = PathLib(directory)
-    audio_extensions = {'.wav', '.mp3', '.flac', '.ogg', '.m4a'}
-    files = [f for f in directory_path.rglob('*') if f.suffix.lower() in audio_extensions]
+    audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+    files = [f for f in directory_path.rglob("*") if f.suffix.lower() in audio_extensions]
 
     if not files:
         click.echo(f"No audio files found in {directory}")
@@ -4817,22 +5342,32 @@ def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
 # Active Learning Commands
 # =============================================================================
 
+
 @cli.group()
 def learn():
     """Active learning commands for efficient annotation."""
     pass
 
 
-@learn.command('init')
-@click.argument('predictions_csv', type=click.Path(exists=True))
-@click.argument('output_state', type=click.Path())
-@click.option('--strategy', '-s', type=click.Choice(['entropy', 'least_confidence', 'margin', 'random', 'hybrid']),
-              default='entropy', help='Sampling strategy')
-@click.option('--labeled-csv', type=click.Path(exists=True),
-              help='CSV file with pre-labeled samples (id,label columns)')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
-def learn_init(predictions_csv: str, output_state: str, strategy: str,
-               labeled_csv: Optional[str], quiet: bool):
+@learn.command("init")
+@click.argument("predictions_csv", type=click.Path(exists=True))
+@click.argument("output_state", type=click.Path())
+@click.option(
+    "--strategy",
+    "-s",
+    type=click.Choice(["entropy", "least_confidence", "margin", "random", "hybrid"]),
+    default="entropy",
+    help="Sampling strategy",
+)
+@click.option(
+    "--labeled-csv",
+    type=click.Path(exists=True),
+    help="CSV file with pre-labeled samples (id,label columns)",
+)
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
+def learn_init(
+    predictions_csv: str, output_state: str, strategy: str, labeled_csv: Optional[str], quiet: bool
+):
     """Initialize active learning session from predictions.
 
     PREDICTIONS_CSV should contain columns: filepath, start_time, end_time,
@@ -4849,9 +5384,9 @@ def learn_init(predictions_csv: str, output_state: str, strategy: str,
     )
 
     # Create sampler based on strategy
-    if strategy == 'random':
+    if strategy == "random":
         sampler = RandomSampler()
-    elif strategy == 'hybrid':
+    elif strategy == "hybrid":
         sampler = HybridSampler()
     else:
         sampler = UncertaintySampler(strategy=strategy)
@@ -4868,11 +5403,11 @@ def learn_init(predictions_csv: str, output_state: str, strategy: str,
     # Load pre-labeled samples if provided
     if labeled_csv:
         labeled_samples = []
-        with TextFile(labeled_csv, mode='r', newline='', encoding='utf-8') as f:
+        with TextFile(labeled_csv, mode="r", newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f.handle)
             for row in reader:
-                sample_id = row.get('id') or row.get('sample_id')
-                label = row.get('label')
+                sample_id = row.get("id") or row.get("sample_id")
+                label = row.get("label")
                 if sample_id and label:
                     # Find sample in pool
                     if sample_id in learner.unlabeled_pool:
@@ -4896,11 +5431,11 @@ def learn_init(predictions_csv: str, output_state: str, strategy: str,
         click.echo(f"  State saved to: {output_state}")
 
 
-@learn.command('query')
-@click.argument('state_file', type=click.Path(exists=True))
-@click.option('--n-samples', '-n', default=10, help='Number of samples to query')
-@click.option('--output', '-o', type=click.Path(), help='Output CSV for query results')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+@learn.command("query")
+@click.argument("state_file", type=click.Path(exists=True))
+@click.option("--n-samples", "-n", default=10, help="Number of samples to query")
+@click.option("--output", "-o", type=click.Path(), help="Output CSV for query results")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
 def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: bool):
     """Query samples for annotation from active learning session.
 
@@ -4916,11 +5451,11 @@ def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: b
     )
 
     # Load state to determine sampler type
-    with TextFile(state_file, mode='r', encoding='utf-8') as f:
+    with TextFile(state_file, mode="r", encoding="utf-8") as f:
         state_data = json.load(f.handle)
 
     # Default to entropy sampler
-    sampler = UncertaintySampler(strategy='entropy')
+    sampler = UncertaintySampler(strategy="entropy")
 
     learner = ActiveLearner.load_state(state_file, sampler=sampler)
 
@@ -4943,21 +5478,30 @@ def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: b
     # Save query results
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
-            fieldnames = ['id', 'filepath', 'start_time', 'end_time',
-                         'predicted_label', 'confidence', 'label']
+        with TextFile(output, mode="w", newline="", encoding="utf-8") as f:
+            fieldnames = [
+                "id",
+                "filepath",
+                "start_time",
+                "end_time",
+                "predicted_label",
+                "confidence",
+                "label",
+            ]
             writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
             for sample in queried:
-                writer.writerow({
-                    'id': sample.id,
-                    'filepath': sample.filepath,
-                    'start_time': sample.start_time,
-                    'end_time': sample.end_time,
-                    'predicted_label': sample.predicted_label or '',
-                    'confidence': sample.confidence or '',
-                    'label': '',  # To be filled by annotator
-                })
+                writer.writerow(
+                    {
+                        "id": sample.id,
+                        "filepath": sample.filepath,
+                        "start_time": sample.start_time,
+                        "end_time": sample.end_time,
+                        "predicted_label": sample.predicted_label or "",
+                        "confidence": sample.confidence or "",
+                        "label": "",  # To be filled by annotator
+                    }
+                )
 
         if not quiet:
             click.echo(f"\nQuery results saved to: {output}")
@@ -4967,11 +5511,11 @@ def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: b
     learner.save_state(state_file)
 
 
-@learn.command('annotate')
-@click.argument('state_file', type=click.Path(exists=True))
-@click.argument('annotations_csv', type=click.Path(exists=True))
-@click.option('--annotator', '-a', default='unknown', help='Annotator identifier')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+@learn.command("annotate")
+@click.argument("state_file", type=click.Path(exists=True))
+@click.argument("annotations_csv", type=click.Path(exists=True))
+@click.option("--annotator", "-a", default="unknown", help="Annotator identifier")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
 def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet: bool):
     """Import annotations into active learning session.
 
@@ -4982,16 +5526,16 @@ def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet:
     from bioamla.core.active_learning import ActiveLearner, UncertaintySampler
 
     # Load learner
-    sampler = UncertaintySampler(strategy='entropy')
+    sampler = UncertaintySampler(strategy="entropy")
     learner = ActiveLearner.load_state(state_file, sampler=sampler)
 
     # Read annotations
     annotations_imported = 0
-    with TextFile(annotations_csv, mode='r', newline='', encoding='utf-8') as f:
+    with TextFile(annotations_csv, mode="r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f.handle)
         for row in reader:
-            sample_id = row.get('id') or row.get('sample_id')
-            label = row.get('label', '').strip()
+            sample_id = row.get("id") or row.get("sample_id")
+            label = row.get("label", "").strip()
 
             if not sample_id or not label:
                 continue
@@ -5013,8 +5557,8 @@ def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet:
         click.echo(f"  Labels per class: {learner.state.labels_per_class}")
 
 
-@learn.command('status')
-@click.argument('state_file', type=click.Path(exists=True))
+@learn.command("status")
+@click.argument("state_file", type=click.Path(exists=True))
 def learn_status(state_file: str):
     """Show status of active learning session."""
     from bioamla.core.active_learning import (
@@ -5023,7 +5567,7 @@ def learn_status(state_file: str):
         summarize_annotation_session,
     )
 
-    sampler = UncertaintySampler(strategy='entropy')
+    sampler = UncertaintySampler(strategy="entropy")
     learner = ActiveLearner.load_state(state_file, sampler=sampler)
 
     summary = summarize_annotation_session(learner)
@@ -5035,31 +5579,37 @@ def learn_status(state_file: str):
     click.echo(f"Total unlabeled: {summary['total_unlabeled']}")
     click.echo(f"Total annotations: {summary['total_annotations']}")
 
-    if summary['labels_per_class']:
+    if summary["labels_per_class"]:
         click.echo("\nLabels per class:")
-        for label, count in sorted(summary['labels_per_class'].items()):
+        for label, count in sorted(summary["labels_per_class"].items()):
             click.echo(f"  {label}: {count}")
 
-    if summary['total_annotation_time_seconds'] > 0:
+    if summary["total_annotation_time_seconds"] > 0:
         click.echo("\nAnnotation statistics:")
         click.echo(f"  Total time: {summary['total_annotation_time_seconds']:.1f}s")
         click.echo(f"  Rate: {summary['annotations_per_hour']:.1f} annotations/hour")
 
-    if summary['class_balance_ratio'] > 0:
+    if summary["class_balance_ratio"] > 0:
         click.echo(f"  Class balance ratio: {summary['class_balance_ratio']:.2f}")
 
 
-@learn.command('export')
-@click.argument('state_file', type=click.Path(exists=True))
-@click.argument('output_file', type=click.Path())
-@click.option('--format', '-f', 'fmt', type=click.Choice(['csv', 'raven']),
-              default='csv', help='Output format')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+@learn.command("export")
+@click.argument("state_file", type=click.Path(exists=True))
+@click.argument("output_file", type=click.Path())
+@click.option(
+    "--format",
+    "-f",
+    "fmt",
+    type=click.Choice(["csv", "raven"]),
+    default="csv",
+    help="Output format",
+)
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
 def learn_export(state_file: str, output_file: str, fmt: str, quiet: bool):
     """Export labeled samples from active learning session."""
     from bioamla.core.active_learning import ActiveLearner, UncertaintySampler, export_annotations
 
-    sampler = UncertaintySampler(strategy='entropy')
+    sampler = UncertaintySampler(strategy="entropy")
     learner = ActiveLearner.load_state(state_file, sampler=sampler)
 
     export_annotations(learner, output_file, format=fmt)
@@ -5069,17 +5619,29 @@ def learn_export(state_file: str, output_file: str, fmt: str, quiet: bool):
         click.echo(f"  Format: {fmt}")
 
 
-@learn.command('simulate')
-@click.argument('predictions_csv', type=click.Path(exists=True))
-@click.argument('ground_truth_csv', type=click.Path(exists=True))
-@click.option('--n-iterations', '-n', default=10, help='Number of iterations')
-@click.option('--batch-size', '-b', default=10, help='Samples per iteration')
-@click.option('--strategy', '-s', type=click.Choice(['entropy', 'least_confidence', 'margin', 'random', 'hybrid']),
-              default='entropy', help='Sampling strategy')
-@click.option('--output', '-o', type=click.Path(), help='Output CSV for simulation results')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
-def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: int,
-                   batch_size: int, strategy: str, output: Optional[str], quiet: bool):
+@learn.command("simulate")
+@click.argument("predictions_csv", type=click.Path(exists=True))
+@click.argument("ground_truth_csv", type=click.Path(exists=True))
+@click.option("--n-iterations", "-n", default=10, help="Number of iterations")
+@click.option("--batch-size", "-b", default=10, help="Samples per iteration")
+@click.option(
+    "--strategy",
+    "-s",
+    type=click.Choice(["entropy", "least_confidence", "margin", "random", "hybrid"]),
+    default="entropy",
+    help="Sampling strategy",
+)
+@click.option("--output", "-o", type=click.Path(), help="Output CSV for simulation results")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
+def learn_simulate(
+    predictions_csv: str,
+    ground_truth_csv: str,
+    n_iterations: int,
+    batch_size: int,
+    strategy: str,
+    output: Optional[str],
+    quiet: bool,
+):
     """Simulate active learning loop using ground truth labels.
 
     Useful for evaluating different sampling strategies.
@@ -5100,11 +5662,11 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
 
     # Load ground truth
     ground_truth = {}
-    with TextFile(ground_truth_csv, mode='r', newline='', encoding='utf-8') as f:
+    with TextFile(ground_truth_csv, mode="r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f.handle)
         for row in reader:
-            sample_id = row.get('id') or row.get('sample_id')
-            label = row.get('label', '').strip()
+            sample_id = row.get("id") or row.get("sample_id")
+            label = row.get("label", "").strip()
             if sample_id and label:
                 ground_truth[sample_id] = label
 
@@ -5113,9 +5675,9 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
         return
 
     # Create sampler
-    if strategy == 'random':
+    if strategy == "random":
         sampler = RandomSampler()
-    elif strategy == 'hybrid':
+    elif strategy == "hybrid":
         sampler = HybridSampler()
     else:
         sampler = UncertaintySampler(strategy=strategy)
@@ -5152,15 +5714,15 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
         for sample in queried:
             try:
                 label = oracle.annotate(sample)
-                learner.teach(sample, label, annotator='oracle')
+                learner.teach(sample, label, annotator="oracle")
             except ValueError:
                 pass  # Sample not in ground truth
 
         # Record progress
         result = {
-            'iteration': iteration + 1,
-            'total_labeled': learner.state.total_labeled,
-            'total_unlabeled': learner.state.total_unlabeled,
+            "iteration": iteration + 1,
+            "total_labeled": learner.state.total_labeled,
+            "total_unlabeled": learner.state.total_unlabeled,
         }
         results.append(result)
 
@@ -5175,8 +5737,8 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
     # Save results
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
-            fieldnames = ['iteration', 'total_labeled', 'total_unlabeled']
+        with TextFile(output, mode="w", newline="", encoding="utf-8") as f:
+            fieldnames = ["iteration", "total_labeled", "total_unlabeled"]
             writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(results)
@@ -5189,21 +5751,26 @@ def learn_simulate(predictions_csv: str, ground_truth_csv: str, n_iterations: in
 # Clustering Commands
 # =============================================================================
 
+
 @cli.group()
 def cluster():
     """Clustering and dimensionality reduction commands."""
     pass
 
 
-@cluster.command('reduce')
-@click.argument('embeddings_file')
-@click.option('--output', '-o', required=True, help='Output file for reduced embeddings')
-@click.option('--method', '-m', type=click.Choice(['umap', 'tsne', 'pca']),
-              default='pca', help='Reduction method')
-@click.option('--n-components', '-n', type=int, default=2, help='Number of output dimensions')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
-def cluster_reduce(embeddings_file: str, output: str, method: str,
-                   n_components: int, quiet: bool):
+@cluster.command("reduce")
+@click.argument("embeddings_file")
+@click.option("--output", "-o", required=True, help="Output file for reduced embeddings")
+@click.option(
+    "--method",
+    "-m",
+    type=click.Choice(["umap", "tsne", "pca"]),
+    default="pca",
+    help="Reduction method",
+)
+@click.option("--n-components", "-n", type=int, default=2, help="Number of output dimensions")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
+def cluster_reduce(embeddings_file: str, output: str, method: str, n_components: int, quiet: bool):
     """Reduce dimensionality of embeddings.
 
     EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
@@ -5215,7 +5782,9 @@ def cluster_reduce(embeddings_file: str, output: str, method: str,
     embeddings = np.load(embeddings_file)
 
     if not quiet:
-        click.echo(f"Reducing {embeddings.shape[1]}D embeddings to {n_components}D using {method}...")
+        click.echo(
+            f"Reducing {embeddings.shape[1]}D embeddings to {n_components}D using {method}..."
+        )
 
     reduced = reduce_dimensions(embeddings, method=method, n_components=n_components)
 
@@ -5225,17 +5794,35 @@ def cluster_reduce(embeddings_file: str, output: str, method: str,
         click.echo(f"Saved reduced embeddings to: {output}")
 
 
-@cluster.command('cluster')
-@click.argument('embeddings_file')
-@click.option('--output', '-o', required=True, help='Output file for cluster labels')
-@click.option('--method', '-m', type=click.Choice(['kmeans', 'dbscan', 'agglomerative']),
-              default='kmeans', help='Clustering method')
-@click.option('--n-clusters', '-k', type=int, default=10, help='Number of clusters (for k-means/agglomerative)')
-@click.option('--eps', type=float, default=0.5, help='DBSCAN epsilon')
-@click.option('--min-samples', type=int, default=5, help='Minimum samples per cluster')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
-def cluster_cluster(embeddings_file: str, output: str, method: str,
-                    n_clusters: int, eps: float, min_samples: int, quiet: bool):
+@cluster.command("cluster")
+@click.argument("embeddings_file")
+@click.option("--output", "-o", required=True, help="Output file for cluster labels")
+@click.option(
+    "--method",
+    "-m",
+    type=click.Choice(["kmeans", "dbscan", "agglomerative"]),
+    default="kmeans",
+    help="Clustering method",
+)
+@click.option(
+    "--n-clusters",
+    "-k",
+    type=int,
+    default=10,
+    help="Number of clusters (for k-means/agglomerative)",
+)
+@click.option("--eps", type=float, default=0.5, help="DBSCAN epsilon")
+@click.option("--min-samples", type=int, default=5, help="Minimum samples per cluster")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
+def cluster_cluster(
+    embeddings_file: str,
+    output: str,
+    method: str,
+    n_clusters: int,
+    eps: float,
+    min_samples: int,
+    quiet: bool,
+):
     """Cluster embeddings.
 
     EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
@@ -5266,11 +5853,11 @@ def cluster_cluster(embeddings_file: str, output: str, method: str,
         click.echo(f"Saved cluster labels to: {output}")
 
 
-@cluster.command('analyze')
-@click.argument('embeddings_file')
-@click.argument('labels_file')
-@click.option('--output', '-o', help='Output JSON file for analysis results')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
+@cluster.command("analyze")
+@click.argument("embeddings_file")
+@click.argument("labels_file")
+@click.option("--output", "-o", help="Output JSON file for analysis results")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
 def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: bool):
     """Analyze cluster quality.
 
@@ -5299,6 +5886,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
+
         # Convert numpy types to Python native types for JSON serialization
         def convert_numpy(obj):
             if isinstance(obj, np.integer):
@@ -5313,22 +5901,28 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
                 return [convert_numpy(v) for v in obj]
             return obj
 
-        with TextFile(output, mode='w', encoding='utf-8') as f:
+        with TextFile(output, mode="w", encoding="utf-8") as f:
             json.dump(convert_numpy(analysis), f.handle, indent=2)
         if not quiet:
             click.echo(f"Saved analysis to: {output}")
 
 
-@cluster.command('novelty')
-@click.argument('embeddings_file')
-@click.option('--output', '-o', required=True, help='Output file for novelty results')
-@click.option('--method', '-m', type=click.Choice(['distance', 'isolation_forest', 'lof']),
-              default='distance', help='Novelty detection method')
-@click.option('--threshold', type=float, help='Novelty threshold')
-@click.option('--labels', help='Optional cluster labels file')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
-def cluster_novelty(embeddings_file: str, output: str, method: str,
-                    threshold: float, labels: str, quiet: bool):
+@cluster.command("novelty")
+@click.argument("embeddings_file")
+@click.option("--output", "-o", required=True, help="Output file for novelty results")
+@click.option(
+    "--method",
+    "-m",
+    type=click.Choice(["distance", "isolation_forest", "lof"]),
+    default="distance",
+    help="Novelty detection method",
+)
+@click.option("--threshold", type=float, help="Novelty threshold")
+@click.option("--labels", help="Optional cluster labels file")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
+def cluster_novelty(
+    embeddings_file: str, output: str, method: str, threshold: float, labels: str, quiet: bool
+):
     """Detect novel sounds in embeddings.
 
     EMBEDDINGS_FILE: Path to numpy file with embeddings (.npy)
@@ -5356,7 +5950,7 @@ def cluster_novelty(embeddings_file: str, output: str, method: str,
 
     n_novel = is_novel.sum()
     if not quiet:
-        click.echo(f"Found {n_novel} novel samples ({100*n_novel/len(embeddings):.1f}%)")
+        click.echo(f"Found {n_novel} novel samples ({100 * n_novel / len(embeddings):.1f}%)")
         click.echo(f"Saved novelty results to: {output}")
 
 
@@ -5364,13 +5958,14 @@ def cluster_novelty(embeddings_file: str, output: str, method: str,
 # Real-time Commands
 # =============================================================================
 
+
 @cli.group()
 def realtime():
     """Real-time audio processing commands."""
     pass
 
 
-@realtime.command('devices')
+@realtime.command("devices")
 def realtime_devices():
     """List available audio input devices."""
     from bioamla.core.realtime import list_audio_devices
@@ -5383,10 +5978,10 @@ def realtime_devices():
         click.echo(f"      Channels: {device['channels']}, Sample Rate: {device['sample_rate']}")
 
 
-@realtime.command('test')
-@click.option('--duration', '-d', type=float, default=3.0, help='Recording duration in seconds')
-@click.option('--device', type=int, help='Device index')
-@click.option('--output', '-o', help='Output file to save recording')
+@realtime.command("test")
+@click.option("--duration", "-d", type=float, default=3.0, help="Recording duration in seconds")
+@click.option("--device", type=int, help="Device index")
+@click.option("--output", "-o", help="Output file to save recording")
 def realtime_test(duration: float, device: int, output: str):
     """Test audio recording from microphone."""
     from bioamla.core.realtime import test_recording
@@ -5396,10 +5991,11 @@ def realtime_test(duration: float, device: int, output: str):
 
     click.echo(f"Recorded {len(audio)} samples")
     click.echo(f"Max amplitude: {audio.max():.4f}")
-    click.echo(f"RMS: {(audio**2).mean()**0.5:.4f}")
+    click.echo(f"RMS: {(audio**2).mean() ** 0.5:.4f}")
 
     if output:
         import soundfile as sf
+
         sf.write(output, audio, 16000)
         click.echo(f"Saved recording to: {output}")
 
@@ -5408,18 +6004,19 @@ def realtime_test(duration: float, device: int, output: str):
 # eBird subgroup (under services)
 # =============================================================================
 
-@services.group('ebird')
+
+@services.group("ebird")
 def services_ebird():
     """eBird bird observation database."""
     pass
 
 
-@services_ebird.command('validate')
-@click.argument('species_code')
-@click.option('--lat', type=float, required=True, help='Latitude')
-@click.option('--lng', type=float, required=True, help='Longitude')
-@click.option('--api-key', envvar='EBIRD_API_KEY', required=True, help='eBird API key')
-@click.option('--distance', type=float, default=50, help='Search radius in km')
+@services_ebird.command("validate")
+@click.argument("species_code")
+@click.option("--lat", type=float, required=True, help="Latitude")
+@click.option("--lng", type=float, required=True, help="Longitude")
+@click.option("--api-key", envvar="EBIRD_API_KEY", required=True, help="eBird API key")
+@click.option("--distance", type=float, default=50, help="Search radius in km")
 def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, distance: float):
     """Validate if a species is expected at a location.
 
@@ -5435,26 +6032,27 @@ def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, dist
         distance_km=distance,
     )
 
-    if result['is_valid']:
+    if result["is_valid"]:
         click.echo(f"✓ {species_code} is expected at this location")
         click.echo(f"  Found {result['nearby_observations']} nearby observations")
-        if result['most_recent_observation']:
+        if result["most_recent_observation"]:
             click.echo(f"  Most recent: {result['most_recent_observation']}")
     else:
         click.echo(f"✗ {species_code} not recently observed at this location")
         click.echo(f"  {result['total_species_in_area']} other species observed nearby")
 
 
-@services_ebird.command('nearby')
-@click.option('--lat', type=float, required=True, help='Latitude')
-@click.option('--lng', type=float, required=True, help='Longitude')
-@click.option('--api-key', envvar='EBIRD_API_KEY', required=True, help='eBird API key')
-@click.option('--distance', type=float, default=25, help='Search radius in km')
-@click.option('--days', type=int, default=14, help='Days back to search')
-@click.option('--limit', type=int, default=20, help='Maximum results')
-@click.option('--output', '-o', help='Output CSV file')
-def ebird_nearby(lat: float, lng: float, api_key: str, distance: float,
-                 days: int, limit: int, output: str):
+@services_ebird.command("nearby")
+@click.option("--lat", type=float, required=True, help="Latitude")
+@click.option("--lng", type=float, required=True, help="Longitude")
+@click.option("--api-key", envvar="EBIRD_API_KEY", required=True, help="eBird API key")
+@click.option("--distance", type=float, default=25, help="Search radius in km")
+@click.option("--days", type=int, default=14, help="Days back to search")
+@click.option("--limit", type=int, default=20, help="Maximum results")
+@click.option("--output", "-o", help="Output CSV file")
+def ebird_nearby(
+    lat: float, lng: float, api_key: str, distance: float, days: int, limit: int, output: str
+):
     """Get recent eBird observations near a location."""
     import csv
 
@@ -5479,9 +6077,18 @@ def ebird_nearby(lat: float, lng: float, api_key: str, distance: float,
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        with TextFile(output, mode='w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f.handle, fieldnames=['species_code', 'common_name', 'scientific_name',
-                                                    'location_name', 'observation_date', 'how_many'])
+        with TextFile(output, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(
+                f.handle,
+                fieldnames=[
+                    "species_code",
+                    "common_name",
+                    "scientific_name",
+                    "location_name",
+                    "observation_date",
+                    "how_many",
+                ],
+            )
             writer.writeheader()
             for obs in observations:
                 writer.writerow(obs.to_dict())
@@ -5489,21 +6096,23 @@ def ebird_nearby(lat: float, lng: float, api_key: str, distance: float,
 
 
 # --- PostgreSQL subgroup ---
-@services.group('pg')
+@services.group("pg")
 def services_pg():
     """PostgreSQL database integration."""
     pass
 
 
-@services_pg.command('export')
-@click.argument('detections_file')
-@click.option('--connection', '-c', envvar='DATABASE_URL', required=True,
-              help='PostgreSQL connection string')
-@click.option('--detector', '-d', default='unknown', help='Detector name')
-@click.option('--create-tables', is_flag=True, help='Create tables if not exist')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
-def pg_export(detections_file: str, connection: str, detector: str,
-              create_tables: bool, quiet: bool):
+@services_pg.command("export")
+@click.argument("detections_file")
+@click.option(
+    "--connection", "-c", envvar="DATABASE_URL", required=True, help="PostgreSQL connection string"
+)
+@click.option("--detector", "-d", default="unknown", help="Detector name")
+@click.option("--create-tables", is_flag=True, help="Create tables if not exist")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
+def pg_export(
+    detections_file: str, connection: str, detector: str, create_tables: bool, quiet: bool
+):
     """Export detections to PostgreSQL database.
 
     DETECTIONS_FILE: Path to JSON file with detections
@@ -5512,7 +6121,7 @@ def pg_export(detections_file: str, connection: str, detector: str,
 
     from bioamla.core.integrations import PostgreSQLExporter
 
-    with TextFile(detections_file, mode='r', encoding='utf-8') as f:
+    with TextFile(detections_file, mode="r", encoding="utf-8") as f:
         detections = json.load(f.handle)
 
     exporter = PostgreSQLExporter(connection_string=connection)
@@ -5529,9 +6138,10 @@ def pg_export(detections_file: str, connection: str, detector: str,
         click.echo(f"Exported {count} detections to database")
 
 
-@services_pg.command('stats')
-@click.option('--connection', '-c', envvar='DATABASE_URL', required=True,
-              help='PostgreSQL connection string')
+@services_pg.command("stats")
+@click.option(
+    "--connection", "-c", envvar="DATABASE_URL", required=True, help="PostgreSQL connection string"
+)
 def pg_stats(connection: str):
     """Show PostgreSQL database statistics."""
     from bioamla.core.integrations import PostgreSQLExporter
@@ -5546,24 +6156,37 @@ def pg_stats(connection: str):
     click.echo(f"  Audio Files: {stats['audio_files_count']}")
     click.echo(f"  Species Observations: {stats['species_observations_count']}")
 
-    if stats.get('detections_by_label'):
+    if stats.get("detections_by_label"):
         click.echo("\nTop Detection Labels:")
-        for label, count in list(stats['detections_by_label'].items())[:10]:
+        for label, count in list(stats["detections_by_label"].items())[:10]:
             click.echo(f"  {label}: {count}")
 
 
-@train.command('spec')
-@click.argument('data_dir')
-@click.option('--output', '-o', required=True, help='Output directory for model')
-@click.option('--model', '-m', type=click.Choice(['cnn', 'crnn', 'attention']),
-              default='cnn', help='Model architecture')
-@click.option('--epochs', '-e', type=int, default=50, help='Number of epochs')
-@click.option('--batch-size', '-b', type=int, default=32, help='Batch size')
-@click.option('--lr', type=float, default=1e-3, help='Learning rate')
-@click.option('--n-classes', '-n', type=int, required=True, help='Number of classes')
-@click.option('--quiet', '-q', is_flag=True, help='Suppress output')
-def train_spec(data_dir: str, output: str, model: str, epochs: int,
-               batch_size: int, lr: float, n_classes: int, quiet: bool):
+@train.command("spec")
+@click.argument("data_dir")
+@click.option("--output", "-o", required=True, help="Output directory for model")
+@click.option(
+    "--model",
+    "-m",
+    type=click.Choice(["cnn", "crnn", "attention"]),
+    default="cnn",
+    help="Model architecture",
+)
+@click.option("--epochs", "-e", type=int, default=50, help="Number of epochs")
+@click.option("--batch-size", "-b", type=int, default=32, help="Batch size")
+@click.option("--lr", type=float, default=1e-3, help="Learning rate")
+@click.option("--n-classes", "-n", type=int, required=True, help="Number of classes")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
+def train_spec(
+    data_dir: str,
+    output: str,
+    model: str,
+    epochs: int,
+    batch_size: int,
+    lr: float,
+    n_classes: int,
+    quiet: bool,
+):
     """Train a spectrogram classifier (CNN/CRNN/Attention).
 
     DATA_DIR: Directory containing training data (spectrograms as .npy files)
@@ -5578,9 +6201,9 @@ def train_spec(data_dir: str, output: str, model: str, epochs: int,
         TrainerConfig,
     )
 
-    if model == 'cnn':
+    if model == "cnn":
         classifier = CNNClassifier(n_classes=n_classes)
-    elif model == 'crnn':
+    elif model == "crnn":
         classifier = CRNNClassifier(n_classes=n_classes)
     else:
         classifier = AttentionClassifier(n_classes=n_classes)
@@ -5601,12 +6224,17 @@ def train_spec(data_dir: str, output: str, model: str, epochs: int,
     click.echo(f"Model will be saved to: {output}")
 
 
-@models.command('ensemble')
-@click.argument('model_dirs', nargs=-1, required=True)
-@click.option('--output', '-o', required=True, help='Output directory for ensemble')
-@click.option('--strategy', '-s', type=click.Choice(['averaging', 'voting', 'max']),
-              default='averaging', help='Ensemble combination strategy')
-@click.option('--weights', '-w', multiple=True, type=float, help='Model weights')
+@models.command("ensemble")
+@click.argument("model_dirs", nargs=-1, required=True)
+@click.option("--output", "-o", required=True, help="Output directory for ensemble")
+@click.option(
+    "--strategy",
+    "-s",
+    type=click.Choice(["averaging", "voting", "max"]),
+    default="averaging",
+    help="Ensemble combination strategy",
+)
+@click.option("--weights", "-w", multiple=True, type=float, help="Model weights")
 def models_ensemble(model_dirs, output: str, strategy: str, weights):
     """Create an ensemble from multiple trained models.
 
@@ -5633,6 +6261,7 @@ def models_ensemble(model_dirs, output: str, strategy: str, weights):
 # Examples Command Group
 # =============================================================================
 
+
 @cli.group()
 def examples():
     """Access example workflow scripts.
@@ -5650,12 +6279,13 @@ def examples():
     pass
 
 
-@examples.command('list')
+@examples.command("list")
 def examples_list():
     """List all available example workflows."""
+    from rich.table import Table
+
     from bioamla._internal.examples import list_examples
     from bioamla.core.progress import console
-    from rich.table import Table
 
     table = Table(title="Available Example Workflows", show_header=True)
     table.add_column("ID", style="cyan", width=4)
@@ -5670,16 +6300,17 @@ def examples_list():
     console.print("[dim]Use 'bioamla examples copy <ID> <dir>' to copy to a directory[/dim]")
 
 
-@examples.command('show')
-@click.argument('example_id')
+@examples.command("show")
+@click.argument("example_id")
 def examples_show(example_id: str):
     """Show the content of an example workflow.
 
     EXAMPLE_ID: The example ID (e.g., 00, 01, 02) or filename
     """
+    from rich.syntax import Syntax
+
     from bioamla._internal.examples import EXAMPLES, get_example_content
     from bioamla.core.progress import console
-    from rich.syntax import Syntax
 
     try:
         content = get_example_content(example_id)
@@ -5697,10 +6328,10 @@ def examples_show(example_id: str):
         raise click.ClickException(str(e))
 
 
-@examples.command('copy')
-@click.argument('example_id')
-@click.argument('output_dir', type=click.Path())
-@click.option('--force', '-f', is_flag=True, help='Overwrite existing files')
+@examples.command("copy")
+@click.argument("example_id")
+@click.argument("output_dir", type=click.Path())
+@click.option("--force", "-f", is_flag=True, help="Overwrite existing files")
 def examples_copy(example_id: str, output_dir: str, force: bool):
     """Copy an example workflow to a directory.
 
@@ -5714,7 +6345,7 @@ def examples_copy(example_id: str, output_dir: str, force: bool):
     try:
         content = get_example_content(example_id)
         filename = EXAMPLES[example_id][0]
-    except (ValueError, KeyError) as e:
+    except (ValueError, KeyError):
         raise click.ClickException(f"Example not found: {example_id}")
 
     output_path = Path(output_dir)
@@ -5722,9 +6353,7 @@ def examples_copy(example_id: str, output_dir: str, force: bool):
 
     dest_file = output_path / filename
     if dest_file.exists() and not force:
-        raise click.ClickException(
-            f"File already exists: {dest_file}\nUse --force to overwrite"
-        )
+        raise click.ClickException(f"File already exists: {dest_file}\nUse --force to overwrite")
 
     dest_file.write_text(content)
     dest_file.chmod(0o755)  # Make executable
@@ -5732,9 +6361,9 @@ def examples_copy(example_id: str, output_dir: str, force: bool):
     click.echo(f"Copied {filename} to {dest_file}")
 
 
-@examples.command('copy-all')
-@click.argument('output_dir', type=click.Path())
-@click.option('--force', '-f', is_flag=True, help='Overwrite existing files')
+@examples.command("copy-all")
+@click.argument("output_dir", type=click.Path())
+@click.option("--force", "-f", is_flag=True, help="Overwrite existing files")
 def examples_copy_all(output_dir: str, force: bool):
     """Copy all example workflows to a directory.
 
@@ -5768,8 +6397,8 @@ def examples_copy_all(output_dir: str, force: bool):
         click.echo(f"Skipped {skipped} existing files (use --force to overwrite)")
 
 
-@examples.command('info')
-@click.argument('example_id')
+@examples.command("info")
+@click.argument("example_id")
 def examples_info(example_id: str):
     """Show detailed information about an example.
 
@@ -5785,30 +6414,30 @@ def examples_info(example_id: str):
     content = get_example_content(example_id)
 
     # Extract purpose and features from the script header
-    lines = content.split('\n')
+    lines = content.split("\n")
     purpose_lines = []
     features_lines = []
     in_purpose = False
     in_features = False
 
     for line in lines:
-        if 'PURPOSE:' in line:
+        if "PURPOSE:" in line:
             in_purpose = True
-            purpose_lines.append(line.split('PURPOSE:')[1].strip())
-        elif 'FEATURES DEMONSTRATED:' in line:
+            purpose_lines.append(line.split("PURPOSE:")[1].strip())
+        elif "FEATURES DEMONSTRATED:" in line:
             in_purpose = False
             in_features = True
-        elif in_purpose and line.strip().startswith('#'):
-            text = line.strip('#').strip()
-            if text and not any(x in text for x in ['INPUT:', 'OUTPUT:', '===', 'FEATURES']):
+        elif in_purpose and line.strip().startswith("#"):
+            text = line.strip("#").strip()
+            if text and not any(x in text for x in ["INPUT:", "OUTPUT:", "===", "FEATURES"]):
                 purpose_lines.append(text)
             else:
                 in_purpose = False
-        elif in_features and line.strip().startswith('#'):
-            text = line.strip('#').strip()
-            if text.startswith('-'):
+        elif in_features and line.strip().startswith("#"):
+            text = line.strip("#").strip()
+            if text.startswith("-"):
                 features_lines.append(text)
-            elif text and not any(x in text for x in ['INPUT:', 'OUTPUT:', '===']):
+            elif text and not any(x in text for x in ["INPUT:", "OUTPUT:", "==="]):
                 continue
             else:
                 in_features = False
@@ -5827,9 +6456,9 @@ def examples_info(example_id: str):
             console.print(f"  {feature}")
 
     # Count lines and commands
-    command_count = sum(1 for line in lines if line.strip().startswith('bioamla '))
+    command_count = sum(1 for line in lines if line.strip().startswith("bioamla "))
     console.print(f"\n[dim]Lines: {len(lines)}, bioamla commands: {command_count}[/dim]")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

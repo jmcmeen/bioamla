@@ -51,7 +51,7 @@ def configure_logging(
     verbose: bool = False,
     level: Optional[int] = None,
     format_string: Optional[str] = None,
-    stream: Optional[object] = None
+    stream: Optional[object] = None,
 ) -> None:
     """
     Configure logging for the bioamla package.

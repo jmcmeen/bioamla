@@ -30,27 +30,26 @@ Usage:
     # Batch processing
     batch_result = indices_ctrl.calculate_batch("./recordings/", output="indices.csv")
 """
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
 
-import numpy as np
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from bioamla.core.analysis.indices import (
     AcousticIndices,
-    compute_all_indices,
     compute_aci,
     compute_adi,
     compute_aei,
+    compute_all_indices,
     compute_bio,
     compute_ndsi,
-    temporal_indices,
     spectral_entropy,
     temporal_entropy,
+    temporal_indices,
 )
+
 from .audio_file import AudioData
 from .base import BaseController, BatchProgress, ControllerResult
-
 
 # Available index names for selection
 AVAILABLE_INDICES = ["aci", "adi", "aei", "bio", "ndsi", "h_spectral", "h_temporal"]
@@ -242,34 +241,49 @@ class IndicesController(BaseController):
 
             if index_name == "aci":
                 value = compute_aci(
-                    samples, audio.sample_rate, n_fft, hop_length,
+                    samples,
+                    audio.sample_rate,
+                    n_fft,
+                    hop_length,
                     min_freq=kwargs.get("min_freq", self.DEFAULT_ACI_MIN_FREQ),
                     max_freq=kwargs.get("max_freq", self.DEFAULT_ACI_MAX_FREQ),
                 )
             elif index_name == "adi":
                 value = compute_adi(
-                    samples, audio.sample_rate, n_fft, hop_length,
+                    samples,
+                    audio.sample_rate,
+                    n_fft,
+                    hop_length,
                     max_freq=kwargs.get("max_freq", self.DEFAULT_ADI_MAX_FREQ),
                     freq_step=kwargs.get("freq_step", self.DEFAULT_ADI_FREQ_STEP),
                     db_threshold=kwargs.get("db_threshold", self.DEFAULT_DB_THRESHOLD),
                 )
             elif index_name == "aei":
                 value = compute_aei(
-                    samples, audio.sample_rate, n_fft, hop_length,
+                    samples,
+                    audio.sample_rate,
+                    n_fft,
+                    hop_length,
                     max_freq=kwargs.get("max_freq", self.DEFAULT_ADI_MAX_FREQ),
                     freq_step=kwargs.get("freq_step", self.DEFAULT_ADI_FREQ_STEP),
                     db_threshold=kwargs.get("db_threshold", self.DEFAULT_DB_THRESHOLD),
                 )
             elif index_name == "bio":
                 value = compute_bio(
-                    samples, audio.sample_rate, n_fft, hop_length,
+                    samples,
+                    audio.sample_rate,
+                    n_fft,
+                    hop_length,
                     min_freq=kwargs.get("min_freq", self.DEFAULT_BIO_MIN_FREQ),
                     max_freq=kwargs.get("max_freq", self.DEFAULT_BIO_MAX_FREQ),
                     db_threshold=kwargs.get("db_threshold", self.DEFAULT_DB_THRESHOLD),
                 )
             elif index_name == "ndsi":
                 value, _, _ = compute_ndsi(
-                    samples, audio.sample_rate, n_fft=1024, hop_length=hop_length,
+                    samples,
+                    audio.sample_rate,
+                    n_fft=1024,
+                    hop_length=hop_length,
                 )
             elif index_name == "h_spectral":
                 value = spectral_entropy(samples, audio.sample_rate, n_fft, hop_length)
@@ -371,10 +385,24 @@ class IndicesController(BaseController):
         """
         import soundfile as sf
 
+        # Start run tracking
+        run_id = self._start_run(
+            name=f"Batch indices: {input_path}",
+            action="indices",
+            input_path=input_path,
+            output_path=output_path or "",
+            parameters={
+                "recursive": recursive,
+                "include_entropy": include_entropy,
+                **kwargs,
+            },
+        )
+
         # Get audio files
         files = self._get_audio_files(input_path, recursive=recursive)
 
         if not files:
+            self._fail_run("No audio files found")
             return ControllerResult.fail(f"No audio files found in {input_path}")
 
         results = []
@@ -409,20 +437,24 @@ class IndicesController(BaseController):
                     results.append(row)
                     successful += 1
                 else:
-                    results.append({
-                        "filepath": str(filepath),
-                        "success": False,
-                        "error": result.error,
-                    })
+                    results.append(
+                        {
+                            "filepath": str(filepath),
+                            "success": False,
+                            "error": result.error,
+                        }
+                    )
                     failed += 1
                     progress.errors.append(f"{filepath.name}: {result.error}")
 
             except Exception as e:
-                results.append({
-                    "filepath": str(filepath),
-                    "success": False,
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "filepath": str(filepath),
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
                 failed += 1
                 progress.errors.append(f"{filepath.name}: {e}")
 
@@ -441,6 +473,16 @@ class IndicesController(BaseController):
             successful=successful,
             failed=failed,
             output_path=saved_path,
+        )
+
+        # Complete run with results
+        self._complete_run(
+            results={
+                "total_files": len(files),
+                "successful": successful,
+                "failed": failed,
+            },
+            output_files=[saved_path] if saved_path else None,
         )
 
         return ControllerResult.ok(

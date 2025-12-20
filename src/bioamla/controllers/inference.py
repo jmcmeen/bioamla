@@ -8,12 +8,13 @@ Controller for ML model inference operations.
 Orchestrates between CLI/API views and core ML inference functions.
 Handles model loading, batch processing, and output formatting.
 """
+
 import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .base import BaseController, BatchProgress, ControllerResult
+from .base import BaseController, ControllerResult
 
 
 @dataclass
@@ -174,6 +175,22 @@ class InferenceController(BaseController):
         if error:
             return ControllerResult.fail(error)
 
+        # Start run tracking
+        run_id = self._start_run(
+            name=f"Batch prediction: {directory}",
+            action="predict",
+            input_path=directory,
+            output_path=output_csv or "",
+            parameters={
+                "model_path": model_path or self._model_path,
+                "top_k": top_k,
+                "min_confidence": min_confidence,
+                "recursive": recursive,
+                "clip_duration": clip_duration,
+                "overlap": overlap,
+            },
+        )
+
         try:
             from bioamla.core.files import TextFile
 
@@ -181,6 +198,7 @@ class InferenceController(BaseController):
             files = self._get_audio_files(directory, recursive=recursive)
 
             if not files:
+                self._fail_run("No audio files found")
                 return ControllerResult.fail(f"No audio files found in {directory}")
 
             all_predictions = []
@@ -224,21 +242,25 @@ class InferenceController(BaseController):
             if output_csv and all_predictions:
                 with TextFile(output_csv, mode="w", newline="") as f:
                     writer = csv.writer(f.handle)
-                    writer.writerow([
-                        "filepath",
-                        "start_time",
-                        "end_time",
-                        "predicted_label",
-                        "confidence",
-                    ])
+                    writer.writerow(
+                        [
+                            "filepath",
+                            "start_time",
+                            "end_time",
+                            "predicted_label",
+                            "confidence",
+                        ]
+                    )
                     for pred in all_predictions:
-                        writer.writerow([
-                            pred.filepath,
-                            f"{pred.start_time:.3f}",
-                            f"{pred.end_time:.3f}",
-                            pred.predicted_label,
-                            f"{pred.confidence:.4f}",
-                        ])
+                        writer.writerow(
+                            [
+                                pred.filepath,
+                                f"{pred.start_time:.3f}",
+                                f"{pred.end_time:.3f}",
+                                pred.predicted_label,
+                                f"{pred.confidence:.4f}",
+                            ]
+                        )
 
             summary = InferenceSummary(
                 total_files=len(files),
@@ -246,6 +268,18 @@ class InferenceController(BaseController):
                 unique_labels=len(label_counts),
                 label_counts=label_counts,
                 output_path=output_csv,
+            )
+
+            # Complete run with results
+            self._complete_run(
+                results={
+                    "total_files": len(files),
+                    "total_predictions": len(all_predictions),
+                    "unique_labels": len(label_counts),
+                    "label_counts": label_counts,
+                    "errors_count": len(errors),
+                },
+                output_files=[output_csv] if output_csv else None,
             )
 
             return ControllerResult.ok(
@@ -257,6 +291,7 @@ class InferenceController(BaseController):
                 message=f"Generated {len(all_predictions)} predictions from {len(files)} files",
             )
         except Exception as e:
+            self._fail_run(str(e))
             return ControllerResult.fail(str(e))
 
     # =========================================================================
@@ -329,6 +364,19 @@ class InferenceController(BaseController):
         if error:
             return ControllerResult.fail(error)
 
+        # Start run tracking
+        run_id = self._start_run(
+            name=f"Batch embedding extraction: {directory}",
+            action="embed",
+            input_path=directory,
+            output_path=output_path,
+            parameters={
+                "model_path": model_path or self._model_path,
+                "recursive": recursive,
+                "format": format,
+            },
+        )
+
         try:
             import numpy as np
 
@@ -336,6 +384,7 @@ class InferenceController(BaseController):
             files = self._get_audio_files(directory, recursive=recursive)
 
             if not files:
+                self._fail_run("No audio files found")
                 return ControllerResult.fail(f"No audio files found in {directory}")
 
             all_embeddings = []
@@ -354,6 +403,7 @@ class InferenceController(BaseController):
                     file_mapping.append(str(filepath))
 
             if not all_embeddings:
+                self._fail_run("No embeddings extracted")
                 return ControllerResult.fail("No embeddings extracted")
 
             # Stack all embeddings
@@ -363,12 +413,14 @@ class InferenceController(BaseController):
             output_file = Path(output_path)
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
+            output_files = [str(output_file)]
             if format == "npy":
                 np.save(str(output_file), stacked)
                 # Also save file mapping
                 mapping_file = output_file.with_suffix(".files.txt")
                 with open(mapping_file, "w") as f:
                     f.write("\n".join(file_mapping))
+                output_files.append(str(mapping_file))
             elif format == "parquet":
                 try:
                     import pandas as pd
@@ -377,7 +429,19 @@ class InferenceController(BaseController):
                     df["filepath"] = file_mapping
                     df.to_parquet(str(output_file))
                 except ImportError:
+                    self._fail_run("pandas required for parquet format")
                     return ControllerResult.fail("pandas required for parquet format")
+
+            # Complete run with results
+            self._complete_run(
+                results={
+                    "total_files": len(files),
+                    "extracted": len(all_embeddings),
+                    "shape": list(stacked.shape),
+                    "errors_count": len(errors),
+                },
+                output_files=output_files,
+            )
 
             return ControllerResult.ok(
                 data={
@@ -390,6 +454,7 @@ class InferenceController(BaseController):
                 message=f"Extracted embeddings from {len(all_embeddings)} files",
             )
         except Exception as e:
+            self._fail_run(str(e))
             return ControllerResult.fail(str(e))
 
     # =========================================================================

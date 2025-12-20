@@ -33,19 +33,18 @@ Example:
     >>> scores = ribbit.detect(audio, sample_rate)
 """
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import librosa
 import numpy as np
-from scipy import ndimage, signal as scipy_signal
+from scipy import ndimage
 from scipy.signal import find_peaks
 
-import logging
-
-from bioamla.core.files import TextFile
 from bioamla.core.audio.signal import bandpass_filter
+from bioamla.core.files import TextFile
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +68,7 @@ __all__ = [
 # Detection Result Classes
 # =============================================================================
 
+
 @dataclass
 class Detection:
     """
@@ -83,6 +83,7 @@ class Detection:
         label: Optional detection label.
         metadata: Additional metadata.
     """
+
     start_time: float
     end_time: float
     confidence: float = 1.0
@@ -127,6 +128,7 @@ class PeakDetection:
         prominence: Peak prominence.
         frequency: Associated frequency in Hz (if applicable).
     """
+
     time: float
     amplitude: float
     width: float = 0.0
@@ -147,6 +149,7 @@ class PeakDetection:
 # =============================================================================
 # Band-Limited Energy Detector
 # =============================================================================
+
 
 class BandLimitedEnergyDetector:
     """
@@ -205,9 +208,7 @@ class BandLimitedEnergyDetector:
             Tuple of (energy envelope, time axis).
         """
         # Bandpass filter
-        filtered = bandpass_filter(
-            audio, sample_rate, self.low_freq, self.high_freq
-        )
+        filtered = bandpass_filter(audio, sample_rate, self.low_freq, self.high_freq)
 
         # Compute energy envelope using RMS
         frame_length = hop_length * 2
@@ -221,7 +222,7 @@ class BandLimitedEnergyDetector:
         if self.smoothing_window > 0:
             smooth_samples = max(1, int(self.smoothing_window * sample_rate / hop_length))
             kernel = np.ones(smooth_samples) / smooth_samples
-            energy = np.convolve(energy, kernel, mode='same')
+            energy = np.convolve(energy, kernel, mode="same")
 
         # Time axis
         times = librosa.frames_to_time(
@@ -290,14 +291,16 @@ class BandLimitedEnergyDetector:
             region_energy = energy[region_indices]
             confidence = float(np.mean(region_energy) / np.max(energy))
 
-            detections.append(Detection(
-                start_time=float(start_time),
-                end_time=float(end_time),
-                confidence=confidence,
-                frequency_low=self.low_freq,
-                frequency_high=self.high_freq,
-                label="band_energy",
-            ))
+            detections.append(
+                Detection(
+                    start_time=float(start_time),
+                    end_time=float(end_time),
+                    confidence=confidence,
+                    frequency_low=self.low_freq,
+                    frequency_high=self.high_freq,
+                    label="band_energy",
+                )
+            )
 
         # Merge nearby detections
         detections = self._merge_detections(detections)
@@ -355,6 +358,7 @@ class BandLimitedEnergyDetector:
 # =============================================================================
 # RIBBIT Periodic Call Detector
 # =============================================================================
+
 
 class RibbitDetector:
     """
@@ -425,17 +429,17 @@ class RibbitDetector:
             Pulse score (0-1).
         """
         # Bandpass filter
-        filtered = bandpass_filter(
-            audio, sample_rate, self.low_freq, self.high_freq
-        )
+        filtered = bandpass_filter(audio, sample_rate, self.low_freq, self.high_freq)
 
         # Compute spectrogram
         hop_length = self.n_fft // 4
-        spec = np.abs(librosa.stft(
-            filtered,
-            n_fft=self.n_fft,
-            hop_length=hop_length,
-        ))
+        spec = np.abs(
+            librosa.stft(
+                filtered,
+                n_fft=self.n_fft,
+                hop_length=hop_length,
+            )
+        )
 
         # Get frequency bins within band
         frequencies = librosa.fft_frequencies(sr=sample_rate, n_fft=self.n_fft)
@@ -456,8 +460,8 @@ class RibbitDetector:
             band_energy = band_energy / np.std(band_energy)
 
         # Compute autocorrelation
-        autocorr = np.correlate(band_energy, band_energy, mode='full')
-        autocorr = autocorr[len(autocorr) // 2:]  # Take positive lags
+        autocorr = np.correlate(band_energy, band_energy, mode="full")
+        autocorr = autocorr[len(autocorr) // 2 :]  # Take positive lags
 
         # Convert lag to time
         time_per_frame = hop_length / sample_rate
@@ -481,7 +485,7 @@ class RibbitDetector:
             return 0.0
 
         # Find max autocorrelation in expected range
-        search_range = autocorr[lag_min:lag_max + 1]
+        search_range = autocorr[lag_min : lag_max + 1]
         if len(search_range) == 0:
             return 0.0
 
@@ -497,7 +501,7 @@ class RibbitDetector:
             h_lag_max = int((h_period + period_tolerance) / time_per_frame)
 
             if h_lag_max < len(autocorr) and h_lag_min < h_lag_max:
-                h_range = autocorr[h_lag_min:h_lag_max + 1]
+                h_range = autocorr[h_lag_min : h_lag_max + 1]
                 if len(h_range) > 0:
                     h_score = np.max(h_range) / (autocorr[0] + 1e-10)
                     harmonic_scores.append(h_score)
@@ -535,24 +539,26 @@ class RibbitDetector:
         position = 0
 
         while position + window_samples <= len(audio):
-            window = audio[position:position + window_samples]
+            window = audio[position : position + window_samples]
             score = self.compute_pulse_score(window, sample_rate)
 
             if score >= self.min_score:
                 start_time = position / sample_rate
                 end_time = (position + window_samples) / sample_rate
 
-                detections.append(Detection(
-                    start_time=float(start_time),
-                    end_time=float(end_time),
-                    confidence=float(score),
-                    frequency_low=self.low_freq,
-                    frequency_high=self.high_freq,
-                    label="ribbit",
-                    metadata={
-                        "pulse_rate_hz": self.pulse_rate_hz,
-                    },
-                ))
+                detections.append(
+                    Detection(
+                        start_time=float(start_time),
+                        end_time=float(end_time),
+                        confidence=float(score),
+                        frequency_low=self.low_freq,
+                        frequency_high=self.high_freq,
+                        label="ribbit",
+                        metadata={
+                            "pulse_rate_hz": self.pulse_rate_hz,
+                        },
+                    )
+                )
 
             position += hop_samples
 
@@ -615,7 +621,7 @@ class RibbitDetector:
         position = 0
 
         while position + window_samples <= len(audio):
-            window = audio[position:position + window_samples]
+            window = audio[position : position + window_samples]
             score = self.compute_pulse_score(window, sample_rate)
 
             center_time = (position + window_samples / 2) / sample_rate
@@ -638,6 +644,7 @@ class RibbitDetector:
 # =============================================================================
 # CWT Peak Detector
 # =============================================================================
+
 
 class CWTPeakDetector:
     """
@@ -709,15 +716,15 @@ class CWTPeakDetector:
             if width < 1:
                 width = 1
             t = np.arange(width) - (width - 1) / 2
-            norm = 2 / (np.sqrt(3 * scale) * np.pi ** 0.25)
-            wavelet = norm * (1 - (t / scale) ** 2) * np.exp(-t ** 2 / (2 * scale ** 2))
+            norm = 2 / (np.sqrt(3 * scale) * np.pi**0.25)
+            wavelet = norm * (1 - (t / scale) ** 2) * np.exp(-(t**2) / (2 * scale**2))
 
             # Convolve signal with wavelet
             if len(signal) >= len(wavelet):
-                cwt_matrix[i, :] = np.convolve(signal, wavelet, mode='same')
+                cwt_matrix[i, :] = np.convolve(signal, wavelet, mode="same")
             else:
                 # Handle case where signal is shorter than wavelet
-                cwt_matrix[i, :] = np.convolve(signal, wavelet[:len(signal)], mode='same')
+                cwt_matrix[i, :] = np.convolve(signal, wavelet[: len(signal)], mode="same")
 
         return np.abs(cwt_matrix), scales
 
@@ -765,20 +772,22 @@ class CWTPeakDetector:
 
             # Get width from properties
             width = 0.0
-            if 'widths' in properties and i < len(properties['widths']):
-                width = float(properties['widths'][i]) / sample_rate
+            if "widths" in properties and i < len(properties["widths"]):
+                width = float(properties["widths"][i]) / sample_rate
 
             # Get prominence
             prominence = 0.0
-            if 'prominences' in properties and i < len(properties['prominences']):
-                prominence = float(properties['prominences'][i])
+            if "prominences" in properties and i < len(properties["prominences"]):
+                prominence = float(properties["prominences"][i])
 
-            peaks.append(PeakDetection(
-                time=time,
-                amplitude=amplitude,
-                width=width,
-                prominence=prominence,
-            ))
+            peaks.append(
+                PeakDetection(
+                    time=time,
+                    amplitude=amplitude,
+                    width=width,
+                    prominence=prominence,
+                )
+            )
 
         return peaks
 
@@ -805,9 +814,7 @@ class CWTPeakDetector:
 
         # Apply frequency band filter if specified
         if self.low_freq is not None and self.high_freq is not None:
-            audio = bandpass_filter(
-                audio, sample_rate, self.low_freq, self.high_freq
-            )
+            audio = bandpass_filter(audio, sample_rate, self.low_freq, self.high_freq)
 
         # Compute energy envelope
         envelope = librosa.feature.rms(
@@ -880,18 +887,24 @@ class CWTPeakDetector:
             end_time = seq[-1].time
             avg_confidence = np.mean([p.amplitude for p in seq])
 
-            detections.append(Detection(
-                start_time=float(start_time),
-                end_time=float(end_time),
-                confidence=float(avg_confidence / (np.max([p.amplitude for p in peaks]) + 1e-10)),
-                frequency_low=self.low_freq,
-                frequency_high=self.high_freq,
-                label="cwt_sequence",
-                metadata={
-                    "n_peaks": len(seq),
-                    "mean_interval": np.mean(np.diff([p.time for p in seq])) if len(seq) > 1 else 0,
-                },
-            ))
+            detections.append(
+                Detection(
+                    start_time=float(start_time),
+                    end_time=float(end_time),
+                    confidence=float(
+                        avg_confidence / (np.max([p.amplitude for p in peaks]) + 1e-10)
+                    ),
+                    frequency_low=self.low_freq,
+                    frequency_high=self.high_freq,
+                    label="cwt_sequence",
+                    metadata={
+                        "n_peaks": len(seq),
+                        "mean_interval": np.mean(np.diff([p.time for p in seq]))
+                        if len(seq) > 1
+                        else 0,
+                    },
+                )
+            )
 
         return detections
 
@@ -908,6 +921,7 @@ class CWTPeakDetector:
 # =============================================================================
 # Accelerating Pattern Detector
 # =============================================================================
+
 
 class AcceleratingPatternDetector:
     """
@@ -1075,7 +1089,7 @@ class AcceleratingPatternDetector:
         position = 0
 
         while position + window_samples <= len(audio):
-            window = audio[position:position + window_samples]
+            window = audio[position : position + window_samples]
             window_start = position / sample_rate
 
             # Detect peaks in window
@@ -1093,21 +1107,23 @@ class AcceleratingPatternDetector:
                     # Calculate confidence based on number of pulses and consistency
                     confidence = min(1.0, analysis["n_pulses"] / (self.min_pulses * 2))
 
-                    detections.append(Detection(
-                        start_time=float(window_start),
-                        end_time=float(window_start + self.window_duration),
-                        confidence=confidence,
-                        frequency_low=self.low_freq,
-                        frequency_high=self.high_freq,
-                        label=f"pattern_{pattern_type}",
-                        metadata={
-                            "pattern_type": pattern_type,
-                            "acceleration_ratio": analysis["acceleration_ratio"],
-                            "initial_rate": analysis["initial_rate"],
-                            "final_rate": analysis["final_rate"],
-                            "n_pulses": analysis["n_pulses"],
-                        },
-                    ))
+                    detections.append(
+                        Detection(
+                            start_time=float(window_start),
+                            end_time=float(window_start + self.window_duration),
+                            confidence=confidence,
+                            frequency_low=self.low_freq,
+                            frequency_high=self.high_freq,
+                            label=f"pattern_{pattern_type}",
+                            metadata={
+                                "pattern_type": pattern_type,
+                                "acceleration_ratio": analysis["acceleration_ratio"],
+                                "initial_rate": analysis["initial_rate"],
+                                "final_rate": analysis["final_rate"],
+                                "n_pulses": analysis["n_pulses"],
+                            },
+                        )
+                    )
 
             position += hop_samples
 
@@ -1163,11 +1179,15 @@ class AcceleratingPatternDetector:
 # Utility Functions
 # =============================================================================
 
+
 def detect_all(
     audio: np.ndarray,
     sample_rate: int,
-    detectors: List[Union[BandLimitedEnergyDetector, RibbitDetector,
-                         CWTPeakDetector, AcceleratingPatternDetector]],
+    detectors: List[
+        Union[
+            BandLimitedEnergyDetector, RibbitDetector, CWTPeakDetector, AcceleratingPatternDetector
+        ]
+    ],
 ) -> List[Detection]:
     """
     Run multiple detectors and combine results.
@@ -1187,12 +1207,18 @@ def detect_all(
             # Convert peaks to detections
             peaks = detector.detect(audio, sample_rate)
             for peak in peaks:
-                all_detections.append(Detection(
-                    start_time=max(0, peak.time - peak.width / 2),
-                    end_time=peak.time + peak.width / 2,
-                    confidence=float(peak.prominence / (np.max([p.prominence for p in peaks]) + 1e-10)) if peaks else 0,
-                    label="cwt_peak",
-                ))
+                all_detections.append(
+                    Detection(
+                        start_time=max(0, peak.time - peak.width / 2),
+                        end_time=peak.time + peak.width / 2,
+                        confidence=float(
+                            peak.prominence / (np.max([p.prominence for p in peaks]) + 1e-10)
+                        )
+                        if peaks
+                        else 0,
+                        label="cwt_peak",
+                    )
+                )
         else:
             detections = detector.detect(audio, sample_rate)
             all_detections.extend(detections)
@@ -1239,15 +1265,18 @@ def export_detections(
         else:
             # Write empty file with header
             with TextFile(output_path, mode="w", newline="") as f:
-                f.write("start_time,end_time,confidence,duration,frequency_low,frequency_high,label\n")
+                f.write(
+                    "start_time,end_time,confidence,duration,frequency_low,frequency_high,label\n"
+                )
 
     return output_path
 
 
 def batch_detect(
     filepaths: List[Union[str, Path]],
-    detector: Union[BandLimitedEnergyDetector, RibbitDetector,
-                   CWTPeakDetector, AcceleratingPatternDetector],
+    detector: Union[
+        BandLimitedEnergyDetector, RibbitDetector, CWTPeakDetector, AcceleratingPatternDetector
+    ],
     verbose: bool = True,
 ) -> Dict[str, List[Detection]]:
     """
@@ -1268,7 +1297,7 @@ def batch_detect(
             print(f"[{i}/{len(filepaths)}] Processing {filepath}")
 
         try:
-            if hasattr(detector, 'detect_from_file'):
+            if hasattr(detector, "detect_from_file"):
                 detections = detector.detect_from_file(filepath)
             else:
                 audio, sr = librosa.load(str(filepath), sr=None, mono=True)

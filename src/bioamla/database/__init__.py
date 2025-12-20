@@ -25,6 +25,7 @@ Usage:
         ))
         print(f"Created project: {project.id}")
 """
+
 from .connection import DatabaseConnection, get_database
 from .models import (
     Annotation,
@@ -41,13 +42,13 @@ from .models import (
     RecordingUpdate,
     TimestampMixin,
 )
-from .repository import BaseRepository
 from .repositories import (
     AnnotationRepository,
     DetectionRepository,
     ProjectRepository,
     RecordingRepository,
 )
+from .repository import BaseRepository
 from .unit_of_work import AbstractUnitOfWork, UnitOfWork
 
 __all__ = [

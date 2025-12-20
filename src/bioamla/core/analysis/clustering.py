@@ -54,6 +54,7 @@ __all__ = [
 # Dimensionality Reduction
 # =============================================================================
 
+
 @dataclass
 class ReductionConfig:
     """Configuration for dimensionality reduction."""
@@ -81,7 +82,7 @@ def reduce_dimensions(
     method: Optional[str] = None,
     n_components: int = 2,
     random_state: int = 42,
-    **kwargs
+    **kwargs,
 ) -> np.ndarray:
     """
     Reduce dimensionality of embeddings.
@@ -109,7 +110,9 @@ def reduce_dimensions(
         try:
             import umap
         except ImportError as err:
-            raise ImportError("umap-learn is required for UMAP. Install with: pip install umap-learn") from err
+            raise ImportError(
+                "umap-learn is required for UMAP. Install with: pip install umap-learn"
+            ) from err
 
         reducer = umap.UMAP(
             n_components=config.n_components,
@@ -117,7 +120,7 @@ def reduce_dimensions(
             min_dist=config.min_dist,
             metric=config.metric,
             random_state=random_state,
-            **kwargs
+            **kwargs,
         )
         return reducer.fit_transform(embeddings)
 
@@ -130,7 +133,7 @@ def reduce_dimensions(
             learning_rate=config.learning_rate,
             max_iter=config.max_iter,
             random_state=random_state,
-            **kwargs
+            **kwargs,
         )
         return reducer.fit_transform(embeddings)
 
@@ -141,7 +144,7 @@ def reduce_dimensions(
             n_components=config.n_components,
             whiten=config.whiten,
             random_state=random_state,
-            **kwargs
+            **kwargs,
         )
         return reducer.fit_transform(embeddings)
 
@@ -156,12 +159,7 @@ class IncrementalReducer:
     Fits on initial data and can transform new points without refitting.
     """
 
-    def __init__(
-        self,
-        method: str = "umap",
-        n_components: int = 2,
-        **kwargs
-    ):
+    def __init__(self, method: str = "umap", n_components: int = 2, **kwargs):
         """
         Initialize incremental reducer.
 
@@ -184,12 +182,10 @@ class IncrementalReducer:
             except ImportError as err:
                 raise ImportError("umap-learn is required for UMAP") from err
 
-            self.reducer = umap.UMAP(
-                n_components=self.n_components,
-                **self.kwargs
-            )
+            self.reducer = umap.UMAP(n_components=self.n_components, **self.kwargs)
         elif self.method == "pca":
             from sklearn.decomposition import PCA
+
             self.reducer = PCA(n_components=self.n_components, **self.kwargs)
         else:
             raise ValueError(f"Unsupported method for incremental: {self.method}")
@@ -213,6 +209,7 @@ class IncrementalReducer:
 # =============================================================================
 # Clustering
 # =============================================================================
+
 
 @dataclass
 class ClusteringConfig:
@@ -247,10 +244,7 @@ class AudioClusterer:
     """
 
     def __init__(
-        self,
-        config: Optional[ClusteringConfig] = None,
-        method: Optional[str] = None,
-        **kwargs
+        self, config: Optional[ClusteringConfig] = None, method: Optional[str] = None, **kwargs
     ):
         """
         Initialize clusterer.
@@ -294,9 +288,8 @@ class AudioClusterer:
             if self.config.method == "hdbscan":
                 try:
                     import hdbscan
-                    labels, strengths = hdbscan.approximate_predict(
-                        self.clusterer, embeddings
-                    )
+
+                    labels, strengths = hdbscan.approximate_predict(self.clusterer, embeddings)
                     return labels
                 except Exception:
                     pass
@@ -318,7 +311,7 @@ class AudioClusterer:
                 cluster_selection_epsilon=self.config.cluster_selection_epsilon,
                 cluster_selection_method=self.config.cluster_selection_method,
                 prediction_data=True,
-                **self.kwargs
+                **self.kwargs,
             )
 
         elif self.config.method == "kmeans":
@@ -329,26 +322,26 @@ class AudioClusterer:
                 n_init=self.config.n_init,
                 max_iter=self.config.max_iter,
                 random_state=42,
-                **self.kwargs
+                **self.kwargs,
             )
 
         elif self.config.method == "dbscan":
             from sklearn.cluster import DBSCAN
 
             self.clusterer = DBSCAN(
-                eps=self.config.eps,
-                min_samples=self.config.min_samples,
-                **self.kwargs
+                eps=self.config.eps, min_samples=self.config.min_samples, **self.kwargs
             )
 
         elif self.config.method == "agglomerative":
             from sklearn.cluster import AgglomerativeClustering
 
             self.clusterer = AgglomerativeClustering(
-                n_clusters=self.config.n_clusters if self.config.distance_threshold is None else None,
+                n_clusters=self.config.n_clusters
+                if self.config.distance_threshold is None
+                else None,
                 linkage=self.config.linkage,
                 distance_threshold=self.config.distance_threshold,
-                **self.kwargs
+                **self.kwargs,
             )
 
         else:
@@ -359,9 +352,7 @@ class AudioClusterer:
         if not hasattr(self, "_cluster_centers"):
             raise RuntimeError("No cluster centers available for prediction")
 
-        distances = np.linalg.norm(
-            embeddings[:, np.newaxis] - self._cluster_centers, axis=2
-        )
+        distances = np.linalg.norm(embeddings[:, np.newaxis] - self._cluster_centers, axis=2)
         return np.argmin(distances, axis=1)
 
     def get_cluster_centers(self, embeddings: np.ndarray) -> np.ndarray:
@@ -455,10 +446,9 @@ def find_optimal_clusters(
 # Cluster Similarity and Sorting
 # =============================================================================
 
+
 def compute_cluster_similarity(
-    embeddings: np.ndarray,
-    labels: np.ndarray,
-    metric: str = "cosine"
+    embeddings: np.ndarray, labels: np.ndarray, metric: str = "cosine"
 ) -> np.ndarray:
     """
     Compute pairwise similarity between clusters.
@@ -492,6 +482,7 @@ def compute_cluster_similarity(
         similarity = centers_norm @ centers_norm.T
     elif metric == "euclidean":
         from sklearn.metrics import pairwise_distances
+
         distances = pairwise_distances(centers, metric="euclidean")
         similarity = 1 / (1 + distances)
     else:
@@ -501,9 +492,7 @@ def compute_cluster_similarity(
 
 
 def sort_by_similarity(
-    embeddings: np.ndarray,
-    reference: Optional[np.ndarray] = None,
-    method: str = "nearest_neighbor"
+    embeddings: np.ndarray, reference: Optional[np.ndarray] = None, method: str = "nearest_neighbor"
 ) -> np.ndarray:
     """
     Sort embeddings by similarity.
@@ -531,10 +520,7 @@ def sort_by_similarity(
 
         while remaining:
             current = embeddings[sorted_indices[-1]]
-            distances = {
-                idx: np.linalg.norm(embeddings[idx] - current)
-                for idx in remaining
-            }
+            distances = {idx: np.linalg.norm(embeddings[idx] - current) for idx in remaining}
             nearest = min(distances, key=distances.get)
             sorted_indices.append(nearest)
             remaining.remove(nearest)
@@ -563,9 +549,7 @@ def sort_by_similarity(
 
 
 def sort_clusters_by_similarity(
-    embeddings: np.ndarray,
-    labels: np.ndarray,
-    reference_label: Optional[int] = None
+    embeddings: np.ndarray, labels: np.ndarray, reference_label: Optional[int] = None
 ) -> List[int]:
     """
     Sort cluster labels by similarity to each other.
@@ -604,9 +588,8 @@ def sort_clusters_by_similarity(
     while remaining:
         current_center = centers[sorted_labels[-1]]
         similarities = {
-            label: np.dot(centers[label], current_center) / (
-                np.linalg.norm(centers[label]) * np.linalg.norm(current_center) + 1e-10
-            )
+            label: np.dot(centers[label], current_center)
+            / (np.linalg.norm(centers[label]) * np.linalg.norm(current_center) + 1e-10)
             for label in remaining
         }
         most_similar = max(similarities, key=similarities.get)
@@ -620,9 +603,11 @@ def sort_clusters_by_similarity(
 # Novel Sound Discovery
 # =============================================================================
 
+
 @dataclass
 class NoveltyResult:
     """Result from novelty detection."""
+
     sample_idx: int
     novelty_score: float
     nearest_cluster: int
@@ -659,11 +644,7 @@ class NoveltyDetector:
         self.cluster_radii = None
         self.detector = None
 
-    def fit(
-        self,
-        embeddings: np.ndarray,
-        labels: Optional[np.ndarray] = None
-    ) -> "NoveltyDetector":
+    def fit(self, embeddings: np.ndarray, labels: Optional[np.ndarray] = None) -> "NoveltyDetector":
         """
         Fit the novelty detector.
 
@@ -685,18 +666,15 @@ class NoveltyDetector:
 
         elif self.method == "isolation_forest":
             from sklearn.ensemble import IsolationForest
-            self.detector = IsolationForest(
-                contamination=self.contamination,
-                random_state=42
-            )
+
+            self.detector = IsolationForest(contamination=self.contamination, random_state=42)
             self.detector.fit(embeddings)
 
         elif self.method == "lof":
             from sklearn.neighbors import LocalOutlierFactor
+
             self.detector = LocalOutlierFactor(
-                n_neighbors=20,
-                contamination=self.contamination,
-                novelty=True
+                n_neighbors=20, contamination=self.contamination, novelty=True
             )
             self.detector.fit(embeddings)
 
@@ -705,11 +683,7 @@ class NoveltyDetector:
 
         return self
 
-    def _fit_distance_based(
-        self,
-        embeddings: np.ndarray,
-        labels: np.ndarray
-    ) -> None:
+    def _fit_distance_based(self, embeddings: np.ndarray, labels: np.ndarray) -> None:
         """Fit distance-based novelty detection."""
         unique_labels = set(labels)
         if -1 in unique_labels:
@@ -754,33 +728,35 @@ class NoveltyDetector:
                 novelty_score = distance / (radius + 1e-10)
                 is_novel = novelty_score > (self.threshold or 1.5)
 
-                results.append(NoveltyResult(
-                    sample_idx=i,
-                    novelty_score=novelty_score,
-                    nearest_cluster=nearest_cluster,
-                    distance_to_cluster=distance,
-                    is_novel=is_novel,
-                ))
+                results.append(
+                    NoveltyResult(
+                        sample_idx=i,
+                        novelty_score=novelty_score,
+                        nearest_cluster=nearest_cluster,
+                        distance_to_cluster=distance,
+                        is_novel=is_novel,
+                    )
+                )
 
         elif self.method in ["isolation_forest", "lof"]:
             scores = -self.detector.score_samples(embeddings)
             predictions = self.detector.predict(embeddings)
 
             for i, (score, pred) in enumerate(zip(scores, predictions)):
-                results.append(NoveltyResult(
-                    sample_idx=i,
-                    novelty_score=score,
-                    nearest_cluster=-1,
-                    distance_to_cluster=0.0,
-                    is_novel=pred == -1,
-                ))
+                results.append(
+                    NoveltyResult(
+                        sample_idx=i,
+                        novelty_score=score,
+                        nearest_cluster=-1,
+                        distance_to_cluster=0.0,
+                        is_novel=pred == -1,
+                    )
+                )
 
         return results
 
     def get_novel_samples(
-        self,
-        embeddings: np.ndarray,
-        n_samples: Optional[int] = None
+        self, embeddings: np.ndarray, n_samples: Optional[int] = None
     ) -> List[int]:
         """
         Get indices of most novel samples.
@@ -807,7 +783,7 @@ def discover_novel_sounds(
     known_labels: Optional[np.ndarray] = None,
     method: str = "distance",
     threshold: Optional[float] = None,
-    return_scores: bool = False
+    return_scores: bool = False,
 ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
     Discover novel sound types in embeddings.
@@ -847,11 +823,9 @@ def discover_novel_sounds(
 # Embedding Extraction Utilities
 # =============================================================================
 
+
 def extract_embeddings_batch(
-    model,
-    dataloader,
-    device=None,
-    layer_name: Optional[str] = None
+    model, dataloader, device=None, layer_name: Optional[str] = None
 ) -> np.ndarray:
     """
     Extract embeddings from a model for a batch of data.
@@ -922,10 +896,9 @@ def extract_embeddings_batch(
 # Cluster Analysis Utilities
 # =============================================================================
 
+
 def analyze_clusters(
-    embeddings: np.ndarray,
-    labels: np.ndarray,
-    metadata: Optional[List[Dict[str, Any]]] = None
+    embeddings: np.ndarray, labels: np.ndarray, metadata: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """
     Comprehensive cluster analysis.
@@ -985,10 +958,7 @@ def analyze_clusters(
 
 
 def export_clusters(
-    labels: np.ndarray,
-    filepaths: List[str],
-    output_dir: str,
-    copy_files: bool = False
+    labels: np.ndarray, filepaths: List[str], output_dir: str, copy_files: bool = False
 ) -> str:
     """
     Export clustering results to directory structure.

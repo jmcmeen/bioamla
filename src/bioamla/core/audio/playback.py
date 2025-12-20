@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class PlaybackState(Enum):
     """Enumeration of playback states."""
+
     STOPPED = "stopped"
     PLAYING = "playing"
     PAUSED = "paused"
@@ -29,6 +30,7 @@ class PlaybackState(Enum):
 @dataclass
 class PlaybackPosition:
     """Current playback position information."""
+
     current_sample: int
     current_time: float
     total_samples: int
@@ -108,7 +110,7 @@ class AudioPlayer:
                 current_time=current_time,
                 total_samples=total_samples,
                 total_time=total_time,
-                progress=progress
+                progress=progress,
             )
 
     @property
@@ -123,7 +125,7 @@ class AudioPlayer:
         audio: np.ndarray,
         sample_rate: int,
         on_complete: Optional[Callable[[], None]] = None,
-        on_position_change: Optional[Callable[[PlaybackPosition], None]] = None
+        on_position_change: Optional[Callable[[PlaybackPosition], None]] = None,
     ) -> None:
         """
         Load audio data for playback.
@@ -157,7 +159,7 @@ class AudioPlayer:
         self,
         filepath: str,
         on_complete: Optional[Callable[[], None]] = None,
-        on_position_change: Optional[Callable[[PlaybackPosition], None]] = None
+        on_position_change: Optional[Callable[[PlaybackPosition], None]] = None,
     ) -> None:
         """
         Load audio from a file for playback.
@@ -209,7 +211,7 @@ class AudioPlayer:
                 channels=channels,
                 callback=self._audio_callback,
                 finished_callback=self._finished_callback,
-                dtype=np.float32
+                dtype=np.float32,
             )
             self._stream.start()
 
@@ -350,7 +352,7 @@ def play_audio(
     audio_or_filepath: Union[np.ndarray, str],
     sample_rate: Optional[int] = None,
     loop: bool = False,
-    block: bool = False
+    block: bool = False,
 ) -> AudioPlayer:
     """
     Play audio data or file.
@@ -396,6 +398,7 @@ def play_audio(
     if block:
         try:
             import sounddevice as sd
+
             while _global_player.is_playing:
                 sd.sleep(100)
         except KeyboardInterrupt:

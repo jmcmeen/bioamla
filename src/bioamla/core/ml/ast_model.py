@@ -8,23 +8,23 @@ and HuggingFace transformers.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import torch
 from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
+from bioamla.core.audio.torchaudio import (
+    load_waveform_tensor,
+    resample_waveform_tensor,
+    split_waveform_tensor,
+)
 from bioamla.core.ml.base import (
     BaseAudioModel,
     ModelBackend,
     ModelConfig,
     PredictionResult,
     register_model,
-)
-from bioamla.core.audio.torchaudio import (
-    load_waveform_tensor,
-    resample_waveform_tensor,
-    split_waveform_tensor,
 )
 
 
@@ -53,11 +53,7 @@ class ASTModel(BaseAudioModel):
         return ModelBackend.AST
 
     def load(
-        self,
-        model_path: str,
-        use_fp16: bool = False,
-        use_compile: bool = False,
-        **kwargs
+        self, model_path: str, use_fp16: bool = False, use_compile: bool = False, **kwargs
     ) -> "ASTModel":
         """
         Load AST model from path or HuggingFace Hub.
@@ -81,9 +77,7 @@ class ASTModel(BaseAudioModel):
         if is_local:
             load_kwargs["local_files_only"] = True
 
-        self.model = AutoModelForAudioClassification.from_pretrained(
-            model_path, **load_kwargs
-        )
+        self.model = AutoModelForAudioClassification.from_pretrained(model_path, **load_kwargs)
 
         if use_compile and hasattr(torch, "compile"):
             self.model = torch.compile(self.model)
@@ -190,14 +184,16 @@ class ASTModel(BaseAudioModel):
                 confidence = prob.item()
 
                 if confidence >= self.config.min_confidence:
-                    results.append(PredictionResult(
-                        label=label,
-                        confidence=confidence,
-                        logits=logits.cpu().numpy() if top_k == 1 else None,
-                        start_time=start_sample / self.config.sample_rate,
-                        end_time=end_sample / self.config.sample_rate,
-                        filepath=filepath,
-                    ))
+                    results.append(
+                        PredictionResult(
+                            label=label,
+                            confidence=confidence,
+                            logits=logits.cpu().numpy() if top_k == 1 else None,
+                            start_time=start_sample / self.config.sample_rate,
+                            end_time=end_sample / self.config.sample_rate,
+                            filepath=filepath,
+                        )
+                    )
 
         return results
 

@@ -23,9 +23,11 @@ class PredictionResult(BaseModel):
         score (float): Confidence score for this prediction (0-1)
         rank (int): Rank of this prediction among all results
     """
+
     label: str
     score: float
     rank: int
+
 
 class AudioClassificationResponse(BaseModel):
     """
@@ -39,12 +41,14 @@ class AudioClassificationResponse(BaseModel):
         model_used (str): Identifier of the model used for classification
         processing_time (Optional[float]): Time taken for processing in seconds
     """
+
     success: bool
     predictions: List[PredictionResult]
     audio_duration: Optional[float] = None
     sample_rate: int
     model_used: str
     processing_time: Optional[float] = None
+
 
 class Base64AudioRequest(BaseModel):
     """
@@ -53,8 +57,10 @@ class Base64AudioRequest(BaseModel):
     This model is used for API endpoints that accept audio data
     encoded as base64 strings, typically for web uploads.
     """
+
     audio_base64: str = Field(..., description="Base64 encoded audio data")
     top_k: Optional[int] = Field(default=5, description="Number of top predictions to return")
+
 
 class ErrorResponse(BaseModel):
     """
@@ -65,6 +71,7 @@ class ErrorResponse(BaseModel):
         error (str): Brief error message
         detail (Optional[str]): Detailed error information if available
     """
+
     success: bool = False
     error: str
     detail: Optional[str] = None

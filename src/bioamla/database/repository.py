@@ -1,7 +1,8 @@
 # database/repository.py
-from typing import TypeVar, Generic, Type, Optional, List, Any
-from sqlmodel import SQLModel, Session, select
+from typing import Any, Generic, List, Optional, Type, TypeVar
 from uuid import UUID
+
+from sqlmodel import Session, SQLModel, select
 
 ModelType = TypeVar("ModelType", bound=SQLModel)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=SQLModel)
@@ -95,9 +96,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         if order_by and hasattr(self.model, order_by):
             order_field = getattr(self.model, order_by)
-            statement = statement.order_by(
-                order_field.desc() if descending else order_field
-            )
+            statement = statement.order_by(order_field.desc() if descending else order_field)
 
         return list(self.session.exec(statement).all())
 
@@ -119,9 +118,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     # --- Update ---
 
-    def update(
-        self, db_obj: ModelType, obj_in: UpdateSchemaType | dict[str, Any]
-    ) -> ModelType:
+    def update(self, db_obj: ModelType, obj_in: UpdateSchemaType | dict[str, Any]) -> ModelType:
         """
         Update an existing record.
 

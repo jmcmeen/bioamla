@@ -18,6 +18,7 @@ Features:
 - dB scaling with adjustable min/max limits
 - Multiple export formats (PNG, JPEG)
 """
+
 from pathlib import Path
 from typing import Literal, Optional, Tuple, Union
 
@@ -114,20 +115,42 @@ def generate_spectrogram(
 
     if viz_type == "stft":
         _plot_stft_spectrogram(
-            audio, sample_rate, ax, hop_length=hop_length,
-            n_fft=n_fft, window=win_func, cmap=cmap, title=title,
-            db_min=db_min, db_max=db_max
+            audio,
+            sample_rate,
+            ax,
+            hop_length=hop_length,
+            n_fft=n_fft,
+            window=win_func,
+            cmap=cmap,
+            title=title,
+            db_min=db_min,
+            db_max=db_max,
         )
     elif viz_type == "mel":
         _plot_mel_spectrogram(
-            audio, sample_rate, ax, n_mels=n_mels, hop_length=hop_length,
-            n_fft=n_fft, window=win_func, cmap=cmap, title=title,
-            db_min=db_min, db_max=db_max
+            audio,
+            sample_rate,
+            ax,
+            n_mels=n_mels,
+            hop_length=hop_length,
+            n_fft=n_fft,
+            window=win_func,
+            cmap=cmap,
+            title=title,
+            db_min=db_min,
+            db_max=db_max,
         )
     elif viz_type == "mfcc":
         _plot_mfcc(
-            audio, sample_rate, ax, n_mfcc=n_mfcc, hop_length=hop_length,
-            n_fft=n_fft, window=win_func, cmap=cmap, title=title
+            audio,
+            sample_rate,
+            ax,
+            n_mfcc=n_mfcc,
+            hop_length=hop_length,
+            n_fft=n_fft,
+            window=win_func,
+            cmap=cmap,
+            title=title,
         )
     elif viz_type == "waveform":
         _plot_waveform(audio, sample_rate, ax, title=title)
@@ -214,9 +237,15 @@ def _plot_stft_spectrogram(
         vmin, vmax = None, None
 
     img = librosa.display.specshow(
-        stft_db, sr=sample_rate, hop_length=hop_length,
-        x_axis="time", y_axis="hz", ax=ax, cmap=cmap,
-        vmin=vmin, vmax=vmax
+        stft_db,
+        sr=sample_rate,
+        hop_length=hop_length,
+        x_axis="time",
+        y_axis="hz",
+        ax=ax,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
     )
     ax.set_title(f"STFT Spectrogram - {title}")
     plt.colorbar(img, ax=ax, format="%+2.0f dB")
@@ -253,9 +282,15 @@ def _plot_mel_spectrogram(
         vmin, vmax = None, None
 
     img = librosa.display.specshow(
-        mel_spec_db, sr=sample_rate, hop_length=hop_length,
-        x_axis="time", y_axis="mel", ax=ax, cmap=cmap,
-        vmin=vmin, vmax=vmax
+        mel_spec_db,
+        sr=sample_rate,
+        hop_length=hop_length,
+        x_axis="time",
+        y_axis="mel",
+        ax=ax,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
     )
     ax.set_title(f"Mel Spectrogram - {title}")
     plt.colorbar(img, ax=ax, format="%+2.0f dB")
@@ -277,14 +312,13 @@ def _plot_mfcc(
     stft = librosa.stft(y=audio, n_fft=n_fft, hop_length=hop_length, window=window)
 
     # Compute mel spectrogram
-    mel_spec = librosa.feature.melspectrogram(S=np.abs(stft)**2, sr=sample_rate)
+    mel_spec = librosa.feature.melspectrogram(S=np.abs(stft) ** 2, sr=sample_rate)
 
     # Compute MFCCs from mel spectrogram
     mfccs = librosa.feature.mfcc(S=librosa.power_to_db(mel_spec), n_mfcc=n_mfcc)
 
     img = librosa.display.specshow(
-        mfccs, sr=sample_rate, hop_length=hop_length,
-        x_axis="time", ax=ax, cmap=cmap
+        mfccs, sr=sample_rate, hop_length=hop_length, x_axis="time", ax=ax, cmap=cmap
     )
     ax.set_title(f"MFCC - {title}")
     ax.set_ylabel("MFCC Coefficient")
@@ -460,10 +494,7 @@ def spectrogram_to_image(
     fig, ax = plt.subplots(figsize=figsize)
 
     # Plot spectrogram
-    img = ax.imshow(
-        spectrogram, aspect="auto", origin="lower", cmap=cmap,
-        vmin=vmin, vmax=vmax
-    )
+    img = ax.imshow(spectrogram, aspect="auto", origin="lower", cmap=cmap, vmin=vmin, vmax=vmax)
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -616,7 +647,7 @@ def batch_generate_spectrograms(
                         format=format,
                     )
                     files_processed += 1
-                except Exception as e:
+                except Exception:
                     files_failed += 1
 
                 progress.advance()

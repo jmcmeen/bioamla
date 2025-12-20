@@ -1,5 +1,6 @@
 # database/repositories/annotation.py
 """Annotation repository for database operations."""
+
 from typing import List, Optional
 from uuid import UUID
 
@@ -33,11 +34,7 @@ class AnnotationRepository(BaseRepository[Annotation, AnnotationCreate, Annotati
 
     def get_by_label(self, label: str, limit: int = 100) -> List[Annotation]:
         """Get annotations with a specific label."""
-        statement = (
-            select(Annotation)
-            .where(Annotation.label == label)
-            .limit(limit)
-        )
+        statement = select(Annotation).where(Annotation.label == label).limit(limit)
         return list(self.session.exec(statement).all())
 
     def get_by_time_range(
@@ -89,11 +86,7 @@ class AnnotationRepository(BaseRepository[Annotation, AnnotationCreate, Annotati
         """Count annotations with a specific label."""
         from sqlalchemy import func
 
-        statement = (
-            select(func.count())
-            .select_from(Annotation)
-            .where(Annotation.label == label)
-        )
+        statement = select(func.count()).select_from(Annotation).where(Annotation.label == label)
         return self.session.exec(statement).one()
 
     def count_by_recording(self, recording_id: UUID) -> int:
@@ -109,9 +102,5 @@ class AnnotationRepository(BaseRepository[Annotation, AnnotationCreate, Annotati
 
     def get_by_source(self, source: str, limit: int = 100) -> List[Annotation]:
         """Get annotations by source (manual, model, import)."""
-        statement = (
-            select(Annotation)
-            .where(Annotation.source == source)
-            .limit(limit)
-        )
+        statement = select(Annotation).where(Annotation.source == source).limit(limit)
         return list(self.session.exec(statement).all())

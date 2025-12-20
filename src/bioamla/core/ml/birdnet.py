@@ -11,12 +11,13 @@ capable of identifying over 3,000 bird species by their sounds.
 
 import json
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
 
+from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 from bioamla.core.files import TextFile
 from bioamla.core.ml.base import (
     BaseAudioModel,
@@ -25,7 +26,6 @@ from bioamla.core.ml.base import (
     PredictionResult,
     register_model,
 )
-from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
 
 @register_model("birdnet")
@@ -73,12 +73,7 @@ class BirdNETModel(BaseAudioModel):
     def backend(self) -> ModelBackend:
         return ModelBackend.BIRDNET
 
-    def load(
-        self,
-        model_path: str,
-        labels_path: Optional[str] = None,
-        **kwargs
-    ) -> "BirdNETModel":
+    def load(self, model_path: str, labels_path: Optional[str] = None, **kwargs) -> "BirdNETModel":
         """
         Load BirdNET model from path.
 
@@ -109,7 +104,9 @@ class BirdNETModel(BaseAudioModel):
             self._load_labels(labels_path)
         elif model_path.is_dir():
             # Look for labels in same directory
-            label_files = list(model_path.glob("labels*.json")) + list(model_path.glob("labels*.txt"))
+            label_files = list(model_path.glob("labels*.json")) + list(
+                model_path.glob("labels*.txt")
+            )
             if label_files:
                 self._load_labels(str(label_files[0]))
 
@@ -124,9 +121,7 @@ class BirdNETModel(BaseAudioModel):
         if isinstance(checkpoint, dict):
             if "model_state_dict" in checkpoint:
                 # Standard checkpoint format
-                self.model = self._create_birdnet_architecture(
-                    checkpoint.get("num_classes", 3000)
-                )
+                self.model = self._create_birdnet_architecture(checkpoint.get("num_classes", 3000))
                 self.model.load_state_dict(checkpoint["model_state_dict"])
 
                 if "id2label" in checkpoint:
@@ -136,7 +131,9 @@ class BirdNETModel(BaseAudioModel):
                     self.species_list = checkpoint["species_list"]
             else:
                 # Just state dict
-                self.model = self._create_birdnet_architecture(len(checkpoint.get("classifier.weight", [3000])))
+                self.model = self._create_birdnet_architecture(
+                    len(checkpoint.get("classifier.weight", [3000]))
+                )
                 self.model.load_state_dict(checkpoint)
         elif isinstance(checkpoint, nn.Module):
             self.model = checkpoint
@@ -262,13 +259,15 @@ class BirdNETModel(BaseAudioModel):
                     if self.geography_filter and label not in self._get_allowed_species():
                         continue
 
-                    results.append(PredictionResult(
-                        label=label,
-                        confidence=confidence,
-                        start_time=start / self.config.sample_rate,
-                        end_time=end / self.config.sample_rate,
-                        filepath=filepath,
-                    ))
+                    results.append(
+                        PredictionResult(
+                            label=label,
+                            confidence=confidence,
+                            start_time=start / self.config.sample_rate,
+                            end_time=end / self.config.sample_rate,
+                            filepath=filepath,
+                        )
+                    )
 
             # Only process first segment if we'd exceed step
             if end >= num_samples:
@@ -418,7 +417,6 @@ class BirdNETEncoder(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, 2),
-
             # Block 2
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.BatchNorm2d(128),
@@ -427,7 +425,6 @@ class BirdNETEncoder(nn.Module):
             nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, 2),
-
             # Block 3
             nn.Conv2d(128, 256, kernel_size=3, padding=1),
             nn.BatchNorm2d(256),
@@ -436,7 +433,6 @@ class BirdNETEncoder(nn.Module):
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, 2),
-
             # Block 4
             nn.Conv2d(256, 512, kernel_size=3, padding=1),
             nn.BatchNorm2d(512),
