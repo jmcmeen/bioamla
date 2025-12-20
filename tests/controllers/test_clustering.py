@@ -154,3 +154,292 @@ class TestNoveltyDetection:
         assert isinstance(result.data, NoveltyDetectionSummary)
         assert result.data.n_novel == 5
         assert result.data.n_known == 25
+
+
+class TestFindOptimalK:
+    """Tests for find_optimal_k method."""
+
+    @pytest.fixture
+    def controller(self):
+        return ClusteringController()
+
+    @pytest.fixture
+    def sample_embeddings(self):
+        """Create sample embeddings for testing."""
+        return np.random.randn(50, 768).astype(np.float32)
+
+    def test_find_optimal_k_success(self, controller, sample_embeddings, mocker):
+        """Test that find_optimal_k succeeds."""
+        mock_find = mocker.patch("bioamla.core.analysis.clustering.find_optimal_clusters")
+        mock_find.return_value = 5
+
+        result = controller.find_optimal_k(sample_embeddings, k_range=(2, 10))
+
+        assert result.success is True
+        assert result.data["optimal_k"] == 5
+        assert result.data["k_range"] == (2, 10)
+
+    def test_find_optimal_k_with_silhouette(self, controller, sample_embeddings, mocker):
+        """Test that find_optimal_k works with silhouette method."""
+        mock_find = mocker.patch("bioamla.core.analysis.clustering.find_optimal_clusters")
+        mock_find.return_value = 7
+
+        result = controller.find_optimal_k(
+            sample_embeddings, k_range=(2, 15), method="silhouette"
+        )
+
+        assert result.success is True
+        assert result.data["method"] == "silhouette"
+
+
+class TestAnalyzeClusters:
+    """Tests for analyze_clusters method."""
+
+    @pytest.fixture
+    def controller(self):
+        return ClusteringController()
+
+    @pytest.fixture
+    def sample_embeddings(self):
+        """Create sample embeddings for testing."""
+        return np.random.randn(50, 768).astype(np.float32)
+
+    @pytest.fixture
+    def sample_labels(self):
+        """Create sample cluster labels."""
+        return np.array([0] * 20 + [1] * 20 + [2] * 10)
+
+    def test_analyze_clusters_success(
+        self, controller, sample_embeddings, sample_labels, mocker
+    ):
+        """Test that cluster analysis succeeds."""
+        mock_analyze = mocker.patch("bioamla.core.analysis.clustering.analyze_clusters")
+        mock_analyze.return_value = {
+            "n_clusters": 3,
+            "n_samples": 50,
+            "n_noise": 0,
+            "silhouette_score": 0.45,
+            "calinski_harabasz_score": 120.5,
+            "cluster_stats": {
+                0: {"size": 20, "centroid_dist": 0.5},
+                1: {"size": 20, "centroid_dist": 0.6},
+                2: {"size": 10, "centroid_dist": 0.4},
+            },
+        }
+
+        result = controller.analyze_clusters(sample_embeddings, sample_labels)
+
+        assert result.success is True
+        assert result.data.n_clusters == 3
+        assert result.data.silhouette_score == 0.45
+
+    def test_analyze_clusters_with_filepaths(
+        self, controller, sample_embeddings, sample_labels, mocker
+    ):
+        """Test that cluster analysis works with filepaths."""
+        mock_analyze = mocker.patch("bioamla.core.analysis.clustering.analyze_clusters")
+        mock_analyze.return_value = {
+            "n_clusters": 3,
+            "n_samples": 50,
+            "n_noise": 0,
+            "silhouette_score": 0.45,
+            "calinski_harabasz_score": 120.5,
+            "cluster_stats": {},
+        }
+
+        filepaths = [f"/path/to/file_{i}.wav" for i in range(50)]
+        result = controller.analyze_clusters(sample_embeddings, sample_labels, filepaths)
+
+        assert result.success is True
+        mock_analyze.assert_called_once()
+
+
+class TestExportClusters:
+    """Tests for export methods."""
+
+    @pytest.fixture
+    def controller(self):
+        return ClusteringController()
+
+    @pytest.fixture
+    def sample_labels(self):
+        """Create sample cluster labels."""
+        return np.array([0, 0, 1, 1, 2, 2, -1])
+
+    @pytest.fixture
+    def sample_filepaths(self):
+        """Create sample file paths."""
+        return [f"/path/to/file_{i}.wav" for i in range(7)]
+
+    def test_export_clusters_success(
+        self, controller, sample_labels, sample_filepaths, tmp_path, mocker
+    ):
+        """Test that export_clusters succeeds."""
+        mock_export = mocker.patch("bioamla.core.analysis.clustering.export_clusters")
+        mock_export.return_value = str(tmp_path / "clusters")
+
+        result = controller.export_clusters(
+            sample_labels,
+            sample_filepaths,
+            str(tmp_path / "clusters"),
+            copy_files=False,
+        )
+
+        assert result.success is True
+        assert result.data["n_clusters"] == 3
+
+    def test_export_to_csv_success(
+        self, controller, sample_labels, sample_filepaths, tmp_path, mocker
+    ):
+        """Test that export_to_csv succeeds."""
+        mocker.patch("bioamla.core.files.TextFile")
+
+        output_csv = tmp_path / "clusters.csv"
+        result = controller.export_to_csv(sample_labels, sample_filepaths, str(output_csv))
+
+        assert result.success is True
+        assert result.data["n_rows"] == 7
+
+    def test_export_to_csv_with_coordinates(
+        self, controller, sample_labels, sample_filepaths, tmp_path, mocker
+    ):
+        """Test that export_to_csv includes 2D coordinates when provided."""
+        mocker.patch("bioamla.core.files.TextFile")
+
+        reduced = np.random.randn(7, 2).astype(np.float32)
+        output_csv = tmp_path / "clusters.csv"
+
+        result = controller.export_to_csv(
+            sample_labels, sample_filepaths, str(output_csv), reduced_embeddings=reduced
+        )
+
+        assert result.success is True
+
+
+class TestClusterSimilarity:
+    """Tests for cluster similarity methods."""
+
+    @pytest.fixture
+    def controller(self):
+        return ClusteringController()
+
+    @pytest.fixture
+    def sample_embeddings(self):
+        """Create sample embeddings for testing."""
+        return np.random.randn(50, 768).astype(np.float32)
+
+    @pytest.fixture
+    def sample_labels(self):
+        """Create sample cluster labels."""
+        return np.array([0] * 20 + [1] * 20 + [2] * 10)
+
+    def test_compute_similarity_success(
+        self, controller, sample_embeddings, sample_labels, mocker
+    ):
+        """Test that compute_similarity succeeds."""
+        mock_similarity = mocker.patch(
+            "bioamla.core.analysis.clustering.compute_cluster_similarity"
+        )
+        mock_similarity.return_value = np.array(
+            [[1.0, 0.5, 0.3], [0.5, 1.0, 0.4], [0.3, 0.4, 1.0]]
+        )
+
+        result = controller.compute_similarity(
+            sample_embeddings, sample_labels, metric="cosine"
+        )
+
+        assert result.success is True
+        assert result.data["n_clusters"] == 3
+        assert result.data["metric"] == "cosine"
+
+    def test_sort_clusters_by_similarity_success(
+        self, controller, sample_embeddings, sample_labels, mocker
+    ):
+        """Test that sort_clusters_by_similarity succeeds."""
+        mock_sort = mocker.patch(
+            "bioamla.core.analysis.clustering.sort_clusters_by_similarity"
+        )
+        mock_sort.return_value = [0, 2, 1]  # Sorted order
+
+        result = controller.sort_clusters_by_similarity(sample_embeddings, sample_labels)
+
+        assert result.success is True
+        assert result.data["sorted_labels"] == [0, 2, 1]
+
+
+class TestGetMostNovel:
+    """Tests for get_most_novel method."""
+
+    @pytest.fixture
+    def controller(self):
+        return ClusteringController()
+
+    @pytest.fixture
+    def sample_embeddings(self):
+        """Create sample embeddings for testing."""
+        return np.random.randn(30, 768).astype(np.float32)
+
+    def test_get_most_novel_success(self, controller, sample_embeddings, mocker):
+        """Test that get_most_novel succeeds."""
+        mock_detector = mocker.patch("bioamla.core.analysis.clustering.NoveltyDetector")
+
+        # Create mock novelty results with varying scores
+        mock_results = []
+        for i in range(30):
+            r = MagicMock()
+            r.sample_idx = i
+            r.novelty_score = i * 0.1  # Increasing scores
+            r.is_novel = i >= 25
+            mock_results.append(r)
+
+        instance = Mock()
+        instance.predict.return_value = mock_results
+        mock_detector.return_value = instance
+
+        result = controller.get_most_novel(sample_embeddings, n_samples=5)
+
+        assert result.success is True
+        assert len(result.data["indices"]) == 5
+        assert len(result.data["scores"]) == 5
+
+
+class TestClusteringSummary:
+    """Tests for ClusteringSummary dataclass."""
+
+    def test_clustering_summary_fields(self):
+        """Test that ClusteringSummary has all expected fields."""
+        summary = ClusteringSummary(
+            n_clusters=5,
+            n_samples=100,
+            n_noise=10,
+            noise_percentage=10.0,
+            silhouette_score=0.45,
+            method="hdbscan",
+            labels=[0, 1, 2, 3, 4],
+            cluster_sizes={0: 20, 1: 20, 2: 20, 3: 20, 4: 10, -1: 10},
+        )
+
+        assert summary.n_clusters == 5
+        assert summary.n_samples == 100
+        assert summary.n_noise == 10
+        assert summary.silhouette_score == 0.45
+
+
+class TestNoveltyDetectionSummary:
+    """Tests for NoveltyDetectionSummary dataclass."""
+
+    def test_novelty_detection_summary_fields(self):
+        """Test that NoveltyDetectionSummary has all expected fields."""
+        summary = NoveltyDetectionSummary(
+            n_samples=100,
+            n_novel=15,
+            n_known=85,
+            novel_percentage=15.0,
+            method="distance",
+            threshold=0.5,
+            novel_indices=[1, 5, 10, 15, 20],
+        )
+
+        assert summary.n_samples == 100
+        assert summary.n_novel == 15
+        assert summary.novel_percentage == 15.0
