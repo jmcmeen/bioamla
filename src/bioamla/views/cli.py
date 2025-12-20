@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 from typing import Dict, Optional
@@ -6,6 +7,9 @@ import click
 
 from bioamla.core.config import get_config, load_config, set_config
 from bioamla.core.files import TextFile
+
+# Environment variable for active project
+BIOAMLA_PROJECT_ENV = "BIOAMLA_PROJECT"
 
 
 class ConfigContext:
@@ -45,6 +49,10 @@ def cli(ctx, config_path: Optional[str], project_path: Optional[str]):
     To enable stateful mode with command history, run tracking, and undo:
       bioamla --project /path/to/project <command>
 
+    Or set the BIOAMLA_PROJECT environment variable:
+      export BIOAMLA_PROJECT=/path/to/project
+      bioamla <command>
+
     Configuration can be provided via:
     - --config option pointing to a TOML file
     - ./bioamla.toml in current directory
@@ -54,7 +62,24 @@ def cli(ctx, config_path: Optional[str], project_path: Optional[str]):
     # Capture start time and args for command logging
     ctx.obj.start_time = time.time()
     ctx.obj.command_args = sys.argv[1:] if len(sys.argv) > 1 else []
-    ctx.obj.project_path = project_path  # None = stateless, path = stateful
+
+    # Resolve project path: CLI flag takes priority, then env var
+    resolved_project = project_path
+    if resolved_project is None:
+        env_project = os.environ.get(BIOAMLA_PROJECT_ENV)
+        if env_project:
+            # Validate the env var path exists and is a directory
+            from pathlib import Path
+            env_path = Path(env_project)
+            if env_path.is_dir():
+                resolved_project = env_project
+            else:
+                click.echo(
+                    f"Warning: {BIOAMLA_PROJECT_ENV}={env_project} is not a valid directory, ignoring.",
+                    err=True,
+                )
+
+    ctx.obj.project_path = resolved_project  # None = stateless, path = stateful
 
     if config_path:
         ctx.obj.config = load_config(config_path)
@@ -500,20 +525,93 @@ def project_status():
     from bioamla.core.progress import console
     from bioamla.core.project import load_project
 
+    # Check environment variable
+    env_project = os.environ.get(BIOAMLA_PROJECT_ENV)
+
     info = load_project()
 
-    if not info:
+    if not info and not env_project:
         click.echo("Not in a bioamla project.")
         click.echo("Run 'bioamla project init' to create one.")
+        click.echo(f"Or set {BIOAMLA_PROJECT_ENV} to activate a project.")
         return
 
-    console.print(f"\n[bold]Project: {info.name}[/bold]")
-    console.print(f"[dim]Version: {info.version}[/dim]")
-    if info.description:
-        console.print(f"[dim]{info.description}[/dim]")
-    console.print(f"\n  Root: {info.root}")
-    console.print(f"  Config: {info.config_path}")
-    console.print(f"  Logs: {info.logs_path}")
+    # Show environment variable status
+    if env_project:
+        console.print(f"\n[green]Active project (via {BIOAMLA_PROJECT_ENV}):[/green]")
+        console.print(f"  {env_project}")
+
+    if info:
+        console.print(f"\n[bold]Project: {info.name}[/bold]")
+        console.print(f"[dim]Version: {info.version}[/dim]")
+        if info.description:
+            console.print(f"[dim]{info.description}[/dim]")
+        console.print(f"\n  Root: {info.root}")
+        console.print(f"  Config: {info.config_path}")
+        console.print(f"  Logs: {info.logs_path}")
+    elif env_project:
+        # env_project is set but load_project didn't find .bioamla
+        console.print(f"\n[yellow]Note: {env_project} is not a bioamla project[/yellow]")
+        console.print("Run 'bioamla project init' there to initialize it.")
+
+
+@project.command("activate")
+@click.argument("path", required=False, default=".")
+def project_activate(path):
+    """Print shell command to activate a project.
+
+    Sets the BIOAMLA_PROJECT environment variable so all subsequent
+    bioamla commands use stateful mode with the specified project.
+
+    \b
+    Usage:
+      eval $(bioamla project activate)           # Activate current directory
+      eval $(bioamla project activate ./proj)    # Activate specific project
+
+    \b
+    For fish shell:
+      bioamla project activate | source
+    """
+    from pathlib import Path
+
+    from bioamla.core.project import PROJECT_MARKER
+
+    project_path = Path(path).resolve()
+
+    # Check if it's a valid bioamla project
+    if not (project_path / PROJECT_MARKER).is_dir():
+        click.echo(f"# Error: {project_path} is not a bioamla project", err=True)
+        click.echo(f"# Run: bioamla project init {project_path}", err=True)
+        raise SystemExit(1)
+
+    # Output shell command to set environment variable
+    click.echo(f'export {BIOAMLA_PROJECT_ENV}="{project_path}"')
+    click.echo(f'# Project activated: {project_path}', err=True)
+
+
+@project.command("deactivate")
+def project_deactivate():
+    """Print shell command to deactivate the current project.
+
+    Unsets the BIOAMLA_PROJECT environment variable.
+
+    \b
+    Usage:
+      eval $(bioamla project deactivate)
+
+    \b
+    For fish shell:
+      bioamla project deactivate | source
+    """
+    env_project = os.environ.get(BIOAMLA_PROJECT_ENV)
+
+    if not env_project:
+        click.echo(f"# No active project ({BIOAMLA_PROJECT_ENV} is not set)", err=True)
+        return
+
+    # Output shell command to unset environment variable
+    click.echo(f'unset {BIOAMLA_PROJECT_ENV}')
+    click.echo(f'# Project deactivated: {env_project}', err=True)
 
 
 @project.command("config")
