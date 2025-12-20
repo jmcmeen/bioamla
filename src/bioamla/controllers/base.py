@@ -6,11 +6,69 @@ Base Controller
 Base class and utilities for all controllers.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Generic, Iterator, List, Optional, TypeVar
 
 T = TypeVar("T")
+
+
+class ToDictMixin:
+    """
+    Mixin that adds to_dict() method to dataclasses.
+
+    Handles nested dataclasses, lists, and common types automatically.
+    Override _to_dict_extra() to add custom serialization logic.
+
+    Example:
+        @dataclass
+        class MyResult(ToDictMixin):
+            name: str
+            count: int
+
+        result = MyResult(name="test", count=5)
+        data = result.to_dict()  # {"name": "test", "count": 5}
+    """
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert dataclass to dictionary, handling nested structures."""
+        if not is_dataclass(self):
+            raise TypeError(f"{self.__class__.__name__} is not a dataclass")
+
+        result = {}
+        for f in fields(self):
+            value = getattr(self, f.name)
+            result[f.name] = self._serialize_value(value)
+
+        # Allow subclasses to add extra fields
+        extra = self._to_dict_extra()
+        if extra:
+            result.update(extra)
+
+        return result
+
+    def _serialize_value(self, value: Any) -> Any:
+        """Serialize a single value for dict output."""
+        if value is None:
+            return None
+        if isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, (list, tuple)):
+            return [self._serialize_value(v) for v in value]
+        if isinstance(value, dict):
+            return {k: self._serialize_value(v) for k, v in value.items()}
+        if hasattr(value, "to_dict"):
+            return value.to_dict()
+        if is_dataclass(value):
+            return asdict(value)
+        # Fallback for other types
+        return str(value)
+
+    def _to_dict_extra(self) -> Optional[Dict[str, Any]]:
+        """Override to add extra fields to dict output."""
+        return None
 
 
 @dataclass
@@ -54,6 +112,34 @@ class ControllerResult(Generic[T]):
             warnings=warnings or [],
             metadata=metadata,
         )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert result to dictionary."""
+        result = {
+            "success": self.success,
+            "message": self.message,
+            "error": self.error,
+            "warnings": self.warnings,
+        }
+
+        # Serialize data if present
+        if self.data is not None:
+            if hasattr(self.data, "to_dict"):
+                result["data"] = self.data.to_dict()
+            elif is_dataclass(self.data):
+                result["data"] = asdict(self.data)
+            elif isinstance(self.data, (dict, list, str, int, float, bool)):
+                result["data"] = self.data
+            else:
+                result["data"] = str(self.data)
+        else:
+            result["data"] = None
+
+        # Include non-empty metadata
+        if self.metadata:
+            result["metadata"] = self.metadata
+
+        return result
 
 
 @dataclass

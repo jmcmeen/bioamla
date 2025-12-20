@@ -32,11 +32,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .base import BaseController, ControllerResult
+from .base import BaseController, ControllerResult, ToDictMixin
 
 
 @dataclass
-class DetectionSummary:
+class DetectionSummary(ToDictMixin):
     """Summary of RIBBIT detection results."""
 
     filepath: str
@@ -49,7 +49,7 @@ class DetectionSummary:
 
 
 @dataclass
-class BatchDetectionSummary:
+class BatchDetectionSummary(ToDictMixin):
     """Summary of batch RIBBIT detection."""
 
     total_files: int
