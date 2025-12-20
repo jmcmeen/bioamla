@@ -8,6 +8,11 @@ Available templates:
 - indices_batch.toml: Acoustic indices batch analysis
 - embedding_clustering.toml: Embedding extraction and clustering
 - audio_preprocessing.toml: Audio preprocessing pipeline
+
+Nested Pipeline Templates (Pipelines of Pipelines):
+- full_analysis.toml: Complete analysis using nested pipelines (pipeline.execute)
+- common_steps.toml: Reusable step definitions for pipeline.include
+- custom_with_includes.toml: Example using pipeline.include for step reuse
 """
 
 from pathlib import Path

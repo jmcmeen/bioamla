@@ -427,6 +427,10 @@ class PipelineEngine:
         self.register_action("util.move", self._action_util_move)
         self.register_action("util.log", self._action_util_log)
 
+        # Pipeline composition actions
+        self.register_action("pipeline.execute", self._action_pipeline_execute)
+        self.register_action("pipeline.include", self._action_pipeline_include)
+
     # =========================================================================
     # Built-in Action Handlers
     # =========================================================================
@@ -804,6 +808,229 @@ class PipelineEngine:
         level = params.get("level", "info")
         getattr(logger, level)(message)
         return {"logged": message}
+
+    # =========================================================================
+    # Pipeline Composition Actions
+    # =========================================================================
+
+    def _action_pipeline_execute(
+        self,
+        context: ExecutionContext,
+        params: Dict[str, Any],
+    ) -> Any:
+        """Execute a nested pipeline.
+
+        This action enables pipelines of pipelines by executing another
+        pipeline as a step within the current pipeline.
+
+        Params:
+            pipeline: Path to the pipeline TOML file to execute
+            variables: Optional dict of variables to pass to the nested pipeline
+            inherit_variables: If True, pass parent pipeline variables (default: True)
+            prefix_outputs: If True, prefix nested outputs with step name (default: True)
+
+        Returns:
+            Dictionary containing:
+            - pipeline_name: Name of executed pipeline
+            - status: Execution status
+            - outputs: Outputs from the nested pipeline
+            - duration: Execution time in seconds
+
+        Example TOML:
+            [[steps]]
+            name = "run_preprocessing"
+            action = "pipeline.execute"
+            params = { pipeline = "./preprocessing.toml" }
+
+            [[steps]]
+            name = "run_detection"
+            action = "pipeline.execute"
+            depends_on = ["run_preprocessing"]
+            params = { pipeline = "./detection.toml", variables = { model = "custom_model" } }
+        """
+        from .parser import parse_pipeline
+
+        pipeline_path = params.get("pipeline")
+        if not pipeline_path:
+            raise ValueError("pipeline.execute requires 'pipeline' parameter")
+
+        # Resolve path relative to parent pipeline's source path
+        pipeline_path = Path(pipeline_path)
+        if not pipeline_path.is_absolute() and context.pipeline.source_path:
+            parent_dir = Path(context.pipeline.source_path).parent
+            pipeline_path = parent_dir / pipeline_path
+
+        if not pipeline_path.exists():
+            raise FileNotFoundError(f"Nested pipeline not found: {pipeline_path}")
+
+        # Build variables for nested pipeline
+        nested_variables = {}
+
+        # Inherit parent variables if requested (default: True)
+        if params.get("inherit_variables", True):
+            nested_variables.update(context.variables)
+
+        # Add explicit variables from params
+        explicit_vars = params.get("variables", {})
+        if explicit_vars:
+            nested_variables.update(explicit_vars)
+
+        # Make parent outputs available to nested pipeline
+        nested_variables["parent_outputs"] = context.outputs
+
+        # Parse and execute nested pipeline
+        nested_pipeline = parse_pipeline(
+            pipeline_path,
+            variables=nested_variables,
+            render_templates=True,
+        )
+
+        logger.info(
+            f"Executing nested pipeline '{nested_pipeline.name}' "
+            f"from step '{context.step.name}'"
+        )
+
+        # Execute with a fresh engine to avoid state conflicts
+        nested_engine = PipelineEngine()
+
+        # Copy registered custom actions to nested engine
+        for action_name, handler in self._actions.items():
+            if action_name not in nested_engine._actions:
+                nested_engine.register_action(action_name, handler)
+
+        result = nested_engine.execute(nested_pipeline, variables=nested_variables)
+
+        if not result.success:
+            raise RuntimeError(
+                f"Nested pipeline '{nested_pipeline.name}' failed: {result.error}"
+            )
+
+        # Prepare outputs
+        outputs = dict(result.outputs)
+
+        # Optionally prefix outputs with step name to avoid collisions
+        if params.get("prefix_outputs", True):
+            prefixed_outputs = {
+                f"{context.step.name}.{k}": v for k, v in outputs.items()
+            }
+            outputs = prefixed_outputs
+
+        return {
+            "pipeline_name": nested_pipeline.name,
+            "status": result.status.value,
+            "outputs": outputs,
+            "duration": result.total_duration_seconds,
+            "steps_completed": result.steps_completed,
+        }
+
+    def _action_pipeline_include(
+        self,
+        context: ExecutionContext,
+        params: Dict[str, Any],
+    ) -> Any:
+        """Include and execute steps from another pipeline.
+
+        Unlike pipeline.execute which runs a complete pipeline, this action
+        imports specific steps from another pipeline and executes them
+        inline as part of the current pipeline.
+
+        Params:
+            pipeline: Path to the pipeline TOML file to include steps from
+            steps: Optional list of step names to include (default: all steps)
+            exclude: Optional list of step names to exclude
+            variables: Optional dict of variables for the included steps
+
+        Returns:
+            Dictionary containing outputs from all included steps
+
+        Example TOML:
+            [[steps]]
+            name = "preprocessing"
+            action = "pipeline.include"
+            params = { pipeline = "./common/preprocess_steps.toml", steps = ["resample", "filter"] }
+        """
+        from .parser import parse_pipeline
+
+        pipeline_path = params.get("pipeline")
+        if not pipeline_path:
+            raise ValueError("pipeline.include requires 'pipeline' parameter")
+
+        # Resolve path relative to parent pipeline's source path
+        pipeline_path = Path(pipeline_path)
+        if not pipeline_path.is_absolute() and context.pipeline.source_path:
+            parent_dir = Path(context.pipeline.source_path).parent
+            pipeline_path = parent_dir / pipeline_path
+
+        if not pipeline_path.exists():
+            raise FileNotFoundError(f"Pipeline to include not found: {pipeline_path}")
+
+        # Build variables
+        include_variables = dict(context.variables)
+        explicit_vars = params.get("variables", {})
+        if explicit_vars:
+            include_variables.update(explicit_vars)
+
+        # Parse the pipeline to include
+        include_pipeline = parse_pipeline(
+            pipeline_path,
+            variables=include_variables,
+            render_templates=True,
+        )
+
+        # Filter steps if specified
+        steps_to_include = params.get("steps")
+        steps_to_exclude = params.get("exclude", [])
+
+        included_steps = []
+        for step in include_pipeline.steps:
+            if steps_to_include and step.name not in steps_to_include:
+                continue
+            if step.name in steps_to_exclude:
+                continue
+            included_steps.append(step)
+
+        if not included_steps:
+            logger.warning(f"No steps to include from {pipeline_path}")
+            return {"included_steps": [], "outputs": {}}
+
+        logger.info(
+            f"Including {len(included_steps)} steps from '{include_pipeline.name}' "
+            f"into step '{context.step.name}'"
+        )
+
+        # Execute included steps
+        all_outputs = {}
+        for step in included_steps:
+            handler = self._actions.get(step.action)
+            if handler is None:
+                raise RuntimeError(f"Unknown action in included step: {step.action}")
+
+            # Create context for this step
+            step_context = ExecutionContext(
+                pipeline=context.pipeline,
+                step=step,
+                variables=include_variables,
+                outputs={**context.outputs, **all_outputs},
+                execution_id=context.execution_id,
+                step_index=context.step_index,
+                total_steps=context.total_steps,
+            )
+
+            try:
+                output = handler(step_context, step.params)
+                if output is not None:
+                    all_outputs[step.name] = output
+            except Exception as e:
+                if step.on_error == "fail":
+                    raise RuntimeError(f"Included step '{step.name}' failed: {e}")
+                elif step.on_error == "skip":
+                    logger.warning(f"Included step '{step.name}' failed, skipping: {e}")
+                # "continue" just continues
+
+        return {
+            "included_steps": [s.name for s in included_steps],
+            "outputs": all_outputs,
+        }
 
     # =========================================================================
     # Export

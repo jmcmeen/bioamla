@@ -1,0 +1,53 @@
+# Full bioacoustic analysis meta-pipeline
+# Demonstrates nested pipelines (pipelines of pipelines)
+
+[pipeline]
+name = "full_analysis"
+description = "Complete bioacoustic analysis using nested pipelines"
+version = "1.0.0"
+author = "bioamla"
+
+[variables]
+input_dir = { type = "path", required = true, description = "Directory containing raw audio files" }
+output_dir = { type = "path", default = "./analysis_output", description = "Output directory" }
+sample_rate = { type = "integer", default = 16000, description = "Target sample rate" }
+model_path = { type = "string", default = "MIT/ast-finetuned-audioset-10-10-0.4593", description = "Model for detection" }
+
+# Step 1: Run preprocessing pipeline
+[[steps]]
+name = "preprocess"
+action = "pipeline.execute"
+description = "Run audio preprocessing pipeline"
+params = { pipeline = "audio_preprocessing.toml", variables = { input_dir = "{{ input_dir }}", output_dir = "{{ output_dir }}/preprocessed", sample_rate = "{{ sample_rate }}" } }
+
+# Step 2: Run detection pipeline on preprocessed audio
+[[steps]]
+name = "detect"
+action = "pipeline.execute"
+description = "Run bird detection pipeline"
+depends_on = ["preprocess"]
+params = { pipeline = "bird_detection.toml", variables = { input_dir = "{{ output_dir }}/preprocessed/final", output_dir = "{{ output_dir }}/detections", model_path = "{{ model_path }}" } }
+
+# Step 3: Run acoustic indices analysis in parallel (doesn't depend on detection)
+[[steps]]
+name = "indices"
+action = "pipeline.execute"
+description = "Calculate acoustic indices"
+depends_on = ["preprocess"]
+params = { pipeline = "indices_batch.toml", variables = { input_dir = "{{ output_dir }}/preprocessed/final", output_dir = "{{ output_dir }}/indices" } }
+
+# Step 4: Run clustering pipeline on preprocessed audio
+[[steps]]
+name = "cluster"
+action = "pipeline.execute"
+description = "Extract embeddings and cluster"
+depends_on = ["preprocess"]
+params = { pipeline = "embedding_clustering.toml", variables = { input_dir = "{{ output_dir }}/preprocessed/final", output_dir = "{{ output_dir }}/clustering" } }
+
+# Step 5: Log completion
+[[steps]]
+name = "complete"
+action = "util.log"
+description = "Log analysis completion"
+depends_on = ["detect", "indices", "cluster"]
+params = { message = "Full analysis complete. Results in {{ output_dir }}" }
