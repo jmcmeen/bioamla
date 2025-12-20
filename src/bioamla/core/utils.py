@@ -22,8 +22,8 @@ from bioamla.core.files import (
     get_files_by_extension,
 )
 
-# Supported audio extensions
-SUPPORTED_AUDIO_EXTENSIONS = [".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma"]
+# Re-export from globals (single source of truth for constants)
+from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
 
 
 def get_audio_files(
