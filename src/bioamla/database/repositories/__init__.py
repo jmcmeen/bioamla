@@ -1,4 +1,13 @@
 # database/repositories/__init__.py
-# Import concrete repositories here as you create them, e.g.:
-# from .user import UserRepository
-# from .project import ProjectRepository
+"""Concrete repository implementations."""
+from .annotation import AnnotationRepository
+from .detection import DetectionRepository
+from .project import ProjectRepository
+from .recording import RecordingRepository
+
+__all__ = [
+    "ProjectRepository",
+    "RecordingRepository",
+    "AnnotationRepository",
+    "DetectionRepository",
+]

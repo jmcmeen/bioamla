@@ -1,11 +1,20 @@
 # database/unit_of_work.py
+"""Unit of Work pattern implementation for bioamla database layer."""
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
-from sqlmodel import Session
 from contextlib import contextmanager
+from typing import TYPE_CHECKING
+
+from sqlmodel import Session
 
 from .connection import DatabaseConnection
+from .repositories import (
+    AnnotationRepository,
+    DetectionRepository,
+    ProjectRepository,
+    RecordingRepository,
+)
 
 if TYPE_CHECKING:
     from typing import Generator
@@ -20,12 +29,12 @@ class UnitOfWork:
 
     Usage:
         with UnitOfWork(db) as uow:
-            item = uow.items.create(item_data)
+            project = uow.projects.create(project_data)
             uow.commit()
 
     Or as a context manager that auto-commits:
         with UnitOfWork(db).auto_commit() as uow:
-            item = uow.items.create(item_data)
+            project = uow.projects.create(project_data)
             # Automatically committed on exit
     """
 
@@ -34,8 +43,10 @@ class UnitOfWork:
         self._session: Session | None = None
 
         # Repository instances (lazily initialized)
-        # Add your repository properties here, e.g.:
-        # self._users: UserRepository | None = None
+        self._projects: ProjectRepository | None = None
+        self._recordings: RecordingRepository | None = None
+        self._annotations: AnnotationRepository | None = None
+        self._detections: DetectionRepository | None = None
 
     @property
     def session(self) -> Session:
@@ -44,13 +55,33 @@ class UnitOfWork:
             raise RuntimeError("UnitOfWork not started. Use 'with' statement.")
         return self._session
 
-    # Add repository properties here, e.g.:
-    # @property
-    # def users(self) -> UserRepository:
-    #     """User repository instance."""
-    #     if self._users is None:
-    #         self._users = UserRepository(self.session)
-    #     return self._users
+    @property
+    def projects(self) -> ProjectRepository:
+        """Project repository instance."""
+        if self._projects is None:
+            self._projects = ProjectRepository(self.session)
+        return self._projects
+
+    @property
+    def recordings(self) -> RecordingRepository:
+        """Recording repository instance."""
+        if self._recordings is None:
+            self._recordings = RecordingRepository(self.session)
+        return self._recordings
+
+    @property
+    def annotations(self) -> AnnotationRepository:
+        """Annotation repository instance."""
+        if self._annotations is None:
+            self._annotations = AnnotationRepository(self.session)
+        return self._annotations
+
+    @property
+    def detections(self) -> DetectionRepository:
+        """Detection repository instance."""
+        if self._detections is None:
+            self._detections = DetectionRepository(self.session)
+        return self._detections
 
     def __enter__(self) -> UnitOfWork:
         """Start the unit of work."""
@@ -76,7 +107,11 @@ class UnitOfWork:
         if self._session is not None:
             self._session.close()
             self._session = None
-            # Reset repository instances here
+            # Reset repository instances
+            self._projects = None
+            self._recordings = None
+            self._annotations = None
+            self._detections = None
 
     def refresh(self, obj) -> None:
         """Refresh an object from the database."""
@@ -89,7 +124,7 @@ class UnitOfWork:
 
         Usage:
             with UnitOfWork(db).auto_commit() as uow:
-                uow.items.create(...)
+                uow.projects.create(...)
                 # Auto-committed here
         """
         self._session = Session(self._database.engine)
@@ -106,9 +141,10 @@ class UnitOfWork:
 class AbstractUnitOfWork(ABC):
     """Abstract UoW for dependency injection and testing."""
 
-    # Declare repository attributes here, e.g.:
-    # users: UserRepository
-    # projects: ProjectRepository
+    projects: ProjectRepository
+    recordings: RecordingRepository
+    annotations: AnnotationRepository
+    detections: DetectionRepository
 
     @abstractmethod
     def commit(self) -> None:
