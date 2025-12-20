@@ -134,6 +134,9 @@ Example configuration file (bioamla.toml):
     uncertainty_threshold = 0.3
     batch_size = 10
     strategy = "uncertainty"
+
+    [execution]
+    stateful = "auto"
 """
 
 import logging
@@ -287,6 +290,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "batch_size": 10,
         "strategy": "uncertainty",  # "uncertainty", "diversity", "hybrid"
     },
+    "execution": {
+        "stateful": "auto",  # "auto", "true", "false"
+    },
 }
 
 # Standard config file locations
@@ -319,6 +325,7 @@ class Config:
         realtime: Realtime audio processing settings
         augmentation: Data augmentation settings
         active_learning: Active learning configuration
+        execution: Execution mode settings (stateful/stateless)
         _source: Path to the config file that was loaded
     """
 
@@ -338,6 +345,7 @@ class Config:
     realtime: Dict[str, Any] = field(default_factory=dict)
     augmentation: Dict[str, Any] = field(default_factory=dict)
     active_learning: Dict[str, Any] = field(default_factory=dict)
+    execution: Dict[str, Any] = field(default_factory=dict)
     _source: Optional[str] = None
 
     def get(self, section: str, key: str, default: Any = None) -> Any:
@@ -372,6 +380,7 @@ class Config:
             "realtime": self.realtime,
             "augmentation": self.augmentation,
             "active_learning": self.active_learning,
+            "execution": self.execution,
         }
 
     @classmethod
@@ -394,6 +403,7 @@ class Config:
             realtime=data.get("realtime", {}),
             augmentation=data.get("augmentation", {}),
             active_learning=data.get("active_learning", {}),
+            execution=data.get("execution", {}),
             _source=source,
         )
 

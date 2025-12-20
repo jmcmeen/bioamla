@@ -175,20 +175,46 @@ class BaseController:
     - Batch processing with progress
     - Error handling and result formatting
     - Run tracking in project repository (supports JSON, SQLite, PostgreSQL)
+
+    Controllers can operate in two modes:
+    - Stateless (default): No run tracking, no logging, no undo
+    - Stateful: When project_path is provided, enables run tracking and logging
     """
 
-    def __init__(self):
+    def __init__(self, project_path: Optional[str] = None):
+        """
+        Initialize the controller.
+
+        Args:
+            project_path: Path to project directory. If provided, enables stateful mode
+                         with run tracking, command logging, and undo support.
+                         If None (default), runs in stateless mode.
+        """
         self._progress_callback: Optional[ProgressCallback] = None
         self._current_run_id: Optional[str] = None
         self._storage = None
+        self._project_path = Path(project_path) if project_path else None
+
+    @property
+    def is_stateful(self) -> bool:
+        """Check if running in stateful mode (project injected)."""
+        return self._project_path is not None
+
+    @property
+    def project_path(self) -> Optional[Path]:
+        """Get the injected project path."""
+        return self._project_path
 
     @property
     def storage(self):
-        """Get the storage instance (lazy initialization)."""
+        """Get the storage instance (lazy initialization, only in stateful mode)."""
+        if not self.is_stateful:
+            return None
+
         if self._storage is None:
             from bioamla.core.storage import get_storage
 
-            self._storage = get_storage()
+            self._storage = get_storage(project_path=self._project_path)
         return self._storage
 
     def _start_run(
@@ -210,8 +236,12 @@ class BaseController:
             parameters: Run parameters
 
         Returns:
-            Run ID if in a project, None otherwise
+            Run ID if in stateful mode, None otherwise
         """
+        # Skip run tracking in stateless mode
+        if not self.is_stateful or self.storage is None:
+            return None
+
         run_id = self.storage.create_run(
             name=name,
             action=action,
@@ -242,6 +272,10 @@ class BaseController:
         Returns:
             True if successful, False otherwise
         """
+        # Skip in stateless mode
+        if not self.is_stateful or self.storage is None:
+            return False
+
         run_id = run_id or self._current_run_id
         if run_id is None:
             return False
@@ -273,6 +307,10 @@ class BaseController:
         Returns:
             True if successful, False otherwise
         """
+        # Skip in stateless mode
+        if not self.is_stateful or self.storage is None:
+            return False
+
         run_id = run_id or self._current_run_id
         if run_id is None:
             return False
@@ -301,6 +339,10 @@ class BaseController:
         Returns:
             Path to saved file, or None if failed
         """
+        # Skip in stateless mode
+        if not self.is_stateful or self.storage is None:
+            return None
+
         run_id = run_id or self._current_run_id
         if run_id is None:
             return None
@@ -322,6 +364,10 @@ class BaseController:
         Returns:
             Loaded data or None
         """
+        # Skip in stateless mode
+        if not self.is_stateful or self.storage is None:
+            return None
+
         run_id = run_id or self._current_run_id
         if run_id is None:
             return None

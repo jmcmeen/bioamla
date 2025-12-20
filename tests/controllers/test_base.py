@@ -174,8 +174,9 @@ class TestRunTracking:
     """Tests for run tracking functionality."""
 
     @pytest.fixture
-    def controller(self):
-        return BaseController()
+    def controller(self, tmp_path):
+        # Run tracking requires stateful mode (project_path)
+        return BaseController(project_path=str(tmp_path))
 
     def test_start_run(self, controller, mocker):
         """Test that _start_run creates a run."""

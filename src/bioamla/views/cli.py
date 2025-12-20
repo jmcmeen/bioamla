@@ -9,12 +9,18 @@ from bioamla.core.files import TextFile
 
 
 class ConfigContext:
-    """Context object to hold configuration."""
+    """Context object to hold configuration and project context."""
 
     def __init__(self):
         self.config = None
         self.start_time = None
         self.command_args = None
+        self.project_path = None  # Injected project path (None = stateless)
+
+    @property
+    def is_stateful(self) -> bool:
+        """Check if running in stateful mode (project injected)."""
+        return self.project_path is not None
 
 
 pass_config = click.make_pass_decorator(ConfigContext, ensure=True)
@@ -24,9 +30,20 @@ pass_config = click.make_pass_decorator(ConfigContext, ensure=True)
 @click.option(
     "--config", "config_path", type=click.Path(exists=True), help="Path to TOML configuration file"
 )
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Project directory for logging/caching (enables stateful mode)",
+)
 @click.pass_context
-def cli(ctx, config_path: Optional[str]):
+def cli(ctx, config_path: Optional[str], project_path: Optional[str]):
     """Bioamla CLI - Bioacoustics and Machine Learning Applications
+
+    By default, commands run statelessly (no logging, caching, or undo).
+
+    To enable stateful mode with command history, run tracking, and undo:
+      bioamla --project /path/to/project <command>
 
     Configuration can be provided via:
     - --config option pointing to a TOML file
@@ -37,6 +54,7 @@ def cli(ctx, config_path: Optional[str]):
     # Capture start time and args for command logging
     ctx.obj.start_time = time.time()
     ctx.obj.command_args = sys.argv[1:] if len(sys.argv) > 1 else []
+    ctx.obj.project_path = project_path  # None = stateless, path = stateful
 
     if config_path:
         ctx.obj.config = load_config(config_path)
@@ -48,23 +66,17 @@ def cli(ctx, config_path: Optional[str]):
 @cli.result_callback()
 @click.pass_context
 def log_command_result(ctx, result, **kwargs):
-    """Log command execution after completion."""
+    """Log command execution after completion (only in stateful mode)."""
     from bioamla.core.command_log import CommandLogger, create_command_entry
-    from bioamla.core.project import is_in_project
 
-    # Only log if in a project
-    if not is_in_project():
+    # Only log if project was injected (stateful mode)
+    if not ctx.obj or not ctx.obj.is_stateful:
         return result
 
     # Get timing info
     duration = 0.0
-    if ctx.obj and ctx.obj.start_time:
+    if ctx.obj.start_time:
         duration = time.time() - ctx.obj.start_time
-
-    # Build command string from invoked subcommand
-    command_parts = []
-    if ctx.invoked_subcommand:
-        command_parts.append(ctx.invoked_subcommand)
 
     # Get full command from sys.argv
     args = ctx.obj.command_args if ctx.obj else []
@@ -78,7 +90,8 @@ def log_command_result(ctx, result, **kwargs):
         duration_seconds=duration,
     )
 
-    logger = CommandLogger()
+    # Log to the injected project
+    logger = CommandLogger(project_root=ctx.obj.project_path)
     logger.log_command(entry)
 
     return result
@@ -1851,17 +1864,25 @@ def models_info(model_path, model_type):
 # Shared controller instance for undo/redo support across audio commands
 # This allows the undo/redo history to persist across multiple CLI invocations
 # within the same session (e.g., when using the CLI interactively)
-_audio_file_controller = None
+# Key is project_path (None for stateless, path string for stateful)
+_audio_file_controllers: Dict[Optional[str], object] = {}
 
 
-def _get_audio_file_controller():
-    """Get or create the shared AudioFileController instance."""
-    global _audio_file_controller
-    if _audio_file_controller is None:
+def _get_audio_file_controller(project_path: Optional[str] = None):
+    """Get or create the shared AudioFileController instance for a project.
+
+    Args:
+        project_path: Project path for stateful mode, None for stateless.
+
+    Returns:
+        AudioFileController instance for the given project context.
+    """
+    global _audio_file_controllers
+    if project_path not in _audio_file_controllers:
         from bioamla.controllers.audio_file import AudioFileController
 
-        _audio_file_controller = AudioFileController()
-    return _audio_file_controller
+        _audio_file_controllers[project_path] = AudioFileController(project_path=project_path)
+    return _audio_file_controllers[project_path]
 
 
 def _get_audio_transform_controller():
@@ -2016,7 +2037,8 @@ def audio_convert(
 @click.option("--highpass", default=None, type=float, help="Highpass cutoff frequency in Hz")
 @click.option("--order", default=5, type=int, help="Filter order (default: 5)")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet):
+@click.pass_context
+def audio_filter(ctx, path, output, batch, bandpass, lowpass, highpass, order, quiet):
     """Apply frequency filter to audio files."""
     from bioamla.core.audio.signal import (
         bandpass_filter,
@@ -2039,7 +2061,9 @@ def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet)
             return highpass_filter(audio, sr, highpass, order)
         return audio
 
-    _run_signal_processing(path, output, batch, processor, quiet, "filter")
+    _run_signal_processing(
+        path, output, batch, processor, quiet, "filter", project_path=ctx.obj.project_path
+    )
 
 
 @audio.command("denoise")
@@ -2053,14 +2077,17 @@ def audio_filter(path, output, batch, bandpass, lowpass, highpass, order, quiet)
     "--strength", default=1.0, type=float, help="Noise reduction strength (0-2, default: 1.0)"
 )
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def audio_denoise(path, output, batch, method, strength, quiet):
+@click.pass_context
+def audio_denoise(ctx, path, output, batch, method, strength, quiet):
     """Apply noise reduction to audio files."""
     from bioamla.core.audio.signal import spectral_denoise
 
     def processor(audio, sr):
         return spectral_denoise(audio, sr, noise_reduce_factor=strength)
 
-    _run_signal_processing(path, output, batch, processor, quiet, "denoise")
+    _run_signal_processing(
+        path, output, batch, processor, quiet, "denoise", project_path=ctx.obj.project_path
+    )
 
 
 @audio.command("segment")
@@ -2225,7 +2252,8 @@ def audio_detect_events(path, output, quiet):
 @click.option("--target-db", default=-20, type=float, help="Target loudness in dB (default: -20)")
 @click.option("--peak", is_flag=True, help="Use peak normalization instead of RMS")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def audio_normalize(path, output, batch, target_db, peak, quiet):
+@click.pass_context
+def audio_normalize(ctx, path, output, batch, target_db, peak, quiet):
     """Normalize audio loudness."""
     from bioamla.core.audio.signal import normalize_loudness, peak_normalize
 
@@ -2235,7 +2263,9 @@ def audio_normalize(path, output, batch, target_db, peak, quiet):
             return peak_normalize(audio, target_peak=min(target_linear, 0.99))
         return normalize_loudness(audio, sr, target_db=target_db)
 
-    _run_signal_processing(path, output, batch, processor, quiet, "normalize")
+    _run_signal_processing(
+        path, output, batch, processor, quiet, "normalize", project_path=ctx.obj.project_path
+    )
 
 
 @audio.command("resample")
@@ -2244,14 +2274,18 @@ def audio_normalize(path, output, batch, target_db, peak, quiet):
 @click.option("--batch", is_flag=True, help="Process all files in directory")
 @click.option("--rate", required=True, type=int, help="Target sample rate in Hz")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def audio_resample(path, output, batch, rate, quiet):
+@click.pass_context
+def audio_resample(ctx, path, output, batch, rate, quiet):
     """Resample audio to a different sample rate."""
     from bioamla.core.audio.signal import resample_audio
 
     def processor(audio, sr):
         return resample_audio(audio, sr, rate)
 
-    _run_signal_processing(path, output, batch, processor, quiet, "resample", output_sr=rate)
+    _run_signal_processing(
+        path, output, batch, processor, quiet, "resample", output_sr=rate,
+        project_path=ctx.obj.project_path
+    )
 
 
 @audio.command("trim")
@@ -2265,7 +2299,8 @@ def audio_resample(path, output, batch, rate, quiet):
     "--threshold", default=-40, type=float, help="Silence threshold in dB (for --silence)"
 )
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
+@click.pass_context
+def audio_trim(ctx, path, output, batch, start, end, silence, threshold, quiet):
     """Trim audio by time or remove silence."""
     from bioamla.core.audio.signal import trim_audio, trim_silence
 
@@ -2278,7 +2313,9 @@ def audio_trim(path, output, batch, start, end, silence, threshold, quiet):
             return trim_silence(audio, sr, threshold_db=threshold)
         return trim_audio(audio, sr, start_time=start, end_time=end)
 
-    _run_signal_processing(path, output, batch, processor, quiet, "trim")
+    _run_signal_processing(
+        path, output, batch, processor, quiet, "trim", project_path=ctx.obj.project_path
+    )
 
 
 @audio.command("analyze")
@@ -2509,11 +2546,23 @@ def audio_analyze(path, batch, output, output_format, silence_threshold, recursi
                 click.echo(f"  Sound segments: {len(analysis.silence.sound_segments)}")
 
 
-def _run_signal_processing(path, output, batch, processor, quiet, operation, output_sr=None):
+def _run_signal_processing(
+    path, output, batch, processor, quiet, operation, output_sr=None, project_path=None
+):
     """Helper to run signal processing on file or directory.
 
     Uses AudioFileController for undo support on single file operations.
     Batch operations use the direct signal processing functions.
+
+    Args:
+        path: Input file or directory path
+        output: Output file or directory path
+        batch: Whether to process all files in directory
+        processor: Function to process audio (audio, sr) -> processed_audio
+        quiet: Whether to suppress output
+        operation: Name of the operation for undo history
+        output_sr: Output sample rate (optional)
+        project_path: Project path for stateful mode (enables undo)
     """
     from pathlib import Path
 
@@ -2545,7 +2594,7 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
             output = str(path.with_stem(path.stem + f"_{operation}"))
 
         try:
-            file_ctrl = _get_audio_file_controller()
+            file_ctrl = _get_audio_file_controller(project_path)
 
             # Create a transform function that returns (processed_audio, sample_rate)
             def transform(audio, sr):
@@ -2563,8 +2612,8 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
 
             if not quiet:
                 click.echo(f"Saved: {output}")
-                if file_ctrl.can_undo:
-                    click.echo("(Use 'bioamla audio undo' to revert)")
+                if file_ctrl.is_stateful and file_ctrl.can_undo:
+                    click.echo("(Use 'bioamla --project <path> audio undo' to revert)")
         except Exception as e:
             click.echo(f"Error: {e}")
             raise SystemExit(1) from e
@@ -2577,20 +2626,26 @@ def _run_signal_processing(path, output, batch, processor, quiet, operation, out
 
 @audio.command("undo")
 @click.option("--quiet", is_flag=True, help="Suppress output")
-def audio_undo(quiet):
+@click.pass_context
+def audio_undo(ctx, quiet):
     """Undo the last audio file operation.
 
     Reverts the most recent audio file operation (resample, normalize, filter,
     trim, denoise). This restores the previous state of the output file.
 
-    Note: Undo history is maintained within the current CLI session.
+    Requires --project flag to enable stateful mode with undo support.
     Batch operations cannot be undone.
 
     Examples:
-        bioamla audio resample recording.wav --rate 16000
-        bioamla audio undo  # Reverts the resample operation
+        bioamla --project . audio resample recording.wav --rate 16000
+        bioamla --project . audio undo  # Reverts the resample operation
     """
-    file_ctrl = _get_audio_file_controller()
+    file_ctrl = _get_audio_file_controller(ctx.obj.project_path)
+
+    if not file_ctrl.is_stateful:
+        click.echo("Error: Undo requires --project flag to enable stateful mode")
+        click.echo("Example: bioamla --project . audio undo")
+        raise SystemExit(1)
 
     if not file_ctrl.can_undo:
         click.echo("Nothing to undo")
@@ -2610,18 +2665,25 @@ def audio_undo(quiet):
 
 @audio.command("redo")
 @click.option("--quiet", is_flag=True, help="Suppress output")
-def audio_redo(quiet):
+@click.pass_context
+def audio_redo(ctx, quiet):
     """Redo the last undone audio file operation.
 
     Re-applies the most recently undone audio file operation.
 
-    Note: Redo history is cleared when a new operation is performed.
+    Requires --project flag to enable stateful mode with redo support.
+    Redo history is cleared when a new operation is performed.
 
     Examples:
-        bioamla audio undo
-        bioamla audio redo  # Re-applies the undone operation
+        bioamla --project . audio undo
+        bioamla --project . audio redo  # Re-applies the undone operation
     """
-    file_ctrl = _get_audio_file_controller()
+    file_ctrl = _get_audio_file_controller(ctx.obj.project_path)
+
+    if not file_ctrl.is_stateful:
+        click.echo("Error: Redo requires --project flag to enable stateful mode")
+        click.echo("Example: bioamla --project . audio redo")
+        raise SystemExit(1)
 
     if not file_ctrl.can_redo:
         click.echo("Nothing to redo")
@@ -2639,16 +2701,24 @@ def audio_redo(quiet):
 
 @audio.command("history")
 @click.option("--clear", is_flag=True, help="Clear the operation history")
-def audio_history(clear):
+@click.pass_context
+def audio_history(ctx, clear):
     """Show or clear the audio operation history.
 
     Displays a list of undoable operations performed in the current session.
 
+    Requires --project flag to enable stateful mode with history tracking.
+
     Examples:
-        bioamla audio history        # Show operation history
-        bioamla audio history --clear  # Clear the history
+        bioamla --project . audio history        # Show operation history
+        bioamla --project . audio history --clear  # Clear the history
     """
-    file_ctrl = _get_audio_file_controller()
+    file_ctrl = _get_audio_file_controller(ctx.obj.project_path)
+
+    if not file_ctrl.is_stateful:
+        click.echo("Error: History requires --project flag to enable stateful mode")
+        click.echo("Example: bioamla --project . audio history")
+        raise SystemExit(1)
 
     if clear:
         file_ctrl.clear_history()
@@ -2670,7 +2740,7 @@ def audio_history(clear):
     click.echo()
     click.echo(f"Total: {len(history)} operations")
     if file_ctrl.can_undo:
-        click.echo("Use 'bioamla audio undo' to revert the most recent operation")
+        click.echo("Use 'bioamla --project <path> audio undo' to revert the most recent operation")
 
 
 # =============================================================================
@@ -3007,9 +3077,9 @@ def workflow_list_actions():
         categories = {}
         for action in actions:
             if "." in action:
-                category, name = action.split(".", 1)
+                category, _ = action.split(".", 1)
             else:
-                category, name = "other", action
+                category = "other"
             categories.setdefault(category, []).append(action)
 
         for category in sorted(categories.keys()):
