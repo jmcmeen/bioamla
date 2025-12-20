@@ -55,9 +55,13 @@ from .audio import AudioController  # Legacy controller for CLI compatibility
 from .audio_file import AudioData, AudioFileController
 from .audio_transform import AudioTransformController
 from .base import BaseController, ControllerResult
+from .clustering import ClusteringController
+from .embedding import EmbeddingController
 from .indices import BatchIndicesResult, IndicesController, IndicesResult
 from .inference import InferenceController
 from .pipeline import PipelineController, PipelineProgress, PipelineResult
+from .ribbit import RibbitController, DetectionSummary, BatchDetectionSummary
+from .workflow import WorkflowController, WorkflowSummary, ExecutionSummary, ValidationSummary
 
 __all__ = [
     # Base
@@ -74,10 +78,21 @@ __all__ = [
     "ClipExtractionResult",
     # ML
     "InferenceController",
+    "EmbeddingController",
+    "ClusteringController",
+    # Detection
+    "RibbitController",
+    "DetectionSummary",
+    "BatchDetectionSummary",
     # Pipeline
     "PipelineController",
     "PipelineResult",
     "PipelineProgress",
+    # Workflow
+    "WorkflowController",
+    "WorkflowSummary",
+    "ExecutionSummary",
+    "ValidationSummary",
     # Analysis
     "IndicesController",
     "IndicesResult",
