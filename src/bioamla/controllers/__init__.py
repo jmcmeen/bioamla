@@ -55,6 +55,7 @@ from .audio_file import AudioFileController, AudioData
 from .audio_transform import AudioTransformController
 from .inference import InferenceController
 from .pipeline import PipelineController, PipelineResult, PipelineProgress
+from .indices import IndicesController, IndicesResult, BatchIndicesResult
 
 __all__ = [
     # Base
@@ -71,4 +72,8 @@ __all__ = [
     "PipelineController",
     "PipelineResult",
     "PipelineProgress",
+    # Analysis
+    "IndicesController",
+    "IndicesResult",
+    "BatchIndicesResult",
 ]
