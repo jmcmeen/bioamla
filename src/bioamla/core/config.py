@@ -23,29 +23,73 @@ Example configuration file (bioamla.toml):
     sample_rate = 16000
     mono = true
     normalize = false
+    filter_order = 5
+    normalization_target_peak = 0.95
+    min_segment_duration = 0.1
+    noise_reduce_factor = 0.21
+    noise_floor_percentile = 10
+    rolloff_threshold = 0.85
+    frame_length = 2048
+    amplitude_to_db_max = 80.0
 
     [visualize]
     type = "mel"
     n_fft = 2048
     hop_length = 512
+    n_mels = 128
     cmap = "magma"
     dpi = 150
+    window = "hann"
+    figsize = [10, 4]
 
     [models]
     default_ast_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
+    prediction_threshold = 0.5
+
+    [models.birdnet]
+    sample_rate = 48000
+    min_confidence = 0.1
 
     [inference]
     batch_size = 8
     use_fp16 = false
     top_k = 5
+    min_confidence = 0.01
+    segment_duration = 10
+    segment_overlap = 0
 
     [training]
     learning_rate = 5.0e-5
     epochs = 10
     batch_size = 16
+    eval_strategy = "epoch"
+    save_strategy = "epoch"
+
+    [training.scheduler]
+    warmup_ratio = 0.1
+    weight_decay = 0.01
 
     [analysis]
     silence_threshold = -40
+    min_silence_duration = 0.1
+
+    [detection.energy]
+    threshold = 0.02
+    min_duration = 0.1
+    frame_length = 2048
+    hop_length = 512
+
+    [detection.ribbit]
+    signal_band = [1000, 2000]
+    noise_band = [0, 500]
+    pulse_rate_range = [5, 15]
+    min_score = 0.5
+
+    [detection.cwt]
+    min_freq = 500
+    max_freq = 8000
+    wavelet = "morl"
+    num_scales = 64
 
     [batch]
     recursive = true
@@ -54,10 +98,42 @@ Example configuration file (bioamla.toml):
     [output]
     format = "csv"
     verbose = true
+    overwrite = false
+
+    [progress]
+    enabled = true
+    style = "rich"
 
     [logging]
     level = "WARNING"
     max_history = 1000
+    rotate_size_mb = 10
+
+    [api]
+    timeout = 30
+    large_download_timeout = 300
+    download_chunk_size = 8192
+    rate_limit_delay = 1.0
+
+    [realtime]
+    sample_rate = 16000
+    channels = 1
+    chunk_size = 1024
+    buffer_seconds = 30
+    format = "int16"
+    thread_join_timeout = 2.0
+
+    [augmentation]
+    enabled = false
+
+    [augmentation.clipping]
+    threshold = 0.99
+    margin = 0.01
+
+    [active_learning]
+    uncertainty_threshold = 0.3
+    batch_size = 10
+    strategy = "uncertainty"
 """
 
 import logging
@@ -91,6 +167,14 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "sample_rate": 16000,
         "mono": True,
         "normalize": False,
+        "filter_order": 5,
+        "normalization_target_peak": 0.95,
+        "min_segment_duration": 0.1,
+        "noise_reduce_factor": 0.21,
+        "noise_floor_percentile": 10,
+        "rolloff_threshold": 0.85,
+        "frame_length": 2048,
+        "amplitude_to_db_max": 80.0,
     },
     "visualize": {
         "type": "mel",
@@ -100,10 +184,18 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "cmap": "magma",
         "dpi": 150,
         "window": "hann",
+        "figsize": [10, 4],
     },
     "models": {
         "default_ast_model": "MIT/ast-finetuned-audioset-10-10-0.4593",
         "cache_dir": None,  # None = use HuggingFace default
+        "prediction_threshold": 0.5,
+        "birdnet": {
+            "model_path": None,
+            "labels_path": None,
+            "sample_rate": 48000,
+            "min_confidence": 0.1,
+        },
     },
     "inference": {
         "batch_size": 8,
@@ -119,10 +211,34 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "batch_size": 16,
         "eval_strategy": "epoch",
         "save_strategy": "epoch",
+        "scheduler": {
+            "warmup_ratio": 0.1,
+            "weight_decay": 0.01,
+        },
     },
     "analysis": {
         "silence_threshold": -40,
         "min_silence_duration": 0.1,
+    },
+    "detection": {
+        "energy": {
+            "threshold": 0.02,
+            "min_duration": 0.1,
+            "frame_length": 2048,
+            "hop_length": 512,
+        },
+        "ribbit": {
+            "signal_band": [1000, 2000],
+            "noise_band": [0, 500],
+            "pulse_rate_range": [5, 15],
+            "min_score": 0.5,
+        },
+        "cwt": {
+            "min_freq": 500,
+            "max_freq": 8000,
+            "wavelet": "morl",
+            "num_scales": 64,
+        },
     },
     "batch": {
         "recursive": True,
@@ -146,6 +262,30 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "api": {
         "xc_api_key": None,  # Xeno-canto API key (or set XC_API_KEY env var)
         "inat_api_token": None,  # iNaturalist API token (optional)
+        "timeout": 30,
+        "large_download_timeout": 300,
+        "download_chunk_size": 8192,
+        "rate_limit_delay": 1.0,
+    },
+    "realtime": {
+        "sample_rate": 16000,
+        "channels": 1,
+        "chunk_size": 1024,
+        "buffer_seconds": 30,
+        "format": "int16",
+        "thread_join_timeout": 2.0,
+    },
+    "augmentation": {
+        "enabled": False,
+        "clipping": {
+            "threshold": 0.99,
+            "margin": 0.01,
+        },
+    },
+    "active_learning": {
+        "uncertainty_threshold": 0.3,
+        "batch_size": 10,
+        "strategy": "uncertainty",  # "uncertainty", "diversity", "hybrid"
     },
 }
 
@@ -166,14 +306,19 @@ class Config:
         project: Project metadata
         audio: Audio processing settings
         visualize: Visualization settings
-        models: Model configuration
+        models: Model configuration (AST, BirdNET)
         inference: Inference settings
-        training: Training settings
-        analysis: Analysis settings
+        training: Training settings with scheduler options
+        analysis: Analysis settings (silence detection, etc.)
+        detection: Detection algorithm settings (energy, ribbit, cwt)
         batch: Batch processing settings
         output: Output settings
         progress: Progress bar settings
         logging: Logging settings
+        api: API configuration (timeouts, rate limits)
+        realtime: Realtime audio processing settings
+        augmentation: Data augmentation settings
+        active_learning: Active learning configuration
         _source: Path to the config file that was loaded
     """
 
@@ -184,11 +329,15 @@ class Config:
     inference: Dict[str, Any] = field(default_factory=dict)
     training: Dict[str, Any] = field(default_factory=dict)
     analysis: Dict[str, Any] = field(default_factory=dict)
+    detection: Dict[str, Any] = field(default_factory=dict)
     batch: Dict[str, Any] = field(default_factory=dict)
     output: Dict[str, Any] = field(default_factory=dict)
     progress: Dict[str, Any] = field(default_factory=dict)
     logging: Dict[str, Any] = field(default_factory=dict)
     api: Dict[str, Any] = field(default_factory=dict)
+    realtime: Dict[str, Any] = field(default_factory=dict)
+    augmentation: Dict[str, Any] = field(default_factory=dict)
+    active_learning: Dict[str, Any] = field(default_factory=dict)
     _source: Optional[str] = None
 
     def get(self, section: str, key: str, default: Any = None) -> Any:
@@ -214,11 +363,15 @@ class Config:
             "inference": self.inference,
             "training": self.training,
             "analysis": self.analysis,
+            "detection": self.detection,
             "batch": self.batch,
             "output": self.output,
             "progress": self.progress,
             "logging": self.logging,
             "api": self.api,
+            "realtime": self.realtime,
+            "augmentation": self.augmentation,
+            "active_learning": self.active_learning,
         }
 
     @classmethod
@@ -232,11 +385,15 @@ class Config:
             inference=data.get("inference", {}),
             training=data.get("training", {}),
             analysis=data.get("analysis", {}),
+            detection=data.get("detection", {}),
             batch=data.get("batch", {}),
             output=data.get("output", {}),
             progress=data.get("progress", {}),
             logging=data.get("logging", {}),
             api=data.get("api", {}),
+            realtime=data.get("realtime", {}),
+            augmentation=data.get("augmentation", {}),
+            active_learning=data.get("active_learning", {}),
             _source=source,
         )
 
