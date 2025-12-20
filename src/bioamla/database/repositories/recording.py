@@ -1,5 +1,6 @@
 # database/repositories/recording.py
 """Recording repository for database operations."""
+
 from typing import List, Optional
 from uuid import UUID
 
@@ -23,10 +24,7 @@ class RecordingRepository(BaseRepository[Recording, RecordingCreate, RecordingUp
     ) -> List[Recording]:
         """Get all recordings for a project."""
         statement = (
-            select(Recording)
-            .where(Recording.project_id == project_id)
-            .offset(skip)
-            .limit(limit)
+            select(Recording).where(Recording.project_id == project_id).offset(skip).limit(limit)
         )
         return list(self.session.exec(statement).all())
 
@@ -44,11 +42,7 @@ class RecordingRepository(BaseRepository[Recording, RecordingCreate, RecordingUp
 
     def search_by_filename(self, pattern: str, limit: int = 50) -> List[Recording]:
         """Search recordings by filename pattern."""
-        statement = (
-            select(Recording)
-            .where(Recording.filename.ilike(f"%{pattern}%"))
-            .limit(limit)
-        )
+        statement = select(Recording).where(Recording.filename.ilike(f"%{pattern}%")).limit(limit)
         return list(self.session.exec(statement).all())
 
     def get_by_location(
@@ -94,8 +88,6 @@ class RecordingRepository(BaseRepository[Recording, RecordingCreate, RecordingUp
         from sqlalchemy import func
 
         statement = (
-            select(func.count())
-            .select_from(Recording)
-            .where(Recording.project_id == project_id)
+            select(func.count()).select_from(Recording).where(Recording.project_id == project_id)
         )
         return self.session.exec(statement).one()

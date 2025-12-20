@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # Custom Classifier Architectures
 # =============================================================================
 
+
 class AudioClassifierBase(nn.Module, ABC):
     """Base class for audio classifiers."""
 
@@ -372,9 +373,11 @@ class AttentionClassifier(AudioClassifierBase):
 # Multi-Label Hierarchical Classification
 # =============================================================================
 
+
 @dataclass
 class HierarchyNode:
     """Node in the label hierarchy."""
+
     name: str
     parent: Optional[str] = None
     children: List[str] = field(default_factory=list)
@@ -395,10 +398,7 @@ class LabelHierarchy:
         self.levels: Dict[int, List[str]] = {}
 
     def add_node(
-        self,
-        name: str,
-        parent: Optional[str] = None,
-        level: Optional[int] = None
+        self, name: str, parent: Optional[str] = None, level: Optional[int] = None
     ) -> None:
         """
         Add a node to the hierarchy.
@@ -500,11 +500,7 @@ class LabelHierarchy:
         return hierarchy
 
     @classmethod
-    def from_taxonomy_csv(
-        cls,
-        filepath: str,
-        columns: List[str] = None
-    ) -> "LabelHierarchy":
+    def from_taxonomy_csv(cls, filepath: str, columns: List[str] = None) -> "LabelHierarchy":
         """
         Create hierarchy from taxonomy CSV.
 
@@ -611,11 +607,7 @@ class HierarchicalClassifier(nn.Module):
             self.label2idx[level] = {label: idx for idx, label in enumerate(labels)}
             self.idx2label[level] = dict(enumerate(labels))
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        return_features: bool = False
-    ) -> Dict[int, torch.Tensor]:
+    def forward(self, x: torch.Tensor, return_features: bool = False) -> Dict[int, torch.Tensor]:
         """
         Forward pass.
 
@@ -667,11 +659,7 @@ class HierarchicalClassifier(nn.Module):
                 self.feature_proj = nn.Linear(logits.size(1), self.feature_dim).to(logits.device)
             return self.feature_proj(logits)
 
-    def predict(
-        self,
-        x: torch.Tensor,
-        threshold: float = 0.5
-    ) -> Dict[int, List[str]]:
+    def predict(self, x: torch.Tensor, threshold: float = 0.5) -> Dict[int, List[str]]:
         """
         Get multi-label predictions for all levels.
 
@@ -701,10 +689,7 @@ class HierarchicalClassifier(nn.Module):
 
             return predictions
 
-    def _enforce_consistency(
-        self,
-        predictions: Dict[int, str]
-    ) -> Dict[int, str]:
+    def _enforce_consistency(self, predictions: Dict[int, str]) -> Dict[int, str]:
         """Ensure predictions are consistent with hierarchy."""
         levels = sorted(predictions.keys(), reverse=True)
 
@@ -797,14 +782,13 @@ class MultiLabelClassifier(nn.Module):
 # Model Ensemble
 # =============================================================================
 
+
 class EnsembleStrategy(ABC):
     """Base class for ensemble combination strategies."""
 
     @abstractmethod
     def combine(
-        self,
-        predictions: List[torch.Tensor],
-        weights: Optional[List[float]] = None
+        self, predictions: List[torch.Tensor], weights: Optional[List[float]] = None
     ) -> torch.Tensor:
         """Combine predictions from multiple models."""
         pass
@@ -814,9 +798,7 @@ class AveragingStrategy(EnsembleStrategy):
     """Average probability predictions."""
 
     def combine(
-        self,
-        predictions: List[torch.Tensor],
-        weights: Optional[List[float]] = None
+        self, predictions: List[torch.Tensor], weights: Optional[List[float]] = None
     ) -> torch.Tensor:
         """Average predictions with optional weights."""
         if weights is None:
@@ -843,9 +825,7 @@ class VotingStrategy(EnsembleStrategy):
         self.soft = soft
 
     def combine(
-        self,
-        predictions: List[torch.Tensor],
-        weights: Optional[List[float]] = None
+        self, predictions: List[torch.Tensor], weights: Optional[List[float]] = None
     ) -> torch.Tensor:
         """Combine predictions via voting."""
         if self.soft:
@@ -868,9 +848,7 @@ class MaxStrategy(EnsembleStrategy):
     """Take maximum probability for each class."""
 
     def combine(
-        self,
-        predictions: List[torch.Tensor],
-        weights: Optional[List[float]] = None
+        self, predictions: List[torch.Tensor], weights: Optional[List[float]] = None
     ) -> torch.Tensor:
         """Take element-wise maximum."""
         stacked = torch.stack(predictions, dim=0)
@@ -904,7 +882,7 @@ class StackingStrategy(EnsembleStrategy):
         predictions: List[torch.Tensor],
         labels: torch.Tensor,
         epochs: int = 10,
-        lr: float = 0.01
+        lr: float = 0.01,
     ) -> None:
         """
         Train meta-classifier.
@@ -932,9 +910,7 @@ class StackingStrategy(EnsembleStrategy):
         self.trained = True
 
     def combine(
-        self,
-        predictions: List[torch.Tensor],
-        weights: Optional[List[float]] = None
+        self, predictions: List[torch.Tensor], weights: Optional[List[float]] = None
     ) -> torch.Tensor:
         """Combine using meta-classifier."""
         if not self.trained:
@@ -1068,6 +1044,7 @@ class Ensemble:
 # Training Utilities
 # =============================================================================
 
+
 @dataclass
 class TrainerConfig:
     """Configuration for model training."""
@@ -1166,13 +1143,9 @@ def train_classifier(
 
     # Learning rate scheduler
     if config.scheduler == "cosine":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=config.epochs
-        )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs)
     elif config.scheduler == "step":
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=10, gamma=0.1
-        )
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     elif config.scheduler == "plateau":
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="max", patience=5, factor=0.5
@@ -1184,10 +1157,7 @@ def train_classifier(
     criterion = nn.CrossEntropyLoss()
 
     # Early stopping
-    early_stopping = EarlyStopping(
-        patience=config.patience,
-        min_delta=config.min_delta
-    )
+    early_stopping = EarlyStopping(patience=config.patience, min_delta=config.min_delta)
 
     # Mixed precision
     scaler = torch.cuda.amp.GradScaler() if config.mixed_precision else None

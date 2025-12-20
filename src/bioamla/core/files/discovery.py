@@ -13,9 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_files_by_extension(
-    directory: Union[str, Path],
-    extensions: Optional[List[str]] = None,
-    recursive: bool = True
+    directory: Union[str, Path], extensions: Optional[List[str]] = None, recursive: bool = True
 ) -> List[str]:
     """
     Get a list of files in a directory filtered by extension.
@@ -30,8 +28,9 @@ def get_files_by_extension(
         List of file paths matching the criteria, sorted alphabetically
     """
     if extensions is not None:
-        extensions = [ext.lower() if ext.startswith('.') else f'.{ext.lower()}'
-                      for ext in extensions]
+        extensions = [
+            ext.lower() if ext.startswith(".") else f".{ext.lower()}" for ext in extensions
+        ]
 
     files = []
     directory_path = Path(directory)
@@ -41,7 +40,7 @@ def get_files_by_extension(
         return files
 
     if recursive:
-        for filepath in directory_path.rglob('*'):
+        for filepath in directory_path.rglob("*"):
             if filepath.is_file():
                 if extensions is None or filepath.suffix.lower() in extensions:
                     files.append(str(filepath))

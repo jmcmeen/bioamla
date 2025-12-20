@@ -176,6 +176,7 @@ class Config:
         logging: Logging settings
         _source: Path to the config file that was loaded
     """
+
     project: Dict[str, Any] = field(default_factory=dict)
     audio: Dict[str, Any] = field(default_factory=dict)
     visualize: Dict[str, Any] = field(default_factory=dict)
@@ -256,8 +257,7 @@ def load_toml(filepath: Union[str, Path]) -> Dict[str, Any]:
     """
     if tomllib is None:
         raise ValueError(
-            "TOML support requires tomli package for Python < 3.11. "
-            "Install with: pip install tomli"
+            "TOML support requires tomli package for Python < 3.11. Install with: pip install tomli"
         )
 
     path = Path(filepath)
@@ -494,7 +494,7 @@ def get_config_locations(include_project: bool = True) -> List[Path]:
     # Project config (highest priority after explicit path)
     if include_project:
         try:
-            from bioamla.core.project import find_project_root, PROJECT_MARKER
+            from bioamla.core.project import PROJECT_MARKER, find_project_root
 
             project_root = find_project_root()
             if project_root:

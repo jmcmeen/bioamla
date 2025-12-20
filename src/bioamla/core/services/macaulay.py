@@ -30,12 +30,11 @@ Example:
 """
 
 import csv
+import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-
-import logging
 
 from bioamla.core.base_api import APICache, APIClient, RateLimiter
 from bioamla.core.files import TextFile, sanitize_filename
@@ -242,8 +241,13 @@ def search(
     # Remove None values
     params = {k: v for k, v in params.items() if v is not None}
 
-    if not any(k in params for k in ["speciesCode", "sciName", "commonName", "region", "taxonCode", "hotspotCode"]):
-        raise ValueError("At least one search filter is required (species_code, scientific_name, common_name, region, taxon_code, or hotspot_code)")
+    if not any(
+        k in params
+        for k in ["speciesCode", "sciName", "commonName", "region", "taxonCode", "hotspotCode"]
+    ):
+        raise ValueError(
+            "At least one search filter is required (species_code, scientific_name, common_name, region, taxon_code, or hotspot_code)"
+        )
 
     try:
         response = _client.get(ML_SEARCH_URL, params=params, use_cache=use_cache)
@@ -392,24 +396,26 @@ def download_assets(
             stats["downloaded"] += 1
             relative_path = result.relative_to(output_dir)
 
-            metadata_rows.append({
-                "file_name": str(relative_path),
-                "ml_id": asset.catalog_id,
-                "asset_id": asset.asset_id,
-                "scientific_name": asset.scientific_name,
-                "common_name": asset.common_name,
-                "species_code": asset.species_code,
-                "contributor": asset.user_display_name,
-                "country": asset.country,
-                "region": asset.region,
-                "location": asset.location,
-                "latitude": asset.latitude,
-                "longitude": asset.longitude,
-                "rating": asset.rating,
-                "media_type": asset.media_type,
-                "date": asset.date,
-                "duration": asset.duration,
-            })
+            metadata_rows.append(
+                {
+                    "file_name": str(relative_path),
+                    "ml_id": asset.catalog_id,
+                    "asset_id": asset.asset_id,
+                    "scientific_name": asset.scientific_name,
+                    "common_name": asset.common_name,
+                    "species_code": asset.species_code,
+                    "contributor": asset.user_display_name,
+                    "country": asset.country,
+                    "region": asset.region,
+                    "location": asset.location,
+                    "latitude": asset.latitude,
+                    "longitude": asset.longitude,
+                    "rating": asset.rating,
+                    "media_type": asset.media_type,
+                    "date": asset.date,
+                    "duration": asset.duration,
+                }
+            )
         else:
             stats["failed"] += 1
 
@@ -426,7 +432,7 @@ def download_assets(
         stats["metadata_file"] = str(metadata_path)
 
     if verbose:
-        print(f"\nDownload complete!")
+        print("\nDownload complete!")
         print(f"  Downloaded: {stats['downloaded']}/{stats['total']}")
         print(f"  Failed: {stats['failed']}")
         if stats["metadata_file"]:
@@ -448,8 +454,7 @@ def get_species_count(species_code: str, media_type: str = "audio") -> int:
     """
     try:
         response = _client.get(
-            ML_SEARCH_URL,
-            params={"speciesCode": species_code, "mediaType": media_type, "count": 0}
+            ML_SEARCH_URL, params={"speciesCode": species_code, "mediaType": media_type, "count": 0}
         )
         return response.get("results", {}).get("count", 0)
     except Exception:

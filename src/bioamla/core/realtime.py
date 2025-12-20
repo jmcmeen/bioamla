@@ -28,9 +28,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from bioamla.core.files import TextFile
-
 import numpy as np
+
+from bioamla.core.files import TextFile
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,7 @@ __all__ = [
 # =============================================================================
 # Audio Recording
 # =============================================================================
+
 
 @dataclass
 class RecordingConfig:
@@ -123,11 +124,11 @@ class AudioRecorder:
         """Import and return sounddevice module."""
         try:
             import sounddevice as sd
+
             return sd
         except ImportError as err:
             raise ImportError(
-                "sounddevice is required for recording. "
-                "Install with: pip install sounddevice"
+                "sounddevice is required for recording. Install with: pip install sounddevice"
             ) from err
 
     def start(self) -> None:
@@ -148,11 +149,11 @@ class AudioRecorder:
                 # Circular buffer
                 end_pos = self.buffer_position + len(audio)
                 if end_pos <= len(self.audio_buffer):
-                    self.audio_buffer[self.buffer_position:end_pos] = audio
+                    self.audio_buffer[self.buffer_position : end_pos] = audio
                 else:
                     first_part = len(self.audio_buffer) - self.buffer_position
-                    self.audio_buffer[self.buffer_position:] = audio[:first_part]
-                    self.audio_buffer[:len(audio) - first_part] = audio[first_part:]
+                    self.audio_buffer[self.buffer_position :] = audio[:first_part]
+                    self.audio_buffer[: len(audio) - first_part] = audio[first_part:]
                 self.buffer_position = end_pos % len(self.audio_buffer)
 
         self._stream = sd.InputStream(
@@ -199,10 +200,7 @@ class AudioRecorder:
             if start < end:
                 return self.audio_buffer[start:end].copy()
             else:
-                return np.concatenate([
-                    self.audio_buffer[start:],
-                    self.audio_buffer[:end]
-                ])
+                return np.concatenate([self.audio_buffer[start:], self.audio_buffer[:end]])
 
 
 class LiveRecorder:
@@ -263,10 +261,7 @@ class LiveRecorder:
         self.recorder.start()
 
         if self.detector is not None:
-            self._detection_thread = threading.Thread(
-                target=self._detection_loop,
-                daemon=True
-            )
+            self._detection_thread = threading.Thread(target=self._detection_loop, daemon=True)
             self._detection_thread.start()
 
         if self.save_detections:
@@ -297,7 +292,10 @@ class LiveRecorder:
                     results = self.detector(audio, self.config.sample_rate)
 
                     for result in results:
-                        if hasattr(result, "confidence") and result.confidence < self.min_confidence:
+                        if (
+                            hasattr(result, "confidence")
+                            and result.confidence < self.min_confidence
+                        ):
                             continue
 
                         event = DetectionEvent(
@@ -349,9 +347,7 @@ class LiveRecorder:
             logger.error(f"Error saving detection: {e}")
 
     def get_recent_detections(
-        self,
-        seconds: Optional[float] = None,
-        label: Optional[str] = None
+        self, seconds: Optional[float] = None, label: Optional[str] = None
     ) -> List[DetectionEvent]:
         """
         Get recent detections.
@@ -381,6 +377,7 @@ class LiveRecorder:
 # =============================================================================
 # Real-Time Spectrogram
 # =============================================================================
+
 
 @dataclass
 class SpectrogramConfig:
@@ -427,9 +424,7 @@ class RealtimeSpectrogram:
         self.callback = callback
 
         if recording_config is None:
-            recording_config = RecordingConfig(
-                sample_rate=self.config.sample_rate
-            )
+            recording_config = RecordingConfig(sample_rate=self.config.sample_rate)
         self.recorder = AudioRecorder(recording_config)
 
         self._running = False
@@ -441,6 +436,7 @@ class RealtimeSpectrogram:
         """Create mel filterbank matrix."""
         try:
             import librosa
+
             return librosa.filters.mel(
                 sr=self.config.sample_rate,
                 n_fft=self.config.n_fft,
@@ -454,10 +450,12 @@ class RealtimeSpectrogram:
             mel_points = np.linspace(
                 self._hz_to_mel(self.config.fmin),
                 self._hz_to_mel(self.config.fmax or self.config.sample_rate // 2),
-                self.config.n_mels + 2
+                self.config.n_mels + 2,
             )
             hz_points = self._mel_to_hz(mel_points)
-            bin_points = np.floor((self.config.n_fft + 1) * hz_points / self.config.sample_rate).astype(int)
+            bin_points = np.floor(
+                (self.config.n_fft + 1) * hz_points / self.config.sample_rate
+            ).astype(int)
 
             filterbank = np.zeros((self.config.n_mels, n_freq))
             for i in range(self.config.n_mels):
@@ -490,7 +488,7 @@ class RealtimeSpectrogram:
 
         for i in range(n_frames):
             start = i * self.config.hop_length
-            frame = audio[start:start + self.config.n_fft]
+            frame = audio[start : start + self.config.n_fft]
             window = np.hanning(len(frame))
             frames[i] = frame * window
 
@@ -513,10 +511,7 @@ class RealtimeSpectrogram:
         self._running = True
         self.recorder.start()
 
-        self._thread = threading.Thread(
-            target=self._stream_loop,
-            daemon=True
-        )
+        self._thread = threading.Thread(target=self._stream_loop, daemon=True)
         self._thread.start()
 
         logger.info("Real-time spectrogram started")
@@ -559,6 +554,7 @@ class RealtimeSpectrogram:
 # =============================================================================
 # Continuous Monitoring
 # =============================================================================
+
 
 @dataclass
 class MonitoringConfig:
@@ -612,11 +608,7 @@ class ContinuousMonitor:
         self._last_alert_times: Dict[str, float] = {}
         self._statistics: Dict[str, int] = {}
 
-    def _wrapped_detector(
-        self,
-        audio: np.ndarray,
-        sample_rate: int
-    ) -> List[Any]:
+    def _wrapped_detector(self, audio: np.ndarray, sample_rate: int) -> List[Any]:
         """Wrapper to filter detections."""
         results = self.detector(audio, sample_rate)
         filtered = []
@@ -665,10 +657,7 @@ class ContinuousMonitor:
             except Exception as e:
                 logger.error(f"Alert callback error: {e}")
 
-    def add_alert_callback(
-        self,
-        callback: Callable[[DetectionEvent], None]
-    ) -> None:
+    def add_alert_callback(self, callback: Callable[[DetectionEvent], None]) -> None:
         """Add callback for alerts."""
         self._alert_callbacks.append(callback)
 
@@ -694,6 +683,7 @@ class ContinuousMonitor:
 # =============================================================================
 # Audio Stream Processing
 # =============================================================================
+
 
 class AudioStreamProcessor:
     """
@@ -724,17 +714,18 @@ class AudioStreamProcessor:
         self.processors: List[Callable[[np.ndarray], np.ndarray]] = []
         self.output_callbacks: List[Callable[[np.ndarray], None]] = []
 
-        self.recorder = AudioRecorder(RecordingConfig(
-            sample_rate=sample_rate,
-            chunk_size=chunk_size,
-        ))
+        self.recorder = AudioRecorder(
+            RecordingConfig(
+                sample_rate=sample_rate,
+                chunk_size=chunk_size,
+            )
+        )
 
         self._running = False
         self._thread = None
 
     def add_processor(
-        self,
-        processor: Callable[[np.ndarray], np.ndarray]
+        self, processor: Callable[[np.ndarray], np.ndarray]
     ) -> "AudioStreamProcessor":
         """
         Add processing step to pipeline.
@@ -748,10 +739,7 @@ class AudioStreamProcessor:
         self.processors.append(processor)
         return self
 
-    def add_output_callback(
-        self,
-        callback: Callable[[np.ndarray], None]
-    ) -> "AudioStreamProcessor":
+    def add_output_callback(self, callback: Callable[[np.ndarray], None]) -> "AudioStreamProcessor":
         """
         Add output callback.
 
@@ -769,10 +757,7 @@ class AudioStreamProcessor:
         self._running = True
         self.recorder.start()
 
-        self._thread = threading.Thread(
-            target=self._process_loop,
-            daemon=True
-        )
+        self._thread = threading.Thread(target=self._process_loop, daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
@@ -794,12 +779,16 @@ class AudioStreamProcessor:
                     current_position = self.recorder.buffer_position
                     if current_position != last_position:
                         if current_position > last_position:
-                            audio = self.recorder.audio_buffer[last_position:current_position].copy()
+                            audio = self.recorder.audio_buffer[
+                                last_position:current_position
+                            ].copy()
                         else:
-                            audio = np.concatenate([
-                                self.recorder.audio_buffer[last_position:],
-                                self.recorder.audio_buffer[:current_position]
-                            ])
+                            audio = np.concatenate(
+                                [
+                                    self.recorder.audio_buffer[last_position:],
+                                    self.recorder.audio_buffer[:current_position],
+                                ]
+                            )
                         last_position = current_position
                     else:
                         audio = None
@@ -824,6 +813,7 @@ class AudioStreamProcessor:
 # Utility Functions
 # =============================================================================
 
+
 def list_audio_devices() -> List[Dict[str, Any]]:
     """
     List available audio input devices.
@@ -834,19 +824,19 @@ def list_audio_devices() -> List[Dict[str, Any]]:
     try:
         import sounddevice as sd
     except ImportError as err:
-        raise ImportError(
-            "sounddevice is required. Install with: pip install sounddevice"
-        ) from err
+        raise ImportError("sounddevice is required. Install with: pip install sounddevice") from err
 
     devices = []
     for i, device in enumerate(sd.query_devices()):
         if device["max_input_channels"] > 0:
-            devices.append({
-                "index": i,
-                "name": device["name"],
-                "channels": device["max_input_channels"],
-                "sample_rate": device["default_samplerate"],
-            })
+            devices.append(
+                {
+                    "index": i,
+                    "name": device["name"],
+                    "channels": device["max_input_channels"],
+                    "sample_rate": device["default_samplerate"],
+                }
+            )
 
     return devices
 
@@ -855,6 +845,7 @@ def get_default_input_device() -> Optional[int]:
     """Get default input device index."""
     try:
         import sounddevice as sd
+
         return sd.default.device[0]
     except Exception:
         return None
@@ -874,9 +865,7 @@ def test_recording(duration: float = 2.0, device: Optional[int] = None) -> np.nd
     try:
         import sounddevice as sd
     except ImportError as err:
-        raise ImportError(
-            "sounddevice is required. Install with: pip install sounddevice"
-        ) from err
+        raise ImportError("sounddevice is required. Install with: pip install sounddevice") from err
 
     sample_rate = 16000
     audio = sd.rec(

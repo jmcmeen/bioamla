@@ -26,7 +26,7 @@ import csv
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 
@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Data Structures
 # =============================================================================
+
 
 @dataclass
 class Annotation:
@@ -58,6 +59,7 @@ class Annotation:
         notes: Additional notes or comments
         custom_fields: Dictionary for storing custom annotation fields
     """
+
     start_time: float
     end_time: float
     low_freq: Optional[float] = None
@@ -137,21 +139,33 @@ class Annotation:
     def from_dict(cls, data: Dict[str, Any]) -> "Annotation":
         """Create an Annotation from a dictionary."""
         known_fields = {
-            "start_time", "end_time", "low_freq", "high_freq",
-            "label", "channel", "confidence", "notes"
+            "start_time",
+            "end_time",
+            "low_freq",
+            "high_freq",
+            "label",
+            "channel",
+            "confidence",
+            "notes",
         }
         custom = {k: v for k, v in data.items() if k not in known_fields}
 
         return cls(
             start_time=float(data.get("start_time", 0)),
             end_time=float(data.get("end_time", 0)),
-            low_freq=float(data["low_freq"]) if data.get("low_freq") not in (None, "", "nan") else None,
-            high_freq=float(data["high_freq"]) if data.get("high_freq") not in (None, "", "nan") else None,
+            low_freq=float(data["low_freq"])
+            if data.get("low_freq") not in (None, "", "nan")
+            else None,
+            high_freq=float(data["high_freq"])
+            if data.get("high_freq") not in (None, "", "nan")
+            else None,
             label=str(data.get("label", "")),
             channel=int(data.get("channel", 1)),
-            confidence=float(data["confidence"]) if data.get("confidence") not in (None, "", "nan") else None,
+            confidence=float(data["confidence"])
+            if data.get("confidence") not in (None, "", "nan")
+            else None,
             notes=str(data.get("notes", "")),
-            custom_fields=custom
+            custom_fields=custom,
         )
 
 
@@ -167,6 +181,7 @@ class AnnotationSet:
         duration: Total duration of the audio file in seconds (optional)
         metadata: Additional metadata about the file or annotation set
     """
+
     file_path: str
     annotations: List[Annotation] = field(default_factory=list)
     sample_rate: Optional[int] = None
@@ -194,23 +209,18 @@ class AnnotationSet:
         """Get all annotations with a specific label."""
         return [a for a in self.annotations if a.label == label]
 
-    def filter_by_time_range(
-        self, start: float, end: float
-    ) -> List[Annotation]:
+    def filter_by_time_range(self, start: float, end: float) -> List[Annotation]:
         """Get all annotations that overlap with a time range."""
-        return [
-            a for a in self.annotations
-            if not (a.end_time <= start or a.start_time >= end)
-        ]
+        return [a for a in self.annotations if not (a.end_time <= start or a.start_time >= end)]
 
-    def filter_by_freq_range(
-        self, low: float, high: float
-    ) -> List[Annotation]:
+    def filter_by_freq_range(self, low: float, high: float) -> List[Annotation]:
         """Get all annotations that overlap with a frequency range."""
         return [
-            a for a in self.annotations
-            if a.low_freq is None or a.high_freq is None or
-            not (a.high_freq <= low or a.low_freq >= high)
+            a
+            for a in self.annotations
+            if a.low_freq is None
+            or a.high_freq is None
+            or not (a.high_freq <= low or a.low_freq >= high)
         ]
 
     def sort_by_time(self) -> None:
@@ -232,7 +242,7 @@ class AnnotationSet:
                 file_path=self.file_path,
                 sample_rate=self.sample_rate,
                 duration=self.duration,
-                metadata=self.metadata.copy()
+                metadata=self.metadata.copy(),
             )
 
         sorted_annots = sorted(self.annotations, key=lambda a: a.start_time)
@@ -244,7 +254,7 @@ class AnnotationSet:
             low_freq=sorted_annots[0].low_freq,
             high_freq=sorted_annots[0].high_freq,
             label=sorted_annots[0].label,
-            channel=sorted_annots[0].channel
+            channel=sorted_annots[0].channel,
         )
 
         for ann in sorted_annots[1:]:
@@ -267,7 +277,7 @@ class AnnotationSet:
                     low_freq=ann.low_freq,
                     high_freq=ann.high_freq,
                     label=ann.label,
-                    channel=ann.channel
+                    channel=ann.channel,
                 )
 
         merged.append(current)
@@ -277,7 +287,7 @@ class AnnotationSet:
             annotations=merged,
             sample_rate=self.sample_rate,
             duration=self.duration,
-            metadata=self.metadata.copy()
+            metadata=self.metadata.copy(),
         )
 
 
@@ -316,9 +326,7 @@ RAVEN_EXPORT_COLUMNS = {
 
 
 def load_raven_selection_table(
-    filepath: str,
-    label_column: Optional[str] = None,
-    encoding: str = "utf-8"
+    filepath: str, label_column: Optional[str] = None, encoding: str = "utf-8"
 ) -> List[Annotation]:
     """
     Load annotations from a Raven Pro selection table file.
@@ -384,7 +392,8 @@ def load_raven_selection_table(
                 # Collect custom fields (non-standard Raven columns)
                 standard_cols = set(RAVEN_COLUMN_MAP.keys())
                 custom_fields = {
-                    k: v for k, v in row.items()
+                    k: v
+                    for k, v in row.items()
                     if k not in standard_cols and k != label_column and v
                 }
 
@@ -395,7 +404,7 @@ def load_raven_selection_table(
                     high_freq=high_freq,
                     label=label,
                     channel=channel,
-                    custom_fields=custom_fields
+                    custom_fields=custom_fields,
                 )
                 annotations.append(ann)
 
@@ -411,7 +420,7 @@ def save_raven_selection_table(
     annotations: List[Annotation],
     filepath: str,
     include_custom_fields: bool = True,
-    encoding: str = "utf-8"
+    encoding: str = "utf-8",
 ) -> str:
     """
     Save annotations to a Raven Pro selection table file.
@@ -438,8 +447,16 @@ def save_raven_selection_table(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # Build column list
-    columns = ["Selection", "View", "Channel", "Begin Time (s)", "End Time (s)",
-               "Low Freq (Hz)", "High Freq (Hz)", "Annotation"]
+    columns = [
+        "Selection",
+        "View",
+        "Channel",
+        "Begin Time (s)",
+        "End Time (s)",
+        "Low Freq (Hz)",
+        "High Freq (Hz)",
+        "Annotation",
+    ]
 
     # Collect all custom fields
     if include_custom_fields:
@@ -477,6 +494,7 @@ def save_raven_selection_table(
 # CSV Annotation Import/Export
 # =============================================================================
 
+
 def load_csv_annotations(
     filepath: str,
     start_time_col: str = "start_time",
@@ -484,7 +502,7 @@ def load_csv_annotations(
     low_freq_col: str = "low_freq",
     high_freq_col: str = "high_freq",
     label_col: str = "label",
-    encoding: str = "utf-8"
+    encoding: str = "utf-8",
 ) -> List[Annotation]:
     """
     Load annotations from a CSV file.
@@ -540,13 +558,16 @@ def load_csv_annotations(
 
                 # Custom fields
                 known_cols = {
-                    start_time_col, end_time_col, low_freq_col, high_freq_col,
-                    label_col, "confidence", "notes", "channel"
+                    start_time_col,
+                    end_time_col,
+                    low_freq_col,
+                    high_freq_col,
+                    label_col,
+                    "confidence",
+                    "notes",
+                    "channel",
                 }
-                custom_fields = {
-                    k: v for k, v in row.items()
-                    if k not in known_cols and v
-                }
+                custom_fields = {k: v for k, v in row.items() if k not in known_cols and v}
 
                 ann = Annotation(
                     start_time=start_time,
@@ -557,7 +578,7 @@ def load_csv_annotations(
                     channel=channel,
                     confidence=confidence,
                     notes=notes,
-                    custom_fields=custom_fields
+                    custom_fields=custom_fields,
                 )
                 annotations.append(ann)
 
@@ -573,7 +594,7 @@ def save_csv_annotations(
     annotations: List[Annotation],
     filepath: str,
     include_custom_fields: bool = True,
-    encoding: str = "utf-8"
+    encoding: str = "utf-8",
 ) -> str:
     """
     Save annotations to a CSV file.
@@ -591,8 +612,16 @@ def save_csv_annotations(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # Build column list
-    columns = ["start_time", "end_time", "low_freq", "high_freq",
-               "label", "channel", "confidence", "notes"]
+    columns = [
+        "start_time",
+        "end_time",
+        "low_freq",
+        "high_freq",
+        "label",
+        "channel",
+        "confidence",
+        "notes",
+    ]
 
     if include_custom_fields:
         custom_cols = set()
@@ -629,6 +658,7 @@ def save_csv_annotations(
 # Label Generation and One-Hot Encoding
 # =============================================================================
 
+
 def get_unique_labels(annotations: List[Annotation]) -> List[str]:
     """
     Get sorted list of unique labels from annotations.
@@ -657,9 +687,7 @@ def create_label_map(labels: List[str]) -> Dict[str, int]:
 
 
 def annotations_to_one_hot(
-    annotations: List[Annotation],
-    label_map: Dict[str, int],
-    num_classes: Optional[int] = None
+    annotations: List[Annotation], label_map: Dict[str, int], num_classes: Optional[int] = None
 ) -> np.ndarray:
     """
     Convert annotations to one-hot encoded labels.
@@ -698,7 +726,7 @@ def generate_clip_labels(
     clip_end: float,
     label_map: Dict[str, int],
     min_overlap: float = 0.0,
-    multi_label: bool = True
+    multi_label: bool = True,
 ) -> np.ndarray:
     """
     Generate labels for a clip based on overlapping annotations.
@@ -761,7 +789,7 @@ def generate_frame_labels(
     total_duration: float,
     frame_size: float,
     hop_length: float,
-    label_map: Dict[str, int]
+    label_map: Dict[str, int],
 ) -> np.ndarray:
     """
     Generate frame-level labels for audio.
@@ -801,10 +829,9 @@ def generate_frame_labels(
 # Label Remapping and Conversion
 # =============================================================================
 
+
 def remap_labels(
-    annotations: List[Annotation],
-    label_mapping: Dict[str, str],
-    keep_unmapped: bool = True
+    annotations: List[Annotation], label_mapping: Dict[str, str], keep_unmapped: bool = True
 ) -> List[Annotation]:
     """
     Remap annotation labels using a mapping dictionary.
@@ -843,7 +870,7 @@ def remap_labels(
                 channel=ann.channel,
                 confidence=ann.confidence,
                 notes=ann.notes,
-                custom_fields=ann.custom_fields.copy()
+                custom_fields=ann.custom_fields.copy(),
             )
             result.append(new_ann)
         elif keep_unmapped:
@@ -855,7 +882,7 @@ def remap_labels(
 def filter_labels(
     annotations: List[Annotation],
     include_labels: Optional[Set[str]] = None,
-    exclude_labels: Optional[Set[str]] = None
+    exclude_labels: Optional[Set[str]] = None,
 ) -> List[Annotation]:
     """
     Filter annotations by label.
@@ -910,11 +937,7 @@ def load_label_mapping(filepath: str, encoding: str = "utf-8") -> Dict[str, str]
     return mapping
 
 
-def save_label_mapping(
-    mapping: Dict[str, str],
-    filepath: str,
-    encoding: str = "utf-8"
-) -> str:
+def save_label_mapping(mapping: Dict[str, str], filepath: str, encoding: str = "utf-8") -> str:
     """
     Save a label mapping to a CSV file.
 
@@ -943,10 +966,9 @@ def save_label_mapping(
 # Batch Operations
 # =============================================================================
 
+
 def load_annotations_from_directory(
-    directory: str,
-    file_pattern: str = "*.txt",
-    format: str = "raven"
+    directory: str, file_pattern: str = "*.txt", format: str = "raven"
 ) -> Dict[str, List[Annotation]]:
     """
     Load annotations from all matching files in a directory.
@@ -1018,6 +1040,7 @@ def summarize_annotations(annotations: List[Annotation]) -> Dict[str, Any]:
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def _parse_float(value: Any) -> Optional[float]:
     """Parse a value to float, returning None if invalid."""

@@ -55,6 +55,7 @@ class EvaluationResult:
         total_samples: Total number of samples evaluated.
         correct_predictions: Number of correctly classified samples.
     """
+
     accuracy: float
     precision: float
     recall: float
@@ -141,10 +142,10 @@ def compute_metrics(
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
         per_class_metrics[label] = {
-            'precision': precision,
-            'recall': recall,
-            'f1_score': f1,
-            'support': int(confusion[idx, :].sum()),
+            "precision": precision,
+            "recall": recall,
+            "f1_score": f1,
+            "support": int(confusion[idx, :].sum()),
         }
 
         # Weight by support for macro average
@@ -291,13 +292,13 @@ def evaluate_directory(
     """
     import torch
 
+    from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
     from bioamla.detection.ast import (
         ast_predict,
         extract_features,
         get_cached_feature_extractor,
         load_pretrained_ast_model,
     )
-    from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
     audio_dir = Path(audio_dir)
     if not audio_dir.exists():
@@ -327,9 +328,9 @@ def evaluate_directory(
     # Load model
     model = load_pretrained_ast_model(model_path)
     feature_extractor = get_cached_feature_extractor(model_path)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if use_fp16 and device.type == 'cuda':
+    if use_fp16 and device.type == "cuda":
         model = model.half()
 
     if verbose:
@@ -345,7 +346,7 @@ def evaluate_directory(
             waveform = resample_waveform_tensor(waveform, orig_freq, resample_freq)
             input_values = extract_features(waveform, resample_freq, feature_extractor, device)
 
-            if use_fp16 and device.type == 'cuda':
+            if use_fp16 and device.type == "cuda":
                 input_values = input_values.half()
 
             prediction = ast_predict(input_values, model)
@@ -394,12 +395,14 @@ def format_metrics_report(result: EvaluationResult, include_per_class: bool = Tr
     ]
 
     if include_per_class and result.per_class_metrics:
-        lines.extend([
-            "Per-Class Metrics:",
-            "-" * 60,
-            f"{'Class':<30} {'Precision':>10} {'Recall':>10} {'F1':>10} {'Support':>8}",
-            "-" * 60,
-        ])
+        lines.extend(
+            [
+                "Per-Class Metrics:",
+                "-" * 60,
+                f"{'Class':<30} {'Precision':>10} {'Recall':>10} {'F1':>10} {'Support':>8}",
+                "-" * 60,
+            ]
+        )
 
         for label in result.class_labels:
             metrics = result.per_class_metrics[label]
@@ -410,11 +413,13 @@ def format_metrics_report(result: EvaluationResult, include_per_class: bool = Tr
 
         lines.append("-" * 60)
 
-    lines.extend([
-        "",
-        "Confusion Matrix:",
-        "-" * 60,
-    ])
+    lines.extend(
+        [
+            "",
+            "Confusion Matrix:",
+            "-" * 60,
+        ]
+    )
 
     # Add column headers
     max_label_len = max(len(str(l)) for l in result.class_labels) if result.class_labels else 10
@@ -472,13 +477,15 @@ def save_evaluation_results(
         rows = []
         for label in result.class_labels:
             metrics = result.per_class_metrics[label]
-            rows.append({
-                "class": label,
-                "precision": metrics["precision"],
-                "recall": metrics["recall"],
-                "f1_score": metrics["f1_score"],
-                "support": metrics["support"],
-            })
+            rows.append(
+                {
+                    "class": label,
+                    "precision": metrics["precision"],
+                    "recall": metrics["recall"],
+                    "f1_score": metrics["f1_score"],
+                    "support": metrics["support"],
+                }
+            )
         df = pd.DataFrame(rows)
         df.to_csv(output_path, index=False)
 

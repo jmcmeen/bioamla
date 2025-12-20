@@ -36,7 +36,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Data Structures
 # =============================================================================
+
 
 @dataclass
 class ActiveLearningSample:
@@ -67,6 +68,7 @@ class ActiveLearningSample:
         probabilities: Full probability distribution over classes
         uncertainty_score: Computed uncertainty score for sampling
     """
+
     id: str
     filepath: str
     start_time: float = 0.0
@@ -131,6 +133,7 @@ class AnnotationRecord:
         confidence: Annotator's confidence in the label
         notes: Optional notes from annotator
     """
+
     sample_id: str
     label: str
     annotator: str = "unknown"
@@ -169,6 +172,7 @@ class ActiveLearningState:
         query_history: History of queried sample IDs
         performance_history: History of model performance metrics
     """
+
     iteration: int = 0
     total_labeled: int = 0
     total_unlabeled: int = 0
@@ -204,6 +208,7 @@ class ActiveLearningState:
 # Sampling Strategies
 # =============================================================================
 
+
 class SamplingStrategy(ABC):
     """Base class for sampling strategies."""
 
@@ -221,10 +226,7 @@ class SamplingStrategy(ABC):
         pass
 
     def select(
-        self,
-        samples: List[ActiveLearningSample],
-        n_samples: int,
-        exclude_ids: Optional[set] = None
+        self, samples: List[ActiveLearningSample], n_samples: int, exclude_ids: Optional[set] = None
     ) -> List[ActiveLearningSample]:
         """
         Select the most informative samples.
@@ -348,10 +350,7 @@ class DiversitySampler(SamplingStrategy):
         return distances
 
     def select(
-        self,
-        samples: List[ActiveLearningSample],
-        n_samples: int,
-        exclude_ids: Optional[set] = None
+        self, samples: List[ActiveLearningSample], n_samples: int, exclude_ids: Optional[set] = None
     ) -> List[ActiveLearningSample]:
         """Select diverse samples using greedy farthest-first traversal."""
         if exclude_ids:
@@ -423,7 +422,7 @@ class HybridSampler(SamplingStrategy):
         self,
         uncertainty_strategy: str = "entropy",
         diversity_method: str = "greedy",
-        uncertainty_ratio: float = 0.5
+        uncertainty_ratio: float = 0.5,
     ):
         """
         Initialize hybrid sampler.
@@ -449,14 +448,13 @@ class HybridSampler(SamplingStrategy):
             diversity_scores = diversity_scores / diversity_scores.max()
 
         # Combine scores
-        return (self.uncertainty_ratio * uncertainty_scores +
-                (1 - self.uncertainty_ratio) * diversity_scores)
+        return (
+            self.uncertainty_ratio * uncertainty_scores
+            + (1 - self.uncertainty_ratio) * diversity_scores
+        )
 
     def select(
-        self,
-        samples: List[ActiveLearningSample],
-        n_samples: int,
-        exclude_ids: Optional[set] = None
+        self, samples: List[ActiveLearningSample], n_samples: int, exclude_ids: Optional[set] = None
     ) -> List[ActiveLearningSample]:
         """Select samples using two-stage approach."""
         if exclude_ids:
@@ -467,14 +465,10 @@ class HybridSampler(SamplingStrategy):
 
         # Stage 1: Pre-filter by uncertainty
         pre_filter_k = min(len(samples), n_samples * 3)
-        uncertain_samples = self.uncertainty_sampler.select(
-            samples, pre_filter_k, exclude_ids=None
-        )
+        uncertain_samples = self.uncertainty_sampler.select(samples, pre_filter_k, exclude_ids=None)
 
         # Stage 2: Select diverse samples from filtered set
-        return self.diversity_sampler.select(
-            uncertain_samples, n_samples, exclude_ids=None
-        )
+        return self.diversity_sampler.select(uncertain_samples, n_samples, exclude_ids=None)
 
 
 class RandomSampler(SamplingStrategy):
@@ -507,10 +501,7 @@ class QueryByCommittee(SamplingStrategy):
         self.disagreement_measure = disagreement_measure
         self.committee_predictions: List[Dict[str, np.ndarray]] = []
 
-    def add_committee_predictions(
-        self,
-        predictions: Dict[str, np.ndarray]
-    ) -> None:
+    def add_committee_predictions(self, predictions: Dict[str, np.ndarray]) -> None:
         """
         Add predictions from a committee member.
 
@@ -613,6 +604,7 @@ class BalancedSampler(SamplingStrategy):
 # Active Learner
 # =============================================================================
 
+
 class ActiveLearner:
     """
     Main active learning orchestrator.
@@ -627,8 +619,10 @@ class ActiveLearner:
     def __init__(
         self,
         sampler: Optional[SamplingStrategy] = None,
-        prediction_fn: Optional[Callable[[List[ActiveLearningSample]], List[ActiveLearningSample]]] = None,
-        state: Optional[ActiveLearningState] = None
+        prediction_fn: Optional[
+            Callable[[List[ActiveLearningSample]], List[ActiveLearningSample]]
+        ] = None,
+        state: Optional[ActiveLearningState] = None,
     ):
         """
         Initialize active learner.
@@ -682,9 +676,7 @@ class ActiveLearner:
         logger.info(f"Added {len(samples)} samples to labeled pool")
 
     def query(
-        self,
-        n_samples: int = 10,
-        update_predictions: bool = True
+        self, n_samples: int = 10, update_predictions: bool = True
     ) -> List[ActiveLearningSample]:
         """
         Query the most informative samples for annotation.
@@ -711,9 +703,7 @@ class ActiveLearner:
 
         # Select samples using strategy
         selected = self.sampler.select(
-            samples,
-            n_samples,
-            exclude_ids=set(self.labeled_pool.keys())
+            samples, n_samples, exclude_ids=set(self.labeled_pool.keys())
         )
 
         # Record query
@@ -729,7 +719,7 @@ class ActiveLearner:
         label: str,
         annotator: str = "unknown",
         duration_seconds: Optional[float] = None,
-        notes: str = ""
+        notes: str = "",
     ) -> None:
         """
         Record an annotation and move sample to labeled pool.
@@ -747,7 +737,7 @@ class ActiveLearner:
             label=label,
             annotator=annotator,
             duration_seconds=duration_seconds,
-            notes=notes
+            notes=notes,
         )
         self.annotation_history.append(record)
 
@@ -769,9 +759,7 @@ class ActiveLearner:
         logger.debug(f"Recorded annotation for {sample.id}: {label}")
 
     def teach_batch(
-        self,
-        annotations: List[Tuple[ActiveLearningSample, str]],
-        annotator: str = "unknown"
+        self, annotations: List[Tuple[ActiveLearningSample, str]], annotator: str = "unknown"
     ) -> None:
         """
         Record multiple annotations at once.
@@ -814,11 +802,9 @@ class ActiveLearner:
         Args:
             metrics: Dictionary of performance metrics (e.g., accuracy, f1)
         """
-        self.state.performance_history.append({
-            "iteration": self.state.iteration,
-            "timestamp": datetime.now().isoformat(),
-            **metrics
-        })
+        self.state.performance_history.append(
+            {"iteration": self.state.iteration, "timestamp": datetime.now().isoformat(), **metrics}
+        )
 
     def save_state(self, filepath: str) -> str:
         """
@@ -851,7 +837,7 @@ class ActiveLearner:
         cls,
         filepath: str,
         sampler: Optional[SamplingStrategy] = None,
-        prediction_fn: Optional[Callable] = None
+        prediction_fn: Optional[Callable] = None,
     ) -> "ActiveLearner":
         """
         Load active learning state from file.
@@ -870,7 +856,7 @@ class ActiveLearner:
         learner = cls(
             sampler=sampler,
             prediction_fn=prediction_fn,
-            state=ActiveLearningState.from_dict(state_dict["state"])
+            state=ActiveLearningState.from_dict(state_dict["state"]),
         )
 
         # Restore pools
@@ -889,9 +875,11 @@ class ActiveLearner:
                 sample_id=record_dict["sample_id"],
                 label=record_dict["label"],
                 annotator=record_dict.get("annotator", "unknown"),
-                timestamp=datetime.fromisoformat(record_dict["timestamp"]) if record_dict.get("timestamp") else None,
+                timestamp=datetime.fromisoformat(record_dict["timestamp"])
+                if record_dict.get("timestamp")
+                else None,
                 duration_seconds=record_dict.get("duration_seconds"),
-                notes=record_dict.get("notes", "")
+                notes=record_dict.get("notes", ""),
             )
             learner.annotation_history.append(record)
 
@@ -902,6 +890,7 @@ class ActiveLearner:
 # =============================================================================
 # Annotation Queue
 # =============================================================================
+
 
 @dataclass
 class AnnotationQueue:
@@ -980,8 +969,15 @@ class AnnotationQueue:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         with TextFile(path, mode="w", newline="", encoding="utf-8") as f:
-            fieldnames = ["id", "filepath", "start_time", "end_time",
-                         "predicted_label", "confidence", "status"]
+            fieldnames = [
+                "id",
+                "filepath",
+                "start_time",
+                "end_time",
+                "predicted_label",
+                "confidence",
+                "status",
+            ]
             writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
 
@@ -992,15 +988,17 @@ class AnnotationQueue:
                 elif sample.id in self.skipped:
                     status = "skipped"
 
-                writer.writerow({
-                    "id": sample.id,
-                    "filepath": sample.filepath,
-                    "start_time": sample.start_time,
-                    "end_time": sample.end_time,
-                    "predicted_label": sample.predicted_label or "",
-                    "confidence": sample.confidence or "",
-                    "status": status,
-                })
+                writer.writerow(
+                    {
+                        "id": sample.id,
+                        "filepath": sample.filepath,
+                        "start_time": sample.start_time,
+                        "end_time": sample.end_time,
+                        "predicted_label": sample.predicted_label or "",
+                        "confidence": sample.confidence or "",
+                        "status": status,
+                    }
+                )
 
         return str(path)
 
@@ -1008,6 +1006,7 @@ class AnnotationQueue:
 # =============================================================================
 # Oracle Interface
 # =============================================================================
+
 
 class Oracle(ABC):
     """
@@ -1056,7 +1055,7 @@ class SimulatedOracle(Oracle):
         self,
         ground_truth: Dict[str, str],
         noise_rate: float = 0.0,
-        labels: Optional[List[str]] = None
+        labels: Optional[List[str]] = None,
     ):
         """
         Initialize simulated oracle.
@@ -1108,13 +1107,14 @@ class CallbackOracle(Oracle):
 # Utility Functions
 # =============================================================================
 
+
 def create_samples_from_predictions(
     predictions_csv: str,
     filepath_col: str = "filepath",
     start_col: str = "start_time",
     end_col: str = "end_time",
     label_col: str = "predicted_label",
-    confidence_col: str = "confidence"
+    confidence_col: str = "confidence",
 ) -> List[ActiveLearningSample]:
     """
     Create Sample objects from a predictions CSV file.
@@ -1157,11 +1157,7 @@ def create_samples_from_predictions(
     return samples
 
 
-def export_annotations(
-    learner: ActiveLearner,
-    filepath: str,
-    format: str = "csv"
-) -> str:
+def export_annotations(learner: ActiveLearner, filepath: str, format: str = "csv") -> str:
     """
     Export annotations from active learner.
 
@@ -1180,21 +1176,30 @@ def export_annotations(
 
     if format == "csv":
         with TextFile(path, mode="w", newline="", encoding="utf-8") as f:
-            fieldnames = ["id", "filepath", "start_time", "end_time", "label",
-                         "predicted_label", "confidence"]
+            fieldnames = [
+                "id",
+                "filepath",
+                "start_time",
+                "end_time",
+                "label",
+                "predicted_label",
+                "confidence",
+            ]
             writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
 
             for sample in labeled_samples:
-                writer.writerow({
-                    "id": sample.id,
-                    "filepath": sample.filepath,
-                    "start_time": sample.start_time,
-                    "end_time": sample.end_time,
-                    "label": sample.label,
-                    "predicted_label": sample.predicted_label or "",
-                    "confidence": sample.confidence or "",
-                })
+                writer.writerow(
+                    {
+                        "id": sample.id,
+                        "filepath": sample.filepath,
+                        "start_time": sample.start_time,
+                        "end_time": sample.end_time,
+                        "label": sample.label,
+                        "predicted_label": sample.predicted_label or "",
+                        "confidence": sample.confidence or "",
+                    }
+                )
 
     elif format == "raven":
         # Export as Raven selection table
@@ -1207,7 +1212,7 @@ def export_annotations(
                 end_time=sample.end_time,
                 label=sample.label or "",
                 confidence=sample.confidence,
-                custom_fields={"sample_id": sample.id, "filepath": sample.filepath}
+                custom_fields={"sample_id": sample.id, "filepath": sample.filepath},
             )
             annotations.append(ann)
 
@@ -1220,10 +1225,7 @@ def export_annotations(
     return str(path)
 
 
-def compute_sample_uncertainty(
-    probabilities: np.ndarray,
-    strategy: str = "entropy"
-) -> float:
+def compute_sample_uncertainty(probabilities: np.ndarray, strategy: str = "entropy") -> float:
     """
     Compute uncertainty score for a single probability distribution.
 

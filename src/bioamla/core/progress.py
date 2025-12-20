@@ -39,7 +39,6 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.table import Table
-from rich.text import Text
 
 # Global console instance
 console = Console()
@@ -103,10 +102,12 @@ class ProgressBar:
         ]
 
         if self.show_time:
-            columns.extend([
-                TimeElapsedColumn(),
-                TimeRemainingColumn(),
-            ])
+            columns.extend(
+                [
+                    TimeElapsedColumn(),
+                    TimeRemainingColumn(),
+                ]
+            )
 
         return Progress(
             *columns,
@@ -421,6 +422,5 @@ class BatchProcessor:
             print_success(f"Processed {self.success_count}/{total} items successfully")
         else:
             print_warning(
-                f"Processed {self.success_count}/{total} items, "
-                f"{self.error_count} failed"
+                f"Processed {self.success_count}/{total} items, {self.error_count} failed"
             )

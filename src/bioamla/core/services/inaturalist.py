@@ -20,14 +20,13 @@ Example usage:
 """
 
 import csv
+import logging
 import time
 from pathlib import Path
 from typing import Any, List, Optional, Union
 
 import requests
 from pyinaturalist import get_observation_species_counts, get_observations
-
-import logging
 
 from bioamla.core.files import (
     BinaryFile,
@@ -79,8 +78,7 @@ def load_taxon_ids_from_csv(csv_path: Union[str, Path]) -> List[int]:
 
         if reader.fieldnames is None or "taxon_id" not in reader.fieldnames:
             raise ValueError(
-                f"CSV file must have a 'taxon_id' column. "
-                f"Found columns: {reader.fieldnames}"
+                f"CSV file must have a 'taxon_id' column. Found columns: {reader.fieldnames}"
             )
 
         for row_num, row in enumerate(reader, start=2):  # start=2 accounts for header
@@ -94,9 +92,7 @@ def load_taxon_ids_from_csv(csv_path: Union[str, Path]) -> List[int]:
                 taxon_id = int(taxon_id_str)
                 taxon_ids.append(taxon_id)
             except ValueError:
-                logger.warning(
-                    f"Invalid taxon_id '{taxon_id_str}' at row {row_num}, skipping"
-                )
+                logger.warning(f"Invalid taxon_id '{taxon_id_str}' at row {row_num}, skipping")
 
     if not taxon_ids:
         raise ValueError(f"No valid taxon IDs found in {csv_path}")
@@ -123,7 +119,7 @@ def download_inat_audio(
     organize_by_taxon: bool = True,
     include_inat_metadata: bool = False,
     file_extensions: Optional[List[str]] = None,
-    verbose: bool = True
+    verbose: bool = True,
 ) -> dict:
     """
     Download audio files from iNaturalist observations.
@@ -206,7 +202,7 @@ def download_inat_audio(
         "skipped_existing": 0,
         "failed_downloads": 0,
         "output_dir": str(output_path.absolute()),
-        "metadata_file": str(output_path / "metadata.csv")
+        "metadata_file": str(output_path / "metadata.csv"),
     }
 
     metadata_rows = []
@@ -225,8 +221,7 @@ def download_inat_audio(
     normalized_extensions = None
     if file_extensions:
         normalized_extensions = [
-            ext.lower() if ext.startswith(".") else f".{ext.lower()}"
-            for ext in file_extensions
+            ext.lower() if ext.startswith(".") else f".{ext.lower()}" for ext in file_extensions
         ]
 
     # Build list of taxon IDs to iterate over
@@ -259,7 +254,7 @@ def download_inat_audio(
                 d1=d1,
                 d2=d2,
                 page=page,
-                per_page=current_per_page
+                per_page=current_per_page,
             )
 
             results = response.get("results", [])
@@ -359,23 +354,25 @@ def download_inat_audio(
                             "attr_id": user,
                             "attr_lic": license_code,
                             "attr_url": file_url,
-                            "attr_note": ""
+                            "attr_note": "",
                         }
 
                         # Optional iNaturalist metadata
                         if include_inat_metadata:
-                            row.update({
-                                "observation_id": obs_id,
-                                "sound_id": sound_id,
-                                "common_name": common_name,
-                                "taxon_id": taxon_id_val,
-                                "observed_on": observed_on,
-                                "location": location,
-                                "place_guess": place_guess,
-                                "observer": user,
-                                "quality_grade": quality,
-                                "observation_url": f"https://www.inaturalist.org/observations/{obs_id}"
-                            })
+                            row.update(
+                                {
+                                    "observation_id": obs_id,
+                                    "sound_id": sound_id,
+                                    "common_name": common_name,
+                                    "taxon_id": taxon_id_val,
+                                    "observed_on": observed_on,
+                                    "location": location,
+                                    "place_guess": place_guess,
+                                    "observer": user,
+                                    "quality_grade": quality,
+                                    "observation_url": f"https://www.inaturalist.org/observations/{obs_id}",
+                                }
+                            )
 
                         metadata_rows.append(row)
                     else:
@@ -387,7 +384,9 @@ def download_inat_audio(
                 stats["total_observations"] += 1
 
                 if verbose and observations_processed % 10 == 0:
-                    print(f"Processed {observations_processed}/{obs_per_taxon} observations for current taxon...")
+                    print(
+                        f"Processed {observations_processed}/{obs_per_taxon} observations for current taxon..."
+                    )
 
             page += 1
 
@@ -433,7 +432,7 @@ def search_inat_sounds(
     taxon_name: Optional[str] = None,
     place_id: Optional[int] = None,
     quality_grade: Optional[str] = "research",
-    per_page: int = 30
+    per_page: int = 30,
 ) -> list:
     """
     Search for iNaturalist observations with sounds without downloading.
@@ -462,7 +461,7 @@ def search_inat_sounds(
         taxon_name=taxon_name,
         place_id=place_id,
         quality_grade=quality_grade,
-        per_page=per_page
+        per_page=per_page,
     )
 
     return response.get("results", [])
@@ -496,7 +495,7 @@ def get_taxa(
     project_id: Optional[str] = None,
     quality_grade: Optional[str] = "research",
     taxon_id: Optional[int] = None,
-    verbose: bool = True
+    verbose: bool = True,
 ) -> List[dict]:
     """
     Find all taxa from observations in a place or project.
@@ -539,7 +538,7 @@ def get_taxa(
             quality_grade=quality_grade,
             taxon_id=taxon_id,
             page=page,
-            per_page=per_page
+            per_page=per_page,
         )
 
         results = response.get("results", [])
@@ -549,12 +548,14 @@ def get_taxa(
 
         for item in results:
             taxon = item.get("taxon", {})
-            taxa_list.append({
-                "taxon_id": taxon.get("id"),
-                "name": taxon.get("name", "unknown"),
-                "common_name": taxon.get("preferred_common_name", ""),
-                "observation_count": item.get("count", 0)
-            })
+            taxa_list.append(
+                {
+                    "taxon_id": taxon.get("id"),
+                    "name": taxon.get("name", "unknown"),
+                    "common_name": taxon.get("preferred_common_name", ""),
+                    "observation_count": item.get("count", 0),
+                }
+            )
 
         if verbose:
             print(f"  Fetched {len(taxa_list)} taxa...")
@@ -573,10 +574,7 @@ def get_taxa(
     return taxa_list
 
 
-def get_project_stats(
-    project_id: str,
-    verbose: bool = True
-) -> dict[str, Any]:
+def get_project_stats(project_id: str, verbose: bool = True) -> dict[str, Any]:
     """
     Get statistics for an iNaturalist project.
 
@@ -634,7 +632,9 @@ def get_project_stats(
     species_count = species_response.json().get("total_results", 0)
 
     # Get observers count
-    observers_url = f"https://api.inaturalist.org/v1/observations/observers?project_id={project_id}&per_page=0"
+    observers_url = (
+        f"https://api.inaturalist.org/v1/observations/observers?project_id={project_id}&per_page=0"
+    )
     observers_response = requests.get(observers_url, timeout=30)
     observers_response.raise_for_status()
     observers_count = observers_response.json().get("total_results", 0)
@@ -650,7 +650,7 @@ def get_project_stats(
         "created_at": project.get("created_at", ""),
         "project_type": project.get("project_type", ""),
         "place": project.get("place", {}).get("display_name", "") if project.get("place") else "",
-        "url": f"https://www.inaturalist.org/projects/{project.get('slug', project_id)}"
+        "url": f"https://www.inaturalist.org/projects/{project.get('slug', project_id)}",
     }
 
     if verbose:

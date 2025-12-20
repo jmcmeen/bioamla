@@ -1,5 +1,6 @@
 # database/repositories/project.py
 """Project repository for database operations."""
+
 from typing import List, Optional
 from uuid import UUID
 
@@ -25,11 +26,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
 
     def search_by_name(self, name_pattern: str, limit: int = 10) -> List[Project]:
         """Search projects by name pattern (case-insensitive contains)."""
-        statement = (
-            select(Project)
-            .where(Project.name.ilike(f"%{name_pattern}%"))
-            .limit(limit)
-        )
+        statement = select(Project).where(Project.name.ilike(f"%{name_pattern}%")).limit(limit)
         return list(self.session.exec(statement).all())
 
     def get_with_recordings(self, project_id: UUID) -> Optional[Project]:

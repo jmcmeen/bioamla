@@ -81,10 +81,7 @@ class RateLimiter:
         with self._lock:
             now = time.monotonic()
             elapsed = now - self._last_update
-            self._tokens = min(
-                self.burst_size,
-                self._tokens + elapsed * self.requests_per_second
-            )
+            self._tokens = min(self.burst_size, self._tokens + elapsed * self.requests_per_second)
             self._last_update = now
 
             if self._tokens >= tokens:
@@ -110,10 +107,7 @@ class RateLimiter:
         with self._lock:
             now = time.monotonic()
             elapsed = now - self._last_update
-            self._tokens = min(
-                self.burst_size,
-                self._tokens + elapsed * self.requests_per_second
-            )
+            self._tokens = min(self.burst_size, self._tokens + elapsed * self.requests_per_second)
             self._last_update = now
 
             if self._tokens >= tokens:
@@ -296,9 +290,7 @@ class APICache:
                 pass
 
         # Check total size
-        total_size = sum(
-            f.stat().st_size for f in self.cache_dir.glob("*.cache") if f.exists()
-        )
+        total_size = sum(f.stat().st_size for f in self.cache_dir.glob("*.cache") if f.exists())
 
         if total_size > self.max_size_bytes:
             # Remove oldest entries until under limit
@@ -551,7 +543,9 @@ def rate_limited(requests_per_second: float = 1.0) -> Callable[[F], F]:
         def wrapper(*args, **kwargs):
             limiter.acquire()
             return func(*args, **kwargs)
+
         return wrapper  # type: ignore
+
     return decorator
 
 
@@ -591,5 +585,7 @@ def cached(ttl: int = 3600, cache_dir: Optional[str] = None) -> Callable[[F], F]
             result = func(*args, **kwargs)
             cache.set(key, result)
             return result
+
         return wrapper  # type: ignore
+
     return decorator

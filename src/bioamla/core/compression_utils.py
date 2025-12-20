@@ -26,7 +26,7 @@ def extract_zip_file(zip_path: str, output_dir: str) -> str:
         Path to the output directory
     """
     create_directory(output_dir)
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
         zip_ref.extractall(output_dir)
     return output_dir
 
@@ -46,7 +46,7 @@ def create_zip_file(file_paths: List[str], output_path: str) -> str:
     if output_dir:
         create_directory(output_dir)
 
-    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
+    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zip_ref:
         for filepath in file_paths:
             arcname = os.path.basename(filepath)
             zip_ref.write(filepath, arcname)
@@ -70,8 +70,8 @@ def zip_directory(directory: str, output_path: str) -> str:
         create_directory(output_dir)
 
     directory_path = Path(directory)
-    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
-        for filepath in directory_path.rglob('*'):
+    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zip_ref:
+        for filepath in directory_path.rglob("*"):
             if filepath.is_file():
                 arcname = filepath.relative_to(directory_path)
                 zip_ref.write(filepath, arcname)

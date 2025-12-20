@@ -77,7 +77,7 @@ def wave_file_batch_inference(
     segment_overlap: int,
     output_csv: str,
     config: Optional[InferenceConfig] = None,
-    feature_extractor: Optional[ASTFeatureExtractor] = None
+    feature_extractor: Optional[ASTFeatureExtractor] = None,
 ) -> None:
     """
     Perform batch inference on multiple audio files using an AST model.
@@ -112,13 +112,27 @@ def wave_file_batch_inference(
 
     if config.num_workers > 1:
         _batch_inference_parallel(
-            wave_files, model, freq, segment_duration, segment_overlap,
-            output_csv, config, feature_extractor, device
+            wave_files,
+            model,
+            freq,
+            segment_duration,
+            segment_overlap,
+            output_csv,
+            config,
+            feature_extractor,
+            device,
         )
     else:
         _batch_inference_sequential(
-            wave_files, model, freq, segment_duration, segment_overlap,
-            output_csv, config, feature_extractor, device
+            wave_files,
+            model,
+            freq,
+            segment_duration,
+            segment_overlap,
+            output_csv,
+            config,
+            feature_extractor,
+            device,
         )
 
 
@@ -131,15 +145,21 @@ def _batch_inference_sequential(
     output_csv: str,
     config: InferenceConfig,
     feature_extractor: ASTFeatureExtractor,
-    device: torch.device
+    device: torch.device,
 ) -> None:
     """Sequential batch inference processing."""
     for filepath in wave_files:
         df = segmented_wave_file_inference(
-            filepath, model, freq, segment_duration, segment_overlap,
-            config=config, feature_extractor=feature_extractor, device=device
+            filepath,
+            model,
+            freq,
+            segment_duration,
+            segment_overlap,
+            config=config,
+            feature_extractor=feature_extractor,
+            device=device,
         )
-        df.to_csv(output_csv, mode='a', header=False, index=False)
+        df.to_csv(output_csv, mode="a", header=False, index=False)
 
 
 def _batch_inference_parallel(
@@ -151,7 +171,7 @@ def _batch_inference_parallel(
     output_csv: str,
     config: InferenceConfig,
     feature_extractor: ASTFeatureExtractor,
-    device: torch.device
+    device: torch.device,
 ) -> None:
     """Parallel batch inference with multiprocessing for file loading."""
 
@@ -171,8 +191,8 @@ def _batch_inference_parallel(
                 filepath, segments, model, freq, config, feature_extractor, device
             )
 
-            df = pd.DataFrame(rows, columns=['filepath', 'start', 'stop', 'prediction'])
-            df.to_csv(output_csv, mode='a', header=False, index=False)
+            df = pd.DataFrame(rows, columns=["filepath", "start", "stop", "prediction"])
+            df.to_csv(output_csv, mode="a", header=False, index=False)
 
 
 def segmented_wave_file_inference(
@@ -183,7 +203,7 @@ def segmented_wave_file_inference(
     segment_overlap: int,
     config: Optional[InferenceConfig] = None,
     feature_extractor: Optional[ASTFeatureExtractor] = None,
-    device: Optional[torch.device] = None
+    device: Optional[torch.device] = None,
 ) -> pd.DataFrame:
     """
     Perform inference on a single audio file by processing it in segments.
@@ -228,7 +248,7 @@ def segmented_wave_file_inference(
             filepath, segments, model, freq, feature_extractor, device
         )
 
-    return pd.DataFrame(rows, columns=['filepath', 'start', 'stop', 'prediction'])
+    return pd.DataFrame(rows, columns=["filepath", "start", "stop", "prediction"])
 
 
 def _process_segments_sequential(
@@ -237,14 +257,14 @@ def _process_segments_sequential(
     model: AutoModelForAudioClassification,
     freq: int,
     feature_extractor: ASTFeatureExtractor,
-    device: torch.device
+    device: torch.device,
 ) -> List[dict]:
     """Process segments one at a time (legacy behavior)."""
     rows = []
     for waveform, start, stop in segments:
         input_values = extract_features(waveform, freq, feature_extractor, device)
         prediction = ast_predict(input_values, model)
-        rows.append({'filepath': filepath, 'start': start, 'stop': stop, 'prediction': prediction})
+        rows.append({"filepath": filepath, "start": start, "stop": stop, "prediction": prediction})
     return rows
 
 
@@ -255,13 +275,13 @@ def _process_segments_batched(
     freq: int,
     config: InferenceConfig,
     feature_extractor: ASTFeatureExtractor,
-    device: torch.device
+    device: torch.device,
 ) -> List[dict]:
     """Process segments in batches for improved GPU utilization."""
     rows = []
 
     for batch_start in range(0, len(segments), config.batch_size):
-        batch_segments = segments[batch_start:batch_start + config.batch_size]
+        batch_segments = segments[batch_start : batch_start + config.batch_size]
 
         batch_inputs = []
         batch_metadata = []
@@ -269,17 +289,14 @@ def _process_segments_batched(
         for waveform, start, stop in batch_segments:
             waveform_np = waveform.squeeze().numpy()
             inputs = feature_extractor(
-                waveform_np,
-                sampling_rate=freq,
-                padding="max_length",
-                return_tensors="pt"
+                waveform_np, sampling_rate=freq, padding="max_length", return_tensors="pt"
             )
             batch_inputs.append(inputs.input_values)
             batch_metadata.append((start, stop))
 
         stacked_inputs = torch.cat(batch_inputs, dim=0).to(device)
 
-        if config.use_fp16 and device.type == 'cuda':
+        if config.use_fp16 and device.type == "cuda":
             stacked_inputs = stacked_inputs.half()
 
         with torch.inference_mode():
@@ -289,12 +306,9 @@ def _process_segments_batched(
 
         for idx, (start, stop) in enumerate(batch_metadata):
             prediction = model.config.id2label[predicted_indices[idx]]
-            rows.append({
-                'filepath': filepath,
-                'start': start,
-                'stop': stop,
-                'prediction': prediction
-            })
+            rows.append(
+                {"filepath": filepath, "start": start, "stop": stop, "prediction": prediction}
+            )
 
     return rows
 
@@ -318,7 +332,7 @@ def wav_ast_inference(wave_path: str, model_path: str, sample_rate: int):
     waveform, orig_freq = load_waveform_tensor(wave_path)
     waveform = resample_waveform_tensor(waveform, orig_freq, sample_rate)
     feature_extractor = get_cached_feature_extractor(model_path)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     input_values = extract_features(waveform, sample_rate, feature_extractor, device)
     model = load_pretrained_ast_model(model_path)
     return ast_predict(input_values, model)
@@ -346,8 +360,7 @@ def ast_predict(input_values, model: AutoModelForAudioClassification) -> str:
 
 
 def ast_predict_batch(
-    input_values: torch.Tensor,
-    model: AutoModelForAudioClassification
+    input_values: torch.Tensor, model: AutoModelForAudioClassification
 ) -> List[str]:
     """
     Perform batched prediction using an AST model.
@@ -370,7 +383,7 @@ def extract_features(
     waveform_tensor: torch.Tensor,
     sample_rate: int,
     feature_extractor: Optional[ASTFeatureExtractor] = None,
-    device: Optional[torch.device] = None
+    device: Optional[torch.device] = None,
 ) -> torch.Tensor:
     """
     Extract features from audio waveform for AST model input.
@@ -397,22 +410,17 @@ def extract_features(
         feature_extractor = get_cached_feature_extractor()
 
     if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     inputs = feature_extractor(
-        waveform_tensor,
-        sampling_rate=sample_rate,
-        padding="max_length",
-        return_tensors="pt"
+        waveform_tensor, sampling_rate=sample_rate, padding="max_length", return_tensors="pt"
     ).to(device)
 
     return inputs.input_values
 
 
 def load_pretrained_ast_model(
-    model_path: str,
-    use_fp16: bool = False,
-    use_compile: bool = False
+    model_path: str, use_fp16: bool = False, use_compile: bool = False
 ) -> AutoModelForAudioClassification:
     """
     Load a pre-trained AST model from a given path with optional optimizations.
@@ -435,25 +443,20 @@ def load_pretrained_ast_model(
     """
     from pathlib import Path
 
-    is_local_path = Path(model_path).exists() or model_path.startswith(('./', '../'))
+    is_local_path = Path(model_path).exists() or model_path.startswith(("./", "../"))
 
     torch_dtype = torch.float16 if use_fp16 else None
 
     if is_local_path:
         model = AutoModelForAudioClassification.from_pretrained(
-            model_path,
-            device_map="auto",
-            local_files_only=True,
-            torch_dtype=torch_dtype
+            model_path, device_map="auto", local_files_only=True, torch_dtype=torch_dtype
         )
     else:
         model = AutoModelForAudioClassification.from_pretrained(
-            model_path,
-            device_map="auto",
-            torch_dtype=torch_dtype
+            model_path, device_map="auto", torch_dtype=torch_dtype
         )
 
-    if use_compile and hasattr(torch, 'compile'):
+    if use_compile and hasattr(torch, "compile"):
         model = torch.compile(model)
 
     return model

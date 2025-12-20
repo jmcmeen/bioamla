@@ -8,6 +8,7 @@ Models:
     - Annotation: Time-frequency annotation (detection or manual label)
     - Detection: Model prediction result
 """
+
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4

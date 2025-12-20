@@ -23,28 +23,28 @@ logger = logging.getLogger(__name__)
 
 # Required metadata fields that must always be present in dataset metadata
 REQUIRED_FIELDS = [
-    "file_name",    # Relative path to the audio file
-    "split",        # Dataset split (train, test, val)
-    "target",       # Numeric target/label ID
-    "label",        # Label/class name (e.g., species name)
-    "attr_id",      # Attribution identifier (e.g., observer username)
-    "attr_lic",     # License code for the audio
-    "attr_url",     # URL to the original source
-    "attr_note"     # Additional attribution notes
+    "file_name",  # Relative path to the audio file
+    "split",  # Dataset split (train, test, val)
+    "target",  # Numeric target/label ID
+    "label",  # Label/class name (e.g., species name)
+    "attr_id",  # Attribution identifier (e.g., observer username)
+    "attr_lic",  # License code for the audio
+    "attr_url",  # URL to the original source
+    "attr_note",  # Additional attribution notes
 ]
 
 # Optional iNaturalist metadata fields that may be included
 OPTIONAL_INAT_FIELDS = [
-    "observation_id",    # iNaturalist observation ID
-    "sound_id",          # iNaturalist sound ID
-    "common_name",       # Common name of the species
-    "taxon_id",          # iNaturalist taxon ID
-    "observed_on",       # Date of observation
-    "location",          # GPS coordinates
-    "place_guess",       # Human-readable location description
-    "observer",          # Observer username
-    "quality_grade",     # iNaturalist quality grade
-    "observation_url"    # URL to the observation page
+    "observation_id",  # iNaturalist observation ID
+    "sound_id",  # iNaturalist sound ID
+    "common_name",  # Common name of the species
+    "taxon_id",  # iNaturalist taxon ID
+    "observed_on",  # Date of observation
+    "location",  # GPS coordinates
+    "place_guess",  # Human-readable location description
+    "observer",  # Observer username
+    "quality_grade",  # iNaturalist quality grade
+    "observation_url",  # URL to the observation page
 ]
 
 
@@ -86,7 +86,7 @@ def write_metadata_csv(
     filepath: Path,
     rows: List[dict],
     fieldnames: Optional[Set[str]] = None,
-    merge_existing: bool = True
+    merge_existing: bool = True,
 ) -> int:
     """
     Write metadata rows to a CSV file.
@@ -140,7 +140,8 @@ def write_metadata_csv(
                 f"Existing has: {existing_optional or 'none'}, "
                 f"New has: {new_optional or 'none'}. "
                 f"Dropping optional metadata columns to maintain consistency.",
-                UserWarning, stacklevel=2
+                UserWarning,
+                stacklevel=2,
             )
             # Drop optional metadata from both existing and new rows
             for row in existing_rows:
@@ -266,6 +267,6 @@ def validate_required_fields(rows: List[dict]) -> Tuple[bool, List[str]]:
             # file_name can be empty for some operations, but should warn
             critical_missing = [f for f in missing if f != "attr_note"]
             if critical_missing:
-                errors.append(f"Row {i+1}: missing required fields {critical_missing}")
+                errors.append(f"Row {i + 1}: missing required fields {critical_missing}")
 
     return len(errors) == 0, errors

@@ -33,6 +33,7 @@ Usage:
     # Save through file controller (only way to persist)
     file_ctrl.save(audio, "output.wav")
 """
+
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -101,9 +102,7 @@ class AudioTransformController(BaseController):
         try:
             from bioamla.core.audio.signal import lowpass_filter
 
-            filtered = lowpass_filter(
-                audio.samples, audio.sample_rate, cutoff_hz, order
-            )
+            filtered = lowpass_filter(audio.samples, audio.sample_rate, cutoff_hz, order)
 
             result_audio = AudioData(
                 samples=filtered,
@@ -145,9 +144,7 @@ class AudioTransformController(BaseController):
         try:
             from bioamla.core.audio.signal import highpass_filter
 
-            filtered = highpass_filter(
-                audio.samples, audio.sample_rate, cutoff_hz, order
-            )
+            filtered = highpass_filter(audio.samples, audio.sample_rate, cutoff_hz, order)
 
             result_audio = AudioData(
                 samples=filtered,
@@ -191,9 +188,7 @@ class AudioTransformController(BaseController):
         try:
             from bioamla.core.audio.signal import bandpass_filter
 
-            filtered = bandpass_filter(
-                audio.samples, audio.sample_rate, low_hz, high_hz, order
-            )
+            filtered = bandpass_filter(audio.samples, audio.sample_rate, low_hz, high_hz, order)
 
             result_audio = AudioData(
                 samples=filtered,
@@ -277,9 +272,7 @@ class AudioTransformController(BaseController):
         try:
             from bioamla.core.audio.signal import normalize_loudness
 
-            normalized = normalize_loudness(
-                audio.samples, audio.sample_rate, target_db=target_db
-            )
+            normalized = normalize_loudness(audio.samples, audio.sample_rate, target_db=target_db)
 
             result_audio = AudioData(
                 samples=normalized,
@@ -329,9 +322,7 @@ class AudioTransformController(BaseController):
         try:
             from bioamla.core.audio.signal import resample_audio
 
-            resampled = resample_audio(
-                audio.samples, audio.sample_rate, target_sample_rate
-            )
+            resampled = resample_audio(audio.samples, audio.sample_rate, target_sample_rate)
 
             result_audio = AudioData(
                 samples=resampled,

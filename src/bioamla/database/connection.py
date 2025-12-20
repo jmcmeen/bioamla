@@ -1,7 +1,8 @@
 # database/connection.py
-from sqlmodel import SQLModel, Session, create_engine
-from typing import Generator
 from contextlib import contextmanager
+from typing import Generator
+
+from sqlmodel import Session, SQLModel, create_engine
 
 
 class DatabaseConnection:
