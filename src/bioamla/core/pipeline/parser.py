@@ -1,16 +1,16 @@
-# core/workflow/parser.py
+# core/pipeline/parser.py
 """
-Workflow Parser
+Pipeline Parser
 ===============
 
-TOML-based workflow definition parser with Jinja2 template support.
+TOML-based pipeline definition parser with Jinja2 template support.
 
-Workflows are defined in TOML files with the following structure:
+Pipelines are defined in TOML files with the following structure:
 
 ```toml
-[workflow]
-name = "my_workflow"
-description = "Example workflow"
+[pipeline]
+name = "my_pipeline"
+description = "Example pipeline"
 version = "1.0"
 
 [variables]
@@ -31,10 +31,10 @@ params = { input = "{{ output_dir }}" }
 ```
 
 This module provides:
-- Workflow: Data class representing a parsed workflow
-- WorkflowStep: Data class for individual steps
-- parse_workflow: Parse TOML file to Workflow object
-- render_workflow: Render Jinja2 templates in workflow
+- Pipeline: Data class representing a parsed pipeline
+- PipelineStep: Data class for individual steps
+- parse_pipeline: Parse TOML file to Pipeline object
+- render_pipeline: Render Jinja2 templates in pipeline
 """
 
 import sys
@@ -56,19 +56,19 @@ else:
         tomllib = None
 
 __all__ = [
-    "Workflow",
-    "WorkflowStep",
-    "parse_workflow",
-    "parse_workflow_string",
-    "render_workflow",
-    "workflow_to_toml",
+    "Pipeline",
+    "PipelineStep",
+    "parse_pipeline",
+    "parse_pipeline_string",
+    "render_pipeline",
+    "pipeline_to_toml",
 ]
 
 
 @dataclass
-class WorkflowStep:
+class PipelineStep:
     """
-    A single step in a workflow.
+    A single step in a pipeline.
 
     Attributes:
         name: Unique step identifier
@@ -121,7 +121,7 @@ class WorkflowStep:
         return d
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "WorkflowStep":
+    def from_dict(cls, data: Dict[str, Any]) -> "PipelineStep":
         """Create from dictionary."""
         return cls(
             name=data["name"],
@@ -139,23 +139,23 @@ class WorkflowStep:
 
 
 @dataclass
-class Workflow:
+class Pipeline:
     """
-    A complete workflow definition.
+    A complete pipeline definition.
 
     Attributes:
-        name: Workflow name
-        description: Workflow description
-        version: Workflow version
-        steps: List of workflow steps
+        name: Pipeline name
+        description: Pipeline description
+        version: Pipeline version
+        steps: List of pipeline steps
         variables: Default variable values
         env: Environment variable mappings
-        imports: List of other workflows to import
+        imports: List of other pipelines to import
         metadata: Additional metadata
     """
 
     name: str
-    steps: List[WorkflowStep]
+    steps: List[PipelineStep]
     description: str = ""
     version: str = "1.0"
     variables: Dict[str, Any] = field(default_factory=dict)
@@ -170,11 +170,11 @@ class Workflow:
         return {step.name for step in self.steps}
 
     @property
-    def enabled_steps(self) -> List[WorkflowStep]:
+    def enabled_steps(self) -> List[PipelineStep]:
         """Get list of enabled steps."""
         return [step for step in self.steps if step.enabled]
 
-    def get_step(self, name: str) -> Optional[WorkflowStep]:
+    def get_step(self, name: str) -> Optional[PipelineStep]:
         """Get step by name."""
         for step in self.steps:
             if step.name == name:
@@ -216,14 +216,14 @@ class Workflow:
                         queue.append(name)
 
         if len(result) != len(graph):
-            raise ValueError("Circular dependency detected in workflow")
+            raise ValueError("Circular dependency detected in pipeline")
 
         return result
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            "workflow": {
+            "pipeline": {
                 "name": self.name,
                 "description": self.description,
                 "version": self.version,
@@ -240,16 +240,16 @@ class Workflow:
         cls,
         data: Dict[str, Any],
         source_path: Optional[str] = None,
-    ) -> "Workflow":
+    ) -> "Pipeline":
         """Create from dictionary."""
-        workflow_info = data.get("workflow", {})
+        pipeline_info = data.get("pipeline", {})
         steps_data = data.get("steps", [])
 
         return cls(
-            name=workflow_info.get("name", "unnamed"),
-            description=workflow_info.get("description", ""),
-            version=workflow_info.get("version", "1.0"),
-            steps=[WorkflowStep.from_dict(s) for s in steps_data],
+            name=pipeline_info.get("name", "unnamed"),
+            description=pipeline_info.get("description", ""),
+            version=pipeline_info.get("version", "1.0"),
+            steps=[PipelineStep.from_dict(s) for s in steps_data],
             variables=data.get("variables", {}),
             env=data.get("env", {}),
             imports=data.get("imports", []),
@@ -258,21 +258,21 @@ class Workflow:
         )
 
 
-def parse_workflow(
+def parse_pipeline(
     filepath: Union[str, Path],
     variables: Optional[Dict[str, Any]] = None,
     render_templates: bool = True,
-) -> Workflow:
+) -> Pipeline:
     """
-    Parse a workflow from a TOML file.
+    Parse a pipeline from a TOML file.
 
     Args:
-        filepath: Path to the TOML workflow file
+        filepath: Path to the TOML pipeline file
         variables: Override variables
         render_templates: Whether to render Jinja2 templates
 
     Returns:
-        Parsed Workflow object
+        Parsed Pipeline object
     """
     if tomllib is None:
         raise ImportError(
@@ -281,31 +281,31 @@ def parse_workflow(
 
     filepath = Path(filepath)
     if not filepath.exists():
-        raise FileNotFoundError(f"Workflow file not found: {filepath}")
+        raise FileNotFoundError(f"Pipeline file not found: {filepath}")
 
     with open(filepath, "rb") as f:
         data = tomllib.load(f)
 
-    workflow = Workflow.from_dict(data, source_path=str(filepath))
+    pipeline = Pipeline.from_dict(data, source_path=str(filepath))
 
     # Merge override variables
     if variables:
-        workflow.variables.update(variables)
+        pipeline.variables.update(variables)
 
     # Render templates if requested
     if render_templates:
-        workflow = render_workflow(workflow)
+        pipeline = render_pipeline(pipeline)
 
-    return workflow
+    return pipeline
 
 
-def parse_workflow_string(
+def parse_pipeline_string(
     content: str,
     variables: Optional[Dict[str, Any]] = None,
     render_templates: bool = True,
-) -> Workflow:
+) -> Pipeline:
     """
-    Parse a workflow from a TOML string.
+    Parse a pipeline from a TOML string.
 
     Args:
         content: TOML content string
@@ -313,7 +313,7 @@ def parse_workflow_string(
         render_templates: Whether to render Jinja2 templates
 
     Returns:
-        Parsed Workflow object
+        Parsed Pipeline object
     """
     if tomllib is None:
         raise ImportError(
@@ -321,30 +321,30 @@ def parse_workflow_string(
         )
 
     data = tomllib.loads(content)
-    workflow = Workflow.from_dict(data)
+    pipeline = Pipeline.from_dict(data)
 
     if variables:
-        workflow.variables.update(variables)
+        pipeline.variables.update(variables)
 
     if render_templates:
-        workflow = render_workflow(workflow)
+        pipeline = render_pipeline(pipeline)
 
-    return workflow
+    return pipeline
 
 
-def render_workflow(
-    workflow: Workflow,
+def render_pipeline(
+    pipeline: Pipeline,
     extra_variables: Optional[Dict[str, Any]] = None,
-) -> Workflow:
+) -> Pipeline:
     """
-    Render Jinja2 templates in workflow parameters.
+    Render Jinja2 templates in pipeline parameters.
 
     Args:
-        workflow: Workflow to render
+        pipeline: Pipeline to render
         extra_variables: Additional variables for rendering
 
     Returns:
-        New Workflow with rendered templates
+        New Pipeline with rendered templates
     """
     try:
         from jinja2 import BaseLoader, Environment, UndefinedError
@@ -352,17 +352,17 @@ def render_workflow(
         logger.warning(
             "Jinja2 not installed, skipping template rendering. Install with: pip install jinja2"
         )
-        return workflow
+        return pipeline
 
     # Combine variables
-    context = {**workflow.variables}
+    context = {**pipeline.variables}
     if extra_variables:
         context.update(extra_variables)
 
     # Add environment variables
     import os
 
-    for key, env_var in workflow.env.items():
+    for key, env_var in pipeline.env.items():
         context[key] = os.environ.get(env_var, "")
 
     # Create Jinja2 environment
@@ -385,7 +385,7 @@ def render_workflow(
 
     # Render each step
     rendered_steps = []
-    for step in workflow.steps:
+    for step in pipeline.steps:
         rendered_params = render_value(step.params)
         rendered_condition = None
         if step.condition and "{{" in step.condition:
@@ -398,7 +398,7 @@ def render_workflow(
             rendered_condition = step.condition
 
         rendered_steps.append(
-            WorkflowStep(
+            PipelineStep(
                 name=step.name,
                 action=step.action,
                 params=rendered_params,
@@ -413,63 +413,63 @@ def render_workflow(
             )
         )
 
-    return Workflow(
-        name=workflow.name,
-        description=workflow.description,
-        version=workflow.version,
+    return Pipeline(
+        name=pipeline.name,
+        description=pipeline.description,
+        version=pipeline.version,
         steps=rendered_steps,
-        variables=workflow.variables,
-        env=workflow.env,
-        imports=workflow.imports,
-        metadata=workflow.metadata,
-        source_path=workflow.source_path,
+        variables=pipeline.variables,
+        env=pipeline.env,
+        imports=pipeline.imports,
+        metadata=pipeline.metadata,
+        source_path=pipeline.source_path,
     )
 
 
-def workflow_to_toml(workflow: Workflow) -> str:
+def pipeline_to_toml(pipeline: Pipeline) -> str:
     """
-    Convert a Workflow to TOML string.
+    Convert a Pipeline to TOML string.
 
     Args:
-        workflow: Workflow to convert
+        pipeline: Pipeline to convert
 
     Returns:
         TOML string representation
     """
     lines = []
 
-    # Workflow section
-    lines.append("[workflow]")
-    lines.append(f'name = "{workflow.name}"')
-    if workflow.description:
-        lines.append(f'description = "{workflow.description}"')
-    lines.append(f'version = "{workflow.version}"')
+    # Pipeline section
+    lines.append("[pipeline]")
+    lines.append(f'name = "{pipeline.name}"')
+    if pipeline.description:
+        lines.append(f'description = "{pipeline.description}"')
+    lines.append(f'version = "{pipeline.version}"')
     lines.append("")
 
     # Variables section
-    if workflow.variables:
+    if pipeline.variables:
         lines.append("[variables]")
-        for key, value in workflow.variables.items():
+        for key, value in pipeline.variables.items():
             lines.append(_format_toml_value(key, value))
         lines.append("")
 
     # Environment section
-    if workflow.env:
+    if pipeline.env:
         lines.append("[env]")
-        for key, value in workflow.env.items():
+        for key, value in pipeline.env.items():
             lines.append(f'{key} = "{value}"')
         lines.append("")
 
     # Imports section
-    if workflow.imports:
+    if pipeline.imports:
         lines.append("imports = [")
-        for imp in workflow.imports:
+        for imp in pipeline.imports:
             lines.append(f'    "{imp}",')
         lines.append("]")
         lines.append("")
 
     # Steps section
-    for step in workflow.steps:
+    for step in pipeline.steps:
         lines.append("[[steps]]")
         lines.append(f'name = "{step.name}"')
         lines.append(f'action = "{step.action}"')

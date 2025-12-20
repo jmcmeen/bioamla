@@ -1,0 +1,51 @@
+# Audio preprocessing pipeline
+# Common preprocessing steps for bioacoustics analysis
+
+[pipeline]
+name = "audio_preprocessing"
+description = "Standard audio preprocessing for bioacoustics analysis"
+version = "1.0.0"
+author = "bioamla"
+
+[variables]
+input_dir = { type = "path", required = true, description = "Directory containing raw audio files" }
+output_dir = { type = "path", default = "./preprocessed", description = "Output directory for processed audio" }
+sample_rate = { type = "integer", default = 16000, description = "Target sample rate" }
+low_freq = { type = "integer", default = 500, description = "Low frequency cutoff (Hz)" }
+high_freq = { type = "integer", default = 10000, description = "High frequency cutoff (Hz)" }
+denoise_strength = { type = "float", default = 1.0, description = "Noise reduction strength (0-2)" }
+target_db = { type = "float", default = -20.0, description = "Target loudness in dBFS" }
+
+[[steps]]
+name = "resample"
+action = "audio.resample"
+description = "Resample to target sample rate"
+params = { input = "{{ input_dir }}", output = "{{ output_dir }}/step1_resampled", sample_rate = "{{ sample_rate }}" }
+
+[[steps]]
+name = "filter"
+action = "audio.filter"
+description = "Apply bandpass filter"
+depends_on = ["resample"]
+params = { input = "{{ output_dir }}/step1_resampled", output = "{{ output_dir }}/step2_filtered", bandpass = "{{ low_freq }},{{ high_freq }}" }
+
+[[steps]]
+name = "denoise"
+action = "audio.denoise"
+description = "Apply noise reduction"
+depends_on = ["filter"]
+params = { input = "{{ output_dir }}/step2_filtered", output = "{{ output_dir }}/step3_denoised", strength = "{{ denoise_strength }}" }
+
+[[steps]]
+name = "normalize"
+action = "audio.normalize"
+description = "Normalize audio levels"
+depends_on = ["denoise"]
+params = { input = "{{ output_dir }}/step3_denoised", output = "{{ output_dir }}/final", target_db = "{{ target_db }}" }
+
+[[steps]]
+name = "log_complete"
+action = "util.log"
+description = "Log completion"
+depends_on = ["normalize"]
+params = { message = "Preprocessing complete. Output in {{ output_dir }}/final" }

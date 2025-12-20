@@ -798,10 +798,17 @@ def ast_predict(
             workers=workers,
         )
     else:
-        from bioamla.core.detection.ast import wav_ast_inference
+        from bioamla.controllers.inference import InferenceController
 
-        prediction = wav_ast_inference(path, model_path, resample_freq)
-        click.echo(f"{prediction}")
+        controller = InferenceController(model_path=model_path)
+        result = controller.predict(filepath=path)
+
+        if not result.success:
+            click.echo(f"Error: {result.error}")
+            raise SystemExit(1)
+
+        for pred in result.data:
+            click.echo(f"{pred.predicted_label} ({pred.confidence:.4f})")
 
 
 def _run_batch_inference(
@@ -2912,48 +2919,48 @@ def audio_visualize(
 
 
 # =============================================================================
-# Workflow Command Group
+# Pipeline Command Group
 # =============================================================================
 
 
 @cli.group()
-def workflow():
-    """Workflow execution and management.
+def pipeline():
+    """Pipeline execution and management.
 
-    Workflows are TOML-based pipelines that define a sequence of operations
+    Pipelines are TOML-based definitions that define a sequence of operations
     to be executed on audio files. They support variables, dependencies,
     and can be exported to shell scripts.
     """
     pass
 
 
-@workflow.command("run")
-@click.argument("workflow_path", type=click.Path(exists=True))
+@pipeline.command("run")
+@click.argument("pipeline_path", type=click.Path(exists=True))
 @click.option(
     "--var",
     "-v",
     multiple=True,
-    help="Set workflow variable (format: key=value)",
+    help="Set pipeline variable (format: key=value)",
 )
 @click.option(
     "--validate/--no-validate",
     default=True,
-    help="Validate workflow before execution (default: yes)",
+    help="Validate pipeline before execution (default: yes)",
 )
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def workflow_run(workflow_path, var, validate, quiet):
-    """Execute a workflow from a TOML file.
+def pipeline_run(pipeline_path, var, validate, quiet):
+    """Execute a pipeline from a TOML file.
 
-    Runs all steps defined in the workflow file in the correct order,
+    Runs all steps defined in the pipeline file in the correct order,
     respecting dependencies between steps.
 
     Examples:
         bioamla workflow run preprocessing.toml
         bioamla workflow run analysis.toml -v input_dir=./audio -v output_dir=./results
     """
-    from bioamla.controllers.workflow import WorkflowController
+    from bioamla.controllers.pipeline import PipelineController
 
-    controller = WorkflowController()
+    controller = PipelineController()
 
     # Parse variables
     variables = {}
@@ -2964,21 +2971,80 @@ def workflow_run(workflow_path, var, validate, quiet):
         else:
             click.echo(f"Warning: Invalid variable format '{v}', expected key=value")
 
-    # Set up progress callback
+    # Set up progress callback with Rich progress bar
     if not quiet:
+        try:
+            from rich.console import Console
+            from rich.progress import (
+                BarColumn,
+                Progress,
+                SpinnerColumn,
+                TaskProgressColumn,
+                TextColumn,
+                TimeElapsedColumn,
+            )
 
-        def progress_callback(step_name, current, total, status):
-            click.echo(f"[{current}/{total}] {step_name}: {status}")
+            console = Console()
+            progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.fields[step_name]}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                TimeElapsedColumn(),
+                TextColumn("[dim]{task.fields[status]}"),
+                console=console,
+                transient=False,
+            )
 
-        controller.set_execution_progress_callback(progress_callback)
+            # Track progress state
+            progress_state = {"task_id": None, "started": False}
 
-    # Execute workflow
-    result = controller.execute(workflow_path, variables=variables, validate_first=validate)
+            def progress_callback(step_name, current, total, status):
+                if not progress_state["started"]:
+                    progress.start()
+                    progress_state["started"] = True
+                    progress_state["task_id"] = progress.add_task(
+                        "workflow", total=total, step_name=step_name, status=status
+                    )
+                else:
+                    progress.update(
+                        progress_state["task_id"],
+                        completed=current,
+                        step_name=step_name,
+                        status=status,
+                    )
+
+            controller.set_execution_progress_callback(progress_callback)
+
+            # Execute workflow
+            result = controller.execute(
+                pipeline_path, variables=variables, validate_first=validate
+            )
+
+            # Stop progress bar
+            if progress_state["started"]:
+                progress.stop()
+
+        except ImportError:
+            # Fallback to simple output if Rich not available
+
+            def progress_callback(step_name, current, total, status):
+                click.echo(f"[{current}/{total}] {step_name}: {status}")
+
+            controller.set_execution_progress_callback(progress_callback)
+            result = controller.execute(
+                pipeline_path, variables=variables, validate_first=validate
+            )
+    else:
+        # Quiet mode - no progress output
+        result = controller.execute(
+            pipeline_path, variables=variables, validate_first=validate
+        )
 
     if result.success:
         data = result.data
         click.echo()
-        click.echo("Workflow completed successfully")
+        click.echo("Pipeline completed successfully")
         click.echo(f"  Workflow: {data.workflow_name}")
         click.echo(f"  Status: {data.status}")
         click.echo(f"  Duration: {data.total_duration:.2f}s")
@@ -2986,38 +3052,38 @@ def workflow_run(workflow_path, var, validate, quiet):
         if data.steps_failed > 0:
             click.echo(f"  Steps failed: {data.steps_failed}")
     else:
-        click.echo(f"Workflow failed: {result.error}")
+        click.echo(f"Pipeline failed: {result.error}")
         raise SystemExit(1)
 
 
-@workflow.command("validate")
-@click.argument("workflow_path", type=click.Path(exists=True))
+@pipeline.command("validate")
+@click.argument("pipeline_path", type=click.Path(exists=True))
 @click.option("--strict", is_flag=True, help="Treat warnings as errors")
-def workflow_validate(workflow_path, strict):
-    """Validate a workflow TOML file.
+def pipeline_validate(pipeline_path, strict):
+    """Validate a pipeline TOML file.
 
-    Checks the workflow for syntax errors, missing dependencies,
+    Checks the pipeline for syntax errors, missing dependencies,
     unknown actions, and invalid parameters.
 
     Examples:
-        bioamla workflow validate my_workflow.toml
-        bioamla workflow validate my_workflow.toml --strict
+        bioamla workflow validate my_pipeline.toml
+        bioamla workflow validate my_pipeline.toml --strict
     """
-    from bioamla.controllers.workflow import WorkflowController
+    from bioamla.controllers.pipeline import PipelineController
 
-    controller = WorkflowController()
-    result = controller.validate(workflow_path, strict=strict)
+    controller = PipelineController()
+    result = controller.validate(pipeline_path, strict=strict)
 
     if result.success:
         data = result.data
         if data.valid:
-            click.echo("Workflow is valid")
+            click.echo("Pipeline is valid")
             if data.num_warnings > 0:
                 click.echo(f"\nWarnings ({data.num_warnings}):")
                 for warning in data.warnings:
                     click.echo(f"  - {warning}")
         else:
-            click.echo("Workflow validation failed")
+            click.echo("Pipeline validation failed")
             click.echo(f"\nErrors ({data.num_errors}):")
             for error in data.errors:
                 click.echo(f"  - {error}")
@@ -3031,46 +3097,46 @@ def workflow_validate(workflow_path, strict):
         raise SystemExit(1)
 
 
-@workflow.command("export")
-@click.argument("workflow_path", type=click.Path(exists=True))
+@pipeline.command("export")
+@click.argument("pipeline_path", type=click.Path(exists=True))
 @click.option("--output", "-o", required=True, help="Output shell script path")
 @click.option("--quiet", is_flag=True, help="Suppress output")
-def workflow_export(workflow_path, output, quiet):
-    """Export a workflow to a shell script.
+def pipeline_export(pipeline_path, output, quiet):
+    """Export a pipeline to a shell script.
 
-    Converts the workflow TOML file to an executable shell script
+    Converts the pipeline TOML file to an executable shell script
     that can be run without bioamla installed.
 
     Examples:
         bioamla workflow export preprocessing.toml -o run_preprocessing.sh
     """
-    from bioamla.controllers.workflow import WorkflowController
+    from bioamla.controllers.pipeline import PipelineController
 
-    controller = WorkflowController()
-    result = controller.export_to_shell(workflow_path, output_path=output)
+    controller = PipelineController()
+    result = controller.export_to_shell(pipeline_path, output_path=output)
 
     if result.success:
         if not quiet:
-            click.echo(f"Exported workflow to: {output}")
+            click.echo(f"Exported pipeline to: {output}")
     else:
         click.echo(f"Export failed: {result.error}")
         raise SystemExit(1)
 
 
-@workflow.command("list-actions")
-def workflow_list_actions():
-    """List all available workflow actions.
+@pipeline.command("list-actions")
+def pipeline_list_actions():
+    """List all available pipeline actions.
 
-    Shows the actions that can be used in workflow step definitions.
+    Shows the actions that can be used in pipeline step definitions.
     """
-    from bioamla.controllers.workflow import WorkflowController
+    from bioamla.controllers.pipeline import PipelineController
 
-    controller = WorkflowController()
+    controller = PipelineController()
     result = controller.list_actions()
 
     if result.success:
         actions = sorted(result.data)
-        click.echo("Available Workflow Actions")
+        click.echo("Available Pipeline Actions")
         click.echo("=" * 50)
 
         # Group by category
@@ -3093,21 +3159,21 @@ def workflow_list_actions():
         raise SystemExit(1)
 
 
-@workflow.command("example")
+@pipeline.command("example")
 @click.option("--output", "-o", default=None, help="Output file path (default: stdout)")
-def workflow_example(output):
-    """Show an example workflow TOML file.
+def pipeline_example(output):
+    """Show an example pipeline TOML file.
 
-    Displays a sample workflow that demonstrates the workflow format
+    Displays a sample workflow that demonstrates the pipeline format
     and available options.
 
     Examples:
         bioamla workflow example                   # Print to stdout
-        bioamla workflow example -o my_workflow.toml  # Save to file
+        bioamla workflow example -o my_pipeline.toml  # Save to file
     """
-    from bioamla.controllers.workflow import WorkflowController
+    from bioamla.controllers.pipeline import PipelineController
 
-    controller = WorkflowController()
+    controller = PipelineController()
     result = controller.get_example_workflow()
 
     if result.success:
@@ -3115,11 +3181,71 @@ def workflow_example(output):
             from pathlib import Path
 
             Path(output).write_text(result.data)
-            click.echo(f"Example workflow saved to: {output}")
+            click.echo(f"Example pipeline saved to: {output}")
         else:
             click.echo(result.data)
     else:
         click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+
+@pipeline.command("templates")
+def pipeline_templates():
+    """List available pipeline templates.
+
+    Shows all built-in pipeline templates that can be used as starting
+    points for your own workflows.
+
+    Examples:
+        bioamla pipeline templates
+    """
+    from bioamla._internal.pipelines import list_pipeline_templates
+
+    templates = list_pipeline_templates()
+
+    if not templates:
+        click.echo("No pipeline templates found.")
+        return
+
+    click.echo("Available pipeline templates:\n")
+    for template in templates:
+        click.echo(f"  {template['name']}")
+        if template["description"]:
+            click.echo(f"    {template['description']}")
+        click.echo()
+
+    click.echo(f"Use 'bioamla pipeline template <name>' to view a template")
+    click.echo(f"Use 'bioamla pipeline template <name> -o file.toml' to copy")
+
+
+@pipeline.command("template")
+@click.argument("name")
+@click.option("--output", "-o", default=None, help="Output file path (default: stdout)")
+def pipeline_template(name, output):
+    """View or copy a workflow template.
+
+    Displays a built-in workflow template that can be customized for your needs.
+
+    Examples:
+        bioamla workflow template bird_detection
+        bioamla workflow template audio_preprocessing -o my_pipeline.toml
+    """
+    from pathlib import Path
+
+    from bioamla._internal.pipelines import get_pipeline_template
+
+    try:
+        content = get_pipeline_template(name)
+
+        if output:
+            Path(output).write_text(content)
+            click.echo(f"Pipeline template '{name}' saved to: {output}")
+        else:
+            click.echo(content)
+
+    except FileNotFoundError:
+        click.echo(f"Template not found: {name}")
+        click.echo("Use 'bioamla pipeline templates' to list available templates")
         raise SystemExit(1)
 
 
@@ -3216,7 +3342,7 @@ def inat_download(
     quiet: bool,
 ):
     """Download audio observations from iNaturalist."""
-    from bioamla.core.services.inaturalist import download_inat_audio
+    from bioamla.controllers.inaturalist import INaturalistController
 
     taxon_ids_list = None
     if taxon_ids:
@@ -3230,7 +3356,8 @@ def inat_download(
     if sound_license:
         sound_license_list = [lic.strip() for lic in sound_license.split(",")]
 
-    stats = download_inat_audio(
+    controller = INaturalistController()
+    result = controller.download(
         output_dir=output_dir,
         taxon_ids=taxon_ids_list,
         taxon_csv=taxon_csv,
@@ -3244,14 +3371,22 @@ def inat_download(
         d2=end_date,
         obs_per_taxon=obs_per_taxon,
         organize_by_taxon=organize_by_taxon,
-        include_inat_metadata=include_inat_metadata,
+        include_metadata=include_inat_metadata,
         file_extensions=extensions_list,
-        delay_between_downloads=delay,
-        verbose=not quiet,
     )
 
-    if quiet:
-        click.echo(f"Downloaded {stats['total_sounds']} audio files to {stats['output_dir']}")
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    if not quiet:
+        click.echo(f"Downloaded {result.data.total_sounds} audio files to {result.data.output_dir}")
+        if result.data.skipped_existing > 0:
+            click.echo(f"  Skipped {result.data.skipped_existing} existing files")
+        if result.data.failed_downloads > 0:
+            click.echo(f"  Failed: {result.data.failed_downloads}")
+    else:
+        click.echo(f"Downloaded {result.data.total_sounds} audio files to {result.data.output_dir}")
 
 
 @services_inat.command("search")
@@ -3282,14 +3417,15 @@ def inat_search(
     quiet: bool,
 ):
     """Search for iNaturalist observations."""
-    from bioamla.core.services.inaturalist import search_inat_sounds
+    from bioamla.controllers.inaturalist import INaturalistController
 
     if not species and not taxon_id and not place_id and not project_id:
         raise click.UsageError(
             "At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)"
         )
 
-    results = search_inat_sounds(
+    controller = INaturalistController()
+    result = controller.search(
         taxon_id=taxon_id,
         taxon_name=species,
         place_id=place_id,
@@ -3297,7 +3433,12 @@ def inat_search(
         per_page=limit,
     )
 
-    if not results:
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    observations = result.data.observations
+    if not observations:
         click.echo("No observations found matching the search criteria.")
         return
 
@@ -3316,7 +3457,7 @@ def inat_search(
             ]
             writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
             writer.writeheader()
-            for obs in results:
+            for obs in observations:
                 taxon = obs.get("taxon", {})
                 observed_on_raw = obs.get("observed_on", "")
                 if hasattr(observed_on_raw, "strftime"):
@@ -3334,12 +3475,12 @@ def inat_search(
                         "url": f"https://www.inaturalist.org/observations/{obs.get('id')}",
                     }
                 )
-        click.echo(f"Saved {len(results)} observations to {output}")
+        click.echo(f"Saved {len(observations)} observations to {output}")
     else:
-        click.echo(f"\nFound {len(results)} observations with sounds:\n")
+        click.echo(f"\nFound {len(observations)} observations with sounds:\n")
         click.echo(f"{'ID':<12} {'Species':<30} {'Sounds':<8} {'Date':<12} {'Location':<30}")
         click.echo("-" * 95)
-        for obs in results:
+        for obs in observations:
             taxon = obs.get("taxon", {})
             obs_id = obs.get("id", "")
             name = taxon.get("name", "Unknown")[:28]
@@ -3361,27 +3502,34 @@ def inat_stats(project_id: str, output: str, quiet: bool):
     """Get statistics for an iNaturalist project."""
     import json
 
-    from bioamla.core.services.inaturalist import get_project_stats
+    from bioamla.controllers.inaturalist import INaturalistController
 
-    stats = get_project_stats(project_id=project_id, verbose=not quiet)
+    controller = INaturalistController()
+    result = controller.get_project_stats(project_id=project_id)
+
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    stats = result.data
 
     if output:
         with TextFile(output, mode="w", encoding="utf-8") as f:
-            json.dump(stats, f.handle, indent=2)
+            json.dump(stats.to_dict(), f.handle, indent=2)
         click.echo(f"Saved project stats to {output}")
     elif quiet:
-        click.echo(json.dumps(stats, indent=2))
+        click.echo(json.dumps(stats.to_dict(), indent=2))
     else:
-        click.echo(f"\nProject: {stats['title']}")
-        click.echo(f"URL: {stats['url']}")
-        click.echo(f"Type: {stats['project_type']}")
-        if stats["place"]:
-            click.echo(f"Place: {stats['place']}")
-        click.echo(f"Created: {stats['created_at']}")
+        click.echo(f"\nProject: {stats.title}")
+        click.echo(f"URL: {stats.url}")
+        click.echo(f"Type: {stats.project_type}")
+        if stats.place:
+            click.echo(f"Place: {stats.place}")
+        click.echo(f"Created: {stats.created_at}")
         click.echo("\nStatistics:")
-        click.echo(f"  Observations: {stats['observation_count']}")
-        click.echo(f"  Species: {stats['species_count']}")
-        click.echo(f"  Observers: {stats['observers_count']}")
+        click.echo(f"  Observations: {stats.observation_count}")
+        click.echo(f"  Species: {stats.species_count}")
+        click.echo(f"  Observers: {stats.observers_count}")
 
 
 # =============================================================================
@@ -4747,7 +4895,9 @@ def indices():
 @click.option("--bio-max-freq", default=8000.0, type=float, help="BIO maximum frequency (Hz)")
 @click.option("--db-threshold", default=-50.0, type=float, help="dB threshold for ADI/AEI")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@click.pass_context
 def indices_compute(
+    ctx,
     path,
     output,
     output_format,
@@ -4773,11 +4923,12 @@ def indices_compute(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.core.analysis.indices import batch_compute_indices, compute_indices_from_file
+    from bioamla.controllers.audio_file import AudioFileController
+    from bioamla.controllers.indices import IndicesController
 
     path_obj = PathLib(path)
 
-    # Build kwargs
+    # Build kwargs for index calculations
     kwargs = {
         "n_fft": n_fft,
         "aci_min_freq": aci_min_freq,
@@ -4788,28 +4939,49 @@ def indices_compute(
     if aci_max_freq:
         kwargs["aci_max_freq"] = aci_max_freq
 
-    if path_obj.is_file():
-        # Single file
-        try:
-            indices_result = compute_indices_from_file(path_obj, **kwargs)
-            # Build result with filepath first, success last for better CSV column order
-            result = {"filepath": str(path_obj)}
-            result.update(indices_result.to_dict())
-            result["success"] = True
-            results = [result]
-        except Exception as e:
-            click.echo(f"Error processing {path}: {e}")
-            raise SystemExit(1) from e
-    else:
-        # Directory - find audio files
-        audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
-        files = [f for f in path_obj.rglob("*") if f.suffix.lower() in audio_extensions]
+    # Get project path from context for stateful mode
+    project_path = ctx.obj.project_path if ctx.obj else None
+    indices_ctrl = IndicesController()
 
-        if not files:
-            click.echo(f"No audio files found in {path}")
+    if path_obj.is_file():
+        # Single file mode - use controller
+        file_ctrl = AudioFileController(project_path=project_path)
+        load_result = file_ctrl.open(str(path_obj))
+
+        if not load_result.success:
+            click.echo(f"Error loading {path}: {load_result.error}")
             raise SystemExit(1)
 
-        results = batch_compute_indices(files, verbose=not quiet, **kwargs)
+        calc_result = indices_ctrl.calculate(load_result.data, include_entropy=True, **kwargs)
+
+        if not calc_result.success:
+            click.echo(f"Error computing indices: {calc_result.error}")
+            raise SystemExit(1)
+
+        result = {"filepath": str(path_obj)}
+        result.update(calc_result.data.to_dict())
+        result["success"] = True
+        results = [result]
+    else:
+        # Directory - use batch processing
+        batch_result = indices_ctrl.calculate_batch(
+            str(path_obj),
+            output_path=output if output else None,
+            recursive=True,
+            include_entropy=True,
+            **kwargs,
+        )
+
+        if not batch_result.success:
+            click.echo(f"Error: {batch_result.error}")
+            raise SystemExit(1)
+
+        results = batch_result.data.results
+
+        # If output was specified and saved by controller, inform user
+        if output and batch_result.data.output_path:
+            click.echo(f"Results saved to {batch_result.data.output_path}")
+            return
 
     # Filter successful results for output
     successful = [r for r in results if r.get("success", False)]
@@ -4843,9 +5015,10 @@ def indices_compute(
                 click.echo(f"  AEI:  {r['aei']:.3f}")
                 click.echo(f"  BIO:  {r['bio']:.2f}")
                 click.echo(f"  NDSI: {r['ndsi']:.3f}")
-                if r.get("anthrophony"):
-                    click.echo(f"  Anthrophony: {r['anthrophony']:.2f}")
-                    click.echo(f"  Biophony: {r['biophony']:.2f}")
+                if r.get("h_spectral"):
+                    click.echo(f"  H (spectral): {r['h_spectral']:.3f}")
+                if r.get("h_temporal"):
+                    click.echo(f"  H (temporal): {r['h_temporal']:.3f}")
             else:
                 click.echo(
                     f"\n{r.get('filepath', 'Unknown')}: Error - {r.get('error', 'Unknown error')}"
@@ -4870,7 +5043,8 @@ def indices_compute(
     help="Output format",
 )
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def indices_temporal(path, window, hop, output, output_format, quiet):
+@click.pass_context
+def indices_temporal(ctx, path, window, hop, output, output_format, quiet):
     """Compute acoustic indices over time windows.
 
     Useful for analyzing how soundscape characteristics change over time
@@ -4882,29 +5056,39 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
     """
     import json as json_lib
 
-    import librosa
+    from bioamla.controllers.audio_file import AudioFileController
+    from bioamla.controllers.indices import IndicesController
 
-    from bioamla.core.analysis.indices import temporal_indices
+    # Get project path from context for stateful mode
+    project_path = ctx.obj.project_path if ctx.obj else None
+    file_ctrl = AudioFileController(project_path=project_path)
+    indices_ctrl = IndicesController()
 
-    try:
-        audio, sample_rate = librosa.load(path, sr=None, mono=True)
-    except Exception as e:
-        click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1) from e
+    # Load audio using controller
+    load_result = file_ctrl.open(path)
+    if not load_result.success:
+        click.echo(f"Error loading audio: {load_result.error}")
+        raise SystemExit(1)
 
-    duration = len(audio) / sample_rate
+    audio_data = load_result.data
 
     if not quiet:
         click.echo(f"Processing {path}")
-        click.echo(f"Duration: {duration:.1f}s, Sample rate: {sample_rate} Hz")
+        click.echo(f"Duration: {audio_data.duration:.1f}s, Sample rate: {audio_data.sample_rate} Hz")
         click.echo(f"Window: {window}s, Hop: {hop or window}s")
 
-    results = temporal_indices(
-        audio,
-        sample_rate,
+    # Calculate temporal indices using controller
+    temporal_result = indices_ctrl.calculate_temporal(
+        audio_data,
         window_duration=window,
         hop_duration=hop,
     )
+
+    if not temporal_result.success:
+        click.echo(f"Error: {temporal_result.error}")
+        raise SystemExit(1)
+
+    results = temporal_result.data.windows
 
     if not results:
         click.echo("No complete windows in recording (audio shorter than window duration)")
@@ -6690,9 +6874,9 @@ def models_ensemble(model_dirs, output: str, strategy: str, weights):
 
 @cli.group()
 def examples():
-    """Access example workflow scripts.
+    """Access example pipeline scripts.
 
-    Example workflows demonstrate bioamla capabilities and can be copied
+    Example pipelines demonstrate bioamla capabilities and can be copied
     to your project directory for customization.
 
     \b
@@ -6707,7 +6891,7 @@ def examples():
 
 @examples.command("list")
 def examples_list():
-    """List all available example workflows."""
+    """List all available example pipelines."""
     from rich.table import Table
 
     from bioamla._internal.examples import list_examples
@@ -6729,7 +6913,7 @@ def examples_list():
 @examples.command("show")
 @click.argument("example_id")
 def examples_show(example_id: str):
-    """Show the content of an example workflow.
+    """Show the content of an example pipeline.
 
     EXAMPLE_ID: The example ID (e.g., 00, 01, 02) or filename
     """
@@ -6759,7 +6943,7 @@ def examples_show(example_id: str):
 @click.argument("output_dir", type=click.Path())
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing files")
 def examples_copy(example_id: str, output_dir: str, force: bool):
-    """Copy an example workflow to a directory.
+    """Copy an example pipeline to a directory.
 
     EXAMPLE_ID: The example ID (e.g., 00, 01, 02)
     OUTPUT_DIR: Directory to copy the example to
@@ -6791,7 +6975,7 @@ def examples_copy(example_id: str, output_dir: str, force: bool):
 @click.argument("output_dir", type=click.Path())
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing files")
 def examples_copy_all(output_dir: str, force: bool):
-    """Copy all example workflows to a directory.
+    """Copy all example pipelines to a directory.
 
     OUTPUT_DIR: Directory to copy examples to
     """

@@ -1,16 +1,16 @@
 """
-Workflow Package
+Pipeline Package
 ================
 
-TOML-based workflow definitions and execution engine.
+TOML-based pipeline definitions and execution engine.
 
 This package provides:
 - PipelineStep: Base class for defining pipeline steps
 - Step utilities: TransformStep, BranchStep, PassthroughStep
 - Step status tracking and result handling
-- Workflow: TOML workflow definition parser
-- WorkflowEngine: Workflow execution engine
-- WorkflowValidator: Schema validation
+- Pipeline: TOML pipeline definition parser
+- PipelineEngine: Pipeline execution engine
+- PipelineValidator: Schema validation
 """
 
 from .engine import (
@@ -18,15 +18,15 @@ from .engine import (
     ExecutionResult,
     ExecutionStatus,
     StepExecutionResult,
-    WorkflowEngine,
+    PipelineEngine,
 )
 from .parser import (
-    Workflow,
-    WorkflowStep,
-    parse_workflow,
-    parse_workflow_string,
-    render_workflow,
-    workflow_to_toml,
+    Pipeline,
+    PipelineStep,
+    parse_pipeline,
+    parse_pipeline_string,
+    render_pipeline,
+    pipeline_to_toml,
 )
 from .step import (
     BranchStep,
@@ -40,8 +40,8 @@ from .step import (
 from .validator import (
     ValidationError,
     ValidationResult,
-    WorkflowValidator,
-    validate_workflow,
+    PipelineValidator,
+    validate_pipeline,
 )
 
 __all__ = [
@@ -54,22 +54,22 @@ __all__ = [
     "PassthroughStep",
     "TransformStep",
     "BranchStep",
-    # TOML workflow parser
-    "Workflow",
-    "WorkflowStep",
-    "parse_workflow",
-    "parse_workflow_string",
-    "render_workflow",
-    "workflow_to_toml",
-    # Workflow engine
-    "WorkflowEngine",
+    # TOML pipeline parser
+    "Pipeline",
+    "PipelineStep",
+    "parse_pipeline",
+    "parse_pipeline_string",
+    "render_pipeline",
+    "pipeline_to_toml",
+    # Pipeline engine
+    "PipelineEngine",
     "ExecutionResult",
     "StepExecutionResult",
     "ExecutionStatus",
     "ExecutionContext",
     # Validation
-    "WorkflowValidator",
+    "PipelineValidator",
     "ValidationResult",
     "ValidationError",
-    "validate_workflow",
+    "validate_pipeline",
 ]
