@@ -183,8 +183,9 @@ class TestAudioFileControllerUndoRedo:
     """Tests for undo/redo functionality."""
 
     @pytest.fixture
-    def controller(self):
-        return AudioFileController()
+    def controller(self, tmp_path):
+        # Undo/redo requires stateful mode (project_path)
+        return AudioFileController(project_path=str(tmp_path))
 
     def test_undo_after_save(self, controller, sample_audio_data, tmp_path):
         """Test that undo removes a saved file."""
@@ -340,3 +341,40 @@ class TestWriteWithTransform:
 
         assert result.success is False
         assert "does not exist" in result.error
+
+
+class TestAudioFileControllerStatelessMode:
+    """Tests for stateless mode behavior (no project_path)."""
+
+    @pytest.fixture
+    def controller(self):
+        # Stateless controller (no project_path)
+        return AudioFileController()
+
+    def test_undo_fails_in_stateless_mode(self, controller, sample_audio_data, tmp_path):
+        """Test that undo fails when not in stateful mode."""
+        # Save works in stateless mode
+        output_path = tmp_path / "output.wav"
+        save_result = controller.save(sample_audio_data, str(output_path))
+        assert save_result.success is True
+        assert output_path.exists()
+
+        # But undo fails
+        result = controller.undo()
+        assert result.success is False
+        assert "--project" in result.error
+
+    def test_redo_fails_in_stateless_mode(self, controller):
+        """Test that redo fails when not in stateful mode."""
+        result = controller.redo()
+        assert result.success is False
+        assert "--project" in result.error
+
+    def test_is_stateful_false(self, controller):
+        """Test that is_stateful returns False without project_path."""
+        assert controller.is_stateful is False
+
+    def test_is_stateful_true_with_project(self, tmp_path):
+        """Test that is_stateful returns True with project_path."""
+        controller = AudioFileController(project_path=str(tmp_path))
+        assert controller.is_stateful is True
