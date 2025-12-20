@@ -12,6 +12,7 @@ Supported augmentations:
 - pitch-shift: Pitch shifting (change pitch without speed change)
 - gain: Random gain adjustment
 """
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -298,7 +299,7 @@ def batch_augment(
                 stem = rel_path.stem
                 suffix = ".wav"  # Always output as WAV
                 if config.multiply > 1:
-                    out_name = f"{stem}_aug{i+1}{suffix}"
+                    out_name = f"{stem}_aug{i + 1}{suffix}"
                 else:
                     out_name = f"{stem}_aug{suffix}"
 
@@ -324,7 +325,9 @@ def batch_augment(
                 print(f"  Failed: {audio_path} - {e}")
 
     if verbose:
-        print(f"Processed {files_processed} files, created {files_created} augmented files, {files_failed} failed")
+        print(
+            f"Processed {files_processed} files, created {files_created} augmented files, {files_failed} failed"
+        )
 
     return {
         "files_processed": files_processed,

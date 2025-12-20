@@ -9,12 +9,12 @@ Detection domain for bioacoustic analysis including:
 """
 
 from bioamla.core.detection.detectors import (
+    AcceleratingPatternDetector,
+    BandLimitedEnergyDetector,
+    CWTPeakDetector,
     Detection,
     PeakDetection,
-    BandLimitedEnergyDetector,
     RibbitDetector,
-    CWTPeakDetector,
-    AcceleratingPatternDetector,
     batch_detect,
     export_detections,
 )

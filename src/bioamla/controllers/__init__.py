@@ -49,14 +49,36 @@ Usage:
     # Undo the save
     file_ctrl.undo()
 """
-from .base import BaseController, ControllerResult
-from .audio import AudioController  # Legacy controller for CLI compatibility
-from .audio_file import AudioFileController, AudioData
-from .audio_transform import AudioTransformController
-from .inference import InferenceController
-from .pipeline import PipelineController, PipelineResult, PipelineProgress
-from .indices import IndicesController, IndicesResult, BatchIndicesResult
+
 from .annotation_controller import AnnotationController, AnnotationResult, ClipExtractionResult
+from .audio import AudioController  # Legacy controller for CLI compatibility
+from .audio_file import AudioData, AudioFileController
+from .audio_transform import AudioTransformController
+from .base import BaseController, ControllerResult
+from .clustering import ClusteringController
+from .embedding import EmbeddingController
+from .inaturalist import (
+    INaturalistController,
+    SearchResult as INatSearchResult,
+    DownloadResult as INatDownloadResult,
+    TaxonInfo,
+    ProjectStats as INatProjectStats,
+    ObservationInfo,
+)
+from .indices import BatchIndicesResult, IndicesController, IndicesResult
+from .inference import InferenceController
+from .pipeline import PipelineController, PipelineProgress, PipelineResult
+from .project import (
+    ProjectController,
+    ProjectSummary,
+    ProjectStatistics,
+    ConfigSummary,
+    ModelInfo,
+    DatasetInfo,
+    RunInfo,
+)
+from .ribbit import RibbitController, DetectionSummary, BatchDetectionSummary
+from .workflow import WorkflowController, WorkflowSummary, ExecutionSummary, ValidationSummary
 
 __all__ = [
     # Base
@@ -73,10 +95,36 @@ __all__ = [
     "ClipExtractionResult",
     # ML
     "InferenceController",
+    "EmbeddingController",
+    "ClusteringController",
+    # Detection
+    "RibbitController",
+    "DetectionSummary",
+    "BatchDetectionSummary",
+    # iNaturalist
+    "INaturalistController",
+    "INatSearchResult",
+    "INatDownloadResult",
+    "TaxonInfo",
+    "INatProjectStats",
+    "ObservationInfo",
     # Pipeline
     "PipelineController",
     "PipelineResult",
     "PipelineProgress",
+    # Project
+    "ProjectController",
+    "ProjectSummary",
+    "ProjectStatistics",
+    "ConfigSummary",
+    "ModelInfo",
+    "DatasetInfo",
+    "RunInfo",
+    # Workflow
+    "WorkflowController",
+    "WorkflowSummary",
+    "ExecutionSummary",
+    "ValidationSummary",
     # Analysis
     "IndicesController",
     "IndicesResult",

@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import soundfile as sf
@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Data Structures
 # =============================================================================
+
 
 @dataclass
 class AudioInfo:
@@ -27,6 +28,7 @@ class AudioInfo:
         format: Audio format (e.g., 'WAV', 'FLAC')
         subtype: Audio subtype (e.g., 'PCM_16')
     """
+
     duration: float
     sample_rate: int
     channels: int
@@ -61,6 +63,7 @@ class AmplitudeStats:
         crest_factor: Peak to RMS ratio (in dB)
         dynamic_range: Difference between peak and RMS in dB
     """
+
     rms: float
     rms_db: float
     peak: float
@@ -95,6 +98,7 @@ class FrequencyStats:
         spectral_centroid: Spectral centroid (center of mass) in Hz
         spectral_rolloff: Frequency below which 85% of energy is contained
     """
+
     peak_frequency: float
     peak_magnitude: float
     mean_frequency: float
@@ -131,6 +135,7 @@ class SilenceInfo:
         sound_segments: List of (start_time, end_time) tuples for non-silent regions
         threshold_used: The amplitude threshold used for detection
     """
+
     is_silent: bool
     silence_ratio: float
     sound_ratio: float
@@ -162,6 +167,7 @@ class AudioAnalysis:
         frequency: Frequency statistics
         silence: Silence detection results
     """
+
     file_path: str
     info: AudioInfo
     amplitude: AmplitudeStats
@@ -178,11 +184,11 @@ class AudioAnalysis:
             "silence": self.silence.to_dict(),
         }
 
-   
 
 # =============================================================================
 # Basic Audio Information
 # =============================================================================
+
 
 def get_audio_info(filepath: str) -> AudioInfo:
     """
@@ -283,6 +289,7 @@ def get_channels(filepath: str) -> int:
 # Amplitude Analysis
 # =============================================================================
 
+
 def calculate_rms(audio: np.ndarray) -> float:
     """
     Calculate the Root Mean Square (RMS) amplitude of audio.
@@ -304,7 +311,7 @@ def calculate_rms(audio: np.ndarray) -> float:
     if audio.ndim > 1:
         audio = audio.flatten()
 
-    return float(np.sqrt(np.mean(audio ** 2)))
+    return float(np.sqrt(np.mean(audio**2)))
 
 
 def calculate_dbfs(amplitude: float, reference: float = 1.0) -> float:
@@ -388,6 +395,7 @@ def get_amplitude_stats(audio: np.ndarray) -> AmplitudeStats:
 # =============================================================================
 # Frequency Analysis
 # =============================================================================
+
 
 def get_peak_frequency(
     audio: np.ndarray,
@@ -519,7 +527,7 @@ def get_frequency_stats(
         spectral_centroid = 0.0
 
     # Mean frequency (weighted by power)
-    power = magnitude ** 2
+    power = magnitude**2
     total_power = np.sum(power)
     if total_power > 0:
         mean_freq = float(np.sum(frequencies * power) / total_power)
@@ -550,6 +558,7 @@ def get_frequency_stats(
 # =============================================================================
 # Silence Detection
 # =============================================================================
+
 
 def detect_silence(
     audio: np.ndarray,
@@ -608,7 +617,7 @@ def detect_silence(
         start = i * hop_length
         end = start + frame_length
         frame = audio[start:end]
-        frame_rms[i] = np.sqrt(np.mean(frame ** 2))
+        frame_rms[i] = np.sqrt(np.mean(frame**2))
 
     # Determine which frames are silent
     is_silent_frame = frame_rms < threshold_linear
@@ -700,6 +709,7 @@ def is_silent(
 # Complete Analysis
 # =============================================================================
 
+
 def analyze_audio(
     filepath: str,
     silence_threshold_db: float = -40,
@@ -732,7 +742,7 @@ def analyze_audio(
     info = get_audio_info(filepath)
 
     # Load audio
-    audio, sr = sf.read(filepath, dtype='float32')
+    audio, sr = sf.read(filepath, dtype="float32")
 
     # Analyze
     amplitude = get_amplitude_stats(audio)
@@ -771,11 +781,11 @@ def analyze_audio_batch(
             analysis = analyze_audio(filepath, silence_threshold_db)
             results.append(analysis)
             if verbose:
-                print(f"[{i+1}/{len(filepaths)}] Analyzed: {filepath}")
+                print(f"[{i + 1}/{len(filepaths)}] Analyzed: {filepath}")
         except Exception as e:
             logger.warning(f"Error analyzing {filepath}: {e}")
             if verbose:
-                print(f"[{i+1}/{len(filepaths)}] Error: {filepath} - {e}")
+                print(f"[{i + 1}/{len(filepaths)}] Error: {filepath} - {e}")
 
     return results
 

@@ -7,22 +7,20 @@ Supports training OpenSoundscape-style models with various backbone
 architectures.
 """
 
-import csv
 import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.optim import Adam, AdamW, SGD
+from torch.optim import SGD, Adam, AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau, StepLR
 from torch.utils.data import DataLoader, Dataset
 
 from bioamla.core.files import TextFile
-from bioamla.core.ml.base import BaseAudioModel, ModelConfig
 
 
 @dataclass
@@ -164,7 +162,7 @@ class SpectrogramDataset(Dataset):
                 start = np.random.randint(0, waveform.shape[1] - target_samples)
             else:
                 start = 0
-            waveform = waveform[:, start:start + target_samples]
+            waveform = waveform[:, start : start + target_samples]
         elif waveform.shape[1] < target_samples:
             padding = target_samples - waveform.shape[1]
             waveform = torch.nn.functional.pad(waveform, (0, padding))
@@ -194,7 +192,9 @@ class SpectrogramDataset(Dataset):
         mel_spec_db = db_transform(mel_spec)
 
         # Normalize
-        mel_spec_db = (mel_spec_db - mel_spec_db.min()) / (mel_spec_db.max() - mel_spec_db.min() + 1e-8)
+        mel_spec_db = (mel_spec_db - mel_spec_db.min()) / (
+            mel_spec_db.max() - mel_spec_db.min() + 1e-8
+        )
 
         # Resize to standard size
         mel_spec_db = torch.nn.functional.interpolate(
@@ -234,8 +234,7 @@ class ModelTrainer:
         """
         self.config = config
         self.device = torch.device(
-            config.device if config.device else
-            ("cuda" if torch.cuda.is_available() else "cpu")
+            config.device if config.device else ("cuda" if torch.cuda.is_available() else "cpu")
         )
 
         self.model: Optional[nn.Module] = None
@@ -594,7 +593,9 @@ def train_model(
         if verbose:
             val_info = ""
             if metrics.val_loss > 0:
-                val_info = f", val_loss: {metrics.val_loss:.4f}, val_acc: {metrics.val_accuracy:.4f}"
+                val_info = (
+                    f", val_loss: {metrics.val_loss:.4f}, val_acc: {metrics.val_accuracy:.4f}"
+                )
             print(
                 f"Epoch {epoch}/{total} - "
                 f"loss: {metrics.train_loss:.4f}, acc: {metrics.train_accuracy:.4f}"

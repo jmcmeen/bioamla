@@ -9,14 +9,15 @@ and processing audio data for machine learning applications.
 These utilities form the core audio processing pipeline used throughout the
 bioamla package for preparing audio data for model training and inference.
 """
+
 import io
 
 import torch
 import torchaudio
-from bioamla.core.utils import get_files_by_extension
 from torchaudio.transforms import Resample
 
 from bioamla.core.ml.config import DefaultConfig
+from bioamla.core.utils import get_files_by_extension
 
 
 def get_wav_info(filepath: str):
@@ -32,6 +33,7 @@ def get_wav_info(filepath: str):
     """
     return torchaudio.info(filepath)
 
+
 def get_wav_files(directory: str) -> list:
     """
     Get a list of all WAV files in a directory.
@@ -42,7 +44,8 @@ def get_wav_files(directory: str) -> list:
     Returns:
         list: List of file paths for all WAV files found
     """
-    return get_files_by_extension(directory, ['.wav'])
+    return get_files_by_extension(directory, [".wav"])
+
 
 def get_wavefile_shape(wavefile_path: str):
     """
@@ -57,6 +60,7 @@ def get_wavefile_shape(wavefile_path: str):
     waveform, _ = torchaudio.load(wavefile_path)
     return waveform.shape
 
+
 def get_wavefile_sample_rate(wavefile_path: str):
     """
     Get the sample rate of an audio file.
@@ -69,6 +73,7 @@ def get_wavefile_sample_rate(wavefile_path: str):
     """
     _, sample_rate = torchaudio.load(wavefile_path)
     return sample_rate
+
 
 def load_waveform_tensor(filepath: str):
     """
@@ -85,7 +90,10 @@ def load_waveform_tensor(filepath: str):
     waveform, sample_rate = torchaudio.load(filepath)
     return (waveform, sample_rate)
 
-def split_waveform_tensor(waveform_tensor: torch.Tensor, freq: int, segment_duration: int, segment_overlap: int):
+
+def split_waveform_tensor(
+    waveform_tensor: torch.Tensor, freq: int, segment_duration: int, segment_overlap: int
+):
     """
     Split a waveform tensor into overlapping segments.
 
@@ -108,10 +116,11 @@ def split_waveform_tensor(waveform_tensor: torch.Tensor, freq: int, segment_dura
     segments = []
     start = 0
     while start + segment_size <= waveform_tensor.shape[1]:
-        segment = waveform_tensor[:, start:start+segment_size]
-        segments.append((segment, start, start+segment_size))
+        segment = waveform_tensor[:, start : start + segment_size]
+        segments.append((segment, start, start + segment_size))
         start += step_size
     return segments
+
 
 def resample_waveform_tensor(waveform_tensor: torch.Tensor, orig_freq: int, new_freq: int):
     """
@@ -128,6 +137,7 @@ def resample_waveform_tensor(waveform_tensor: torch.Tensor, orig_freq: int, new_
     resampler = Resample(orig_freq=orig_freq, new_freq=new_freq)
     waveform_tensor = resampler(waveform_tensor)
     return waveform_tensor
+
 
 def load_audio_from_bytes(audio_bytes: bytes, target_sr: int = DefaultConfig.SAMPLE_RATE):
     """
@@ -162,10 +172,7 @@ def load_audio_from_bytes(audio_bytes: bytes, target_sr: int = DefaultConfig.SAM
 
         # Resample if necessary
         if sample_rate != target_sr:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=sample_rate,
-                new_freq=target_sr
-            )
+            resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=target_sr)
             waveform = resampler(waveform)
 
         # Flatten to 1D array

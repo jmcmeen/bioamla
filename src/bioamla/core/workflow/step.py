@@ -41,6 +41,7 @@ Usage:
                 return StepResult.ok(result.data)
             return StepResult.fail(result.error)
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -486,9 +487,7 @@ class BranchStep(PipelineStep[InputT, OutputT]):
                 step = self._branches.get(self._default)
 
             if step is None:
-                return StepResult.fail(
-                    f"No branch found for key '{branch_key}' and no default set"
-                )
+                return StepResult.fail(f"No branch found for key '{branch_key}' and no default set")
 
             return step.run(data)
 

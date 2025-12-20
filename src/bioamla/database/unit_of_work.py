@@ -1,5 +1,6 @@
 # database/unit_of_work.py
 """Unit of Work pattern implementation for bioamla database layer."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -155,7 +156,7 @@ class AbstractUnitOfWork(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def __enter__(self) -> "AbstractUnitOfWork":
+    def __enter__(self) -> AbstractUnitOfWork:
         raise NotImplementedError
 
     @abstractmethod

@@ -10,26 +10,24 @@ These utilities are re-exported from specialized packages:
 - Audio file discovery from specialized functions
 """
 
-from typing import List, Optional, Union
 from pathlib import Path
+from typing import List, Optional, Union
 
 # Re-export from files package
 from bioamla.core.files import (
-    get_files_by_extension,
-    file_exists,
-    directory_exists,
     create_directory,
+    directory_exists,
     download_file,
+    file_exists,
+    get_files_by_extension,
 )
 
-# Supported audio extensions
-SUPPORTED_AUDIO_EXTENSIONS = ['.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac', '.wma']
+# Re-export from globals (single source of truth for constants)
+from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
 
 
 def get_audio_files(
-    directory: Union[str, Path],
-    extensions: Optional[List[str]] = None,
-    recursive: bool = True
+    directory: Union[str, Path], extensions: Optional[List[str]] = None, recursive: bool = True
 ) -> List[str]:
     """
     Get a list of audio files in a directory.
@@ -59,14 +57,15 @@ def get_wav_metadata(filepath: str) -> dict:
         Dictionary with audio metadata (sample_rate, channels, duration, etc.)
     """
     import soundfile as sf
+
     info = sf.info(filepath)
     return {
-        'sample_rate': info.samplerate,
-        'channels': info.channels,
-        'frames': info.frames,
-        'duration': info.duration,
-        'format': info.format,
-        'subtype': info.subtype,
+        "sample_rate": info.samplerate,
+        "channels": info.channels,
+        "frames": info.frames,
+        "duration": info.duration,
+        "format": info.format,
+        "subtype": info.subtype,
     }
 
 
@@ -82,12 +81,13 @@ def extract_zip_file(zip_path: Union[str, Path], extract_to: Union[str, Path]) -
         List of extracted file paths
     """
     import zipfile
+
     zip_path = Path(zip_path)
     extract_to = Path(extract_to)
     extract_to.mkdir(parents=True, exist_ok=True)
 
     extracted_files = []
-    with zipfile.ZipFile(zip_path, 'r') as zf:
+    with zipfile.ZipFile(zip_path, "r") as zf:
         zf.extractall(extract_to)
         extracted_files = [str(extract_to / name) for name in zf.namelist()]
 
@@ -106,10 +106,11 @@ def create_zip_file(files: List[Union[str, Path]], zip_path: Union[str, Path]) -
         Path to the created ZIP file
     """
     import zipfile
+
     zip_path = Path(zip_path)
     zip_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for file in files:
             file = Path(file)
             zf.write(file, file.name)
@@ -129,12 +130,13 @@ def zip_directory(directory: Union[str, Path], zip_path: Union[str, Path]) -> st
         Path to the created ZIP file
     """
     import zipfile
+
     directory = Path(directory)
     zip_path = Path(zip_path)
     zip_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for file in directory.rglob('*'):
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file in directory.rglob("*"):
             if file.is_file():
                 arcname = file.relative_to(directory)
                 zf.write(file, arcname)
@@ -144,18 +146,18 @@ def zip_directory(directory: Union[str, Path], zip_path: Union[str, Path]) -> st
 
 __all__ = [
     # Constants
-    'SUPPORTED_AUDIO_EXTENSIONS',
+    "SUPPORTED_AUDIO_EXTENSIONS",
     # File operations
-    'get_files_by_extension',
-    'file_exists',
-    'directory_exists',
-    'create_directory',
-    'download_file',
+    "get_files_by_extension",
+    "file_exists",
+    "directory_exists",
+    "create_directory",
+    "download_file",
     # Audio utilities
-    'get_audio_files',
-    'get_wav_metadata',
+    "get_audio_files",
+    "get_wav_metadata",
     # Archive utilities
-    'extract_zip_file',
-    'create_zip_file',
-    'zip_directory',
+    "extract_zip_file",
+    "create_zip_file",
+    "zip_directory",
 ]

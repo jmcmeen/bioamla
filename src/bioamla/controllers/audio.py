@@ -8,12 +8,13 @@ Controller for audio processing operations.
 Orchestrates between CLI/API views and core audio processing functions.
 Handles file I/O, batch processing, and output formatting.
 """
+
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
-from .base import BaseController, BatchProgress, ControllerResult
+from .base import BaseController, ControllerResult
 
 
 @dataclass
@@ -248,7 +249,7 @@ class AudioController(BaseController):
                     duration_seconds=len(resampled) / target_rate,
                 )
 
-            for filepath, result, error in self._process_batch(files, process_file):
+            for filepath, _result, error in self._process_batch(files, process_file):
                 if error:
                     errors.append(f"{filepath.name}: {error}")
 
@@ -433,6 +434,8 @@ class AudioController(BaseController):
                 load_audio,
                 save_audio,
                 trim_audio,
+            )
+            from bioamla.core.audio.signal import (
                 trim_silence as do_trim_silence,
             )
 
@@ -532,7 +535,8 @@ class AudioController(BaseController):
             return ControllerResult.fail(error)
 
         try:
-            from bioamla.core.audio.signal import analyze_audio, load_audio
+            from bioamla.core.audio import analyze_audio
+            from bioamla.core.audio.signal import load_audio
 
             audio, sr = load_audio(filepath)
             analysis = analyze_audio(audio, sr, silence_threshold_db=silence_threshold_db)
@@ -574,7 +578,8 @@ class AudioController(BaseController):
             return ControllerResult.fail(error)
 
         try:
-            from bioamla.core.audio.signal import analyze_audio, load_audio
+            from bioamla.core.audio import analyze_audio
+            from bioamla.core.audio.signal import load_audio
             from bioamla.core.files import TextFile
 
             files = self._get_audio_files(directory, recursive=recursive)
@@ -608,25 +613,29 @@ class AudioController(BaseController):
             if output_csv and results:
                 with TextFile(output_csv, mode="w", newline="") as f:
                     writer = csv.writer(f.handle)
-                    writer.writerow([
-                        "filepath",
-                        "duration_s",
-                        "sample_rate",
-                        "channels",
-                        "rms_db",
-                        "peak_db",
-                        "silence_ratio",
-                    ])
+                    writer.writerow(
+                        [
+                            "filepath",
+                            "duration_s",
+                            "sample_rate",
+                            "channels",
+                            "rms_db",
+                            "peak_db",
+                            "silence_ratio",
+                        ]
+                    )
                     for r in results:
-                        writer.writerow([
-                            r.filepath,
-                            f"{r.duration_seconds:.2f}",
-                            r.sample_rate,
-                            r.channels,
-                            f"{r.rms_db:.1f}",
-                            f"{r.peak_db:.1f}",
-                            f"{r.silence_ratio:.2f}",
-                        ])
+                        writer.writerow(
+                            [
+                                r.filepath,
+                                f"{r.duration_seconds:.2f}",
+                                r.sample_rate,
+                                r.channels,
+                                f"{r.rms_db:.1f}",
+                                f"{r.peak_db:.1f}",
+                                f"{r.silence_ratio:.2f}",
+                            ]
+                        )
 
             return ControllerResult.ok(
                 data=BatchResult(
@@ -696,7 +705,7 @@ class AudioController(BaseController):
                 processed += 1
                 return out_file
 
-            for filepath, result, error in self._process_batch(files, process_file):
+            for filepath, _result, error in self._process_batch(files, process_file):
                 if error:
                     errors.append(f"{filepath.name}: {error}")
 

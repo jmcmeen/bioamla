@@ -44,6 +44,7 @@ __all__ = [
 # eBird Integration
 # =============================================================================
 
+
 @dataclass
 class EBirdObservation:
     """Represents an eBird observation."""
@@ -169,11 +170,7 @@ class EBirdClient:
             self._session.headers["X-eBirdApiToken"] = self.api_key
         return self._session
 
-    def _request(
-        self,
-        endpoint: str,
-        params: Optional[Dict[str, Any]] = None
-    ) -> Any:
+    def _request(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Any:
         """Make API request."""
         session = self._get_session()
         url = f"{self.BASE_URL}/{endpoint}"
@@ -250,10 +247,7 @@ class EBirdClient:
 
         return [EBirdObservation.from_api_response(obs) for obs in data]
 
-    def get_species_list(
-        self,
-        region_code: str
-    ) -> List[Dict[str, str]]:
+    def get_species_list(self, region_code: str) -> List[Dict[str, str]]:
         """
         Get list of species observed in a region.
 
@@ -267,9 +261,7 @@ class EBirdClient:
         return self._request(endpoint)
 
     def get_taxonomy(
-        self,
-        species_codes: Optional[List[str]] = None,
-        category: str = "species"
+        self, species_codes: Optional[List[str]] = None, category: str = "species"
     ) -> List[Dict[str, Any]]:
         """
         Get eBird taxonomy data.
@@ -289,11 +281,7 @@ class EBirdClient:
 
         return self._request(endpoint, params)
 
-    def get_hotspots(
-        self,
-        region_code: str,
-        back: int = 14
-    ) -> List[Dict[str, Any]]:
+    def get_hotspots(self, region_code: str, back: int = 14) -> List[Dict[str, Any]]:
         """
         Get eBird hotspots in a region.
 
@@ -438,9 +426,9 @@ def match_detections_to_ebird(
         det_copy = det.copy()
         det_copy["ebird_validated"] = species_code in nearby_species
         det_copy["ebird_species_code"] = species_code
-        det_copy["ebird_nearby_count"] = len([
-            o for o in nearby_obs if o.species_code == species_code
-        ])
+        det_copy["ebird_nearby_count"] = len(
+            [o for o in nearby_obs if o.species_code == species_code]
+        )
 
         results.append(det_copy)
 
@@ -450,6 +438,7 @@ def match_detections_to_ebird(
 # =============================================================================
 # PostgreSQL Database Export
 # =============================================================================
+
 
 @dataclass
 class DatabaseConfig:
@@ -617,9 +606,7 @@ class PostgreSQLExporter:
         logger.info("Database tables created")
 
     def export_detections(
-        self,
-        detections: List[Dict[str, Any]],
-        detector_name: str = "unknown"
+        self, detections: List[Dict[str, Any]], detector_name: str = "unknown"
     ) -> int:
         """
         Export detections to database.
@@ -636,22 +623,25 @@ class PostgreSQLExporter:
 
         count = 0
         for det in detections:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO detections
                 (filepath, start_time, end_time, label, confidence,
                  low_freq, high_freq, detector, metadata)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                det.get("filepath", ""),
-                det.get("start_time", 0),
-                det.get("end_time", 0),
-                det.get("label", ""),
-                det.get("confidence", 0),
-                det.get("low_freq"),
-                det.get("high_freq"),
-                detector_name,
-                json.dumps(det.get("metadata", {})),
-            ))
+            """,
+                (
+                    det.get("filepath", ""),
+                    det.get("start_time", 0),
+                    det.get("end_time", 0),
+                    det.get("label", ""),
+                    det.get("confidence", 0),
+                    det.get("low_freq"),
+                    det.get("high_freq"),
+                    detector_name,
+                    json.dumps(det.get("metadata", {})),
+                ),
+            )
             count += 1
 
         conn.commit()
@@ -659,9 +649,7 @@ class PostgreSQLExporter:
         return count
 
     def export_annotations(
-        self,
-        annotations: List[Dict[str, Any]],
-        annotator: str = "unknown"
+        self, annotations: List[Dict[str, Any]], annotator: str = "unknown"
     ) -> int:
         """
         Export annotations to database.
@@ -678,23 +666,26 @@ class PostgreSQLExporter:
 
         count = 0
         for ann in annotations:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO annotations
                 (filepath, start_time, end_time, low_freq, high_freq,
                  label, annotator, confidence, notes, metadata)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                ann.get("filepath", ""),
-                ann.get("start_time", 0),
-                ann.get("end_time", 0),
-                ann.get("low_freq"),
-                ann.get("high_freq"),
-                ann.get("label", ""),
-                annotator,
-                ann.get("confidence"),
-                ann.get("notes", ""),
-                json.dumps(ann.get("metadata", {})),
-            ))
+            """,
+                (
+                    ann.get("filepath", ""),
+                    ann.get("start_time", 0),
+                    ann.get("end_time", 0),
+                    ann.get("low_freq"),
+                    ann.get("high_freq"),
+                    ann.get("label", ""),
+                    annotator,
+                    ann.get("confidence"),
+                    ann.get("notes", ""),
+                    json.dumps(ann.get("metadata", {})),
+                ),
+            )
             count += 1
 
         conn.commit()
@@ -733,7 +724,8 @@ class PostgreSQLExporter:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO audio_files
             (filepath, duration, sample_rate, channels, file_size,
              recorded_at, location_lat, location_lng, metadata)
@@ -748,17 +740,19 @@ class PostgreSQLExporter:
                 location_lng = EXCLUDED.location_lng,
                 metadata = EXCLUDED.metadata
             RETURNING id
-        """, (
-            filepath,
-            duration,
-            sample_rate,
-            channels,
-            file_size,
-            recorded_at,
-            latitude,
-            longitude,
-            json.dumps(metadata or {}),
-        ))
+        """,
+            (
+                filepath,
+                duration,
+                sample_rate,
+                channels,
+                file_size,
+                recorded_at,
+                latitude,
+                longitude,
+                json.dumps(metadata or {}),
+            ),
+        )
 
         audio_file_id = cursor.fetchone()[0]
         conn.commit()
@@ -787,25 +781,28 @@ class PostgreSQLExporter:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO species_observations
             (species_code, common_name, scientific_name, observation_date,
              location_lat, location_lng, location_name, detection_id,
              ebird_validated, metadata)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        """, (
-            species_code,
-            common_name,
-            scientific_name,
-            observation_date,
-            latitude,
-            longitude,
-            location_name,
-            detection_id,
-            ebird_validated,
-            json.dumps(metadata or {}),
-        ))
+        """,
+            (
+                species_code,
+                common_name,
+                scientific_name,
+                observation_date,
+                latitude,
+                longitude,
+                location_name,
+                detection_id,
+                ebird_validated,
+                json.dumps(metadata or {}),
+            ),
+        )
 
         obs_id = cursor.fetchone()[0]
         conn.commit()
@@ -897,17 +894,12 @@ class PostgreSQLExporter:
             ORDER BY month DESC
             LIMIT 12
         """)
-        stats["observations_by_month"] = {
-            str(row[0].date()): row[1] for row in cursor.fetchall()
-        }
+        stats["observations_by_month"] = {str(row[0].date()): row[1] for row in cursor.fetchall()}
 
         return stats
 
     def export_to_csv(
-        self,
-        table: str,
-        output_path: str,
-        query_filter: Optional[str] = None
+        self, table: str, output_path: str, query_filter: Optional[str] = None
     ) -> str:
         """
         Export table to CSV.
@@ -959,7 +951,7 @@ def export_detections_to_postgres(
     detections: List[Dict[str, Any]],
     connection_string: str,
     detector_name: str = "unknown",
-    create_tables: bool = True
+    create_tables: bool = True,
 ) -> int:
     """
     Convenience function to export detections to PostgreSQL.

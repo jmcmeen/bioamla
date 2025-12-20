@@ -31,13 +31,12 @@ Example:
 
 import csv
 import json
+import logging
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
-
-import logging
 
 from bioamla.core.base_api import APICache, APIClient, RateLimiter
 from bioamla.core.files import TextFile
@@ -360,13 +359,18 @@ def search(
 
         if best_score >= min_score:
             seen.add(sci_name)
-            matches.append((best_score, {
-                "scientific_name": sci_name,
-                "common_name": entry.get("common_name", ""),
-                "species_code": entry.get("species_code", ""),
-                "family": entry.get("family", ""),
-                "score": best_score,
-            }))
+            matches.append(
+                (
+                    best_score,
+                    {
+                        "scientific_name": sci_name,
+                        "common_name": entry.get("common_name", ""),
+                        "species_code": entry.get("species_code", ""),
+                        "family": entry.get("family", ""),
+                        "score": best_score,
+                    },
+                )
+            )
 
     # Sort by score descending
     matches.sort(key=lambda x: x[0], reverse=True)
@@ -437,7 +441,9 @@ def batch_convert(
         >>> batch_convert(["Turdus migratorius", "Strix varia"])
         {'Turdus migratorius': 'American Robin', 'Strix varia': 'Barred Owl'}
     """
-    converter = scientific_to_common if direction == "scientific_to_common" else common_to_scientific
+    converter = (
+        scientific_to_common if direction == "scientific_to_common" else common_to_scientific
+    )
     return {name: converter(name) for name in names}
 
 
@@ -479,10 +485,7 @@ def find_species_name(category: str, all_categories: set) -> str:
         return category
 
     # Find all categories that are prefixes of this category
-    matching_species = [
-        c for c in all_categories
-        if category.startswith(c) and c != category
-    ]
+    matching_species = [c for c in all_categories if category.startswith(c) and c != category]
 
     if matching_species:
         # Return the shortest matching species (most general)

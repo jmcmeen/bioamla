@@ -15,35 +15,32 @@ Modules:
     - discovery: File discovery and existence checking
 """
 
-from bioamla.core.files.io import (
-    File,
-    TextFile,
-    BinaryFile,
-    read_text,
-    write_text,
-    read_binary,
-    write_binary,
-    append_text,
-    append_binary,
+from bioamla.core.files.discovery import (
+    create_directory,
+    directory_exists,
+    file_exists,
+    get_files_by_extension,
 )
-
-from bioamla.core.files.paths import (
-    sanitize_filename,
-    ensure_directory,
-    get_relative_path,
-)
-
 from bioamla.core.files.downloads import (
     download_file,
-    get_extension_from_url,
     get_extension_from_content_type,
+    get_extension_from_url,
 )
-
-from bioamla.core.files.discovery import (
-    get_files_by_extension,
-    file_exists,
-    directory_exists,
-    create_directory,
+from bioamla.core.files.io import (
+    BinaryFile,
+    File,
+    TextFile,
+    append_binary,
+    append_text,
+    read_binary,
+    read_text,
+    write_binary,
+    write_text,
+)
+from bioamla.core.files.paths import (
+    ensure_directory,
+    get_relative_path,
+    sanitize_filename,
 )
 
 __all__ = [

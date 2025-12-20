@@ -9,14 +9,14 @@ OpenSoundscape-style models use spectrogram images as input to standard
 image classification networks (transfer learning from ImageNet).
 """
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.models as models
 
+from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 from bioamla.core.ml.base import (
     BaseAudioModel,
     ModelBackend,
@@ -24,7 +24,6 @@ from bioamla.core.ml.base import (
     PredictionResult,
     register_model,
 )
-from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
 
 class SpectrogramCNN(nn.Module):
@@ -88,7 +87,8 @@ class SpectrogramCNN(nn.Module):
             # ResNet has 3-channel input, average weights for 1-channel
             old_conv = self.backbone.conv1
             self.backbone.conv1 = nn.Conv2d(
-                1, old_conv.out_channels,
+                1,
+                old_conv.out_channels,
                 kernel_size=old_conv.kernel_size,
                 stride=old_conv.stride,
                 padding=old_conv.padding,
@@ -96,13 +96,12 @@ class SpectrogramCNN(nn.Module):
             )
             # Initialize with averaged weights
             with torch.no_grad():
-                self.backbone.conv1.weight = nn.Parameter(
-                    old_conv.weight.mean(dim=1, keepdim=True)
-                )
+                self.backbone.conv1.weight = nn.Parameter(old_conv.weight.mean(dim=1, keepdim=True))
         elif self.architecture.startswith("efficientnet"):
             old_conv = self.backbone.features[0][0]
             self.backbone.features[0][0] = nn.Conv2d(
-                1, old_conv.out_channels,
+                1,
+                old_conv.out_channels,
                 kernel_size=old_conv.kernel_size,
                 stride=old_conv.stride,
                 padding=old_conv.padding,
@@ -230,10 +229,7 @@ class OpenSoundscapeModel(BaseAudioModel):
         return instance
 
     def load(
-        self,
-        model_path: str,
-        architecture: Optional[str] = None,
-        **kwargs
+        self, model_path: str, architecture: Optional[str] = None, **kwargs
     ) -> "OpenSoundscapeModel":
         """
         Load model from path.
@@ -278,7 +274,9 @@ class OpenSoundscapeModel(BaseAudioModel):
             self.model = checkpoint
         else:
             # Try loading as state dict directly
-            raise ValueError(f"Unknown checkpoint format. Please use a dict with 'model_state_dict'.")
+            raise ValueError(
+                "Unknown checkpoint format. Please use a dict with 'model_state_dict'."
+            )
 
         self.model.to(self.device)
         self.model.eval()
@@ -361,13 +359,15 @@ class OpenSoundscapeModel(BaseAudioModel):
 
                 if confidence >= self.config.min_confidence:
                     label = self.id2label.get(idx.item(), f"class_{idx.item()}")
-                    results.append(PredictionResult(
-                        label=label,
-                        confidence=confidence,
-                        start_time=start / self.config.sample_rate,
-                        end_time=end / self.config.sample_rate,
-                        filepath=filepath,
-                    ))
+                    results.append(
+                        PredictionResult(
+                            label=label,
+                            confidence=confidence,
+                            start_time=start / self.config.sample_rate,
+                            end_time=end / self.config.sample_rate,
+                            filepath=filepath,
+                        )
+                    )
 
             if end >= num_samples:
                 break
@@ -395,7 +395,9 @@ class OpenSoundscapeModel(BaseAudioModel):
         mel_spec_db = db_transform(mel_spec)
 
         # Normalize to [0, 1]
-        mel_spec_db = (mel_spec_db - mel_spec_db.min()) / (mel_spec_db.max() - mel_spec_db.min() + 1e-8)
+        mel_spec_db = (mel_spec_db - mel_spec_db.min()) / (
+            mel_spec_db.max() - mel_spec_db.min() + 1e-8
+        )
 
         # Resize to target dimensions
         mel_spec_db = torch.nn.functional.interpolate(
@@ -484,7 +486,7 @@ class OpenSoundscapeModel(BaseAudioModel):
                 "sample_rate": self.config.sample_rate,
                 "clip_duration": self.config.clip_duration,
                 "backend": self.backend.value,
-            }
+            },
         }
 
         torch.save(state, path)
