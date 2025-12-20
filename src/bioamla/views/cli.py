@@ -3164,17 +3164,17 @@ def pipeline_list_actions():
 def pipeline_example(output):
     """Show an example pipeline TOML file.
 
-    Displays a sample workflow that demonstrates the pipeline format
+    Displays a sample pipeline that demonstrates the pipeline format
     and available options.
 
     Examples:
-        bioamla workflow example                   # Print to stdout
-        bioamla workflow example -o my_pipeline.toml  # Save to file
+        bioamla pipeline example                   # Print to stdout
+        bioamla pipeline example -o my_pipeline.toml  # Save to file
     """
     from bioamla.controllers.pipeline import PipelineController
 
     controller = PipelineController()
-    result = controller.get_example_workflow()
+    result = controller.get_example_pipeline()
 
     if result.success:
         if output:
