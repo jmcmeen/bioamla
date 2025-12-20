@@ -318,7 +318,7 @@ class JSONStorage(BaseStorage):
         try:
             data = json.loads(run_file.read_text())
             return RunRecord.from_dict(data)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             return None
 
     def list_runs(
@@ -370,7 +370,7 @@ class JSONStorage(BaseStorage):
         try:
             shutil.rmtree(run_dir)
             return True
-        except IOError:
+        except OSError:
             return False
 
     def save_artifact(
@@ -397,7 +397,7 @@ class JSONStorage(BaseStorage):
                 file_path.write_text(json.dumps(data, indent=2, default=str))
 
             return file_path
-        except IOError:
+        except OSError:
             return None
 
     def get_artifact(self, run_id: str, filename: str) -> Optional[Any]:
@@ -413,7 +413,7 @@ class JSONStorage(BaseStorage):
             if filename.endswith(".json"):
                 return json.loads(content)
             return content
-        except (IOError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError):
             return None
 
     def _save_run(self, run: RunRecord) -> bool:
@@ -428,7 +428,7 @@ class JSONStorage(BaseStorage):
         try:
             run_file.write_text(json.dumps(run.to_dict(), indent=2))
             return True
-        except IOError:
+        except OSError:
             return False
 
 
@@ -780,11 +780,11 @@ class PostgresStorage(BaseStorage):
                     self._init_db()
                     self._initialized = True
 
-            except ImportError:
+            except ImportError as err:
                 raise ImportError(
                     "PostgreSQL support requires psycopg2. "
                     "Install with: pip install psycopg2-binary"
-                )
+                ) from err
 
         return self._connection
 

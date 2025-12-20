@@ -168,7 +168,7 @@ class BirdNETModel(BaseAudioModel):
 
         # Setup label mappings
         if not self.id2label:
-            self.id2label = {i: label for i, label in enumerate(self.species_list)}
+            self.id2label = dict(enumerate(self.species_list))
         if not self.label2id:
             self.label2id = {v: k for k, v in self.id2label.items()}
 

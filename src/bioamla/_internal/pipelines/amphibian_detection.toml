@@ -1,0 +1,36 @@
+# Amphibian call detection using RIBBIT
+# Detects periodic frog and toad calls in field recordings
+
+[pipeline]
+name = "amphibian_detection"
+description = "Amphibian call detection using RIBBIT pulse rate analysis"
+version = "1.0.0"
+author = "bioamla"
+
+[variables]
+input_dir = { type = "path", required = true, description = "Directory containing audio files" }
+output_dir = { type = "path", default = "./amphibian_detections", description = "Output directory for results" }
+signal_band_low = { type = "integer", default = 1000, description = "Signal frequency band low (Hz)" }
+signal_band_high = { type = "integer", default = 4000, description = "Signal frequency band high (Hz)" }
+pulse_rate_min = { type = "float", default = 5.0, description = "Minimum pulse rate (Hz)" }
+pulse_rate_max = { type = "float", default = 50.0, description = "Maximum pulse rate (Hz)" }
+
+[[steps]]
+name = "resample"
+action = "audio.resample"
+description = "Resample to 16kHz for RIBBIT"
+params = { input = "{{ input_dir }}", output = "{{ output_dir }}/resampled", sample_rate = 16000 }
+
+[[steps]]
+name = "detect"
+action = "detection.ribbit"
+description = "Run RIBBIT pulse detection"
+depends_on = ["resample"]
+params = { input = "{{ output_dir }}/resampled", output = "{{ output_dir }}/detections.csv", signal_band = "{{ signal_band_low }},{{ signal_band_high }}", pulse_rate = "{{ pulse_rate_min }},{{ pulse_rate_max }}" }
+
+[[steps]]
+name = "log_complete"
+action = "util.log"
+description = "Log completion"
+depends_on = ["detect"]
+params = { message = "Amphibian detection complete. Results in {{ output_dir }}/detections.csv" }

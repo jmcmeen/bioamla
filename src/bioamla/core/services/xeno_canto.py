@@ -343,7 +343,7 @@ def search(
 
         # Parse response
         recordings_data = response.get("recordings", [])
-        num_recordings = int(response.get("numRecordings", 0))
+        int(response.get("numRecordings", 0))
         num_pages = int(response.get("numPages", 1))
         total_pages = num_pages
 

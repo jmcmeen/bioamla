@@ -198,3 +198,5 @@ cython_debug/
 .cursorindexingignore
 
 /.vscode
+/frog_acoustic_study
+mlflow.db

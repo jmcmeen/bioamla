@@ -1,26 +1,26 @@
-# core/workflow/validator.py
+# core/pipeline/validator.py
 """
-Workflow Validator
+Pipeline Validator
 ==================
 
-Schema validation for TOML workflow definitions.
+Schema validation for TOML pipeline definitions.
 
 Provides comprehensive validation of:
-- Workflow structure and required fields
+- Pipeline structure and required fields
 - Step configuration and parameters
 - Dependency graph integrity
 - Action validity
 - Variable references
 
 Example:
-    from bioamla.core.workflow.validator import (
-        validate_workflow,
-        WorkflowValidator,
+    from bioamla.core.pipeline.validator import (
+        validate_pipeline,
+        PipelineValidator,
     )
-    from bioamla.core.workflow.parser import parse_workflow
+    from bioamla.core.pipeline.parser import parse_pipeline
 
-    workflow = parse_workflow("workflow.toml", render_templates=False)
-    result = validate_workflow(workflow)
+    pipeline = parse_pipeline("pipeline.toml", render_templates=False)
+    result = validate_pipeline(pipeline)
 
     if not result.valid:
         for error in result.errors:
@@ -33,15 +33,15 @@ from typing import Any, Dict, List, Optional, Set
 
 from bioamla.core.logger import get_logger
 
-from .parser import Workflow, WorkflowStep
+from .parser import Pipeline, PipelineStep
 
 logger = get_logger(__name__)
 
 __all__ = [
     "ValidationResult",
     "ValidationError",
-    "WorkflowValidator",
-    "validate_workflow",
+    "PipelineValidator",
+    "validate_pipeline",
 ]
 
 
@@ -61,7 +61,7 @@ class ValidationError:
 
 @dataclass
 class ValidationResult:
-    """Result of workflow validation."""
+    """Result of pipeline validation."""
 
     valid: bool
     errors: List[ValidationError] = field(default_factory=list)
@@ -157,9 +157,9 @@ KNOWN_ACTIONS: Dict[str, Dict[str, Any]] = {
 }
 
 
-class WorkflowValidator:
+class PipelineValidator:
     """
-    Validator for workflow definitions.
+    Validator for pipeline definitions.
 
     Performs comprehensive validation including:
     - Structure validation
@@ -185,60 +185,60 @@ class WorkflowValidator:
             "optional": optional_params or [],
         }
 
-    def validate(self, workflow: Workflow) -> ValidationResult:
+    def validate(self, pipeline: Pipeline) -> ValidationResult:
         """
-        Validate a workflow.
+        Validate a pipeline.
 
         Args:
-            workflow: Workflow to validate
+            pipeline: Pipeline to validate
 
         Returns:
             ValidationResult with errors and warnings
         """
         result = ValidationResult(valid=True)
 
-        # Validate workflow metadata
-        self._validate_metadata(workflow, result)
+        # Validate pipeline metadata
+        self._validate_metadata(pipeline, result)
 
         # Validate steps
-        self._validate_steps(workflow, result)
+        self._validate_steps(pipeline, result)
 
         # Validate dependencies
-        self._validate_dependencies(workflow, result)
+        self._validate_dependencies(pipeline, result)
 
         # Validate variable references
-        self._validate_variable_references(workflow, result)
+        self._validate_variable_references(pipeline, result)
 
         return result
 
     def _validate_metadata(
         self,
-        workflow: Workflow,
+        pipeline: Pipeline,
         result: ValidationResult,
     ) -> None:
-        """Validate workflow metadata."""
-        if not workflow.name:
-            result.add_error("Workflow name is required", "workflow.name")
+        """Validate pipeline metadata."""
+        if not pipeline.name:
+            result.add_error("Pipeline name is required", "pipeline.name")
 
-        if not workflow.name.replace("_", "").replace("-", "").isalnum():
+        if not pipeline.name.replace("_", "").replace("-", "").isalnum():
             result.add_warning(
-                "Workflow name should contain only alphanumeric characters, "
+                "Pipeline name should contain only alphanumeric characters, "
                 "underscores, and hyphens",
-                "workflow.name",
+                "pipeline.name",
             )
 
-        if not workflow.steps:
-            result.add_error("Workflow must have at least one step", "steps")
+        if not pipeline.steps:
+            result.add_error("Pipeline must have at least one step", "steps")
 
     def _validate_steps(
         self,
-        workflow: Workflow,
+        pipeline: Pipeline,
         result: ValidationResult,
     ) -> None:
         """Validate individual steps."""
         step_names: Set[str] = set()
 
-        for idx, step in enumerate(workflow.steps):
+        for idx, step in enumerate(pipeline.steps):
             location = f"steps[{idx}]"
 
             # Check for duplicate names
@@ -262,7 +262,7 @@ class WorkflowValidator:
             elif step.action not in self._known_actions:
                 result.add_warning(
                     f"Unknown action: '{step.action}'. "
-                    "Make sure it's registered with the workflow engine.",
+                    "Make sure it's registered with the pipeline engine.",
                     f"{location}.action",
                 )
             else:
@@ -289,7 +289,7 @@ class WorkflowValidator:
 
     def _validate_action_params(
         self,
-        step: WorkflowStep,
+        step: PipelineStep,
         location: str,
         result: ValidationResult,
     ) -> None:
@@ -324,13 +324,13 @@ class WorkflowValidator:
 
     def _validate_dependencies(
         self,
-        workflow: Workflow,
+        pipeline: Pipeline,
         result: ValidationResult,
     ) -> None:
         """Validate step dependencies."""
-        step_names = {step.name for step in workflow.steps}
+        step_names = {step.name for step in pipeline.steps}
 
-        for idx, step in enumerate(workflow.steps):
+        for idx, step in enumerate(pipeline.steps):
             location = f"steps[{idx}].depends_on"
 
             for dep in step.depends_on:
@@ -343,23 +343,23 @@ class WorkflowValidator:
 
         # Check for circular dependencies
         try:
-            workflow.get_execution_order()
+            pipeline.get_execution_order()
         except ValueError as e:
             result.add_error(str(e), "dependencies")
 
     def _validate_variable_references(
         self,
-        workflow: Workflow,
+        pipeline: Pipeline,
         result: ValidationResult,
     ) -> None:
         """Validate variable references in templates."""
-        defined_vars = set(workflow.variables.keys())
-        defined_vars.update(workflow.env.keys())
+        defined_vars = set(pipeline.variables.keys())
+        defined_vars.update(pipeline.env.keys())
 
         # Pattern to find Jinja2 variable references
         var_pattern = re.compile(r"\{\{\s*(\w+)(?:\.\w+)*\s*\}\}")
 
-        for idx, step in enumerate(workflow.steps):
+        for idx, step in enumerate(pipeline.steps):
             location = f"steps[{idx}]"
 
             # Check params
@@ -401,22 +401,22 @@ class WorkflowValidator:
         return refs
 
 
-def validate_workflow(
-    workflow: Workflow,
+def validate_pipeline(
+    pipeline: Pipeline,
     strict: bool = False,
 ) -> ValidationResult:
     """
-    Validate a workflow.
+    Validate a pipeline.
 
     Args:
-        workflow: Workflow to validate
+        pipeline: Pipeline to validate
         strict: If True, treat warnings as errors
 
     Returns:
         ValidationResult
     """
-    validator = WorkflowValidator()
-    result = validator.validate(workflow)
+    validator = PipelineValidator()
+    result = validator.validate(pipeline)
 
     if strict:
         for warning in result.warnings:
