@@ -268,6 +268,7 @@ class RibbitDetector:
 
         try:
             from opensoundscape.ribbit import ribbit
+
             self._ribbit = ribbit
             return self._ribbit
         except ImportError:
@@ -300,6 +301,7 @@ class RibbitDetector:
         try:
             if isinstance(audio, str):
                 import soundfile as sf
+
                 audio_data, sr = sf.read(audio, dtype="float32")
             else:
                 audio_data = audio
@@ -451,8 +453,8 @@ class RibbitDetector:
                 continue
 
             # Autocorrelation
-            acf = np.correlate(window - window.mean(), window - window.mean(), mode='full')
-            acf = acf[len(acf) // 2:]
+            acf = np.correlate(window - window.mean(), window - window.mean(), mode="full")
+            acf = acf[len(acf) // 2 :]
             acf = acf / (acf[0] + 1e-10)
 
             # Find peaks in expected pulse rate range
@@ -507,18 +509,22 @@ class RibbitDetector:
 
         for start_idx, end_idx in zip(starts, ends):
             start_time = times[start_idx] if start_idx < len(times) else times[-1]
-            end_time = times[end_idx - 1] + time_step if end_idx <= len(times) else times[-1] + time_step
+            end_time = (
+                times[end_idx - 1] + time_step if end_idx <= len(times) else times[-1] + time_step
+            )
             duration = end_time - start_time
 
             if duration >= min_dur:
                 segment_scores = scores[start_idx:end_idx]
                 avg_score = segment_scores.mean() if len(segment_scores) > 0 else 0
 
-                detections.append(RibbitDetection(
-                    start_time=float(start_time),
-                    end_time=float(end_time),
-                    score=float(avg_score),
-                ))
+                detections.append(
+                    RibbitDetection(
+                        start_time=float(start_time),
+                        end_time=float(end_time),
+                        score=float(avg_score),
+                    )
+                )
 
         return detections
 

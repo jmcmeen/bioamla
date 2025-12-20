@@ -120,6 +120,20 @@ class ClusteringController(BaseController):
         Returns:
             Result with clustering summary
         """
+        # Start run tracking
+        self._start_run(
+            name=f"Clustering: {method}",
+            action="cluster",
+            parameters={
+                "method": method,
+                "n_clusters": n_clusters,
+                "min_cluster_size": min_cluster_size,
+                "min_samples": min_samples,
+                "n_samples": len(embeddings),
+                "n_features": embeddings.shape[1] if len(embeddings.shape) > 1 else 1,
+            },
+        )
+
         try:
             from bioamla.core.analysis.clustering import AudioClusterer, ClusteringConfig
 
@@ -165,6 +179,17 @@ class ClusteringController(BaseController):
 
             self._clusterer = clusterer
 
+            # Complete run with results
+            self._complete_run(
+                results={
+                    "n_clusters": n_clusters,
+                    "n_samples": len(embeddings),
+                    "n_noise": n_noise,
+                    "noise_percentage": n_noise / len(embeddings) * 100,
+                    "silhouette_score": float(silhouette),
+                },
+            )
+
             return ControllerResult.ok(
                 data=summary,
                 message=f"Found {n_clusters} clusters with {method}",
@@ -172,6 +197,7 @@ class ClusteringController(BaseController):
                 clusterer=clusterer,
             )
         except Exception as e:
+            self._fail_run(str(e))
             return ControllerResult.fail(str(e))
 
     def find_optimal_k(
@@ -332,11 +358,13 @@ class ClusteringController(BaseController):
         )
 
         if result.success:
-            coords = result.reduced_embeddings
+            coords = result.metadata["reduced_embeddings"]
             result.data["x"] = coords[:, 0].tolist()
             result.data["y"] = coords[:, 1].tolist()
             if labels is not None:
-                result.data["labels"] = labels.tolist() if hasattr(labels, "tolist") else list(labels)
+                result.data["labels"] = (
+                    labels.tolist() if hasattr(labels, "tolist") else list(labels)
+                )
 
         return result
 
@@ -560,9 +588,7 @@ class ClusteringController(BaseController):
         try:
             from bioamla.core.analysis.clustering import export_clusters
 
-            output_path = export_clusters(
-                labels, filepaths, output_dir, copy_files=copy_files
-            )
+            output_path = export_clusters(labels, filepaths, output_dir, copy_files=copy_files)
 
             unique_labels = set(labels)
             n_clusters = len(unique_labels) - (1 if -1 in unique_labels else 0)

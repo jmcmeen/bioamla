@@ -249,7 +249,7 @@ class AudioController(BaseController):
                     duration_seconds=len(resampled) / target_rate,
                 )
 
-            for filepath, result, error in self._process_batch(files, process_file):
+            for filepath, _result, error in self._process_batch(files, process_file):
                 if error:
                     errors.append(f"{filepath.name}: {error}")
 
@@ -535,7 +535,8 @@ class AudioController(BaseController):
             return ControllerResult.fail(error)
 
         try:
-            from bioamla.core.audio.signal import analyze_audio, load_audio
+            from bioamla.core.audio import analyze_audio
+            from bioamla.core.audio.signal import load_audio
 
             audio, sr = load_audio(filepath)
             analysis = analyze_audio(audio, sr, silence_threshold_db=silence_threshold_db)
@@ -577,7 +578,8 @@ class AudioController(BaseController):
             return ControllerResult.fail(error)
 
         try:
-            from bioamla.core.audio.signal import analyze_audio, load_audio
+            from bioamla.core.audio import analyze_audio
+            from bioamla.core.audio.signal import load_audio
             from bioamla.core.files import TextFile
 
             files = self._get_audio_files(directory, recursive=recursive)
@@ -703,7 +705,7 @@ class AudioController(BaseController):
                 processed += 1
                 return out_file
 
-            for filepath, result, error in self._process_batch(files, process_file):
+            for filepath, _result, error in self._process_batch(files, process_file):
                 if error:
                     errors.append(f"{filepath.name}: {error}")
 

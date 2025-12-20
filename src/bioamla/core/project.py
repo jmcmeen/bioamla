@@ -178,7 +178,7 @@ def _customize_template(content: str, name: str, description: str = "") -> str:
 
 def _create_models_toml(path: Path, project_name: str) -> None:
     """Create initial models.toml file."""
-    content = f'''# Bioamla Models Registry - {project_name}
+    content = f"""# Bioamla Models Registry - {project_name}
 # Registered models for this project
 
 # Default model for inference
@@ -194,13 +194,13 @@ embedding = ""
 # type = "ast"                  # ast, birdnet, custom
 # description = "Model description"
 # registered = "2024-01-01T00:00:00Z"
-'''
+"""
     path.write_text(content)
 
 
 def _create_datasets_toml(path: Path, project_name: str) -> None:
     """Create initial datasets.toml file."""
-    content = f'''# Bioamla Datasets Registry - {project_name}
+    content = f"""# Bioamla Datasets Registry - {project_name}
 # Registered datasets for this project
 
 # Default dataset paths
@@ -217,7 +217,7 @@ output_dir = "output"
 # description = "Dataset description"
 # registered = "2024-01-01T00:00:00Z"
 # metadata = "metadata.csv"     # relative to dataset path
-'''
+"""
     path.write_text(content)
 
 

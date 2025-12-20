@@ -224,7 +224,7 @@ class WorkflowValidator:
             result.add_warning(
                 "Workflow name should contain only alphanumeric characters, "
                 "underscores, and hyphens",
-                "workflow.name"
+                "workflow.name",
             )
 
         if not workflow.steps:
@@ -243,10 +243,7 @@ class WorkflowValidator:
 
             # Check for duplicate names
             if step.name in step_names:
-                result.add_error(
-                    f"Duplicate step name: '{step.name}'",
-                    location
-                )
+                result.add_error(f"Duplicate step name: '{step.name}'", location)
             step_names.add(step.name)
 
             # Validate step name
@@ -256,7 +253,7 @@ class WorkflowValidator:
                 result.add_warning(
                     f"Step name '{step.name}' should contain only "
                     "alphanumeric characters, underscores, and hyphens",
-                    f"{location}.name"
+                    f"{location}.name",
                 )
 
             # Validate action
@@ -266,7 +263,7 @@ class WorkflowValidator:
                 result.add_warning(
                     f"Unknown action: '{step.action}'. "
                     "Make sure it's registered with the workflow engine.",
-                    f"{location}.action"
+                    f"{location}.action",
                 )
             else:
                 # Validate parameters for known actions
@@ -277,21 +274,17 @@ class WorkflowValidator:
                 result.add_error(
                     f"Invalid on_error value: '{step.on_error}'. "
                     "Must be 'fail', 'skip', or 'continue'",
-                    f"{location}.on_error"
+                    f"{location}.on_error",
                 )
 
             # Validate timeout
             if step.timeout is not None and step.timeout <= 0:
-                result.add_error(
-                    f"Timeout must be positive: {step.timeout}",
-                    f"{location}.timeout"
-                )
+                result.add_error(f"Timeout must be positive: {step.timeout}", f"{location}.timeout")
 
             # Validate retry
             if step.retry < 0:
                 result.add_error(
-                    f"Retry count must be non-negative: {step.retry}",
-                    f"{location}.retry"
+                    f"Retry count must be non-negative: {step.retry}", f"{location}.retry"
                 )
 
     def _validate_action_params(
@@ -318,7 +311,7 @@ class WorkflowValidator:
             if not any("{{" in str(v) for v in step.params.values()):
                 result.add_warning(
                     f"Missing required parameter '{param}' for action '{step.action}'",
-                    f"{location}.params"
+                    f"{location}.params",
                 )
 
         # Check for unknown params
@@ -326,7 +319,7 @@ class WorkflowValidator:
         for param in unknown:
             result.add_warning(
                 f"Unknown parameter '{param}' for action '{step.action}'",
-                f"{location}.params.{param}"
+                f"{location}.params.{param}",
             )
 
     def _validate_dependencies(
@@ -343,14 +336,10 @@ class WorkflowValidator:
             for dep in step.depends_on:
                 if dep not in step_names:
                     result.add_error(
-                        f"Step '{step.name}' depends on unknown step: '{dep}'",
-                        location
+                        f"Step '{step.name}' depends on unknown step: '{dep}'", location
                     )
                 elif dep == step.name:
-                    result.add_error(
-                        f"Step '{step.name}' cannot depend on itself",
-                        location
-                    )
+                    result.add_error(f"Step '{step.name}' cannot depend on itself", location)
 
         # Check for circular dependencies
         try:
@@ -379,8 +368,7 @@ class WorkflowValidator:
                 # Skip 'outputs' which is runtime
                 if ref != "outputs" and ref not in defined_vars:
                     result.add_warning(
-                        f"Reference to undefined variable '{{{{ {ref} }}}}'",
-                        f"{location}.params"
+                        f"Reference to undefined variable '{{{{ {ref} }}}}'", f"{location}.params"
                     )
 
             # Check condition
@@ -390,7 +378,7 @@ class WorkflowValidator:
                     if ref != "outputs" and ref not in defined_vars:
                         result.add_warning(
                             f"Reference to undefined variable '{{{{ {ref} }}}}' in condition",
-                            f"{location}.condition"
+                            f"{location}.condition",
                         )
 
     def _find_variable_refs(

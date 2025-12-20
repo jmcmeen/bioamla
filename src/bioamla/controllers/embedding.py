@@ -357,7 +357,7 @@ class EmbeddingController(BaseController):
         )
 
         if result.success:
-            coords = result.reduced_embeddings
+            coords = result.metadata["reduced_embeddings"]
             result.data["x"] = coords[:, 0].tolist()
             result.data["y"] = coords[:, 1].tolist()
 

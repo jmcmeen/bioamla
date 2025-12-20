@@ -103,14 +103,12 @@ class ExecutionResult:
     @property
     def steps_completed(self) -> int:
         """Number of completed steps."""
-        return sum(1 for r in self.step_results
-                   if r.status == ExecutionStatus.COMPLETED)
+        return sum(1 for r in self.step_results if r.status == ExecutionStatus.COMPLETED)
 
     @property
     def steps_failed(self) -> int:
         """Number of failed steps."""
-        return sum(1 for r in self.step_results
-                   if r.status == ExecutionStatus.FAILED)
+        return sum(1 for r in self.step_results if r.status == ExecutionStatus.FAILED)
 
     @property
     def success(self) -> bool:
@@ -372,9 +370,7 @@ class WorkflowEngine:
             result.error = last_error
 
         result.completed_at = datetime.utcnow()
-        result.duration_seconds = (
-            result.completed_at - result.started_at
-        ).total_seconds()
+        result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
 
         return result
 
@@ -588,6 +584,7 @@ class WorkflowEngine:
     ) -> Any:
         """Copy files."""
         import shutil
+
         src = Path(params.get("source"))
         dst = Path(params.get("destination"))
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -604,6 +601,7 @@ class WorkflowEngine:
     ) -> Any:
         """Move files."""
         import shutil
+
         src = Path(params.get("source"))
         dst = Path(params.get("destination"))
         dst.parent.mkdir(parents=True, exist_ok=True)

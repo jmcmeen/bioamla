@@ -230,9 +230,7 @@ class ConfigAwareMixin:
         config_value = section_config.get(key)
 
         if config_value is not None:
-            logger.debug(
-                f"Using config default for {key}: [{section_name}].{key} = {config_value}"
-            )
+            logger.debug(f"Using config default for {key}: [{section_name}].{key} = {config_value}")
 
         return config_value
 
