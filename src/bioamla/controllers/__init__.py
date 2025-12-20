@@ -56,6 +56,7 @@ from .audio_transform import AudioTransformController
 from .inference import InferenceController
 from .pipeline import PipelineController, PipelineResult, PipelineProgress
 from .indices import IndicesController, IndicesResult, BatchIndicesResult
+from .annotation_controller import AnnotationController, AnnotationResult, ClipExtractionResult
 
 __all__ = [
     # Base
@@ -66,6 +67,10 @@ __all__ = [
     "AudioFileController",  # New: File I/O with undo/redo
     "AudioTransformController",  # New: In-memory transforms
     "AudioData",  # Audio data container
+    # Annotations
+    "AnnotationController",
+    "AnnotationResult",
+    "ClipExtractionResult",
     # ML
     "InferenceController",
     # Pipeline
