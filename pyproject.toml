@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.1.4"
+version = "0.1.5"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -90,7 +90,7 @@ packages = ["src/bioamla"]
 [tool.hatch.build]
 include = [
   "src/bioamla/**/*.py",
-  "src/bioamla/examples/*.sh",
+  "src/bioamla/_internal/examples/*.sh",
 ]
 
 [tool.pytest.ini_options]

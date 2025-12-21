@@ -1,0 +1,36 @@
+# Common reusable pipeline steps
+# Use with pipeline.include action to import these steps into other pipelines
+
+[pipeline]
+name = "common_steps"
+description = "Reusable step definitions for common operations"
+version = "1.0.0"
+author = "bioamla"
+
+[variables]
+input_dir = { type = "path", required = true }
+output_dir = { type = "path", required = true }
+sample_rate = { type = "integer", default = 16000 }
+
+# Reusable step: Resample audio
+[[steps]]
+name = "resample"
+action = "audio.resample"
+description = "Resample to target sample rate"
+params = { input = "{{ input_dir }}", output = "{{ output_dir }}/resampled", sample_rate = "{{ sample_rate }}" }
+
+# Reusable step: Apply bandpass filter
+[[steps]]
+name = "bandpass"
+action = "audio.filter"
+description = "Apply bandpass filter for bioacoustics"
+depends_on = ["resample"]
+params = { input = "{{ output_dir }}/resampled", output = "{{ output_dir }}/filtered", bandpass = "500,10000" }
+
+# Reusable step: Normalize audio
+[[steps]]
+name = "normalize"
+action = "audio.normalize"
+description = "Normalize audio levels"
+depends_on = ["bandpass"]
+params = { input = "{{ output_dir }}/filtered", output = "{{ output_dir }}/normalized", target_db = -20.0 }
