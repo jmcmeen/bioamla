@@ -29,6 +29,7 @@ Example:
 
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from bioamla.core.logger import get_logger
@@ -154,6 +155,15 @@ KNOWN_ACTIONS: Dict[str, Dict[str, Any]] = {
         "required": ["message"],
         "optional": ["level"],
     },
+    # Pipeline composition actions
+    "pipeline.execute": {
+        "required": ["pipeline"],
+        "optional": ["variables", "inherit_variables", "prefix_outputs"],
+    },
+    "pipeline.include": {
+        "required": ["pipeline"],
+        "optional": ["steps", "exclude", "variables"],
+    },
 }
 
 
@@ -185,12 +195,17 @@ class PipelineValidator:
             "optional": optional_params or [],
         }
 
-    def validate(self, pipeline: Pipeline) -> ValidationResult:
+    def validate(
+        self,
+        pipeline: Pipeline,
+        validate_nested_paths: bool = True,
+    ) -> ValidationResult:
         """
         Validate a pipeline.
 
         Args:
             pipeline: Pipeline to validate
+            validate_nested_paths: Whether to validate that nested pipeline paths exist
 
         Returns:
             ValidationResult with errors and warnings
@@ -208,6 +223,10 @@ class PipelineValidator:
 
         # Validate variable references
         self._validate_variable_references(pipeline, result)
+
+        # Validate nested pipeline references
+        if validate_nested_paths:
+            self._validate_nested_pipelines(pipeline, result)
 
         return result
 
@@ -399,6 +418,65 @@ class PipelineValidator:
                 refs.update(self._find_variable_refs(v, pattern))
 
         return refs
+
+    def _validate_nested_pipelines(
+        self,
+        pipeline: Pipeline,
+        result: ValidationResult,
+    ) -> None:
+        """Validate nested pipeline references."""
+        for idx, step in enumerate(pipeline.steps):
+            location = f"steps[{idx}]"
+
+            # Check for pipeline.execute and pipeline.include actions
+            if step.action not in ("pipeline.execute", "pipeline.include"):
+                continue
+
+            pipeline_param = step.params.get("pipeline")
+            if not pipeline_param:
+                # Already caught by action param validation
+                continue
+
+            # Skip if it's a template variable
+            if "{{" in str(pipeline_param):
+                result.add_warning(
+                    f"Cannot validate templated pipeline path: '{pipeline_param}'",
+                    f"{location}.params.pipeline",
+                )
+                continue
+
+            # Resolve path relative to source pipeline
+            nested_path = Path(pipeline_param)
+            if not nested_path.is_absolute() and pipeline.source_path:
+                parent_dir = Path(pipeline.source_path).parent
+                nested_path = parent_dir / nested_path
+
+            # Check if file exists
+            if not nested_path.exists():
+                result.add_error(
+                    f"Nested pipeline not found: '{pipeline_param}'",
+                    f"{location}.params.pipeline",
+                )
+            elif not nested_path.suffix == ".toml":
+                result.add_warning(
+                    f"Nested pipeline should be a TOML file: '{pipeline_param}'",
+                    f"{location}.params.pipeline",
+                )
+
+            # Validate steps parameter for pipeline.include
+            if step.action == "pipeline.include":
+                steps_param = step.params.get("steps")
+                exclude_param = step.params.get("exclude")
+
+                if steps_param and exclude_param:
+                    # Check for overlap
+                    if isinstance(steps_param, list) and isinstance(exclude_param, list):
+                        overlap = set(steps_param) & set(exclude_param)
+                        if overlap:
+                            result.add_warning(
+                                f"Steps both included and excluded: {overlap}",
+                                f"{location}.params",
+                            )
 
 
 def validate_pipeline(

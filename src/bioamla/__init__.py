@@ -43,10 +43,10 @@ Import from specific submodules as needed:
     from bioamla.services import search_inaturalist, download_xeno_canto
     from bioamla.utils import get_audio_files, SUPPORTED_AUDIO_EXTENSIONS
 
-Version: 0.1.4
+Version: 0.1.5
 """
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 # Re-export commonly used utilities for convenience
 from bioamla.core.utils import (
