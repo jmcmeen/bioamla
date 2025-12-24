@@ -18,11 +18,9 @@
 set -e  # Exit on error
 
 # Configuration
-PROJECT_NAME="frog_acoustic_study"
-PROJECT_DIR="./${PROJECT_NAME}"
-AUDIO_DIR="${PROJECT_DIR}/raw_recordings"
+AUDIO_DIR="./scp_small"
 AUDIO_FILE=$(find "$AUDIO_DIR" -type f \( -name "*.wav" -o -name "*.mp3" -o -name "*.flac" \) | head -1)
-OUTPUT_DIR="${PROJECT_DIR}/visualizations"
+OUTPUT_DIR="./visualizations"
 
 
 echo "=== Visualization Workflow ==="
