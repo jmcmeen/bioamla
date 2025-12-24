@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .base import BaseService, ControllerResult
+from .base import BaseService, ServiceResult
 
 
 @dataclass
@@ -105,7 +105,7 @@ class ClusteringController(BaseService):
         min_cluster_size: int = 5,
         min_samples: int = 3,
         **kwargs,
-    ) -> ControllerResult[ClusteringSummary]:
+    ) -> ServiceResult[ClusteringSummary]:
         """
         Cluster embeddings.
 
@@ -190,7 +190,7 @@ class ClusteringController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=f"Found {n_clusters} clusters with {method}",
                 labels=labels,
@@ -198,14 +198,14 @@ class ClusteringController(BaseService):
             )
         except Exception as e:
             self._fail_run(str(e))
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def find_optimal_k(
         self,
         embeddings: np.ndarray,
         k_range: Tuple[int, int] = (2, 20),
         method: str = "silhouette",
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Find optimal number of clusters for k-means.
 
@@ -226,7 +226,7 @@ class ClusteringController(BaseService):
                 k_range=k_range,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "optimal_k": optimal_k,
                     "k_range": k_range,
@@ -235,14 +235,14 @@ class ClusteringController(BaseService):
                 message=f"Optimal k = {optimal_k} using {method} method",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def analyze_clusters(
         self,
         embeddings: np.ndarray,
         labels: np.ndarray,
         filepaths: Optional[List[str]] = None,
-    ) -> ControllerResult[ClusterAnalysis]:
+    ) -> ServiceResult[ClusterAnalysis]:
         """
         Perform detailed analysis of clustering results.
 
@@ -272,12 +272,12 @@ class ClusteringController(BaseService):
                 cluster_stats=analysis["cluster_stats"],
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result,
                 message=f"Analyzed {result.n_clusters} clusters with silhouette={result.silhouette_score:.3f}",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Dimensionality Reduction
@@ -290,7 +290,7 @@ class ClusteringController(BaseService):
         n_components: int = 2,
         output_path: Optional[str] = None,
         **kwargs,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Reduce dimensionality of embeddings.
 
@@ -317,7 +317,7 @@ class ClusteringController(BaseService):
             if output_path:
                 np.save(output_path, reduced)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "original_shape": embeddings.shape,
                     "reduced_shape": reduced.shape,
@@ -329,7 +329,7 @@ class ClusteringController(BaseService):
                 reduced_embeddings=reduced,
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def reduce_for_visualization(
         self,
@@ -337,7 +337,7 @@ class ClusteringController(BaseService):
         method: str = "umap",
         labels: Optional[np.ndarray] = None,
         **kwargs,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Reduce embeddings to 2D for visualization.
 
@@ -380,7 +380,7 @@ class ClusteringController(BaseService):
         method: str = "distance",
         threshold: Optional[float] = None,
         contamination: float = 0.1,
-    ) -> ControllerResult[NoveltyDetectionSummary]:
+    ) -> ServiceResult[NoveltyDetectionSummary]:
         """
         Detect novel/outlier samples in embeddings.
 
@@ -432,7 +432,7 @@ class ClusteringController(BaseService):
 
             self._novelty_detector = detector
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=f"Detected {n_novel} novel samples ({summary.novel_percentage:.1f}%)",
                 is_novel=is_novel,
@@ -440,7 +440,7 @@ class ClusteringController(BaseService):
                 detector=detector,
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def get_most_novel(
         self,
@@ -448,7 +448,7 @@ class ClusteringController(BaseService):
         n_samples: int = 10,
         known_embeddings: Optional[np.ndarray] = None,
         method: str = "distance",
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Get the most novel samples.
 
@@ -480,7 +480,7 @@ class ClusteringController(BaseService):
             indices = [r.sample_idx for r in top_n]
             scores = [r.novelty_score for r in top_n]
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "indices": indices,
                     "scores": scores,
@@ -489,7 +489,7 @@ class ClusteringController(BaseService):
                 message=f"Found {len(indices)} most novel samples",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Cluster Similarity
@@ -500,7 +500,7 @@ class ClusteringController(BaseService):
         embeddings: np.ndarray,
         labels: np.ndarray,
         metric: str = "cosine",
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Compute pairwise similarity between clusters.
 
@@ -517,7 +517,7 @@ class ClusteringController(BaseService):
 
             similarity = compute_cluster_similarity(embeddings, labels, metric=metric)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "n_clusters": similarity.shape[0],
                     "metric": metric,
@@ -526,14 +526,14 @@ class ClusteringController(BaseService):
                 similarity_matrix=similarity,
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def sort_clusters_by_similarity(
         self,
         embeddings: np.ndarray,
         labels: np.ndarray,
         reference_cluster: Optional[int] = None,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Sort clusters by similarity to each other.
 
@@ -552,7 +552,7 @@ class ClusteringController(BaseService):
                 embeddings, labels, reference_label=reference_cluster
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "sorted_labels": sorted_labels,
                     "reference_cluster": reference_cluster or "largest",
@@ -560,7 +560,7 @@ class ClusteringController(BaseService):
                 message=f"Sorted {len(sorted_labels)} clusters by similarity",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Export
@@ -572,7 +572,7 @@ class ClusteringController(BaseService):
         filepaths: List[str],
         output_dir: str,
         copy_files: bool = False,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Export clustering results to directory structure.
 
@@ -593,7 +593,7 @@ class ClusteringController(BaseService):
             unique_labels = set(labels)
             n_clusters = len(unique_labels) - (1 if -1 in unique_labels else 0)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "output_dir": output_path,
                     "n_clusters": n_clusters,
@@ -603,7 +603,7 @@ class ClusteringController(BaseService):
                 message=f"Exported {n_clusters} clusters to {output_path}",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def export_to_csv(
         self,
@@ -612,7 +612,7 @@ class ClusteringController(BaseService):
         output_path: str,
         embeddings: Optional[np.ndarray] = None,
         reduced_embeddings: Optional[np.ndarray] = None,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Export clustering results to CSV.
 
@@ -653,7 +653,7 @@ class ClusteringController(BaseService):
                         row["y"] = float(reduced_embeddings[i, 1])
                     writer.writerow(row)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "output_path": str(output_path),
                     "n_rows": len(labels),
@@ -661,4 +661,4 @@ class ClusteringController(BaseService):
                 message=f"Exported {len(labels)} rows to {output_path}",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))

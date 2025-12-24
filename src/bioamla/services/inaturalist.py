@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .base import BaseService, ControllerResult, ToDictMixin
+from .base import BaseService, ServiceResult, ToDictMixin
 
 
 @dataclass
@@ -137,7 +137,7 @@ class INaturalistController(BaseService):
         place_id: Optional[int] = None,
         quality_grade: Optional[str] = "research",
         per_page: int = 30,
-    ) -> ControllerResult[SearchResult]:
+    ) -> ServiceResult[SearchResult]:
         """
         Search for iNaturalist observations with sounds.
 
@@ -173,12 +173,12 @@ class INaturalistController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result,
                 message=f"Found {len(observations)} observations with sounds",
             )
         except Exception as e:
-            return ControllerResult.fail(f"Search failed: {e}")
+            return ServiceResult.fail(f"Search failed: {e}")
 
     # =========================================================================
     # Download
@@ -201,7 +201,7 @@ class INaturalistController(BaseService):
         organize_by_taxon: bool = True,
         include_metadata: bool = True,
         file_extensions: Optional[List[str]] = None,
-    ) -> ControllerResult[DownloadResult]:
+    ) -> ServiceResult[DownloadResult]:
         """
         Download audio files from iNaturalist.
 
@@ -260,20 +260,20 @@ class INaturalistController(BaseService):
             if result.skipped_existing:
                 message += f" (skipped {result.skipped_existing} existing)"
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result,
                 message=message,
                 stats=stats,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Download failed: {e}")
+            return ServiceResult.fail(f"Download failed: {e}")
 
     def download_from_observations(
         self,
         observation_ids: List[int],
         output_dir: str,
         organize_by_taxon: bool = True,
-    ) -> ControllerResult[DownloadResult]:
+    ) -> ServiceResult[DownloadResult]:
         """
         Download audio from specific observation IDs.
 
@@ -353,12 +353,12 @@ class INaturalistController(BaseService):
                 errors=errors,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result,
                 message=f"Downloaded {total_sounds} sounds from {len(observation_ids)} observations",
             )
         except Exception as e:
-            return ControllerResult.fail(f"Download failed: {e}")
+            return ServiceResult.fail(f"Download failed: {e}")
 
     # =========================================================================
     # Taxa Discovery
@@ -370,7 +370,7 @@ class INaturalistController(BaseService):
         project_id: Optional[str] = None,
         quality_grade: Optional[str] = "research",
         parent_taxon_id: Optional[int] = None,
-    ) -> ControllerResult[List[TaxonInfo]]:
+    ) -> ServiceResult[List[TaxonInfo]]:
         """
         Get taxa with observations in a place or project.
 
@@ -384,7 +384,7 @@ class INaturalistController(BaseService):
             Result with list of taxa
         """
         if not place_id and not project_id:
-            return ControllerResult.fail("At least one of place_id or project_id must be provided")
+            return ServiceResult.fail("At least one of place_id or project_id must be provided")
 
         try:
             from bioamla.core.services.inaturalist import get_taxa
@@ -407,19 +407,19 @@ class INaturalistController(BaseService):
                 for t in taxa_list
             ]
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=results,
                 message=f"Found {len(results)} taxa",
                 raw_data=taxa_list,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to get taxa: {e}")
+            return ServiceResult.fail(f"Failed to get taxa: {e}")
 
     def export_taxa_csv(
         self,
         taxa: List[TaxonInfo],
         output_path: str,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Export taxa list to CSV file.
 
@@ -452,12 +452,12 @@ class INaturalistController(BaseService):
                         }
                     )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=str(output),
                 message=f"Exported {len(taxa)} taxa to {output}",
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to export taxa: {e}")
+            return ServiceResult.fail(f"Failed to export taxa: {e}")
 
     # =========================================================================
     # Project & Observation Info
@@ -466,7 +466,7 @@ class INaturalistController(BaseService):
     def get_project_stats(
         self,
         project_id: str,
-    ) -> ControllerResult[ProjectStats]:
+    ) -> ServiceResult[ProjectStats]:
         """
         Get statistics for an iNaturalist project.
 
@@ -495,18 +495,18 @@ class INaturalistController(BaseService):
                 url=stats["url"],
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result,
                 message=f"Project: {result.title}",
                 raw_stats=stats,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to get project stats: {e}")
+            return ServiceResult.fail(f"Failed to get project stats: {e}")
 
     def get_observation(
         self,
         observation_id: int,
-    ) -> ControllerResult[ObservationInfo]:
+    ) -> ServiceResult[ObservationInfo]:
         """
         Get information about a specific observation.
 
@@ -523,7 +523,7 @@ class INaturalistController(BaseService):
             results = response.get("results", [])
 
             if not results:
-                return ControllerResult.fail(f"Observation {observation_id} not found")
+                return ServiceResult.fail(f"Observation {observation_id} not found")
 
             obs = results[0]
             taxon = obs.get("taxon", {})
@@ -541,18 +541,18 @@ class INaturalistController(BaseService):
                 url=f"https://www.inaturalist.org/observations/{observation_id}",
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result,
                 message=f"Observation: {result.taxon_name}",
                 raw_observation=obs,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to get observation: {e}")
+            return ServiceResult.fail(f"Failed to get observation: {e}")
 
     def get_observation_sounds(
         self,
         observation_id: int,
-    ) -> ControllerResult[List[Dict[str, Any]]]:
+    ) -> ServiceResult[List[Dict[str, Any]]]:
         """
         Get all sounds from a specific observation.
 
@@ -567,12 +567,12 @@ class INaturalistController(BaseService):
 
             sounds = get_observation_sounds(observation_id)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=sounds,
                 message=f"Found {len(sounds)} sounds",
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to get sounds: {e}")
+            return ServiceResult.fail(f"Failed to get sounds: {e}")
 
     # =========================================================================
     # Utilities
@@ -581,7 +581,7 @@ class INaturalistController(BaseService):
     def load_taxon_ids(
         self,
         csv_path: str,
-    ) -> ControllerResult[List[int]]:
+    ) -> ServiceResult[List[int]]:
         """
         Load taxon IDs from a CSV file.
 
@@ -596,14 +596,14 @@ class INaturalistController(BaseService):
 
             taxon_ids = load_taxon_ids_from_csv(csv_path)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=taxon_ids,
                 message=f"Loaded {len(taxon_ids)} taxon IDs from {csv_path}",
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to load taxon IDs: {e}")
+            return ServiceResult.fail(f"Failed to load taxon IDs: {e}")
 
-    def get_common_taxa(self) -> ControllerResult[Dict[str, int]]:
+    def get_common_taxa(self) -> ServiceResult[Dict[str, int]]:
         """
         Get a dictionary of common taxon IDs.
 
@@ -639,7 +639,7 @@ class INaturalistController(BaseService):
             "Anaxyrus americanus": 24225,  # American Toad
         }
 
-        return ControllerResult.ok(
+        return ServiceResult.ok(
             data=common_taxa,
             message=f"Found {len(common_taxa)} common taxa",
         )

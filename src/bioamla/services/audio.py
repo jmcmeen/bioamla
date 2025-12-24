@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .base import BaseService, ControllerResult
+from .base import BaseService, ServiceResult
 
 
 @dataclass
@@ -88,7 +88,7 @@ class AudioController(BaseService):
         self,
         directory: str,
         recursive: bool = True,
-    ) -> ControllerResult[List[str]]:
+    ) -> ServiceResult[List[str]]:
         """
         List audio files in a directory.
 
@@ -101,19 +101,19 @@ class AudioController(BaseService):
         """
         error = self._validate_input_path(directory)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             files = self._get_audio_files(directory, recursive=recursive)
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=[str(f) for f in files],
                 message=f"Found {len(files)} audio files",
                 count=len(files),
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
-    def get_metadata(self, filepath: str) -> ControllerResult[AudioMetadata]:
+    def get_metadata(self, filepath: str) -> ServiceResult[AudioMetadata]:
         """
         Get metadata from an audio file.
 
@@ -125,14 +125,14 @@ class AudioController(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.utils import get_wav_metadata
 
             metadata = get_wav_metadata(filepath)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=AudioMetadata(
                     filepath=filepath,
                     duration_seconds=metadata.get("duration", 0),
@@ -143,7 +143,7 @@ class AudioController(BaseService):
                 )
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Signal Processing
@@ -154,7 +154,7 @@ class AudioController(BaseService):
         input_path: str,
         output_path: str,
         target_rate: int,
-    ) -> ControllerResult[ProcessedAudio]:
+    ) -> ServiceResult[ProcessedAudio]:
         """
         Resample an audio file to a different sample rate.
 
@@ -168,11 +168,11 @@ class AudioController(BaseService):
         """
         error = self._validate_input_path(input_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         error = self._validate_output_path(output_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.audio.signal import load_audio, resample_audio, save_audio
@@ -183,7 +183,7 @@ class AudioController(BaseService):
 
             duration = len(resampled) / target_rate
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=ProcessedAudio(
                     input_path=input_path,
                     output_path=output_path,
@@ -194,7 +194,7 @@ class AudioController(BaseService):
                 message=f"Resampled {input_path} to {target_rate}Hz",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def resample_batch(
         self,
@@ -202,7 +202,7 @@ class AudioController(BaseService):
         output_dir: str,
         target_rate: int,
         recursive: bool = True,
-    ) -> ControllerResult[BatchResult]:
+    ) -> ServiceResult[BatchResult]:
         """
         Resample multiple audio files.
 
@@ -217,7 +217,7 @@ class AudioController(BaseService):
         """
         error = self._validate_input_path(input_dir)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
@@ -227,7 +227,7 @@ class AudioController(BaseService):
 
             files = self._get_audio_files(input_dir, recursive=recursive)
             if not files:
-                return ControllerResult.fail(f"No audio files found in {input_dir}")
+                return ServiceResult.fail(f"No audio files found in {input_dir}")
 
             processed = 0
             errors = []
@@ -253,7 +253,7 @@ class AudioController(BaseService):
                 if error:
                     errors.append(f"{filepath.name}: {error}")
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=BatchResult(
                     processed=processed,
                     failed=len(errors),
@@ -263,7 +263,7 @@ class AudioController(BaseService):
                 message=f"Resampled {processed} files to {target_rate}Hz",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def normalize(
         self,
@@ -271,7 +271,7 @@ class AudioController(BaseService):
         output_path: str,
         target_db: float = -20.0,
         peak: bool = False,
-    ) -> ControllerResult[ProcessedAudio]:
+    ) -> ServiceResult[ProcessedAudio]:
         """
         Normalize audio loudness.
 
@@ -286,11 +286,11 @@ class AudioController(BaseService):
         """
         error = self._validate_input_path(input_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         error = self._validate_output_path(output_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.audio.signal import (
@@ -311,7 +311,7 @@ class AudioController(BaseService):
             save_audio(output_path, normalized, sr)
             duration = len(normalized) / sr
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=ProcessedAudio(
                     input_path=input_path,
                     output_path=output_path,
@@ -322,7 +322,7 @@ class AudioController(BaseService):
                 message=f"Normalized {input_path} to {target_db}dB",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def filter_audio(
         self,
@@ -332,7 +332,7 @@ class AudioController(BaseService):
         highpass: Optional[float] = None,
         bandpass: Optional[Tuple[float, float]] = None,
         order: int = 5,
-    ) -> ControllerResult[ProcessedAudio]:
+    ) -> ServiceResult[ProcessedAudio]:
         """
         Apply frequency filter to audio.
 
@@ -348,15 +348,15 @@ class AudioController(BaseService):
             Result with processed audio info
         """
         if not any([lowpass, highpass, bandpass]):
-            return ControllerResult.fail("Must specify lowpass, highpass, or bandpass")
+            return ServiceResult.fail("Must specify lowpass, highpass, or bandpass")
 
         error = self._validate_input_path(input_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         error = self._validate_output_path(output_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.audio.signal import (
@@ -382,7 +382,7 @@ class AudioController(BaseService):
             save_audio(output_path, filtered, sr)
             duration = len(filtered) / sr
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=ProcessedAudio(
                     input_path=input_path,
                     output_path=output_path,
@@ -393,7 +393,7 @@ class AudioController(BaseService):
                 message=f"Applied {filter_desc} to {input_path}",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def trim(
         self,
@@ -403,7 +403,7 @@ class AudioController(BaseService):
         end: Optional[float] = None,
         trim_silence: bool = False,
         silence_threshold_db: float = -40.0,
-    ) -> ControllerResult[ProcessedAudio]:
+    ) -> ServiceResult[ProcessedAudio]:
         """
         Trim audio by time or remove silence.
 
@@ -419,15 +419,15 @@ class AudioController(BaseService):
             Result with processed audio info
         """
         if not trim_silence and start is None and end is None:
-            return ControllerResult.fail("Must specify start/end or use trim_silence")
+            return ServiceResult.fail("Must specify start/end or use trim_silence")
 
         error = self._validate_input_path(input_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         error = self._validate_output_path(output_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.audio.signal import (
@@ -451,7 +451,7 @@ class AudioController(BaseService):
             save_audio(output_path, trimmed, sr)
             duration = len(trimmed) / sr
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=ProcessedAudio(
                     input_path=input_path,
                     output_path=output_path,
@@ -462,14 +462,14 @@ class AudioController(BaseService):
                 message=f"Trimmed {input_path} ({operation})",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def denoise(
         self,
         input_path: str,
         output_path: str,
         strength: float = 1.0,
-    ) -> ControllerResult[ProcessedAudio]:
+    ) -> ServiceResult[ProcessedAudio]:
         """
         Apply noise reduction to audio.
 
@@ -483,11 +483,11 @@ class AudioController(BaseService):
         """
         error = self._validate_input_path(input_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         error = self._validate_output_path(output_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.audio.signal import load_audio, save_audio, spectral_denoise
@@ -498,7 +498,7 @@ class AudioController(BaseService):
 
             duration = len(denoised) / sr
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=ProcessedAudio(
                     input_path=input_path,
                     output_path=output_path,
@@ -509,7 +509,7 @@ class AudioController(BaseService):
                 message=f"Denoised {input_path}",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Analysis
@@ -519,7 +519,7 @@ class AudioController(BaseService):
         self,
         filepath: str,
         silence_threshold_db: float = -40.0,
-    ) -> ControllerResult[AnalysisResult]:
+    ) -> ServiceResult[AnalysisResult]:
         """
         Analyze an audio file.
 
@@ -532,7 +532,7 @@ class AudioController(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.audio import analyze_audio
@@ -541,7 +541,7 @@ class AudioController(BaseService):
             audio, sr = load_audio(filepath)
             analysis = analyze_audio(audio, sr, silence_threshold_db=silence_threshold_db)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=AnalysisResult(
                     filepath=filepath,
                     duration_seconds=analysis.get("duration", 0),
@@ -554,14 +554,14 @@ class AudioController(BaseService):
                 )
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def analyze_batch(
         self,
         directory: str,
         output_csv: Optional[str] = None,
         recursive: bool = True,
-    ) -> ControllerResult[BatchResult]:
+    ) -> ServiceResult[BatchResult]:
         """
         Analyze multiple audio files.
 
@@ -575,7 +575,7 @@ class AudioController(BaseService):
         """
         error = self._validate_input_path(directory)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.audio import analyze_audio
@@ -584,7 +584,7 @@ class AudioController(BaseService):
 
             files = self._get_audio_files(directory, recursive=recursive)
             if not files:
-                return ControllerResult.fail(f"No audio files found in {directory}")
+                return ServiceResult.fail(f"No audio files found in {directory}")
 
             results = []
             errors = []
@@ -637,7 +637,7 @@ class AudioController(BaseService):
                             ]
                         )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=BatchResult(
                     processed=len(results),
                     failed=len(errors),
@@ -647,7 +647,7 @@ class AudioController(BaseService):
                 message=f"Analyzed {len(results)} files",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Generic Signal Processing
@@ -661,7 +661,7 @@ class AudioController(BaseService):
         operation_name: str = "process",
         recursive: bool = True,
         output_sample_rate: Optional[int] = None,
-    ) -> ControllerResult[BatchResult]:
+    ) -> ServiceResult[BatchResult]:
         """
         Apply a custom processor to multiple audio files.
 
@@ -678,7 +678,7 @@ class AudioController(BaseService):
         """
         error = self._validate_input_path(input_dir)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
@@ -688,7 +688,7 @@ class AudioController(BaseService):
 
             files = self._get_audio_files(input_dir, recursive=recursive)
             if not files:
-                return ControllerResult.fail(f"No audio files found in {input_dir}")
+                return ServiceResult.fail(f"No audio files found in {input_dir}")
 
             processed = 0
             errors = []
@@ -709,7 +709,7 @@ class AudioController(BaseService):
                 if error:
                     errors.append(f"{filepath.name}: {error}")
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=BatchResult(
                     processed=processed,
                     failed=len(errors),
@@ -719,4 +719,4 @@ class AudioController(BaseService):
                 message=f"{operation_name}: processed {processed} files",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))

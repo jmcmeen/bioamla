@@ -72,7 +72,7 @@ class ToDictMixin:
 
 
 @dataclass
-class ControllerResult(Generic[T]):
+class ServiceResult(Generic[T]):
     """
     Result object returned by controller operations.
 
@@ -93,7 +93,7 @@ class ControllerResult(Generic[T]):
         message: str = None,
         warnings: List[str] = None,
         **metadata,
-    ) -> "ControllerResult[T]":
+    ) -> "ServiceResult[T]":
         """Create a successful result."""
         return cls(
             success=True,
@@ -104,7 +104,7 @@ class ControllerResult(Generic[T]):
         )
 
     @classmethod
-    def fail(cls, error: str, warnings: List[str] = None, **metadata) -> "ControllerResult[T]":
+    def fail(cls, error: str, warnings: List[str] = None, **metadata) -> "ServiceResult[T]":
         """Create a failed result."""
         return cls(
             success=False,

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .base import BaseService, ControllerResult
+from .base import BaseService, ServiceResult
 
 
 @dataclass
@@ -97,7 +97,7 @@ class InferenceController(BaseService):
         model_path: Optional[str] = None,
         top_k: int = 5,
         min_confidence: float = 0.0,
-    ) -> ControllerResult[List[PredictionResult]]:
+    ) -> ServiceResult[List[PredictionResult]]:
         """
         Run prediction on a single audio file.
 
@@ -112,7 +112,7 @@ class InferenceController(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             model = self._get_model(model_path)
@@ -133,12 +133,12 @@ class InferenceController(BaseService):
                         )
                     )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=results,
                 message=f"Generated {len(results)} predictions for {filepath}",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Batch Prediction
@@ -154,7 +154,7 @@ class InferenceController(BaseService):
         recursive: bool = True,
         clip_duration: Optional[float] = None,
         overlap: float = 0.0,
-    ) -> ControllerResult[BatchInferenceResult]:
+    ) -> ServiceResult[BatchInferenceResult]:
         """
         Run prediction on multiple audio files.
 
@@ -173,7 +173,7 @@ class InferenceController(BaseService):
         """
         error = self._validate_input_path(directory)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         # Start run tracking
         self._start_run(
@@ -199,7 +199,7 @@ class InferenceController(BaseService):
 
             if not files:
                 self._fail_run("No audio files found")
-                return ControllerResult.fail(f"No audio files found in {directory}")
+                return ServiceResult.fail(f"No audio files found in {directory}")
 
             all_predictions = []
             errors = []
@@ -282,7 +282,7 @@ class InferenceController(BaseService):
                 output_files=[output_csv] if output_csv else None,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=BatchInferenceResult(
                     predictions=all_predictions,
                     summary=summary,
@@ -292,7 +292,7 @@ class InferenceController(BaseService):
             )
         except Exception as e:
             self._fail_run(str(e))
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Embedding Extraction
@@ -303,7 +303,7 @@ class InferenceController(BaseService):
         filepath: str,
         model_path: Optional[str] = None,
         output_path: Optional[str] = None,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Extract embeddings from an audio file.
 
@@ -317,7 +317,7 @@ class InferenceController(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             model = self._get_model(model_path)
@@ -328,7 +328,7 @@ class InferenceController(BaseService):
 
                 np.save(output_path, embeddings)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "filepath": filepath,
                     "shape": embeddings.shape,
@@ -337,7 +337,7 @@ class InferenceController(BaseService):
                 message=f"Extracted embeddings with shape {embeddings.shape}",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def extract_embeddings_batch(
         self,
@@ -346,7 +346,7 @@ class InferenceController(BaseService):
         model_path: Optional[str] = None,
         recursive: bool = True,
         format: str = "npy",
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Extract embeddings from multiple audio files.
 
@@ -362,7 +362,7 @@ class InferenceController(BaseService):
         """
         error = self._validate_input_path(directory)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         # Start run tracking
         self._start_run(
@@ -385,7 +385,7 @@ class InferenceController(BaseService):
 
             if not files:
                 self._fail_run("No audio files found")
-                return ControllerResult.fail(f"No audio files found in {directory}")
+                return ServiceResult.fail(f"No audio files found in {directory}")
 
             all_embeddings = []
             file_mapping = []
@@ -404,7 +404,7 @@ class InferenceController(BaseService):
 
             if not all_embeddings:
                 self._fail_run("No embeddings extracted")
-                return ControllerResult.fail("No embeddings extracted")
+                return ServiceResult.fail("No embeddings extracted")
 
             # Stack all embeddings
             stacked = np.vstack(all_embeddings)
@@ -430,7 +430,7 @@ class InferenceController(BaseService):
                     df.to_parquet(str(output_file))
                 except ImportError:
                     self._fail_run("pandas required for parquet format")
-                    return ControllerResult.fail("pandas required for parquet format")
+                    return ServiceResult.fail("pandas required for parquet format")
 
             # Complete run with results
             self._complete_run(
@@ -443,7 +443,7 @@ class InferenceController(BaseService):
                 output_files=output_files,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "total_files": len(files),
                     "extracted": len(all_embeddings),
@@ -455,7 +455,7 @@ class InferenceController(BaseService):
             )
         except Exception as e:
             self._fail_run(str(e))
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Model Information
@@ -464,7 +464,7 @@ class InferenceController(BaseService):
     def get_model_info(
         self,
         model_path: Optional[str] = None,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Get information about a model.
 
@@ -484,11 +484,11 @@ class InferenceController(BaseService):
                 "labels": getattr(model, "labels", None),
             }
 
-            return ControllerResult.ok(data=info)
+            return ServiceResult.ok(data=info)
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
-    def list_available_models(self) -> ControllerResult[List[Dict[str, str]]]:
+    def list_available_models(self) -> ServiceResult[List[Dict[str, str]]]:
         """
         List commonly available models.
 
@@ -513,7 +513,7 @@ class InferenceController(BaseService):
             },
         ]
 
-        return ControllerResult.ok(
+        return ServiceResult.ok(
             data=models,
             message=f"Found {len(models)} available models",
         )

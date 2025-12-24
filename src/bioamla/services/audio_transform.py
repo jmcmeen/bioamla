@@ -40,7 +40,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 from .audio_file import AudioData
-from .base import BaseService, ControllerResult
+from .base import BaseService, ServiceResult
 
 
 @dataclass
@@ -87,7 +87,7 @@ class AudioTransformController(BaseService):
         audio: AudioData,
         cutoff_hz: float,
         order: int = 5,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Apply a lowpass filter.
 
@@ -116,20 +116,20 @@ class AudioTransformController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message=f"Applied lowpass filter at {cutoff_hz}Hz",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Lowpass filter failed: {e}")
+            return ServiceResult.fail(f"Lowpass filter failed: {e}")
 
     def apply_highpass(
         self,
         audio: AudioData,
         cutoff_hz: float,
         order: int = 5,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Apply a highpass filter.
 
@@ -158,13 +158,13 @@ class AudioTransformController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message=f"Applied highpass filter at {cutoff_hz}Hz",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Highpass filter failed: {e}")
+            return ServiceResult.fail(f"Highpass filter failed: {e}")
 
     def apply_bandpass(
         self,
@@ -172,7 +172,7 @@ class AudioTransformController(BaseService):
         low_hz: float,
         high_hz: float,
         order: int = 5,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Apply a bandpass filter.
 
@@ -202,13 +202,13 @@ class AudioTransformController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message=f"Applied bandpass filter {low_hz}-{high_hz}Hz",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Bandpass filter failed: {e}")
+            return ServiceResult.fail(f"Bandpass filter failed: {e}")
 
     # =========================================================================
     # Normalization Operations
@@ -218,7 +218,7 @@ class AudioTransformController(BaseService):
         self,
         audio: AudioData,
         target_peak: float = 0.99,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Normalize audio to a target peak amplitude.
 
@@ -246,19 +246,19 @@ class AudioTransformController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message=f"Peak normalized to {target_peak}",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Peak normalization failed: {e}")
+            return ServiceResult.fail(f"Peak normalization failed: {e}")
 
     def normalize_loudness(
         self,
         audio: AudioData,
         target_db: float = -20.0,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Normalize audio to a target loudness (RMS level).
 
@@ -286,13 +286,13 @@ class AudioTransformController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message=f"Loudness normalized to {target_db} dBFS",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Loudness normalization failed: {e}")
+            return ServiceResult.fail(f"Loudness normalization failed: {e}")
 
     # =========================================================================
     # Resampling
@@ -302,7 +302,7 @@ class AudioTransformController(BaseService):
         self,
         audio: AudioData,
         target_sample_rate: int,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Resample audio to a different sample rate.
 
@@ -314,7 +314,7 @@ class AudioTransformController(BaseService):
             ControllerResult with resampled AudioData
         """
         if target_sample_rate == audio.sample_rate:
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=audio,
                 message="Already at target sample rate",
             )
@@ -337,13 +337,13 @@ class AudioTransformController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message=f"Resampled from {audio.sample_rate}Hz to {target_sample_rate}Hz",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Resampling failed: {e}")
+            return ServiceResult.fail(f"Resampling failed: {e}")
 
     # =========================================================================
     # Trimming Operations
@@ -354,7 +354,7 @@ class AudioTransformController(BaseService):
         audio: AudioData,
         start_time: Optional[float] = None,
         end_time: Optional[float] = None,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Trim audio to a time range.
 
@@ -393,20 +393,20 @@ class AudioTransformController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message=f"Trimmed to {start:.2f}s - {end:.2f}s",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Trim failed: {e}")
+            return ServiceResult.fail(f"Trim failed: {e}")
 
     def trim_silence(
         self,
         audio: AudioData,
         threshold_db: float = -40.0,
         min_silence_duration: float = 0.1,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Trim silence from the beginning and end of audio.
 
@@ -441,14 +441,14 @@ class AudioTransformController(BaseService):
 
             removed_duration = audio.duration - result_audio.duration
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message=f"Trimmed {removed_duration:.2f}s of silence",
                 removed_duration=removed_duration,
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Silence trimming failed: {e}")
+            return ServiceResult.fail(f"Silence trimming failed: {e}")
 
     # =========================================================================
     # Noise Reduction
@@ -458,7 +458,7 @@ class AudioTransformController(BaseService):
         self,
         audio: AudioData,
         strength: float = 1.0,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Apply spectral noise reduction.
 
@@ -490,13 +490,13 @@ class AudioTransformController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message=f"Applied noise reduction (strength={strength})",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Noise reduction failed: {e}")
+            return ServiceResult.fail(f"Noise reduction failed: {e}")
 
     # =========================================================================
     # Gain Operations
@@ -506,7 +506,7 @@ class AudioTransformController(BaseService):
         self,
         audio: AudioData,
         gain_db: float,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Apply gain (volume adjustment) to audio.
 
@@ -536,19 +536,19 @@ class AudioTransformController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message=f"Applied {gain_db:+.1f} dB gain",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Gain adjustment failed: {e}")
+            return ServiceResult.fail(f"Gain adjustment failed: {e}")
 
     # =========================================================================
     # Channel Operations
     # =========================================================================
 
-    def to_mono(self, audio: AudioData) -> ControllerResult[AudioData]:
+    def to_mono(self, audio: AudioData) -> ServiceResult[AudioData]:
         """
         Convert stereo audio to mono.
 
@@ -561,7 +561,7 @@ class AudioTransformController(BaseService):
         try:
             if audio.samples.ndim == 1:
                 # Already mono
-                return ControllerResult.ok(
+                return ServiceResult.ok(
                     data=audio,
                     message="Already mono",
                 )
@@ -582,13 +582,13 @@ class AudioTransformController(BaseService):
                 },
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result_audio,
                 message="Converted to mono",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Mono conversion failed: {e}")
+            return ServiceResult.fail(f"Mono conversion failed: {e}")
 
     # =========================================================================
     # Playback Preparation
@@ -599,7 +599,7 @@ class AudioTransformController(BaseService):
         audio: AudioData,
         target_sample_rate: int = 44100,
         normalize: bool = True,
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Prepare audio for playback.
 
@@ -639,7 +639,7 @@ class AudioTransformController(BaseService):
                 return norm_result
             result = norm_result.data
 
-        return ControllerResult.ok(
+        return ServiceResult.ok(
             data=result,
             message="Prepared for playback",
             sample_rate=target_sample_rate,
@@ -652,7 +652,7 @@ class AudioTransformController(BaseService):
     def get_amplitude_stats(
         self,
         audio: AudioData,
-    ) -> ControllerResult[dict]:
+    ) -> ServiceResult[dict]:
         """
         Get amplitude statistics for audio.
 
@@ -667,18 +667,18 @@ class AudioTransformController(BaseService):
 
             stats = get_amplitude_stats(audio.samples)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=stats.to_dict(),
                 message="Calculated amplitude statistics",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Amplitude analysis failed: {e}")
+            return ServiceResult.fail(f"Amplitude analysis failed: {e}")
 
     def get_frequency_stats(
         self,
         audio: AudioData,
-    ) -> ControllerResult[dict]:
+    ) -> ServiceResult[dict]:
         """
         Get frequency statistics for audio.
 
@@ -693,19 +693,19 @@ class AudioTransformController(BaseService):
 
             stats = get_frequency_stats(audio.samples, audio.sample_rate)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=stats.to_dict(),
                 message="Calculated frequency statistics",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Frequency analysis failed: {e}")
+            return ServiceResult.fail(f"Frequency analysis failed: {e}")
 
     def detect_silence(
         self,
         audio: AudioData,
         threshold_db: float = -40.0,
-    ) -> ControllerResult[dict]:
+    ) -> ServiceResult[dict]:
         """
         Detect silent regions in audio.
 
@@ -725,13 +725,13 @@ class AudioTransformController(BaseService):
                 threshold_db=threshold_db,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=info.to_dict(),
                 message="Detected silence regions",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Silence detection failed: {e}")
+            return ServiceResult.fail(f"Silence detection failed: {e}")
 
     # =========================================================================
     # Chaining Support
@@ -741,7 +741,7 @@ class AudioTransformController(BaseService):
         self,
         audio: AudioData,
         operations: List[Tuple[str, dict]],
-    ) -> ControllerResult[AudioData]:
+    ) -> ServiceResult[AudioData]:
         """
         Apply a chain of operations to audio.
 
@@ -765,11 +765,11 @@ class AudioTransformController(BaseService):
         for op_name, kwargs in operations:
             method = getattr(self, op_name, None)
             if method is None:
-                return ControllerResult.fail(f"Unknown operation: {op_name}")
+                return ServiceResult.fail(f"Unknown operation: {op_name}")
 
             result = method(current, **kwargs)
             if not result.success:
-                return ControllerResult.fail(
+                return ServiceResult.fail(
                     f"Chain failed at {op_name}: {result.error}",
                     warnings=[f"Successfully applied: {', '.join(applied)}"] if applied else [],
                 )
@@ -777,7 +777,7 @@ class AudioTransformController(BaseService):
             current = result.data
             applied.append(op_name)
 
-        return ControllerResult.ok(
+        return ServiceResult.ok(
             data=current,
             message=f"Applied chain: {' -> '.join(applied)}",
         )

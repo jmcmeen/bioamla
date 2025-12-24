@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .base import BaseService, ControllerResult
+from .base import BaseService, ServiceResult
 
 
 @dataclass
@@ -128,7 +128,7 @@ class EmbeddingController(BaseService):
         layer: str = "last_hidden_state",
         normalize: bool = True,
         output_path: Optional[str] = None,
-    ) -> ControllerResult[EmbeddingInfo]:
+    ) -> ServiceResult[EmbeddingInfo]:
         """
         Extract embeddings from a single audio file.
 
@@ -144,7 +144,7 @@ class EmbeddingController(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             extractor = self._get_extractor(model_path, normalize=normalize)
@@ -171,14 +171,14 @@ class EmbeddingController(BaseService):
                 layer=layer,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=info,
                 message=f"Extracted embeddings with shape {result.embeddings.shape}",
                 embeddings=result.embeddings,
                 segments=result.segments,
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Batch Extraction
@@ -194,7 +194,7 @@ class EmbeddingController(BaseService):
         aggregate: str = "mean",
         normalize: bool = True,
         recursive: bool = True,
-    ) -> ControllerResult[BatchEmbeddingSummary]:
+    ) -> ServiceResult[BatchEmbeddingSummary]:
         """
         Extract embeddings from multiple audio files.
 
@@ -213,14 +213,14 @@ class EmbeddingController(BaseService):
         """
         error = self._validate_input_path(directory)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             extractor = self._get_extractor(model_path, normalize=normalize)
             files = self._get_audio_files(directory, recursive=recursive)
 
             if not files:
-                return ControllerResult.fail(f"No audio files found in {directory}")
+                return ServiceResult.fail(f"No audio files found in {directory}")
 
             # Extract with progress
             all_embeddings = []
@@ -244,7 +244,7 @@ class EmbeddingController(BaseService):
                     filepaths.append(str(filepath))
 
             if not all_embeddings:
-                return ControllerResult.fail("No embeddings extracted")
+                return ServiceResult.fail("No embeddings extracted")
 
             # Stack embeddings
             stacked = np.vstack(all_embeddings)
@@ -271,14 +271,14 @@ class EmbeddingController(BaseService):
                 errors=errors,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=f"Extracted {stacked.shape[0]} embeddings from {len(filepaths)} files",
                 embeddings=stacked,
                 filepaths=filepaths,
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Dimensionality Reduction
@@ -291,7 +291,7 @@ class EmbeddingController(BaseService):
         n_components: int = 2,
         output_path: Optional[str] = None,
         **kwargs,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Reduce dimensionality of embeddings.
 
@@ -318,7 +318,7 @@ class EmbeddingController(BaseService):
             if output_path:
                 np.save(output_path, reduced)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "original_shape": embeddings.shape,
                     "reduced_shape": reduced.shape,
@@ -330,14 +330,14 @@ class EmbeddingController(BaseService):
                 reduced_embeddings=reduced,
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def reduce_for_visualization(
         self,
         embeddings: np.ndarray,
         method: str = "umap",
         **kwargs,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Reduce embeddings to 2D for visualization.
 
@@ -370,7 +370,7 @@ class EmbeddingController(BaseService):
     def load_embeddings(
         self,
         filepath: str,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Load embeddings from file.
 
@@ -382,14 +382,14 @@ class EmbeddingController(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.ml.embeddings import load_embeddings
 
             embeddings, filepaths = load_embeddings(filepath)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "filepath": filepath,
                     "shape": embeddings.shape,
@@ -400,7 +400,7 @@ class EmbeddingController(BaseService):
                 filepaths=filepaths,
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def save_embeddings(
         self,
@@ -408,7 +408,7 @@ class EmbeddingController(BaseService):
         filepaths: List[str],
         output_path: str,
         format: str = "npy",
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Save embeddings to file.
 
@@ -431,7 +431,7 @@ class EmbeddingController(BaseService):
                 format=format,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "output_path": saved_path,
                     "format": format,
@@ -441,7 +441,7 @@ class EmbeddingController(BaseService):
                 message=f"Saved embeddings to {saved_path}",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Model Information
@@ -450,7 +450,7 @@ class EmbeddingController(BaseService):
     def get_model_info(
         self,
         model_path: Optional[str] = None,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Get information about the embedding model.
 
@@ -472,6 +472,6 @@ class EmbeddingController(BaseService):
                 "clip_duration": extractor.config.clip_duration,
             }
 
-            return ControllerResult.ok(data=info)
+            return ServiceResult.ok(data=info)
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
