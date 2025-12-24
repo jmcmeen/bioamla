@@ -6,12 +6,10 @@
 #          and segmenting audio files.
 #
 # FEATURES DEMONSTRATED:
-#   - Audio format conversion
-#   - Bandpass filtering to isolate frequency ranges
-#   - Noise reduction
-#   - Audio normalization
-#   - Silence-based segmentation
+#   - Audio format conversion (batch-convert)
 #   - Resampling for consistent sample rates
+#   - Audio normalization
+#   - Fixed-duration segmentation with overlap
 #
 # INPUT: Directory of raw audio recordings (any supported format)
 # OUTPUT: Cleaned, normalized, and segmented audio files ready for analysis
@@ -20,32 +18,31 @@
 set -e  # Exit on error
 
 # Configuration
-PROJECT_NAME="frog_acoustic_study"
-PROJECT_DIR="./${PROJECT_NAME}"
-INPUT_DIR="${PROJECT_DIR}/raw_recordings/scp_small"
-OUTPUT_DIR="${PROJECT_DIR}/processed_audio"
+
+AUDIO_DIR="./scp_small"
+OUTPUT_DIR="./processed_audio"
 SAMPLE_RATE=22050
 TARGET_DB=-20
 
-bioamla dataset download "https://www.bioamla.org/datasets/scp_small.zip" $PROJECT_DIR/raw_recordings/
-bioamla dataset unzip $PROJECT_DIR/raw_recordings/scp_small.zip $PROJECT_DIR/raw_recordings/
+bioamla dataset download "https://www.bioamla.org/datasets/scp_small.zip" .
+bioamla dataset unzip ./scp_small.zip .
 
 echo "=== Audio Preprocessing Workflow ==="
-echo "Input directory: $INPUT_DIR"
+echo "Input directory: $AUDIO_DIR"
 echo ""
 
 # Check if input directory exists and has audio files
-if [ ! -d "$INPUT_DIR" ]; then
-    echo "Error: Input directory '$INPUT_DIR' does not exist."
-    echo "Usage: $0 [input_directory]"
+if [ ! -d "$AUDIO_DIR" ]; then
+    echo "Error: Input directory '$AUDIO_DIR' does not exist."
+    echo "Usage: $0 [AUDIO_DIRectory]"
     echo "Create the directory and add audio files, or specify a different path."
     exit 1
 fi
 
 # Count audio files
-AUDIO_COUNT=$(find "$INPUT_DIR" -type f \( -name "*.wav" -o -name "*.mp3" -o -name "*.flac" -o -name "*.ogg" -o -name "*.m4a" \) 2>/dev/null | wc -l)
+AUDIO_COUNT=$(find "$AUDIO_DIR" -type f \( -name "*.wav" -o -name "*.mp3" -o -name "*.flac" -o -name "*.ogg" -o -name "*.m4a" \) 2>/dev/null | wc -l)
 if [ "$AUDIO_COUNT" -eq 0 ]; then
-    echo "Error: No audio files found in '$INPUT_DIR'."
+    echo "Error: No audio files found in '$AUDIO_DIR'."
     echo "Supported formats: wav, mp3, flac, ogg, m4a"
     echo ""
     echo "Add some audio files and try again, or specify a different directory:"
@@ -56,62 +53,60 @@ fi
 echo "Found $AUDIO_COUNT audio file(s) to process."
 echo ""
 
-# Step 1: Convert all audio files to WAV format
-echo "Step 1: Converting audio files to WAV format..."
-bioamla audio convert "$INPUT_DIR" wav --output "$OUTPUT_DIR/converted" --batch
+# Create output directories
+mkdir -p "$OUTPUT_DIR/converted"
+mkdir -p "$OUTPUT_DIR/normalized"
+mkdir -p "$OUTPUT_DIR/segments"
 
-# Step 2: Resample to consistent sample rate
-echo ""
-echo "Step 2: Resampling audio to ${SAMPLE_RATE}Hz..."
-bioamla audio resample "$OUTPUT_DIR/converted" \
-    --output "$OUTPUT_DIR/resampled" \
-    --rate $SAMPLE_RATE \
-    --batch
+# Step 1: Batch convert all audio files to WAV format at target sample rate
+echo "Step 1: Converting audio files to WAV format at ${SAMPLE_RATE}Hz..."
+bioamla audio batch-convert "$AUDIO_DIR" "$OUTPUT_DIR/converted" \
+    --format wav \
+    --sample-rate $SAMPLE_RATE
 
-# Step 3: Apply bandpass filter to isolate biophony frequencies (500Hz - 10kHz)
+# Step 2: Normalize audio levels
 echo ""
-echo "Step 3: Applying bandpass filter (500Hz - 10kHz)..."
-bioamla audio filter "$OUTPUT_DIR/resampled" \
-    --output "$OUTPUT_DIR/filtered" \
-    --bandpass "500-10000" \
-    --batch
+echo "Step 2: Normalizing audio to ${TARGET_DB}dB..."
+shopt -s globstar nullglob
+for file in "$OUTPUT_DIR/converted"/**/*.wav; do
+    if [ -f "$file" ]; then
+        # Get relative path from converted dir
+        rel_path="${file#$OUTPUT_DIR/converted/}"
+        output_file="$OUTPUT_DIR/normalized/$rel_path"
+        mkdir -p "$(dirname "$output_file")"
+        echo "  Normalizing: $rel_path"
+        bioamla audio normalize "$file" "$output_file" --target-db $TARGET_DB
+    fi
+done
 
-# Step 4: Denoise using spectral subtraction
+# Step 3: Segment audio into fixed-duration clips
 echo ""
-echo "Step 4: Applying spectral denoising..."
-bioamla audio denoise "$OUTPUT_DIR/filtered" \
-    --output "$OUTPUT_DIR/denoised" \
-    --method spectral \
-    --strength 0.5 \
-    --batch
+echo "Step 3: Segmenting audio into 3-second clips..."
+for file in "$OUTPUT_DIR/normalized"/**/*.wav; do
+    if [ -f "$file" ]; then
+        # Get relative path and create segment directory
+        rel_path="${file#$OUTPUT_DIR/normalized/}"
+        base_name="${rel_path%.wav}"
+        segment_dir="$OUTPUT_DIR/segments/$base_name"
+        mkdir -p "$segment_dir"
+        echo "  Segmenting: $rel_path"
+        bioamla audio segment "$file" "$segment_dir" --duration 3.0 --overlap 0.5
+    fi
+done
 
-# Step 5: Normalize audio levels
+# Step 4: Display info for a sample of processed files
 echo ""
-echo "Step 5: Normalizing audio to ${TARGET_DB}dB..."
-bioamla audio normalize "$OUTPUT_DIR/denoised" \
-    --output "$OUTPUT_DIR/normalized" \
-    --target-db $TARGET_DB \
-    --batch
-
-# Step 6: Segment audio on silence to extract vocalization events
-echo ""
-echo "Step 6: Segmenting audio on silence..."
-bioamla audio segment "$OUTPUT_DIR/normalized" \
-    --output "$OUTPUT_DIR/segments" \
-    --batch \
-    --silence-threshold -40 \
-    --min-silence 0.3 \
-    --min-segment 0.5
-
-# Step 7: Analyze the processed files
-echo ""
-echo "Step 7: Analyzing processed audio files..."
-bioamla audio analyze "$OUTPUT_DIR/segments" \
-    --batch \
-    --output "$OUTPUT_DIR/analysis_report.csv" \
-    --format csv
+echo "Step 4: Displaying info for sample processed files..."
+count=0
+for file in "$OUTPUT_DIR/normalized"/**/*.wav; do
+    if [ -f "$file" ] && [ $count -lt 3 ]; then
+        bioamla audio info "$file"
+        count=$((count + 1))
+    fi
+done
 
 echo ""
 echo "=== Preprocessing Complete ==="
-echo "Processed files are in: $OUTPUT_DIR/segments"
-echo "Analysis report: $OUTPUT_DIR/analysis_report.csv"
+echo "Converted files: $OUTPUT_DIR/converted"
+echo "Normalized files: $OUTPUT_DIR/normalized"
+echo "Segmented files: $OUTPUT_DIR/segments"
