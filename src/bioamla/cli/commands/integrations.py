@@ -161,6 +161,62 @@ def inat_stats(project_id: str, output: str, quiet: bool):
         click.echo(f"  Observers: {stats.observers_count}")
 
 
+@services_inat.command("download")
+@click.argument("output_dir")
+@click.option("--taxon-ids", "-t", default=None, help="Comma-separated taxon IDs")
+@click.option("--taxon-name", "-n", default=None, help="Taxon name to search for")
+@click.option("--place-id", "-p", default=None, type=int, help="iNaturalist place ID")
+@click.option("--project-id", default=None, help="iNaturalist project slug or ID")
+@click.option(
+    "--quality-grade",
+    "-q",
+    type=click.Choice(["research", "needs_id", "casual", "any"]),
+    default="research",
+    help="Quality grade filter",
+)
+@click.option("--obs-per-taxon", default=10, type=int, help="Max observations per taxon")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def inat_download(
+    output_dir: str,
+    taxon_ids: str,
+    taxon_name: str,
+    place_id: int,
+    project_id: str,
+    quality_grade: str,
+    obs_per_taxon: int,
+    quiet: bool,
+):
+    """Download audio observations from iNaturalist."""
+    from bioamla.services.inaturalist import INaturalistController
+
+    # Parse taxon IDs
+    taxon_id_list = None
+    if taxon_ids:
+        taxon_id_list = [int(t.strip()) for t in taxon_ids.split(",")]
+
+    controller = INaturalistController()
+    result = controller.download(
+        output_dir=output_dir,
+        taxon_ids=taxon_id_list,
+        taxon_name=taxon_name,
+        place_id=place_id,
+        project_id=project_id,
+        quality_grade=quality_grade if quality_grade != "any" else None,
+        obs_per_taxon=obs_per_taxon,
+    )
+
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    download_result = result.data
+    if not quiet:
+        click.echo(f"\nDownload complete:")
+        click.echo(f"  Files downloaded: {download_result.files_downloaded}")
+        click.echo(f"  Total size: {download_result.total_bytes / 1024 / 1024:.1f} MB")
+        click.echo(f"  Output directory: {output_dir}")
+
+
 # =============================================================================
 # HuggingFace Hub subgroup
 # =============================================================================
@@ -334,7 +390,7 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
     """Search Xeno-canto for bird recordings."""
     import json as json_lib
 
-    from bioamla.core import xeno_canto
+    from bioamla.core.services import xeno_canto
 
     try:
         results = xeno_canto.search(
@@ -387,7 +443,7 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
 @click.option("--delay", default=1.0, type=float, help="Delay between downloads in seconds")
 def xc_download(species, genus, country, quality, max_recordings, output_dir, delay):
     """Download recordings from Xeno-canto."""
-    from bioamla.core import xeno_canto
+    from bioamla.core.services import xeno_canto
 
     click.echo("Searching Xeno-canto...")
 
@@ -450,7 +506,7 @@ def ml_search(species_code, scientific_name, region, min_rating, max_results, ou
     """Search Macaulay Library for audio recordings."""
     import json as json_lib
 
-    from bioamla.core import macaulay
+    from bioamla.core.services import macaulay
 
     try:
         results = macaulay.search(
@@ -493,7 +549,7 @@ def ml_search(species_code, scientific_name, region, min_rating, max_results, ou
 @click.option("--output-dir", "-o", default="./ml_recordings", help="Output directory")
 def ml_download(species_code, scientific_name, region, min_rating, max_recordings, output_dir):
     """Download recordings from Macaulay Library."""
-    from bioamla.core import macaulay
+    from bioamla.core.services import macaulay
 
     click.echo("Searching Macaulay Library...")
 
@@ -588,7 +644,7 @@ def species_lookup(name, to_common, to_scientific, info):
 @click.option("--limit", "-n", default=10, type=int, help="Maximum results")
 def species_search(query, limit):
     """Fuzzy search for species by name."""
-    from bioamla.core import species
+    from bioamla.core.services import species
 
     results = species.search(query, limit=limit)
 
@@ -614,21 +670,21 @@ def clear_cache(clear_all, xc, ml, species):
     total = 0
 
     if clear_all or xc:
-        from bioamla.core import xeno_canto
+        from bioamla.core.services import xeno_canto
 
         count = xeno_canto.clear_cache()
         click.echo(f"Cleared {count} Xeno-canto cache entries")
         total += count
 
     if clear_all or ml:
-        from bioamla.core import macaulay
+        from bioamla.core.services import macaulay
 
         count = macaulay.clear_cache()
         click.echo(f"Cleared {count} Macaulay Library cache entries")
         total += count
 
     if clear_all or species:
-        from bioamla.core import species as species_mod
+        from bioamla.core.services import species as species_mod
 
         count = species_mod.clear_cache()
         click.echo(f"Cleared {count} species cache entries")
@@ -660,7 +716,7 @@ def services_ebird():
 @click.option("--distance", type=float, default=50, help="Search radius in km")
 def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, distance: float):
     """Validate if a species is expected at a location."""
-    from bioamla.core.integrations import EBirdClient
+    from bioamla.core.services.integrations import EBirdClient
 
     client = EBirdClient(api_key=api_key)
     result = client.validate_species_for_location(
@@ -695,7 +751,7 @@ def ebird_nearby(
     import csv
     from pathlib import Path
 
-    from bioamla.core.integrations import EBirdClient
+    from bioamla.core.services.integrations import EBirdClient
 
     client = EBirdClient(api_key=api_key)
     observations = client.get_nearby_observations(
@@ -759,7 +815,7 @@ def pg_export(
     """Export detections to PostgreSQL database."""
     import json
 
-    from bioamla.core.integrations import PostgreSQLExporter
+    from bioamla.core.services.integrations import PostgreSQLExporter
 
     with TextFile(detections_file, mode="r", encoding="utf-8") as f:
         detections = json.load(f.handle)
@@ -784,7 +840,7 @@ def pg_export(
 )
 def pg_stats(connection: str):
     """Show PostgreSQL database statistics."""
-    from bioamla.core.integrations import PostgreSQLExporter
+    from bioamla.core.services.integrations import PostgreSQLExporter
 
     exporter = PostgreSQLExporter(connection_string=connection)
     stats = exporter.get_statistics()

@@ -23,12 +23,29 @@ def audio_info(path: str):
         raise SystemExit(1)
 
     audio_data = result.data
-    click.echo(f"File: {audio_data.path}")
+    click.echo(f"File: {path}")
     click.echo(f"Duration: {audio_data.duration:.2f}s")
     click.echo(f"Sample rate: {audio_data.sample_rate} Hz")
     click.echo(f"Channels: {audio_data.channels}")
-    click.echo(f"Samples: {audio_data.samples}")
-    click.echo(f"Format: {audio_data.format}")
+    click.echo(f"Samples: {audio_data.num_samples}")
+
+
+@audio.command("list")
+@click.argument("path")
+@click.option("--recursive/--no-recursive", "-r", default=True, help="Search subdirectories (default: recursive)")
+def audio_list(path: str, recursive: bool):
+    """List audio files in a directory."""
+    from bioamla.core.utils import get_audio_files
+
+    audio_files = get_audio_files(path, recursive=recursive)
+
+    if not audio_files:
+        click.echo("No audio files found")
+        return
+
+    click.echo(f"Found {len(audio_files)} audio file(s):")
+    for f in audio_files:
+        click.echo(f"  {f}")
 
 
 @audio.command("convert")
@@ -90,23 +107,43 @@ def audio_convert(input_path, output_path, sample_rate, channels, bit_depth, for
 )
 def audio_segment(input_path, output_dir, duration, overlap, format, prefix):
     """Segment audio file into fixed-duration clips."""
-    from bioamla.services.audio_file import AudioFileController
+    from pathlib import Path
 
-    controller = AudioFileController()
-    result = controller.segment(
-        input_path=input_path,
-        output_dir=output_dir,
-        segment_duration=duration,
-        overlap=overlap,
-        output_format=format,
-        prefix=prefix,
-    )
+    from bioamla.core.audio.signal import load_audio, save_audio
 
-    if not result.success:
-        click.echo(f"Error: {result.error}")
+    try:
+        audio, sr = load_audio(input_path)
+    except Exception as e:
+        click.echo(f"Error loading audio: {e}")
         raise SystemExit(1)
 
-    click.echo(f"Created {result.data.segments_created} segments in {output_dir}")
+    # Calculate segment parameters
+    segment_samples = int(duration * sr)
+    overlap_samples = int(overlap * sr)
+    step_samples = segment_samples - overlap_samples
+
+    # Create output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Determine prefix
+    if prefix is None:
+        prefix = Path(input_path).stem
+
+    # Segment the audio
+    segments_created = 0
+    position = 0
+    while position + segment_samples <= len(audio):
+        segment = audio[position : position + segment_samples]
+        segment_file = output_path / f"{prefix}_{segments_created:04d}.{format}"
+        try:
+            save_audio(str(segment_file), segment, sr)
+            segments_created += 1
+        except Exception as e:
+            click.echo(f"Error saving segment: {e}")
+        position += step_samples
+
+    click.echo(f"Created {segments_created} segments in {output_dir}")
 
 
 @audio.command("trim")
@@ -146,14 +183,14 @@ def audio_trim(input_path, output_path, start, end, duration):
 @click.option("--method", "-m", type=click.Choice(["peak", "rms"]), default="peak", help="Method")
 def audio_normalize(input_path, output_path, target_db, method):
     """Normalize audio amplitude."""
-    from bioamla.services.audio_file import AudioFileController
+    from bioamla.services.audio import AudioController
 
-    controller = AudioFileController()
+    controller = AudioController()
     result = controller.normalize(
         input_path=input_path,
         output_path=output_path,
         target_db=target_db,
-        method=method,
+        peak=(method == "peak"),
     )
 
     if not result.success:
@@ -279,6 +316,77 @@ def audio_waveform(path, output, width, height, color, show):
         click.echo("Displaying waveform...")
 
 
+@audio.command("visualize")
+@click.argument("path")
+@click.option("--output", "-o", default=None, help="Output image file path")
+@click.option(
+    "--type", "-t",
+    "viz_type",
+    default="mel",
+    type=click.Choice(["mel", "stft", "mfcc", "waveform"]),
+    help="Visualization type",
+)
+@click.option("--n-fft", default=2048, type=int, help="FFT window size")
+@click.option("--hop-length", default=512, type=int, help="Hop length")
+@click.option("--n-mels", default=128, type=int, help="Number of mel bands")
+@click.option("--n-mfcc", default=20, type=int, help="Number of MFCCs")
+@click.option("--cmap", default="viridis", help="Colormap name")
+@click.option("--dpi", default=100, type=int, help="Output DPI")
+@click.option("--batch", is_flag=True, help="Process directory of files")
+def audio_visualize(path, output, viz_type, n_fft, hop_length, n_mels, n_mfcc, cmap, dpi, batch):
+    """Generate audio visualization (spectrogram, waveform, MFCC)."""
+    from pathlib import Path
+
+    from bioamla.core.visualize import generate_spectrogram
+
+    if batch:
+        from bioamla.core.utils import get_audio_files
+
+        audio_files = get_audio_files(path, recursive=True)
+        if not audio_files:
+            click.echo("No audio files found")
+            return
+
+        output_dir = Path(output) if output else Path(path) / "visualizations"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        for audio_file in audio_files:
+            out_file = output_dir / f"{Path(audio_file).stem}_{viz_type}.png"
+            try:
+                generate_spectrogram(
+                    audio_path=audio_file,
+                    output_path=str(out_file),
+                    viz_type=viz_type,
+                    n_fft=n_fft,
+                    hop_length=hop_length,
+                    n_mels=n_mels,
+                    n_mfcc=n_mfcc,
+                    cmap=cmap,
+                    dpi=dpi,
+                )
+            except Exception as e:
+                click.echo(f"Error processing {audio_file}: {e}")
+        click.echo(f"Visualizations saved to: {output_dir}")
+    else:
+        output_path = output or f"{Path(path).stem}_{viz_type}.png"
+        try:
+            generate_spectrogram(
+                audio_path=path,
+                output_path=output_path,
+                viz_type=viz_type,
+                n_fft=n_fft,
+                hop_length=hop_length,
+                n_mels=n_mels,
+                n_mfcc=n_mfcc,
+                cmap=cmap,
+                dpi=dpi,
+            )
+            click.echo(f"Visualization saved to: {output_path}")
+        except Exception as e:
+            click.echo(f"Error: {e}")
+            raise SystemExit(1)
+
+
 @audio.command("batch-convert")
 @click.argument("input_dir")
 @click.argument("output_dir")
@@ -319,13 +427,18 @@ def audio_batch_convert(input_dir, output_dir, sample_rate, channels, format, re
             output_path = Path(output_dir) / rel_path.with_suffix(f".{format}")
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
-            result = controller.convert(
-                input_path=str(input_path),
-                output_path=str(output_path),
-                target_sample_rate=sample_rate,
-                target_channels=channels,
-                target_format=format,
-            )
+            # Load the audio file
+            open_result = controller.open(str(input_path))
+            if not open_result.success:
+                result = open_result
+            else:
+                # Save with conversion
+                result = controller.save_as(
+                    audio_data=open_result.data,
+                    output_path=str(output_path),
+                    target_sample_rate=sample_rate,
+                    format=format,
+                )
 
             if result.success:
                 success_count += 1
