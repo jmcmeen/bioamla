@@ -20,6 +20,8 @@
 
 set -e  # Exit on error
 
+#TODO Fix paths
+
 # Configuration
 PROJECT_NAME="frog_acoustic_study"
 PROJECT_DIR="./${PROJECT_NAME}"
