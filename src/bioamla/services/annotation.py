@@ -25,7 +25,7 @@ from uuid import UUID
 
 import numpy as np
 
-from bioamla.services.base import BaseService, ControllerResult
+from bioamla.services.base import BaseService, ServiceResult
 from bioamla.core.annotations import (
     Annotation as CoreAnnotation,
 )
@@ -138,7 +138,7 @@ class AnnotationService(BaseService):
         label_column: Optional[str] = None,
         recording_id: Optional[UUID] = None,
         uow=None,
-    ) -> ControllerResult[AnnotationResult]:
+    ) -> ServiceResult[AnnotationResult]:
         """
         Import annotations from a Raven selection table.
 
@@ -153,7 +153,7 @@ class AnnotationService(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             annotations = load_raven_selection_table(filepath, label_column=label_column)
@@ -164,7 +164,7 @@ class AnnotationService(BaseService):
 
             summary = summarize_annotations(annotations)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=AnnotationResult(annotations=annotations, file_path=filepath, summary=summary),
                 message=f"Imported {len(annotations)} annotations from Raven table",
                 count=len(annotations),
@@ -172,7 +172,7 @@ class AnnotationService(BaseService):
 
         except Exception as e:
             logger.exception(f"Failed to import Raven table: {e}")
-            return ControllerResult.fail(f"Failed to import Raven table: {e}")
+            return ServiceResult.fail(f"Failed to import Raven table: {e}")
 
     def import_csv(
         self,
@@ -184,7 +184,7 @@ class AnnotationService(BaseService):
         label_col: str = "label",
         recording_id: Optional[UUID] = None,
         uow=None,
-    ) -> ControllerResult[AnnotationResult]:
+    ) -> ServiceResult[AnnotationResult]:
         """
         Import annotations from a CSV file.
 
@@ -203,7 +203,7 @@ class AnnotationService(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             annotations = load_csv_annotations(
@@ -221,7 +221,7 @@ class AnnotationService(BaseService):
 
             summary = summarize_annotations(annotations)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=AnnotationResult(annotations=annotations, file_path=filepath, summary=summary),
                 message=f"Imported {len(annotations)} annotations from CSV",
                 count=len(annotations),
@@ -229,7 +229,7 @@ class AnnotationService(BaseService):
 
         except Exception as e:
             logger.exception(f"Failed to import CSV: {e}")
-            return ControllerResult.fail(f"Failed to import CSV: {e}")
+            return ServiceResult.fail(f"Failed to import CSV: {e}")
 
     # =========================================================================
     # Export Operations
@@ -240,7 +240,7 @@ class AnnotationService(BaseService):
         annotations: List[CoreAnnotation],
         output_path: str,
         include_custom_fields: bool = True,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Export annotations to a Raven selection table.
 
@@ -254,14 +254,14 @@ class AnnotationService(BaseService):
         """
         error = self._validate_output_path(output_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             saved_path = save_raven_selection_table(
                 annotations, output_path, include_custom_fields=include_custom_fields
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=saved_path,
                 message=f"Exported {len(annotations)} annotations to Raven table",
                 count=len(annotations),
@@ -269,14 +269,14 @@ class AnnotationService(BaseService):
 
         except Exception as e:
             logger.exception(f"Failed to export Raven table: {e}")
-            return ControllerResult.fail(f"Failed to export Raven table: {e}")
+            return ServiceResult.fail(f"Failed to export Raven table: {e}")
 
     def export_csv(
         self,
         annotations: List[CoreAnnotation],
         output_path: str,
         include_custom_fields: bool = True,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Export annotations to a CSV file.
 
@@ -290,14 +290,14 @@ class AnnotationService(BaseService):
         """
         error = self._validate_output_path(output_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             saved_path = save_csv_annotations(
                 annotations, output_path, include_custom_fields=include_custom_fields
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=saved_path,
                 message=f"Exported {len(annotations)} annotations to CSV",
                 count=len(annotations),
@@ -305,13 +305,13 @@ class AnnotationService(BaseService):
 
         except Exception as e:
             logger.exception(f"Failed to export CSV: {e}")
-            return ControllerResult.fail(f"Failed to export CSV: {e}")
+            return ServiceResult.fail(f"Failed to export CSV: {e}")
 
     def export_parquet(
         self,
         annotations: List[CoreAnnotation],
         output_path: str,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Export annotations to a Parquet file.
 
@@ -324,7 +324,7 @@ class AnnotationService(BaseService):
         """
         error = self._validate_output_path(output_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             import pandas as pd
@@ -339,23 +339,23 @@ class AnnotationService(BaseService):
 
             df.to_parquet(str(path), index=False)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=str(path),
                 message=f"Exported {len(annotations)} annotations to Parquet",
                 count=len(annotations),
             )
 
         except ImportError:
-            return ControllerResult.fail("pandas and pyarrow required for Parquet export")
+            return ServiceResult.fail("pandas and pyarrow required for Parquet export")
         except Exception as e:
             logger.exception(f"Failed to export Parquet: {e}")
-            return ControllerResult.fail(f"Failed to export Parquet: {e}")
+            return ServiceResult.fail(f"Failed to export Parquet: {e}")
 
     def export_json(
         self,
         annotations: List[CoreAnnotation],
         output_path: str,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Export annotations to a JSON file.
 
@@ -368,7 +368,7 @@ class AnnotationService(BaseService):
         """
         error = self._validate_output_path(output_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             path = Path(output_path)
@@ -379,7 +379,7 @@ class AnnotationService(BaseService):
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=str(path),
                 message=f"Exported {len(annotations)} annotations to JSON",
                 count=len(annotations),
@@ -387,7 +387,7 @@ class AnnotationService(BaseService):
 
         except Exception as e:
             logger.exception(f"Failed to export JSON: {e}")
-            return ControllerResult.fail(f"Failed to export JSON: {e}")
+            return ServiceResult.fail(f"Failed to export JSON: {e}")
 
     # =========================================================================
     # CRUD Operations
@@ -405,7 +405,7 @@ class AnnotationService(BaseService):
         notes: str = "",
         recording_id: Optional[UUID] = None,
         uow=None,
-    ) -> ControllerResult[CoreAnnotation]:
+    ) -> ServiceResult[CoreAnnotation]:
         """
         Create a new annotation.
 
@@ -425,10 +425,10 @@ class AnnotationService(BaseService):
             ControllerResult containing the created annotation
         """
         if end_time <= start_time:
-            return ControllerResult.fail("end_time must be greater than start_time")
+            return ServiceResult.fail("end_time must be greater than start_time")
 
         if low_freq is not None and high_freq is not None and high_freq <= low_freq:
-            return ControllerResult.fail("high_freq must be greater than low_freq")
+            return ServiceResult.fail("high_freq must be greater than low_freq")
 
         try:
             annotation = CoreAnnotation(
@@ -447,24 +447,24 @@ class AnnotationService(BaseService):
                 db_annotation = self._persist_annotation(
                     annotation, recording_id, "manual", None, uow
                 )
-                return ControllerResult.ok(
+                return ServiceResult.ok(
                     data=annotation,
                     message="Created annotation",
                     db_id=str(db_annotation.id),
                 )
 
-            return ControllerResult.ok(data=annotation, message="Created annotation")
+            return ServiceResult.ok(data=annotation, message="Created annotation")
 
         except Exception as e:
             logger.exception(f"Failed to create annotation: {e}")
-            return ControllerResult.fail(f"Failed to create annotation: {e}")
+            return ServiceResult.fail(f"Failed to create annotation: {e}")
 
     def update_annotation(
         self,
         annotation_id: UUID,
         uow,
         **fields,
-    ) -> ControllerResult[CoreAnnotation]:
+    ) -> ServiceResult[CoreAnnotation]:
         """
         Update an existing annotation in the database.
 
@@ -483,22 +483,22 @@ class AnnotationService(BaseService):
             db_annotation = uow.annotations.update_by_id(annotation_id, update_data)
 
             if db_annotation is None:
-                return ControllerResult.fail(f"Annotation {annotation_id} not found")
+                return ServiceResult.fail(f"Annotation {annotation_id} not found")
 
             # Convert back to core annotation
             annotation = self._db_to_core_annotation(db_annotation)
 
-            return ControllerResult.ok(data=annotation, message="Updated annotation")
+            return ServiceResult.ok(data=annotation, message="Updated annotation")
 
         except Exception as e:
             logger.exception(f"Failed to update annotation: {e}")
-            return ControllerResult.fail(f"Failed to update annotation: {e}")
+            return ServiceResult.fail(f"Failed to update annotation: {e}")
 
     def delete_annotation(
         self,
         annotation_id: UUID,
         uow,
-    ) -> ControllerResult[bool]:
+    ) -> ServiceResult[bool]:
         """
         Delete an annotation from the database.
 
@@ -513,13 +513,13 @@ class AnnotationService(BaseService):
             deleted = uow.annotations.delete_by_id(annotation_id)
 
             if not deleted:
-                return ControllerResult.fail(f"Annotation {annotation_id} not found")
+                return ServiceResult.fail(f"Annotation {annotation_id} not found")
 
-            return ControllerResult.ok(data=True, message="Deleted annotation")
+            return ServiceResult.ok(data=True, message="Deleted annotation")
 
         except Exception as e:
             logger.exception(f"Failed to delete annotation: {e}")
-            return ControllerResult.fail(f"Failed to delete annotation: {e}")
+            return ServiceResult.fail(f"Failed to delete annotation: {e}")
 
     def get_annotations(
         self,
@@ -527,7 +527,7 @@ class AnnotationService(BaseService):
         uow,
         skip: int = 0,
         limit: int = 1000,
-    ) -> ControllerResult[List[CoreAnnotation]]:
+    ) -> ServiceResult[List[CoreAnnotation]]:
         """
         Get all annotations for a recording from the database.
 
@@ -545,7 +545,7 @@ class AnnotationService(BaseService):
 
             annotations = [self._db_to_core_annotation(a) for a in db_annotations]
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=annotations,
                 message=f"Retrieved {len(annotations)} annotations",
                 count=len(annotations),
@@ -553,7 +553,7 @@ class AnnotationService(BaseService):
 
         except Exception as e:
             logger.exception(f"Failed to get annotations: {e}")
-            return ControllerResult.fail(f"Failed to get annotations: {e}")
+            return ServiceResult.fail(f"Failed to get annotations: {e}")
 
     # =========================================================================
     # Clip Extraction
@@ -567,7 +567,7 @@ class AnnotationService(BaseService):
         padding_ms: float = 0.0,
         format: str = "wav",
         include_label_in_filename: bool = True,
-    ) -> ControllerResult[ClipExtractionResult]:
+    ) -> ServiceResult[ClipExtractionResult]:
         """
         Extract audio clips from annotations.
 
@@ -584,11 +584,11 @@ class AnnotationService(BaseService):
         """
         error = self._validate_input_path(audio_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         error = self._validate_output_path(output_dir)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             import soundfile as sf
@@ -640,7 +640,7 @@ class AnnotationService(BaseService):
                     logger.warning(f"Failed to extract clip {i}: {e}")
                     result.failed_clips.append(f"Clip {i}: {e}")
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result,
                 message=f"Extracted {len(result.extracted_clips)} clips",
                 extracted=len(result.extracted_clips),
@@ -649,7 +649,7 @@ class AnnotationService(BaseService):
 
         except Exception as e:
             logger.exception(f"Failed to extract clips: {e}")
-            return ControllerResult.fail(f"Failed to extract clips: {e}")
+            return ServiceResult.fail(f"Failed to extract clips: {e}")
 
     # =========================================================================
     # Measurement Operations
@@ -660,7 +660,7 @@ class AnnotationService(BaseService):
         annotation: CoreAnnotation,
         audio_path: str,
         metrics: Optional[List[str]] = None,
-    ) -> ControllerResult[MeasurementResult]:
+    ) -> ServiceResult[MeasurementResult]:
         """
         Compute acoustic measurements for an annotation.
 
@@ -675,7 +675,7 @@ class AnnotationService(BaseService):
         """
         error = self._validate_input_path(audio_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             import soundfile as sf
@@ -747,14 +747,14 @@ class AnnotationService(BaseService):
                         rolloff_idx = np.searchsorted(cumsum, 0.85 * cumsum[-1])
                         measurements["rolloff"] = float(freqs[min(rolloff_idx, len(freqs) - 1)])
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=MeasurementResult(measurements=measurements),
                 message=f"Computed {len(measurements)} measurements",
             )
 
         except Exception as e:
             logger.exception(f"Failed to compute measurements: {e}")
-            return ControllerResult.fail(f"Failed to compute measurements: {e}")
+            return ServiceResult.fail(f"Failed to compute measurements: {e}")
 
     # =========================================================================
     # Batch Operations
@@ -767,7 +767,7 @@ class AnnotationService(BaseService):
         format: str = "raven",
         recording_id: Optional[UUID] = None,
         uow=None,
-    ) -> ControllerResult[AnnotationResult]:
+    ) -> ServiceResult[AnnotationResult]:
         """
         Import annotations from all matching files in a directory.
 
@@ -783,7 +783,7 @@ class AnnotationService(BaseService):
         """
         error = self._validate_input_path(directory)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.annotations import load_annotations_from_directory
@@ -803,7 +803,7 @@ class AnnotationService(BaseService):
 
             summary = summarize_annotations(all_annotations)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=AnnotationResult(
                     annotations=all_annotations, file_path=directory, summary=summary
                 ),
@@ -814,7 +814,7 @@ class AnnotationService(BaseService):
 
         except Exception as e:
             logger.exception(f"Failed to batch import: {e}")
-            return ControllerResult.fail(f"Failed to batch import: {e}")
+            return ServiceResult.fail(f"Failed to batch import: {e}")
 
     # =========================================================================
     # Helper Methods

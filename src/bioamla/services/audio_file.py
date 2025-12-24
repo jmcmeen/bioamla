@@ -35,7 +35,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .base import BaseService, ControllerResult
+from .base import BaseService, ServiceResult
 
 
 @dataclass
@@ -128,7 +128,7 @@ class AudioFileController(BaseService):
     # File Operations
     # =========================================================================
 
-    def open(self, filepath: str) -> ControllerResult[AudioData]:
+    def open(self, filepath: str) -> ServiceResult[AudioData]:
         """
         Open an audio file and load its data.
 
@@ -142,7 +142,7 @@ class AudioFileController(BaseService):
 
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             audio, sr = sf.read(filepath, dtype="float32")
@@ -164,7 +164,7 @@ class AudioFileController(BaseService):
                 metadata={"original_duration": len(audio) / sr},
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=audio_data,
                 message=f"Loaded {filepath}",
                 duration=audio_data.duration,
@@ -172,14 +172,14 @@ class AudioFileController(BaseService):
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Failed to open audio file: {e}")
+            return ServiceResult.fail(f"Failed to open audio file: {e}")
 
     def save(
         self,
         audio_data: AudioData,
         output_path: str,
         format: Optional[str] = None,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Save audio data to a file.
 
@@ -195,7 +195,7 @@ class AudioFileController(BaseService):
 
         error = self._validate_output_path(output_path)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             output = Path(output_path)
@@ -220,13 +220,13 @@ class AudioFileController(BaseService):
                 format=format_to_use,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=str(output),
                 message=f"Saved audio to {output}",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Failed to save audio: {e}")
+            return ServiceResult.fail(f"Failed to save audio: {e}")
 
     def save_as(
         self,
@@ -234,7 +234,7 @@ class AudioFileController(BaseService):
         output_path: str,
         target_sample_rate: Optional[int] = None,
         format: Optional[str] = None,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Save audio data to a new file, optionally with format conversion.
 
@@ -267,7 +267,7 @@ class AudioFileController(BaseService):
                     metadata=audio_data.metadata.copy(),
                 )
             except Exception as e:
-                return ControllerResult.fail(f"Resampling failed: {e}")
+                return ServiceResult.fail(f"Resampling failed: {e}")
 
         return self.save(data_to_save, output_path, format=format)
 
@@ -275,7 +275,7 @@ class AudioFileController(BaseService):
         self,
         audio_data: AudioData,
         target_path: Optional[str] = None,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Overwrite an existing audio file.
 
@@ -290,10 +290,10 @@ class AudioFileController(BaseService):
         """
         path = target_path or audio_data.source_path
         if path is None:
-            return ControllerResult.fail("No target path specified and audio has no source path")
+            return ServiceResult.fail("No target path specified and audio has no source path")
 
         if not Path(path).exists():
-            return ControllerResult.fail(f"Target file does not exist: {path}")
+            return ServiceResult.fail(f"Target file does not exist: {path}")
 
         return self.save(audio_data, path)
 
@@ -303,7 +303,7 @@ class AudioFileController(BaseService):
         output_path: str,
         transform: Callable[[np.ndarray, int], Tuple[np.ndarray, int]],
         transform_name: str = "transform",
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Load, transform, and save audio in one operation.
 
@@ -320,11 +320,11 @@ class AudioFileController(BaseService):
 
         input_error = self._validate_input_path(input_path)
         if input_error:
-            return ControllerResult.fail(input_error)
+            return ServiceResult.fail(input_error)
 
         output_error = self._validate_output_path(output_path)
         if output_error:
-            return ControllerResult.fail(output_error)
+            return ServiceResult.fail(output_error)
 
         try:
             # Load input
@@ -339,13 +339,13 @@ class AudioFileController(BaseService):
             # Save
             sf.write(str(output_path), processed, out_sr)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=str(output_path),
                 message=f"Applied {transform_name} and saved to {output_path}",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Failed to write audio: {e}")
+            return ServiceResult.fail(f"Failed to write audio: {e}")
 
     # =========================================================================
     # Temporary File Support
@@ -355,7 +355,7 @@ class AudioFileController(BaseService):
         self,
         audio_data: AudioData,
         suffix: str = ".wav",
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Create a temporary audio file.
 
@@ -382,10 +382,10 @@ class AudioFileController(BaseService):
 
             sf.write(temp_path, audio_data.samples, audio_data.sample_rate)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=temp_path,
                 message=f"Created temporary file: {temp_path}",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Failed to create temp file: {e}")
+            return ServiceResult.fail(f"Failed to create temp file: {e}")

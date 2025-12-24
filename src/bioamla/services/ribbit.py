@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .base import BaseService, ControllerResult, ToDictMixin
+from .base import BaseService, ServiceResult, ToDictMixin
 
 
 @dataclass
@@ -117,7 +117,7 @@ class RibbitService(BaseService):
         filepath: str,
         preset: Optional[str] = None,
         profile: Optional[Dict[str, Any]] = None,
-    ) -> ControllerResult[DetectionSummary]:
+    ) -> ServiceResult[DetectionSummary]:
         """
         Run RIBBIT detection on a single audio file.
 
@@ -131,14 +131,14 @@ class RibbitService(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             detector = self._get_detector(preset=preset, profile=profile)
             result = detector.detect(filepath)
 
             if result.error:
-                return ControllerResult.fail(result.error)
+                return ServiceResult.fail(result.error)
 
             summary = DetectionSummary(
                 filepath=result.filepath,
@@ -150,14 +150,14 @@ class RibbitService(BaseService):
                 processing_time=result.processing_time,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=f"Found {result.num_detections} detections",
                 detections=[d.to_dict() for d in result.detections],
                 result=result,
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Batch Detection
@@ -170,7 +170,7 @@ class RibbitService(BaseService):
         profile: Optional[Dict[str, Any]] = None,
         output_csv: Optional[str] = None,
         recursive: bool = True,
-    ) -> ControllerResult[BatchDetectionSummary]:
+    ) -> ServiceResult[BatchDetectionSummary]:
         """
         Run RIBBIT detection on multiple audio files.
 
@@ -186,7 +186,7 @@ class RibbitService(BaseService):
         """
         error = self._validate_input_path(directory)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         # Start run tracking
         self._start_run(
@@ -209,7 +209,7 @@ class RibbitService(BaseService):
 
             if not files:
                 self._fail_run("No audio files found")
-                return ControllerResult.fail(f"No audio files found in {directory}")
+                return ServiceResult.fail(f"No audio files found in {directory}")
 
             all_detections = []
             all_results = []
@@ -296,7 +296,7 @@ class RibbitService(BaseService):
                 output_files=[saved_path] if saved_path else None,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=f"Found {len(all_detections)} detections in {files_with_detections} files",
                 detections=all_detections,
@@ -304,13 +304,13 @@ class RibbitService(BaseService):
             )
         except Exception as e:
             self._fail_run(str(e))
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Profile Management
     # =========================================================================
 
-    def list_presets(self) -> ControllerResult[List[Dict[str, Any]]]:
+    def list_presets(self) -> ServiceResult[List[Dict[str, Any]]]:
         """
         List all available preset profiles.
 
@@ -334,14 +334,14 @@ class RibbitService(BaseService):
                     }
                 )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=preset_list,
                 message=f"Found {len(preset_list)} preset profiles",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
-    def get_preset(self, preset_name: str) -> ControllerResult[Dict[str, Any]]:
+    def get_preset(self, preset_name: str) -> ServiceResult[Dict[str, Any]]:
         """
         Get details of a specific preset profile.
 
@@ -358,17 +358,17 @@ class RibbitService(BaseService):
 
             if preset_name not in profiles:
                 available = ", ".join(profiles.keys())
-                return ControllerResult.fail(
+                return ServiceResult.fail(
                     f"Unknown preset: {preset_name}. Available: {available}"
                 )
 
             profile = profiles[preset_name]
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=profile.to_dict(),
                 message=f"Profile: {preset_name}",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     def create_profile(
         self,
@@ -380,7 +380,7 @@ class RibbitService(BaseService):
         score_threshold: float = 0.5,
         description: str = "",
         species: Optional[str] = None,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Create a custom RIBBIT profile.
 
@@ -413,15 +413,15 @@ class RibbitService(BaseService):
 
             error = profile.validate()
             if error:
-                return ControllerResult.fail(f"Invalid profile: {error}")
+                return ServiceResult.fail(f"Invalid profile: {error}")
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=profile.to_dict(),
                 message=f"Created profile: {name}",
                 profile=profile,
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Visualization Helpers
@@ -431,7 +431,7 @@ class RibbitService(BaseService):
         self,
         result,  # RibbitResult
         resolution: float = 1.0,
-    ) -> ControllerResult[Dict[str, Any]]:
+    ) -> ServiceResult[Dict[str, Any]]:
         """
         Generate timeline data for visualization.
 
@@ -455,7 +455,7 @@ class RibbitService(BaseService):
                 end_bin = int(np.ceil(detection.end_time / resolution))
                 timeline[start_bin:end_bin] = detection.score
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data={
                     "times": times.tolist(),
                     "scores": timeline.tolist(),
@@ -465,4 +465,4 @@ class RibbitService(BaseService):
                 message="Generated timeline",
             )
         except Exception as e:
-            return ControllerResult.fail(str(e))
+            return ServiceResult.fail(str(e))

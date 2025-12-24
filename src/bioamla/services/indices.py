@@ -49,7 +49,7 @@ from bioamla.core.analysis.indices import (
 )
 
 from .audio_file import AudioData
-from .base import BaseService, BatchProgress, ControllerResult
+from .base import BaseService, BatchProgress, ServiceResult
 
 # Available index names for selection
 AVAILABLE_INDICES = ["aci", "adi", "aei", "bio", "ndsi", "h_spectral", "h_temporal"]
@@ -145,7 +145,7 @@ class IndicesController(BaseService):
         indices: Optional[List[str]] = None,
         include_entropy: bool = True,
         **kwargs,
-    ) -> ControllerResult[IndicesResult]:
+    ) -> ServiceResult[IndicesResult]:
         """
         Calculate acoustic indices for audio data.
 
@@ -204,20 +204,20 @@ class IndicesController(BaseService):
                 h_temporal=h_temporal,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result,
                 message=f"Computed indices for {audio.duration:.1f}s audio",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Index calculation failed: {e}")
+            return ServiceResult.fail(f"Index calculation failed: {e}")
 
     def calculate_single_index(
         self,
         audio: AudioData,
         index_name: str,
         **kwargs,
-    ) -> ControllerResult[float]:
+    ) -> ServiceResult[float]:
         """
         Calculate a single acoustic index.
 
@@ -290,17 +290,17 @@ class IndicesController(BaseService):
             elif index_name == "h_temporal":
                 value = temporal_entropy(samples, audio.sample_rate, n_fft, hop_length)
             else:
-                return ControllerResult.fail(
+                return ServiceResult.fail(
                     f"Unknown index: {index_name}. Available: {AVAILABLE_INDICES}"
                 )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=value,
                 message=f"{index_name.upper()}: {value:.4f}",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Index calculation failed: {e}")
+            return ServiceResult.fail(f"Index calculation failed: {e}")
 
     # =========================================================================
     # Temporal Analysis
@@ -312,7 +312,7 @@ class IndicesController(BaseService):
         window_duration: float = 60.0,
         hop_duration: Optional[float] = None,
         **kwargs,
-    ) -> ControllerResult[TemporalIndicesResult]:
+    ) -> ServiceResult[TemporalIndicesResult]:
         """
         Calculate acoustic indices over sliding time windows.
 
@@ -350,13 +350,13 @@ class IndicesController(BaseService):
                 total_duration=audio.duration,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=result,
                 message=f"Computed {len(windows)} windows ({window_duration}s each)",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Temporal analysis failed: {e}")
+            return ServiceResult.fail(f"Temporal analysis failed: {e}")
 
     # =========================================================================
     # Batch Operations
@@ -369,7 +369,7 @@ class IndicesController(BaseService):
         recursive: bool = True,
         include_entropy: bool = True,
         **kwargs,
-    ) -> ControllerResult[BatchIndicesResult]:
+    ) -> ServiceResult[BatchIndicesResult]:
         """
         Calculate acoustic indices for multiple audio files.
 
@@ -403,7 +403,7 @@ class IndicesController(BaseService):
 
         if not files:
             self._fail_run("No audio files found")
-            return ControllerResult.fail(f"No audio files found in {input_path}")
+            return ServiceResult.fail(f"No audio files found in {input_path}")
 
         results = []
         successful = 0
@@ -485,7 +485,7 @@ class IndicesController(BaseService):
             output_files=[saved_path] if saved_path else None,
         )
 
-        return ControllerResult.ok(
+        return ServiceResult.ok(
             data=batch_result,
             message=f"Processed {len(files)} files: {successful} successful, {failed} failed",
             warnings=progress.errors if progress.errors else None,
@@ -495,7 +495,7 @@ class IndicesController(BaseService):
         self,
         results: List[Dict[str, Any]],
         output_path: str,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """Save results to CSV or Parquet."""
         try:
             import pandas as pd
@@ -509,13 +509,13 @@ class IndicesController(BaseService):
             else:
                 df.to_csv(path, index=False)
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=str(path),
                 message=f"Saved results to {path}",
             )
 
         except Exception as e:
-            return ControllerResult.fail(f"Failed to save results: {e}")
+            return ServiceResult.fail(f"Failed to save results: {e}")
 
     # =========================================================================
     # Convenience Methods

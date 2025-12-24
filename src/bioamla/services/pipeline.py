@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .base import BaseService, ControllerResult, ToDictMixin
+from .base import BaseService, ServiceResult, ToDictMixin
 
 
 @dataclass
@@ -119,7 +119,7 @@ class PipelineController(BaseService):
         self,
         filepath: str,
         render_templates: bool = True,
-    ) -> ControllerResult[PipelineSummary]:
+    ) -> ServiceResult[PipelineSummary]:
         """
         Parse a pipeline TOML file.
 
@@ -132,7 +132,7 @@ class PipelineController(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.pipeline.parser import parse_pipeline
@@ -150,19 +150,19 @@ class PipelineController(BaseService):
                 execution_order=execution_order,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=f"Parsed pipeline: {pipeline.name}",
                 pipeline=pipeline,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to parse pipeline: {e}")
+            return ServiceResult.fail(f"Failed to parse pipeline: {e}")
 
     def parse_string(
         self,
         content: str,
         render_templates: bool = True,
-    ) -> ControllerResult[PipelineSummary]:
+    ) -> ServiceResult[PipelineSummary]:
         """
         Parse pipeline from TOML string.
 
@@ -189,13 +189,13 @@ class PipelineController(BaseService):
                 execution_order=execution_order,
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=f"Parsed pipeline: {pipeline.name}",
                 pipeline=pipeline,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to parse pipeline: {e}")
+            return ServiceResult.fail(f"Failed to parse pipeline: {e}")
 
     # =========================================================================
     # Validation
@@ -205,7 +205,7 @@ class PipelineController(BaseService):
         self,
         filepath: str,
         strict: bool = False,
-    ) -> ControllerResult[ValidationSummary]:
+    ) -> ServiceResult[ValidationSummary]:
         """
         Validate a pipeline TOML file.
 
@@ -218,7 +218,7 @@ class PipelineController(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.pipeline.parser import parse_pipeline
@@ -242,20 +242,20 @@ class PipelineController(BaseService):
             else:
                 message = f"Pipeline has {len(result.errors)} errors"
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=message,
                 warnings=summary.warnings,
                 validation_result=result,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to validate pipeline: {e}")
+            return ServiceResult.fail(f"Failed to validate pipeline: {e}")
 
     def validate_pipeline(
         self,
         pipeline,
         strict: bool = False,
-    ) -> ControllerResult[ValidationSummary]:
+    ) -> ServiceResult[ValidationSummary]:
         """
         Validate a parsed Pipeline object.
 
@@ -284,14 +284,14 @@ class PipelineController(BaseService):
             else:
                 message = f"Pipeline has {len(result.errors)} errors"
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=message,
                 warnings=summary.warnings,
                 validation_result=result,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to validate pipeline: {e}")
+            return ServiceResult.fail(f"Failed to validate pipeline: {e}")
 
     # =========================================================================
     # Execution
@@ -302,7 +302,7 @@ class PipelineController(BaseService):
         filepath: str,
         variables: Optional[Dict[str, Any]] = None,
         validate_first: bool = True,
-    ) -> ControllerResult[ExecutionSummary]:
+    ) -> ServiceResult[ExecutionSummary]:
         """
         Execute a pipeline from a TOML file.
 
@@ -316,7 +316,7 @@ class PipelineController(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.pipeline.engine import ExecutionStatus
@@ -328,7 +328,7 @@ class PipelineController(BaseService):
             if validate_first:
                 validation = self.validate_pipeline(pipeline)
                 if validation.data and not validation.data.valid:
-                    return ControllerResult.fail(
+                    return ServiceResult.fail(
                         f"Pipeline validation failed: {validation.data.errors[0]}"
                     )
 
@@ -362,20 +362,20 @@ class PipelineController(BaseService):
             else:
                 message = f"Pipeline failed: {result.error}"
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=message,
                 execution_result=result,
                 outputs=result.outputs,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to execute pipeline: {e}")
+            return ServiceResult.fail(f"Failed to execute pipeline: {e}")
 
     def execute_pipeline(
         self,
         pipeline,
         variables: Optional[Dict[str, Any]] = None,
-    ) -> ControllerResult[ExecutionSummary]:
+    ) -> ServiceResult[ExecutionSummary]:
         """
         Execute a parsed Pipeline object.
 
@@ -417,14 +417,14 @@ class PipelineController(BaseService):
             else:
                 message = f"Pipeline failed: {result.error}"
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=summary,
                 message=message,
                 execution_result=result,
                 outputs=result.outputs,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to execute pipeline: {e}")
+            return ServiceResult.fail(f"Failed to execute pipeline: {e}")
 
     def cancel(self) -> None:
         """Cancel a running pipeline execution."""
@@ -439,7 +439,7 @@ class PipelineController(BaseService):
         self,
         name: str,
         handler: Callable,
-    ) -> ControllerResult[None]:
+    ) -> ServiceResult[None]:
         """
         Register a custom action handler.
 
@@ -453,13 +453,13 @@ class PipelineController(BaseService):
         try:
             engine = self._get_engine()
             engine.register_action(name, handler)
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 message=f"Registered action: {name}",
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to register action: {e}")
+            return ServiceResult.fail(f"Failed to register action: {e}")
 
-    def list_actions(self) -> ControllerResult[List[str]]:
+    def list_actions(self) -> ServiceResult[List[str]]:
         """
         List all registered actions.
 
@@ -469,12 +469,12 @@ class PipelineController(BaseService):
         try:
             engine = self._get_engine()
             actions = list(engine._actions.keys())
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=sorted(actions),
                 message=f"Found {len(actions)} registered actions",
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to list actions: {e}")
+            return ServiceResult.fail(f"Failed to list actions: {e}")
 
     # =========================================================================
     # Export
@@ -484,7 +484,7 @@ class PipelineController(BaseService):
         self,
         filepath: str,
         output_path: Optional[str] = None,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Export a pipeline to a shell script.
 
@@ -497,7 +497,7 @@ class PipelineController(BaseService):
         """
         error = self._validate_input_path(filepath)
         if error:
-            return ControllerResult.fail(error)
+            return ServiceResult.fail(error)
 
         try:
             from bioamla.core.pipeline.parser import parse_pipeline
@@ -510,19 +510,19 @@ class PipelineController(BaseService):
             if output_path:
                 message += f": {output_path}"
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=script,
                 message=message,
                 output_path=output_path,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to export pipeline: {e}")
+            return ServiceResult.fail(f"Failed to export pipeline: {e}")
 
     def export_to_toml(
         self,
         pipeline,
         output_path: Optional[str] = None,
-    ) -> ControllerResult[str]:
+    ) -> ServiceResult[str]:
         """
         Export a Pipeline object to TOML.
 
@@ -547,13 +547,13 @@ class PipelineController(BaseService):
             if output_path:
                 message += f": {output_path}"
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=toml_content,
                 message=message,
                 output_path=output_path,
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to export pipeline: {e}")
+            return ServiceResult.fail(f"Failed to export pipeline: {e}")
 
     # =========================================================================
     # Pipeline Creation Helpers
@@ -565,7 +565,7 @@ class PipelineController(BaseService):
         steps: List[Dict[str, Any]],
         description: str = "",
         variables: Optional[Dict[str, Any]] = None,
-    ) -> ControllerResult:
+    ) -> ServiceResult:
         """
         Create a Pipeline object programmatically.
 
@@ -603,14 +603,14 @@ class PipelineController(BaseService):
                 variables=variables or {},
             )
 
-            return ControllerResult.ok(
+            return ServiceResult.ok(
                 data=pipeline,
                 message=f"Created pipeline: {name}",
             )
         except Exception as e:
-            return ControllerResult.fail(f"Failed to create pipeline: {e}")
+            return ServiceResult.fail(f"Failed to create pipeline: {e}")
 
-    def get_example_pipeline(self) -> ControllerResult[str]:
+    def get_example_pipeline(self) -> ServiceResult[str]:
         """
         Get an example pipeline TOML.
 
@@ -668,7 +668,7 @@ embeddings = "{{ output_dir }}/embeddings.npy"
 output = "{{ output_dir }}/clusters.json"
 method = "hdbscan"
 """
-        return ControllerResult.ok(
+        return ServiceResult.ok(
             data=example,
             message="Example pipeline",
         )

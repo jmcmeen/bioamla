@@ -51,7 +51,7 @@ from .annotation import AnnotationService, AnnotationResult, ClipExtractionResul
 from .audio import AudioController  # Legacy controller for CLI compatibility
 from .audio_file import AudioData, AudioFileController
 from .audio_transform import AudioTransformController
-from .base import BaseService, ControllerResult
+from .base import BaseService, ServiceResult
 from .clustering import ClusteringController
 from .embedding import EmbeddingController
 from .inaturalist import (
@@ -81,7 +81,7 @@ from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitService
 __all__ = [
     # Base
     "BaseService",
-    "ControllerResult",
+    "ServiceResult",
     # Audio
     "AudioController",  # Legacy, for CLI file-based operations
     "AudioFileController",  # File I/O operations
