@@ -24,11 +24,10 @@
 set -e  # Exit on error
 
 # Configuration
-PROJECT_NAME="frog_acoustic_study"
-PROJECT_DIR="./${PROJECT_NAME}"
-AUDIO_DIR="${PROJECT_DIR}/raw_recordings"
+
+AUDIO_DIR="./scp_small"
 OUTPUT_SUBDIR="predictions"
-OUTPUT_DIR="${PROJECT_DIR}/$OUTPUT_SUBDIR"
+OUTPUT_DIR="./$OUTPUT_SUBDIR"
 
 # Choose your model based on use case:
 # General audio classification (birds, frogs, music, speech, etc.)
