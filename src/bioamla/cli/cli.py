@@ -22,7 +22,6 @@ from .commands import (
     learn,
     models,
     pipeline,
-    realtime,
     services,
 )
 
@@ -59,7 +58,6 @@ cli.add_command(indices)
 cli.add_command(learn)
 cli.add_command(models)
 cli.add_command(pipeline)
-cli.add_command(realtime)
 cli.add_command(services)
 
 
