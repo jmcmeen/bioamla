@@ -306,7 +306,7 @@ class EmbeddingService(BaseService):
             Result with reduced embeddings info
         """
         try:
-            from bioamla.core.analysis.clustering import reduce_dimensions
+            from bioamla.core.audio.clustering import reduce_dimensions
 
             reduced = reduce_dimensions(
                 embeddings,

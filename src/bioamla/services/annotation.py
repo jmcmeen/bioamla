@@ -22,10 +22,10 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from bioamla.services.base import BaseService, ServiceResult
-from bioamla.core.analysis.annotations import (
+from bioamla.core.audio.annotations import (
     Annotation as CoreAnnotation,
 )
-from bioamla.core.analysis.annotations import (
+from bioamla.core.audio.annotations import (
     load_csv_annotations,
     load_raven_selection_table,
     save_csv_annotations,
@@ -609,7 +609,7 @@ class AnnotationService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.analysis.annotations import load_annotations_from_directory
+            from bioamla.core.audio.annotations import load_annotations_from_directory
 
             all_annotations_dict = load_annotations_from_directory(
                 directory, file_pattern=file_pattern, format=format

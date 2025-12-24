@@ -337,7 +337,7 @@ def audio_visualize(path, output, viz_type, n_fft, hop_length, n_mels, n_mfcc, c
     """Generate audio visualization (spectrogram, waveform, MFCC)."""
     from pathlib import Path
 
-    from bioamla.core.visualize import generate_spectrogram
+    from bioamla.core.visualization.visualize import generate_spectrogram
 
     if batch:
         from bioamla.core.utils import get_audio_files

@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from bioamla.core.base_api import APICache, APIClient, RateLimiter
+from bioamla.core.catalogs.base_api import APICache, APIClient, RateLimiter
 from bioamla.core.files import TextFile, sanitize_filename
 
 logger = logging.getLogger(__name__)

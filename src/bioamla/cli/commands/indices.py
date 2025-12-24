@@ -233,7 +233,7 @@ def indices_aci(path, min_freq, max_freq, n_fft):
     """Compute Acoustic Complexity Index (ACI) for an audio file."""
     import librosa
 
-    from bioamla.core.analysis.indices import compute_aci
+    from bioamla.core.audio.indices import compute_aci
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -258,7 +258,7 @@ def indices_adi(path, max_freq, freq_step, db_threshold):
     """Compute Acoustic Diversity Index (ADI) for an audio file."""
     import librosa
 
-    from bioamla.core.analysis.indices import compute_adi
+    from bioamla.core.audio.indices import compute_adi
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -281,7 +281,7 @@ def indices_aei(path, max_freq, freq_step, db_threshold):
     """Compute Acoustic Evenness Index (AEI) for an audio file."""
     import librosa
 
-    from bioamla.core.analysis.indices import compute_aei
+    from bioamla.core.audio.indices import compute_aei
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -303,7 +303,7 @@ def indices_bio(path, min_freq, max_freq):
     """Compute Bioacoustic Index (BIO) for an audio file."""
     import librosa
 
-    from bioamla.core.analysis.indices import compute_bio
+    from bioamla.core.audio.indices import compute_bio
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -325,7 +325,7 @@ def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
     """Compute Normalized Difference Soundscape Index (NDSI) for an audio file."""
     import librosa
 
-    from bioamla.core.analysis.indices import compute_ndsi
+    from bioamla.core.audio.indices import compute_ndsi
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
@@ -355,7 +355,7 @@ def indices_entropy(path, spectral, temporal):
     """Compute entropy-based acoustic indices for an audio file."""
     import librosa
 
-    from bioamla.core.analysis.indices import spectral_entropy, temporal_entropy
+    from bioamla.core.audio.indices import spectral_entropy, temporal_entropy
 
     try:
         audio, sample_rate = librosa.load(path, sr=None, mono=True)
