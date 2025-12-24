@@ -17,48 +17,53 @@ Architecture:
         ↓ (config objects, paths)
     Service
         ↓ (delegates to)
-    Core Services (audio, ml, analysis)
-        ↓ (uses)
-    Database (repositories, UoW)
+    Core (audio processing, ML, analysis)
 
 Audio Service Architecture:
-    AudioFileController - File I/O operations
+    AudioFileService - File I/O operations
         ↓ produces/consumes
     AudioData - In-memory audio container
         ↓ processed by
-    AudioTransformController - In-memory signal processing
-        ↓ (no file writes)
-    AudioFileController.save() - Only way to persist changes
+    AudioTransformService - In-memory signal processing + file-based batch operations
+        ↓ (can persist via file methods or delegate to AudioFileService)
 
 Usage:
-    from bioamla.services import AudioFileController, AudioTransformController
+    from bioamla.services import AudioFileService, AudioTransformService
 
-    # Load audio through file controller
-    file_ctrl = AudioFileController()
-    result = file_ctrl.open("input.wav")
+    # Load audio through file service
+    file_svc = AudioFileService()
+    result = file_svc.open("input.wav")
     audio = result.data
 
     # Apply transforms in memory
-    transform_ctrl = AudioTransformController()
-    audio = transform_ctrl.apply_bandpass(audio, 500, 8000).data
-    audio = transform_ctrl.normalize_loudness(audio, -20).data
+    transform_svc = AudioTransformService()
+    audio = transform_svc.apply_bandpass(audio, 500, 8000).data
+    audio = transform_svc.normalize_loudness(audio, -20).data
 
-    # Save through file controller
-    file_ctrl.save(audio, "output.wav")
+    # Save through file service
+    file_svc.save(audio, "output.wav")
+
+    # Or use file-based batch operations
+    result = transform_svc.resample_batch("input_dir", "output_dir", 16000)
 """
 
 from .annotation import AnnotationService, AnnotationResult, ClipExtractionResult
-from .audio import AudioController  # Legacy controller for CLI compatibility
-from .audio_file import AudioData, AudioFileController
-from .audio_transform import AudioTransformController
+from .audio_file import AudioData, AudioFileService
+from .audio_transform import (
+    AudioTransformService,
+    AudioMetadata,
+    ProcessedAudio,
+    AnalysisResult,
+    BatchResult,
+)
 from .base import BaseService, ServiceResult
-from .clustering import ClusteringController
-from .embedding import EmbeddingController
+from .clustering import ClusteringService
+from .embedding import EmbeddingService
 from .inaturalist import (
     DownloadResult as INatDownloadResult,
 )
 from .inaturalist import (
-    INaturalistController,
+    INaturalistService,
     ObservationInfo,
     TaxonInfo,
 )
@@ -68,11 +73,11 @@ from .inaturalist import (
 from .inaturalist import (
     SearchResult as INatSearchResult,
 )
-from .indices import BatchIndicesResult, IndicesController, IndicesResult
-from .inference import InferenceController
+from .indices import BatchIndicesResult, IndicesService, IndicesResult
+from .inference import InferenceService
 from .pipeline import (
     ExecutionSummary,
-    PipelineController,
+    PipelineService,
     PipelineSummary,
     ValidationSummary,
 )
@@ -83,36 +88,39 @@ __all__ = [
     "BaseService",
     "ServiceResult",
     # Audio
-    "AudioController",  # Legacy, for CLI file-based operations
-    "AudioFileController",  # File I/O operations
-    "AudioTransformController",  # In-memory transforms
+    "AudioFileService",  # File I/O operations
+    "AudioTransformService",  # In-memory transforms + file-based batch operations
     "AudioData",  # Audio data container
+    "AudioMetadata",  # File metadata
+    "ProcessedAudio",  # Processing result
+    "AnalysisResult",  # Analysis result
+    "BatchResult",  # Batch operation result
     # Annotations
     "AnnotationService",
     "AnnotationResult",
     "ClipExtractionResult",
     # ML
-    "InferenceController",
-    "EmbeddingController",
-    "ClusteringController",
+    "InferenceService",
+    "EmbeddingService",
+    "ClusteringService",
     # Detection
     "RibbitService",
     "DetectionSummary",
     "BatchDetectionSummary",
     # iNaturalist
-    "INaturalistController",
+    "INaturalistService",
     "INatSearchResult",
     "INatDownloadResult",
     "TaxonInfo",
     "INatProjectStats",
     "ObservationInfo",
     # Pipeline
-    "PipelineController",
+    "PipelineService",
     "PipelineSummary",
     "ExecutionSummary",
     "ValidationSummary",
     # Analysis
-    "IndicesController",
+    "IndicesService",
     "IndicesResult",
     "BatchIndicesResult",
 ]

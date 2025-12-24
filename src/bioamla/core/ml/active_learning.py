@@ -1203,7 +1203,7 @@ def export_annotations(learner: ActiveLearner, filepath: str, format: str = "csv
 
     elif format == "raven":
         # Export as Raven selection table
-        from bioamla.core.annotations import Annotation, save_raven_selection_table
+        from bioamla.core.analysis.annotations import Annotation, save_raven_selection_table
 
         annotations = []
         for sample in labeled_samples:

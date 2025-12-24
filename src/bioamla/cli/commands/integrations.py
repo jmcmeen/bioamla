@@ -46,15 +46,15 @@ def inat_search(
     quiet: bool,
 ):
     """Search for iNaturalist observations."""
-    from bioamla.services.inaturalist import INaturalistController
+    from bioamla.services.inaturalist import INaturalistService
 
     if not species and not taxon_id and not place_id and not project_id:
         raise click.UsageError(
             "At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)"
         )
 
-    controller = INaturalistController()
-    result = controller.search(
+    service = INaturalistService()
+    result = service.search(
         taxon_id=taxon_id,
         taxon_name=species,
         place_id=place_id,
@@ -131,10 +131,10 @@ def inat_stats(project_id: str, output: str, quiet: bool):
     """Get statistics for an iNaturalist project."""
     import json
 
-    from bioamla.services.inaturalist import INaturalistController
+    from bioamla.services.inaturalist import INaturalistService
 
-    controller = INaturalistController()
-    result = controller.get_project_stats(project_id=project_id)
+    service = INaturalistService()
+    result = service.get_project_stats(project_id=project_id)
 
     if not result.success:
         click.echo(f"Error: {result.error}")
@@ -187,15 +187,15 @@ def inat_download(
     quiet: bool,
 ):
     """Download audio observations from iNaturalist."""
-    from bioamla.services.inaturalist import INaturalistController
+    from bioamla.services.inaturalist import INaturalistService
 
     # Parse taxon IDs
     taxon_id_list = None
     if taxon_ids:
         taxon_id_list = [int(t.strip()) for t in taxon_ids.split(",")]
 
-    controller = INaturalistController()
-    result = controller.download(
+    service = INaturalistService()
+    result = service.download(
         output_dir=output_dir,
         taxon_ids=taxon_id_list,
         taxon_name=taxon_name,

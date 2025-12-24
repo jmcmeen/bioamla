@@ -35,7 +35,7 @@ def learn_init(
     """Initialize active learning session from predictions."""
     import csv
 
-    from bioamla.core.active_learning import (
+    from bioamla.core.ml.active_learning import (
         ActiveLearner,
         HybridSampler,
         RandomSampler,
@@ -97,7 +97,7 @@ def learn_query(state_file: str, n_samples: int, output: Optional[str], quiet: b
     import json
     from pathlib import Path
 
-    from bioamla.core.active_learning import (
+    from bioamla.core.ml.active_learning import (
         ActiveLearner,
         UncertaintySampler,
     )
@@ -167,7 +167,7 @@ def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet:
     """Import annotations into active learning session."""
     import csv
 
-    from bioamla.core.active_learning import ActiveLearner, UncertaintySampler
+    from bioamla.core.ml.active_learning import ActiveLearner, UncertaintySampler
 
     sampler = UncertaintySampler(strategy="entropy")
     learner = ActiveLearner.load_state(state_file, sampler=sampler)
@@ -201,7 +201,7 @@ def learn_annotate(state_file: str, annotations_csv: str, annotator: str, quiet:
 @click.argument("state_file", type=click.Path(exists=True))
 def learn_status(state_file: str):
     """Show status of active learning session."""
-    from bioamla.core.active_learning import (
+    from bioamla.core.ml.active_learning import (
         ActiveLearner,
         UncertaintySampler,
         summarize_annotation_session,
@@ -247,7 +247,7 @@ def learn_status(state_file: str):
 @click.option("--quiet", "-q", is_flag=True, help="Suppress output")
 def learn_export(state_file: str, output_file: str, fmt: str, quiet: bool):
     """Export labeled samples from active learning session."""
-    from bioamla.core.active_learning import ActiveLearner, UncertaintySampler, export_annotations
+    from bioamla.core.ml.active_learning import ActiveLearner, UncertaintySampler, export_annotations
 
     sampler = UncertaintySampler(strategy="entropy")
     learner = ActiveLearner.load_state(state_file, sampler=sampler)
@@ -286,7 +286,7 @@ def learn_simulate(
     import csv
     from pathlib import Path
 
-    from bioamla.core.active_learning import (
+    from bioamla.core.ml.active_learning import (
         ActiveLearner,
         HybridSampler,
         RandomSampler,

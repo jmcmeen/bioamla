@@ -1,25 +1,25 @@
-# controllers/embedding.py
+# services/embedding.py
 """
-Embedding Controller
-====================
+Embedding Service
+=================
 
-Controller for audio embedding extraction operations.
+Service for audio embedding extraction operations.
 
 Orchestrates between CLI/API views and core embedding extraction functions.
 Handles model loading, batch processing, dimensionality reduction, and
 output formatting.
 
 Example:
-    from bioamla.controllers.embedding import EmbeddingController
+    from bioamla.services import EmbeddingService
 
-    controller = EmbeddingController(model_path="MIT/ast-finetuned-audioset")
+    service = EmbeddingService(model_path="MIT/ast-finetuned-audioset")
 
     # Single file
-    result = controller.extract("audio.wav")
+    result = service.extract("audio.wav")
     print(result.data.embeddings.shape)
 
     # Batch extraction
-    result = controller.extract_batch(
+    result = service.extract_batch(
         directory="./audio",
         output_path="embeddings.npy",
     )
@@ -60,9 +60,9 @@ class BatchEmbeddingSummary:
     errors: List[str] = field(default_factory=list)
 
 
-class EmbeddingController(BaseService):
+class EmbeddingService(BaseService):
     """
-    Controller for audio embedding extraction operations.
+    Service for audio embedding extraction operations.
 
     Provides high-level methods for:
     - Single file embedding extraction
@@ -78,7 +78,7 @@ class EmbeddingController(BaseService):
         model_type: str = "ast",
     ):
         """
-        Initialize embedding controller.
+        Initialize embedding service.
 
         Args:
             model_path: Path to model (HuggingFace ID or local path)

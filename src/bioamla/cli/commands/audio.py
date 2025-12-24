@@ -13,9 +13,9 @@ def audio():
 @click.argument("path")
 def audio_info(path: str):
     """Display audio file information."""
-    from bioamla.services.audio_file import AudioFileController
+    from bioamla.services.audio_file import AudioFileService
 
-    controller = AudioFileController()
+    controller = AudioFileService()
     result = controller.open(path)
 
     if not result.success:
@@ -63,9 +63,9 @@ def audio_list(path: str, recursive: bool):
 )
 def audio_convert(input_path, output_path, sample_rate, channels, bit_depth, format):
     """Convert audio file format or properties."""
-    from bioamla.services.audio_file import AudioFileController
+    from bioamla.services.audio_file import AudioFileService
 
-    controller = AudioFileController()
+    controller = AudioFileService()
     result = controller.convert(
         input_path=input_path,
         output_path=output_path,
@@ -154,13 +154,13 @@ def audio_segment(input_path, output_dir, duration, overlap, format, prefix):
 @click.option("--duration", "-d", default=None, type=float, help="Duration in seconds")
 def audio_trim(input_path, output_path, start, end, duration):
     """Trim audio file to specified time range."""
-    from bioamla.services.audio_file import AudioFileController
+    from bioamla.services.audio_file import AudioFileService
 
     if end is not None and duration is not None:
         click.echo("Error: Cannot specify both --end and --duration")
         raise SystemExit(1)
 
-    controller = AudioFileController()
+    controller = AudioFileService()
     result = controller.trim(
         input_path=input_path,
         output_path=output_path,
@@ -183,9 +183,9 @@ def audio_trim(input_path, output_path, start, end, duration):
 @click.option("--method", "-m", type=click.Choice(["peak", "rms"]), default="peak", help="Method")
 def audio_normalize(input_path, output_path, target_db, method):
     """Normalize audio amplitude."""
-    from bioamla.services.audio import AudioController
+    from bioamla.services.audio import AudioService
 
-    controller = AudioController()
+    controller = AudioService()
     result = controller.normalize(
         input_path=input_path,
         output_path=output_path,
@@ -206,9 +206,9 @@ def audio_normalize(input_path, output_path, target_db, method):
 @click.option("--sample-rate", "-r", required=True, type=int, help="Target sample rate in Hz")
 def audio_resample(input_path, output_path, sample_rate):
     """Resample audio to a different sample rate."""
-    from bioamla.services.audio_file import AudioFileController
+    from bioamla.services.audio_file import AudioFileService
 
-    controller = AudioFileController()
+    controller = AudioFileService()
     result = controller.resample(
         input_path=input_path,
         output_path=output_path,
@@ -240,18 +240,18 @@ def audio_spectrogram(
     path, output, width, height, n_fft, hop_length, colormap, mel, n_mels, fmin, fmax, db, show
 ):
     """Generate spectrogram visualization."""
-    from bioamla.services.audio_file import AudioFileController
-    from bioamla.services.visualize import VisualizeController
+    from bioamla.services.audio_file import AudioFileService
+    from bioamla.services.visualize import VisualizeService
 
-    audio_ctrl = AudioFileController()
-    result = audio_ctrl.open(path)
+    audio_svc = AudioFileService()
+    result = audio_svc.open(path)
 
     if not result.success:
         click.echo(f"Error loading audio: {result.error}")
         raise SystemExit(1)
 
-    vis_ctrl = VisualizeController()
-    vis_result = vis_ctrl.spectrogram(
+    vis_svc = VisualizeService()
+    vis_result = vis_svc.spectrogram(
         audio_data=result.data,
         output_path=output,
         width=width,
@@ -286,18 +286,18 @@ def audio_spectrogram(
 @click.option("--show", is_flag=True, help="Display the plot interactively")
 def audio_waveform(path, output, width, height, color, show):
     """Generate waveform visualization."""
-    from bioamla.services.audio_file import AudioFileController
-    from bioamla.services.visualize import VisualizeController
+    from bioamla.services.audio_file import AudioFileService
+    from bioamla.services.visualize import VisualizeService
 
-    audio_ctrl = AudioFileController()
-    result = audio_ctrl.open(path)
+    audio_svc = AudioFileService()
+    result = audio_svc.open(path)
 
     if not result.success:
         click.echo(f"Error loading audio: {result.error}")
         raise SystemExit(1)
 
-    vis_ctrl = VisualizeController()
-    vis_result = vis_ctrl.waveform(
+    vis_svc = VisualizeService()
+    vis_result = vis_svc.waveform(
         audio_data=result.data,
         output_path=output,
         width=width,
@@ -407,7 +407,7 @@ def audio_batch_convert(input_dir, output_dir, sample_rate, channels, format, re
 
     from bioamla.core.progress import ProgressBar
     from bioamla.core.utils import get_audio_files
-    from bioamla.services.audio_file import AudioFileController
+    from bioamla.services.audio_file import AudioFileService
 
     audio_files = get_audio_files(input_dir, recursive=recursive)
     if not audio_files:
@@ -416,7 +416,7 @@ def audio_batch_convert(input_dir, output_dir, sample_rate, channels, format, re
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    controller = AudioFileController()
+    controller = AudioFileService()
     success_count = 0
     error_count = 0
 

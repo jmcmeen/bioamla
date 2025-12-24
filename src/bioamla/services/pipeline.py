@@ -1,26 +1,26 @@
-# controllers/pipeline.py
+# services/pipeline.py
 """
-Pipeline Controller
-===================
+Pipeline Service
+================
 
-Controller for pipeline operations.
+Service for pipeline operations.
 
 Orchestrates between CLI/API views and core pipeline engine.
 Handles parsing, validation, execution, and export of pipelines.
 
 Example:
-    from bioamla.controllers.pipeline import PipelineController
+    from bioamla.services import PipelineService
 
-    controller = PipelineController()
+    service = PipelineService()
 
     # Parse and validate a pipeline
-    result = controller.parse("pipeline.toml")
+    result = service.parse("pipeline.toml")
 
     # Execute a pipeline
-    result = controller.execute("pipeline.toml", variables={"input": "./audio"})
+    result = service.execute("pipeline.toml", variables={"input": "./audio"})
 
     # Export to shell script
-    result = controller.export_to_shell("pipeline.toml", "run_pipeline.sh")
+    result = service.export_to_shell("pipeline.toml", "run_pipeline.sh")
 """
 
 from dataclasses import dataclass, field
@@ -68,9 +68,9 @@ class ValidationSummary(ToDictMixin):
     warnings: List[str] = field(default_factory=list)
 
 
-class PipelineController(BaseService):
+class PipelineService(BaseService):
     """
-    Controller for pipeline operations.
+    Service for pipeline operations.
 
     Provides high-level methods for:
     - Parsing pipeline TOML files
@@ -80,7 +80,7 @@ class PipelineController(BaseService):
     """
 
     def __init__(self):
-        """Initialize pipeline controller."""
+        """Initialize pipeline service."""
         super().__init__()
         self._engine = None
         self._progress_callback: Optional[Callable[[str, int, int, Optional[str]], None]] = None

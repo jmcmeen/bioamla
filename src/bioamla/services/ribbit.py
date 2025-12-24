@@ -1,26 +1,26 @@
-# controllers/ribbit.py
+# services/ribbit.py
 """
-RIBBIT Controller
-=================
+RIBBIT Service
+==============
 
-Controller for RIBBIT periodic vocalization detection operations.
+Service for RIBBIT periodic vocalization detection operations.
 
 Orchestrates between CLI/API views and core RIBBIT detection functions.
 Handles profile management, batch processing, and result formatting.
 
 Example:
-    from bioamla.controllers.ribbit import RibbitController
+    from bioamla.services import RibbitService
 
-    controller = RibbitController()
+    service = RibbitService()
 
     # List available presets
-    presets = controller.list_presets()
+    presets = service.list_presets()
 
     # Detect using preset
-    result = controller.detect("audio.wav", preset="spring_peeper")
+    result = service.detect("audio.wav", preset="spring_peeper")
 
     # Batch detection
-    result = controller.detect_batch(
+    result = service.detect_batch(
         directory="./audio",
         preset="american_bullfrog",
         output_csv="detections.csv",
@@ -64,7 +64,7 @@ class BatchDetectionSummary(ToDictMixin):
 
 class RibbitService(BaseService):
     """
-    Controller for RIBBIT periodic vocalization detection.
+    Service for RIBBIT periodic vocalization detection.
 
     Provides high-level methods for:
     - Single file detection with preset or custom profiles
@@ -85,7 +85,7 @@ class RibbitService(BaseService):
         profile: Optional[Dict[str, Any]] = None,
     ):
         """Get or create detector with specified profile."""
-        from bioamla.core.detection.ribbit import RibbitDetector, RibbitProfile
+        from bioamla.core.analysis.ribbit import RibbitDetector, RibbitProfile
 
         if preset:
             # Use preset profile
@@ -318,7 +318,7 @@ class RibbitService(BaseService):
             Result with list of preset info
         """
         try:
-            from bioamla.core.detection.ribbit import get_preset_profiles
+            from bioamla.core.analysis.ribbit import get_preset_profiles
 
             profiles = get_preset_profiles()
             preset_list = []
@@ -352,7 +352,7 @@ class RibbitService(BaseService):
             Result with profile details
         """
         try:
-            from bioamla.core.detection.ribbit import get_preset_profiles
+            from bioamla.core.analysis.ribbit import get_preset_profiles
 
             profiles = get_preset_profiles()
 
@@ -398,7 +398,7 @@ class RibbitService(BaseService):
             Result with created profile
         """
         try:
-            from bioamla.core.detection.ribbit import RibbitProfile
+            from bioamla.core.analysis.ribbit import RibbitProfile
 
             profile = RibbitProfile(
                 name=name,
