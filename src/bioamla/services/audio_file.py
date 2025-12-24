@@ -108,8 +108,8 @@ class AudioFileService(BaseService):
         save_result = file_svc.save(processed_audio, "output.wav")
     """
 
-    def __init__(self, project_path: Optional[str] = None):
-        super().__init__(project_path=project_path)
+    def __init__(self):
+        super().__init__()
         self._temp_dir: Optional[Path] = None
 
     def _get_temp_dir(self) -> Path:
