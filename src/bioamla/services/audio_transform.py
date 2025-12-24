@@ -1227,6 +1227,83 @@ class AudioTransformService(BaseService):
         except Exception as e:
             return ServiceResult.fail(str(e))
 
+    def segment_file(
+        self,
+        input_path: str,
+        output_dir: str,
+        duration: float = 3.0,
+        overlap: float = 0.0,
+        format: str = "wav",
+        prefix: Optional[str] = None,
+    ) -> ServiceResult[BatchResult]:
+        """
+        Segment audio file into fixed-duration clips.
+
+        Args:
+            input_path: Input audio file path
+            output_dir: Output directory for segments
+            duration: Segment duration in seconds
+            overlap: Overlap between segments in seconds
+            format: Output format (wav, mp3, flac, ogg)
+            prefix: Prefix for output filenames (default: input filename)
+
+        Returns:
+            Result with batch processing summary
+        """
+        from pathlib import Path
+
+        error = self._validate_input_path(input_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.audio.signal import load_audio, save_audio
+
+            audio, sr = load_audio(input_path)
+
+            # Calculate segment parameters
+            segment_samples = int(duration * sr)
+            overlap_samples = int(overlap * sr)
+            step_samples = segment_samples - overlap_samples
+
+            if step_samples <= 0:
+                return ServiceResult.fail("Overlap must be less than duration")
+
+            # Create output directory
+            output_path = Path(output_dir)
+            output_path.mkdir(parents=True, exist_ok=True)
+
+            # Determine prefix
+            if prefix is None:
+                prefix = Path(input_path).stem
+
+            # Segment the audio
+            segments_created = 0
+            errors = []
+            position = 0
+
+            while position + segment_samples <= len(audio):
+                segment = audio[position : position + segment_samples]
+                segment_file = output_path / f"{prefix}_{segments_created:04d}.{format}"
+                try:
+                    save_audio(str(segment_file), segment, sr)
+                    segments_created += 1
+                except Exception as e:
+                    errors.append(f"{segment_file}: {e}")
+                position += step_samples
+
+            return ServiceResult.ok(
+                data=BatchResult(
+                    files_processed=segments_created,
+                    files_failed=len(errors),
+                    errors=errors,
+                    output_dir=str(output_path),
+                ),
+                message=f"Created {segments_created} segments in {output_dir}",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
     def denoise_file(
         self,
         input_path: str,
@@ -1472,6 +1549,141 @@ class AudioTransformService(BaseService):
                     errors=errors,
                 ),
                 message=f"{operation_name}: processed {processed} files",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def visualize_file(
+        self,
+        input_path: str,
+        output_path: str,
+        viz_type: str = "mel",
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        n_mels: int = 128,
+        n_mfcc: int = 20,
+        cmap: str = "viridis",
+        dpi: int = 100,
+    ) -> ServiceResult[str]:
+        """
+        Generate audio visualization.
+
+        Args:
+            input_path: Input audio file path
+            output_path: Output image file path
+            viz_type: Visualization type (mel, stft, mfcc, waveform)
+            n_fft: FFT window size
+            hop_length: Hop length
+            n_mels: Number of mel bands
+            n_mfcc: Number of MFCCs
+            cmap: Colormap name
+            dpi: Output DPI
+
+        Returns:
+            Result with output path
+        """
+        error = self._validate_input_path(input_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.visualization.visualize import generate_spectrogram
+
+            generate_spectrogram(
+                audio_path=input_path,
+                output_path=output_path,
+                viz_type=viz_type,
+                n_fft=n_fft,
+                hop_length=hop_length,
+                n_mels=n_mels,
+                n_mfcc=n_mfcc,
+                cmap=cmap,
+                dpi=dpi,
+            )
+
+            return ServiceResult.ok(
+                data=output_path,
+                message=f"Generated {viz_type} visualization: {output_path}",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def visualize_batch(
+        self,
+        input_dir: str,
+        output_dir: str,
+        viz_type: str = "mel",
+        n_fft: int = 2048,
+        hop_length: int = 512,
+        n_mels: int = 128,
+        n_mfcc: int = 20,
+        cmap: str = "viridis",
+        dpi: int = 100,
+        recursive: bool = True,
+    ) -> ServiceResult[BatchResult]:
+        """
+        Generate visualizations for multiple audio files.
+
+        Args:
+            input_dir: Input directory
+            output_dir: Output directory
+            viz_type: Visualization type (mel, stft, mfcc, waveform)
+            n_fft: FFT window size
+            hop_length: Hop length
+            n_mels: Number of mel bands
+            n_mfcc: Number of MFCCs
+            cmap: Colormap name
+            dpi: Output DPI
+            recursive: Search subdirectories
+
+        Returns:
+            Result with batch processing summary
+        """
+        from pathlib import Path
+
+        error = self._validate_input_path(input_dir)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.visualization.visualize import generate_spectrogram
+
+            files = self._get_audio_files(input_dir, recursive=recursive)
+            if not files:
+                return ServiceResult.fail(f"No audio files found in {input_dir}")
+
+            output_path = Path(output_dir)
+            output_path.mkdir(parents=True, exist_ok=True)
+
+            processed = 0
+            errors = []
+
+            for filepath in files:
+                out_file = output_path / f"{filepath.stem}_{viz_type}.png"
+                try:
+                    generate_spectrogram(
+                        audio_path=str(filepath),
+                        output_path=str(out_file),
+                        viz_type=viz_type,
+                        n_fft=n_fft,
+                        hop_length=hop_length,
+                        n_mels=n_mels,
+                        n_mfcc=n_mfcc,
+                        cmap=cmap,
+                        dpi=dpi,
+                    )
+                    processed += 1
+                except Exception as e:
+                    errors.append(f"{filepath.name}: {e}")
+
+            return ServiceResult.ok(
+                data=BatchResult(
+                    files_processed=processed,
+                    files_failed=len(errors),
+                    errors=errors,
+                    output_dir=str(output_path),
+                ),
+                message=f"Generated {processed} visualizations in {output_dir}",
             )
         except Exception as e:
             return ServiceResult.fail(str(e))
