@@ -75,12 +75,6 @@ from .inaturalist import (
 )
 from .indices import BatchIndicesResult, IndicesService, IndicesResult
 from .inference import InferenceService
-from .pipeline import (
-    ExecutionSummary,
-    PipelineService,
-    PipelineSummary,
-    ValidationSummary,
-)
 from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitService
 
 __all__ = [
@@ -114,11 +108,6 @@ __all__ = [
     "TaxonInfo",
     "INatProjectStats",
     "ObservationInfo",
-    # Pipeline
-    "PipelineService",
-    "PipelineSummary",
-    "ExecutionSummary",
-    "ValidationSummary",
     # Analysis
     "IndicesService",
     "IndicesResult",

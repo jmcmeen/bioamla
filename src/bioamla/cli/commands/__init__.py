@@ -9,9 +9,7 @@ from .dataset import dataset
 from .detect import detect
 from .examples import examples
 from .indices import indices
-from .learn import learn
 from .models import models
-from .pipeline import pipeline
 from .integrations import services
 
 __all__ = [
@@ -24,8 +22,6 @@ __all__ = [
     "detect",
     "examples",
     "indices",
-    "learn",
     "models",
-    "pipeline",
     "integrations",
 ]
