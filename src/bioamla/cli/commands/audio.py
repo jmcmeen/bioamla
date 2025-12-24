@@ -66,13 +66,35 @@ def audio_convert(input_path, output_path, sample_rate, channels, bit_depth, for
     from bioamla.services.audio_file import AudioFileService
 
     controller = AudioFileService()
-    result = controller.convert(
-        input_path=input_path,
+
+    # Load the audio file
+    open_result = controller.open(input_path)
+    if not open_result.success:
+        click.echo(f"Error: {open_result.error}")
+        raise SystemExit(1)
+
+    audio_data = open_result.data
+
+    # Handle channel conversion if requested
+    if channels is not None and channels != audio_data.channels:
+        import numpy as np
+
+        if channels == 1 and audio_data.channels == 2:
+            # Stereo to mono: average channels
+            if audio_data.samples.ndim == 2:
+                audio_data.samples = audio_data.samples.mean(axis=1)
+            audio_data.channels = 1
+        elif channels == 2 and audio_data.channels == 1:
+            # Mono to stereo: duplicate channel
+            audio_data.samples = np.column_stack([audio_data.samples, audio_data.samples])
+            audio_data.channels = 2
+
+    # Save with optional resampling and format conversion
+    result = controller.save_as(
+        audio_data=audio_data,
         output_path=output_path,
         target_sample_rate=sample_rate,
-        target_channels=channels,
-        target_bit_depth=bit_depth,
-        target_format=format,
+        format=format,
     )
 
     if not result.success:
@@ -154,19 +176,22 @@ def audio_segment(input_path, output_dir, duration, overlap, format, prefix):
 @click.option("--duration", "-d", default=None, type=float, help="Duration in seconds")
 def audio_trim(input_path, output_path, start, end, duration):
     """Trim audio file to specified time range."""
-    from bioamla.services.audio_file import AudioFileService
+    from bioamla.services.audio_transform import AudioTransformService
 
     if end is not None and duration is not None:
         click.echo("Error: Cannot specify both --end and --duration")
         raise SystemExit(1)
 
-    controller = AudioFileService()
-    result = controller.trim(
+    # Calculate end time from duration if specified
+    if duration is not None:
+        end = start + duration
+
+    controller = AudioTransformService()
+    result = controller.trim_file(
         input_path=input_path,
         output_path=output_path,
-        start_time=start,
-        end_time=end,
-        duration=duration,
+        start=start if start != 0.0 else None,
+        end=end,
     )
 
     if not result.success:
@@ -206,13 +231,13 @@ def audio_normalize(input_path, output_path, target_db, method):
 @click.option("--sample-rate", "-r", required=True, type=int, help="Target sample rate in Hz")
 def audio_resample(input_path, output_path, sample_rate):
     """Resample audio to a different sample rate."""
-    from bioamla.services.audio_file import AudioFileService
+    from bioamla.services.audio_transform import AudioTransformService
 
-    controller = AudioFileService()
-    result = controller.resample(
+    controller = AudioTransformService()
+    result = controller.resample_file(
         input_path=input_path,
         output_path=output_path,
-        target_sample_rate=sample_rate,
+        target_rate=sample_rate,
     )
 
     if not result.success:
