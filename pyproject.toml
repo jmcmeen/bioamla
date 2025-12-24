@@ -26,6 +26,7 @@ dependencies = [
   "datasets[audio]",
   "audiomentations",
   "evaluate",
+  "pydantic>=2.0",
   "pydub",
   "textual",
   "matplotlib",
