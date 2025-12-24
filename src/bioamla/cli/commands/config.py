@@ -14,7 +14,7 @@ def config():
 @config.command("show")
 def config_show():
     """Show current configuration."""
-    from bioamla.core.progress import console
+    from bioamla.cli.progress import console
 
     config_obj = get_config()
 
@@ -54,7 +54,7 @@ def config_init(output, force):
     from pathlib import Path
 
     from bioamla.core.config import create_default_config_file
-    from bioamla.core.progress import print_error, print_success
+    from bioamla.cli.progress import print_error, print_success
 
     path = Path(output)
     if path.exists() and not force:
@@ -70,7 +70,7 @@ def config_init(output, force):
 def config_path():
     """Show configuration file search paths."""
     from bioamla.core.config import CONFIG_LOCATIONS, find_config_file
-    from bioamla.core.progress import console
+    from bioamla.cli.progress import console
 
     console.print("\n[bold]Configuration File Search Paths[/bold]\n")
     console.print("Files are searched in order (first found wins):\n")
@@ -216,7 +216,7 @@ def config_deps(do_install: bool, yes: bool):
         get_full_install_command,
         run_install,
     )
-    from bioamla.core.progress import console
+    from bioamla.cli.progress import console
 
     os_type = detect_os()
     deps = check_all_dependencies()

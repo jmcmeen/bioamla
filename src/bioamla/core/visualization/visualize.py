@@ -613,7 +613,7 @@ def batch_generate_spectrograms(
 
     # Use Rich progress bar if requested
     if use_rich_progress and verbose:
-        from bioamla.core.progress import ProgressBar, print_error, print_success
+        from bioamla.cli.progress import ProgressBar, print_error, print_success
 
         with ProgressBar(
             total=len(audio_files),

@@ -49,7 +49,7 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
             click.echo(f"No audio files found in {path}")
             return
 
-        from bioamla.core.progress import ProgressBar, print_success
+        from bioamla.cli.progress import ProgressBar, print_success
 
         with ProgressBar(
             total=len(audio_files),
@@ -153,7 +153,7 @@ def detect_ribbit(
             click.echo(f"No audio files found in {path}")
             return
 
-        from bioamla.core.progress import ProgressBar, print_success
+        from bioamla.cli.progress import ProgressBar, print_success
 
         with ProgressBar(
             total=len(audio_files),
@@ -254,7 +254,7 @@ def detect_peaks(
         all_detections = []
 
         if len(audio_files) > 1:
-            from bioamla.core.progress import ProgressBar, print_success
+            from bioamla.cli.progress import ProgressBar, print_success
 
             with ProgressBar(
                 total=len(audio_files),
@@ -316,7 +316,7 @@ def detect_peaks(
         all_peaks = []
 
         if len(audio_files) > 1:
-            from bioamla.core.progress import ProgressBar, print_success
+            from bioamla.cli.progress import ProgressBar, print_success
 
             with ProgressBar(
                 total=len(audio_files),
@@ -450,7 +450,7 @@ def detect_accelerating(
             click.echo(f"No audio files found in {path}")
             return
 
-        from bioamla.core.progress import ProgressBar, print_success
+        from bioamla.cli.progress import ProgressBar, print_success
 
         with ProgressBar(
             total=len(audio_files),
