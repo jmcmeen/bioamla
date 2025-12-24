@@ -15,6 +15,11 @@ from pathlib import Path
 
 # Example metadata: (filename, title, description)
 EXAMPLES = {
+    "00": (
+        "00_download_samples.sh",
+        "Download Samples",
+        "Download sample data for testing",
+    ),
     "01": (
         "01_audio_preprocessing.sh",
         "Audio Preprocessing",
