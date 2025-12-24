@@ -12,7 +12,7 @@ from .learn import learn
 from .models import models
 from .pipeline import pipeline
 from .realtime import realtime
-from .services import services
+from .integrations import services
 
 __all__ = [
     "annotation",
@@ -27,5 +27,5 @@ __all__ = [
     "models",
     "pipeline",
     "realtime",
-    "services",
+    "integrations",
 ]
