@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .base import BaseController, ControllerResult
+from .base import BaseService, ControllerResult
 
 
 @dataclass
@@ -60,7 +60,7 @@ class BatchEmbeddingSummary:
     errors: List[str] = field(default_factory=list)
 
 
-class EmbeddingController(BaseController):
+class EmbeddingController(BaseService):
     """
     Controller for audio embedding extraction operations.
 

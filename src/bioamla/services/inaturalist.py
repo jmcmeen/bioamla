@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .base import BaseController, ControllerResult, ToDictMixin
+from .base import BaseService, ControllerResult, ToDictMixin
 
 
 @dataclass
@@ -99,7 +99,7 @@ class ObservationInfo(ToDictMixin):
     url: str
 
 
-class INaturalistController(BaseController):
+class INaturalistController(BaseService):
     """
     Controller for iNaturalist operations.
 

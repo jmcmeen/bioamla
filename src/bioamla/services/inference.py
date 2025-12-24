@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .base import BaseController, ControllerResult
+from .base import BaseService, ControllerResult
 
 
 @dataclass
@@ -50,7 +50,7 @@ class BatchInferenceResult:
     errors: List[str] = field(default_factory=list)
 
 
-class InferenceController(BaseController):
+class InferenceController(BaseService):
     """
     Controller for ML model inference operations.
 

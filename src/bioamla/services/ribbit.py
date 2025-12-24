@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .base import BaseController, ControllerResult, ToDictMixin
+from .base import BaseService, ControllerResult, ToDictMixin
 
 
 @dataclass
@@ -62,7 +62,7 @@ class BatchDetectionSummary(ToDictMixin):
     errors: List[str] = field(default_factory=list)
 
 
-class RibbitController(BaseController):
+class RibbitService(BaseService):
     """
     Controller for RIBBIT periodic vocalization detection.
 

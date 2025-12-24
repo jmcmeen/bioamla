@@ -1,4 +1,4 @@
-# controllers/annotation_controller.py
+# controllers/annotation.py
 """
 Annotation Controller
 =====================
@@ -25,7 +25,7 @@ from uuid import UUID
 
 import numpy as np
 
-from bioamla.services.base import BaseController, ControllerResult
+from bioamla.services.base import BaseService, ControllerResult
 from bioamla.core.annotations import (
     Annotation as CoreAnnotation,
 )
@@ -67,7 +67,7 @@ class MeasurementResult:
     measurements: Dict[str, float] = field(default_factory=dict)
 
 
-class AnnotationController(BaseController):
+class AnnotationService(BaseService):
     """
     Controller for annotation operations.
 

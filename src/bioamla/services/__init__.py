@@ -1,11 +1,11 @@
-# controllers/__init__.py
+# services/__init__.py
 """
-Controllers Package
-===================
+Services Package
+================
 
-Application controllers that orchestrate between views (CLI, API) and core business logic.
+Application services that orchestrate between views (CLI, API) and core business logic.
 
-Controllers provide:
+Services provide:
 - A clean interface for views to invoke operations
 - Input validation and error handling
 - Progress reporting and logging
@@ -15,14 +15,14 @@ Controllers provide:
 Architecture:
     View (CLI/API)
         ↓ (config objects, paths)
-    Controller
+    Service
         ↓ (delegates to)
     Core Services (audio, ml, analysis)
         ↓ (uses)
     Database (repositories, UoW)
 
-Audio Controller Architecture:
-    AudioFileController - File I/O with undo/redo support
+Audio Service Architecture:
+    AudioFileController - File I/O operations
         ↓ produces/consumes
     AudioData - In-memory audio container
         ↓ processed by
@@ -31,7 +31,7 @@ Audio Controller Architecture:
     AudioFileController.save() - Only way to persist changes
 
 Usage:
-    from bioamla.controllers import AudioFileController, AudioTransformController
+    from bioamla.services import AudioFileController, AudioTransformController
 
     # Load audio through file controller
     file_ctrl = AudioFileController()
@@ -43,18 +43,15 @@ Usage:
     audio = transform_ctrl.apply_bandpass(audio, 500, 8000).data
     audio = transform_ctrl.normalize_loudness(audio, -20).data
 
-    # Save through file controller (with undo support)
+    # Save through file controller
     file_ctrl.save(audio, "output.wav")
-
-    # Undo the save
-    file_ctrl.undo()
 """
 
-from .annotation_controller import AnnotationController, AnnotationResult, ClipExtractionResult
+from .annotation import AnnotationService, AnnotationResult, ClipExtractionResult
 from .audio import AudioController  # Legacy controller for CLI compatibility
 from .audio_file import AudioData, AudioFileController
 from .audio_transform import AudioTransformController
-from .base import BaseController, ControllerResult
+from .base import BaseService, ControllerResult
 from .clustering import ClusteringController
 from .embedding import EmbeddingController
 from .inaturalist import (
@@ -79,28 +76,19 @@ from .pipeline import (
     PipelineSummary,
     ValidationSummary,
 )
-from .project import (
-    ConfigSummary,
-    DatasetInfo,
-    ModelInfo,
-    ProjectController,
-    ProjectStatistics,
-    ProjectSummary,
-    RunInfo,
-)
-from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitController
+from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitService
 
 __all__ = [
     # Base
-    "BaseController",
+    "BaseService",
     "ControllerResult",
     # Audio
     "AudioController",  # Legacy, for CLI file-based operations
-    "AudioFileController",  # New: File I/O with undo/redo
-    "AudioTransformController",  # New: In-memory transforms
+    "AudioFileController",  # File I/O operations
+    "AudioTransformController",  # In-memory transforms
     "AudioData",  # Audio data container
     # Annotations
-    "AnnotationController",
+    "AnnotationService",
     "AnnotationResult",
     "ClipExtractionResult",
     # ML
@@ -108,7 +96,7 @@ __all__ = [
     "EmbeddingController",
     "ClusteringController",
     # Detection
-    "RibbitController",
+    "RibbitService",
     "DetectionSummary",
     "BatchDetectionSummary",
     # iNaturalist
@@ -123,14 +111,6 @@ __all__ = [
     "PipelineSummary",
     "ExecutionSummary",
     "ValidationSummary",
-    # Project
-    "ProjectController",
-    "ProjectSummary",
-    "ProjectStatistics",
-    "ConfigSummary",
-    "ModelInfo",
-    "DatasetInfo",
-    "RunInfo",
     # Analysis
     "IndicesController",
     "IndicesResult",
