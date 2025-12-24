@@ -26,8 +26,6 @@ dependencies = [
   "datasets[audio]",
   "audiomentations",
   "evaluate",
-  "tensorboardX",
-  "fastapi[standard]",
   "pydub",
   "textual",
   "matplotlib",
@@ -41,7 +39,6 @@ dependencies = [
   "sounddevice>=0.4.0",
   "requests>=2.28.0",
   "onnx>=1.14.0",
-  "onnxscript>=0.1.0",
 ]
 
 [project.scripts]
