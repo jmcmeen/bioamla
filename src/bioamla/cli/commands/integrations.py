@@ -46,7 +46,7 @@ def inat_search(
     quiet: bool,
 ):
     """Search for iNaturalist observations."""
-    from bioamla.controllers.inaturalist import INaturalistController
+    from bioamla.services.inaturalist import INaturalistController
 
     if not species and not taxon_id and not place_id and not project_id:
         raise click.UsageError(
@@ -131,7 +131,7 @@ def inat_stats(project_id: str, output: str, quiet: bool):
     """Get statistics for an iNaturalist project."""
     import json
 
-    from bioamla.controllers.inaturalist import INaturalistController
+    from bioamla.services.inaturalist import INaturalistController
 
     controller = INaturalistController()
     result = controller.get_project_stats(project_id=project_id)
