@@ -20,10 +20,8 @@
 set -e  # Exit on error
 
 # Configuration
-PROJECT_NAME="frog_acoustic_study"
-PROJECT_DIR="./${PROJECT_NAME}"
-AUDIO_DIR="${PROJECT_DIR}/raw_recordings"
-OUTPUT_DIR="${PROJECT_DIR}/detections"
+AUDIO_DIR="./scp_small"
+OUTPUT_DIR="$./detections"
 
 echo "=== Species Detection Workflow ==="
 echo ""
