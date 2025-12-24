@@ -34,7 +34,7 @@ def annotation_convert(input_file, output_file, from_format, to_format, label_co
     """Convert annotation files between formats."""
     from pathlib import Path
 
-    from bioamla.core.analysis.annotations import (
+    from bioamla.core.audio.annotations import (
         load_csv_annotations,
         load_raven_selection_table,
         save_csv_annotations,
@@ -90,7 +90,7 @@ def annotation_summary(path, file_format, output_json):
     import json
     from pathlib import Path
 
-    from bioamla.core.analysis.annotations import (
+    from bioamla.core.audio.annotations import (
         load_csv_annotations,
         load_raven_selection_table,
         summarize_annotations,
@@ -148,7 +148,7 @@ def annotation_remap(input_file, output_file, mapping, keep_unmapped, quiet):
     """Remap annotation labels using a mapping file."""
     from pathlib import Path
 
-    from bioamla.core.analysis.annotations import (
+    from bioamla.core.audio.annotations import (
         load_csv_annotations,
         load_label_mapping,
         load_raven_selection_table,
@@ -199,7 +199,7 @@ def annotation_filter(input_file, output_file, include, exclude, min_duration, m
     """Filter annotations by label or duration."""
     from pathlib import Path
 
-    from bioamla.core.analysis.annotations import (
+    from bioamla.core.audio.annotations import (
         filter_labels,
         load_csv_annotations,
         load_raven_selection_table,
@@ -283,7 +283,7 @@ def annotation_generate_labels(
 
     import numpy as np
 
-    from bioamla.core.analysis.annotations import (
+    from bioamla.core.audio.annotations import (
         create_label_map,
         generate_clip_labels,
         get_unique_labels,

@@ -85,7 +85,7 @@ class RibbitService(BaseService):
         profile: Optional[Dict[str, Any]] = None,
     ):
         """Get or create detector with specified profile."""
-        from bioamla.core.analysis.ribbit import RibbitDetector, RibbitProfile
+        from bioamla.core.audio.ribbit import RibbitDetector, RibbitProfile
 
         if preset:
             # Use preset profile
@@ -318,7 +318,7 @@ class RibbitService(BaseService):
             Result with list of preset info
         """
         try:
-            from bioamla.core.analysis.ribbit import get_preset_profiles
+            from bioamla.core.audio.ribbit import get_preset_profiles
 
             profiles = get_preset_profiles()
             preset_list = []
@@ -352,7 +352,7 @@ class RibbitService(BaseService):
             Result with profile details
         """
         try:
-            from bioamla.core.analysis.ribbit import get_preset_profiles
+            from bioamla.core.audio.ribbit import get_preset_profiles
 
             profiles = get_preset_profiles()
 
@@ -398,7 +398,7 @@ class RibbitService(BaseService):
             Result with created profile
         """
         try:
-            from bioamla.core.analysis.ribbit import RibbitProfile
+            from bioamla.core.audio.ribbit import RibbitProfile
 
             profile = RibbitProfile(
                 name=name,

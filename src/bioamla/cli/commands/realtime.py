@@ -12,7 +12,7 @@ def realtime():
 @realtime.command("devices")
 def realtime_devices():
     """List available audio input devices."""
-    from bioamla.core.realtime import list_audio_devices
+    from bioamla.core.audio.realtime import list_audio_devices
 
     devices = list_audio_devices()
 
@@ -28,7 +28,7 @@ def realtime_devices():
 @click.option("--output", "-o", help="Output file to save recording")
 def realtime_test(duration: float, device: int, output: str):
     """Test audio recording from microphone."""
-    from bioamla.core.realtime import test_recording
+    from bioamla.core.audio.realtime import test_recording
 
     click.echo(f"Recording for {duration} seconds...")
     audio = test_recording(duration=duration, device=device)
