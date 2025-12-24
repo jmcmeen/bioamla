@@ -65,42 +65,47 @@ cli.add_command(services)
 @cli.command("devices")
 def devices():
     """List available compute devices (GPU/CPU)."""
-    import torch
+    from bioamla.services.util import UtilityService
 
+    result = UtilityService().get_devices()
+
+    if not result.success:
+        click.echo(f"Error: {result.error}", err=True)
+        raise SystemExit(1)
+
+    data = result.data
     click.echo("Compute Devices:")
 
-    if torch.cuda.is_available():
-        for i in range(torch.cuda.device_count()):
-            props = torch.cuda.get_device_properties(i)
-            memory_gb = props.total_memory / (1024**3)
-            click.echo(f"  [cuda:{i}] {props.name} ({memory_gb:.1f} GB)")
-    else:
+    if not data.cuda_available:
         click.echo("  No CUDA devices available")
 
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        click.echo("  [mps] Apple Metal Performance Shaders")
-
-    click.echo("  [cpu] CPU")
+    for device in data.devices:
+        if device.memory_gb:
+            click.echo(f"  [{device.device_id}] {device.name} ({device.memory_gb} GB)")
+        else:
+            click.echo(f"  [{device.device_id}] {device.name}")
 
 
 @cli.command("version")
 def version():
     """Show version information."""
-    import platform
-    import sys
+    from bioamla.services.util import UtilityService
 
-    click.echo(f"bioamla {__version__}")
-    click.echo(f"Python {sys.version}")
-    click.echo(f"Platform: {platform.platform()}")
+    result = UtilityService().get_version()
 
-    try:
-        import torch
+    if not result.success:
+        click.echo(f"Error: {result.error}", err=True)
+        raise SystemExit(1)
 
-        click.echo(f"PyTorch: {torch.__version__}")
-        if torch.cuda.is_available():
-            click.echo(f"CUDA: {torch.version.cuda}")
-    except ImportError:
-        pass
+    data = result.data
+    click.echo(f"bioamla {data.bioamla_version}")
+    click.echo(f"Python {data.python_version}")
+    click.echo(f"Platform: {data.platform}")
+
+    if data.pytorch_version:
+        click.echo(f"PyTorch: {data.pytorch_version}")
+    if data.cuda_version:
+        click.echo(f"CUDA: {data.cuda_version}")
 
 
 if __name__ == "__main__":
