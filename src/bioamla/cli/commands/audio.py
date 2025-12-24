@@ -297,9 +297,9 @@ def audio_batch_convert(input_dir, output_dir, sample_rate, channels, format, re
     """Batch convert audio files in a directory."""
     from pathlib import Path
 
-    from bioamla.services.audio_file import AudioFileController
     from bioamla.core.progress import ProgressBar
     from bioamla.core.utils import get_audio_files
+    from bioamla.services.audio_file import AudioFileController
 
     audio_files = get_audio_files(input_dir, recursive=recursive)
     if not audio_files:
