@@ -2,8 +2,6 @@
 
 import click
 
-from bioamla.core.files import TextFile
-
 
 @click.group()
 def dataset():
