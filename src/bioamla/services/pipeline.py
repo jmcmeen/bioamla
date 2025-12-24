@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .base import BaseController, ControllerResult, ToDictMixin
+from .base import BaseService, ControllerResult, ToDictMixin
 
 
 @dataclass
@@ -68,7 +68,7 @@ class ValidationSummary(ToDictMixin):
     warnings: List[str] = field(default_factory=list)
 
 
-class PipelineController(BaseController):
+class PipelineController(BaseService):
     """
     Controller for pipeline operations.
 

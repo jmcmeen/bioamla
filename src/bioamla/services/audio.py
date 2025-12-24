@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .base import BaseController, ControllerResult
+from .base import BaseService, ControllerResult
 
 
 @dataclass
@@ -68,7 +68,7 @@ class BatchResult:
             self.errors = []
 
 
-class AudioController(BaseController):
+class AudioController(BaseService):
     """
     Controller for audio processing operations.
 

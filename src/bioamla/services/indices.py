@@ -49,7 +49,7 @@ from bioamla.core.analysis.indices import (
 )
 
 from .audio_file import AudioData
-from .base import BaseController, BatchProgress, ControllerResult
+from .base import BaseService, BatchProgress, ControllerResult
 
 # Available index names for selection
 AVAILABLE_INDICES = ["aci", "adi", "aei", "bio", "ndsi", "h_spectral", "h_temporal"]
@@ -107,7 +107,7 @@ class BatchIndicesResult:
         return self.successful + self.failed
 
 
-class IndicesController(BaseController):
+class IndicesController(BaseService):
     """
     Controller for acoustic index calculations.
 

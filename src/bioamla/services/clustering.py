@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .base import BaseController, ControllerResult
+from .base import BaseService, ControllerResult
 
 
 @dataclass
@@ -73,7 +73,7 @@ class ClusterAnalysis:
     cluster_stats: Dict[int, Dict[str, Any]]
 
 
-class ClusteringController(BaseController):
+class ClusteringController(BaseService):
     """
     Controller for clustering and novelty detection operations.
 

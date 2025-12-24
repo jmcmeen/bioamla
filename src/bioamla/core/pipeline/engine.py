@@ -755,9 +755,9 @@ class PipelineEngine:
         params: Dict[str, Any],
     ) -> Any:
         """Run RIBBIT detection."""
-        from bioamla.services.ribbit import RibbitController
+        from bioamla.services.ribbit import RibbitService
 
-        controller = RibbitController()
+        controller = RibbitService()
         result = controller.detect_batch(
             directory=params.get("input"),
             preset=params.get("preset"),

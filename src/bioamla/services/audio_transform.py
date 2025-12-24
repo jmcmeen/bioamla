@@ -40,7 +40,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 from .audio_file import AudioData
-from .base import BaseController, ControllerResult
+from .base import BaseService, ControllerResult
 
 
 @dataclass
@@ -52,7 +52,7 @@ class TransformResult:
     parameters: dict
 
 
-class AudioTransformController(BaseController):
+class AudioTransformController(BaseService):
     """
     Controller for in-memory audio signal processing.
 

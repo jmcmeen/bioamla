@@ -166,7 +166,7 @@ class BatchProgress:
 ProgressCallback = Callable[[BatchProgress], None]
 
 
-class BaseController:
+class BaseService:
     """
     Base class for all controllers.
 
@@ -176,8 +176,8 @@ class BaseController:
     - Error handling and result formatting
     - Run tracking in project repository (supports JSON, SQLite, PostgreSQL)
 
-    Controllers can operate in two modes:
-    - Stateless (default): No run tracking, no logging, no undo
+    Services can operate in two modes:
+    - Stateless (default): No run tracking, no logging
     - Stateful: When project_path is provided, enables run tracking and logging
     """
 
@@ -187,7 +187,7 @@ class BaseController:
 
         Args:
             project_path: Path to project directory. If provided, enables stateful mode
-                         with run tracking, command logging, and undo support.
+                         with run tracking and command logging.
                          If None (default), runs in stateless mode.
         """
         self._progress_callback: Optional[ProgressCallback] = None
