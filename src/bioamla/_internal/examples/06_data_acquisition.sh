@@ -20,9 +20,8 @@
 set -e  # Exit on error
 
 # Configuration
-PROJECT_NAME="frog_acoustic_study"
-PROJECT_DIR="./${PROJECT_NAME}"
-OUTPUT_DIR="${PROJECT_DIR}/acquired_data"
+
+OUTPUT_DIR="./acquired_data"
 SPECIES_COMMON="American Bullfrog"
 SPECIES_SCIENTIFIC="Lithobates catesbeianus"
 
