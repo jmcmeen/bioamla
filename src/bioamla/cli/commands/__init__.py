@@ -12,7 +12,6 @@ from .indices import indices
 from .learn import learn
 from .models import models
 from .pipeline import pipeline
-from .realtime import realtime
 from .integrations import services
 
 __all__ = [
@@ -28,6 +27,5 @@ __all__ = [
     "learn",
     "models",
     "pipeline",
-    "realtime",
     "integrations",
 ]
