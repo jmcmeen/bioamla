@@ -35,7 +35,7 @@ from bioamla.core.files import (
     get_extension_from_url,
     sanitize_filename,
 )
-from bioamla.core.metadata import (
+from bioamla.core.audio.metadata import (
     get_existing_observation_ids,
     read_metadata_csv,
     write_metadata_csv,

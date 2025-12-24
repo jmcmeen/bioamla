@@ -37,7 +37,7 @@ def dataset_merge(
     quiet: bool,
 ):
     """Merge multiple audio datasets into a single dataset."""
-    from bioamla.core.datasets import merge_datasets as do_merge
+    from bioamla.core.datasets.datasets import merge_datasets as do_merge
 
     stats = do_merge(
         dataset_paths=list(dataset_paths),

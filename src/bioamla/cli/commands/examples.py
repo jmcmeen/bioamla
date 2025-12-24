@@ -26,7 +26,7 @@ def examples_list():
     from rich.table import Table
 
     from bioamla._internal.examples import list_examples
-    from bioamla.core.progress import console
+    from bioamla.cli.progress import console
 
     table = Table(title="Available Example Workflows", show_header=True)
     table.add_column("ID", style="cyan", width=4)
@@ -48,7 +48,7 @@ def examples_show(example_id: str):
     from rich.syntax import Syntax
 
     from bioamla._internal.examples import EXAMPLES, get_example_content
-    from bioamla.core.progress import console
+    from bioamla.cli.progress import console
 
     try:
         content = get_example_content(example_id)
@@ -133,7 +133,7 @@ def examples_copy_all(output_dir: str, force: bool):
 def examples_info(example_id: str):
     """Show detailed information about an example."""
     from bioamla._internal.examples import EXAMPLES, get_example_content
-    from bioamla.core.progress import console
+    from bioamla.cli.progress import console
 
     if example_id not in EXAMPLES:
         raise click.ClickException(f"Example not found: {example_id}")
