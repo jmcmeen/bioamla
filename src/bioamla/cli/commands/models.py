@@ -127,10 +127,10 @@ def ast_predict(
             workers=workers,
         )
     else:
-        from bioamla.services.inference import InferenceController
+        from bioamla.services.inference import InferenceService
 
-        controller = InferenceController(model_path=model_path)
-        result = controller.predict(filepath=path)
+        service = InferenceService(model_path=model_path)
+        result = service.predict(filepath=path)
 
         if not result.success:
             click.echo(f"Error: {result.error}")
@@ -160,7 +160,7 @@ def _run_batch_inference(
     import pandas as pd
     import torch
 
-    from bioamla.core.detection.ast import (
+    from bioamla.core.ml.ast import (
         InferenceConfig,
         load_pretrained_ast_model,
         wave_file_batch_inference,
@@ -229,7 +229,7 @@ def _run_batch_inference(
         batch_size=batch_size, use_fp16=fp16, use_compile=compile, num_workers=workers
     )
 
-    from bioamla.core.detection.ast import get_cached_feature_extractor
+    from bioamla.core.ml.ast import get_cached_feature_extractor
 
     feature_extractor = get_cached_feature_extractor()
 

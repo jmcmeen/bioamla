@@ -1,19 +1,16 @@
-# controllers/annotation.py
+# services/annotation.py
 """
-Annotation Controller
-=====================
+Annotation Service
+==================
 
-Controller for managing audio annotations with support for:
-- CRUD operations on annotations
+Service for managing audio annotations with support for:
+- File-based CRUD operations on annotations
 - Raven selection table import/export
 - CSV/Parquet/JSON export
 - Audio clip extraction from annotations
-- Integration with database layer for persistence
 - Measurement computation for annotations
 
-This controller bridges the core annotation system (bioamla.core.annotations)
-with the database layer (bioamla.database) and provides a clean interface
-for CLI and GUI applications.
+This service provides in-memory annotation management for CLI and GUI applications.
 """
 
 import json
@@ -21,15 +18,14 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from uuid import UUID
 
 import numpy as np
 
 from bioamla.services.base import BaseService, ServiceResult
-from bioamla.core.annotations import (
+from bioamla.core.analysis.annotations import (
     Annotation as CoreAnnotation,
 )
-from bioamla.core.annotations import (
+from bioamla.core.analysis.annotations import (
     load_csv_annotations,
     load_raven_selection_table,
     save_csv_annotations,
@@ -69,64 +65,24 @@ class MeasurementResult:
 
 class AnnotationService(BaseService):
     """
-    Controller for annotation operations.
+    Service for annotation operations.
 
     Provides a unified interface for:
     - Loading and saving annotations in various formats
-    - Creating, updating, and deleting annotations
+    - Creating annotations in memory
     - Extracting audio clips from annotations
     - Computing measurements for annotations
-    - Database persistence (when available)
 
     Usage:
-        # Basic usage without database
-        ctrl = AnnotationController()
-        result = ctrl.import_raven("selections.txt")
+        svc = AnnotationService()
+        result = svc.import_raven("selections.txt")
         annotations = result.data.annotations
-
-        # With database persistence
-        from bioamla.database import DatabaseConnection, UnitOfWork
-        db = DatabaseConnection("sqlite:///project.db")
-        ctrl = AnnotationController(database=db)
-
-        with ctrl.begin_transaction() as uow:
-            result = ctrl.import_raven("selections.txt", recording_id=rec_id, uow=uow)
-            uow.commit()
     """
 
-    def __init__(self, database=None):
-        """
-        Initialize AnnotationController.
-
-        Args:
-            database: Optional DatabaseConnection for persistence.
-                      If not provided, operations are in-memory only.
-        """
+    def __init__(self):
+        """Initialize AnnotationService."""
         super().__init__()
-        self._database = database
         self._annotations: List[CoreAnnotation] = []
-
-    @property
-    def has_database(self) -> bool:
-        """Check if database is available."""
-        return self._database is not None
-
-    def begin_transaction(self):
-        """
-        Begin a database transaction.
-
-        Returns:
-            UnitOfWork context manager
-
-        Raises:
-            RuntimeError: If no database is configured
-        """
-        if not self.has_database:
-            raise RuntimeError("No database configured for AnnotationController")
-
-        from bioamla.database import UnitOfWork
-
-        return UnitOfWork(self._database)
 
     # =========================================================================
     # Import Operations
@@ -136,8 +92,6 @@ class AnnotationService(BaseService):
         self,
         filepath: str,
         label_column: Optional[str] = None,
-        recording_id: Optional[UUID] = None,
-        uow=None,
     ) -> ServiceResult[AnnotationResult]:
         """
         Import annotations from a Raven selection table.
@@ -145,11 +99,9 @@ class AnnotationService(BaseService):
         Args:
             filepath: Path to the Raven selection table (.txt)
             label_column: Optional column name to use for labels
-            recording_id: Optional recording UUID for database persistence
-            uow: Optional UnitOfWork for database transaction
 
         Returns:
-            ControllerResult containing AnnotationResult with imported annotations
+            ServiceResult containing AnnotationResult with imported annotations
         """
         error = self._validate_input_path(filepath)
         if error:
@@ -157,11 +109,6 @@ class AnnotationService(BaseService):
 
         try:
             annotations = load_raven_selection_table(filepath, label_column=label_column)
-
-            # Persist to database if UoW provided
-            if uow and recording_id:
-                self._persist_annotations(annotations, recording_id, "import", filepath, uow)
-
             summary = summarize_annotations(annotations)
 
             return ServiceResult.ok(
@@ -182,8 +129,6 @@ class AnnotationService(BaseService):
         low_freq_col: str = "low_freq",
         high_freq_col: str = "high_freq",
         label_col: str = "label",
-        recording_id: Optional[UUID] = None,
-        uow=None,
     ) -> ServiceResult[AnnotationResult]:
         """
         Import annotations from a CSV file.
@@ -195,11 +140,9 @@ class AnnotationService(BaseService):
             low_freq_col: Column name for low frequency
             high_freq_col: Column name for high frequency
             label_col: Column name for label
-            recording_id: Optional recording UUID for database persistence
-            uow: Optional UnitOfWork for database transaction
 
         Returns:
-            ControllerResult containing AnnotationResult with imported annotations
+            ServiceResult containing AnnotationResult with imported annotations
         """
         error = self._validate_input_path(filepath)
         if error:
@@ -214,11 +157,6 @@ class AnnotationService(BaseService):
                 high_freq_col=high_freq_col,
                 label_col=label_col,
             )
-
-            # Persist to database if UoW provided
-            if uow and recording_id:
-                self._persist_annotations(annotations, recording_id, "import", filepath, uow)
-
             summary = summarize_annotations(annotations)
 
             return ServiceResult.ok(
@@ -250,7 +188,7 @@ class AnnotationService(BaseService):
             include_custom_fields: Include custom fields as additional columns
 
         Returns:
-            ControllerResult containing the output file path
+            ServiceResult containing the output file path
         """
         error = self._validate_output_path(output_path)
         if error:
@@ -286,7 +224,7 @@ class AnnotationService(BaseService):
             include_custom_fields: Include custom fields as additional columns
 
         Returns:
-            ControllerResult containing the output file path
+            ServiceResult containing the output file path
         """
         error = self._validate_output_path(output_path)
         if error:
@@ -320,7 +258,7 @@ class AnnotationService(BaseService):
             output_path: Output file path (.parquet)
 
         Returns:
-            ControllerResult containing the output file path
+            ServiceResult containing the output file path
         """
         error = self._validate_output_path(output_path)
         if error:
@@ -364,7 +302,7 @@ class AnnotationService(BaseService):
             output_path: Output file path (.json)
 
         Returns:
-            ControllerResult containing the output file path
+            ServiceResult containing the output file path
         """
         error = self._validate_output_path(output_path)
         if error:
@@ -390,7 +328,7 @@ class AnnotationService(BaseService):
             return ServiceResult.fail(f"Failed to export JSON: {e}")
 
     # =========================================================================
-    # CRUD Operations
+    # Annotation Creation
     # =========================================================================
 
     def create_annotation(
@@ -403,8 +341,6 @@ class AnnotationService(BaseService):
         channel: int = 1,
         confidence: Optional[float] = None,
         notes: str = "",
-        recording_id: Optional[UUID] = None,
-        uow=None,
     ) -> ServiceResult[CoreAnnotation]:
         """
         Create a new annotation.
@@ -418,11 +354,9 @@ class AnnotationService(BaseService):
             channel: Audio channel (1-indexed)
             confidence: Confidence score (0.0-1.0)
             notes: Additional notes
-            recording_id: Recording UUID for database persistence
-            uow: UnitOfWork for database transaction
 
         Returns:
-            ControllerResult containing the created annotation
+            ServiceResult containing the created annotation
         """
         if end_time <= start_time:
             return ServiceResult.fail("end_time must be greater than start_time")
@@ -442,118 +376,11 @@ class AnnotationService(BaseService):
                 notes=notes,
             )
 
-            # Persist to database if UoW provided
-            if uow and recording_id:
-                db_annotation = self._persist_annotation(
-                    annotation, recording_id, "manual", None, uow
-                )
-                return ServiceResult.ok(
-                    data=annotation,
-                    message="Created annotation",
-                    db_id=str(db_annotation.id),
-                )
-
             return ServiceResult.ok(data=annotation, message="Created annotation")
 
         except Exception as e:
             logger.exception(f"Failed to create annotation: {e}")
             return ServiceResult.fail(f"Failed to create annotation: {e}")
-
-    def update_annotation(
-        self,
-        annotation_id: UUID,
-        uow,
-        **fields,
-    ) -> ServiceResult[CoreAnnotation]:
-        """
-        Update an existing annotation in the database.
-
-        Args:
-            annotation_id: UUID of the annotation to update
-            uow: UnitOfWork for database transaction
-            **fields: Fields to update (start_time, end_time, label, etc.)
-
-        Returns:
-            ControllerResult containing the updated annotation
-        """
-        try:
-            from bioamla.database.models import AnnotationUpdate
-
-            update_data = AnnotationUpdate(**fields)
-            db_annotation = uow.annotations.update_by_id(annotation_id, update_data)
-
-            if db_annotation is None:
-                return ServiceResult.fail(f"Annotation {annotation_id} not found")
-
-            # Convert back to core annotation
-            annotation = self._db_to_core_annotation(db_annotation)
-
-            return ServiceResult.ok(data=annotation, message="Updated annotation")
-
-        except Exception as e:
-            logger.exception(f"Failed to update annotation: {e}")
-            return ServiceResult.fail(f"Failed to update annotation: {e}")
-
-    def delete_annotation(
-        self,
-        annotation_id: UUID,
-        uow,
-    ) -> ServiceResult[bool]:
-        """
-        Delete an annotation from the database.
-
-        Args:
-            annotation_id: UUID of the annotation to delete
-            uow: UnitOfWork for database transaction
-
-        Returns:
-            ControllerResult containing True if deleted
-        """
-        try:
-            deleted = uow.annotations.delete_by_id(annotation_id)
-
-            if not deleted:
-                return ServiceResult.fail(f"Annotation {annotation_id} not found")
-
-            return ServiceResult.ok(data=True, message="Deleted annotation")
-
-        except Exception as e:
-            logger.exception(f"Failed to delete annotation: {e}")
-            return ServiceResult.fail(f"Failed to delete annotation: {e}")
-
-    def get_annotations(
-        self,
-        recording_id: UUID,
-        uow,
-        skip: int = 0,
-        limit: int = 1000,
-    ) -> ServiceResult[List[CoreAnnotation]]:
-        """
-        Get all annotations for a recording from the database.
-
-        Args:
-            recording_id: UUID of the recording
-            uow: UnitOfWork for database query
-            skip: Number of records to skip
-            limit: Maximum records to return
-
-        Returns:
-            ControllerResult containing list of annotations
-        """
-        try:
-            db_annotations = uow.annotations.get_by_recording(recording_id, skip=skip, limit=limit)
-
-            annotations = [self._db_to_core_annotation(a) for a in db_annotations]
-
-            return ServiceResult.ok(
-                data=annotations,
-                message=f"Retrieved {len(annotations)} annotations",
-                count=len(annotations),
-            )
-
-        except Exception as e:
-            logger.exception(f"Failed to get annotations: {e}")
-            return ServiceResult.fail(f"Failed to get annotations: {e}")
 
     # =========================================================================
     # Clip Extraction
@@ -580,7 +407,7 @@ class AnnotationService(BaseService):
             include_label_in_filename: Include label in clip filename
 
         Returns:
-            ControllerResult containing ClipExtractionResult
+            ServiceResult containing ClipExtractionResult
         """
         error = self._validate_input_path(audio_path)
         if error:
@@ -671,7 +498,7 @@ class AnnotationService(BaseService):
                      Options: duration, bandwidth, rms, peak, centroid, etc.
 
         Returns:
-            ControllerResult containing MeasurementResult
+            ServiceResult containing MeasurementResult
         """
         error = self._validate_input_path(audio_path)
         if error:
@@ -765,8 +592,6 @@ class AnnotationService(BaseService):
         directory: str,
         file_pattern: str = "*.txt",
         format: str = "raven",
-        recording_id: Optional[UUID] = None,
-        uow=None,
     ) -> ServiceResult[AnnotationResult]:
         """
         Import annotations from all matching files in a directory.
@@ -775,18 +600,16 @@ class AnnotationService(BaseService):
             directory: Path to directory containing annotation files
             file_pattern: Glob pattern for matching files
             format: Annotation format ('raven' or 'csv')
-            recording_id: Optional recording UUID for database persistence
-            uow: Optional UnitOfWork for database transaction
 
         Returns:
-            ControllerResult containing combined AnnotationResult
+            ServiceResult containing combined AnnotationResult
         """
         error = self._validate_input_path(directory)
         if error:
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.annotations import load_annotations_from_directory
+            from bioamla.core.analysis.annotations import load_annotations_from_directory
 
             all_annotations_dict = load_annotations_from_directory(
                 directory, file_pattern=file_pattern, format=format
@@ -796,10 +619,6 @@ class AnnotationService(BaseService):
             all_annotations = []
             for _filename, annotations in all_annotations_dict.items():
                 all_annotations.extend(annotations)
-
-            # Persist to database if UoW provided
-            if uow and recording_id:
-                self._persist_annotations(all_annotations, recording_id, "import", directory, uow)
 
             summary = summarize_annotations(all_annotations)
 
@@ -815,80 +634,3 @@ class AnnotationService(BaseService):
         except Exception as e:
             logger.exception(f"Failed to batch import: {e}")
             return ServiceResult.fail(f"Failed to batch import: {e}")
-
-    # =========================================================================
-    # Helper Methods
-    # =========================================================================
-
-    def _persist_annotations(
-        self,
-        annotations: List[CoreAnnotation],
-        recording_id: UUID,
-        source: str,
-        source_file: Optional[str],
-        uow,
-    ) -> List:
-        """Persist annotations to database."""
-        from bioamla.database.models import AnnotationCreate
-
-        db_annotations = []
-        for ann in annotations:
-            create_data = AnnotationCreate(
-                recording_id=recording_id,
-                start_time=ann.start_time,
-                end_time=ann.end_time,
-                low_freq=ann.low_freq,
-                high_freq=ann.high_freq,
-                label=ann.label,
-                channel=ann.channel,
-                confidence=ann.confidence,
-                notes=ann.notes,
-                source=source,
-                source_file=source_file,
-                custom_fields=ann.custom_fields if ann.custom_fields else None,
-            )
-            db_ann = uow.annotations.create(create_data)
-            db_annotations.append(db_ann)
-
-        return db_annotations
-
-    def _persist_annotation(
-        self,
-        annotation: CoreAnnotation,
-        recording_id: UUID,
-        source: str,
-        source_file: Optional[str],
-        uow,
-    ):
-        """Persist a single annotation to database."""
-        from bioamla.database.models import AnnotationCreate
-
-        create_data = AnnotationCreate(
-            recording_id=recording_id,
-            start_time=annotation.start_time,
-            end_time=annotation.end_time,
-            low_freq=annotation.low_freq,
-            high_freq=annotation.high_freq,
-            label=annotation.label,
-            channel=annotation.channel,
-            confidence=annotation.confidence,
-            notes=annotation.notes,
-            source=source,
-            source_file=source_file,
-            custom_fields=annotation.custom_fields if annotation.custom_fields else None,
-        )
-        return uow.annotations.create(create_data)
-
-    def _db_to_core_annotation(self, db_annotation) -> CoreAnnotation:
-        """Convert database annotation to core annotation."""
-        return CoreAnnotation(
-            start_time=db_annotation.start_time,
-            end_time=db_annotation.end_time,
-            low_freq=db_annotation.low_freq,
-            high_freq=db_annotation.high_freq,
-            label=db_annotation.label,
-            channel=db_annotation.channel,
-            confidence=db_annotation.confidence,
-            notes=db_annotation.notes or "",
-            custom_fields=db_annotation.custom_fields or {},
-        )

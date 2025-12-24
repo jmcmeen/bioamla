@@ -1,9 +1,9 @@
-# controllers/inference.py
+# services/inference.py
 """
-Inference Controller
-====================
+Inference Service
+=================
 
-Controller for ML model inference operations.
+Service for ML model inference operations.
 
 Orchestrates between CLI/API views and core ML inference functions.
 Handles model loading, batch processing, and output formatting.
@@ -50,9 +50,9 @@ class BatchInferenceResult:
     errors: List[str] = field(default_factory=list)
 
 
-class InferenceController(BaseService):
+class InferenceService(BaseService):
     """
-    Controller for ML model inference operations.
+    Service for ML model inference operations.
 
     Provides high-level methods for:
     - Single file prediction
@@ -63,7 +63,7 @@ class InferenceController(BaseService):
 
     def __init__(self, model_path: Optional[str] = None):
         """
-        Initialize inference controller.
+        Initialize inference service.
 
         Args:
             model_path: Path to model (HuggingFace ID or local path)

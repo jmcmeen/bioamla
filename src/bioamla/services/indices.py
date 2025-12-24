@@ -1,9 +1,9 @@
-# controllers/indices.py
+# services/indices.py
 """
-Indices Controller
-==================
+Indices Service
+===============
 
-Controller for acoustic index calculations.
+Service for acoustic index calculations.
 
 Provides a clean interface for:
 - Computing indices on AudioData objects
@@ -12,23 +12,23 @@ Provides a clean interface for:
 - CSV/Parquet export of results
 
 Usage:
-    from bioamla.controllers import IndicesController, AudioFileController
+    from bioamla.services import IndicesService, AudioFileService
 
     # Load audio
-    file_ctrl = AudioFileController()
-    result = file_ctrl.open("recording.wav")
+    file_svc = AudioFileService()
+    result = file_svc.open("recording.wav")
     audio = result.data
 
     # Calculate indices
-    indices_ctrl = IndicesController()
-    result = indices_ctrl.calculate(audio)
+    indices_svc = IndicesService()
+    result = indices_svc.calculate(audio)
 
     if result.success:
         print(f"ACI: {result.data.aci}")
         print(f"NDSI: {result.data.ndsi}")
 
     # Batch processing
-    batch_result = indices_ctrl.calculate_batch("./recordings/", output="indices.csv")
+    batch_result = indices_svc.calculate_batch("./recordings/", output="indices.csv")
 """
 
 from dataclasses import dataclass
@@ -107,9 +107,9 @@ class BatchIndicesResult:
         return self.successful + self.failed
 
 
-class IndicesController(BaseService):
+class IndicesService(BaseService):
     """
-    Controller for acoustic index calculations.
+    Service for acoustic index calculations.
 
     Computes standard ecoacoustic indices:
     - ACI: Acoustic Complexity Index
@@ -156,7 +156,7 @@ class IndicesController(BaseService):
             **kwargs: Additional parameters for index calculations
 
         Returns:
-            ControllerResult containing IndicesResult
+            ServiceResult containing IndicesResult
         """
         try:
             # Ensure mono
@@ -227,7 +227,7 @@ class IndicesController(BaseService):
             **kwargs: Parameters for index calculation
 
         Returns:
-            ControllerResult containing the index value
+            ServiceResult containing the index value
         """
         try:
             samples = audio.samples
@@ -323,7 +323,7 @@ class IndicesController(BaseService):
             **kwargs: Parameters for index calculations
 
         Returns:
-            ControllerResult containing TemporalIndicesResult
+            ServiceResult containing TemporalIndicesResult
         """
         try:
             samples = audio.samples
@@ -381,7 +381,7 @@ class IndicesController(BaseService):
             **kwargs: Parameters for index calculations
 
         Returns:
-            ControllerResult containing BatchIndicesResult
+            ServiceResult containing BatchIndicesResult
         """
         import soundfile as sf
 

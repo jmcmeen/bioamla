@@ -44,8 +44,8 @@ def indices_compute(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.services.audio_file import AudioFileController
-    from bioamla.services.indices import IndicesController
+    from bioamla.services.audio_file import AudioFileService
+    from bioamla.services.indices import IndicesService
 
     path_obj = PathLib(path)
 
@@ -59,17 +59,17 @@ def indices_compute(
     if aci_max_freq:
         kwargs["aci_max_freq"] = aci_max_freq
 
-    indices_ctrl = IndicesController()
+    indices_svc = IndicesService()
 
     if path_obj.is_file():
-        file_ctrl = AudioFileController()
-        load_result = file_ctrl.open(str(path_obj))
+        file_svc = AudioFileService()
+        load_result = file_svc.open(str(path_obj))
 
         if not load_result.success:
             click.echo(f"Error loading {path}: {load_result.error}")
             raise SystemExit(1)
 
-        calc_result = indices_ctrl.calculate(load_result.data, include_entropy=True, **kwargs)
+        calc_result = indices_svc.calculate(load_result.data, include_entropy=True, **kwargs)
 
         if not calc_result.success:
             click.echo(f"Error computing indices: {calc_result.error}")
@@ -80,7 +80,7 @@ def indices_compute(
         result["success"] = True
         results = [result]
     else:
-        batch_result = indices_ctrl.calculate_batch(
+        batch_result = indices_svc.calculate_batch(
             str(path_obj),
             output_path=output if output else None,
             recursive=True,
@@ -160,13 +160,13 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
     """Compute acoustic indices over time windows."""
     import json as json_lib
 
-    from bioamla.services.audio_file import AudioFileController
-    from bioamla.services.indices import IndicesController
+    from bioamla.services.audio_file import AudioFileService
+    from bioamla.services.indices import IndicesService
 
-    file_ctrl = AudioFileController()
-    indices_ctrl = IndicesController()
+    file_svc = AudioFileService()
+    indices_svc = IndicesService()
 
-    load_result = file_ctrl.open(path)
+    load_result = file_svc.open(path)
     if not load_result.success:
         click.echo(f"Error loading audio: {load_result.error}")
         raise SystemExit(1)
@@ -178,7 +178,7 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
         click.echo(f"Duration: {audio_data.duration:.1f}s, Sample rate: {audio_data.sample_rate} Hz")
         click.echo(f"Window: {window}s, Hop: {hop or window}s")
 
-    temporal_result = indices_ctrl.calculate_temporal(
+    temporal_result = indices_svc.calculate_temporal(
         audio_data,
         window_duration=window,
         hop_duration=hop,

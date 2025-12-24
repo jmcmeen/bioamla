@@ -1,46 +1,107 @@
-# controllers/audio_transform.py
+# services/audio_transform.py
 """
-Audio Transform Controller
-==========================
+Audio Transform Service
+=======================
 
-Controller for in-memory audio signal processing and transforms.
+Service for audio signal processing operations, both in-memory and file-based.
 
-This controller handles:
-- Signal processing operations (filter, normalize, resample, etc.)
-- Audio transformations that operate purely in memory
+This service provides:
+- In-memory signal processing (filter, normalize, resample, etc.)
+- File-based batch processing for CLI operations
+- Audio analysis and metadata extraction
 - Playback preparation (format conversion, gain adjustment)
-- Analysis operations that don't modify files
 
-Design principle: AudioTransformController NEVER writes to permanent storage.
-All file operations must go through AudioFileController. If a temporary file
-is needed (e.g., for external tool integration), it delegates to
-AudioFileController.create_temp_file().
+Architecture:
+    - In-memory operations work on AudioData objects
+    - File-based operations handle I/O and batch processing
+    - Use AudioFileService for direct file I/O operations
 
 Usage:
-    from bioamla.controllers import AudioFileController, AudioTransformController
+    from bioamla.services import AudioFileService, AudioTransformService
 
-    file_ctrl = AudioFileController()
-    transform_ctrl = AudioTransformController()
+    file_svc = AudioFileService()
+    transform_svc = AudioTransformService()
 
     # Load audio
-    result = file_ctrl.open("input.wav")
+    result = file_svc.open("input.wav")
     audio = result.data
 
     # Apply transforms (in memory)
-    audio = transform_ctrl.apply_bandpass(audio, 500, 8000)
-    audio = transform_ctrl.normalize(audio, target_db=-20)
+    audio = transform_svc.apply_bandpass(audio, 500, 8000).data
+    audio = transform_svc.normalize_loudness(audio, target_db=-20).data
 
-    # Save through file controller (only way to persist)
-    file_ctrl.save(audio, "output.wav")
+    # Save through file service
+    file_svc.save(audio, "output.wav")
+
+    # Or use file-based batch operations directly
+    result = transform_svc.resample_files("input_dir", "output_dir", 16000)
 """
 
+import csv
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from .audio_file import AudioData
 from .base import BaseService, ServiceResult
+
+
+# =============================================================================
+# Data Classes for File-Based Operations
+# =============================================================================
+
+
+@dataclass
+class AudioMetadata:
+    """Metadata about an audio file."""
+
+    filepath: str
+    duration_seconds: float
+    sample_rate: int
+    channels: int
+    bit_depth: Optional[int] = None
+    format: Optional[str] = None
+
+
+@dataclass
+class ProcessedAudio:
+    """Result of processing an audio file."""
+
+    input_path: str
+    output_path: str
+    operation: str
+    sample_rate: int
+    duration_seconds: float
+
+
+@dataclass
+class AnalysisResult:
+    """Result of audio analysis."""
+
+    filepath: str
+    duration_seconds: float
+    sample_rate: int
+    channels: int
+    rms_db: float
+    peak_db: float
+    silence_ratio: float
+    frequency_stats: Dict[str, float]
+
+
+@dataclass
+class BatchResult:
+    """Result of a batch operation."""
+
+    processed: int
+    failed: int
+    output_path: Optional[str] = None
+    errors: List[str] = None
+
+    def __post_init__(self):
+        if self.errors is None:
+            self.errors = []
 
 
 @dataclass
@@ -52,25 +113,29 @@ class TransformResult:
     parameters: dict
 
 
-class AudioTransformController(BaseService):
+class AudioTransformService(BaseService):
     """
-    Controller for in-memory audio signal processing.
+    Service for audio signal processing operations.
 
-    All methods return new AudioData objects without modifying the originals.
-    This controller never writes files - use AudioFileController for persistence.
+    Provides both in-memory and file-based audio processing:
 
-    Transform operations:
+    In-memory operations (work on AudioData objects):
     - Filtering (lowpass, highpass, bandpass)
     - Normalization (peak, RMS/loudness)
     - Resampling
     - Trimming
     - Noise reduction
     - Gain adjustment
+    - Channel operations (mono conversion)
+    - Playback preparation
 
-    Playback operations:
-    - Convert to playback format
-    - Apply real-time gain
-    - Mix channels
+    File-based operations (for CLI/batch processing):
+    - list_files: Discover audio files
+    - get_metadata: Extract file metadata
+    - resample_files: Batch resample
+    - normalize_files: Batch normalize
+    - filter_files: Batch filter
+    - analyze_files: Batch analysis with CSV export
 
     Analysis operations:
     - Get amplitude statistics
@@ -97,7 +162,7 @@ class AudioTransformController(BaseService):
             order: Filter order
 
         Returns:
-            ControllerResult with filtered AudioData
+            ServiceResult with filtered AudioData
         """
         try:
             from bioamla.core.audio.signal import lowpass_filter
@@ -139,7 +204,7 @@ class AudioTransformController(BaseService):
             order: Filter order
 
         Returns:
-            ControllerResult with filtered AudioData
+            ServiceResult with filtered AudioData
         """
         try:
             from bioamla.core.audio.signal import highpass_filter
@@ -183,7 +248,7 @@ class AudioTransformController(BaseService):
             order: Filter order
 
         Returns:
-            ControllerResult with filtered AudioData
+            ServiceResult with filtered AudioData
         """
         try:
             from bioamla.core.audio.signal import bandpass_filter
@@ -227,7 +292,7 @@ class AudioTransformController(BaseService):
             target_peak: Target peak amplitude (0.0 to 1.0)
 
         Returns:
-            ControllerResult with normalized AudioData
+            ServiceResult with normalized AudioData
         """
         try:
             from bioamla.core.audio.signal import peak_normalize
@@ -267,7 +332,7 @@ class AudioTransformController(BaseService):
             target_db: Target loudness in dBFS
 
         Returns:
-            ControllerResult with normalized AudioData
+            ServiceResult with normalized AudioData
         """
         try:
             from bioamla.core.audio.signal import normalize_loudness
@@ -311,7 +376,7 @@ class AudioTransformController(BaseService):
             target_sample_rate: Target sample rate in Hz
 
         Returns:
-            ControllerResult with resampled AudioData
+            ServiceResult with resampled AudioData
         """
         if target_sample_rate == audio.sample_rate:
             return ServiceResult.ok(
@@ -364,7 +429,7 @@ class AudioTransformController(BaseService):
             end_time: End time in seconds (default: end of audio)
 
         Returns:
-            ControllerResult with trimmed AudioData
+            ServiceResult with trimmed AudioData
         """
         try:
             from bioamla.core.audio.signal import trim_audio
@@ -416,7 +481,7 @@ class AudioTransformController(BaseService):
             min_silence_duration: Minimum silence duration to trim
 
         Returns:
-            ControllerResult with trimmed AudioData
+            ServiceResult with trimmed AudioData
         """
         try:
             from bioamla.core.audio.signal import trim_silence
@@ -467,7 +532,7 @@ class AudioTransformController(BaseService):
             strength: Noise reduction strength (0.0 to 2.0)
 
         Returns:
-            ControllerResult with denoised AudioData
+            ServiceResult with denoised AudioData
         """
         try:
             from bioamla.core.audio.signal import spectral_denoise
@@ -515,7 +580,7 @@ class AudioTransformController(BaseService):
             gain_db: Gain in decibels (positive = louder, negative = quieter)
 
         Returns:
-            ControllerResult with gain-adjusted AudioData
+            ServiceResult with gain-adjusted AudioData
         """
         try:
             gain_linear = 10 ** (gain_db / 20)
@@ -556,7 +621,7 @@ class AudioTransformController(BaseService):
             audio: Input AudioData
 
         Returns:
-            ControllerResult with mono AudioData
+            ServiceResult with mono AudioData
         """
         try:
             if audio.samples.ndim == 1:
@@ -614,7 +679,7 @@ class AudioTransformController(BaseService):
             normalize: Whether to normalize audio
 
         Returns:
-            ControllerResult with playback-ready AudioData
+            ServiceResult with playback-ready AudioData
         """
         result = audio
 
@@ -660,7 +725,7 @@ class AudioTransformController(BaseService):
             audio: Input AudioData
 
         Returns:
-            ControllerResult with amplitude statistics dict
+            ServiceResult with amplitude statistics dict
         """
         try:
             from bioamla.core.audio.audio import get_amplitude_stats
@@ -686,7 +751,7 @@ class AudioTransformController(BaseService):
             audio: Input AudioData
 
         Returns:
-            ControllerResult with frequency statistics dict
+            ServiceResult with frequency statistics dict
         """
         try:
             from bioamla.core.audio.audio import get_frequency_stats
@@ -714,7 +779,7 @@ class AudioTransformController(BaseService):
             threshold_db: Silence threshold in dBFS
 
         Returns:
-            ControllerResult with silence detection results
+            ServiceResult with silence detection results
         """
         try:
             from bioamla.core.audio.audio import detect_silence
@@ -750,7 +815,7 @@ class AudioTransformController(BaseService):
             operations: List of (operation_name, kwargs) tuples
 
         Returns:
-            ControllerResult with processed AudioData
+            ServiceResult with processed AudioData
 
         Example:
             result = controller.chain(audio, [
@@ -781,3 +846,632 @@ class AudioTransformController(BaseService):
             data=current,
             message=f"Applied chain: {' -> '.join(applied)}",
         )
+
+    # =========================================================================
+    # File-Based Operations (for CLI/batch processing)
+    # =========================================================================
+
+    def list_files(
+        self,
+        directory: str,
+        recursive: bool = True,
+    ) -> ServiceResult[List[str]]:
+        """
+        List audio files in a directory.
+
+        Args:
+            directory: Directory path to search
+            recursive: Search subdirectories
+
+        Returns:
+            Result with list of audio file paths
+        """
+        error = self._validate_input_path(directory)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            files = self._get_audio_files(directory, recursive=recursive)
+            return ServiceResult.ok(
+                data=[str(f) for f in files],
+                message=f"Found {len(files)} audio files",
+                count=len(files),
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def get_metadata(self, filepath: str) -> ServiceResult[AudioMetadata]:
+        """
+        Get metadata from an audio file.
+
+        Args:
+            filepath: Path to audio file
+
+        Returns:
+            Result with audio metadata
+        """
+        error = self._validate_input_path(filepath)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.utils import get_wav_metadata
+
+            metadata = get_wav_metadata(filepath)
+
+            return ServiceResult.ok(
+                data=AudioMetadata(
+                    filepath=filepath,
+                    duration_seconds=metadata.get("duration", 0),
+                    sample_rate=metadata.get("sample_rate", 0),
+                    channels=metadata.get("channels", 0),
+                    bit_depth=metadata.get("bit_depth"),
+                    format=metadata.get("format"),
+                )
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def resample_file(
+        self,
+        input_path: str,
+        output_path: str,
+        target_rate: int,
+    ) -> ServiceResult[ProcessedAudio]:
+        """
+        Resample an audio file to a different sample rate.
+
+        Args:
+            input_path: Input audio file path
+            output_path: Output audio file path
+            target_rate: Target sample rate in Hz
+
+        Returns:
+            Result with processed audio info
+        """
+        error = self._validate_input_path(input_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        error = self._validate_output_path(output_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.audio.signal import load_audio, resample_audio, save_audio
+
+            audio, sr = load_audio(input_path)
+            resampled = resample_audio(audio, sr, target_rate)
+            save_audio(output_path, resampled, target_rate)
+
+            duration = len(resampled) / target_rate
+
+            return ServiceResult.ok(
+                data=ProcessedAudio(
+                    input_path=input_path,
+                    output_path=output_path,
+                    operation="resample",
+                    sample_rate=target_rate,
+                    duration_seconds=duration,
+                ),
+                message=f"Resampled {input_path} to {target_rate}Hz",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def resample_batch(
+        self,
+        input_dir: str,
+        output_dir: str,
+        target_rate: int,
+        recursive: bool = True,
+    ) -> ServiceResult[BatchResult]:
+        """
+        Resample multiple audio files.
+
+        Args:
+            input_dir: Input directory
+            output_dir: Output directory
+            target_rate: Target sample rate in Hz
+            recursive: Search subdirectories
+
+        Returns:
+            Result with batch processing summary
+        """
+        error = self._validate_input_path(input_dir)
+        if error:
+            return ServiceResult.fail(error)
+
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            from bioamla.core.audio.signal import load_audio, resample_audio, save_audio
+
+            files = self._get_audio_files(input_dir, recursive=recursive)
+            if not files:
+                return ServiceResult.fail(f"No audio files found in {input_dir}")
+
+            processed = 0
+            errors = []
+
+            def process_file(filepath: Path) -> ProcessedAudio:
+                nonlocal processed
+                audio, sr = load_audio(str(filepath))
+                resampled = resample_audio(audio, sr, target_rate)
+
+                out_file = output_path / filepath.name
+                save_audio(str(out_file), resampled, target_rate)
+
+                processed += 1
+                return ProcessedAudio(
+                    input_path=str(filepath),
+                    output_path=str(out_file),
+                    operation="resample",
+                    sample_rate=target_rate,
+                    duration_seconds=len(resampled) / target_rate,
+                )
+
+            for filepath, _result, error in self._process_batch(files, process_file):
+                if error:
+                    errors.append(f"{filepath.name}: {error}")
+
+            return ServiceResult.ok(
+                data=BatchResult(
+                    processed=processed,
+                    failed=len(errors),
+                    output_path=str(output_path),
+                    errors=errors,
+                ),
+                message=f"Resampled {processed} files to {target_rate}Hz",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def normalize_file(
+        self,
+        input_path: str,
+        output_path: str,
+        target_db: float = -20.0,
+        peak: bool = False,
+    ) -> ServiceResult[ProcessedAudio]:
+        """
+        Normalize audio loudness.
+
+        Args:
+            input_path: Input audio file path
+            output_path: Output audio file path
+            target_db: Target loudness in dB
+            peak: Use peak normalization instead of RMS
+
+        Returns:
+            Result with processed audio info
+        """
+        error = self._validate_input_path(input_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        error = self._validate_output_path(output_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.audio.signal import (
+                load_audio,
+                normalize_loudness,
+                peak_normalize,
+                save_audio,
+            )
+
+            audio, sr = load_audio(input_path)
+
+            if peak:
+                target_linear = 10 ** (target_db / 20)
+                normalized = peak_normalize(audio, target_peak=min(target_linear, 0.99))
+            else:
+                normalized = normalize_loudness(audio, sr, target_db=target_db)
+
+            save_audio(output_path, normalized, sr)
+            duration = len(normalized) / sr
+
+            return ServiceResult.ok(
+                data=ProcessedAudio(
+                    input_path=input_path,
+                    output_path=output_path,
+                    operation="normalize",
+                    sample_rate=sr,
+                    duration_seconds=duration,
+                ),
+                message=f"Normalized {input_path} to {target_db}dB",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def filter_file(
+        self,
+        input_path: str,
+        output_path: str,
+        lowpass: Optional[float] = None,
+        highpass: Optional[float] = None,
+        bandpass: Optional[Tuple[float, float]] = None,
+        order: int = 5,
+    ) -> ServiceResult[ProcessedAudio]:
+        """
+        Apply frequency filter to audio.
+
+        Args:
+            input_path: Input audio file path
+            output_path: Output audio file path
+            lowpass: Lowpass cutoff frequency in Hz
+            highpass: Highpass cutoff frequency in Hz
+            bandpass: Tuple of (low, high) for bandpass filter
+            order: Filter order
+
+        Returns:
+            Result with processed audio info
+        """
+        if not any([lowpass, highpass, bandpass]):
+            return ServiceResult.fail("Must specify lowpass, highpass, or bandpass")
+
+        error = self._validate_input_path(input_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        error = self._validate_output_path(output_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.audio.signal import (
+                bandpass_filter,
+                highpass_filter,
+                load_audio,
+                lowpass_filter,
+                save_audio,
+            )
+
+            audio, sr = load_audio(input_path)
+
+            if bandpass:
+                filtered = bandpass_filter(audio, sr, bandpass[0], bandpass[1], order)
+                filter_desc = f"bandpass {bandpass[0]}-{bandpass[1]}Hz"
+            elif lowpass:
+                filtered = lowpass_filter(audio, sr, lowpass, order)
+                filter_desc = f"lowpass {lowpass}Hz"
+            else:
+                filtered = highpass_filter(audio, sr, highpass, order)
+                filter_desc = f"highpass {highpass}Hz"
+
+            save_audio(output_path, filtered, sr)
+            duration = len(filtered) / sr
+
+            return ServiceResult.ok(
+                data=ProcessedAudio(
+                    input_path=input_path,
+                    output_path=output_path,
+                    operation=f"filter ({filter_desc})",
+                    sample_rate=sr,
+                    duration_seconds=duration,
+                ),
+                message=f"Applied {filter_desc} to {input_path}",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def trim_file(
+        self,
+        input_path: str,
+        output_path: str,
+        start: Optional[float] = None,
+        end: Optional[float] = None,
+        trim_silence: bool = False,
+        silence_threshold_db: float = -40.0,
+    ) -> ServiceResult[ProcessedAudio]:
+        """
+        Trim audio by time or remove silence.
+
+        Args:
+            input_path: Input audio file path
+            output_path: Output audio file path
+            start: Start time in seconds
+            end: End time in seconds
+            trim_silence: Trim silence from start/end instead
+            silence_threshold_db: Silence threshold in dB
+
+        Returns:
+            Result with processed audio info
+        """
+        if not trim_silence and start is None and end is None:
+            return ServiceResult.fail("Must specify start/end or use trim_silence")
+
+        error = self._validate_input_path(input_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        error = self._validate_output_path(output_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.audio.signal import (
+                load_audio,
+                save_audio,
+                trim_audio,
+            )
+            from bioamla.core.audio.signal import (
+                trim_silence as do_trim_silence,
+            )
+
+            audio, sr = load_audio(input_path)
+
+            if trim_silence:
+                trimmed = do_trim_silence(audio, sr, threshold_db=silence_threshold_db)
+                operation = "trim silence"
+            else:
+                trimmed = trim_audio(audio, sr, start_time=start, end_time=end)
+                operation = f"trim {start or 0}s-{end or 'end'}"
+
+            save_audio(output_path, trimmed, sr)
+            duration = len(trimmed) / sr
+
+            return ServiceResult.ok(
+                data=ProcessedAudio(
+                    input_path=input_path,
+                    output_path=output_path,
+                    operation=operation,
+                    sample_rate=sr,
+                    duration_seconds=duration,
+                ),
+                message=f"Trimmed {input_path} ({operation})",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def denoise_file(
+        self,
+        input_path: str,
+        output_path: str,
+        strength: float = 1.0,
+    ) -> ServiceResult[ProcessedAudio]:
+        """
+        Apply noise reduction to audio.
+
+        Args:
+            input_path: Input audio file path
+            output_path: Output audio file path
+            strength: Noise reduction strength (0-2, default: 1.0)
+
+        Returns:
+            Result with processed audio info
+        """
+        error = self._validate_input_path(input_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        error = self._validate_output_path(output_path)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.audio.signal import load_audio, save_audio, spectral_denoise
+
+            audio, sr = load_audio(input_path)
+            denoised = spectral_denoise(audio, sr, noise_reduce_factor=strength)
+            save_audio(output_path, denoised, sr)
+
+            duration = len(denoised) / sr
+
+            return ServiceResult.ok(
+                data=ProcessedAudio(
+                    input_path=input_path,
+                    output_path=output_path,
+                    operation=f"denoise (strength={strength})",
+                    sample_rate=sr,
+                    duration_seconds=duration,
+                ),
+                message=f"Denoised {input_path}",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def analyze_file(
+        self,
+        filepath: str,
+        silence_threshold_db: float = -40.0,
+    ) -> ServiceResult[AnalysisResult]:
+        """
+        Analyze an audio file.
+
+        Args:
+            filepath: Path to audio file
+            silence_threshold_db: Silence detection threshold
+
+        Returns:
+            Result with analysis data
+        """
+        error = self._validate_input_path(filepath)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.audio import analyze_audio
+            from bioamla.core.audio.signal import load_audio
+
+            audio, sr = load_audio(filepath)
+            analysis = analyze_audio(audio, sr, silence_threshold_db=silence_threshold_db)
+
+            return ServiceResult.ok(
+                data=AnalysisResult(
+                    filepath=filepath,
+                    duration_seconds=analysis.get("duration", 0),
+                    sample_rate=sr,
+                    channels=analysis.get("channels", 1),
+                    rms_db=analysis.get("rms_db", 0),
+                    peak_db=analysis.get("peak_db", 0),
+                    silence_ratio=analysis.get("silence_ratio", 0),
+                    frequency_stats=analysis.get("frequency_stats", {}),
+                )
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def analyze_batch(
+        self,
+        directory: str,
+        output_csv: Optional[str] = None,
+        recursive: bool = True,
+    ) -> ServiceResult[BatchResult]:
+        """
+        Analyze multiple audio files.
+
+        Args:
+            directory: Directory containing audio files
+            output_csv: Optional CSV output path
+            recursive: Search subdirectories
+
+        Returns:
+            Result with batch processing summary
+        """
+        error = self._validate_input_path(directory)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.audio import analyze_audio
+            from bioamla.core.audio.signal import load_audio
+            from bioamla.core.files import TextFile
+
+            files = self._get_audio_files(directory, recursive=recursive)
+            if not files:
+                return ServiceResult.fail(f"No audio files found in {directory}")
+
+            results = []
+            errors = []
+
+            def process_file(filepath: Path) -> AnalysisResult:
+                audio, sr = load_audio(str(filepath))
+                analysis = analyze_audio(audio, sr)
+                return AnalysisResult(
+                    filepath=str(filepath),
+                    duration_seconds=analysis.get("duration", 0),
+                    sample_rate=sr,
+                    channels=analysis.get("channels", 1),
+                    rms_db=analysis.get("rms_db", 0),
+                    peak_db=analysis.get("peak_db", 0),
+                    silence_ratio=analysis.get("silence_ratio", 0),
+                    frequency_stats=analysis.get("frequency_stats", {}),
+                )
+
+            for filepath, result, error in self._process_batch(files, process_file):
+                if error:
+                    errors.append(f"{filepath.name}: {error}")
+                elif result:
+                    results.append(result)
+
+            # Write CSV if requested
+            if output_csv and results:
+                with TextFile(output_csv, mode="w", newline="") as f:
+                    writer = csv.writer(f.handle)
+                    writer.writerow(
+                        [
+                            "filepath",
+                            "duration_s",
+                            "sample_rate",
+                            "channels",
+                            "rms_db",
+                            "peak_db",
+                            "silence_ratio",
+                        ]
+                    )
+                    for r in results:
+                        writer.writerow(
+                            [
+                                r.filepath,
+                                f"{r.duration_seconds:.2f}",
+                                r.sample_rate,
+                                r.channels,
+                                f"{r.rms_db:.1f}",
+                                f"{r.peak_db:.1f}",
+                                f"{r.silence_ratio:.2f}",
+                            ]
+                        )
+
+            return ServiceResult.ok(
+                data=BatchResult(
+                    processed=len(results),
+                    failed=len(errors),
+                    output_path=output_csv,
+                    errors=errors,
+                ),
+                message=f"Analyzed {len(results)} files",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))
+
+    def process_batch(
+        self,
+        input_dir: str,
+        output_dir: str,
+        processor: Callable,
+        operation_name: str = "process",
+        recursive: bool = True,
+        output_sample_rate: Optional[int] = None,
+    ) -> ServiceResult[BatchResult]:
+        """
+        Apply a custom processor to multiple audio files.
+
+        Args:
+            input_dir: Input directory
+            output_dir: Output directory
+            processor: Function(audio, sr) -> processed_audio
+            operation_name: Name of the operation for logging
+            recursive: Search subdirectories
+            output_sample_rate: Output sample rate (if different from input)
+
+        Returns:
+            Result with batch processing summary
+        """
+        error = self._validate_input_path(input_dir)
+        if error:
+            return ServiceResult.fail(error)
+
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            from bioamla.core.audio.signal import load_audio, save_audio
+
+            files = self._get_audio_files(input_dir, recursive=recursive)
+            if not files:
+                return ServiceResult.fail(f"No audio files found in {input_dir}")
+
+            processed = 0
+            errors = []
+
+            def process_file(filepath: Path):
+                nonlocal processed
+                audio, sr = load_audio(str(filepath))
+                result = processor(audio, sr)
+
+                out_sr = output_sample_rate or sr
+                out_file = output_path / filepath.name
+                save_audio(str(out_file), result, out_sr)
+
+                processed += 1
+                return out_file
+
+            for filepath, _result, error in self._process_batch(files, process_file):
+                if error:
+                    errors.append(f"{filepath.name}: {error}")
+
+            return ServiceResult.ok(
+                data=BatchResult(
+                    processed=processed,
+                    failed=len(errors),
+                    output_path=str(output_path),
+                    errors=errors,
+                ),
+                message=f"{operation_name}: processed {processed} files",
+            )
+        except Exception as e:
+            return ServiceResult.fail(str(e))

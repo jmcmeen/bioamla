@@ -1,30 +1,30 @@
-# controllers/inaturalist.py
+# services/inaturalist.py
 """
-iNaturalist Controller
-======================
+iNaturalist Service
+===================
 
-Controller for iNaturalist data operations.
+Service for iNaturalist data operations.
 
 Orchestrates between CLI/API views and core iNaturalist service functions.
 Handles search, download, and taxa management with progress reporting.
 
 Example:
-    from bioamla.controllers.inaturalist import INaturalistController
+    from bioamla.services import INaturalistService
 
-    controller = INaturalistController()
+    service = INaturalistService()
 
     # Search for sounds
-    result = controller.search(taxon_name="Strix varia", per_page=10)
+    result = service.search(taxon_name="Strix varia", per_page=10)
 
     # Download audio
-    result = controller.download(
+    result = service.download(
         output_dir="./sounds",
         taxon_ids=[3],  # Birds
         obs_per_taxon=50,
     )
 
     # Get taxa for a project
-    result = controller.get_taxa(project_id="appalachia-bioacoustics")
+    result = service.get_taxa(project_id="appalachia-bioacoustics")
 """
 
 from dataclasses import dataclass, field
@@ -99,9 +99,9 @@ class ObservationInfo(ToDictMixin):
     url: str
 
 
-class INaturalistController(BaseService):
+class INaturalistService(BaseService):
     """
-    Controller for iNaturalist operations.
+    Service for iNaturalist operations.
 
     Provides high-level methods for:
     - Searching for observations with sounds
@@ -111,7 +111,7 @@ class INaturalistController(BaseService):
     """
 
     def __init__(self):
-        """Initialize iNaturalist controller."""
+        """Initialize iNaturalist service."""
         super().__init__()
         self._download_callback: Optional[Callable[[int, int, str], None]] = None
 

@@ -8,7 +8,7 @@ Detection domain for bioacoustic analysis including:
 - Detection data structures and utilities
 """
 
-from bioamla.core.detection.detectors import (
+from bioamla.core.analysis.detectors import (
     AcceleratingPatternDetector,
     BandLimitedEnergyDetector,
     CWTPeakDetector,

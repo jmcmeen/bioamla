@@ -1,30 +1,30 @@
 # services/audio_file.py
 """
-Audio File Controller
-=====================
+Audio File Service
+==================
 
-Controller responsible for audio file I/O operations.
+Service responsible for audio file I/O operations.
 
-This controller manages:
+This service manages:
 - Opening and loading audio files from disk
 - Saving audio data to files
 - Writing processed audio to new locations
 
-Design principle: AudioFileController is the ONLY component that should write
-audio data to permanent storage. AudioController handles in-memory transforms
-but must delegate to AudioFileController for persistence.
+Design principle: AudioFileService is the ONLY component that should write
+audio data to permanent storage. AudioTransformService handles in-memory transforms
+but must delegate to AudioFileService for persistence.
 
 Usage:
-    from bioamla.services import AudioFileController
+    from bioamla.services import AudioFileService
 
-    file_ctrl = AudioFileController()
+    file_svc = AudioFileService()
 
     # Load audio
-    result = file_ctrl.open("input.wav")
+    result = file_svc.open("input.wav")
     audio_data = result.data
 
     # Save processed audio
-    file_ctrl.save(audio_data, "output.wav")
+    file_svc.save(audio_data, "output.wav")
 """
 
 import shutil
@@ -43,9 +43,9 @@ class AudioData:
     """
     Container for audio data with metadata.
 
-    This is the primary data transfer object between controllers.
-    AudioFileController produces AudioData, AudioController transforms it,
-    and AudioFileController persists it.
+    This is the primary data transfer object between services.
+    AudioFileService produces AudioData, AudioTransformService transforms it,
+    and AudioFileService persists it.
     """
 
     samples: np.ndarray
@@ -83,29 +83,29 @@ class AudioData:
         return copy
 
 
-class AudioFileController(BaseService):
+class AudioFileService(BaseService):
     """
-    Controller for audio file I/O operations.
+    Service for audio file I/O operations.
 
     Manages all file-based operations:
     - Opening audio files
     - Saving audio data
     - Writing transformed audio
 
-    This controller is the single point of responsibility for audio persistence.
-    In-memory transforms should use AudioController, which produces AudioData
-    objects that can then be saved through this controller.
+    This service is the single point of responsibility for audio persistence.
+    In-memory transforms should use AudioTransformService, which produces AudioData
+    objects that can then be saved through this service.
 
     Example:
-        file_ctrl = AudioFileController()
+        file_svc = AudioFileService()
 
         # Open a file
-        result = file_ctrl.open("recording.wav")
+        result = file_svc.open("recording.wav")
         if result.success:
             audio = result.data
 
         # After processing...
-        save_result = file_ctrl.save(processed_audio, "output.wav")
+        save_result = file_svc.save(processed_audio, "output.wav")
     """
 
     def __init__(self, project_path: Optional[str] = None):
@@ -136,7 +136,7 @@ class AudioFileController(BaseService):
             filepath: Path to the audio file
 
         Returns:
-            ControllerResult containing AudioData on success
+            ServiceResult containing AudioData on success
         """
         import soundfile as sf
 
@@ -189,7 +189,7 @@ class AudioFileController(BaseService):
             format: Audio format (auto-detected from extension if not specified)
 
         Returns:
-            ControllerResult containing the output path on success
+            ServiceResult containing the output path on success
         """
         import soundfile as sf
 
@@ -245,7 +245,7 @@ class AudioFileController(BaseService):
             format: Audio format (auto-detected from extension if not specified)
 
         Returns:
-            ControllerResult containing the output path on success
+            ServiceResult containing the output path on success
         """
         # Handle resampling if requested
         data_to_save = audio_data
@@ -286,7 +286,7 @@ class AudioFileController(BaseService):
             target_path: Path to overwrite (defaults to source_path)
 
         Returns:
-            ControllerResult containing the overwritten path on success
+            ServiceResult containing the overwritten path on success
         """
         path = target_path or audio_data.source_path
         if path is None:
@@ -314,7 +314,7 @@ class AudioFileController(BaseService):
             transform_name: Name for logging
 
         Returns:
-            ControllerResult containing the output path on success
+            ServiceResult containing the output path on success
         """
         import soundfile as sf
 
@@ -366,7 +366,7 @@ class AudioFileController(BaseService):
             suffix: File extension
 
         Returns:
-            ControllerResult containing the temporary file path
+            ServiceResult containing the temporary file path
         """
         import soundfile as sf
 

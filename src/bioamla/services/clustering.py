@@ -1,27 +1,27 @@
-# controllers/clustering.py
+# services/clustering.py
 """
-Clustering Controller
-=====================
+Clustering Service
+==================
 
-Controller for clustering and novelty detection operations on audio embeddings.
+Service for clustering and novelty detection operations on audio embeddings.
 
 Orchestrates between CLI/API views and core clustering functions.
 Handles UMAP/PCA reduction, HDBSCAN/k-means clustering, novelty detection,
 and visualization generation.
 
 Example:
-    from bioamla.controllers.clustering import ClusteringController
+    from bioamla.services import ClusteringService
     import numpy as np
 
-    controller = ClusteringController()
+    service = ClusteringService()
 
     # Cluster embeddings
     embeddings = np.load("embeddings.npy")
-    result = controller.cluster(embeddings, method="hdbscan")
+    result = service.cluster(embeddings, method="hdbscan")
     print(f"Found {result.data.n_clusters} clusters")
 
     # Reduce and visualize
-    result = controller.reduce_for_visualization(embeddings)
+    result = service.reduce_for_visualization(embeddings)
     x, y = result.data["x"], result.data["y"]
 """
 
@@ -73,9 +73,9 @@ class ClusterAnalysis:
     cluster_stats: Dict[int, Dict[str, Any]]
 
 
-class ClusteringController(BaseService):
+class ClusteringService(BaseService):
     """
-    Controller for clustering and novelty detection operations.
+    Service for clustering and novelty detection operations.
 
     Provides high-level methods for:
     - Embedding clustering (HDBSCAN, k-means, DBSCAN)
@@ -87,7 +87,7 @@ class ClusteringController(BaseService):
     """
 
     def __init__(self):
-        """Initialize clustering controller."""
+        """Initialize clustering service."""
         super().__init__()
         self._clusterer = None
         self._reducer = None

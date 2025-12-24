@@ -1,9 +1,9 @@
-# controllers/base.py
+# services/base.py
 """
-Base Controller
-===============
+Base Service
+============
 
-Base class and utilities for all controllers.
+Base class and utilities for all services.
 """
 
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
@@ -74,7 +74,7 @@ class ToDictMixin:
 @dataclass
 class ServiceResult(Generic[T]):
     """
-    Result object returned by controller operations.
+    Result object returned by service operations.
 
     Provides a consistent interface for views to handle operation outcomes.
     """
@@ -168,211 +168,17 @@ ProgressCallback = Callable[[BatchProgress], None]
 
 class BaseService:
     """
-    Base class for all controllers.
+    Base class for all services.
 
     Provides common functionality for:
     - File discovery and validation
     - Batch processing with progress
     - Error handling and result formatting
-    - Run tracking in project repository (supports JSON, SQLite, PostgreSQL)
-
-    Services can operate in two modes:
-    - Stateless (default): No run tracking, no logging
-    - Stateful: When project_path is provided, enables run tracking and logging
     """
 
-    def __init__(self, project_path: Optional[str] = None):
-        """
-        Initialize the controller.
-
-        Args:
-            project_path: Path to project directory. If provided, enables stateful mode
-                         with run tracking and command logging.
-                         If None (default), runs in stateless mode.
-        """
+    def __init__(self):
+        """Initialize the service."""
         self._progress_callback: Optional[ProgressCallback] = None
-        self._current_run_id: Optional[str] = None
-        self._storage = None
-        self._project_path = Path(project_path) if project_path else None
-
-    @property
-    def is_stateful(self) -> bool:
-        """Check if running in stateful mode (project injected)."""
-        return self._project_path is not None
-
-    @property
-    def project_path(self) -> Optional[Path]:
-        """Get the injected project path."""
-        return self._project_path
-
-    @property
-    def storage(self):
-        """Get the storage instance (lazy initialization, only in stateful mode)."""
-        if not self.is_stateful:
-            return None
-
-        if self._storage is None:
-            from bioamla.core.storage import get_storage
-
-            self._storage = get_storage(project_path=self._project_path)
-        return self._storage
-
-    def _start_run(
-        self,
-        name: str,
-        action: str,
-        input_path: str = "",
-        output_path: str = "",
-        parameters: Optional[Dict[str, Any]] = None,
-    ) -> Optional[str]:
-        """
-        Start a new run in the project repository.
-
-        Args:
-            name: Run name/description
-            action: Action being performed (e.g., 'predict', 'embed', 'indices')
-            input_path: Input file/directory
-            output_path: Output file/directory
-            parameters: Run parameters
-
-        Returns:
-            Run ID if in stateful mode, None otherwise
-        """
-        # Skip run tracking in stateless mode
-        if not self.is_stateful or self.storage is None:
-            return None
-
-        run_id = self.storage.create_run(
-            name=name,
-            action=action,
-            controller=self.__class__.__name__,
-            input_path=input_path,
-            output_path=output_path,
-            parameters=parameters,
-        )
-        self._current_run_id = run_id
-        return run_id
-
-    def _complete_run(
-        self,
-        run_id: Optional[str] = None,
-        status: str = "completed",
-        results: Optional[Dict[str, Any]] = None,
-        output_files: Optional[List[str]] = None,
-    ) -> bool:
-        """
-        Mark a run as complete.
-
-        Args:
-            run_id: Run ID (defaults to current run)
-            status: Final status (completed, failed, cancelled)
-            results: Run results/summary
-            output_files: List of output file paths
-
-        Returns:
-            True if successful, False otherwise
-        """
-        # Skip in stateless mode
-        if not self.is_stateful or self.storage is None:
-            return False
-
-        run_id = run_id or self._current_run_id
-        if run_id is None:
-            return False
-
-        success = self.storage.update_run(
-            run_id=run_id,
-            status=status,
-            results=results,
-            output_files=output_files,
-        )
-
-        if success and run_id == self._current_run_id:
-            self._current_run_id = None
-
-        return success
-
-    def _fail_run(
-        self,
-        error_message: str,
-        run_id: Optional[str] = None,
-    ) -> bool:
-        """
-        Mark a run as failed.
-
-        Args:
-            error_message: Error message
-            run_id: Run ID (defaults to current run)
-
-        Returns:
-            True if successful, False otherwise
-        """
-        # Skip in stateless mode
-        if not self.is_stateful or self.storage is None:
-            return False
-
-        run_id = run_id or self._current_run_id
-        if run_id is None:
-            return False
-
-        success = self.storage.fail_run(run_id, error_message)
-
-        if success and run_id == self._current_run_id:
-            self._current_run_id = None
-
-        return success
-
-    def _save_run_artifact(
-        self,
-        filename: str,
-        data: Any,
-        run_id: Optional[str] = None,
-    ) -> Optional[Path]:
-        """
-        Save an artifact to the run directory.
-
-        Args:
-            filename: Name of the file to save
-            data: Data to save (dict for JSON, str for text)
-            run_id: Run ID (defaults to current run)
-
-        Returns:
-            Path to saved file, or None if failed
-        """
-        # Skip in stateless mode
-        if not self.is_stateful or self.storage is None:
-            return None
-
-        run_id = run_id or self._current_run_id
-        if run_id is None:
-            return None
-
-        return self.storage.save_artifact(run_id, filename, data)
-
-    def _get_run_artifact(
-        self,
-        filename: str,
-        run_id: Optional[str] = None,
-    ) -> Optional[Any]:
-        """
-        Load an artifact from the run directory.
-
-        Args:
-            filename: Artifact filename
-            run_id: Run ID (defaults to current run)
-
-        Returns:
-            Loaded data or None
-        """
-        # Skip in stateless mode
-        if not self.is_stateful or self.storage is None:
-            return None
-
-        run_id = run_id or self._current_run_id
-        if run_id is None:
-            return None
-
-        return self.storage.get_artifact(run_id, filename)
 
     def set_progress_callback(self, callback: ProgressCallback) -> None:
         """Set a callback for progress updates during batch operations."""
