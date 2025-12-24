@@ -48,7 +48,7 @@ dependencies = [
 ]
 
 [project.scripts]
-bioamla = "bioamla.views.cli:cli"
+bioamla = "bioamla.cli:cli"
 
 [project.optional-dependencies]
 dev = [
