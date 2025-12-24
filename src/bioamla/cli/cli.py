@@ -12,6 +12,7 @@ from bioamla import __version__
 from .commands import (
     annotation,
     audio,
+    batch,
     cluster,
     config,
     dataset,
@@ -48,6 +49,7 @@ def cli():
 # Register command groups
 cli.add_command(annotation)
 cli.add_command(audio)
+cli.add_command(batch)
 cli.add_command(cluster)
 cli.add_command(config)
 cli.add_command(dataset)
