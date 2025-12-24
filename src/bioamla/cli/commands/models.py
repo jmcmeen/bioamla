@@ -127,7 +127,7 @@ def ast_predict(
             workers=workers,
         )
     else:
-        from bioamla.controllers.inference import InferenceController
+        from bioamla.services.inference import InferenceController
 
         controller = InferenceController(model_path=model_path)
         result = controller.predict(filepath=path)
@@ -764,7 +764,7 @@ def ast_evaluate(
 @models.command("list")
 def models_list():
     """List available model types."""
-    from bioamla.models import list_models
+    from bioamla.core.ml import list_models
 
     click.echo("Available model types:")
     for model_name in list_models():
@@ -811,7 +811,7 @@ def predict_generic(
     from pathlib import Path
 
     from bioamla.core.utils import get_audio_files
-    from bioamla.models import ModelConfig, load_model
+    from bioamla.core.ml import ModelConfig, load_model
 
     config = ModelConfig(
         sample_rate=sample_rate,
@@ -934,7 +934,7 @@ def models_embed(path, model_type, model_path, output, batch, layer, sample_rate
     import numpy as np
 
     from bioamla.core.utils import get_audio_files
-    from bioamla.models import ModelConfig, load_model
+    from bioamla.core.ml import ModelConfig, load_model
 
     config = ModelConfig(sample_rate=sample_rate)
 
@@ -1082,7 +1082,7 @@ def train_spec(
 )
 def models_convert(input_path, output_path, output_format, model_type):
     """Convert model between formats (PyTorch to ONNX)."""
-    from bioamla.models import load_model
+    from bioamla.core.ml import load_model
 
     click.echo(f"Loading model from {input_path}...")
     model = load_model(model_type, input_path)
@@ -1106,7 +1106,7 @@ def models_convert(input_path, output_path, output_format, model_type):
 )
 def models_info(model_path, model_type):
     """Display information about a model."""
-    from bioamla.models import load_model
+    from bioamla.core.ml import load_model
 
     try:
         model = load_model(model_type, model_path)

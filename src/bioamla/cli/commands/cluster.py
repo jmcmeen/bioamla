@@ -27,7 +27,7 @@ def cluster_reduce(embeddings_file: str, output: str, method: str, n_components:
     """Reduce dimensionality of embeddings."""
     import numpy as np
 
-    from bioamla.core.clustering import reduce_dimensions
+    from bioamla.core.analysis.clustering import reduce_dimensions
 
     embeddings = np.load(embeddings_file)
 
@@ -76,7 +76,7 @@ def cluster_cluster(
     """Cluster embeddings."""
     import numpy as np
 
-    from bioamla.core.clustering import AudioClusterer, ClusteringConfig
+    from bioamla.core.analysis.clustering import AudioClusterer, ClusteringConfig
 
     embeddings = np.load(embeddings_file)
 
@@ -112,7 +112,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
 
     import numpy as np
 
-    from bioamla.core.clustering import analyze_clusters
+    from bioamla.core.analysis.clustering import analyze_clusters
 
     embeddings = np.load(embeddings_file)
     labels = np.load(labels_file)
@@ -168,7 +168,7 @@ def cluster_novelty(
     """Detect novel sounds in embeddings."""
     import numpy as np
 
-    from bioamla.core.clustering import discover_novel_sounds
+    from bioamla.core.analysis.clustering import discover_novel_sounds
 
     embeddings = np.load(embeddings_file)
     known_labels = np.load(labels) if labels else None

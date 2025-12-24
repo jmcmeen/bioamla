@@ -441,7 +441,7 @@ class PipelineEngine:
         params: Dict[str, Any],
     ) -> Any:
         """Resample audio files."""
-        from bioamla.controllers.audio_file import AudioFileController
+        from bioamla.services.audio_file import AudioFileController
 
         controller = AudioFileController()
         result = controller.resample(
@@ -466,7 +466,7 @@ class PipelineEngine:
             target_db: Target loudness in dB (default: -20.0)
             peak: Use peak normalization instead of RMS (default: false)
         """
-        from bioamla.controllers.audio import AudioController
+        from bioamla.services.audio import AudioController
 
         controller = AudioController()
         input_path = Path(params.get("input", ""))
@@ -513,7 +513,7 @@ class PipelineEngine:
             bandpass: Comma-separated low,high frequencies for bandpass (optional)
             order: Filter order (default: 5)
         """
-        from bioamla.controllers.audio import AudioController
+        from bioamla.services.audio import AudioController
 
         controller = AudioController()
         input_path = Path(params.get("input", ""))
@@ -586,7 +586,7 @@ class PipelineEngine:
             trim_silence: Trim silence from start/end (default: false)
             silence_threshold_db: Silence threshold in dB (default: -40.0)
         """
-        from bioamla.controllers.audio import AudioController
+        from bioamla.services.audio import AudioController
 
         controller = AudioController()
         input_path = Path(params.get("input", ""))
@@ -647,7 +647,7 @@ class PipelineEngine:
             output: Output file or directory path
             strength: Noise reduction strength 0-2 (default: 1.0)
         """
-        from bioamla.controllers.audio import AudioController
+        from bioamla.services.audio import AudioController
 
         controller = AudioController()
         input_path = Path(params.get("input", ""))
@@ -680,7 +680,7 @@ class PipelineEngine:
         params: Dict[str, Any],
     ) -> Any:
         """Calculate acoustic indices."""
-        from bioamla.controllers.indices import IndicesController
+        from bioamla.services.indices import IndicesController
 
         controller = IndicesController()
         result = controller.calculate_batch(
@@ -699,7 +699,7 @@ class PipelineEngine:
         """Cluster embeddings."""
         import numpy as np
 
-        from bioamla.controllers.clustering import ClusteringController
+        from bioamla.services.clustering import ClusteringController
 
         controller = ClusteringController()
 
@@ -721,7 +721,7 @@ class PipelineEngine:
         params: Dict[str, Any],
     ) -> Any:
         """Run inference prediction."""
-        from bioamla.controllers.inference import InferenceController
+        from bioamla.services.inference import InferenceController
 
         controller = InferenceController(model_path=params.get("model"))
         result = controller.predict_batch(
@@ -738,7 +738,7 @@ class PipelineEngine:
         params: Dict[str, Any],
     ) -> Any:
         """Extract embeddings."""
-        from bioamla.controllers.embedding import EmbeddingController
+        from bioamla.services.embedding import EmbeddingController
 
         controller = EmbeddingController(model_path=params.get("model"))
         result = controller.extract_batch(
@@ -755,7 +755,7 @@ class PipelineEngine:
         params: Dict[str, Any],
     ) -> Any:
         """Run RIBBIT detection."""
-        from bioamla.controllers.ribbit import RibbitController
+        from bioamla.services.ribbit import RibbitController
 
         controller = RibbitController()
         result = controller.detect_batch(

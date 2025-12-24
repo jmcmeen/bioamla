@@ -25,7 +25,7 @@ from uuid import UUID
 
 import numpy as np
 
-from bioamla.controllers.base import BaseController, ControllerResult
+from bioamla.services.base import BaseController, ControllerResult
 from bioamla.core.annotations import (
     Annotation as CoreAnnotation,
 )
