@@ -58,6 +58,12 @@ from .audio_transform import (
     ProcessedAudio,
 )
 from .base import BaseService, ServiceResult
+from .batch_base import BatchServiceBase
+from .batch_audio_transform import BatchAudioTransformService
+from .batch_clustering import BatchClusteringService
+from .batch_detection import BatchDetectionService
+from .batch_indices import BatchIndicesService
+from .batch_inference import BatchInferenceService
 from .birdnet import BirdNETService
 from .clustering import ClusteringService
 from .cnn import CNNService
@@ -98,6 +104,8 @@ __all__ = [
     # Base
     "BaseService",
     "ServiceResult",
+    # Batch Base
+    "BatchServiceBase",
     # Audio
     "AudioFileService",  # File I/O operations
     "AudioTransformService",  # In-memory transforms + file-based batch operations
@@ -106,6 +114,12 @@ __all__ = [
     "ProcessedAudio",  # Processing result
     "AnalysisResult",  # Analysis result
     "BatchResult",  # Batch operation result
+    # Batch Services
+    "BatchAudioTransformService",
+    "BatchDetectionService",
+    "BatchIndicesService",
+    "BatchInferenceService",
+    "BatchClusteringService",
     # Annotations
     "AnnotationService",
     "AnnotationResult",
