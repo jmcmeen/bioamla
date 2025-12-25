@@ -271,14 +271,22 @@ def search(
         >>> # Search with bounding box
         >>> results = search(box=(35, 45, -90, -70), quality="A B")
     """
-    # Build query string
+    # Build query string (API v3 requires tagged queries)
     if query:
         query_str = query
     else:
         parts = []
 
         if species:
-            parts.append(species)
+            # Parse species name into genus and species parts for tagged query
+            species_parts = species.strip().split()
+            if len(species_parts) >= 2:
+                # Scientific name format: "Genus species" -> gen:Genus sp:species
+                parts.append(f"gen:{species_parts[0]}")
+                parts.append(f"sp:{species_parts[1]}")
+            else:
+                # Single name - could be common name or genus, use en: tag
+                parts.append(f"en:{species}")
         if genus:
             parts.append(f"gen:{genus}")
         if recordist:
@@ -325,11 +333,10 @@ def search(
     total_pages = 1
 
     while current_page <= total_pages:
-        params = {"query": query_str, "page": current_page}
-        headers = {"X-API-Key": api_key}
+        params = {"query": query_str, "page": current_page, "key": api_key}
 
         try:
-            response = _client.get(XC_API_URL, params=params, headers=headers)
+            response = _client.get(XC_API_URL, params=params)
         except Exception as e:
             logger.error(f"Xeno-canto API error: {e}")
             raise
@@ -372,8 +379,7 @@ def get_recording(recording_id: str) -> Optional[XCRecording]:
         return None
 
     try:
-        headers = {"X-API-Key": api_key}
-        response = _client.get(XC_API_URL, params={"query": f"nr:{recording_id}"}, headers=headers)
+        response = _client.get(XC_API_URL, params={"query": f"nr:{recording_id}", "key": api_key})
         recordings = response.get("recordings", [])
         if recordings:
             return XCRecording.from_api_response(recordings[0])
@@ -559,8 +565,13 @@ def get_species_recordings_count(species: str) -> int:
         return 0
 
     try:
-        headers = {"X-API-Key": api_key}
-        response = _client.get(XC_API_URL, params={"query": species}, headers=headers)
+        # Parse species into tagged query format for API v3
+        species_parts = species.strip().split()
+        if len(species_parts) >= 2:
+            query = f"gen:{species_parts[0]} sp:{species_parts[1]}"
+        else:
+            query = f"en:{species}"
+        response = _client.get(XC_API_URL, params={"query": query, "key": api_key})
         return int(response.get("numRecordings", 0))
     except Exception:
         return 0
