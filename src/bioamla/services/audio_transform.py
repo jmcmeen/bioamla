@@ -3,79 +3,22 @@
 Service for audio signal processing operations, both in-memory and file-based.
 """
 
-import csv
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .audio_file import AudioData
+from bioamla.models.audio import (
+    AnalysisResult,
+    AudioData,
+    AudioMetadata,
+    BatchResult,
+    ProcessedAudio,
+    TransformResult,
+)
+from bioamla.repository.protocol import FileRepositoryProtocol
+
 from .base import BaseService, ServiceResult
-
-# =============================================================================
-# Data Classes for File-Based Operations
-# =============================================================================
-
-
-@dataclass
-class AudioMetadata:
-    """Metadata about an audio file."""
-
-    filepath: str
-    duration_seconds: float
-    sample_rate: int
-    channels: int
-    bit_depth: Optional[int] = None
-    format: Optional[str] = None
-
-
-@dataclass
-class ProcessedAudio:
-    """Result of processing an audio file."""
-
-    input_path: str
-    output_path: str
-    operation: str
-    sample_rate: int
-    duration_seconds: float
-
-
-@dataclass
-class AnalysisResult:
-    """Result of audio analysis."""
-
-    filepath: str
-    duration_seconds: float
-    sample_rate: int
-    channels: int
-    rms_db: float
-    peak_db: float
-    silence_ratio: float
-    frequency_stats: Dict[str, float]
-
-
-@dataclass
-class BatchResult:
-    """Result of a batch operation."""
-
-    processed: int
-    failed: int
-    output_path: Optional[str] = None
-    errors: List[str] = None
-
-    def __post_init__(self):
-        if self.errors is None:
-            self.errors = []
-
-
-@dataclass
-class TransformResult:
-    """Result of an audio transform operation."""
-
-    audio: AudioData
-    operation: str
-    parameters: dict
 
 
 class AudioTransformService(BaseService):
@@ -94,19 +37,33 @@ class AudioTransformService(BaseService):
     - Channel operations (mono conversion)
     - Playback preparation
 
-    File-based operations (for CLI/batch processing):
+    File-based operations (single-file, require file_repository):
     - list_files: Discover audio files
     - get_metadata: Extract file metadata
-    - resample_files: Batch resample
-    - normalize_files: Batch normalize
-    - filter_files: Batch filter
-    - analyze_files: Batch analysis with CSV export
+    - resample_file: Resample single file
+    - normalize_file: Normalize single file
+    - filter_file: Filter single file
+    - analyze_file: Analyze single file
+    - segment_file: Segment single file
+    - visualize_file: Visualize single file
 
     Analysis operations:
     - Get amplitude statistics
     - Get frequency statistics
     - Detect silence regions
+
+    Note: Batch operations have been moved to BatchAudioTransformService.
     """
+
+    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
+        """Initialize the audio transform service.
+
+        Args:
+            file_repository: File repository for file I/O operations (required).
+        """
+        super().__init__(file_repository=file_repository)
+        if file_repository is None:
+            raise ValueError("AudioTransformService requires a file_repository")
 
     # =========================================================================
     # Filtering Operations
@@ -822,7 +779,7 @@ class AudioTransformService(BaseService):
         recursive: bool = True,
     ) -> ServiceResult[List[str]]:
         """
-        List audio files in a directory.
+        List audio files in a directory using the file repository.
 
         Args:
             directory: Directory path to search
@@ -831,12 +788,20 @@ class AudioTransformService(BaseService):
         Returns:
             Result with list of audio file paths
         """
-        error = self._validate_input_path(directory)
-        if error:
-            return ServiceResult.fail(error)
+        if not self.file_repository.exists(directory):
+            return ServiceResult.fail(f"Path does not exist: {directory}")
+
+        if not self.file_repository.is_dir(directory):
+            return ServiceResult.fail(f"Path is not a directory: {directory}")
 
         try:
-            files = self._get_audio_files(directory, recursive=recursive)
+            # Use repository to list audio files
+            extensions = [".wav", ".mp3", ".flac", ".ogg", ".m4a"]
+            files = []
+            for ext in extensions:
+                pattern = f"**/*{ext}" if recursive else f"*{ext}"
+                files.extend(self.file_repository.list_files(directory, pattern, recursive))
+
             return ServiceResult.ok(
                 data=[str(f) for f in files],
                 message=f"Found {len(files)} audio files",
@@ -924,74 +889,6 @@ class AudioTransformService(BaseService):
         except Exception as e:
             return ServiceResult.fail(str(e))
 
-    def resample_batch(
-        self,
-        input_dir: str,
-        output_dir: str,
-        target_rate: int,
-        recursive: bool = True,
-    ) -> ServiceResult[BatchResult]:
-        """
-        Resample multiple audio files.
-
-        Args:
-            input_dir: Input directory
-            output_dir: Output directory
-            target_rate: Target sample rate in Hz
-            recursive: Search subdirectories
-
-        Returns:
-            Result with batch processing summary
-        """
-        error = self._validate_input_path(input_dir)
-        if error:
-            return ServiceResult.fail(error)
-
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        try:
-            from bioamla.core.audio.signal import load_audio, resample_audio, save_audio
-
-            files = self._get_audio_files(input_dir, recursive=recursive)
-            if not files:
-                return ServiceResult.fail(f"No audio files found in {input_dir}")
-
-            processed = 0
-            errors = []
-
-            def process_file(filepath: Path) -> ProcessedAudio:
-                nonlocal processed
-                audio, sr = load_audio(str(filepath))
-                resampled = resample_audio(audio, sr, target_rate)
-
-                out_file = output_path / filepath.name
-                save_audio(str(out_file), resampled, target_rate)
-
-                processed += 1
-                return ProcessedAudio(
-                    input_path=str(filepath),
-                    output_path=str(out_file),
-                    operation="resample",
-                    sample_rate=target_rate,
-                    duration_seconds=len(resampled) / target_rate,
-                )
-
-            for filepath, _result, error in self._process_batch(files, process_file):
-                if error:
-                    errors.append(f"{filepath.name}: {error}")
-
-            return ServiceResult.ok(
-                data=BatchResult(
-                    processed=processed,
-                    failed=len(errors),
-                    output_path=str(output_path),
-                    errors=errors,
-                ),
-                message=f"Resampled {processed} files to {target_rate}Hz",
-            )
-        except Exception as e:
-            return ServiceResult.fail(str(e))
 
     def normalize_file(
         self,
@@ -1234,9 +1131,9 @@ class AudioTransformService(BaseService):
             if step_samples <= 0:
                 return ServiceResult.fail("Overlap must be less than duration")
 
-            # Create output directory
+            # Create output directory using repository
+            self.file_repository.mkdir(output_dir, parents=True)
             output_path = Path(output_dir)
-            output_path.mkdir(parents=True, exist_ok=True)
 
             # Determine prefix
             if prefix is None:
@@ -1259,10 +1156,10 @@ class AudioTransformService(BaseService):
 
             return ServiceResult.ok(
                 data=BatchResult(
-                    files_processed=segments_created,
-                    files_failed=len(errors),
+                    processed=segments_created,
+                    failed=len(errors),
+                    output_path=str(output_path),
                     errors=errors,
-                    output_dir=str(output_path),
                 ),
                 message=f"Created {segments_created} segments in {output_dir}",
             )
@@ -1357,166 +1254,7 @@ class AudioTransformService(BaseService):
         except Exception as e:
             return ServiceResult.fail(str(e))
 
-    def analyze_batch(
-        self,
-        directory: str,
-        output_csv: Optional[str] = None,
-        recursive: bool = True,
-    ) -> ServiceResult[BatchResult]:
-        """
-        Analyze multiple audio files.
 
-        Args:
-            directory: Directory containing audio files
-            output_csv: Optional CSV output path
-            recursive: Search subdirectories
-
-        Returns:
-            Result with batch processing summary
-        """
-        error = self._validate_input_path(directory)
-        if error:
-            return ServiceResult.fail(error)
-
-        try:
-            from bioamla.core.audio import analyze_audio
-            from bioamla.core.audio.signal import load_audio
-            from bioamla.core.files import TextFile
-
-            files = self._get_audio_files(directory, recursive=recursive)
-            if not files:
-                return ServiceResult.fail(f"No audio files found in {directory}")
-
-            results = []
-            errors = []
-
-            def process_file(filepath: Path) -> AnalysisResult:
-                audio, sr = load_audio(str(filepath))
-                analysis = analyze_audio(audio, sr)
-                return AnalysisResult(
-                    filepath=str(filepath),
-                    duration_seconds=analysis.get("duration", 0),
-                    sample_rate=sr,
-                    channels=analysis.get("channels", 1),
-                    rms_db=analysis.get("rms_db", 0),
-                    peak_db=analysis.get("peak_db", 0),
-                    silence_ratio=analysis.get("silence_ratio", 0),
-                    frequency_stats=analysis.get("frequency_stats", {}),
-                )
-
-            for filepath, result, error in self._process_batch(files, process_file):
-                if error:
-                    errors.append(f"{filepath.name}: {error}")
-                elif result:
-                    results.append(result)
-
-            # Write CSV if requested
-            if output_csv and results:
-                with TextFile(output_csv, mode="w", newline="") as f:
-                    writer = csv.writer(f.handle)
-                    writer.writerow(
-                        [
-                            "filepath",
-                            "duration_s",
-                            "sample_rate",
-                            "channels",
-                            "rms_db",
-                            "peak_db",
-                            "silence_ratio",
-                        ]
-                    )
-                    for r in results:
-                        writer.writerow(
-                            [
-                                r.filepath,
-                                f"{r.duration_seconds:.2f}",
-                                r.sample_rate,
-                                r.channels,
-                                f"{r.rms_db:.1f}",
-                                f"{r.peak_db:.1f}",
-                                f"{r.silence_ratio:.2f}",
-                            ]
-                        )
-
-            return ServiceResult.ok(
-                data=BatchResult(
-                    processed=len(results),
-                    failed=len(errors),
-                    output_path=output_csv,
-                    errors=errors,
-                ),
-                message=f"Analyzed {len(results)} files",
-            )
-        except Exception as e:
-            return ServiceResult.fail(str(e))
-
-    def process_batch(
-        self,
-        input_dir: str,
-        output_dir: str,
-        processor: Callable,
-        operation_name: str = "process",
-        recursive: bool = True,
-        output_sample_rate: Optional[int] = None,
-    ) -> ServiceResult[BatchResult]:
-        """
-        Apply a custom processor to multiple audio files.
-
-        Args:
-            input_dir: Input directory
-            output_dir: Output directory
-            processor: Function(audio, sr) -> processed_audio
-            operation_name: Name of the operation for logging
-            recursive: Search subdirectories
-            output_sample_rate: Output sample rate (if different from input)
-
-        Returns:
-            Result with batch processing summary
-        """
-        error = self._validate_input_path(input_dir)
-        if error:
-            return ServiceResult.fail(error)
-
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        try:
-            from bioamla.core.audio.signal import load_audio, save_audio
-
-            files = self._get_audio_files(input_dir, recursive=recursive)
-            if not files:
-                return ServiceResult.fail(f"No audio files found in {input_dir}")
-
-            processed = 0
-            errors = []
-
-            def process_file(filepath: Path):
-                nonlocal processed
-                audio, sr = load_audio(str(filepath))
-                result = processor(audio, sr)
-
-                out_sr = output_sample_rate or sr
-                out_file = output_path / filepath.name
-                save_audio(str(out_file), result, out_sr)
-
-                processed += 1
-                return out_file
-
-            for filepath, _result, error in self._process_batch(files, process_file):
-                if error:
-                    errors.append(f"{filepath.name}: {error}")
-
-            return ServiceResult.ok(
-                data=BatchResult(
-                    processed=processed,
-                    failed=len(errors),
-                    output_path=str(output_path),
-                    errors=errors,
-                ),
-                message=f"{operation_name}: processed {processed} files",
-            )
-        except Exception as e:
-            return ServiceResult.fail(str(e))
 
     def visualize_file(
         self,
@@ -1573,82 +1311,3 @@ class AudioTransformService(BaseService):
         except Exception as e:
             return ServiceResult.fail(str(e))
 
-    def visualize_batch(
-        self,
-        input_dir: str,
-        output_dir: str,
-        viz_type: str = "mel",
-        n_fft: int = 2048,
-        hop_length: int = 512,
-        n_mels: int = 128,
-        n_mfcc: int = 20,
-        cmap: str = "viridis",
-        dpi: int = 100,
-        recursive: bool = True,
-    ) -> ServiceResult[BatchResult]:
-        """
-        Generate visualizations for multiple audio files.
-
-        Args:
-            input_dir: Input directory
-            output_dir: Output directory
-            viz_type: Visualization type (mel, stft, mfcc, waveform)
-            n_fft: FFT window size
-            hop_length: Hop length
-            n_mels: Number of mel bands
-            n_mfcc: Number of MFCCs
-            cmap: Colormap name
-            dpi: Output DPI
-            recursive: Search subdirectories
-
-        Returns:
-            Result with batch processing summary
-        """
-        from pathlib import Path
-
-        error = self._validate_input_path(input_dir)
-        if error:
-            return ServiceResult.fail(error)
-
-        try:
-            from bioamla.core.visualization.visualize import generate_spectrogram
-
-            files = self._get_audio_files(input_dir, recursive=recursive)
-            if not files:
-                return ServiceResult.fail(f"No audio files found in {input_dir}")
-
-            output_path = Path(output_dir)
-            output_path.mkdir(parents=True, exist_ok=True)
-
-            processed = 0
-            errors = []
-
-            for filepath in files:
-                out_file = output_path / f"{filepath.stem}_{viz_type}.png"
-                try:
-                    generate_spectrogram(
-                        audio_path=str(filepath),
-                        output_path=str(out_file),
-                        viz_type=viz_type,
-                        n_fft=n_fft,
-                        hop_length=hop_length,
-                        n_mels=n_mels,
-                        n_mfcc=n_mfcc,
-                        cmap=cmap,
-                        dpi=dpi,
-                    )
-                    processed += 1
-                except Exception as e:
-                    errors.append(f"{filepath.name}: {e}")
-
-            return ServiceResult.ok(
-                data=BatchResult(
-                    files_processed=processed,
-                    files_failed=len(errors),
-                    errors=errors,
-                    output_dir=str(output_path),
-                ),
-                message=f"Generated {processed} visualizations in {output_dir}",
-            )
-        except Exception as e:
-            return ServiceResult.fail(str(e))
