@@ -54,7 +54,7 @@ class BirdNETModel(BaseAudioModel):
     BIRDNET_CLIP_DURATION = 3.0
     BIRDNET_MIN_CONFIDENCE = 0.1
 
-    def __init__(self, config: Optional[ModelConfig] = None):
+    def __init__(self, config: Optional[ModelConfig] = None) -> None:
         """Initialize BirdNET model."""
         # Override defaults for BirdNET
         if config is None:
@@ -402,7 +402,7 @@ class BirdNETEncoder(nn.Module):
     For production use, load the official BirdNET model weights.
     """
 
-    def __init__(self, num_classes: int = 3000, embedding_dim: int = 1024):
+    def __init__(self, num_classes: int = 3000, embedding_dim: int = 1024) -> None:
         super().__init__()
 
         self.embedding_dim = embedding_dim

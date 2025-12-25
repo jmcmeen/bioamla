@@ -26,6 +26,8 @@ Example:
     >>> embeddings = model.extract_embeddings("audio.wav")
 """
 
+from typing import Any
+
 # API response models (safe to import, no circular deps)
 # Config (safe, no circular deps)
 # Import base classes for type annotations (safe, no circular deps)
@@ -38,7 +40,7 @@ from bioamla.core.ml.responses import (
 from bioamla.core.ml.responses import PredictionResult as APIPredictionResult
 
 
-def _ensure_models_registered():
+def _ensure_models_registered() -> None:
     """Import model modules to trigger @register_model decorators."""
     # These imports register the models via @register_model decorator
     from bioamla.core.ml import (
@@ -48,7 +50,7 @@ def _ensure_models_registered():
     )
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     """Lazy import to avoid circular dependencies."""
     # Base classes and utilities
     if name in (

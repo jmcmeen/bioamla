@@ -52,7 +52,7 @@ class EBirdService(BaseService):
     - Getting nearby observations
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None) -> None:
         """
         Initialize eBird service.
 

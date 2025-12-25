@@ -58,7 +58,7 @@ class XenoCantoService(BaseService):
     - Managing API cache
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Xeno-canto service."""
         super().__init__()
 

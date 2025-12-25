@@ -391,7 +391,7 @@ class LabelHierarchy:
     Supports multi-level taxonomy (e.g., Order -> Family -> Genus -> Species).
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize empty hierarchy."""
         self.nodes: Dict[str, HierarchyNode] = {}
         self.root_nodes: List[str] = []
@@ -814,7 +814,7 @@ class AveragingStrategy(EnsembleStrategy):
 class VotingStrategy(EnsembleStrategy):
     """Majority voting on class predictions."""
 
-    def __init__(self, soft: bool = True):
+    def __init__(self, soft: bool = True) -> None:
         """
         Initialize voting strategy.
 
@@ -862,7 +862,7 @@ class StackingStrategy(EnsembleStrategy):
     Trains a meta-model on base model predictions.
     """
 
-    def __init__(self, n_classes: int, n_models: int):
+    def __init__(self, n_classes: int, n_models: int) -> None:
         """
         Initialize stacking strategy.
 
@@ -1066,7 +1066,7 @@ class TrainerConfig:
 class EarlyStopping:
     """Early stopping handler."""
 
-    def __init__(self, patience: int = 10, min_delta: float = 1e-4):
+    def __init__(self, patience: int = 10, min_delta: float = 1e-4) -> None:
         """
         Initialize early stopping.
 

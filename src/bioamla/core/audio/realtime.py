@@ -107,7 +107,7 @@ class AudioRecorder:
         to ``get_buffer()`` while recording is active.
     """
 
-    def __init__(self, config: Optional[RecordingConfig] = None):
+    def __init__(self, config: Optional[RecordingConfig] = None) -> None:
         """
         Initialize audio recorder.
 
@@ -120,7 +120,7 @@ class AudioRecorder:
         self.buffer_lock = threading.Lock()
         self._stream = None
 
-    def _get_sounddevice(self):
+    def _get_sounddevice(self) -> Any:
         """Import and return sounddevice module."""
         try:
             import sounddevice as sd

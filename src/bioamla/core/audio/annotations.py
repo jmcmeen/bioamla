@@ -26,7 +26,7 @@ import csv
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Iterator, List, Optional, Set
 
 import numpy as np
 
@@ -191,7 +191,7 @@ class AnnotationSet:
     def __len__(self) -> int:
         return len(self.annotations)
 
-    def __iter__(self):
+    def __iter__(self) -> "Iterator[Annotation]":
         return iter(self.annotations)
 
     def __getitem__(self, idx: int) -> Annotation:

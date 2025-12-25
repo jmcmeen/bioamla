@@ -29,7 +29,7 @@ class HuggingFaceService(BaseService):
     - Pushing datasets to the Hub
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize HuggingFace service."""
         super().__init__()
 

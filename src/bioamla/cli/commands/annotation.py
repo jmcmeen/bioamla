@@ -30,7 +30,7 @@ def annotation():
 )
 @click.option("--label-column", default=None, help="Column name for labels in input file")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def annotation_convert(input_file, output_file, from_format, to_format, label_column, quiet):
+def annotation_convert(input_file : str, output_file : str, from_format : str, to_format : str, label_column : str, quiet : bool) -> None:
     """Convert annotation files between formats."""
     from pathlib import Path
 
@@ -85,7 +85,7 @@ def annotation_convert(input_file, output_file, from_format, to_format, label_co
     help="Annotation format (auto-detected from extension if not specified)",
 )
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
-def annotation_summary(path, file_format, output_json):
+def annotation_summary(path : str, file_format : str, output_json : str) -> None:
     """Display summary statistics for an annotation file."""
     import json
     from pathlib import Path
@@ -144,7 +144,7 @@ def annotation_summary(path, file_format, output_json):
     help="Keep or drop annotations with unmapped labels",
 )
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def annotation_remap(input_file, output_file, mapping, keep_unmapped, quiet):
+def annotation_remap(input_file : str, output_file : str, mapping : str, keep_unmapped: bool, quiet : bool) -> None:
     """Remap annotation labels using a mapping file."""
     from pathlib import Path
 
@@ -195,7 +195,7 @@ def annotation_remap(input_file, output_file, mapping, keep_unmapped, quiet):
 @click.option("--min-duration", type=float, default=None, help="Minimum duration in seconds")
 @click.option("--max-duration", type=float, default=None, help="Maximum duration in seconds")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def annotation_filter(input_file, output_file, include, exclude, min_duration, max_duration, quiet):
+def annotation_filter(input_file : str, output_file : str, include, exclude, min_duration, max_duration, quiet):
     """Filter annotations by label or duration."""
     from pathlib import Path
 

@@ -54,7 +54,7 @@ class EmbeddingService(BaseService):
         self,
         model_path: Optional[str] = None,
         model_type: str = "ast",
-    ):
+    ) -> None:
         """
         Initialize embedding service.
 
@@ -71,8 +71,8 @@ class EmbeddingService(BaseService):
         self,
         model_path: Optional[str] = None,
         model_type: Optional[str] = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> "EmbeddingExtractor":
         """Lazy load the embedding extractor."""
         from bioamla.core.ml.embeddings import EmbeddingConfig, EmbeddingExtractor
 

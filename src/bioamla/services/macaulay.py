@@ -57,7 +57,7 @@ class MacaulayService(BaseService):
     - Managing API cache
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Macaulay Library service."""
         super().__init__()
 
