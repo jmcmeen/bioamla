@@ -8,7 +8,6 @@ from .cluster import cluster
 from .config import config
 from .dataset import dataset
 from .detect import detect
-from .examples import examples
 from .indices import indices
 from .models import models
 
@@ -21,7 +20,6 @@ __all__ = [
     "config",
     "dataset",
     "detect",
-    "examples",
     "indices",
     "models",
 ]
