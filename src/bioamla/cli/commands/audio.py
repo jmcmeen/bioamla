@@ -13,18 +13,11 @@ def audio() -> None:
 @click.argument("path")
 def audio_info(path: str) -> None:
     """Display audio file information."""
-    from bioamla.repository.local import LocalFileRepository
-    from bioamla.services.audio_file import AudioFileService
+    from bioamla.cli.service_helpers import handle_result, services
 
-    repository = LocalFileRepository()
-    controller = AudioFileService(file_repository=repository)
-    result = controller.open(path)
+    result = services.audio_file.open(path)
+    audio_data = handle_result(result)
 
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    audio_data = result.data
     click.echo(f"File: {path}")
     click.echo(f"Duration: {audio_data.duration:.2f}s")
     click.echo(f"Sample rate: {audio_data.sample_rate} Hz")
@@ -37,17 +30,11 @@ def audio_info(path: str) -> None:
 @click.option("--recursive/--no-recursive", "-r", default=True, help="Search subdirectories (default: recursive)")
 def audio_list(path: str, recursive: bool) -> None:
     """List audio files in a directory."""
-    from bioamla.repository.local import LocalFileRepository
-    from bioamla.services.audio_transform import AudioTransformService
+    from bioamla.cli.service_helpers import handle_result, services
 
-    repository = LocalFileRepository()
-    result = AudioTransformService(file_repository=repository).list_files(path, recursive=recursive)
+    result = services.audio_transform.list_files(path, recursive=recursive)
+    audio_files = handle_result(result)
 
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    audio_files = result.data
     if not audio_files:
         click.echo("No audio files found")
         return
@@ -72,19 +59,10 @@ def audio_list(path: str, recursive: bool) -> None:
 )
 def audio_convert(input_path: str, output_path: str, sample_rate: int, channels: int, bit_depth: int, format: str) -> None:
     """Convert audio file format or properties."""
-    from bioamla.repository.local import LocalFileRepository
-    from bioamla.services.audio_file import AudioFileService
-
-    repository = LocalFileRepository()
-    controller = AudioFileService(file_repository=repository)
+    from bioamla.cli.service_helpers import check_result, handle_result, services
 
     # Load the audio file
-    open_result = controller.open(input_path)
-    if not open_result.success:
-        click.echo(f"Error: {open_result.error}")
-        raise SystemExit(1)
-
-    audio_data = open_result.data
+    audio_data = handle_result(services.audio_file.open(input_path))
 
     # Handle channel conversion if requested
     if channels is not None and channels != audio_data.channels:
@@ -101,16 +79,13 @@ def audio_convert(input_path: str, output_path: str, sample_rate: int, channels:
             audio_data.channels = 2
 
     # Save with optional resampling and format conversion
-    result = controller.save_as(
+    result = services.audio_file.save_as(
         audio_data=audio_data,
         output_path=output_path,
         target_sample_rate=sample_rate,
         format=format,
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
+    check_result(result)
 
     click.echo(f"Converted: {output_path}")
 
@@ -140,11 +115,9 @@ def audio_convert(input_path: str, output_path: str, sample_rate: int, channels:
 )
 def audio_segment(input_path: str, output_dir: str, duration: float, overlap: float, format: str, prefix: str) -> None:
     """Segment audio file into fixed-duration clips."""
-    from bioamla.repository.local import LocalFileRepository
-    from bioamla.services.audio_transform import AudioTransformService
+    from bioamla.cli.service_helpers import handle_result, services
 
-    repository = LocalFileRepository()
-    result = AudioTransformService(file_repository=repository).segment_file(
+    result = services.audio_transform.segment_file(
         input_path=input_path,
         output_dir=output_dir,
         duration=duration,
@@ -152,12 +125,9 @@ def audio_segment(input_path: str, output_dir: str, duration: float, overlap: fl
         format=format,
         prefix=prefix,
     )
+    batch_result = handle_result(result)
 
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    click.echo(f"Created {result.data.processed} segments in {output_dir}")
+    click.echo(f"Created {batch_result.processed} segments in {output_dir}")
 
 
 @audio.command("trim")
@@ -168,29 +138,22 @@ def audio_segment(input_path: str, output_dir: str, duration: float, overlap: fl
 @click.option("--duration", "-d", default=None, type=float, help="Duration in seconds")
 def audio_trim(input_path: str, output_path: str, start: float, end: float, duration: float) -> None:
     """Trim audio file to specified time range."""
-    from bioamla.repository.local import LocalFileRepository
-    from bioamla.services.audio_transform import AudioTransformService
+    from bioamla.cli.service_helpers import check_result, exit_with_error, services
 
     if end is not None and duration is not None:
-        click.echo("Error: Cannot specify both --end and --duration")
-        raise SystemExit(1)
+        exit_with_error("Cannot specify both --end and --duration")
 
     # Calculate end time from duration if specified
     if duration is not None:
         end = start + duration
 
-    repository = LocalFileRepository()
-    controller = AudioTransformService(file_repository=repository)
-    result = controller.trim_file(
+    result = services.audio_transform.trim_file(
         input_path=input_path,
         output_path=output_path,
         start=start if start != 0.0 else None,
         end=end,
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
+    check_result(result)
 
     click.echo(f"Trimmed audio saved to: {output_path}")
 
@@ -202,20 +165,15 @@ def audio_trim(input_path: str, output_path: str, start: float, end: float, dura
 @click.option("--method", "-m", type=click.Choice(["peak", "rms"]), default="peak", help="Method")
 def audio_normalize(input_path: str, output_path: str, target_db: float, method: str) -> None:
     """Normalize audio amplitude."""
-    from bioamla.repository.local import LocalFileRepository
-    from bioamla.services.audio_transform import AudioTransformService
+    from bioamla.cli.service_helpers import check_result, services
 
-    repository = LocalFileRepository()
-    result = AudioTransformService(file_repository=repository).normalize_file(
+    result = services.audio_transform.normalize_file(
         input_path=input_path,
         output_path=output_path,
         target_db=target_db,
         peak=(method == "peak"),
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
+    check_result(result)
 
     click.echo(f"Normalized audio saved to: {output_path}")
 
@@ -226,19 +184,14 @@ def audio_normalize(input_path: str, output_path: str, target_db: float, method:
 @click.option("--sample-rate", "-r", required=True, type=int, help="Target sample rate in Hz")
 def audio_resample(input_path: str, output_path: str, sample_rate: int) -> None:
     """Resample audio to a different sample rate."""
-    from bioamla.repository.local import LocalFileRepository
-    from bioamla.services.audio_transform import AudioTransformService
+    from bioamla.cli.service_helpers import check_result, services
 
-    repository = LocalFileRepository()
-    result = AudioTransformService(file_repository=repository).resample_file(
+    result = services.audio_transform.resample_file(
         input_path=input_path,
         output_path=output_path,
         target_rate=sample_rate,
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
+    check_result(result)
 
     click.echo(f"Resampled audio saved to: {output_path}")
 
@@ -263,12 +216,10 @@ def audio_visualize(path: str, output: str, viz_type: str, n_fft: int, hop_lengt
     """Generate audio visualization (spectrogram, waveform, MFCC) for a single file."""
     from pathlib import Path
 
-    from bioamla.repository.local import LocalFileRepository
-    from bioamla.services.audio_transform import AudioTransformService
+    from bioamla.cli.service_helpers import check_result, services
 
-    repository = LocalFileRepository()
     output_path = output or f"{Path(path).stem}_{viz_type}.png"
-    result = AudioTransformService(file_repository=repository).visualize_file(
+    result = services.audio_transform.visualize_file(
         input_path=path,
         output_path=output_path,
         viz_type=viz_type,
@@ -279,10 +230,7 @@ def audio_visualize(path: str, output: str, viz_type: str, n_fft: int, hop_lengt
         cmap=cmap,
         dpi=dpi,
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
+    check_result(result)
 
     click.echo(f"Visualization saved to: {output_path}")
 
