@@ -53,9 +53,9 @@ if TYPE_CHECKING:
     from bioamla.services.embedding import EmbeddingService
     from bioamla.services.file import FileService
     from bioamla.services.huggingface import HuggingFaceService
+    from bioamla.services.inaturalist import INaturalistService
     from bioamla.services.indices import IndicesService
     from bioamla.services.inference import InferenceService
-    from bioamla.services.inaturalist import INaturalistService
     from bioamla.services.macaulay import MacaulayService
     from bioamla.services.ribbit import RibbitService
     from bioamla.services.species import SpeciesService
