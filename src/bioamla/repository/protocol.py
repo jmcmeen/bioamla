@@ -1,7 +1,7 @@
 """Abstract protocol for file repository operations."""
 
 from pathlib import Path
-from typing import List, Optional, Protocol, Union
+from typing import List, Protocol, Union
 
 
 class FileRepositoryProtocol(Protocol):
@@ -35,9 +35,7 @@ class FileRepositoryProtocol(Protocol):
         """Write bytes to file."""
         ...
 
-    def write_text(
-        self, path: Union[str, Path], content: str, encoding: str = "utf-8"
-    ) -> None:
+    def write_text(self, path: Union[str, Path], content: str, encoding: str = "utf-8") -> None:
         """Write text to file."""
         ...
 
@@ -71,15 +69,11 @@ class FileRepositoryProtocol(Protocol):
         """Delete a directory."""
         ...
 
-    def copy_file(
-        self, source: Union[str, Path], destination: Union[str, Path]
-    ) -> None:
+    def copy_file(self, source: Union[str, Path], destination: Union[str, Path]) -> None:
         """Copy a file."""
         ...
 
-    def move_file(
-        self, source: Union[str, Path], destination: Union[str, Path]
-    ) -> None:
+    def move_file(self, source: Union[str, Path], destination: Union[str, Path]) -> None:
         """Move/rename a file."""
         ...
 

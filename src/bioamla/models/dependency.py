@@ -1,6 +1,6 @@
 """Dependency tracking and reporting models."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 from bioamla.services.base import ToDictMixin

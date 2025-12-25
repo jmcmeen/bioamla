@@ -1,6 +1,6 @@
 """Acoustic indices models."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from bioamla.services.base import ToDictMixin
