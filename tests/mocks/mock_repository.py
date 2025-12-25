@@ -1,7 +1,7 @@
 """Mock file repository for testing."""
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 
 
 class MockFileRepository:
