@@ -288,10 +288,10 @@ class INaturalistService(BaseService):
         try:
             from pyinaturalist import get_observations
 
-            from bioamla.core.files import sanitize_filename
             from bioamla.core.catalogs.inaturalist import (
                 _download_file,
             )
+            from bioamla.core.files import sanitize_filename
 
             output_path = Path(output_dir)
             output_path.mkdir(parents=True, exist_ok=True)

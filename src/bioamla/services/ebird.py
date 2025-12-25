@@ -20,7 +20,7 @@ Example:
     result = service.get_nearby(lat=40.7, lng=-74.0)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from .base import BaseService, ServiceResult, ToDictMixin

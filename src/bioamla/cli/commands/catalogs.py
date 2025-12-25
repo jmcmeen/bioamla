@@ -11,13 +11,13 @@ Catalogs provide access to external bioacoustic databases and services:
 
 import click
 
-from bioamla.services.file import FileService
-from bioamla.services.xeno_canto import XenoCantoService
-from bioamla.services.macaulay import MacaulayService
-from bioamla.services.species import SpeciesService
 from bioamla.services.ebird import EBirdService
+from bioamla.services.file import FileService
 from bioamla.services.huggingface import HuggingFaceService
 from bioamla.services.inaturalist import INaturalistService
+from bioamla.services.macaulay import MacaulayService
+from bioamla.services.species import SpeciesService
+from bioamla.services.xeno_canto import XenoCantoService
 
 
 @click.group()
@@ -216,7 +216,7 @@ def inat_download(
 
     download_result = result.data
     if not quiet:
-        click.echo(f"\nDownload complete:")
+        click.echo("\nDownload complete:")
         click.echo(f"  Observations: {download_result.total_observations}")
         click.echo(f"  Sounds downloaded: {download_result.total_sounds}")
         if download_result.skipped_existing > 0:

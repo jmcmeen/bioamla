@@ -96,7 +96,7 @@ class FileService(BaseService):
             if not path.exists():
                 return ServiceResult.fail(f"File not found: {path}")
 
-            with open(path, "r", encoding=encoding) as f:
+            with open(path, encoding=encoding) as f:
                 content = f.read()
 
             return ServiceResult.ok(
@@ -159,7 +159,7 @@ class FileService(BaseService):
             if not path.exists():
                 return ServiceResult.fail(f"File not found: {path}")
 
-            with open(path, "r", encoding=encoding) as f:
+            with open(path, encoding=encoding) as f:
                 data = json.load(f)
 
             return ServiceResult.ok(
@@ -272,7 +272,7 @@ class FileService(BaseService):
             if not path.exists():
                 return ServiceResult.fail(f"File not found: {path}")
 
-            with open(path, "r", encoding=encoding, newline="") as f:
+            with open(path, encoding=encoding, newline="") as f:
                 if has_header:
                     reader = csv.DictReader(f)
                     rows = list(reader)

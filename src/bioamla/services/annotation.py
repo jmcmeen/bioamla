@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from bioamla.services.base import BaseService, ServiceResult
 from bioamla.core.audio.annotations import (
     Annotation as CoreAnnotation,
 )
@@ -32,6 +31,7 @@ from bioamla.core.audio.annotations import (
     save_raven_selection_table,
     summarize_annotations,
 )
+from bioamla.services.base import BaseService, ServiceResult
 
 logger = logging.getLogger(__name__)
 

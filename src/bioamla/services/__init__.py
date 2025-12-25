@@ -47,18 +47,30 @@ Usage:
     result = transform_svc.resample_batch("input_dir", "output_dir", 16000)
 """
 
-from .annotation import AnnotationService, AnnotationResult, ClipExtractionResult
+from .annotation import AnnotationResult, AnnotationService, ClipExtractionResult
+from .ast import ASTService
 from .audio_file import AudioData, AudioFileService
 from .audio_transform import (
-    AudioTransformService,
-    AudioMetadata,
-    ProcessedAudio,
     AnalysisResult,
+    AudioMetadata,
+    AudioTransformService,
     BatchResult,
+    ProcessedAudio,
 )
 from .base import BaseService, ServiceResult
+from .birdnet import BirdNETService
 from .clustering import ClusteringService
+from .cnn import CNNService
+from .config import ConfigService
+from .dataset import AugmentResult, DatasetService, LicenseResult, MergeResult
+from .dependency import DependencyInfo, DependencyReport, DependencyService
+from .detection import BatchDetectionResult, DetectionInfo, DetectionResult, DetectionService
+from .ebird import EBirdService
 from .embedding import EmbeddingService
+
+# New services for CLI layer separation
+from .file import FileService
+from .huggingface import HuggingFaceService
 from .inaturalist import (
     DownloadResult as INatDownloadResult,
 )
@@ -73,26 +85,14 @@ from .inaturalist import (
 from .inaturalist import (
     SearchResult as INatSearchResult,
 )
-from .indices import BatchIndicesResult, IndicesService, IndicesResult
+from .indices import BatchIndicesResult, IndicesResult, IndicesService
 from .inference import InferenceService
+from .macaulay import MacaulayService
 from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitService
+from .species import SpeciesService
 
 # Catalog services
 from .xeno_canto import XenoCantoService
-from .macaulay import MacaulayService
-from .species import SpeciesService
-from .ebird import EBirdService
-from .huggingface import HuggingFaceService
-
-# New services for CLI layer separation
-from .file import FileService
-from .config import ConfigService
-from .dependency import DependencyService, DependencyInfo, DependencyReport
-from .detection import DetectionService, DetectionInfo, DetectionResult, BatchDetectionResult
-from .dataset import DatasetService, MergeResult, AugmentResult, LicenseResult
-from .ast import ASTService
-from .cnn import CNNService
-from .birdnet import BirdNETService
 
 __all__ = [
     # Base
