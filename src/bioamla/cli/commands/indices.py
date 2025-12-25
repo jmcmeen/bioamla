@@ -63,7 +63,7 @@ def indices_compute(
     output_dict.update(indices_result.to_dict())
 
     if output:
-        services.file.write_csv_dicts(output, [output_dict], fieldnames=list(output_dict.keys()))
+        services.file.write_json(output, output_dict)
         click.echo(f"Results saved to {output}")
     elif output_format == "json":
         click.echo(json_lib.dumps(output_dict, indent=2))
@@ -118,9 +118,7 @@ def indices_temporal(file: str, segment_duration: float, output: str, n_fft: int
                 "ndsi": window_indices["ndsi"],
             }
             rows.append(row)
-        services.file.write_csv_dicts(
-            output, rows, fieldnames=["segment", "start_time", "aci", "adi", "aei", "bio", "ndsi"]
-        )
+        services.file.write_json(output, rows)
         click.echo(f"Temporal indices saved to {output}")
     else:
         click.echo(f"\n{file} - Temporal indices ({segment_duration}s segments):")
