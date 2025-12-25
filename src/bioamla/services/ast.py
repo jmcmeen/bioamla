@@ -424,6 +424,49 @@ class ASTService(BaseService):
         except Exception as e:
             return ServiceResult.fail(f"Failed to list models: {e}")
 
+    def extract_embeddings(
+        self,
+        filepath: str,
+        model_path: str,
+        layer: Optional[str] = None,
+        sample_rate: int = 16000,
+    ) -> ServiceResult[Dict[str, Any]]:
+        """
+        Extract embeddings from audio using an AST model.
+
+        Args:
+            filepath: Path to audio file
+            model_path: Path to model or HuggingFace identifier
+            layer: Layer to extract embeddings from
+            sample_rate: Target sample rate
+
+        Returns:
+            ServiceResult containing embeddings info
+        """
+        error = self._validate_input_path(filepath)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.ml import ModelConfig, load_model
+
+            config = ModelConfig(sample_rate=sample_rate)
+            model = load_model("ast", model_path, config)
+
+            embeddings = model.extract_embeddings(filepath, layer=layer)
+
+            return ServiceResult.ok(
+                data={
+                    "filepath": filepath,
+                    "shape": embeddings.shape,
+                    "dtype": str(embeddings.dtype),
+                },
+                message=f"Extracted embeddings with shape {embeddings.shape}",
+                embeddings=embeddings,
+            )
+        except Exception as e:
+            return ServiceResult.fail(f"Embedding extraction failed: {e}")
+
     def get_model_info(
         self,
         model_path: str,
