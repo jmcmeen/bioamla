@@ -167,7 +167,7 @@ class EmbeddingExtractor:
         self._model = None
         self._reducer = None
 
-    def _get_model(self):
+    def _get_model(self) -> Any:
         """Lazy load the model."""
         if self._model is not None:
             return self._model

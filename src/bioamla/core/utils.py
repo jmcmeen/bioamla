@@ -11,7 +11,7 @@ These utilities are re-exported from specialized packages:
 """
 
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 # Re-export from files package
 from bioamla.core.files import (
@@ -46,7 +46,7 @@ def get_audio_files(
     return get_files_by_extension(directory, extensions, recursive)
 
 
-def get_wav_metadata(filepath: str) -> dict:
+def get_wav_metadata(filepath: str) -> Dict[str, Any]:
     """
     Get metadata from a WAV file.
 

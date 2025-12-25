@@ -74,7 +74,7 @@ class AnnotationService(BaseService):
         annotations = result.data.annotations
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize AnnotationService."""
         super().__init__()
         self._annotations: List[CoreAnnotation] = []

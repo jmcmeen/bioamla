@@ -7,7 +7,7 @@ import logging
 import threading
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 
@@ -59,7 +59,7 @@ class AudioPlayer:
         Requires sounddevice to be installed: pip install sounddevice
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the audio player."""
         self._audio: Optional[np.ndarray] = None
         self._sample_rate: int = 44100
@@ -251,7 +251,7 @@ class AudioPlayer:
             # Clamp to valid range
             self._position = max(0, min(new_position, len(self._audio)))
 
-    def _audio_callback(self, outdata, frames, time_info, status):
+    def _audio_callback(self, outdata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
         """Callback for sounddevice output stream."""
         import sounddevice as sd
 
@@ -321,7 +321,7 @@ class AudioPlayer:
             except Exception as e:
                 logger.warning(f"Position callback error: {e}")
 
-    def _finished_callback(self):
+    def _finished_callback(self) -> None:
         """Callback when playback completes."""
         with self._lock:
             if not self._loop:

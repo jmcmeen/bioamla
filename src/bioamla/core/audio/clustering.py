@@ -159,7 +159,7 @@ class IncrementalReducer:
     Fits on initial data and can transform new points without refitting.
     """
 
-    def __init__(self, method: str = "umap", n_components: int = 2, **kwargs):
+    def __init__(self, method: str = "umap", n_components: int = 2, **kwargs: Any) -> None:
         """
         Initialize incremental reducer.
 
@@ -297,7 +297,7 @@ class AudioClusterer:
             # Fall back to nearest cluster center
             return self._predict_nearest(embeddings)
 
-    def _create_clusterer(self):
+    def _create_clusterer(self) -> None:
         """Create the clustering algorithm."""
         if self.config.method == "hdbscan":
             try:

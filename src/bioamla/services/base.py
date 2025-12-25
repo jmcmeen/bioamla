@@ -173,7 +173,7 @@ class BaseService:
     - Error handling and result formatting
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the service."""
         self._progress_callback: Optional[ProgressCallback] = None
 

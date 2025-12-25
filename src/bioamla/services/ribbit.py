@@ -49,7 +49,7 @@ class RibbitService(BaseService):
     - Result export to CSV/JSON
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize RIBBIT controller."""
         super().__init__()
         self._detector = None
@@ -59,7 +59,7 @@ class RibbitService(BaseService):
         self,
         preset: Optional[str] = None,
         profile: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> "RibbitDetector":
         """Get or create detector with specified profile."""
         from bioamla.core.audio.ribbit import RibbitDetector, RibbitProfile
 

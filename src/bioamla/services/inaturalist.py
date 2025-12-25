@@ -86,7 +86,7 @@ class INaturalistService(BaseService):
     - Getting project statistics
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize iNaturalist service."""
         super().__init__()
         self._download_callback: Optional[Callable[[int, int, str], None]] = None

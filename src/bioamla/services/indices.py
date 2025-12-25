@@ -104,7 +104,7 @@ class IndicesService(BaseService):
     DEFAULT_BIO_MAX_FREQ = 8000.0
     DEFAULT_DB_THRESHOLD = -50.0
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     # =========================================================================

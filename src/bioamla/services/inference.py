@@ -55,7 +55,7 @@ class InferenceService(BaseService):
     - Model information and listing
     """
 
-    def __init__(self, model_path: Optional[str] = None):
+    def __init__(self, model_path: Optional[str] = None) -> None:
         """
         Initialize inference service.
 
@@ -66,7 +66,7 @@ class InferenceService(BaseService):
         self._model_path = model_path
         self._model = None
 
-    def _get_model(self, model_path: Optional[str] = None):
+    def _get_model(self, model_path: Optional[str] = None) -> "ASTInference":
         """Lazy load the model."""
         path = model_path or self._model_path
         if path is None:

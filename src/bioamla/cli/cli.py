@@ -45,7 +45,7 @@ cli.add_command(catalogs)
 
 # Top-level convenience commands
 @cli.command("devices")
-def devices():
+def devices() -> None:
     """List available compute devices (GPU/CPU)."""
     from bioamla.services.util import UtilityService
 
@@ -69,7 +69,7 @@ def devices():
 
 
 @cli.command("version")
-def version():
+def version() -> None:
     """Show version information."""
     from bioamla.services.util import UtilityService
 

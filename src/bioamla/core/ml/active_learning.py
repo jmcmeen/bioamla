@@ -81,10 +81,10 @@ class ActiveLearningSample:
     probabilities: Optional[np.ndarray] = None
     uncertainty_score: Optional[float] = None
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.id)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, ActiveLearningSample):
             return self.id == other.id
         return False
@@ -142,7 +142,7 @@ class AnnotationRecord:
     confidence: Optional[float] = None
     notes: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.timestamp is None:
             self.timestamp = datetime.now()
 
@@ -266,7 +266,7 @@ class UncertaintySampler(SamplingStrategy):
         - "entropy": -sum(p * log(p)), Shannon entropy
     """
 
-    def __init__(self, strategy: str = "entropy"):
+    def __init__(self, strategy: str = "entropy") -> None:
         """
         Initialize uncertainty sampler.
 
@@ -317,7 +317,7 @@ class DiversitySampler(SamplingStrategy):
     Uses k-medoids or greedy farthest-first traversal.
     """
 
-    def __init__(self, method: str = "greedy"):
+    def __init__(self, method: str = "greedy") -> None:
         """
         Initialize diversity sampler.
 
@@ -423,7 +423,7 @@ class HybridSampler(SamplingStrategy):
         uncertainty_strategy: str = "entropy",
         diversity_method: str = "greedy",
         uncertainty_ratio: float = 0.5,
-    ):
+    ) -> None:
         """
         Initialize hybrid sampler.
 
@@ -474,7 +474,7 @@ class HybridSampler(SamplingStrategy):
 class RandomSampler(SamplingStrategy):
     """Random sampling strategy (baseline)."""
 
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = None) -> None:
         """Initialize random sampler with optional seed."""
         self.rng = np.random.default_rng(seed)
 
@@ -491,7 +491,7 @@ class QueryByCommittee(SamplingStrategy):
     informative samples.
     """
 
-    def __init__(self, disagreement_measure: str = "vote_entropy"):
+    def __init__(self, disagreement_measure: str = "vote_entropy") -> None:
         """
         Initialize QBC sampler.
 
@@ -564,7 +564,7 @@ class BalancedSampler(SamplingStrategy):
     balanced training data.
     """
 
-    def __init__(self, class_counts: Optional[Dict[str, int]] = None):
+    def __init__(self, class_counts: Optional[Dict[str, int]] = None) -> None:
         """
         Initialize balanced sampler.
 
@@ -623,7 +623,7 @@ class ActiveLearner:
             Callable[[List[ActiveLearningSample]], List[ActiveLearningSample]]
         ] = None,
         state: Optional[ActiveLearningState] = None,
-    ):
+    ) -> None:
         """
         Initialize active learner.
 
@@ -1056,7 +1056,7 @@ class SimulatedOracle(Oracle):
         ground_truth: Dict[str, str],
         noise_rate: float = 0.0,
         labels: Optional[List[str]] = None,
-    ):
+    ) -> None:
         """
         Initialize simulated oracle.
 
@@ -1089,7 +1089,7 @@ class SimulatedOracle(Oracle):
 class CallbackOracle(Oracle):
     """Oracle that uses a callback function for annotation."""
 
-    def __init__(self, callback: Callable[[ActiveLearningSample], str]):
+    def __init__(self, callback: Callable[[ActiveLearningSample], str]) -> None:
         """
         Initialize callback oracle.
 

@@ -43,7 +43,7 @@ class VersionData(ToDictMixin):
 class UtilityService(BaseService):
     """Service for system information and utility operations."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     def get_devices(self) -> ServiceResult[DevicesData]:

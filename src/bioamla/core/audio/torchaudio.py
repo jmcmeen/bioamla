@@ -12,6 +12,7 @@ bioamla package for preparing audio data for model training and inference.
 
 import io
 
+import numpy as np
 import torch
 import torchaudio
 from torchaudio.transforms import Resample
@@ -20,7 +21,7 @@ from bioamla.core.ml.config import DefaultConfig
 from bioamla.core.utils import get_files_by_extension
 
 
-def get_wav_info(filepath: str):
+def get_wav_info(filepath: str) -> torchaudio.AudioMetaData:
     """
     Get metadata information about a WAV audio file.
 
@@ -47,7 +48,7 @@ def get_wav_files(directory: str) -> list:
     return get_files_by_extension(directory, [".wav"])
 
 
-def get_wavefile_shape(wavefile_path: str):
+def get_wavefile_shape(wavefile_path: str) -> torch.Size:
     """
     Get the shape (dimensions) of an audio waveform.
 
@@ -61,7 +62,7 @@ def get_wavefile_shape(wavefile_path: str):
     return waveform.shape
 
 
-def get_wavefile_sample_rate(wavefile_path: str):
+def get_wavefile_sample_rate(wavefile_path: str) -> int:
     """
     Get the sample rate of an audio file.
 
@@ -75,7 +76,7 @@ def get_wavefile_sample_rate(wavefile_path: str):
     return sample_rate
 
 
-def load_waveform_tensor(filepath: str):
+def load_waveform_tensor(filepath: str) -> tuple[torch.Tensor, int]:
     """
     Load an audio file as a waveform tensor.
 
@@ -93,7 +94,7 @@ def load_waveform_tensor(filepath: str):
 
 def split_waveform_tensor(
     waveform_tensor: torch.Tensor, freq: int, segment_duration: int, segment_overlap: int
-):
+) -> list[tuple[torch.Tensor, int, int]]:
     """
     Split a waveform tensor into overlapping segments.
 
@@ -122,7 +123,7 @@ def split_waveform_tensor(
     return segments
 
 
-def resample_waveform_tensor(waveform_tensor: torch.Tensor, orig_freq: int, new_freq: int):
+def resample_waveform_tensor(waveform_tensor: torch.Tensor, orig_freq: int, new_freq: int) -> torch.Tensor:
     """
     Resample a waveform tensor to a different sample rate.
 
@@ -139,7 +140,7 @@ def resample_waveform_tensor(waveform_tensor: torch.Tensor, orig_freq: int, new_
     return waveform_tensor
 
 
-def load_audio_from_bytes(audio_bytes: bytes, target_sr: int = DefaultConfig.SAMPLE_RATE):
+def load_audio_from_bytes(audio_bytes: bytes, target_sr: int = DefaultConfig.SAMPLE_RATE) -> tuple[np.ndarray, int]:
     """
     Load audio data from bytes and preprocess for model input.
 

@@ -43,7 +43,7 @@ class SpeciesService(BaseService):
     - Managing species cache
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize species service."""
         super().__init__()
 

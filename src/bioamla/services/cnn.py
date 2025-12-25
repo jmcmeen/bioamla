@@ -51,7 +51,7 @@ class CNNService(BaseService):
     Provides ServiceResult-wrapped methods for CNN model operations.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._model = None
         self._model_path = None

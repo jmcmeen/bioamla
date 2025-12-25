@@ -64,7 +64,7 @@ class ClusteringService(BaseService):
     - Cluster export
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize clustering service."""
         super().__init__()
         self._clusterer = None

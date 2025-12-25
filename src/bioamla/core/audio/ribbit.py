@@ -228,7 +228,7 @@ class RibbitDetector:
         result = detector.detect("audio.wav")
     """
 
-    def __init__(self, profile: RibbitProfile):
+    def __init__(self, profile: RibbitProfile) -> None:
         """
         Initialize RIBBIT detector.
 
@@ -260,7 +260,7 @@ class RibbitDetector:
             raise ValueError(f"Unknown preset: {preset_name}. Available: {available}")
         return cls(profiles[preset_name])
 
-    def _get_ribbit(self):
+    def _get_ribbit(self) -> Any:
         """Lazy-load OpenSoundscape RIBBIT."""
         if self._ribbit is not None:
             return self._ribbit
