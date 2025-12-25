@@ -53,6 +53,9 @@ def get_factory() -> ServiceFactory:
     """
     Get the singleton ServiceFactory instance for CLI.
 
+    This is lazily initialized on first access. For testing or custom
+    configurations, use set_factory() to inject a custom instance.
+
     Returns:
         ServiceFactory: The singleton factory instance with LocalFileRepository
     """
@@ -62,8 +65,178 @@ def get_factory() -> ServiceFactory:
     return _factory
 
 
-# Convenient alias for CLI commands
-services = get_factory()
+def set_factory(factory: ServiceFactory) -> None:
+    """
+    Set a custom ServiceFactory instance.
+
+    This is primarily useful for testing or when you need to inject
+    a custom file repository (e.g., S3Repository for cloud environments).
+
+    Args:
+        factory: Custom ServiceFactory instance to use
+
+    Example:
+        # In tests
+        from bioamla.repository.mock import MockFileRepository
+        mock_repo = MockFileRepository()
+        custom_factory = ServiceFactory(file_repository=mock_repo)
+        set_factory(custom_factory)
+    """
+    global _factory
+    _factory = factory
+
+
+class _ServiceAccessor:
+    """
+    Lazy accessor for services that provides type hints and autocomplete.
+
+    This class provides property-based access to all services while maintaining
+    type safety and IDE support. Services are accessed through the singleton
+    factory, which is only created when first accessed.
+    """
+
+    @property
+    def audio_file(self):
+        """Get AudioFileService instance."""
+        from bioamla.services import AudioFileService
+        return get_factory().audio_file
+
+    @property
+    def audio_transform(self):
+        """Get AudioTransformService instance."""
+        from bioamla.services import AudioTransformService
+        return get_factory().audio_transform
+
+    @property
+    def file(self):
+        """Get FileService instance."""
+        from bioamla.services import FileService
+        return get_factory().file
+
+    @property
+    def dataset(self):
+        """Get DatasetService instance."""
+        from bioamla.services import DatasetService
+        return get_factory().dataset
+
+    @property
+    def annotation(self):
+        """Get AnnotationService instance."""
+        from bioamla.services import AnnotationService
+        return get_factory().annotation
+
+    @property
+    def detection(self):
+        """Get DetectionService instance."""
+        from bioamla.services import DetectionService
+        return get_factory().detection
+
+    @property
+    def indices(self):
+        """Get IndicesService instance."""
+        from bioamla.services import IndicesService
+        return get_factory().indices
+
+    @property
+    def ribbit(self):
+        """Get RibbitService instance."""
+        from bioamla.services import RibbitService
+        return get_factory().ribbit
+
+    @property
+    def embedding(self):
+        """Get EmbeddingService instance."""
+        from bioamla.services import EmbeddingService
+        return get_factory().embedding
+
+    @property
+    def inference(self):
+        """Get InferenceService instance."""
+        from bioamla.services import InferenceService
+        return get_factory().inference
+
+    @property
+    def ast(self):
+        """Get ASTService instance."""
+        from bioamla.services import ASTService
+        return get_factory().ast
+
+    @property
+    def clustering(self):
+        """Get ClusteringService instance."""
+        from bioamla.services import ClusteringService
+        return get_factory().clustering
+
+    @property
+    def config(self):
+        """Get ConfigService instance."""
+        from bioamla.services import ConfigService
+        return get_factory().config
+
+    @property
+    def inaturalist(self):
+        """Get INaturalistService instance."""
+        from bioamla.services import INaturalistService
+        return get_factory().inaturalist
+
+    @property
+    def xeno_canto(self):
+        """Get XenoCantoService instance."""
+        from bioamla.services import XenoCantoService
+        return get_factory().xeno_canto
+
+    @property
+    def macaulay(self):
+        """Get MacaulayService instance."""
+        from bioamla.services import MacaulayService
+        return get_factory().macaulay
+
+    @property
+    def ebird(self):
+        """Get EBirdService instance."""
+        from bioamla.services import EBirdService
+        return get_factory().ebird
+
+    @property
+    def species(self):
+        """Get SpeciesService instance."""
+        from bioamla.services import SpeciesService
+        return get_factory().species
+
+    @property
+    def huggingface(self):
+        """Get HuggingFaceService instance."""
+        from bioamla.services import HuggingFaceService
+        return get_factory().huggingface
+
+    @property
+    def dependency(self):
+        """Get DependencyService instance."""
+        from bioamla.services import DependencyService
+        return get_factory().dependency
+
+    # Add batch services
+    @property
+    def batch_audio_transform(self):
+        """Get BatchAudioTransformService instance."""
+        from bioamla.services import BatchAudioTransformService
+        return get_factory().batch_audio_transform
+
+    @property
+    def batch_detection(self):
+        """Get BatchDetectionService instance."""
+        from bioamla.services import BatchDetectionService
+        return get_factory().batch_detection
+
+    @property
+    def batch_indices(self):
+        """Get BatchIndicesService instance."""
+        from bioamla.services import BatchIndicesService
+        return get_factory().batch_indices
+
+
+# Lazy service accessor - factory only created when services are actually accessed
+services = _ServiceAccessor()
 
 
 # ============================================================================
@@ -158,6 +331,7 @@ def reset_factory() -> None:
 __all__ = [
     "services",
     "get_factory",
+    "set_factory",
     "handle_result",
     "exit_with_error",
     "check_result",

@@ -1,38 +1,32 @@
-"""ML model operations (predict, embed, train, convert)."""
+"""ML model operations - AST (Audio Spectrogram Transformer) only."""
 
 from typing import Dict
 
 import click
 
-from bioamla.repository.local import LocalFileRepository
-from bioamla.services.ast import ASTService
-from bioamla.services.birdnet import BirdNETService
-from bioamla.services.cnn import CNNService
-from bioamla.services.file import FileService
-
 
 @click.group()
 def models() -> None:
-    """ML model operations (predict, embed, train, convert)."""
+    """ML model operations - AST (Audio Spectrogram Transformer) only."""
     pass
 
 
 # Subgroups for models
 @models.group()
 def predict() -> None:
-    """Run inference with ML models."""
+    """Run AST inference."""
     pass
 
 
 @models.group()
 def train() -> None:
-    """Train ML models."""
+    """Train AST models."""
     pass
 
 
 @models.group()
 def evaluate() -> None:
-    """Evaluate ML models."""
+    """Evaluate AST models."""
     pass
 
 
@@ -42,159 +36,27 @@ def evaluate() -> None:
 
 
 @predict.command("ast")
-@click.argument("path")
+@click.argument("file", type=click.Path(exists=True))
 @click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for inference")
 @click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
-@click.option(
-    "--batch", is_flag=True, default=False, help="Run batch inference on a directory of audio files"
-)
-@click.option("--output-csv", default="output.csv", help="Output CSV file name (batch mode only)")
-@click.option(
-    "--segment-duration",
-    default=1,
-    type=int,
-    help="Duration of audio segments in seconds (batch mode only)",
-)
-@click.option(
-    "--segment-overlap",
-    default=0,
-    type=int,
-    help="Overlap between segments in seconds (batch mode only)",
-)
-@click.option(
-    "--restart/--no-restart",
-    default=False,
-    help="Whether to restart from existing results (batch mode only)",
-)
-@click.option(
-    "--batch-size",
-    default=8,
-    type=int,
-    help="Number of segments to process in parallel (default: 8, batch mode only)",
-)
-@click.option(
-    "--fp16/--no-fp16",
-    default=False,
-    help="Use half-precision (FP16) for faster GPU inference (batch mode only)",
-)
-@click.option(
-    "--compile/--no-compile",
-    default=False,
-    help="Use torch.compile() for optimized inference (PyTorch 2.0+, batch mode only)",
-)
-@click.option(
-    "--workers",
-    default=1,
-    type=int,
-    help="Number of parallel workers for file loading (default: 1, batch mode only)",
-)
 def ast_predict(
-    path: str,
+    file: str,
     model_path: str,
     resample_freq: int,
-    batch: bool,
-    output_csv: str,
-    segment_duration: int,
-    segment_overlap: int,
-    restart: bool,
-    batch_size: int,
-    fp16: bool,
-    compile: bool,
-    workers: int,
 ) -> None:
     """
-    Perform prediction on audio file(s).
+    Perform AST prediction on a single audio file.
 
-    PATH can be a single audio file or a directory (with --batch flag).
-
-    Single file mode (default):
-        bioamla models ast-predict audio.wav --model-path my_model
-
-    Batch mode (--batch):
-        bioamla models ast-predict ./audio_dir --batch --model-path my_model
-
-        Processes all WAV files in the specified directory and saves predictions
-        to a CSV file. Supports resumable operations.
+    Example:
+        bioamla models predict ast audio.wav --model-path my_model
     """
-    if batch:
-        _run_batch_inference(
-            directory=path,
-            output_csv=output_csv,
-            model_path=model_path,
-            resample_freq=resample_freq,
-            segment_duration=segment_duration,
-            segment_overlap=segment_overlap,
-            restart=restart,
-            batch_size=batch_size,
-            fp16=fp16,
-            compile=compile,
-            workers=workers,
-        )
-    else:
-        from bioamla.services.inference import InferenceService
+    from bioamla.cli.service_helpers import handle_result, services
 
-        service = InferenceService(model_path=model_path)
-        result = service.predict(filepath=path)
+    result = services.inference.predict(filepath=file, model_path=model_path)
+    predictions = handle_result(result)
 
-        if not result.success:
-            click.echo(f"Error: {result.error}")
-            raise SystemExit(1)
-
-        for pred in result.data:
-            click.echo(f"{pred.predicted_label} ({pred.confidence:.4f})")
-
-
-def _run_batch_inference(
-    directory: str,
-    output_csv: str,
-    model_path: str,
-    resample_freq: int,
-    segment_duration: int,
-    segment_overlap: int,
-    restart: bool,
-    batch_size: int,
-    fp16: bool,
-    compile: bool,
-    workers: int,
-) -> None:
-    """Run batch inference on a directory of audio files."""
-    import os
-
-    output_csv = os.path.join(directory, output_csv)
-
-    print("Output csv: " + output_csv)
-    print("Loading model: " + model_path)
-    print(
-        f"Performance options: batch_size={batch_size}, fp16={fp16}, compile={compile}, workers={workers}"
-    )
-
-    repository = LocalFileRepository()
-
-
-    ast_svc = ASTService(file_repository=repository)
-    result = ast_svc.predict_batch(
-        directory=directory,
-        model_path=model_path,
-        output_csv=output_csv,
-        resample_freq=resample_freq,
-        segment_duration=segment_duration,
-        segment_overlap=segment_overlap,
-        batch_size=batch_size,
-        fp16=fp16,
-        use_compile=compile,
-        workers=workers,
-        restart=restart,
-    )
-
-    if not result.success:
-        print(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    print(result.message)
-    data = result.data
-    elapsed = data.elapsed_seconds
-    if elapsed > 0 and data.total_files > 0:
-        print(f"Elapsed time: {elapsed:.2f}s ({data.total_files / elapsed:.2f} files/sec)")
+    for pred in predictions:
+        click.echo(f"{pred.predicted_label} ({pred.confidence:.4f})")
 
 
 @train.command("ast")
@@ -315,6 +177,8 @@ def ast_train(
         Trainer,
         TrainingArguments,
     )
+
+    from bioamla.cli.service_helpers import services
 
     output_dir = training_dir + "/runs"
     logging_dir = training_dir + "/logs"
@@ -609,16 +473,12 @@ def ast_train(
 
     trainer.train()
 
-    repository = LocalFileRepository()
-
-
-    file_svc = FileService(file_repository=repository)
-    file_svc.ensure_directory(best_model_path)
+    services.file.ensure_directory(best_model_path)
     trainer.save_model(best_model_path)
 
 
 @evaluate.command("ast")
-@click.argument("path")
+@click.argument("path", type=click.Path(exists=True))
 @click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for evaluation")
 @click.option(
     "--ground-truth", "-g", required=True, help="Path to CSV file with ground truth labels"
@@ -655,6 +515,8 @@ def ast_evaluate(
     """Evaluate an AST model on a directory of audio files."""
     from pathlib import Path as PathLib
 
+    from bioamla.cli.service_helpers import handle_result, services
+
     path_obj = PathLib(path)
     if not path_obj.exists():
         click.echo(f"Error: Path not found: {path}")
@@ -665,11 +527,7 @@ def ast_evaluate(
         click.echo(f"Error: Ground truth file not found: {ground_truth}")
         raise SystemExit(1)
 
-    repository = LocalFileRepository()
-
-
-    ast_svc = ASTService(file_repository=repository)
-    result = ast_svc.evaluate(
+    result = services.ast.evaluate(
         audio_dir=path,
         model_path=model_path,
         ground_truth_csv=ground_truth,
@@ -679,12 +537,8 @@ def ast_evaluate(
         batch_size=batch_size,
         fp16=fp16,
     )
+    eval_result = handle_result(result)
 
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    eval_result = result.data
     if not quiet:
         click.echo("\nEvaluation Results:")
         click.echo("-" * 40)
@@ -695,443 +549,55 @@ def ast_evaluate(
     click.echo(f"Total Samples: {eval_result.total_samples}")
 
     if output:
-        repository = LocalFileRepository()
-
-        file_svc = FileService(file_repository=repository)
         if output_format == "json":
-            file_svc.write_json(output, eval_result.to_dict())
+            services.file.write_json(output, eval_result.to_dict())
         else:
-            file_svc.write_text(output, str(eval_result.to_dict()))
+            services.file.write_text(output, str(eval_result.to_dict()))
         click.echo(f"Results saved to: {output}")
 
 
-@models.command("list")
-def models_list() -> None:
-    """List available model types."""
-    click.echo("Available model types:")
-    click.echo("  - ast (Audio Spectrogram Transformer)")
-    click.echo("  - birdnet (BirdNET)")
-    click.echo("  - opensoundscape (OpenSoundscape CNN)")
-
-
-@predict.command("generic")
-@click.argument("path")
-@click.option(
-    "--model-type",
-    type=click.Choice(["ast", "birdnet", "opensoundscape"]),
-    default="ast",
-    help="Model type to use",
-)
-@click.option("--model-path", required=True, help="Path to model or HuggingFace identifier")
-@click.option("--output", "-o", default=None, help="Output CSV file")
-@click.option("--batch", is_flag=True, help="Process all files in directory")
-@click.option("--min-confidence", default=0.0, type=float, help="Minimum confidence threshold")
-@click.option("--top-k", default=1, type=int, help="Number of top predictions per segment")
-@click.option("--clip-duration", default=3.0, type=float, help="Clip duration in seconds")
-@click.option("--overlap", default=0.0, type=float, help="Overlap between clips in seconds")
-@click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
-@click.option("--batch-size", default=8, type=int, help="Batch size for processing")
-@click.option("--fp16/--no-fp16", default=False, help="Use half-precision inference")
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
-def predict_generic(
-    path: str,
-    model_type: str,
-    model_path: str,
-    output: str,
-    batch: bool,
-    min_confidence: float,
-    top_k: int,
-    clip_duration: float,
-    overlap: float,
-    sample_rate: int,
-    batch_size: int,
-    fp16: bool,
-    quiet: bool,
-) -> None:
-    """Run predictions using an ML model (multi-model interface)."""
-    from pathlib import Path as PathLib
-
-    # Select the appropriate service based on model type
-    if model_type == "ast":
-        repository = LocalFileRepository()
-
-        svc = ASTService(file_repository=repository)
-    elif model_type == "birdnet":
-        repository = LocalFileRepository()
-
-        svc = BirdNETService(file_repository=repository)
-    else:
-        repository = LocalFileRepository()
-
-        svc = CNNService(file_repository=repository)
-
-    if not quiet:
-        click.echo(f"Loading {model_type} model from {model_path}...")
-
-    if batch:
-        path_obj = PathLib(path)
-        if not path_obj.is_dir():
-            click.echo(f"Error: {path} is not a directory")
-            raise SystemExit(1)
-
-        result = svc.predict_batch(
-            directory=path,
-            model_path=model_path,
-            output_csv=output,
-            sample_rate=sample_rate,
-            clip_duration=clip_duration,
-            overlap=overlap,
-            min_confidence=min_confidence,
-            batch_size=batch_size,
-            fp16=fp16,
-        )
-
-        if not result.success:
-            click.echo(f"Error: {result.error}")
-            raise SystemExit(1)
-
-        if not quiet:
-            click.echo(result.message)
-            if output:
-                click.echo(f"Results saved to {output}")
-    else:
-        if not PathLib(path).exists():
-            click.echo(f"Error: File not found: {path}")
-            raise SystemExit(1)
-
-        result = svc.predict(
-            filepath=path,
-            model_path=model_path,
-            sample_rate=sample_rate,
-            clip_duration=clip_duration,
-            overlap=overlap,
-            min_confidence=min_confidence,
-            top_k=top_k,
-        )
-
-        if not result.success:
-            click.echo(f"Error: {result.error}")
-            raise SystemExit(1)
-
-        predictions = result.data
-
-        if output:
-            repository = LocalFileRepository()
-
-            file_svc = FileService(file_repository=repository)
-            rows = [
-                {
-                    "filepath": r.filepath,
-                    "start_time": f"{r.start_time:.3f}" if r.start_time else "",
-                    "end_time": f"{r.end_time:.3f}" if r.end_time else "",
-                    "label": r.label,
-                    "confidence": f"{r.confidence:.4f}",
-                }
-                for r in predictions
-            ]
-            file_svc.write_csv_dicts(output, rows)
-            click.echo(f"Results saved to {output}")
-        else:
-            for r in predictions:
-                if r.start_time is not None and r.end_time is not None:
-                    click.echo(f"{r.start_time:.2f}-{r.end_time:.2f}s: {r.label} ({r.confidence:.3f})")
-                else:
-                    click.echo(f"{r.label} ({r.confidence:.3f})")
-
-
 @models.command("embed")
-@click.argument("path")
-@click.option(
-    "--model-type",
-    type=click.Choice(["ast", "birdnet", "opensoundscape"]),
-    default="ast",
-    help="Model type to use",
-)
-@click.option("--model-path", required=True, help="Path to model or HuggingFace identifier")
-@click.option("--output", "-o", required=True, help="Output file (.npy or .npz)")
-@click.option("--batch", is_flag=True, help="Process all files in directory")
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--model-path", required=True, help="Path to AST model or HuggingFace identifier")
+@click.option("--output", "-o", required=True, help="Output file (.npy)")
 @click.option("--layer", default=None, help="Layer to extract embeddings from")
 @click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
-def models_embed(path: str, model_type: str, model_path: str, output: str, batch: bool, layer: str, sample_rate: int, quiet: bool) -> None:
-    """Extract embeddings from audio using an ML model."""
-    from pathlib import Path as PathLib
-
+def models_embed(
+    file: str, model_path: str, output: str, layer: str, sample_rate: int
+) -> None:
+    """Extract embeddings from audio using AST model (single file)."""
     import numpy as np
 
-    # Select the appropriate service based on model type
-    if model_type == "ast":
-        repository = LocalFileRepository()
+    from bioamla.cli.service_helpers import handle_result, services
 
-        svc = ASTService(file_repository=repository)
-    elif model_type == "birdnet":
-        repository = LocalFileRepository()
+    click.echo(f"Loading AST model from {model_path}...")
 
-        svc = BirdNETService(file_repository=repository)
-    else:
-        repository = LocalFileRepository()
+    result = services.ast.extract_embeddings(
+        filepath=file,
+        model_path=model_path,
+        layer=layer,
+        sample_rate=sample_rate,
+    )
+    embeddings = handle_result(result)
 
-        svc = CNNService(file_repository=repository)
-
-    if not quiet:
-        click.echo(f"Loading {model_type} model from {model_path}...")
-
-    repository = LocalFileRepository()
-
-
-    file_svc = FileService(file_repository=repository)
-
-    if batch:
-        path_obj = PathLib(path)
-        if not path_obj.is_dir():
-            click.echo(f"Error: {path} is not a directory")
-            raise SystemExit(1)
-
-        # Get audio files from directory
-        audio_extensions = [".wav", ".mp3", ".flac", ".ogg", ".m4a"]
-        audio_files = []
-        for ext in audio_extensions:
-            audio_files.extend(path_obj.rglob(f"*{ext}"))
-        audio_files = [str(f) for f in sorted(audio_files)]
-
-        if not audio_files:
-            click.echo("No audio files found")
-            raise SystemExit(1)
-
-        if not quiet:
-            click.echo(f"Extracting embeddings from {len(audio_files)} files...")
-
-        embeddings_list = []
-        filepaths_list = []
-        for i, filepath in enumerate(audio_files):
-            result = svc.extract_embeddings(
-                filepath=filepath,
-                model_path=model_path,
-                layer=layer,
-                sample_rate=sample_rate,
-            )
-
-            if result.success:
-                emb = result.embeddings
-                if emb.ndim > 1:
-                    emb = emb.mean(axis=0) if emb.shape[0] > 1 else emb.squeeze()
-                embeddings_list.append(emb)
-                filepaths_list.append(filepath)
-                if not quiet:
-                    click.echo(f"[{i + 1}/{len(audio_files)}] {filepath}: shape {emb.shape}")
-            else:
-                if not quiet:
-                    click.echo(f"[{i + 1}/{len(audio_files)}] Error: {filepath} - {result.error}")
-
-        if embeddings_list:
-            embeddings = np.vstack(embeddings_list)
-            np.save(output, embeddings)
-
-            filepaths_output = str(output).replace(".npy", "_filepaths.txt")
-            file_svc.write_text(filepaths_output, "\n".join(filepaths_list))
-
-            if not quiet:
-                click.echo(f"\nEmbeddings saved to {output}")
-                click.echo(f"Filepaths saved to {filepaths_output}")
-        else:
-            click.echo("No embeddings extracted")
-            raise SystemExit(1)
-    else:
-        if not PathLib(path).exists():
-            click.echo(f"Error: File not found: {path}")
-            raise SystemExit(1)
-
-        result = svc.extract_embeddings(
-            filepath=path,
-            model_path=model_path,
-            layer=layer,
-            sample_rate=sample_rate,
-        )
-
-        if not result.success:
-            click.echo(f"Error: {result.error}")
-            raise SystemExit(1)
-
-        embeddings = result.embeddings
-        np.save(output, embeddings)
-        click.echo(f"Embeddings saved to {output} (shape: {embeddings.shape})")
-
-
-@train.command("cnn")
-@click.argument("data_dir")
-@click.option("--output", "-o", required=True, help="Output directory for model")
-@click.option(
-    "--model",
-    "-m",
-    type=click.Choice(["cnn", "crnn", "attention"]),
-    default="cnn",
-    help="Model architecture",
-)
-@click.option("--epochs", "-e", type=int, default=50, help="Number of epochs")
-@click.option("--batch-size", "-b", type=int, default=32, help="Batch size")
-@click.option("--lr", type=float, default=1e-3, help="Learning rate")
-@click.option("--n-classes", "-n", type=int, required=True, help="Number of classes")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
-def train_cnn(
-    data_dir: str,
-    output: str,
-    model: str,
-    epochs: int,
-    batch_size: int,
-    lr: float,
-    n_classes: int,
-    quiet: bool,
-) -> None:
-    """Train a CNN-based spectrogram classifier."""
-    click.echo(f"Training {model.upper()} classifier with {n_classes} classes...")
-    click.echo(f"  Data: {data_dir}")
-    click.echo(f"  Epochs: {epochs}, Batch Size: {batch_size}, LR: {lr}")
-    click.echo("Note: This command requires properly formatted training data.")
-    click.echo(f"Model will be saved to: {output}")
-
-
-@train.command("spec")
-@click.argument("data_dir")
-@click.option("--output", "-o", required=True, help="Output directory for model")
-@click.option(
-    "--model",
-    "-m",
-    type=click.Choice(["cnn", "crnn", "attention"]),
-    default="cnn",
-    help="Model architecture",
-)
-@click.option("--epochs", "-e", type=int, default=50, help="Number of epochs")
-@click.option("--batch-size", "-b", type=int, default=32, help="Batch size")
-@click.option("--lr", type=float, default=1e-3, help="Learning rate")
-@click.option("--n-classes", "-n", type=int, required=True, help="Number of classes")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress output")
-def train_spec(
-    data_dir: str,
-    output: str,
-    model: str,
-    epochs: int,
-    batch_size: int,
-    lr: float,
-    n_classes: int,
-    quiet: bool,
-) -> None:
-    """Train a spectrogram classifier (CNN/CRNN/Attention)."""
-    if not quiet:
-        click.echo(f"Training {model.upper()} classifier with {n_classes} classes...")
-        click.echo(f"  Epochs: {epochs}, Batch Size: {batch_size}, LR: {lr}")
-
-    click.echo("Note: This command requires properly formatted training data.")
-    click.echo(f"Model will be saved to: {output}")
-
-
-@models.command("convert")
-@click.argument("input_path")
-@click.argument("output_path")
-@click.option(
-    "--format",
-    "output_format",
-    type=click.Choice(["pt", "onnx"]),
-    default="onnx",
-    help="Output format",
-)
-@click.option(
-    "--model-type",
-    type=click.Choice(["ast", "birdnet", "opensoundscape"]),
-    default="ast",
-    help="Model type",
-)
-def models_convert(input_path: str, output_path: str, output_format: str, model_type: str) -> None:
-    """Convert model between formats (PyTorch to ONNX)."""
-    click.echo(f"Loading model from {input_path}...")
-
-    # Select the appropriate service based on model type
-    if model_type == "ast":
-        repository = LocalFileRepository()
-
-        svc = ASTService(file_repository=repository)
-    elif model_type == "birdnet":
-        repository = LocalFileRepository()
-
-        svc = BirdNETService(file_repository=repository)
-    else:
-        repository = LocalFileRepository()
-
-        svc = CNNService(file_repository=repository)
-
-    result = svc.get_model_info(input_path)
-    if not result.success:
-        click.echo(f"Error loading model: {result.error}")
-        raise SystemExit(1)
-
-    click.echo(f"Converting to {output_format}...")
-    click.echo("Note: Model conversion functionality is available through the core ML module.")
-    click.echo(f"Target output: {output_path}")
+    np.save(output, embeddings)
+    click.echo(f"Embeddings saved to {output} (shape: {embeddings.shape})")
 
 
 @models.command("info")
 @click.argument("model_path")
-@click.option(
-    "--model-type",
-    type=click.Choice(["ast", "birdnet", "opensoundscape"]),
-    default="ast",
-    help="Model type",
-)
-def models_info(model_path: str, model_type: str) -> None:
-    """Display information about a model."""
-    # Select the appropriate service based on model type
-    if model_type == "ast":
-        repository = LocalFileRepository()
+def models_info(model_path: str) -> None:
+    """Display information about an AST model."""
+    from bioamla.cli.service_helpers import handle_result, services
 
-        svc = ASTService(file_repository=repository)
-    elif model_type == "birdnet":
-        repository = LocalFileRepository()
+    result = services.ast.get_model_info(model_path)
+    info = handle_result(result)
 
-        svc = BirdNETService(file_repository=repository)
-    else:
-        repository = LocalFileRepository()
-
-        svc = CNNService(file_repository=repository)
-
-    result = svc.get_model_info(model_path)
-    if not result.success:
-        click.echo(f"Error loading model: {result.error}")
-        raise SystemExit(1)
-
-    info = result.data
     click.echo(f"Model: {info['path']}")
     click.echo(f"Backend: {info['backend']}")
     click.echo(f"Classes: {info['num_classes']}")
-    if info.get('classes'):
-        labels = ', '.join(info['classes'])
-        if info.get('has_more_classes'):
+    if info.get("classes"):
+        labels = ", ".join(info["classes"])
+        if info.get("has_more_classes"):
             labels += f"... (+{info['num_classes'] - 10} more)"
         click.echo(f"Labels: {labels}")
-
-
-@models.command("ensemble")
-@click.argument("model_dirs", nargs=-1, required=True)
-@click.option("--output", "-o", required=True, help="Output directory for ensemble")
-@click.option(
-    "--strategy",
-    "-s",
-    type=click.Choice(["averaging", "voting", "max"]),
-    default="averaging",
-    help="Ensemble combination strategy",
-)
-@click.option("--weights", "-w", multiple=True, type=float, help="Model weights")
-def models_ensemble(model_dirs: tuple[str, ...], output: str, strategy: str, weights: tuple[float, ...]) -> None:
-    """Create an ensemble from multiple trained models."""
-    click.echo(f"Creating {strategy} ensemble from {len(model_dirs)} models...")
-
-    weights_list = list(weights) if weights else None
-    if weights_list and len(weights_list) != len(model_dirs):
-        raise click.ClickException("Number of weights must match number of models")
-
-    repository = LocalFileRepository()
-
-
-    file_svc = FileService(file_repository=repository)
-    file_svc.ensure_directory(output)
-
-    click.echo(f"Ensemble configuration saved to: {output}")
-    click.echo("Note: Load individual models and combine using bioamla.ml.Ensemble")

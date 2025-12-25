@@ -11,14 +11,8 @@ Catalogs provide access to external bioacoustic databases and services:
 
 import click
 
-from bioamla.repository.local import LocalFileRepository
+from bioamla.cli.service_helpers import handle_result, services
 from bioamla.services.ebird import EBirdService
-from bioamla.services.file import FileService
-from bioamla.services.huggingface import HuggingFaceService
-from bioamla.services.inaturalist import INaturalistService
-from bioamla.services.macaulay import MacaulayService
-from bioamla.services.species import SpeciesService
-from bioamla.services.xeno_canto import XenoCantoService
 
 
 @click.group()
@@ -67,28 +61,19 @@ def inat_search(
             "At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)"
         )
 
-    service = INaturalistService()
-    result = service.search(
+    result = services.inaturalist.search(
         taxon_id=taxon_id,
         taxon_name=species,
         place_id=place_id,
         quality_grade=quality_grade,
         per_page=limit,
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    observations = result.data.observations
+    observations = handle_result(result).observations
     if not observations:
         click.echo("No observations found matching the search criteria.")
         return
 
     if output:
-        repository = LocalFileRepository()
-
-        file_svc = FileService(file_repository=repository)
         rows = []
         for obs in observations:
             taxon = obs.get("taxon", {})
@@ -115,7 +100,7 @@ def inat_search(
             "location",
             "url",
         ]
-        file_svc.write_csv_dicts(output, rows, fieldnames=fieldnames)
+        services.file.write_csv_dicts(output, rows, fieldnames=fieldnames)
         click.echo(f"Saved {len(observations)} observations to {output}")
     else:
         click.echo(f"\nFound {len(observations)} observations with sounds:\n")
@@ -143,20 +128,11 @@ def inat_stats(project_id: str, output: str, quiet: bool) -> None:
     """Get statistics for an iNaturalist project."""
     import json
 
-    service = INaturalistService()
-    result = service.get_project_stats(project_id=project_id)
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    stats = result.data
+    result = services.inaturalist.get_project_stats(project_id=project_id)
+    stats = handle_result(result)
 
     if output:
-        repository = LocalFileRepository()
-
-        file_svc = FileService(file_repository=repository)
-        file_svc.write_json(output, stats.to_dict())
+        services.file.write_json(output, stats.to_dict())
         click.echo(f"Saved project stats to {output}")
     elif quiet:
         click.echo(json.dumps(stats.to_dict(), indent=2))
@@ -204,8 +180,7 @@ def inat_download(
     if taxon_ids:
         taxon_id_list = [int(t.strip()) for t in taxon_ids.split(",")]
 
-    service = INaturalistService()
-    result = service.download(
+    result = services.inaturalist.download(
         output_dir=output_dir,
         taxon_ids=taxon_id_list,
         taxon_name=taxon_name,
@@ -214,12 +189,7 @@ def inat_download(
         quality_grade=quality_grade if quality_grade != "any" else None,
         obs_per_taxon=obs_per_taxon,
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    download_result = result.data
+    download_result = handle_result(result)
     if not quiet:
         click.echo("\nDownload complete:")
         click.echo(f"  Observations: {download_result.total_observations}")
@@ -254,8 +224,7 @@ def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str) -
     """Push a model folder to the HuggingFace Hub."""
     click.echo(f"Pushing model folder {path} to HuggingFace Hub: {repo_id}...")
 
-    service = HuggingFaceService()
-    result = service.push_model(path, repo_id, private=private, commit_message=commit_message)
+    result = services.huggingface.push_model(path, repo_id, private=private, commit_message=commit_message)
 
     if not result.success:
         click.echo(f"Error: {result.error}")
@@ -276,8 +245,7 @@ def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str)
     """Push a dataset folder to the HuggingFace Hub."""
     click.echo(f"Pushing dataset folder {path} to HuggingFace Hub: {repo_id}...")
 
-    service = HuggingFaceService()
-    result = service.push_dataset(path, repo_id, private=private, commit_message=commit_message)
+    result = services.huggingface.push_dataset(path, repo_id, private=private, commit_message=commit_message)
 
     if not result.success:
         click.echo(f"Error: {result.error}")
@@ -316,8 +284,7 @@ def xc_search(species: str, genus: str, country: str, quality: str, sound_type: 
     """Search Xeno-canto for bird recordings."""
     import json as json_lib
 
-    service = XenoCantoService()
-    result = service.search(
+    result = services.xeno_canto.search(
         species=species,
         genus=genus,
         country=country,
@@ -325,12 +292,7 @@ def xc_search(species: str, genus: str, country: str, quality: str, sound_type: 
         sound_type=sound_type,
         max_results=max_results,
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    recordings = result.data.recordings
+    recordings = handle_result(result).recordings
     if not recordings:
         click.echo("No recordings found.")
         return
@@ -368,8 +330,7 @@ def xc_download(species: str, genus: str, country: str, quality: str, max_record
     """Download recordings from Xeno-canto."""
     click.echo("Searching Xeno-canto...")
 
-    service = XenoCantoService()
-    result = service.download(
+    result = services.xeno_canto.download(
         species=species,
         genus=genus,
         country=country,
@@ -378,12 +339,7 @@ def xc_download(species: str, genus: str, country: str, quality: str, max_record
         output_dir=output_dir,
         delay=delay,
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    download_result = result.data
+    download_result = handle_result(result)
     if download_result.total == 0:
         click.echo("No recordings found.")
         return
@@ -443,8 +399,7 @@ def ml_search(
     """
     import json as json_lib
 
-    service = MacaulayService()
-    result = service.search(
+    result = services.macaulay.search(
         species_code=species_code,
         scientific_name=scientific_name,
         common_name=common_name,
@@ -455,12 +410,7 @@ def ml_search(
         min_rating=min_rating,
         max_results=max_results,
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    recordings = result.data.recordings
+    recordings = handle_result(result).recordings
     if not recordings:
         click.echo("No recordings found.")
         return
@@ -509,8 +459,7 @@ def ml_download(
     """
     click.echo("Searching Macaulay Library...")
 
-    service = MacaulayService()
-    result = service.download(
+    result = services.macaulay.download(
         species_code=species_code,
         scientific_name=scientific_name,
         common_name=common_name,
@@ -522,12 +471,7 @@ def ml_download(
         max_recordings=max_recordings,
         output_dir=output_dir,
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    download_result = result.data
+    download_result = handle_result(result)
     if download_result.total == 0:
         click.echo("No recordings found.")
         return
@@ -553,8 +497,7 @@ def ebird_species(name: str) -> None:
 
     NAME can be a common name, scientific name, or species code.
     """
-    service = SpeciesService()
-    result = service.lookup(name, ebird_only=True)
+    result = services.species.lookup(name, ebird_only=True)
 
     if not result.success:
         click.echo(f"Species not found in eBird taxonomy: {name}")
@@ -573,8 +516,7 @@ def ebird_species(name: str) -> None:
 @click.option("--limit", "-n", default=10, type=int, help="Maximum results")
 def ebird_search(query: str, limit: int) -> None:
     """Fuzzy search eBird taxonomy for species."""
-    service = SpeciesService()
-    result = service.search(query, limit=limit)
+    result = services.species.search(query, limit=limit)
 
     if not result.success:
         click.echo(f"Error: {result.error}")
@@ -662,9 +604,6 @@ def ebird_nearby(
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        repository = LocalFileRepository()
-
-        file_svc = FileService(file_repository=repository)
         fieldnames = [
             "species_code",
             "common_name",
@@ -674,7 +613,7 @@ def ebird_nearby(
             "how_many",
         ]
         rows = [obs.to_dict() for obs in observations]
-        file_svc.write_csv_dicts(output, rows, fieldnames=fieldnames)
+        services.file.write_csv_dicts(output, rows, fieldnames=fieldnames)
         click.echo(f"Saved to: {output}")
 
 
