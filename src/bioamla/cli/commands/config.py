@@ -2,10 +2,6 @@
 
 import click
 
-from bioamla.repository.local import LocalFileRepository
-from bioamla.services.config import ConfigService
-from bioamla.services.dependency import DependencyService
-
 
 @click.group()
 def config() -> None:
@@ -17,13 +13,9 @@ def config() -> None:
 def config_show() -> None:
     """Show current configuration."""
     from bioamla.cli.progress import console
+    from bioamla.cli.service_helpers import handle_result, services
 
-    config_svc = ConfigService()
-    result = config_svc.get_config()
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-    config_obj = result.data
+    config_obj = handle_result(services.config.get_config())
 
     console.print("\n[bold]Current Configuration[/bold]")
     if config_obj._source:
@@ -59,9 +51,9 @@ def config_show() -> None:
 def config_init(output: str, force: bool) -> None:
     """Create a default configuration file."""
     from bioamla.cli.progress import print_error, print_success
+    from bioamla.cli.service_helpers import services
 
-    config_svc = ConfigService()
-    result = config_svc.create_default_config(output, force=force)
+    result = services.config.create_default_config(output, force=force)
 
     if not result.success:
         print_error(result.error)
@@ -78,18 +70,17 @@ def config_path() -> None:
     from pathlib import Path
 
     from bioamla.cli.progress import console
-
-    config_svc = ConfigService()
+    from bioamla.cli.service_helpers import services
 
     console.print("\n[bold]Configuration File Search Paths[/bold]\n")
     console.print("Files are searched in order (first found wins):\n")
 
     # Get active config
-    active_result = config_svc.find_config_file()
+    active_result = services.config.find_config_file()
     active_config = Path(active_result.data) if active_result.success and active_result.data else None
 
     # Get all locations
-    locations_result = config_svc.get_config_locations()
+    locations_result = services.config.get_config_locations()
     if locations_result.success:
         locations = [Path(loc) for loc in locations_result.data]
         for i, location in enumerate(locations, 1):
@@ -131,7 +122,7 @@ def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool) -> No
     import shutil
     from pathlib import Path
 
-    from huggingface_hub import scan_cache_dir
+    from huggingface_hub import constants, scan_cache_dir
 
     if not models and not datasets and not purge_all:
         click.echo("Please specify what to purge: --models, --datasets, or --all")
@@ -187,8 +178,6 @@ def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool) -> No
     deleted_count = 0
     freed_space = 0
 
-    from huggingface_hub import constants
-
     cache_path = Path(constants.HF_HUB_CACHE)
 
     for repo in models_to_delete + datasets_to_delete:
@@ -226,20 +215,14 @@ def config_deps(do_install: bool, yes: bool) -> None:
         bioamla config deps --install -y # Install without confirmation
     """
     from bioamla.cli.progress import console
-
-    dep_svc = DependencyService()
+    from bioamla.cli.service_helpers import handle_result, services
 
     # Get OS type
-    os_result = dep_svc.detect_os()
+    os_result = services.dependency.detect_os()
     os_type = os_result.data if os_result.success else "unknown"
 
     # Check all dependencies
-    check_result = dep_svc.check_all()
-    if not check_result.success:
-        click.echo(f"Error: {check_result.error}")
-        raise SystemExit(1)
-
-    report = check_result.data
+    report = handle_result(services.dependency.check_all())
 
     console.print("\n[bold]System Dependencies[/bold]")
     console.print(f"[dim]Detected OS: {os_type}[/dim]\n")
@@ -275,12 +258,12 @@ def config_deps(do_install: bool, yes: bool) -> None:
                 return
 
         console.print("\n[bold]Installing dependencies...[/bold]")
-        install_result = dep_svc.install(os_type)
+        install_result = services.dependency.install(os_type)
 
         if install_result.success:
             console.print(f"[green]{install_result.message}[/green]")
             console.print("\n[bold]Verifying installation...[/bold]")
-            verify_result = dep_svc.check_all()
+            verify_result = services.dependency.check_all()
             if verify_result.success:
                 for dep in verify_result.data.dependencies:
                     if dep.installed:
