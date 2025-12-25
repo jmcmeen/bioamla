@@ -204,5 +204,144 @@ class ServiceFactory:
         """Create BatchClusteringService with file repository."""
         return BatchClusteringService(file_repository=self.file_repository)
 
+    # ========================================================================
+    # Property-Based Access (Convenience for CLI and other applications)
+    # ========================================================================
+
+    @property
+    def audio_file(self) -> AudioFileService:
+        """Convenience property for create_audio_file_service()."""
+        return self.create_audio_file_service()
+
+    @property
+    def audio_transform(self) -> AudioTransformService:
+        """Convenience property for create_audio_transform_service()."""
+        return self.create_audio_transform_service()
+
+    @property
+    def file(self) -> FileService:
+        """Convenience property for create_file_service()."""
+        return self.create_file_service()
+
+    @property
+    def dataset(self) -> DatasetService:
+        """Convenience property for create_dataset_service()."""
+        return self.create_dataset_service()
+
+    @property
+    def annotation(self) -> AnnotationService:
+        """Convenience property for create_annotation_service()."""
+        return self.create_annotation_service()
+
+    @property
+    def detection(self) -> DetectionService:
+        """Convenience property for create_detection_service()."""
+        return self.create_detection_service()
+
+    @property
+    def indices(self) -> IndicesService:
+        """Convenience property for create_indices_service()."""
+        return self.create_indices_service()
+
+    @property
+    def ribbit(self) -> RibbitService:
+        """Convenience property for create_ribbit_service()."""
+        return self.create_ribbit_service()
+
+    @property
+    def embedding(self) -> EmbeddingService:
+        """Convenience property for create_embedding_service()."""
+        return self.create_embedding_service()
+
+    @property
+    def inference(self) -> InferenceService:
+        """Convenience property for create_inference_service()."""
+        return self.create_inference_service()
+
+    @property
+    def ast(self) -> ASTService:
+        """Convenience property for create_ast_service()."""
+        return self.create_ast_service()
+
+    @property
+    def birdnet(self) -> BirdNETService:
+        """Convenience property for create_birdnet_service()."""
+        return self.create_birdnet_service()
+
+    @property
+    def cnn(self) -> CNNService:
+        """Convenience property for create_cnn_service()."""
+        return self.create_cnn_service()
+
+    @property
+    def inaturalist(self) -> INaturalistService:
+        """Convenience property for create_inaturalist_service()."""
+        return self.create_inaturalist_service()
+
+    @property
+    def xeno_canto(self) -> XenoCantoService:
+        """Convenience property for create_xeno_canto_service()."""
+        return self.create_xeno_canto_service()
+
+    @property
+    def macaulay(self) -> MacaulayService:
+        """Convenience property for create_macaulay_service()."""
+        return self.create_macaulay_service()
+
+    @property
+    def ebird(self) -> EBirdService:
+        """Convenience property for create_ebird_service()."""
+        return self.create_ebird_service()
+
+    @property
+    def huggingface(self) -> HuggingFaceService:
+        """Convenience property for create_huggingface_service()."""
+        return self.create_huggingface_service()
+
+    @property
+    def species(self) -> SpeciesService:
+        """Convenience property for create_species_service()."""
+        return self.create_species_service()
+
+    @property
+    def clustering(self) -> ClusteringService:
+        """Convenience property for create_clustering_service()."""
+        return self.create_clustering_service()
+
+    @property
+    def config(self) -> ConfigService:
+        """Convenience property for create_config_service()."""
+        return self.create_config_service()
+
+    @property
+    def dependency(self) -> DependencyService:
+        """Convenience property for create_dependency_service()."""
+        return self.create_dependency_service()
+
+    @property
+    def batch_audio_transform(self) -> BatchAudioTransformService:
+        """Convenience property for create_batch_audio_transform_service()."""
+        return self.create_batch_audio_transform_service()
+
+    @property
+    def batch_detection(self) -> BatchDetectionService:
+        """Convenience property for create_batch_detection_service()."""
+        return self.create_batch_detection_service()
+
+    @property
+    def batch_indices(self) -> BatchIndicesService:
+        """Convenience property for create_batch_indices_service()."""
+        return self.create_batch_indices_service()
+
+    @property
+    def batch_inference(self) -> BatchInferenceService:
+        """Convenience property for create_batch_inference_service()."""
+        return self.create_batch_inference_service()
+
+    @property
+    def batch_clustering(self) -> BatchClusteringService:
+        """Convenience property for create_batch_clustering_service()."""
+        return self.create_batch_clustering_service()
+
 
 __all__ = ["ServiceFactory"]
