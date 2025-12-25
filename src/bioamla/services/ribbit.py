@@ -3,39 +3,12 @@
 Service for RIBBIT periodic vocalization detection operations.
 """
 
-import csv
-from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .base import BaseService, ServiceResult, ToDictMixin
+from bioamla.models.ribbit import DetectionSummary
+from bioamla.repository.protocol import FileRepositoryProtocol
 
-
-@dataclass
-class DetectionSummary(ToDictMixin):
-    """Summary of RIBBIT detection results."""
-
-    filepath: str
-    profile_name: str
-    num_detections: int
-    total_detection_time: float
-    detection_percentage: float
-    duration: float
-    processing_time: float
-
-
-@dataclass
-class BatchDetectionSummary(ToDictMixin):
-    """Summary of batch RIBBIT detection."""
-
-    total_files: int
-    files_with_detections: int
-    total_detections: int
-    total_duration: float
-    total_detection_time: float
-    detection_percentage: float
-    output_path: Optional[str]
-    errors: List[str] = field(default_factory=list)
+from .base import BaseService, ServiceResult
 
 
 class RibbitService(BaseService):
@@ -44,14 +17,17 @@ class RibbitService(BaseService):
 
     Provides high-level methods for:
     - Single file detection with preset or custom profiles
-    - Batch detection with progress reporting
     - Profile management and listing
     - Result export to CSV/JSON
     """
 
-    def __init__(self) -> None:
-        """Initialize RIBBIT controller."""
-        super().__init__()
+    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
+        """Initialize RIBBIT service.
+
+        Args:
+            file_repository: Repository for file operations (required)
+        """
+        super().__init__(file_repository=file_repository)
         self._detector = None
         self._current_profile = None
 
@@ -135,152 +111,6 @@ class RibbitService(BaseService):
         except Exception as e:
             return ServiceResult.fail(str(e))
 
-    # =========================================================================
-    # Batch Detection
-    # =========================================================================
-
-    def detect_batch(
-        self,
-        directory: str,
-        preset: Optional[str] = None,
-        profile: Optional[Dict[str, Any]] = None,
-        output_csv: Optional[str] = None,
-        recursive: bool = True,
-    ) -> ServiceResult[BatchDetectionSummary]:
-        """
-        Run RIBBIT detection on multiple audio files.
-
-        Args:
-            directory: Directory containing audio files
-            preset: Name of preset profile to use
-            profile: Custom profile dictionary
-            output_csv: Optional CSV output path
-            recursive: Search subdirectories
-
-        Returns:
-            Result with batch detection summary
-        """
-        error = self._validate_input_path(directory)
-        if error:
-            return ServiceResult.fail(error)
-
-        # Start run tracking
-        self._start_run(
-            name=f"RIBBIT batch detection: {directory}",
-            action="ribbit",
-            input_path=directory,
-            output_path=output_csv or "",
-            parameters={
-                "preset": preset,
-                "profile": profile,
-                "recursive": recursive,
-            },
-        )
-
-        try:
-            from bioamla.core.files import TextFile
-
-            detector = self._get_detector(preset=preset, profile=profile)
-            files = self._get_audio_files(directory, recursive=recursive)
-
-            if not files:
-                self._fail_run("No audio files found")
-                return ServiceResult.fail(f"No audio files found in {directory}")
-
-            all_detections = []
-            all_results = []
-            errors = []
-            total_duration = 0.0
-            total_detection_time = 0.0
-            files_with_detections = 0
-
-            def process_file(filepath: Path):
-                result = detector.detect(str(filepath))
-                return result
-
-            for filepath, result, error in self._process_batch(files, process_file):
-                if error:
-                    errors.append(f"{filepath.name}: {error}")
-                elif result is not None:
-                    all_results.append(result)
-                    total_duration += result.duration
-                    total_detection_time += result.total_detection_time
-
-                    if result.num_detections > 0:
-                        files_with_detections += 1
-
-                    for detection in result.detections:
-                        all_detections.append(
-                            {
-                                "filepath": str(filepath),
-                                "profile": result.profile_name,
-                                "start_time": detection.start_time,
-                                "end_time": detection.end_time,
-                                "duration": detection.duration,
-                                "score": detection.score,
-                                "pulse_rate": detection.pulse_rate,
-                            }
-                        )
-
-            # Write CSV if requested
-            saved_path = None
-            if output_csv and all_detections:
-                output_path = Path(output_csv)
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-
-                with TextFile(output_path, mode="w", newline="") as f:
-                    fieldnames = [
-                        "filepath",
-                        "profile",
-                        "start_time",
-                        "end_time",
-                        "duration",
-                        "score",
-                        "pulse_rate",
-                    ]
-                    writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
-                    writer.writeheader()
-                    for det in all_detections:
-                        writer.writerow(det)
-
-                saved_path = str(output_path)
-
-            detection_percentage = (
-                total_detection_time / total_duration * 100 if total_duration > 0 else 0
-            )
-
-            summary = BatchDetectionSummary(
-                total_files=len(files),
-                files_with_detections=files_with_detections,
-                total_detections=len(all_detections),
-                total_duration=total_duration,
-                total_detection_time=total_detection_time,
-                detection_percentage=detection_percentage,
-                output_path=saved_path,
-                errors=errors,
-            )
-
-            # Complete run with results
-            self._complete_run(
-                results={
-                    "total_files": len(files),
-                    "files_with_detections": files_with_detections,
-                    "total_detections": len(all_detections),
-                    "detection_percentage": detection_percentage,
-                    "errors_count": len(errors),
-                },
-                output_files=[saved_path] if saved_path else None,
-            )
-
-            return ServiceResult.ok(
-                data=summary,
-                message=f"Found {len(all_detections)} detections in {files_with_detections} files",
-                detections=all_detections,
-                results=all_results,
-            )
-        except Exception as e:
-            self._fail_run(str(e))
-            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Profile Management

@@ -13,9 +13,11 @@ def audio() -> None:
 @click.argument("path")
 def audio_info(path: str) -> None:
     """Display audio file information."""
+    from bioamla.repository.local import LocalFileRepository
     from bioamla.services.audio_file import AudioFileService
 
-    controller = AudioFileService()
+    repository = LocalFileRepository()
+    controller = AudioFileService(file_repository=repository)
     result = controller.open(path)
 
     if not result.success:
@@ -70,9 +72,11 @@ def audio_list(path: str, recursive: bool) -> None:
 )
 def audio_convert(input_path: str, output_path: str, sample_rate: int, channels: int, bit_depth: int, format: str) -> None:
     """Convert audio file format or properties."""
+    from bioamla.repository.local import LocalFileRepository
     from bioamla.services.audio_file import AudioFileService
 
-    controller = AudioFileService()
+    repository = LocalFileRepository()
+    controller = AudioFileService(file_repository=repository)
 
     # Load the audio file
     open_result = controller.open(input_path)

@@ -2,6 +2,7 @@
 
 import click
 
+from bioamla.repository.local import LocalFileRepository
 from bioamla.services.file import FileService
 
 
@@ -334,7 +335,10 @@ def annotation_generate_labels(
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    file_svc = FileService()
+    repository = LocalFileRepository()
+
+
+    file_svc = FileService(file_repository=repository)
 
     if output_format == "numpy":
         np.save(output_file, labels_array)

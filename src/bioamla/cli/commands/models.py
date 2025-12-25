@@ -4,6 +4,7 @@ from typing import Dict
 
 import click
 
+from bioamla.repository.local import LocalFileRepository
 from bioamla.services.ast import ASTService
 from bioamla.services.birdnet import BirdNETService
 from bioamla.services.cnn import CNNService
@@ -167,7 +168,10 @@ def _run_batch_inference(
         f"Performance options: batch_size={batch_size}, fp16={fp16}, compile={compile}, workers={workers}"
     )
 
-    ast_svc = ASTService()
+    repository = LocalFileRepository()
+
+
+    ast_svc = ASTService(file_repository=repository)
     result = ast_svc.predict_batch(
         directory=directory,
         model_path=model_path,
@@ -605,7 +609,10 @@ def ast_train(
 
     trainer.train()
 
-    file_svc = FileService()
+    repository = LocalFileRepository()
+
+
+    file_svc = FileService(file_repository=repository)
     file_svc.ensure_directory(best_model_path)
     trainer.save_model(best_model_path)
 
@@ -658,7 +665,10 @@ def ast_evaluate(
         click.echo(f"Error: Ground truth file not found: {ground_truth}")
         raise SystemExit(1)
 
-    ast_svc = ASTService()
+    repository = LocalFileRepository()
+
+
+    ast_svc = ASTService(file_repository=repository)
     result = ast_svc.evaluate(
         audio_dir=path,
         model_path=model_path,
@@ -685,7 +695,9 @@ def ast_evaluate(
     click.echo(f"Total Samples: {eval_result.total_samples}")
 
     if output:
-        file_svc = FileService()
+        repository = LocalFileRepository()
+
+        file_svc = FileService(file_repository=repository)
         if output_format == "json":
             file_svc.write_json(output, eval_result.to_dict())
         else:
@@ -741,11 +753,17 @@ def predict_generic(
 
     # Select the appropriate service based on model type
     if model_type == "ast":
-        svc = ASTService()
+        repository = LocalFileRepository()
+
+        svc = ASTService(file_repository=repository)
     elif model_type == "birdnet":
-        svc = BirdNETService()
+        repository = LocalFileRepository()
+
+        svc = BirdNETService(file_repository=repository)
     else:
-        svc = CNNService()
+        repository = LocalFileRepository()
+
+        svc = CNNService(file_repository=repository)
 
     if not quiet:
         click.echo(f"Loading {model_type} model from {model_path}...")
@@ -798,7 +816,9 @@ def predict_generic(
         predictions = result.data
 
         if output:
-            file_svc = FileService()
+            repository = LocalFileRepository()
+
+            file_svc = FileService(file_repository=repository)
             rows = [
                 {
                     "filepath": r.filepath,
@@ -841,16 +861,25 @@ def models_embed(path: str, model_type: str, model_path: str, output: str, batch
 
     # Select the appropriate service based on model type
     if model_type == "ast":
-        svc = ASTService()
+        repository = LocalFileRepository()
+
+        svc = ASTService(file_repository=repository)
     elif model_type == "birdnet":
-        svc = BirdNETService()
+        repository = LocalFileRepository()
+
+        svc = BirdNETService(file_repository=repository)
     else:
-        svc = CNNService()
+        repository = LocalFileRepository()
+
+        svc = CNNService(file_repository=repository)
 
     if not quiet:
         click.echo(f"Loading {model_type} model from {model_path}...")
 
-    file_svc = FileService()
+    repository = LocalFileRepository()
+
+
+    file_svc = FileService(file_repository=repository)
 
     if batch:
         path_obj = PathLib(path)
@@ -1017,11 +1046,17 @@ def models_convert(input_path: str, output_path: str, output_format: str, model_
 
     # Select the appropriate service based on model type
     if model_type == "ast":
-        svc = ASTService()
+        repository = LocalFileRepository()
+
+        svc = ASTService(file_repository=repository)
     elif model_type == "birdnet":
-        svc = BirdNETService()
+        repository = LocalFileRepository()
+
+        svc = BirdNETService(file_repository=repository)
     else:
-        svc = CNNService()
+        repository = LocalFileRepository()
+
+        svc = CNNService(file_repository=repository)
 
     result = svc.get_model_info(input_path)
     if not result.success:
@@ -1045,11 +1080,17 @@ def models_info(model_path: str, model_type: str) -> None:
     """Display information about a model."""
     # Select the appropriate service based on model type
     if model_type == "ast":
-        svc = ASTService()
+        repository = LocalFileRepository()
+
+        svc = ASTService(file_repository=repository)
     elif model_type == "birdnet":
-        svc = BirdNETService()
+        repository = LocalFileRepository()
+
+        svc = BirdNETService(file_repository=repository)
     else:
-        svc = CNNService()
+        repository = LocalFileRepository()
+
+        svc = CNNService(file_repository=repository)
 
     result = svc.get_model_info(model_path)
     if not result.success:
@@ -1086,7 +1127,10 @@ def models_ensemble(model_dirs: tuple[str, ...], output: str, strategy: str, wei
     if weights_list and len(weights_list) != len(model_dirs):
         raise click.ClickException("Number of weights must match number of models")
 
-    file_svc = FileService()
+    repository = LocalFileRepository()
+
+
+    file_svc = FileService(file_repository=repository)
     file_svc.ensure_directory(output)
 
     click.echo(f"Ensemble configuration saved to: {output}")

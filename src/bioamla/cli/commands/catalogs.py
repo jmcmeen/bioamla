@@ -11,6 +11,7 @@ Catalogs provide access to external bioacoustic databases and services:
 
 import click
 
+from bioamla.repository.local import LocalFileRepository
 from bioamla.services.ebird import EBirdService
 from bioamla.services.file import FileService
 from bioamla.services.huggingface import HuggingFaceService
@@ -85,7 +86,9 @@ def inat_search(
         return
 
     if output:
-        file_svc = FileService()
+        repository = LocalFileRepository()
+
+        file_svc = FileService(file_repository=repository)
         rows = []
         for obs in observations:
             taxon = obs.get("taxon", {})
@@ -150,7 +153,9 @@ def inat_stats(project_id: str, output: str, quiet: bool) -> None:
     stats = result.data
 
     if output:
-        file_svc = FileService()
+        repository = LocalFileRepository()
+
+        file_svc = FileService(file_repository=repository)
         file_svc.write_json(output, stats.to_dict())
         click.echo(f"Saved project stats to {output}")
     elif quiet:
@@ -657,7 +662,9 @@ def ebird_nearby(
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        file_svc = FileService()
+        repository = LocalFileRepository()
+
+        file_svc = FileService(file_repository=repository)
         fieldnames = [
             "species_code",
             "common_name",

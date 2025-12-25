@@ -3,45 +3,12 @@
 Service for ML model inference operations.
 """
 
-import csv
-from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from bioamla.models.inference import PredictionResult
+from bioamla.repository.protocol import FileRepositoryProtocol
+
 from .base import BaseService, ServiceResult
-
-
-@dataclass
-class PredictionResult:
-    """Single prediction result."""
-
-    filepath: str
-    start_time: float
-    end_time: float
-    predicted_label: str
-    confidence: float
-    top_k_labels: List[str] = field(default_factory=list)
-    top_k_scores: List[float] = field(default_factory=list)
-
-
-@dataclass
-class InferenceSummary:
-    """Summary of inference results."""
-
-    total_files: int
-    total_predictions: int
-    unique_labels: int
-    label_counts: Dict[str, int]
-    output_path: Optional[str] = None
-
-
-@dataclass
-class BatchInferenceResult:
-    """Result of batch inference."""
-
-    predictions: List[PredictionResult]
-    summary: InferenceSummary
-    errors: List[str] = field(default_factory=list)
 
 
 class InferenceService(BaseService):
@@ -50,19 +17,23 @@ class InferenceService(BaseService):
 
     Provides high-level methods for:
     - Single file prediction
-    - Batch prediction with progress
     - CSV/JSON output generation
     - Model information and listing
     """
 
-    def __init__(self, model_path: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        file_repository: FileRepositoryProtocol,
+        model_path: Optional[str] = None,
+    ) -> None:
         """
         Initialize inference service.
 
         Args:
+            file_repository: Repository for file operations (required)
             model_path: Path to model (HuggingFace ID or local path)
         """
-        super().__init__()
+        super().__init__(file_repository=file_repository)
         self._model_path = model_path
         self._model = None
 
@@ -134,159 +105,6 @@ class InferenceService(BaseService):
         except Exception as e:
             return ServiceResult.fail(str(e))
 
-    # =========================================================================
-    # Batch Prediction
-    # =========================================================================
-
-    def predict_batch(
-        self,
-        directory: str,
-        model_path: Optional[str] = None,
-        output_csv: Optional[str] = None,
-        top_k: int = 5,
-        min_confidence: float = 0.0,
-        recursive: bool = True,
-        clip_duration: Optional[float] = None,
-        overlap: float = 0.0,
-    ) -> ServiceResult[BatchInferenceResult]:
-        """
-        Run prediction on multiple audio files.
-
-        Args:
-            directory: Directory containing audio files
-            model_path: Model path (uses controller default if not specified)
-            output_csv: Optional CSV output path
-            top_k: Number of top predictions per clip
-            min_confidence: Minimum confidence threshold
-            recursive: Search subdirectories
-            clip_duration: Duration of clips in seconds (for long files)
-            overlap: Overlap between clips (0-1)
-
-        Returns:
-            Result with batch inference summary
-        """
-        error = self._validate_input_path(directory)
-        if error:
-            return ServiceResult.fail(error)
-
-        # Start run tracking
-        self._start_run(
-            name=f"Batch prediction: {directory}",
-            action="predict",
-            input_path=directory,
-            output_path=output_csv or "",
-            parameters={
-                "model_path": model_path or self._model_path,
-                "top_k": top_k,
-                "min_confidence": min_confidence,
-                "recursive": recursive,
-                "clip_duration": clip_duration,
-                "overlap": overlap,
-            },
-        )
-
-        try:
-            from bioamla.core.files import TextFile
-
-            model = self._get_model(model_path)
-            files = self._get_audio_files(directory, recursive=recursive)
-
-            if not files:
-                self._fail_run("No audio files found")
-                return ServiceResult.fail(f"No audio files found in {directory}")
-
-            all_predictions = []
-            errors = []
-            label_counts: Dict[str, int] = {}
-
-            def process_file(filepath: Path) -> List[PredictionResult]:
-                raw_preds = model.predict(
-                    str(filepath),
-                    top_k=top_k,
-                    clip_duration=clip_duration,
-                    overlap=overlap,
-                )
-
-                results = []
-                for pred in raw_preds:
-                    conf = pred.get("confidence", 0)
-                    if conf >= min_confidence:
-                        label = pred.get("label", "")
-                        label_counts[label] = label_counts.get(label, 0) + 1
-                        results.append(
-                            PredictionResult(
-                                filepath=str(filepath),
-                                start_time=pred.get("start_time", 0.0),
-                                end_time=pred.get("end_time", 0.0),
-                                predicted_label=label,
-                                confidence=conf,
-                                top_k_labels=pred.get("top_k_labels", []),
-                                top_k_scores=pred.get("top_k_scores", []),
-                            )
-                        )
-                return results
-
-            for filepath, results, error in self._process_batch(files, process_file):
-                if error:
-                    errors.append(f"{filepath.name}: {error}")
-                elif results:
-                    all_predictions.extend(results)
-
-            # Write CSV if requested
-            if output_csv and all_predictions:
-                with TextFile(output_csv, mode="w", newline="") as f:
-                    writer = csv.writer(f.handle)
-                    writer.writerow(
-                        [
-                            "filepath",
-                            "start_time",
-                            "end_time",
-                            "predicted_label",
-                            "confidence",
-                        ]
-                    )
-                    for pred in all_predictions:
-                        writer.writerow(
-                            [
-                                pred.filepath,
-                                f"{pred.start_time:.3f}",
-                                f"{pred.end_time:.3f}",
-                                pred.predicted_label,
-                                f"{pred.confidence:.4f}",
-                            ]
-                        )
-
-            summary = InferenceSummary(
-                total_files=len(files),
-                total_predictions=len(all_predictions),
-                unique_labels=len(label_counts),
-                label_counts=label_counts,
-                output_path=output_csv,
-            )
-
-            # Complete run with results
-            self._complete_run(
-                results={
-                    "total_files": len(files),
-                    "total_predictions": len(all_predictions),
-                    "unique_labels": len(label_counts),
-                    "label_counts": label_counts,
-                    "errors_count": len(errors),
-                },
-                output_files=[output_csv] if output_csv else None,
-            )
-
-            return ServiceResult.ok(
-                data=BatchInferenceResult(
-                    predictions=all_predictions,
-                    summary=summary,
-                    errors=errors,
-                ),
-                message=f"Generated {len(all_predictions)} predictions from {len(files)} files",
-            )
-        except Exception as e:
-            self._fail_run(str(e))
-            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Embedding Extraction
@@ -333,123 +151,6 @@ class InferenceService(BaseService):
         except Exception as e:
             return ServiceResult.fail(str(e))
 
-    def extract_embeddings_batch(
-        self,
-        directory: str,
-        output_path: str,
-        model_path: Optional[str] = None,
-        recursive: bool = True,
-        format: str = "npy",
-    ) -> ServiceResult[Dict[str, Any]]:
-        """
-        Extract embeddings from multiple audio files.
-
-        Args:
-            directory: Directory containing audio files
-            output_path: Path to save embeddings
-            model_path: Model path
-            recursive: Search subdirectories
-            format: Output format (npy, parquet, csv)
-
-        Returns:
-            Result with embedding extraction summary
-        """
-        error = self._validate_input_path(directory)
-        if error:
-            return ServiceResult.fail(error)
-
-        # Start run tracking
-        self._start_run(
-            name=f"Batch embedding extraction: {directory}",
-            action="embed",
-            input_path=directory,
-            output_path=output_path,
-            parameters={
-                "model_path": model_path or self._model_path,
-                "recursive": recursive,
-                "format": format,
-            },
-        )
-
-        try:
-            import numpy as np
-
-            model = self._get_model(model_path)
-            files = self._get_audio_files(directory, recursive=recursive)
-
-            if not files:
-                self._fail_run("No audio files found")
-                return ServiceResult.fail(f"No audio files found in {directory}")
-
-            all_embeddings = []
-            file_mapping = []
-            errors = []
-
-            def process_file(filepath: Path):
-                emb = model.get_embeddings(str(filepath))
-                return emb
-
-            for filepath, embeddings, error in self._process_batch(files, process_file):
-                if error:
-                    errors.append(f"{filepath.name}: {error}")
-                elif embeddings is not None:
-                    all_embeddings.append(embeddings)
-                    file_mapping.append(str(filepath))
-
-            if not all_embeddings:
-                self._fail_run("No embeddings extracted")
-                return ServiceResult.fail("No embeddings extracted")
-
-            # Stack all embeddings
-            stacked = np.vstack(all_embeddings)
-
-            # Save based on format
-            output_file = Path(output_path)
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-
-            output_files = [str(output_file)]
-            if format == "npy":
-                np.save(str(output_file), stacked)
-                # Also save file mapping
-                mapping_file = output_file.with_suffix(".files.txt")
-                with open(mapping_file, "w") as f:
-                    f.write("\n".join(file_mapping))
-                output_files.append(str(mapping_file))
-            elif format == "parquet":
-                try:
-                    import pandas as pd
-
-                    df = pd.DataFrame(stacked)
-                    df["filepath"] = file_mapping
-                    df.to_parquet(str(output_file))
-                except ImportError:
-                    self._fail_run("pandas required for parquet format")
-                    return ServiceResult.fail("pandas required for parquet format")
-
-            # Complete run with results
-            self._complete_run(
-                results={
-                    "total_files": len(files),
-                    "extracted": len(all_embeddings),
-                    "shape": list(stacked.shape),
-                    "errors_count": len(errors),
-                },
-                output_files=output_files,
-            )
-
-            return ServiceResult.ok(
-                data={
-                    "total_files": len(files),
-                    "extracted": len(all_embeddings),
-                    "shape": stacked.shape,
-                    "output_path": str(output_file),
-                    "errors": errors,
-                },
-                message=f"Extracted embeddings from {len(all_embeddings)} files",
-            )
-        except Exception as e:
-            self._fail_run(str(e))
-            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Model Information
