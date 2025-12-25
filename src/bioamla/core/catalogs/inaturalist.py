@@ -44,6 +44,82 @@ from bioamla.core.audio.metadata import (
 logger = logging.getLogger(__name__)
 
 
+def _discover_taxa_from_query(
+    taxon_name: Optional[str] = None,
+    place_id: Optional[int] = None,
+    user_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    quality_grade: Optional[str] = None,
+    sound_license: Optional[List[str]] = None,
+    d1: Optional[str] = None,
+    d2: Optional[str] = None,
+    verbose: bool = True,
+) -> List[int]:
+    """
+    Discover unique taxa from a query to enable proper per-taxon limits.
+
+    Uses the species_counts API to efficiently get all taxa matching the query,
+    then returns their IDs for individual per-taxon downloads.
+
+    Args:
+        taxon_name: Filter by taxon name
+        place_id: Filter by place ID
+        user_id: Filter by observer username
+        project_id: Filter by project ID/slug
+        quality_grade: Filter by quality grade
+        sound_license: Filter by license(s)
+        d1: Start date
+        d2: End date
+        verbose: Print progress info
+
+    Returns:
+        List of taxon IDs found in the query results
+    """
+    try:
+        # Use species_counts API to get all taxa efficiently
+        all_taxa = []
+        page = 1
+        per_page = 500
+
+        while True:
+            response = get_observation_species_counts(
+                sounds=True,
+                taxon_name=taxon_name,
+                place_id=place_id,
+                user_id=user_id,
+                project_id=project_id,
+                quality_grade=quality_grade,
+                sound_license=sound_license,
+                d1=d1,
+                d2=d2,
+                page=page,
+                per_page=per_page,
+            )
+
+            results = response.get("results", [])
+            if not results:
+                break
+
+            for item in results:
+                taxon = item.get("taxon", {})
+                taxon_id = taxon.get("id")
+                if taxon_id:
+                    all_taxa.append(taxon_id)
+
+            if len(results) < per_page:
+                break
+
+            page += 1
+
+        return all_taxa
+
+    except Exception as e:
+        if verbose:
+            print(f"Warning: Could not discover taxa ({e}), falling back to single query")
+        logger.warning(f"Failed to discover taxa: {e}")
+        return []
+
+
 def load_taxon_ids_from_csv(csv_path: Union[str, Path]) -> List[int]:
     """
     Load taxon IDs from a CSV file.
@@ -225,8 +301,32 @@ def download_inat_audio(
         ]
 
     # Build list of taxon IDs to iterate over
-    # If taxon_ids provided, iterate over each; otherwise use None (single query)
-    taxon_list = taxon_ids if taxon_ids else [None]
+    # If taxon_ids provided, use them directly
+    # Otherwise, discover taxa from the query first to ensure obs_per_taxon applies to each
+    if taxon_ids:
+        taxon_list = taxon_ids
+    else:
+        # Discover taxa from the query to properly apply obs_per_taxon to each
+        if verbose:
+            print("Discovering taxa from query to apply per-taxon limits...")
+        discovered_taxa = _discover_taxa_from_query(
+            taxon_name=taxon_name,
+            place_id=place_id,
+            user_id=user_id,
+            project_id=project_id,
+            quality_grade=quality_grade,
+            sound_license=normalized_license,
+            d1=d1,
+            d2=d2,
+            verbose=verbose,
+        )
+        if discovered_taxa:
+            taxon_list = discovered_taxa
+            if verbose:
+                print(f"Found {len(taxon_list)} taxa, will download up to {obs_per_taxon} observations each")
+        else:
+            # Fallback to single query if no taxa discovered
+            taxon_list = [None]
 
     for current_taxon_id in taxon_list:
         page = 1

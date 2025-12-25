@@ -152,7 +152,7 @@ class INaturalistService(BaseService):
             Result with search results
         """
         try:
-            from bioamla.core.services.inaturalist import search_inat_sounds
+            from bioamla.core.catalogs.inaturalist import search_inat_sounds
 
             observations = search_inat_sounds(
                 taxon_id=taxon_id,
@@ -226,7 +226,7 @@ class INaturalistService(BaseService):
             Result with download statistics
         """
         try:
-            from bioamla.core.services.inaturalist import download_inat_audio
+            from bioamla.core.catalogs.inaturalist import download_inat_audio
 
             stats = download_inat_audio(
                 output_dir=output_dir,
@@ -289,7 +289,7 @@ class INaturalistService(BaseService):
             from pyinaturalist import get_observations
 
             from bioamla.core.files import sanitize_filename
-            from bioamla.core.services.inaturalist import (
+            from bioamla.core.catalogs.inaturalist import (
                 _download_file,
             )
 
@@ -387,7 +387,7 @@ class INaturalistService(BaseService):
             return ServiceResult.fail("At least one of place_id or project_id must be provided")
 
         try:
-            from bioamla.core.services.inaturalist import get_taxa
+            from bioamla.core.catalogs.inaturalist import get_taxa
 
             taxa_list = get_taxa(
                 place_id=place_id,
@@ -477,7 +477,7 @@ class INaturalistService(BaseService):
             Result with project statistics
         """
         try:
-            from bioamla.core.services.inaturalist import get_project_stats
+            from bioamla.core.catalogs.inaturalist import get_project_stats
 
             stats = get_project_stats(project_id, verbose=False)
 
@@ -563,7 +563,7 @@ class INaturalistService(BaseService):
             Result with list of sound dictionaries
         """
         try:
-            from bioamla.core.services.inaturalist import get_observation_sounds
+            from bioamla.core.catalogs.inaturalist import get_observation_sounds
 
             sounds = get_observation_sounds(observation_id)
 
@@ -592,7 +592,7 @@ class INaturalistService(BaseService):
             Result with list of taxon IDs
         """
         try:
-            from bioamla.core.services.inaturalist import load_taxon_ids_from_csv
+            from bioamla.core.catalogs.inaturalist import load_taxon_ids_from_csv
 
             taxon_ids = load_taxon_ids_from_csv(csv_path)
 

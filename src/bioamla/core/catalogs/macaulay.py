@@ -9,14 +9,14 @@ The Macaulay Library is one of the world's largest natural sound archives,
 containing over 15 million audio, video, and photo specimens.
 
 Note:
-    The Macaulay Library uses the eBird API for metadata and a separate
-    asset server for media files. Some features may require API keys.
+    The Macaulay Library uses eBird species codes for species identification.
+    Use 'catalogs ebird species' to look up species codes.
 
 Features:
 - Search recordings by species, location, and media type
 - Download audio with metadata
-- Rate limiting and caching support
-- Integration with eBird taxonomy
+- Rate limiting support
+- Uses eBird species codes for species lookup
 
 Example:
     >>> from bioamla.api import macaulay
@@ -36,25 +36,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from bioamla.core.catalogs.base_api import APICache, APIClient, RateLimiter
+from bioamla.core.catalogs.base_api import APIClient, RateLimiter
 from bioamla.core.files import TextFile, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
-# Macaulay Library / eBird API endpoints
+# Macaulay Library API endpoints
 ML_SEARCH_URL = "https://search.macaulaylibrary.org/api/v1/search"
 ML_ASSET_URL = "https://cdn.download.ams.birds.cornell.edu/api/v1/asset"
-EBIRD_TAXONOMY_URL = "https://api.ebird.org/v2/ref/taxonomy/ebird"
 
 # Default rate limit: 1 request per second
 _rate_limiter = RateLimiter(requests_per_second=1.0, burst_size=2)
-_cache = APICache(
-    cache_dir=Path.home() / ".cache" / "bioamla" / "macaulay",
-    default_ttl=3600,
-)
 _client = APIClient(
     rate_limiter=_rate_limiter,
-    cache=_cache,
     user_agent="bioamla/1.0 (bioacoustics research tool)",
 )
 
@@ -117,7 +111,7 @@ class MLAsset:
             common_name=data.get("commonName", ""),
             scientific_name=data.get("sciName", ""),
             media_type=data.get("mediaType", ""),
-            rating=int(data.get("rating", 0)),
+            rating=int(float(data.get("rating", 0) or 0)),
             location=data.get("location", ""),
             region=data.get("region", ""),
             country=data.get("country", ""),
@@ -177,7 +171,6 @@ def search(
     month: Optional[int] = None,
     sort: str = "rating_rank_desc",
     count: int = 100,
-    use_cache: bool = True,
 ) -> List[MLAsset]:
     """
     Search the Macaulay Library for media assets.
@@ -196,7 +189,6 @@ def search(
         month: Month filter (1-12).
         sort: Sort order (rating_rank_desc, obs_dt_desc, upload_dt_desc).
         count: Maximum results to return.
-        use_cache: Whether to use cached results.
 
     Returns:
         List of MLAsset objects.
@@ -218,7 +210,7 @@ def search(
     }
 
     if species_code:
-        params["speciesCode"] = species_code
+        params["taxonCode"] = species_code
     if scientific_name:
         params["sciName"] = scientific_name
     if common_name:
@@ -243,14 +235,14 @@ def search(
 
     if not any(
         k in params
-        for k in ["speciesCode", "sciName", "commonName", "region", "taxonCode", "hotspotCode"]
+        for k in ["taxonCode", "sciName", "commonName", "region", "hotspotCode"]
     ):
         raise ValueError(
             "At least one search filter is required (species_code, scientific_name, common_name, region, taxon_code, or hotspot_code)"
         )
 
     try:
-        response = _client.get(ML_SEARCH_URL, params=params, use_cache=use_cache)
+        response = _client.get(ML_SEARCH_URL, params=params)
     except Exception as e:
         logger.error(f"Macaulay Library API error: {e}")
         raise
@@ -491,11 +483,3 @@ def search_audio(
     )
 
 
-def clear_cache() -> int:
-    """
-    Clear the Macaulay Library API cache.
-
-    Returns:
-        Number of cache entries cleared.
-    """
-    return _cache.clear()
