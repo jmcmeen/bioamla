@@ -627,38 +627,35 @@ class ClusteringService(BaseService):
             Result with export info
         """
         try:
-            import csv
+            from bioamla.services.file import FileService
 
-            from bioamla.core.files import TextFile
+            output_path_obj = Path(output_path)
+            output_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
-            output_path = Path(output_path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
+            fieldnames = ["filepath", "cluster"]
+            if reduced_embeddings is not None and reduced_embeddings.shape[1] >= 2:
+                fieldnames.extend(["x", "y"])
 
-            with TextFile(output_path, mode="w", newline="") as f:
-                fieldnames = ["filepath", "cluster"]
-
+            rows = []
+            for i, (fp, label) in enumerate(zip(filepaths, labels)):
+                row = {
+                    "filepath": fp,
+                    "cluster": int(label),
+                }
                 if reduced_embeddings is not None and reduced_embeddings.shape[1] >= 2:
-                    fieldnames.extend(["x", "y"])
+                    row["x"] = float(reduced_embeddings[i, 0])
+                    row["y"] = float(reduced_embeddings[i, 1])
+                rows.append(row)
 
-                writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
-                writer.writeheader()
-
-                for i, (fp, label) in enumerate(zip(filepaths, labels)):
-                    row = {
-                        "filepath": fp,
-                        "cluster": int(label),
-                    }
-                    if reduced_embeddings is not None and reduced_embeddings.shape[1] >= 2:
-                        row["x"] = float(reduced_embeddings[i, 0])
-                        row["y"] = float(reduced_embeddings[i, 1])
-                    writer.writerow(row)
+            file_svc = FileService()
+            file_svc.write_csv_dicts(str(output_path_obj), rows, fieldnames=fieldnames)
 
             return ServiceResult.ok(
                 data={
-                    "output_path": str(output_path),
+                    "output_path": str(output_path_obj),
                     "n_rows": len(labels),
                 },
-                message=f"Exported {len(labels)} rows to {output_path}",
+                message=f"Exported {len(labels)} rows to {output_path_obj}",
             )
         except Exception as e:
             return ServiceResult.fail(str(e))

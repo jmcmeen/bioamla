@@ -68,12 +68,13 @@ class SpeciesService(BaseService):
         """Initialize species service."""
         super().__init__()
 
-    def lookup(self, name: str) -> ServiceResult[SpeciesInfo]:
+    def lookup(self, name: str, ebird_only: bool = False) -> ServiceResult[SpeciesInfo]:
         """
         Look up species information by name.
 
         Args:
             name: Species name (scientific or common)
+            ebird_only: If True, only search eBird taxonomy
 
         Returns:
             Result with species information
@@ -81,7 +82,7 @@ class SpeciesService(BaseService):
         try:
             from bioamla.core.catalogs import species
 
-            info = species.get_species_info(name)
+            info = species.get_species_info(name, ebird_only=ebird_only)
             if not info:
                 return ServiceResult.fail(f"Species not found: {name}")
 

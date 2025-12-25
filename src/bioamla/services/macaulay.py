@@ -86,7 +86,11 @@ class MacaulayService(BaseService):
         self,
         species_code: Optional[str] = None,
         scientific_name: Optional[str] = None,
+        common_name: Optional[str] = None,
         region: Optional[str] = None,
+        country: Optional[str] = None,
+        taxon_code: Optional[str] = None,
+        hotspot_code: Optional[str] = None,
         min_rating: int = 0,
         max_results: int = 10,
     ) -> ServiceResult[SearchResult]:
@@ -96,7 +100,11 @@ class MacaulayService(BaseService):
         Args:
             species_code: eBird species code (e.g., amerob)
             scientific_name: Scientific name
+            common_name: Common name
             region: Region code (e.g., US-NY)
+            country: Country code (e.g., US)
+            taxon_code: eBird taxon code for broader searches
+            hotspot_code: eBird hotspot code
             min_rating: Minimum quality rating (1-5)
             max_results: Maximum number of results
 
@@ -109,7 +117,11 @@ class MacaulayService(BaseService):
             results = macaulay.search(
                 species_code=species_code,
                 scientific_name=scientific_name,
+                common_name=common_name,
                 region=region,
+                country=country,
+                taxon_code=taxon_code,
+                hotspot_code=hotspot_code,
                 media_type="audio",
                 min_rating=min_rating,
                 count=max_results,
@@ -138,7 +150,11 @@ class MacaulayService(BaseService):
                 query_params={
                     "species_code": species_code,
                     "scientific_name": scientific_name,
+                    "common_name": common_name,
                     "region": region,
+                    "country": country,
+                    "taxon_code": taxon_code,
+                    "hotspot_code": hotspot_code,
                     "min_rating": min_rating,
                 },
             )
@@ -154,7 +170,11 @@ class MacaulayService(BaseService):
         self,
         species_code: Optional[str] = None,
         scientific_name: Optional[str] = None,
+        common_name: Optional[str] = None,
         region: Optional[str] = None,
+        country: Optional[str] = None,
+        taxon_code: Optional[str] = None,
+        hotspot_code: Optional[str] = None,
         min_rating: int = 3,
         max_recordings: int = 10,
         output_dir: str = "./ml_recordings",
@@ -165,7 +185,11 @@ class MacaulayService(BaseService):
         Args:
             species_code: eBird species code (e.g., amerob)
             scientific_name: Scientific name
+            common_name: Common name
             region: Region code (e.g., US-NY)
+            country: Country code (e.g., US)
+            taxon_code: eBird taxon code for broader searches
+            hotspot_code: eBird hotspot code
             min_rating: Minimum quality rating (default: 3)
             max_recordings: Maximum recordings to download
             output_dir: Output directory
@@ -180,7 +204,11 @@ class MacaulayService(BaseService):
             results = macaulay.search(
                 species_code=species_code,
                 scientific_name=scientific_name,
+                common_name=common_name,
                 region=region,
+                country=country,
+                taxon_code=taxon_code,
+                hotspot_code=hotspot_code,
                 media_type="audio",
                 min_rating=min_rating,
                 count=max_recordings,
