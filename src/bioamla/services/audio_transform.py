@@ -1,40 +1,6 @@
 # services/audio_transform.py
 """
-Audio Transform Service
-=======================
-
 Service for audio signal processing operations, both in-memory and file-based.
-
-This service provides:
-- In-memory signal processing (filter, normalize, resample, etc.)
-- File-based batch processing for CLI operations
-- Audio analysis and metadata extraction
-- Playback preparation (format conversion, gain adjustment)
-
-Architecture:
-    - In-memory operations work on AudioData objects
-    - File-based operations handle I/O and batch processing
-    - Use AudioFileService for direct file I/O operations
-
-Usage:
-    from bioamla.services import AudioFileService, AudioTransformService
-
-    file_svc = AudioFileService()
-    transform_svc = AudioTransformService()
-
-    # Load audio
-    result = file_svc.open("input.wav")
-    audio = result.data
-
-    # Apply transforms (in memory)
-    audio = transform_svc.apply_bandpass(audio, 500, 8000).data
-    audio = transform_svc.normalize_loudness(audio, target_db=-20).data
-
-    # Save through file service
-    file_svc.save(audio, "output.wav")
-
-    # Or use file-based batch operations directly
-    result = transform_svc.resample_files("input_dir", "output_dir", 16000)
 """
 
 import csv

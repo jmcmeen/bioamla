@@ -1,28 +1,6 @@
 # services/clustering.py
 """
-Clustering Service
-==================
-
 Service for clustering and novelty detection operations on audio embeddings.
-
-Orchestrates between CLI/API views and core clustering functions.
-Handles UMAP/PCA reduction, HDBSCAN/k-means clustering, novelty detection,
-and visualization generation.
-
-Example:
-    from bioamla.services import ClusteringService
-    import numpy as np
-
-    service = ClusteringService()
-
-    # Cluster embeddings
-    embeddings = np.load("embeddings.npy")
-    result = service.cluster(embeddings, method="hdbscan")
-    print(f"Found {result.data.n_clusters} clusters")
-
-    # Reduce and visualize
-    result = service.reduce_for_visualization(embeddings)
-    x, y = result.data["x"], result.data["y"]
 """
 
 from dataclasses import dataclass, field

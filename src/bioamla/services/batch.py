@@ -1,25 +1,7 @@
 # services/batch.py
 """
-Batch Processing Service
-========================
-
 Service for batch processing operations across multiple files.
 
-This service orchestrates other services for iterative processing,
-providing progress tracking and error handling for batch operations.
-
-Usage:
-    from bioamla.services import BatchService
-
-    batch_svc = BatchService()
-
-    # Batch convert audio files
-    result = batch_svc.audio_convert(
-        input_dir="input/",
-        output_dir="output/",
-        format="wav",
-        sample_rate=16000,
-    )
 """
 
 from dataclasses import dataclass, field

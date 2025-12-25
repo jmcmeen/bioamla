@@ -1,34 +1,6 @@
 # services/indices.py
 """
-Indices Service
-===============
-
 Service for acoustic index calculations.
-
-Provides a clean interface for:
-- Computing indices on AudioData objects
-- Batch processing of audio files
-- Temporal analysis with sliding windows
-- CSV/Parquet export of results
-
-Usage:
-    from bioamla.services import IndicesService, AudioFileService
-
-    # Load audio
-    file_svc = AudioFileService()
-    result = file_svc.open("recording.wav")
-    audio = result.data
-
-    # Calculate indices
-    indices_svc = IndicesService()
-    result = indices_svc.calculate(audio)
-
-    if result.success:
-        print(f"ACI: {result.data.aci}")
-        print(f"NDSI: {result.data.ndsi}")
-
-    # Batch processing
-    batch_result = indices_svc.calculate_batch("./recordings/", output="indices.csv")
 """
 
 from dataclasses import dataclass

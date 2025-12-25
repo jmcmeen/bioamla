@@ -1,27 +1,6 @@
 # services/macaulay.py
 """
-Macaulay Library Service
-========================
-
 Service for Macaulay Library audio recording operations.
-
-Orchestrates between CLI/API views and core Macaulay functions.
-Handles search and download with progress reporting.
-
-Example:
-    from bioamla.services import MacaulayService
-
-    service = MacaulayService()
-
-    # Search for recordings
-    result = service.search(species_code="amerob", min_rating=3)
-
-    # Download recordings
-    result = service.download(
-        species_code="amerob",
-        output_dir="./recordings",
-        max_recordings=10,
-    )
 """
 
 from dataclasses import dataclass, field

@@ -1,29 +1,6 @@
 # services/birdnet.py
 """
-BirdNET Service
-===============
-
 Service for BirdNET model operations.
-
-This service provides a unified interface for BirdNET model inference
-and embedding extraction.
-
-Usage:
-    from bioamla.services import BirdNETService
-
-    birdnet_svc = BirdNETService()
-
-    # Predict on a single file
-    result = birdnet_svc.predict(
-        filepath="audio.wav",
-        model_path="path/to/birdnet",
-    )
-
-    # Extract embeddings
-    result = birdnet_svc.extract_embeddings(
-        filepath="audio.wav",
-        model_path="path/to/birdnet",
-    )
 """
 
 from dataclasses import dataclass

@@ -1,23 +1,6 @@
 # services/huggingface.py
 """
-HuggingFace Hub Service
-=======================
-
 Service for HuggingFace Hub model and dataset operations.
-
-Orchestrates between CLI/API views and HuggingFace Hub API.
-Handles model and dataset uploads.
-
-Example:
-    from bioamla.services import HuggingFaceService
-
-    service = HuggingFaceService()
-
-    # Push a model
-    result = service.push_model("./model", "username/model-name")
-
-    # Push a dataset
-    result = service.push_dataset("./dataset", "username/dataset-name")
 """
 
 from dataclasses import dataclass

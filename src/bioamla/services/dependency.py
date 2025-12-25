@@ -1,29 +1,6 @@
 # services/dependency.py
 """
-Dependency Service
-==================
-
 Service for system dependency checking and installation.
-
-This service provides a consistent interface for checking and installing
-system-level dependencies required by bioamla (FFmpeg, libsndfile, PortAudio).
-
-Usage:
-    from bioamla.services import DependencyService
-
-    dep_svc = DependencyService()
-
-    # Check all dependencies
-    result = dep_svc.check_all()
-    if result.success:
-        for dep in result.data:
-            print(f"{dep.name}: {'installed' if dep.installed else 'missing'}")
-
-    # Check specific dependency
-    result = dep_svc.check_ffmpeg()
-
-    # Install missing dependencies
-    result = dep_svc.install()
 """
 
 from dataclasses import dataclass

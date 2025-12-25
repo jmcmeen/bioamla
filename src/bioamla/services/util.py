@@ -1,7 +1,4 @@
 """
-Utility Service
-===============
-
 Service for system information and utility operations.
 """
 

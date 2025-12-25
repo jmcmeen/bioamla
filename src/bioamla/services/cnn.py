@@ -1,30 +1,6 @@
 # services/cnn.py
 """
-CNN Service
-===========
-
 Service for CNN-based spectrogram classifier operations.
-
-This service provides a unified interface for CNN model inference, training,
-and evaluation operations.
-
-Usage:
-    from bioamla.services import CNNService
-
-    cnn_svc = CNNService()
-
-    # Predict on a single file
-    result = cnn_svc.predict(
-        filepath="audio.wav",
-        model_path="./models/my_cnn",
-    )
-
-    # Train a model
-    result = cnn_svc.train(
-        data_dir="./training_data",
-        output_dir="./models/my_cnn",
-        n_classes=10,
-    )
 """
 
 from dataclasses import dataclass

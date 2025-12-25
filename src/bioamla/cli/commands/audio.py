@@ -66,7 +66,7 @@ def audio_list(path: str, recursive: bool):
     type=click.Choice(["wav", "mp3", "flac", "ogg"]),
     help="Output format",
 )
-def audio_convert(input_path, output_path, sample_rate, channels, bit_depth, format):
+def audio_convert(input_path : str, output_path : str, sample_rate : int, channels : int, bit_depth : int, format : str):
     """Convert audio file format or properties."""
     from bioamla.services.audio_file import AudioFileService
 

@@ -1,23 +1,6 @@
 # services/ebird.py
 """
-eBird Service
-=============
-
 Service for eBird observation data operations.
-
-Orchestrates between CLI/API views and core eBird functions.
-Handles species validation and nearby observations.
-
-Example:
-    from bioamla.services import EBirdService
-
-    service = EBirdService(api_key="your-api-key")
-
-    # Validate species at location
-    result = service.validate_species("amerob", lat=40.7, lng=-74.0)
-
-    # Get nearby observations
-    result = service.get_nearby(lat=40.7, lng=-74.0)
 """
 
 from dataclasses import dataclass

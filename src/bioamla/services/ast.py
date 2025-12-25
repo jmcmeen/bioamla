@@ -1,37 +1,6 @@
 # services/ast.py
 """
-AST Service
-===========
-
 Service for Audio Spectrogram Transformer (AST) model operations.
-
-This service provides a unified interface for AST model inference, training,
-and evaluation operations.
-
-Usage:
-    from bioamla.services import ASTService
-
-    ast_svc = ASTService()
-
-    # Predict on a single file
-    result = ast_svc.predict(
-        filepath="audio.wav",
-        model_path="bioamla/scp-frogs",
-    )
-
-    # Batch prediction
-    result = ast_svc.predict_batch(
-        directory="./audio",
-        model_path="bioamla/scp-frogs",
-        output_csv="predictions.csv",
-    )
-
-    # Train a model
-    result = ast_svc.train(
-        train_dataset="bioamla/scp-frogs",
-        base_model="MIT/ast-finetuned-audioset-10-10-0.4593",
-        output_dir="./training",
-    )
 """
 
 from dataclasses import dataclass
