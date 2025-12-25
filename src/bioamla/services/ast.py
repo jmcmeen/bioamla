@@ -6,6 +6,8 @@ Service for Audio Spectrogram Transformer (AST) model operations.
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from bioamla.repository.protocol import FileRepositoryProtocol
+
 from .base import BaseService, ServiceResult, ToDictMixin
 
 
@@ -18,16 +20,6 @@ class PredictionResult(ToDictMixin):
     confidence: float
     start_time: Optional[float] = None
     end_time: Optional[float] = None
-
-
-@dataclass
-class BatchPredictionResult(ToDictMixin):
-    """Result of batch prediction."""
-
-    total_files: int
-    total_predictions: int
-    output_path: Optional[str]
-    elapsed_seconds: float
 
 
 @dataclass
@@ -59,8 +51,13 @@ class ASTService(BaseService):
     Provides ServiceResult-wrapped methods for AST model operations.
     """
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
+        """Initialize AST service.
+
+        Args:
+            file_repository: Repository for file operations (required)
+        """
+        super().__init__(file_repository=file_repository)
         self._model = None
         self._model_path = None
 
@@ -88,7 +85,10 @@ class ASTService(BaseService):
         try:
             from bioamla.services.inference import InferenceService
 
-            service = InferenceService(model_path=model_path)
+            service = InferenceService(
+                file_repository=self.file_repository,
+                model_path=model_path,
+            )
             result = service.predict(filepath=filepath)
 
             if not result.success:
@@ -110,148 +110,6 @@ class ASTService(BaseService):
         except Exception as e:
             return ServiceResult.fail(f"Prediction failed: {e}")
 
-    def predict_batch(
-        self,
-        directory: str,
-        model_path: str = "bioamla/scp-frogs",
-        output_csv: Optional[str] = None,
-        resample_freq: int = 16000,
-        segment_duration: int = 1,
-        segment_overlap: int = 0,
-        batch_size: int = 8,
-        fp16: bool = False,
-        use_compile: bool = False,
-        workers: int = 1,
-        restart: bool = False,
-    ) -> ServiceResult[BatchPredictionResult]:
-        """
-        Run batch prediction on a directory of audio files.
-
-        Args:
-            directory: Directory containing audio files
-            model_path: Path to model or HuggingFace identifier
-            output_csv: Output CSV file path
-            resample_freq: Target sample rate
-            segment_duration: Duration of audio segments in seconds
-            segment_overlap: Overlap between segments in seconds
-            batch_size: Number of segments to process in parallel
-            fp16: Use half-precision inference
-            use_compile: Use torch.compile for optimized inference
-            workers: Number of parallel workers for file loading
-            restart: Resume from existing results
-
-        Returns:
-            ServiceResult containing BatchPredictionResult
-        """
-        error = self._validate_input_path(directory)
-        if error:
-            return ServiceResult.fail(error)
-
-        try:
-            import os
-            import time
-
-            import pandas as pd
-
-            from bioamla.core.ml.ast import (
-                InferenceConfig,
-                get_cached_feature_extractor,
-                load_pretrained_ast_model,
-                wave_file_batch_inference,
-            )
-            from bioamla.core.utils import file_exists, get_files_by_extension
-
-            # Prepare output path
-            if output_csv:
-                output_path = output_csv
-            else:
-                output_path = os.path.join(directory, "predictions.csv")
-
-            output_dir = os.path.dirname(output_path)
-            if output_dir:
-                os.makedirs(output_dir, exist_ok=True)
-
-            # Find wave files
-            wave_files = get_files_by_extension(
-                directory=directory,
-                extensions=[".wav"],
-                recursive=True,
-            )
-
-            if not wave_files:
-                return ServiceResult.fail(f"No WAV files found in {directory}")
-
-            # Handle restart
-            if restart and file_exists(output_path):
-                df = pd.read_csv(output_path)
-                processed_files = set(df["filepath"])
-                wave_files = [f for f in wave_files if f not in processed_files]
-
-                if not wave_files:
-                    return ServiceResult.ok(
-                        data=BatchPredictionResult(
-                            total_files=len(processed_files),
-                            total_predictions=len(df),
-                            output_path=output_path,
-                            elapsed_seconds=0,
-                        ),
-                        message="All files already processed",
-                    )
-            else:
-                # Create new CSV
-                results = pd.DataFrame(columns=["filepath", "start", "stop", "prediction"])
-                results.to_csv(output_path, header=True, index=False)
-
-            # Load model
-            model = load_pretrained_ast_model(
-                model_path,
-                use_fp16=fp16,
-                use_compile=use_compile,
-            )
-            model.eval()
-
-            config = InferenceConfig(
-                batch_size=batch_size,
-                use_fp16=fp16,
-                use_compile=use_compile,
-                num_workers=workers,
-            )
-
-            feature_extractor = get_cached_feature_extractor()
-
-            # Run inference
-            start_time = time.time()
-
-            wave_file_batch_inference(
-                wave_files=wave_files,
-                model=model,
-                freq=resample_freq,
-                segment_duration=segment_duration,
-                segment_overlap=segment_overlap,
-                output_csv=output_path,
-                config=config,
-                feature_extractor=feature_extractor,
-            )
-
-            elapsed = time.time() - start_time
-
-            # Count predictions
-            df = pd.read_csv(output_path)
-            total_predictions = len(df)
-
-            result = BatchPredictionResult(
-                total_files=len(wave_files),
-                total_predictions=total_predictions,
-                output_path=output_path,
-                elapsed_seconds=elapsed,
-            )
-
-            return ServiceResult.ok(
-                data=result,
-                message=f"Processed {len(wave_files)} files in {elapsed:.2f}s",
-            )
-        except Exception as e:
-            return ServiceResult.fail(f"Batch prediction failed: {e}")
 
     def train(
         self,

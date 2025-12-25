@@ -2,6 +2,7 @@
 
 import click
 
+from bioamla.repository.local import LocalFileRepository
 from bioamla.services.dataset import DatasetService
 
 
@@ -39,7 +40,9 @@ def dataset_merge(
     quiet: bool,
 ) -> None:
     """Merge multiple audio datasets into a single dataset."""
-    service = DatasetService()
+    repository = LocalFileRepository()
+
+    service = DatasetService(file_repository=repository)
     result = service.merge(
         dataset_paths=list(dataset_paths),
         output_dir=output_dir,
@@ -86,7 +89,10 @@ def dataset_license(
         click.echo(f"Error: Template file '{template}' not found.")
         raise SystemExit(1)
 
-    service = DatasetService()
+    repository = LocalFileRepository()
+
+
+    service = DatasetService(file_repository=repository)
 
     if batch:
         if not path_obj.is_dir():
@@ -224,7 +230,10 @@ def dataset_augment(
         click.echo("Use --help for available options")
         raise SystemExit(1)
 
-    service = DatasetService()
+    repository = LocalFileRepository()
+
+
+    service = DatasetService(file_repository=repository)
     result = service.augment(
         input_dir=input_dir,
         output_dir=output,
@@ -276,7 +285,10 @@ def dataset_download(url: str, output_dir: str) -> None:
 
     output_path = os.path.join(output_dir, filename)
 
-    service = DatasetService()
+    repository = LocalFileRepository()
+
+
+    service = DatasetService(file_repository=repository)
     result = service.download(url, output_path)
 
     if not result.success:
@@ -294,7 +306,10 @@ def dataset_unzip(file_path: str, output_path: str) -> None:
     if output_path == ".":
         output_path = os.getcwd()
 
-    service = DatasetService()
+    repository = LocalFileRepository()
+
+
+    service = DatasetService(file_repository=repository)
     result = service.extract_zip(file_path, output_path)
 
     if not result.success:
@@ -307,7 +322,9 @@ def dataset_unzip(file_path: str, output_path: str) -> None:
 @click.argument("output_file")
 def dataset_zip(source_path: str, output_file: str) -> None:
     """Create a ZIP archive from a file or directory."""
-    service = DatasetService()
+    repository = LocalFileRepository()
+
+    service = DatasetService(file_repository=repository)
     result = service.create_zip(source_path, output_file)
 
     if not result.success:

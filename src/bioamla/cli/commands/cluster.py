@@ -2,6 +2,7 @@
 
 import click
 
+from bioamla.repository.local import LocalFileRepository
 from bioamla.services.clustering import ClusteringService
 from bioamla.services.file import FileService
 
@@ -142,7 +143,9 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        file_svc = FileService()
+        repository = LocalFileRepository()
+
+        file_svc = FileService(file_repository=repository)
 
         def convert_numpy(obj: Any) -> Any:
             if isinstance(obj, np.integer):

@@ -2,6 +2,7 @@
 
 import click
 
+from bioamla.repository.local import LocalFileRepository
 from bioamla.services.detection import DetectionService
 from bioamla.services.file import FileService
 
@@ -31,7 +32,8 @@ def detect_energy(path: str, low_freq: float, high_freq: float, threshold: float
     import json as json_lib
     from pathlib import Path as PathLib
 
-    service = DetectionService()
+    repository = LocalFileRepository()
+    service = DetectionService(file_repository=repository)
     path_obj = PathLib(path)
     all_detections = []
 
@@ -141,7 +143,10 @@ def detect_ribbit(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    service = DetectionService()
+    repository = LocalFileRepository()
+
+
+    service = DetectionService(file_repository=repository)
     path_obj = PathLib(path)
     all_detections = []
 
@@ -247,7 +252,10 @@ def detect_peaks(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    service = DetectionService()
+    repository = LocalFileRepository()
+
+
+    service = DetectionService(file_repository=repository)
     path_obj = PathLib(path)
 
     if path_obj.is_dir():
@@ -372,7 +380,9 @@ def detect_peaks(
                     all_detections.extend(result.data.detections)
 
         if output:
-            file_svc = FileService()
+            repository = LocalFileRepository()
+
+            file_svc = FileService(file_repository=repository)
             fieldnames = ["start_time", "end_time", "confidence", "amplitude", "width"]
             if len(audio_files) > 1:
                 fieldnames.append("source_file")
@@ -465,7 +475,10 @@ def detect_accelerating(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    service = DetectionService()
+    repository = LocalFileRepository()
+
+
+    service = DetectionService(file_repository=repository)
     path_obj = PathLib(path)
     all_detections = []
 
@@ -572,7 +585,9 @@ def detect_accelerating(
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_batch(directory: str, detector: str, output_dir: str, low_freq: float, high_freq: float, quiet: bool) -> None:
     """Run detection on all audio files in a directory."""
-    service = DetectionService()
+    repository = LocalFileRepository()
+
+    service = DetectionService(file_repository=repository)
 
     result = service.batch_detect(
         directory=directory,

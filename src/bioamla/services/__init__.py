@@ -58,6 +58,13 @@ from .audio_transform import (
     ProcessedAudio,
 )
 from .base import BaseService, ServiceResult
+from .batch_base import BatchServiceBase
+from .batch_audio_transform import BatchAudioTransformService
+from .batch_clustering import BatchClusteringService
+from .batch_detection import BatchDetectionService
+from .batch_indices import BatchIndicesService
+from .batch_inference import BatchInferenceService
+from .factory import ServiceFactory
 from .birdnet import BirdNETService
 from .clustering import ClusteringService
 from .cnn import CNNService
@@ -88,7 +95,8 @@ from .inaturalist import (
 from .indices import BatchIndicesResult, IndicesResult, IndicesService
 from .inference import InferenceService
 from .macaulay import MacaulayService
-from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitService
+from .ribbit import RibbitService
+from bioamla.models.ribbit import BatchDetectionSummary, DetectionSummary
 from .species import SpeciesService
 
 # Catalog services
@@ -98,6 +106,10 @@ __all__ = [
     # Base
     "BaseService",
     "ServiceResult",
+    # Batch Base
+    "BatchServiceBase",
+    # Factory
+    "ServiceFactory",
     # Audio
     "AudioFileService",  # File I/O operations
     "AudioTransformService",  # In-memory transforms + file-based batch operations
@@ -106,6 +118,12 @@ __all__ = [
     "ProcessedAudio",  # Processing result
     "AnalysisResult",  # Analysis result
     "BatchResult",  # Batch operation result
+    # Batch Services
+    "BatchAudioTransformService",
+    "BatchDetectionService",
+    "BatchIndicesService",
+    "BatchInferenceService",
+    "BatchClusteringService",
     # Annotations
     "AnnotationService",
     "AnnotationResult",

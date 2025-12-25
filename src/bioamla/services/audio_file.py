@@ -11,6 +11,8 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 import numpy as np
 
+from bioamla.repository.protocol import FileRepositoryProtocol
+
 from .base import BaseService, ServiceResult
 
 
@@ -73,7 +75,9 @@ class AudioFileService(BaseService):
     objects that can then be saved through this service.
 
     Example:
-        file_svc = AudioFileService()
+        from bioamla.repository.local import LocalFileRepository
+
+        file_svc = AudioFileService(LocalFileRepository())
 
         # Open a file
         result = file_svc.open("recording.wav")
@@ -84,8 +88,13 @@ class AudioFileService(BaseService):
         save_result = file_svc.save(processed_audio, "output.wav")
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
+        """Initialize the service.
+
+        Args:
+            file_repository: File repository for all file I/O operations (required).
+        """
+        super().__init__(file_repository)
         self._temp_dir: Optional[Path] = None
 
     def _get_temp_dir(self) -> Path:
@@ -175,7 +184,7 @@ class AudioFileService(BaseService):
 
         try:
             output = Path(output_path)
-            output.parent.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(output.parent, parents=True)
 
             # Determine format from extension if not specified
             format_to_use = format
@@ -268,7 +277,7 @@ class AudioFileService(BaseService):
         if path is None:
             return ServiceResult.fail("No target path specified and audio has no source path")
 
-        if not Path(path).exists():
+        if not self.file_repository.exists(path):
             return ServiceResult.fail(f"Target file does not exist: {path}")
 
         return self.save(audio_data, path)
@@ -310,7 +319,7 @@ class AudioFileService(BaseService):
             processed, out_sr = transform(audio, sr)
 
             # Ensure parent directory exists
-            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(Path(output_path).parent, parents=True)
 
             # Save
             sf.write(str(output_path), processed, out_sr)

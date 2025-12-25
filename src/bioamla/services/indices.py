@@ -19,9 +19,10 @@ from bioamla.core.audio.indices import (
     temporal_entropy,
     temporal_indices,
 )
+from bioamla.repository.protocol import FileRepositoryProtocol
 
 from .audio_file import AudioData
-from .base import BaseService, BatchProgress, ServiceResult
+from .base import BaseService, ServiceResult
 
 # Available index names for selection
 AVAILABLE_INDICES = ["aci", "adi", "aei", "bio", "ndsi", "h_spectral", "h_temporal"]
@@ -104,8 +105,13 @@ class IndicesService(BaseService):
     DEFAULT_BIO_MAX_FREQ = 8000.0
     DEFAULT_DB_THRESHOLD = -50.0
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
+        """Initialize the service.
+
+        Args:
+            file_repository: File repository for all file I/O operations (required).
+        """
+        super().__init__(file_repository)
 
     # =========================================================================
     # Single File Operations
@@ -330,138 +336,6 @@ class IndicesService(BaseService):
         except Exception as e:
             return ServiceResult.fail(f"Temporal analysis failed: {e}")
 
-    # =========================================================================
-    # Batch Operations
-    # =========================================================================
-
-    def calculate_batch(
-        self,
-        input_path: str,
-        output_path: Optional[str] = None,
-        recursive: bool = True,
-        include_entropy: bool = True,
-        **kwargs,
-    ) -> ServiceResult[BatchIndicesResult]:
-        """
-        Calculate acoustic indices for multiple audio files.
-
-        Args:
-            input_path: Path to directory containing audio files
-            output_path: Optional CSV/Parquet file to save results
-            recursive: Search subdirectories
-            include_entropy: Include entropy indices
-            **kwargs: Parameters for index calculations
-
-        Returns:
-            ServiceResult containing BatchIndicesResult
-        """
-        import soundfile as sf
-
-        # Start run tracking
-        self._start_run(
-            name=f"Batch indices: {input_path}",
-            action="indices",
-            input_path=input_path,
-            output_path=output_path or "",
-            parameters={
-                "recursive": recursive,
-                "include_entropy": include_entropy,
-                **kwargs,
-            },
-        )
-
-        # Get audio files
-        files = self._get_audio_files(input_path, recursive=recursive)
-
-        if not files:
-            self._fail_run("No audio files found")
-            return ServiceResult.fail(f"No audio files found in {input_path}")
-
-        results = []
-        successful = 0
-        failed = 0
-
-        # Process files
-        progress = BatchProgress(total=len(files))
-        self._report_progress(progress)
-
-        for filepath in files:
-            progress.current_file = str(filepath)
-            self._report_progress(progress)
-
-            try:
-                # Load audio
-                audio_samples, sr = sf.read(str(filepath), dtype="float32")
-
-                # Create AudioData object
-                audio = AudioData(
-                    samples=audio_samples,
-                    sample_rate=sr,
-                    source_path=str(filepath),
-                )
-
-                # Calculate indices
-                result = self.calculate(audio, include_entropy=include_entropy, **kwargs)
-
-                if result.success:
-                    row = result.data.to_dict()
-                    row["success"] = True
-                    results.append(row)
-                    successful += 1
-                else:
-                    results.append(
-                        {
-                            "filepath": str(filepath),
-                            "success": False,
-                            "error": result.error,
-                        }
-                    )
-                    failed += 1
-                    progress.errors.append(f"{filepath.name}: {result.error}")
-
-            except Exception as e:
-                results.append(
-                    {
-                        "filepath": str(filepath),
-                        "success": False,
-                        "error": str(e),
-                    }
-                )
-                failed += 1
-                progress.errors.append(f"{filepath.name}: {e}")
-
-            progress.completed += 1
-            self._report_progress(progress)
-
-        # Save results if output path specified
-        saved_path = None
-        if output_path and results:
-            save_result = self._save_results(results, output_path)
-            if save_result.success:
-                saved_path = save_result.data
-
-        batch_result = BatchIndicesResult(
-            results=results,
-            successful=successful,
-            failed=failed,
-            output_path=saved_path,
-        )
-
-        # Complete run with results
-        self._complete_run(
-            results={
-                "total_files": len(files),
-                "successful": successful,
-                "failed": failed,
-            },
-            output_files=[saved_path] if saved_path else None,
-        )
-
-        return ServiceResult.ok(
-            data=batch_result,
-            message=f"Processed {len(files)} files: {successful} successful, {failed} failed",
-            warnings=progress.errors if progress.errors else None,
-        )
 
     def _save_results(
         self,
@@ -474,7 +348,7 @@ class IndicesService(BaseService):
 
             df = pd.DataFrame(results)
             path = Path(output_path)
-            path.parent.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(path.parent, parents=True)
 
             if path.suffix.lower() == ".parquet":
                 df.to_parquet(path, index=False)
@@ -487,6 +361,7 @@ class IndicesService(BaseService):
             )
 
         except Exception as e:
+            return ServiceResult.fail(f"Failed to save results: {e}")
             return ServiceResult.fail(f"Failed to save results: {e}")
 
     # =========================================================================

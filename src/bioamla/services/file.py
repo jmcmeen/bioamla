@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from bioamla.repository.protocol import FileRepositoryProtocol
+
 from .base import BaseService, ServiceResult
 
 
@@ -16,8 +18,16 @@ class FileService(BaseService):
     Service for general file I/O operations.
 
     Provides ServiceResult-wrapped methods for common file operations
-    used by CLI commands.
+    used by CLI commands. All file I/O is delegated to the file repository.
     """
+
+    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
+        """Initialize the service.
+
+        Args:
+            file_repository: File repository for all file I/O operations (required).
+        """
+        super().__init__(file_repository)
 
     def write_text(
         self,
@@ -38,10 +48,8 @@ class FileService(BaseService):
         """
         try:
             path = Path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-
-            with open(path, "w", encoding=encoding) as f:
-                f.write(content)
+            self.file_repository.mkdir(path.parent, parents=True)
+            self.file_repository.write_text(path, content, encoding=encoding)
 
             return ServiceResult.ok(
                 data=str(path),
@@ -67,11 +75,10 @@ class FileService(BaseService):
         """
         try:
             path = Path(path)
-            if not path.exists():
+            if not self.file_repository.exists(path):
                 return ServiceResult.fail(f"File not found: {path}")
 
-            with open(path, encoding=encoding) as f:
-                content = f.read()
+            content = self.file_repository.read_text(path, encoding=encoding)
 
             return ServiceResult.ok(
                 data=content,
@@ -101,10 +108,10 @@ class FileService(BaseService):
         """
         try:
             path = Path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(path.parent, parents=True)
 
-            with open(path, "w", encoding=encoding) as f:
-                json.dump(data, f, indent=indent, default=str)
+            content = json.dumps(data, indent=indent, default=str)
+            self.file_repository.write_text(path, content, encoding=encoding)
 
             return ServiceResult.ok(
                 data=str(path),
@@ -130,11 +137,11 @@ class FileService(BaseService):
         """
         try:
             path = Path(path)
-            if not path.exists():
+            if not self.file_repository.exists(path):
                 return ServiceResult.fail(f"File not found: {path}")
 
-            with open(path, encoding=encoding) as f:
-                data = json.load(f)
+            content = self.file_repository.read_text(path, encoding=encoding)
+            data = json.loads(content)
 
             return ServiceResult.ok(
                 data=data,
@@ -165,14 +172,20 @@ class FileService(BaseService):
             ServiceResult containing the output path on success
         """
         try:
-            path = Path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
+            from io import StringIO
 
-            with open(path, "w", encoding=encoding, newline="") as f:
-                writer = csv.writer(f)
-                if headers:
-                    writer.writerow(headers)
-                writer.writerows(rows)
+            path = Path(path)
+            self.file_repository.mkdir(path.parent, parents=True)
+
+            # Write CSV to in-memory buffer
+            buffer = StringIO()
+            writer = csv.writer(buffer)
+            if headers:
+                writer.writerow(headers)
+            writer.writerows(rows)
+
+            # Write buffer contents to file via repository
+            self.file_repository.write_text(path, buffer.getvalue(), encoding=encoding)
 
             row_count = len(rows)
             return ServiceResult.ok(
@@ -202,8 +215,10 @@ class FileService(BaseService):
             ServiceResult containing the output path on success
         """
         try:
+            from io import StringIO
+
             path = Path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(path.parent, parents=True)
 
             if not rows:
                 return ServiceResult.fail("No rows to write")
@@ -211,10 +226,14 @@ class FileService(BaseService):
             # Infer fieldnames from first row if not provided
             fields = fieldnames or list(rows[0].keys())
 
-            with open(path, "w", encoding=encoding, newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=fields)
-                writer.writeheader()
-                writer.writerows(rows)
+            # Write CSV to in-memory buffer
+            buffer = StringIO()
+            writer = csv.DictWriter(buffer, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+
+            # Write buffer contents to file via repository
+            self.file_repository.write_text(path, buffer.getvalue(), encoding=encoding)
 
             row_count = len(rows)
             return ServiceResult.ok(
@@ -242,17 +261,23 @@ class FileService(BaseService):
             ServiceResult containing list of row dictionaries on success
         """
         try:
+            from io import StringIO
+
             path = Path(path)
-            if not path.exists():
+            if not self.file_repository.exists(path):
                 return ServiceResult.fail(f"File not found: {path}")
 
-            with open(path, encoding=encoding, newline="") as f:
-                if has_header:
-                    reader = csv.DictReader(f)
-                    rows = list(reader)
-                else:
-                    reader = csv.reader(f)
-                    rows = [dict(enumerate(row)) for row in reader]
+            # Read file contents via repository
+            content = self.file_repository.read_text(path, encoding=encoding)
+
+            # Parse CSV from in-memory buffer
+            buffer = StringIO(content)
+            if has_header:
+                reader = csv.DictReader(buffer)
+                rows = list(reader)
+            else:
+                reader = csv.reader(buffer)
+                rows = [dict(enumerate(row)) for row in reader]
 
             return ServiceResult.ok(
                 data=rows,
@@ -276,7 +301,7 @@ class FileService(BaseService):
         """
         try:
             path = Path(path)
-            path.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(path, parents=True)
 
             return ServiceResult.ok(
                 data=str(path),
@@ -295,7 +320,7 @@ class FileService(BaseService):
         Returns:
             True if the path exists, False otherwise
         """
-        return Path(path).exists()
+        return self.file_repository.exists(path)
 
     def is_file(self, path: Union[str, Path]) -> bool:
         """
@@ -307,7 +332,7 @@ class FileService(BaseService):
         Returns:
             True if the path is a file, False otherwise
         """
-        return Path(path).is_file()
+        return self.file_repository.is_file(path)
 
     def is_directory(self, path: Union[str, Path]) -> bool:
         """
@@ -319,7 +344,7 @@ class FileService(BaseService):
         Returns:
             True if the path is a directory, False otherwise
         """
-        return Path(path).is_dir()
+        return self.file_repository.is_dir(path)
 
     def append_text(
         self,
@@ -340,10 +365,14 @@ class FileService(BaseService):
         """
         try:
             path = Path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(path.parent, parents=True)
 
-            with open(path, "a", encoding=encoding) as f:
-                f.write(content)
+            # Read existing content, append new content, then write back
+            existing_content = ""
+            if self.file_repository.exists(path):
+                existing_content = self.file_repository.read_text(path, encoding=encoding)
+
+            self.file_repository.write_text(path, existing_content + content, encoding=encoding)
 
             return ServiceResult.ok(
                 data=str(path),
