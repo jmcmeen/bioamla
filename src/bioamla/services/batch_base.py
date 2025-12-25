@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, TypeVar
+from typing import Any, Callable, List, Optional, TypeVar
 
 from bioamla.models.batch import BatchConfig, BatchResult
 from bioamla.repository.protocol import FileRepositoryProtocol
@@ -18,10 +18,20 @@ class BatchServiceBase(BaseService, ABC):
 
     Handles common batch operations like file discovery, parallel processing,
     and result aggregation.
+
+    Note: file_repository is optional. Batch services that process files should
+    provide a file_repository, but batch services that perform API calls or
+    in-memory operations may not need one.
     """
 
-    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
-        """Initialize batch service with file repository."""
+    def __init__(self, file_repository: Optional[FileRepositoryProtocol] = None) -> None:
+        """Initialize batch service with optional file repository.
+
+        Args:
+            file_repository: Optional file repository for file discovery and I/O.
+                           Required for batch services that process files.
+                           Not needed for batch services that perform API calls or in-memory operations.
+        """
         super().__init__(file_repository)
 
     @abstractmethod
@@ -42,11 +52,20 @@ class BatchServiceBase(BaseService, ABC):
 
         Returns:
             BatchResult with processing summary
+
+        Raises:
+            ValueError: If file_repository is None (required for file-based batch processing)
         """
         start_time = datetime.now()
         result = BatchResult(start_time=start_time.isoformat())
 
         # Find files to process
+        if self.file_repository is None:
+            raise ValueError(
+                "file_repository is required for file-based batch processing. "
+                "Pass a FileRepositoryProtocol instance to the constructor."
+            )
+
         input_path = Path(config.input_dir)
         files = self.file_repository.list_files(
             input_path,
@@ -97,8 +116,7 @@ class BatchServiceBase(BaseService, ABC):
         """Process files in parallel."""
         with ThreadPoolExecutor(max_workers=config.max_workers) as executor:
             futures = {
-                executor.submit(self.process_file, file_path): file_path
-                for file_path in files
+                executor.submit(self.process_file, file_path): file_path for file_path in files
             }
 
             for future in as_completed(futures):
