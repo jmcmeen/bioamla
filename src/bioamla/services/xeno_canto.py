@@ -1,27 +1,6 @@
 # services/xeno_canto.py
 """
-Xeno-canto Service
-==================
-
 Service for Xeno-canto bird recording operations.
-
-Orchestrates between CLI/API views and core Xeno-canto functions.
-Handles search and download with progress reporting.
-
-Example:
-    from bioamla.services import XenoCantoService
-
-    service = XenoCantoService()
-
-    # Search for recordings
-    result = service.search(species="Turdus migratorius", quality="A")
-
-    # Download recordings
-    result = service.download(
-        species="Turdus migratorius",
-        output_dir="./recordings",
-        max_recordings=10,
-    )
 """
 
 from dataclasses import dataclass, field

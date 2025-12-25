@@ -1,28 +1,6 @@
 # services/embedding.py
 """
-Embedding Service
-=================
-
 Service for audio embedding extraction operations.
-
-Orchestrates between CLI/API views and core embedding extraction functions.
-Handles model loading, batch processing, dimensionality reduction, and
-output formatting.
-
-Example:
-    from bioamla.services import EmbeddingService
-
-    service = EmbeddingService(model_path="MIT/ast-finetuned-audioset")
-
-    # Single file
-    result = service.extract("audio.wav")
-    print(result.data.embeddings.shape)
-
-    # Batch extraction
-    result = service.extract_batch(
-        directory="./audio",
-        output_path="embeddings.npy",
-    )
 """
 
 from dataclasses import dataclass, field

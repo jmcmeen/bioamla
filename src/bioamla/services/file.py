@@ -1,32 +1,6 @@
 # services/file.py
 """
-File Service
-============
-
 Service for file I/O operations used across CLI commands.
-
-This service provides a consistent interface for reading and writing
-text, JSON, and CSV files. It wraps the core file operations to provide
-ServiceResult-based error handling.
-
-Usage:
-    from bioamla.services import FileService
-
-    file_svc = FileService()
-
-    # Write text
-    result = file_svc.write_text("output.txt", "Hello, World!")
-
-    # Read text
-    result = file_svc.read_text("input.txt")
-    if result.success:
-        content = result.data
-
-    # Write JSON
-    result = file_svc.write_json("data.json", {"key": "value"})
-
-    # Read JSON
-    result = file_svc.read_json("data.json")
 """
 
 import csv

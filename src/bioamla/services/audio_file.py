@@ -1,30 +1,6 @@
 # services/audio_file.py
 """
-Audio File Service
-==================
-
 Service responsible for audio file I/O operations.
-
-This service manages:
-- Opening and loading audio files from disk
-- Saving audio data to files
-- Writing processed audio to new locations
-
-Design principle: AudioFileService is the ONLY component that should write
-audio data to permanent storage. AudioTransformService handles in-memory transforms
-but must delegate to AudioFileService for persistence.
-
-Usage:
-    from bioamla.services import AudioFileService
-
-    file_svc = AudioFileService()
-
-    # Load audio
-    result = file_svc.open("input.wav")
-    audio_data = result.data
-
-    # Save processed audio
-    file_svc.save(audio_data, "output.wav")
 """
 
 import shutil

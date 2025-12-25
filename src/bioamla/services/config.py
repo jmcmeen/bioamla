@@ -1,29 +1,6 @@
 # services/config.py
 """
-Config Service
-==============
-
 Service for configuration management operations.
-
-This service provides a consistent interface for accessing and managing
-bioamla configuration, wrapping the core config module with ServiceResult
-error handling.
-
-Usage:
-    from bioamla.services import ConfigService
-
-    config_svc = ConfigService()
-
-    # Get current configuration
-    result = config_svc.get_config()
-    if result.success:
-        config = result.data
-
-    # Find config file
-    result = config_svc.find_config_file()
-
-    # Create default config
-    result = config_svc.create_default_config("bioamla.toml")
 """
 
 from dataclasses import dataclass

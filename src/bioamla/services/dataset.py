@@ -1,36 +1,6 @@
 # services/dataset.py
 """
-Dataset Service
-===============
-
 Service for dataset management operations.
-
-This service provides a unified interface for dataset operations including
-merging, augmentation, license generation, and file utilities.
-
-Usage:
-    from bioamla.services import DatasetService
-
-    dataset_svc = DatasetService()
-
-    # Merge datasets
-    result = dataset_svc.merge(
-        dataset_paths=["dataset1", "dataset2"],
-        output_dir="merged_dataset",
-    )
-
-    # Augment dataset
-    result = dataset_svc.augment(
-        input_dir="source_data",
-        output_dir="augmented_data",
-        config={"add_noise": True, "noise_min_snr": 3, "noise_max_snr": 30},
-    )
-
-    # Generate license
-    result = dataset_svc.generate_license(
-        dataset_path="my_dataset",
-        output_filename="LICENSE.txt",
-    )
 """
 
 from dataclasses import dataclass, field

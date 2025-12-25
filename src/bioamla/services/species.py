@@ -1,27 +1,6 @@
 # services/species.py
 """
-Species Service
-===============
-
 Service for species name lookup and conversion operations.
-
-Orchestrates between CLI/API views and core species functions.
-Handles name conversion and fuzzy search.
-
-Example:
-    from bioamla.services import SpeciesService
-
-    service = SpeciesService()
-
-    # Look up species info
-    result = service.lookup("Turdus migratorius")
-
-    # Convert names
-    result = service.scientific_to_common("Turdus migratorius")
-    result = service.common_to_scientific("American Robin")
-
-    # Fuzzy search
-    result = service.search("robin")
 """
 
 from dataclasses import dataclass

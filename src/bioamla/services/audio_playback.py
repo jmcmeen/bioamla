@@ -1,11 +1,6 @@
 """
-Audio Playback
-==============
-
 Audio playback functionality using sounddevice for real-time audio output.
 Provides play, pause, stop, and seek capabilities.
-
-Note: Requires sounddevice to be installed: pip install sounddevice
 """
 
 import logging

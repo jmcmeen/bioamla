@@ -1,30 +1,6 @@
 # services/inaturalist.py
 """
-iNaturalist Service
-===================
-
 Service for iNaturalist data operations.
-
-Orchestrates between CLI/API views and core iNaturalist service functions.
-Handles search, download, and taxa management with progress reporting.
-
-Example:
-    from bioamla.services import INaturalistService
-
-    service = INaturalistService()
-
-    # Search for sounds
-    result = service.search(taxon_name="Strix varia", per_page=10)
-
-    # Download audio
-    result = service.download(
-        output_dir="./sounds",
-        taxon_ids=[3],  # Birds
-        obs_per_taxon=50,
-    )
-
-    # Get taxa for a project
-    result = service.get_taxa(project_id="appalachia-bioacoustics")
 """
 
 from dataclasses import dataclass, field

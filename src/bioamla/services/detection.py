@@ -1,33 +1,6 @@
 # services/detection.py
 """
-Detection Service
-=================
-
 Service for acoustic detection operations.
-
-This service provides a unified interface for various acoustic detection
-algorithms including band-limited energy detection, RIBBIT periodic call
-detection, CWT peak detection, and accelerating pattern detection.
-
-Usage:
-    from bioamla.services import DetectionService
-
-    detection_svc = DetectionService()
-
-    # Detect using energy detector
-    result = detection_svc.detect_energy(
-        filepath="audio.wav",
-        low_freq=500,
-        high_freq=5000,
-        threshold_db=-20,
-    )
-
-    # Batch detection
-    result = detection_svc.batch_detect(
-        directory="./audio",
-        detector_type="energy",
-        output_dir="./detections",
-    )
 """
 
 from dataclasses import dataclass, field

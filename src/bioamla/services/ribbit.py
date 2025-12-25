@@ -1,30 +1,6 @@
 # services/ribbit.py
 """
-RIBBIT Service
-==============
-
 Service for RIBBIT periodic vocalization detection operations.
-
-Orchestrates between CLI/API views and core RIBBIT detection functions.
-Handles profile management, batch processing, and result formatting.
-
-Example:
-    from bioamla.services import RibbitService
-
-    service = RibbitService()
-
-    # List available presets
-    presets = service.list_presets()
-
-    # Detect using preset
-    result = service.detect("audio.wav", preset="spring_peeper")
-
-    # Batch detection
-    result = service.detect_batch(
-        directory="./audio",
-        preset="american_bullfrog",
-        output_csv="detections.csv",
-    )
 """
 
 import csv

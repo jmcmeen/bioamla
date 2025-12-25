@@ -1,24 +1,6 @@
 """
-Progress Bar Utilities
-======================
-
 This module provides Rich-based progress bars and console output utilities
 for batch operations in bioamla CLI.
-
-Features:
-- Rich progress bars for batch processing
-- Styled console output
-- Fallback to simple progress for non-TTY environments
-- Progress context managers for easy integration
-
-Example:
-    >>> from bioamla.progress import ProgressBar, console
-    >>> with ProgressBar(total=100, description="Processing") as progress:
-    ...     for item in items:
-    ...         process(item)
-    ...         progress.advance()
-
-    >>> console.print("[green]Success![/green] Processed 100 files.")
 """
 
 import sys

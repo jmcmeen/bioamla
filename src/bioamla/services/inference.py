@@ -1,12 +1,6 @@
 # services/inference.py
 """
-Inference Service
-=================
-
 Service for ML model inference operations.
-
-Orchestrates between CLI/API views and core ML inference functions.
-Handles model loading, batch processing, and output formatting.
 """
 
 import csv

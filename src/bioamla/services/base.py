@@ -1,8 +1,5 @@
 # services/base.py
 """
-Base Service
-============
-
 Base class and utilities for all services.
 """
 

@@ -1,16 +1,11 @@
 # services/annotation.py
 """
-Annotation Service
-==================
-
 Service for managing audio annotations with support for:
 - File-based CRUD operations on annotations
 - Raven selection table import/export
 - CSV/Parquet/JSON export
 - Audio clip extraction from annotations
 - Measurement computation for annotations
-
-This service provides in-memory annotation management for CLI and GUI applications.
 """
 
 import json
