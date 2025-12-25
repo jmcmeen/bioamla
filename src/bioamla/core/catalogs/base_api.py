@@ -2,14 +2,14 @@
 API Base Utilities
 ==================
 
-Provides rate limiting, caching, and common HTTP client functionality
+Provides rate limiting and common HTTP client functionality
 for all API integrations.
 
 Features:
 - Thread-safe rate limiting with configurable requests per second
-- Disk-based caching with TTL support
 - Automatic retry with exponential backoff
 - Unified HTTP client with timeout and error handling
+- Disk-based caching with TTL for API responses
 - @config_aware decorator for configuration-driven API methods
 """
 
@@ -17,7 +17,6 @@ import functools
 import hashlib
 import inspect
 import json
-import pickle
 import threading
 import time
 from dataclasses import dataclass, field
@@ -28,12 +27,124 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from bioamla.core.files import BinaryFile, TextFile
+from bioamla.core.files import BinaryFile
 from bioamla.core.logger import get_logger
 
 logger = get_logger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+# Default cache directory
+_CACHE_DIR = Path.home() / ".cache" / "bioamla" / "api"
+
+
+def get_cache_dir() -> Path:
+    """Get the API cache directory, creating it if needed."""
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return _CACHE_DIR
+
+
+def clear_cache() -> int:
+    """
+    Clear all cached API responses.
+
+    Returns:
+        Number of cache files removed.
+    """
+    cache_dir = get_cache_dir()
+    count = 0
+    for cache_file in cache_dir.glob("*.json"):
+        try:
+            cache_file.unlink()
+            count += 1
+        except OSError:
+            pass
+    logger.info(f"Cleared {count} cached API responses")
+    return count
+
+
+@dataclass
+class APICache:
+    """
+    Simple disk-based cache for API responses.
+
+    Caches JSON responses to disk with TTL (time-to-live) support.
+    Uses MD5 hash of request parameters as cache key.
+
+    Args:
+        ttl_seconds: Time-to-live for cache entries in seconds.
+                    Default is 24 hours (86400 seconds).
+        enabled: Whether caching is enabled. Default True.
+
+    Example:
+        >>> cache = APICache(ttl_seconds=3600)  # 1 hour TTL
+        >>> key = cache.make_key("https://api.example.com", {"q": "test"})
+        >>> cache.set(key, {"result": "data"})
+        >>> data = cache.get(key)  # Returns cached data or None
+    """
+
+    ttl_seconds: int = 86400  # 24 hours default
+    enabled: bool = True
+
+    def make_key(self, url: str, params: Optional[Dict[str, Any]] = None) -> str:
+        """Generate a cache key from URL and parameters."""
+        key_data = url + json.dumps(params or {}, sort_keys=True)
+        return hashlib.md5(key_data.encode()).hexdigest()
+
+    def _cache_path(self, key: str) -> Path:
+        """Get the file path for a cache key."""
+        return get_cache_dir() / f"{key}.json"
+
+    def get(self, key: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a cached response if it exists and hasn't expired.
+
+        Args:
+            key: Cache key from make_key().
+
+        Returns:
+            Cached data or None if not found/expired.
+        """
+        if not self.enabled:
+            return None
+
+        cache_path = self._cache_path(key)
+        if not cache_path.exists():
+            return None
+
+        try:
+            with open(cache_path, encoding="utf-8") as f:
+                cached = json.load(f)
+
+            # Check TTL
+            cached_time = cached.get("_cached_at", 0)
+            if time.time() - cached_time > self.ttl_seconds:
+                cache_path.unlink(missing_ok=True)
+                return None
+
+            logger.debug(f"Cache hit: {key[:8]}...")
+            return cached.get("data")
+        except (json.JSONDecodeError, OSError, KeyError):
+            return None
+
+    def set(self, key: str, data: Dict[str, Any]) -> None:
+        """
+        Cache a response.
+
+        Args:
+            key: Cache key from make_key().
+            data: Response data to cache.
+        """
+        if not self.enabled:
+            return
+
+        cache_path = self._cache_path(key)
+        try:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump({"_cached_at": time.time(), "data": data}, f)
+            logger.debug(f"Cached: {key[:8]}...")
+        except OSError as e:
+            logger.debug(f"Failed to cache: {e}")
 
 
 # =============================================================================
@@ -344,229 +455,26 @@ class RateLimiter:
             return False
 
 
-class APICache:
-    """
-    Disk-based cache with TTL support for API responses.
-
-    Stores cached responses as JSON or pickle files in a cache directory.
-    Automatically cleans up expired entries on access.
-
-    Thread Safety:
-        This class is thread-safe for concurrent read/write operations.
-        Uses ``threading.Lock`` internally to protect cache modifications.
-        Multiple threads can safely call ``get()``, ``set()``, and ``delete()``
-        concurrently.
-
-    Args:
-        cache_dir: Directory to store cache files (default: ~/.cache/bioamla).
-        default_ttl: Default time-to-live in seconds (default: 3600 = 1 hour).
-        max_size_mb: Maximum cache size in megabytes (default: 100).
-
-    Example:
-        >>> cache = APICache(default_ttl=3600)
-        >>> cache.set("key", {"data": "value"})
-        >>> result = cache.get("key")
-    """
-
-    def __init__(
-        self,
-        cache_dir: Optional[Union[str, Path]] = None,
-        default_ttl: int = 3600,
-        max_size_mb: int = 100,
-    ):
-        if cache_dir is None:
-            cache_dir = Path.home() / ".cache" / "bioamla" / "api"
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.default_ttl = default_ttl
-        self.max_size_bytes = max_size_mb * 1024 * 1024
-        self._lock = threading.Lock()
-
-    def _get_cache_path(self, key: str) -> Path:
-        """Get the cache file path for a key."""
-        key_hash = hashlib.md5(key.encode()).hexdigest()
-        return self.cache_dir / f"{key_hash}.cache"
-
-    def _get_meta_path(self, key: str) -> Path:
-        """Get the metadata file path for a key."""
-        key_hash = hashlib.md5(key.encode()).hexdigest()
-        return self.cache_dir / f"{key_hash}.meta"
-
-    def get(self, key: str) -> Optional[Any]:
-        """
-        Get a cached value if it exists and hasn't expired.
-
-        Args:
-            key: Cache key.
-
-        Returns:
-            Cached value or None if not found/expired.
-        """
-        cache_path = self._get_cache_path(key)
-        meta_path = self._get_meta_path(key)
-
-        if not cache_path.exists() or not meta_path.exists():
-            return None
-
-        try:
-            with TextFile(meta_path, mode="r") as f:
-                meta = json.load(f.handle)
-
-            # Check expiration
-            if time.time() > meta.get("expires_at", 0):
-                self.delete(key)
-                return None
-
-            # Load cached data
-            with BinaryFile(cache_path, mode="rb") as f:
-                return pickle.load(f.handle)
-
-        except (json.JSONDecodeError, pickle.PickleError, OSError) as e:
-            logger.warning(f"Cache read error for {key}: {e}")
-            self.delete(key)
-            return None
-
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        """
-        Store a value in the cache.
-
-        Args:
-            key: Cache key.
-            value: Value to cache.
-            ttl: Time-to-live in seconds (uses default if not specified).
-        """
-        if ttl is None:
-            ttl = self.default_ttl
-
-        cache_path = self._get_cache_path(key)
-        meta_path = self._get_meta_path(key)
-
-        with self._lock:
-            try:
-                # Check cache size and clean if necessary
-                self._maybe_clean()
-
-                # Write cache data
-                with BinaryFile(cache_path, mode="wb") as f:
-                    pickle.dump(value, f.handle)
-
-                # Write metadata
-                meta = {
-                    "key": key,
-                    "created_at": time.time(),
-                    "expires_at": time.time() + ttl,
-                }
-                with TextFile(meta_path, mode="w") as f:
-                    json.dump(meta, f.handle)
-
-            except (pickle.PickleError, OSError) as e:
-                logger.warning(f"Cache write error for {key}: {e}")
-
-    def delete(self, key: str) -> bool:
-        """
-        Delete a cached value.
-
-        Args:
-            key: Cache key.
-
-        Returns:
-            True if deleted, False if not found.
-        """
-        cache_path = self._get_cache_path(key)
-        meta_path = self._get_meta_path(key)
-
-        deleted = False
-        with self._lock:
-            if cache_path.exists():
-                cache_path.unlink()
-                deleted = True
-            if meta_path.exists():
-                meta_path.unlink()
-                deleted = True
-        return deleted
-
-    def clear(self) -> int:
-        """
-        Clear all cached entries.
-
-        Returns:
-            Number of entries cleared.
-        """
-        count = 0
-        with self._lock:
-            for path in self.cache_dir.glob("*.cache"):
-                path.unlink()
-                count += 1
-            for path in self.cache_dir.glob("*.meta"):
-                path.unlink()
-        return count
-
-    def _maybe_clean(self) -> None:
-        """Clean expired entries and enforce size limit."""
-        # Clean expired entries
-        now = time.time()
-        for meta_path in self.cache_dir.glob("*.meta"):
-            try:
-                with TextFile(meta_path, mode="r") as f:
-                    meta = json.load(f.handle)
-                if now > meta.get("expires_at", 0):
-                    cache_path = meta_path.with_suffix(".cache")
-                    if cache_path.exists():
-                        cache_path.unlink()
-                    meta_path.unlink()
-            except (json.JSONDecodeError, OSError):
-                pass
-
-        # Check total size
-        total_size = sum(f.stat().st_size for f in self.cache_dir.glob("*.cache") if f.exists())
-
-        if total_size > self.max_size_bytes:
-            # Remove oldest entries until under limit
-            entries = []
-            for meta_path in self.cache_dir.glob("*.meta"):
-                try:
-                    with TextFile(meta_path, mode="r") as f:
-                        meta = json.load(f.handle)
-                    cache_path = meta_path.with_suffix(".cache")
-                    if cache_path.exists():
-                        entries.append((meta.get("created_at", 0), cache_path, meta_path))
-                except (json.JSONDecodeError, OSError):
-                    pass
-
-            # Sort by creation time (oldest first)
-            entries.sort(key=lambda x: x[0])
-
-            for _, cache_path, meta_path in entries:
-                if total_size <= self.max_size_bytes * 0.8:  # Clean to 80%
-                    break
-                try:
-                    size = cache_path.stat().st_size
-                    cache_path.unlink()
-                    meta_path.unlink()
-                    total_size -= size
-                except OSError:
-                    pass
-
-
 class APIClient:
     """
-    HTTP client with retry, rate limiting, and caching support.
+    HTTP client with retry, rate limiting, and optional caching support.
 
     Provides a unified interface for making API requests with automatic
-    error handling, exponential backoff retry, and optional caching.
+    error handling and exponential backoff retry.
 
     Args:
         base_url: Base URL for API requests.
         rate_limiter: RateLimiter instance for rate limiting.
-        cache: APICache instance for caching responses.
         timeout: Request timeout in seconds (default: 30).
         max_retries: Maximum number of retries (default: 3).
         user_agent: User-Agent header value.
+        cache: Optional APICache instance for response caching.
 
     Example:
         >>> client = APIClient(
         ...     base_url="https://api.example.com",
-        ...     rate_limiter=RateLimiter(requests_per_second=1.0)
+        ...     rate_limiter=RateLimiter(requests_per_second=1.0),
+        ...     cache=APICache(ttl_seconds=3600),  # Cache for 1 hour
         ... )
         >>> response = client.get("/endpoint", params={"q": "search"})
     """
@@ -575,16 +483,16 @@ class APIClient:
         self,
         base_url: str = "",
         rate_limiter: Optional[RateLimiter] = None,
-        cache: Optional[APICache] = None,
         timeout: int = 30,
         max_retries: int = 3,
         user_agent: str = "bioamla/1.0",
+        cache: Optional[APICache] = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.rate_limiter = rate_limiter
-        self.cache = cache
         self.timeout = timeout
         self.user_agent = user_agent
+        self.cache = cache
 
         # Configure session with retries
         self.session = requests.Session()
@@ -599,18 +507,10 @@ class APIClient:
         self.session.mount("https://", adapter)
         self.session.headers.update({"User-Agent": user_agent})
 
-    def _make_cache_key(self, method: str, url: str, params: Optional[Dict] = None) -> str:
-        """Generate a cache key for a request."""
-        key_parts = [method, url]
-        if params:
-            key_parts.append(json.dumps(params, sort_keys=True))
-        return ":".join(key_parts)
-
     def get(
         self,
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
-        cache_ttl: Optional[int] = None,
         use_cache: bool = True,
         **kwargs,
     ) -> Dict[str, Any]:
@@ -620,8 +520,7 @@ class APIClient:
         Args:
             endpoint: API endpoint (appended to base_url).
             params: Query parameters.
-            cache_ttl: Cache TTL in seconds (None uses default).
-            use_cache: Whether to use caching.
+            use_cache: Whether to use cache for this request (default True).
             **kwargs: Additional arguments passed to requests.
 
         Returns:
@@ -633,12 +532,12 @@ class APIClient:
         url = f"{self.base_url}{endpoint}" if self.base_url else endpoint
 
         # Check cache first
-        if use_cache and self.cache:
-            cache_key = self._make_cache_key("GET", url, params)
-            cached_response = self.cache.get(cache_key)
-            if cached_response is not None:
-                logger.debug(f"Cache hit for {url}")
-                return cached_response
+        cache_key = None
+        if self.cache and use_cache:
+            cache_key = self.cache.make_key(url, params)
+            cached_data = self.cache.get(cache_key)
+            if cached_data is not None:
+                return cached_data
 
         # Rate limiting
         if self.rate_limiter:
@@ -656,9 +555,9 @@ class APIClient:
         response.raise_for_status()
         data = response.json()
 
-        # Cache response
-        if use_cache and self.cache:
-            self.cache.set(cache_key, data, cache_ttl)
+        # Cache the response
+        if cache_key and self.cache:
+            self.cache.set(cache_key, data)
 
         return data
 
@@ -777,43 +676,3 @@ def rate_limited(requests_per_second: float = 1.0) -> Callable[[F], F]:
     return decorator
 
 
-def cached(ttl: int = 3600, cache_dir: Optional[str] = None) -> Callable[[F], F]:
-    """
-    Decorator to cache function results.
-
-    Args:
-        ttl: Cache time-to-live in seconds.
-        cache_dir: Cache directory (uses default if None).
-
-    Returns:
-        Decorated function.
-
-    Example:
-        >>> @cached(ttl=3600)
-        ... def expensive_api_call(query: str):
-        ...     return requests.get(f"https://api.example.com?q={query}").json()
-    """
-    cache = APICache(cache_dir=cache_dir, default_ttl=ttl)
-
-    def decorator(func: F) -> F:
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            # Create cache key from function name and arguments
-            key_parts = [func.__name__]
-            key_parts.extend(str(arg) for arg in args)
-            key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()))
-            key = ":".join(key_parts)
-
-            # Check cache
-            result = cache.get(key)
-            if result is not None:
-                return result
-
-            # Call function and cache result
-            result = func(*args, **kwargs)
-            cache.set(key, result)
-            return result
-
-        return wrapper  # type: ignore
-
-    return decorator

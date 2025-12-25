@@ -13,6 +13,7 @@ from .commands import (
     annotation,
     audio,
     batch,
+    catalogs,
     cluster,
     config,
     dataset,
@@ -20,7 +21,6 @@ from .commands import (
     examples,
     indices,
     models,
-    services,
 )
 
 
@@ -54,7 +54,7 @@ cli.add_command(detect)
 cli.add_command(examples)
 cli.add_command(indices)
 cli.add_command(models)
-cli.add_command(services)
+cli.add_command(catalogs)
 
 
 # Top-level convenience commands

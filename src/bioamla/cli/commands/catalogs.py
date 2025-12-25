@@ -1,4 +1,13 @@
-"""External service integrations (iNaturalist, Xeno-canto, HuggingFace, eBird, etc.)."""
+"""Catalog integrations for bioacoustic data sources.
+
+Catalogs provide access to external bioacoustic databases and services:
+- iNaturalist: Citizen science observations with audio recordings
+- Xeno-canto: Bird sound archive
+- Macaulay Library: Cornell's multimedia archive
+- eBird: Bird observation data
+- Species: Taxonomic name lookup
+- HuggingFace: Model and dataset hosting
+"""
 
 import click
 
@@ -6,8 +15,8 @@ from bioamla.core.files import TextFile
 
 
 @click.group()
-def services():
-    """External service integrations (iNaturalist, Xeno-canto, HuggingFace, eBird, etc.)."""
+def catalogs():
+    """Access bioacoustic data catalogs and external services."""
     pass
 
 
@@ -16,13 +25,13 @@ def services():
 # =============================================================================
 
 
-@services.group("inat")
-def services_inat():
+@catalogs.group("inat")
+def catalogs_inat():
     """iNaturalist observation database."""
     pass
 
 
-@services_inat.command("search")
+@catalogs_inat.command("search")
 @click.option("--species", "-s", default=None, help="Species scientific name to filter by")
 @click.option("--taxon-id", "-t", default=None, type=int, help="iNaturalist taxon ID")
 @click.option("--place-id", "-p", default=None, type=int, help="iNaturalist place ID")
@@ -123,7 +132,7 @@ def inat_search(
             click.echo(f"{obs_id:<12} {name:<30} {sound_count:<8} {observed_on:<12} {location:<30}")
 
 
-@services_inat.command("stats")
+@catalogs_inat.command("stats")
 @click.argument("project_id")
 @click.option("--output", "-o", default=None, help="Output file path for JSON (optional)")
 @click.option("--quiet", is_flag=True, help="Suppress progress output, print only JSON")
@@ -161,7 +170,7 @@ def inat_stats(project_id: str, output: str, quiet: bool):
         click.echo(f"  Observers: {stats.observers_count}")
 
 
-@services_inat.command("download")
+@catalogs_inat.command("download")
 @click.argument("output_dir")
 @click.option("--taxon-ids", "-t", default=None, help="Comma-separated taxon IDs")
 @click.option("--taxon-name", "-n", default=None, help="Taxon name to search for")
@@ -212,9 +221,14 @@ def inat_download(
     download_result = result.data
     if not quiet:
         click.echo(f"\nDownload complete:")
-        click.echo(f"  Files downloaded: {download_result.files_downloaded}")
-        click.echo(f"  Total size: {download_result.total_bytes / 1024 / 1024:.1f} MB")
-        click.echo(f"  Output directory: {output_dir}")
+        click.echo(f"  Observations: {download_result.total_observations}")
+        click.echo(f"  Sounds downloaded: {download_result.total_sounds}")
+        if download_result.skipped_existing > 0:
+            click.echo(f"  Skipped (existing): {download_result.skipped_existing}")
+        if download_result.failed_downloads > 0:
+            click.echo(f"  Failed: {download_result.failed_downloads}")
+        click.echo(f"  Output directory: {download_result.output_dir}")
+        click.echo(f"  Metadata file: {download_result.metadata_file}")
 
 
 # =============================================================================
@@ -222,52 +236,13 @@ def inat_download(
 # =============================================================================
 
 
-def _get_folder_size(path: str, limit: int | None = None) -> int:
-    """Calculate the total size of a folder in bytes."""
-    import os
-
-    total_size = 0
-    for dirpath, _dirnames, filenames in os.walk(path):
-        for filename in filenames:
-            filepath = os.path.join(dirpath, filename)
-            if os.path.isfile(filepath):
-                total_size += os.path.getsize(filepath)
-                if limit is not None and total_size > limit:
-                    return total_size
-    return total_size
-
-
-def _count_files(path: str, limit: int | None = None) -> int:
-    """Count the total number of files in a folder."""
-    import os
-
-    count = 0
-    for _dirpath, _dirnames, filenames in os.walk(path):
-        count += len(filenames)
-        if limit is not None and count > limit:
-            return count
-    return count
-
-
-def _is_large_folder(
-    path: str, size_threshold_gb: float = 5.0, file_count_threshold: int = 1000
-) -> bool:
-    """Determine if a folder should be uploaded using upload_large_folder."""
-    size_threshold_bytes = int(size_threshold_gb * 1024 * 1024 * 1024)
-    file_count = _count_files(path, limit=file_count_threshold)
-    if file_count > file_count_threshold:
-        return True
-    folder_size = _get_folder_size(path, limit=size_threshold_bytes)
-    return folder_size > size_threshold_bytes
-
-
-@services.group("hf")
-def services_hf():
+@catalogs.group("hf")
+def catalogs_hf():
     """HuggingFace Hub model and dataset management."""
     pass
 
 
-@services_hf.command("push-model")
+@catalogs_hf.command("push-model")
 @click.argument("path")
 @click.argument("repo_id")
 @click.option(
@@ -276,45 +251,22 @@ def services_hf():
 @click.option("--commit-message", default=None, help="Custom commit message for the push")
 def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str):
     """Push a model folder to the HuggingFace Hub."""
-    import os
-
-    from huggingface_hub import HfApi
-
-    if not os.path.isdir(path):
-        click.echo(f"Error: Path '{path}' does not exist or is not a directory.")
-        raise SystemExit(1)
+    from bioamla.services.huggingface import HuggingFaceService
 
     click.echo(f"Pushing model folder {path} to HuggingFace Hub: {repo_id}...")
 
-    try:
-        api = HfApi()
-        api.create_repo(repo_id=repo_id, repo_type="model", private=private, exist_ok=True)
+    service = HuggingFaceService()
+    result = service.push_model(path, repo_id, private=private, commit_message=commit_message)
 
-        if _is_large_folder(path):
-            click.echo("Large folder detected, using optimized upload method...")
-            api.upload_large_folder(
-                folder_path=path,
-                repo_id=repo_id,
-                repo_type="model",
-                commit_message=commit_message or "Upload model",
-            )
-        else:
-            api.upload_folder(
-                folder_path=path,
-                repo_id=repo_id,
-                repo_type="model",
-                commit_message=commit_message or "Upload model",
-            )
-
-        click.echo(f"Successfully pushed model to: https://huggingface.co/{repo_id}")
-
-    except Exception as e:
-        click.echo(f"Error pushing to HuggingFace Hub: {e}")
+    if not result.success:
+        click.echo(f"Error: {result.error}")
         click.echo("Make sure you are logged in with 'huggingface-cli login'.")
-        raise SystemExit(1) from e
+        raise SystemExit(1)
+
+    click.echo(f"Successfully pushed model to: {result.data.url}")
 
 
-@services_hf.command("push-dataset")
+@catalogs_hf.command("push-dataset")
 @click.argument("path")
 @click.argument("repo_id")
 @click.option(
@@ -323,42 +275,19 @@ def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str):
 @click.option("--commit-message", default=None, help="Custom commit message for the push")
 def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str):
     """Push a dataset folder to the HuggingFace Hub."""
-    import os
-
-    from huggingface_hub import HfApi
-
-    if not os.path.isdir(path):
-        click.echo(f"Error: Path '{path}' does not exist or is not a directory.")
-        raise SystemExit(1)
+    from bioamla.services.huggingface import HuggingFaceService
 
     click.echo(f"Pushing dataset folder {path} to HuggingFace Hub: {repo_id}...")
 
-    try:
-        api = HfApi()
-        api.create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True)
+    service = HuggingFaceService()
+    result = service.push_dataset(path, repo_id, private=private, commit_message=commit_message)
 
-        if _is_large_folder(path):
-            click.echo("Large folder detected, using optimized upload method...")
-            api.upload_large_folder(
-                folder_path=path,
-                repo_id=repo_id,
-                repo_type="dataset",
-                commit_message=commit_message or "Upload dataset",
-            )
-        else:
-            api.upload_folder(
-                folder_path=path,
-                repo_id=repo_id,
-                repo_type="dataset",
-                commit_message=commit_message or "Upload dataset",
-            )
-
-        click.echo(f"Successfully pushed dataset to: https://huggingface.co/datasets/{repo_id}")
-
-    except Exception as e:
-        click.echo(f"Error pushing to HuggingFace Hub: {e}")
+    if not result.success:
+        click.echo(f"Error: {result.error}")
         click.echo("Make sure you are logged in with 'huggingface-cli login'.")
-        raise SystemExit(1) from e
+        raise SystemExit(1)
+
+    click.echo(f"Successfully pushed dataset to: {result.data.url}")
 
 
 # =============================================================================
@@ -366,13 +295,13 @@ def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str)
 # =============================================================================
 
 
-@services.group("xc")
-def services_xc():
+@catalogs.group("xc")
+def catalogs_xc():
     """Xeno-canto bird recording database."""
     pass
 
 
-@services_xc.command("search")
+@catalogs_xc.command("search")
 @click.option("--species", "-s", help="Species name (scientific or common)")
 @click.option("--genus", "-g", help="Genus name")
 @click.option("--country", "-c", help="Country name")
@@ -390,7 +319,7 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
     """Search Xeno-canto for bird recordings."""
     import json as json_lib
 
-    from bioamla.core.services import xeno_canto
+    from bioamla.core.catalogs import xeno_canto
 
     try:
         results = xeno_canto.search(
@@ -433,7 +362,7 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
             click.echo()
 
 
-@services_xc.command("download")
+@catalogs_xc.command("download")
 @click.option("--species", "-s", help="Species name (scientific or common)")
 @click.option("--genus", "-g", help="Genus name")
 @click.option("--country", "-c", help="Country name")
@@ -443,7 +372,7 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
 @click.option("--delay", default=1.0, type=float, help="Delay between downloads in seconds")
 def xc_download(species, genus, country, quality, max_recordings, output_dir, delay):
     """Download recordings from Xeno-canto."""
-    from bioamla.core.services import xeno_canto
+    from bioamla.core.catalogs import xeno_canto
 
     click.echo("Searching Xeno-canto...")
 
@@ -483,16 +412,23 @@ def xc_download(species, genus, country, quality, max_recordings, output_dir, de
 # =============================================================================
 
 
-@services.group("ml")
-def services_ml():
-    """Macaulay Library audio recordings database."""
+@catalogs.group("ml")
+def catalogs_ml():
+    """Macaulay Library audio recordings database.
+
+    Use 'catalogs ebird species' or 'catalogs ebird search' to look up species codes.
+    """
     pass
 
 
-@services_ml.command("search")
+@catalogs_ml.command("search")
 @click.option("--species-code", "-s", help="eBird species code (e.g., amerob)")
 @click.option("--scientific-name", help="Scientific name")
+@click.option("--common-name", help="Common name")
 @click.option("--region", "-r", help="Region code (e.g., US-NY)")
+@click.option("--country", help="Country code (e.g., US)")
+@click.option("--taxon-code", help="eBird taxon code for broader searches")
+@click.option("--hotspot-code", help="eBird hotspot code")
 @click.option("--min-rating", default=0, type=int, help="Minimum quality rating (1-5)")
 @click.option("--max-results", "-n", default=10, type=int, help="Maximum results")
 @click.option(
@@ -502,17 +438,38 @@ def services_ml():
     default="table",
     help="Output format",
 )
-def ml_search(species_code, scientific_name, region, min_rating, max_results, output_format):
-    """Search Macaulay Library for audio recordings."""
+def ml_search(
+    species_code,
+    scientific_name,
+    common_name,
+    region,
+    country,
+    taxon_code,
+    hotspot_code,
+    min_rating,
+    max_results,
+    output_format,
+):
+    """Search Macaulay Library for audio recordings.
+
+    Requires at least one filter: species-code, scientific-name, common-name,
+    region, taxon-code, or hotspot-code.
+
+    Use 'catalogs ebird species <name>' to look up species codes.
+    """
     import json as json_lib
 
-    from bioamla.core.services import macaulay
+    from bioamla.core.catalogs import macaulay
 
     try:
         results = macaulay.search(
             species_code=species_code,
             scientific_name=scientific_name,
+            common_name=common_name,
             region=region,
+            country=country,
+            taxon_code=taxon_code,
+            hotspot_code=hotspot_code,
             media_type="audio",
             min_rating=min_rating,
             count=max_results,
@@ -540,16 +497,37 @@ def ml_search(species_code, scientific_name, region, min_rating, max_results, ou
             click.echo()
 
 
-@services_ml.command("download")
+@catalogs_ml.command("download")
 @click.option("--species-code", "-s", help="eBird species code (e.g., amerob)")
 @click.option("--scientific-name", help="Scientific name")
+@click.option("--common-name", help="Common name")
 @click.option("--region", "-r", help="Region code (e.g., US-NY)")
+@click.option("--country", help="Country code (e.g., US)")
+@click.option("--taxon-code", help="eBird taxon code for broader searches")
+@click.option("--hotspot-code", help="eBird hotspot code")
 @click.option("--min-rating", default=3, type=int, help="Minimum quality rating (default: 3)")
 @click.option("--max-recordings", "-n", default=10, type=int, help="Maximum recordings to download")
 @click.option("--output-dir", "-o", default="./ml_recordings", help="Output directory")
-def ml_download(species_code, scientific_name, region, min_rating, max_recordings, output_dir):
-    """Download recordings from Macaulay Library."""
-    from bioamla.core.services import macaulay
+def ml_download(
+    species_code,
+    scientific_name,
+    common_name,
+    region,
+    country,
+    taxon_code,
+    hotspot_code,
+    min_rating,
+    max_recordings,
+    output_dir,
+):
+    """Download recordings from Macaulay Library.
+
+    Requires at least one filter: species-code, scientific-name, common-name,
+    region, taxon-code, or hotspot-code.
+
+    Use 'catalogs ebird species <name>' to look up species codes.
+    """
+    from bioamla.core.catalogs import macaulay
 
     click.echo("Searching Macaulay Library...")
 
@@ -557,7 +535,11 @@ def ml_download(species_code, scientific_name, region, min_rating, max_recording
         results = macaulay.search(
             species_code=species_code,
             scientific_name=scientific_name,
+            common_name=common_name,
             region=region,
+            country=country,
+            taxon_code=taxon_code,
+            hotspot_code=hotspot_code,
             media_type="audio",
             min_rating=min_rating,
             count=max_recordings,
@@ -585,66 +567,44 @@ def ml_download(species_code, scientific_name, region, min_rating, max_recording
 
 
 # =============================================================================
-# Species lookup subgroup
+# eBird subgroup
 # =============================================================================
 
 
-@services.group("species")
-def services_species():
-    """Species name lookup and search."""
+@catalogs.group("ebird")
+def catalogs_ebird():
+    """eBird bird observation data and taxonomy."""
     pass
 
 
-@services_species.command("lookup")
+@catalogs_ebird.command("species")
 @click.argument("name")
-@click.option("--to-common", "-c", is_flag=True, help="Convert scientific to common name")
-@click.option("--to-scientific", "-s", is_flag=True, help="Convert common to scientific name")
-@click.option("--info", "-i", is_flag=True, help="Show full species information")
-def species_lookup(name, to_common, to_scientific, info):
-    """Look up species names and convert between formats."""
-    from bioamla.core.services import species
+def ebird_species(name: str):
+    """Look up species in eBird taxonomy.
 
-    if info:
-        result = species.get_species_info(name)
-        if result:
-            click.echo(f"Scientific name: {result.scientific_name}")
-            click.echo(f"Common name: {result.common_name}")
-            click.echo(f"Species code: {result.species_code}")
-            click.echo(f"Family: {result.family}")
-            click.echo(f"Order: {result.order}")
-            click.echo(f"Source: {result.source}")
-        else:
-            click.echo(f"Species not found: {name}")
-            raise SystemExit(1)
-    elif to_common:
-        result = species.scientific_to_common(name)
-        if result:
-            click.echo(result)
-        else:
-            click.echo(f"No common name found for: {name}")
-            raise SystemExit(1)
-    elif to_scientific:
-        result = species.common_to_scientific(name)
-        if result:
-            click.echo(result)
-        else:
-            click.echo(f"No scientific name found for: {name}")
-            raise SystemExit(1)
-    else:
-        info_result = species.get_species_info(name)
-        if info_result:
-            click.echo(f"{info_result.scientific_name} - {info_result.common_name}")
-        else:
-            click.echo(f"Species not found: {name}")
-            raise SystemExit(1)
+    NAME can be a common name, scientific name, or species code.
+    """
+    from bioamla.core.catalogs import species
+
+    result = species.get_species_info(name, ebird_only=True)
+
+    if not result:
+        click.echo(f"Species not found in eBird taxonomy: {name}")
+        raise SystemExit(1)
+
+    click.echo(f"Scientific name: {result.scientific_name}")
+    click.echo(f"Common name: {result.common_name}")
+    click.echo(f"Species code: {result.species_code}")
+    click.echo(f"Family: {result.family}")
+    click.echo(f"Order: {result.order}")
 
 
-@services_species.command("search")
+@catalogs_ebird.command("search")
 @click.argument("query")
 @click.option("--limit", "-n", default=10, type=int, help="Maximum results")
-def species_search(query, limit):
-    """Fuzzy search for species by name."""
-    from bioamla.core.services import species
+def ebird_search(query: str, limit: int):
+    """Fuzzy search eBird taxonomy for species."""
+    from bioamla.core.catalogs import species
 
     results = species.search(query, limit=limit)
 
@@ -655,68 +615,19 @@ def species_search(query, limit):
     click.echo(f"Found {len(results)} matching species:\n")
     for r in results:
         score = r["score"] * 100
-        click.echo(f"{r['scientific_name']} - {r['common_name']}")
-        click.echo(f"  Code: {r['species_code']} | Family: {r['family']} | Match: {score:.0f}%")
-        click.echo()
+        click.echo(f"{r['scientific_name']} - {r['common_name']} ({r['species_code']})")
+        click.echo(f"  Family: {r['family']} | Match: {score:.0f}%")
 
 
-@services.command("clear-cache")
-@click.option("--all", "clear_all", is_flag=True, help="Clear all API caches")
-@click.option("--xc", is_flag=True, help="Clear Xeno-canto cache")
-@click.option("--ml", is_flag=True, help="Clear Macaulay Library cache")
-@click.option("--species", is_flag=True, help="Clear species cache")
-def clear_cache(clear_all, xc, ml, species):
-    """Clear API response caches."""
-    total = 0
-
-    if clear_all or xc:
-        from bioamla.core.services import xeno_canto
-
-        count = xeno_canto.clear_cache()
-        click.echo(f"Cleared {count} Xeno-canto cache entries")
-        total += count
-
-    if clear_all or ml:
-        from bioamla.core.services import macaulay
-
-        count = macaulay.clear_cache()
-        click.echo(f"Cleared {count} Macaulay Library cache entries")
-        total += count
-
-    if clear_all or species:
-        from bioamla.core.services import species as species_mod
-
-        count = species_mod.clear_cache()
-        click.echo(f"Cleared {count} species cache entries")
-        total += count
-
-    if not any([clear_all, xc, ml, species]):
-        click.echo("No cache specified. Use --all to clear all caches.")
-        return
-
-    click.echo(f"\nTotal: {total} cache entries cleared")
-
-
-# =============================================================================
-# eBird subgroup
-# =============================================================================
-
-
-@services.group("ebird")
-def services_ebird():
-    """eBird bird observation database."""
-    pass
-
-
-@services_ebird.command("validate")
+@catalogs_ebird.command("validate")
 @click.argument("species_code")
 @click.option("--lat", type=float, required=True, help="Latitude")
 @click.option("--lng", type=float, required=True, help="Longitude")
-@click.option("--api-key", envvar="EBIRD_API_KEY", required=True, help="eBird API key")
+@click.option("--api-key", envvar="EBIRD_API_KEY", required=True, help="eBird API key (or set EBIRD_API_KEY)")
 @click.option("--distance", type=float, default=50, help="Search radius in km")
 def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, distance: float):
     """Validate if a species is expected at a location."""
-    from bioamla.core.services.integrations import EBirdClient
+    from bioamla.core.catalogs.integrations import EBirdClient
 
     client = EBirdClient(api_key=api_key)
     result = client.validate_species_for_location(
@@ -736,10 +647,10 @@ def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, dist
         click.echo(f"  {result['total_species_in_area']} other species observed nearby")
 
 
-@services_ebird.command("nearby")
+@catalogs_ebird.command("nearby")
 @click.option("--lat", type=float, required=True, help="Latitude")
 @click.option("--lng", type=float, required=True, help="Longitude")
-@click.option("--api-key", envvar="EBIRD_API_KEY", required=True, help="eBird API key")
+@click.option("--api-key", envvar="EBIRD_API_KEY", required=True, help="eBird API key (or set EBIRD_API_KEY)")
 @click.option("--distance", type=float, default=25, help="Search radius in km")
 @click.option("--days", type=int, default=14, help="Days back to search")
 @click.option("--limit", type=int, default=20, help="Maximum results")
@@ -751,7 +662,7 @@ def ebird_nearby(
     import csv
     from pathlib import Path
 
-    from bioamla.core.services.integrations import EBirdClient
+    from bioamla.core.catalogs.integrations import EBirdClient
 
     client = EBirdClient(api_key=api_key)
     observations = client.get_nearby_observations(

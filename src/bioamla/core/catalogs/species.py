@@ -10,7 +10,6 @@ Features:
 - Common name to scientific name lookup
 - Fuzzy matching for approximate name searches
 - Support for multiple taxonomies (eBird, iNaturalist)
-- Caching for offline use
 
 Example:
     >>> from bioamla.api import species
@@ -48,15 +47,13 @@ EBIRD_TAXONOMY_URL = "https://api.ebird.org/v2/ref/taxonomy/ebird"
 INAT_TAXA_URL = "https://api.inaturalist.org/v1/taxa"
 
 # Default rate limiter and cache
+# eBird taxonomy is stable, cache for 7 days
 _rate_limiter = RateLimiter(requests_per_second=1.0)
-_cache = APICache(
-    cache_dir=Path.home() / ".cache" / "bioamla" / "species",
-    default_ttl=86400 * 7,  # 1 week
-)
+_cache = APICache(ttl_seconds=7 * 24 * 3600)  # 7 days
 _client = APIClient(
     rate_limiter=_rate_limiter,
-    cache=_cache,
     user_agent="bioamla/1.0 (bioacoustics research tool)",
+    cache=_cache,
 )
 
 # In-memory taxonomy cache (loaded on demand)
@@ -121,23 +118,12 @@ def _load_ebird_taxonomy() -> None:
     if _taxonomy_loaded:
         return
 
-    cache_key = "ebird_taxonomy_full"
-    cached = _cache.get(cache_key)
-
-    if cached:
-        _taxonomy_cache = cached
-        _taxonomy_loaded = True
-        return
-
     try:
-        # eBird taxonomy API (CSV format)
-        response = _client.session.get(
+        # eBird taxonomy API (JSON format) - uses disk cache
+        taxa = _client.get(
             EBIRD_TAXONOMY_URL,
             params={"fmt": "json"},
-            timeout=60,
         )
-        response.raise_for_status()
-        taxa = response.json()
 
         for taxon in taxa:
             sci_name = taxon.get("sciName", "")
@@ -161,8 +147,6 @@ def _load_ebird_taxonomy() -> None:
                 if species_code:
                     _taxonomy_cache[species_code.lower()] = entry
 
-        # Cache for later use
-        _cache.set(cache_key, _taxonomy_cache, ttl=86400 * 30)  # 30 days
         _taxonomy_loaded = True
         logger.info(f"Loaded {len(taxa)} taxa from eBird taxonomy")
 
@@ -268,12 +252,13 @@ def common_to_scientific(
     return None
 
 
-def get_species_info(name: str) -> Optional[SpeciesInfo]:
+def get_species_info(name: str, ebird_only: bool = False) -> Optional[SpeciesInfo]:
     """
     Get full species information by name.
 
     Args:
         name: Scientific name, common name, or species code.
+        ebird_only: If True, only search eBird taxonomy (no iNaturalist fallback).
 
     Returns:
         SpeciesInfo object or None if not found.
@@ -303,10 +288,11 @@ def get_species_info(name: str) -> Optional[SpeciesInfo]:
                 source="ebird",
             )
 
-    # Try iNaturalist
-    info = _search_inat_taxon(name)
-    if info:
-        return info
+    # Try iNaturalist fallback (unless ebird_only is set)
+    if not ebird_only:
+        info = _search_inat_taxon(name)
+        if info:
+            return info
 
     return None
 
@@ -542,14 +528,13 @@ def export_taxonomy(
     return output_path
 
 
-def clear_cache() -> int:
+def clear_taxonomy_cache() -> None:
     """
-    Clear the species cache.
+    Clear the in-memory taxonomy cache.
 
-    Returns:
-        Number of cache entries cleared.
+    This will force the taxonomy to be reloaded from the API
+    on the next lookup.
     """
     global _taxonomy_cache, _taxonomy_loaded
     _taxonomy_cache = {}
     _taxonomy_loaded = False
-    return _cache.clear()

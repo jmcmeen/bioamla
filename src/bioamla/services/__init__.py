@@ -77,6 +77,13 @@ from .indices import BatchIndicesResult, IndicesService, IndicesResult
 from .inference import InferenceService
 from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitService
 
+# Catalog services
+from .xeno_canto import XenoCantoService
+from .macaulay import MacaulayService
+from .species import SpeciesService
+from .ebird import EBirdService
+from .huggingface import HuggingFaceService
+
 __all__ = [
     # Base
     "BaseService",
@@ -112,4 +119,10 @@ __all__ = [
     "IndicesService",
     "IndicesResult",
     "BatchIndicesResult",
+    # Catalogs
+    "XenoCantoService",
+    "MacaulayService",
+    "SpeciesService",
+    "EBirdService",
+    "HuggingFaceService",
 ]

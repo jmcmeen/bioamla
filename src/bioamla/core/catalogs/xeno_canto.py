@@ -8,7 +8,7 @@ the world's largest collection of bird sounds.
 Features:
 - Search recordings by species, location, quality, and more
 - Download recordings with metadata
-- Rate limiting and caching support
+- Rate limiting support
 - Batch download with progress tracking
 
 Example:
@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from bioamla.core.catalogs.base_api import APICache, APIClient, RateLimiter
+from bioamla.core.catalogs.base_api import APIClient, RateLimiter
 from bioamla.core.files import TextFile, sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -99,13 +99,8 @@ def get_api_key() -> str | None:
 
 # Default rate limit: 1 request per second (be respectful to the API)
 _rate_limiter = RateLimiter(requests_per_second=1.0, burst_size=2)
-_cache = APICache(
-    cache_dir=Path.home() / ".cache" / "bioamla" / "xeno_canto",
-    default_ttl=3600,  # 1 hour
-)
 _client = APIClient(
     rate_limiter=_rate_limiter,
-    cache=_cache,
     user_agent="bioamla/1.0 (bioacoustics research tool)",
 )
 
@@ -241,7 +236,6 @@ def search(
     query: Optional[str] = None,
     page: int = 1,
     max_results: Optional[int] = None,
-    use_cache: bool = True,
 ) -> List[XCRecording]:
     """
     Search Xeno-canto for bird recordings.
@@ -263,7 +257,6 @@ def search(
         query: Raw query string (overrides other parameters).
         page: Page number for pagination.
         max_results: Maximum number of results to return.
-        use_cache: Whether to use cached results.
 
     Returns:
         List of XCRecording objects.
@@ -336,7 +329,7 @@ def search(
         headers = {"X-API-Key": api_key}
 
         try:
-            response = _client.get(XC_API_URL, params=params, headers=headers, use_cache=use_cache)
+            response = _client.get(XC_API_URL, params=params, headers=headers)
         except Exception as e:
             logger.error(f"Xeno-canto API error: {e}")
             raise
@@ -609,11 +602,3 @@ def search_by_location(
     return search(box=box, quality=quality, max_results=max_results)
 
 
-def clear_cache() -> int:
-    """
-    Clear the Xeno-canto API cache.
-
-    Returns:
-        Number of cache entries cleared.
-    """
-    return _cache.clear()
