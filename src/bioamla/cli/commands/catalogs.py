@@ -11,7 +11,13 @@ Catalogs provide access to external bioacoustic databases and services:
 
 import click
 
-from bioamla.core.files import TextFile
+from bioamla.services.file import FileService
+from bioamla.services.xeno_canto import XenoCantoService
+from bioamla.services.macaulay import MacaulayService
+from bioamla.services.species import SpeciesService
+from bioamla.services.ebird import EBirdService
+from bioamla.services.huggingface import HuggingFaceService
+from bioamla.services.inaturalist import INaturalistService
 
 
 @click.group()
@@ -55,8 +61,6 @@ def inat_search(
     quiet: bool,
 ):
     """Search for iNaturalist observations."""
-    from bioamla.services.inaturalist import INaturalistService
-
     if not species and not taxon_id and not place_id and not project_id:
         raise click.UsageError(
             "At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)"
@@ -81,38 +85,34 @@ def inat_search(
         return
 
     if output:
-        import csv
-
-        with TextFile(output, mode="w", newline="", encoding="utf-8") as f:
-            fieldnames = [
-                "observation_id",
-                "scientific_name",
-                "common_name",
-                "sound_count",
-                "observed_on",
-                "location",
-                "url",
-            ]
-            writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
-            writer.writeheader()
-            for obs in observations:
-                taxon = obs.get("taxon", {})
-                observed_on_raw = obs.get("observed_on", "")
-                if hasattr(observed_on_raw, "strftime"):
-                    observed_on = observed_on_raw.strftime("%Y-%m-%d")
-                else:
-                    observed_on = str(observed_on_raw) if observed_on_raw else ""
-                writer.writerow(
-                    {
-                        "observation_id": obs.get("id"),
-                        "scientific_name": taxon.get("name", ""),
-                        "common_name": taxon.get("preferred_common_name", ""),
-                        "sound_count": len(obs.get("sounds", [])),
-                        "observed_on": observed_on,
-                        "location": obs.get("place_guess", ""),
-                        "url": f"https://www.inaturalist.org/observations/{obs.get('id')}",
-                    }
-                )
+        file_svc = FileService()
+        rows = []
+        for obs in observations:
+            taxon = obs.get("taxon", {})
+            observed_on_raw = obs.get("observed_on", "")
+            if hasattr(observed_on_raw, "strftime"):
+                observed_on = observed_on_raw.strftime("%Y-%m-%d")
+            else:
+                observed_on = str(observed_on_raw) if observed_on_raw else ""
+            rows.append({
+                "observation_id": obs.get("id"),
+                "scientific_name": taxon.get("name", ""),
+                "common_name": taxon.get("preferred_common_name", ""),
+                "sound_count": len(obs.get("sounds", [])),
+                "observed_on": observed_on,
+                "location": obs.get("place_guess", ""),
+                "url": f"https://www.inaturalist.org/observations/{obs.get('id')}",
+            })
+        fieldnames = [
+            "observation_id",
+            "scientific_name",
+            "common_name",
+            "sound_count",
+            "observed_on",
+            "location",
+            "url",
+        ]
+        file_svc.write_csv_dicts(output, rows, fieldnames=fieldnames)
         click.echo(f"Saved {len(observations)} observations to {output}")
     else:
         click.echo(f"\nFound {len(observations)} observations with sounds:\n")
@@ -140,8 +140,6 @@ def inat_stats(project_id: str, output: str, quiet: bool):
     """Get statistics for an iNaturalist project."""
     import json
 
-    from bioamla.services.inaturalist import INaturalistService
-
     service = INaturalistService()
     result = service.get_project_stats(project_id=project_id)
 
@@ -152,8 +150,8 @@ def inat_stats(project_id: str, output: str, quiet: bool):
     stats = result.data
 
     if output:
-        with TextFile(output, mode="w", encoding="utf-8") as f:
-            json.dump(stats.to_dict(), f.handle, indent=2)
+        file_svc = FileService()
+        file_svc.write_json(output, stats.to_dict())
         click.echo(f"Saved project stats to {output}")
     elif quiet:
         click.echo(json.dumps(stats.to_dict(), indent=2))
@@ -196,8 +194,6 @@ def inat_download(
     quiet: bool,
 ):
     """Download audio observations from iNaturalist."""
-    from bioamla.services.inaturalist import INaturalistService
-
     # Parse taxon IDs
     taxon_id_list = None
     if taxon_ids:
@@ -251,8 +247,6 @@ def catalogs_hf():
 @click.option("--commit-message", default=None, help="Custom commit message for the push")
 def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str):
     """Push a model folder to the HuggingFace Hub."""
-    from bioamla.services.huggingface import HuggingFaceService
-
     click.echo(f"Pushing model folder {path} to HuggingFace Hub: {repo_id}...")
 
     service = HuggingFaceService()
@@ -275,8 +269,6 @@ def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str):
 @click.option("--commit-message", default=None, help="Custom commit message for the push")
 def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str):
     """Push a dataset folder to the HuggingFace Hub."""
-    from bioamla.services.huggingface import HuggingFaceService
-
     click.echo(f"Pushing dataset folder {path} to HuggingFace Hub: {repo_id}...")
 
     service = HuggingFaceService()
@@ -319,41 +311,38 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
     """Search Xeno-canto for bird recordings."""
     import json as json_lib
 
-    from bioamla.core.catalogs import xeno_canto
+    service = XenoCantoService()
+    result = service.search(
+        species=species,
+        genus=genus,
+        country=country,
+        quality=quality,
+        sound_type=sound_type,
+        max_results=max_results,
+    )
 
-    try:
-        results = xeno_canto.search(
-            species=species,
-            genus=genus,
-            country=country,
-            quality=quality,
-            sound_type=sound_type,
-            max_results=max_results,
-        )
-    except ValueError as e:
-        click.echo(f"Error: {e}")
-        raise SystemExit(1) from e
-    except Exception as e:
-        click.echo(f"API error: {e}")
-        raise SystemExit(1) from e
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
 
-    if not results:
+    recordings = result.data.recordings
+    if not recordings:
         click.echo("No recordings found.")
         return
 
     if output_format == "json":
-        click.echo(json_lib.dumps([r.to_dict() for r in results], indent=2))
+        click.echo(json_lib.dumps([r.to_dict() for r in recordings], indent=2))
     elif output_format == "csv":
         import csv
         import sys
 
-        writer = csv.DictWriter(sys.stdout, fieldnames=results[0].to_dict().keys())
+        writer = csv.DictWriter(sys.stdout, fieldnames=recordings[0].to_dict().keys())
         writer.writeheader()
-        for r in results:
+        for r in recordings:
             writer.writerow(r.to_dict())
     else:
-        click.echo(f"Found {len(results)} recordings:\n")
-        for r in results:
+        click.echo(f"Found {len(recordings)} recordings:\n")
+        for r in recordings:
             click.echo(f"XC{r.id}: {r.scientific_name} ({r.common_name})")
             click.echo(f"  Quality: {r.quality} | Type: {r.sound_type} | Length: {r.length}")
             click.echo(f"  Location: {r.location}, {r.country}")
@@ -372,39 +361,29 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
 @click.option("--delay", default=1.0, type=float, help="Delay between downloads in seconds")
 def xc_download(species, genus, country, quality, max_recordings, output_dir, delay):
     """Download recordings from Xeno-canto."""
-    from bioamla.core.catalogs import xeno_canto
-
     click.echo("Searching Xeno-canto...")
 
-    try:
-        results = xeno_canto.search(
-            species=species,
-            genus=genus,
-            country=country,
-            quality=quality,
-            max_results=max_recordings,
-        )
-    except ValueError as e:
-        click.echo(f"Error: {e}")
-        raise SystemExit(1) from e
-    except Exception as e:
-        click.echo(f"API error: {e}")
-        raise SystemExit(1) from e
+    service = XenoCantoService()
+    result = service.download(
+        species=species,
+        genus=genus,
+        country=country,
+        quality=quality,
+        max_recordings=max_recordings,
+        output_dir=output_dir,
+        delay=delay,
+    )
 
-    if not results:
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    download_result = result.data
+    if download_result.total == 0:
         click.echo("No recordings found.")
         return
 
-    click.echo(f"Found {len(results)} recordings. Starting download...")
-
-    stats = xeno_canto.download_recordings(
-        results,
-        output_dir=output_dir,
-        delay=delay,
-        verbose=True,
-    )
-
-    click.echo(f"\nDownload complete: {stats['downloaded']}/{stats['total']} recordings")
+    click.echo(f"\nDownload complete: {download_result.downloaded}/{download_result.total} recordings")
 
 
 # =============================================================================
@@ -459,37 +438,33 @@ def ml_search(
     """
     import json as json_lib
 
-    from bioamla.core.catalogs import macaulay
+    service = MacaulayService()
+    result = service.search(
+        species_code=species_code,
+        scientific_name=scientific_name,
+        common_name=common_name,
+        region=region,
+        country=country,
+        taxon_code=taxon_code,
+        hotspot_code=hotspot_code,
+        min_rating=min_rating,
+        max_results=max_results,
+    )
 
-    try:
-        results = macaulay.search(
-            species_code=species_code,
-            scientific_name=scientific_name,
-            common_name=common_name,
-            region=region,
-            country=country,
-            taxon_code=taxon_code,
-            hotspot_code=hotspot_code,
-            media_type="audio",
-            min_rating=min_rating,
-            count=max_results,
-        )
-    except ValueError as e:
-        click.echo(f"Error: {e}")
-        raise SystemExit(1) from e
-    except Exception as e:
-        click.echo(f"API error: {e}")
-        raise SystemExit(1) from e
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
 
-    if not results:
+    recordings = result.data.recordings
+    if not recordings:
         click.echo("No recordings found.")
         return
 
     if output_format == "json":
-        click.echo(json_lib.dumps([a.to_dict() for a in results], indent=2))
+        click.echo(json_lib.dumps([a.to_dict() for a in recordings], indent=2))
     else:
-        click.echo(f"Found {len(results)} recordings:\n")
-        for a in results:
+        click.echo(f"Found {len(recordings)} recordings:\n")
+        for a in recordings:
             click.echo(f"ML{a.catalog_id}: {a.scientific_name} ({a.common_name})")
             click.echo(f"  Rating: {a.rating}/5 | Duration: {a.duration or 'N/A'}s")
             click.echo(f"  Location: {a.location}, {a.country}")
@@ -527,43 +502,32 @@ def ml_download(
 
     Use 'catalogs ebird species <name>' to look up species codes.
     """
-    from bioamla.core.catalogs import macaulay
-
     click.echo("Searching Macaulay Library...")
 
-    try:
-        results = macaulay.search(
-            species_code=species_code,
-            scientific_name=scientific_name,
-            common_name=common_name,
-            region=region,
-            country=country,
-            taxon_code=taxon_code,
-            hotspot_code=hotspot_code,
-            media_type="audio",
-            min_rating=min_rating,
-            count=max_recordings,
-        )
-    except ValueError as e:
-        click.echo(f"Error: {e}")
-        raise SystemExit(1) from e
-    except Exception as e:
-        click.echo(f"API error: {e}")
-        raise SystemExit(1) from e
+    service = MacaulayService()
+    result = service.download(
+        species_code=species_code,
+        scientific_name=scientific_name,
+        common_name=common_name,
+        region=region,
+        country=country,
+        taxon_code=taxon_code,
+        hotspot_code=hotspot_code,
+        min_rating=min_rating,
+        max_recordings=max_recordings,
+        output_dir=output_dir,
+    )
 
-    if not results:
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    download_result = result.data
+    if download_result.total == 0:
         click.echo("No recordings found.")
         return
 
-    click.echo(f"Found {len(results)} recordings. Starting download...")
-
-    stats = macaulay.download_assets(
-        results,
-        output_dir=output_dir,
-        verbose=True,
-    )
-
-    click.echo(f"\nDownload complete: {stats['downloaded']}/{stats['total']} recordings")
+    click.echo(f"\nDownload complete: {download_result.downloaded}/{download_result.total} recordings")
 
 
 # =============================================================================
@@ -584,19 +548,19 @@ def ebird_species(name: str):
 
     NAME can be a common name, scientific name, or species code.
     """
-    from bioamla.core.catalogs import species
+    service = SpeciesService()
+    result = service.lookup(name, ebird_only=True)
 
-    result = species.get_species_info(name, ebird_only=True)
-
-    if not result:
+    if not result.success:
         click.echo(f"Species not found in eBird taxonomy: {name}")
         raise SystemExit(1)
 
-    click.echo(f"Scientific name: {result.scientific_name}")
-    click.echo(f"Common name: {result.common_name}")
-    click.echo(f"Species code: {result.species_code}")
-    click.echo(f"Family: {result.family}")
-    click.echo(f"Order: {result.order}")
+    info = result.data
+    click.echo(f"Scientific name: {info.scientific_name}")
+    click.echo(f"Common name: {info.common_name}")
+    click.echo(f"Species code: {info.species_code}")
+    click.echo(f"Family: {info.family}")
+    click.echo(f"Order: {info.order}")
 
 
 @catalogs_ebird.command("search")
@@ -604,19 +568,23 @@ def ebird_species(name: str):
 @click.option("--limit", "-n", default=10, type=int, help="Maximum results")
 def ebird_search(query: str, limit: int):
     """Fuzzy search eBird taxonomy for species."""
-    from bioamla.core.catalogs import species
+    service = SpeciesService()
+    result = service.search(query, limit=limit)
 
-    results = species.search(query, limit=limit)
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
 
-    if not results:
+    matches = result.data
+    if not matches:
         click.echo(f"No species found matching: {query}")
         return
 
-    click.echo(f"Found {len(results)} matching species:\n")
-    for r in results:
-        score = r["score"] * 100
-        click.echo(f"{r['scientific_name']} - {r['common_name']} ({r['species_code']})")
-        click.echo(f"  Family: {r['family']} | Match: {score:.0f}%")
+    click.echo(f"Found {len(matches)} matching species:\n")
+    for r in matches:
+        score = r.score * 100
+        click.echo(f"{r.scientific_name} - {r.common_name} ({r.species_code})")
+        click.echo(f"  Family: {r.family} | Match: {score:.0f}%")
 
 
 @catalogs_ebird.command("validate")
@@ -627,24 +595,27 @@ def ebird_search(query: str, limit: int):
 @click.option("--distance", type=float, default=50, help="Search radius in km")
 def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, distance: float):
     """Validate if a species is expected at a location."""
-    from bioamla.core.catalogs.integrations import EBirdClient
-
-    client = EBirdClient(api_key=api_key)
-    result = client.validate_species_for_location(
+    service = EBirdService(api_key=api_key)
+    result = service.validate_species(
         species_code=species_code,
-        latitude=lat,
-        longitude=lng,
+        lat=lat,
+        lng=lng,
         distance_km=distance,
     )
 
-    if result["is_valid"]:
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    validation = result.data
+    if validation.is_valid:
         click.echo(f"✓ {species_code} is expected at this location")
-        click.echo(f"  Found {result['nearby_observations']} nearby observations")
-        if result["most_recent_observation"]:
-            click.echo(f"  Most recent: {result['most_recent_observation']}")
+        click.echo(f"  Found {validation.nearby_observations} nearby observations")
+        if validation.most_recent_observation:
+            click.echo(f"  Most recent: {validation.most_recent_observation}")
     else:
         click.echo(f"✗ {species_code} not recently observed at this location")
-        click.echo(f"  {result['total_species_in_area']} other species observed nearby")
+        click.echo(f"  {validation.total_species_in_area} other species observed nearby")
 
 
 @catalogs_ebird.command("nearby")
@@ -659,19 +630,22 @@ def ebird_nearby(
     lat: float, lng: float, api_key: str, distance: float, days: int, limit: int, output: str
 ):
     """Get recent eBird observations near a location."""
-    import csv
     from pathlib import Path
 
-    from bioamla.core.catalogs.integrations import EBirdClient
-
-    client = EBirdClient(api_key=api_key)
-    observations = client.get_nearby_observations(
-        latitude=lat,
-        longitude=lng,
+    service = EBirdService(api_key=api_key)
+    result = service.get_nearby(
+        lat=lat,
+        lng=lng,
         distance_km=distance,
-        back=days,
-        max_results=limit,
+        days=days,
+        limit=limit,
     )
+
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    observations = result.data.observations
 
     click.echo(f"Found {len(observations)} recent observations:")
     for obs in observations[:10]:
@@ -683,21 +657,17 @@ def ebird_nearby(
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        with TextFile(output, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(
-                f.handle,
-                fieldnames=[
-                    "species_code",
-                    "common_name",
-                    "scientific_name",
-                    "location_name",
-                    "observation_date",
-                    "how_many",
-                ],
-            )
-            writer.writeheader()
-            for obs in observations:
-                writer.writerow(obs.to_dict())
+        file_svc = FileService()
+        fieldnames = [
+            "species_code",
+            "common_name",
+            "scientific_name",
+            "location_name",
+            "observation_date",
+            "how_many",
+        ]
+        rows = [obs.to_dict() for obs in observations]
+        file_svc.write_csv_dicts(output, rows, fieldnames=fieldnames)
         click.echo(f"Saved to: {output}")
 
 

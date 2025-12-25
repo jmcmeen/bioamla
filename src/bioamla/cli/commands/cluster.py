@@ -2,7 +2,8 @@
 
 import click
 
-from bioamla.core.files import TextFile
+from bioamla.services.clustering import ClusteringService
+from bioamla.services.file import FileService
 
 
 @click.group()
@@ -27,8 +28,6 @@ def cluster_reduce(embeddings_file: str, output: str, method: str, n_components:
     """Reduce dimensionality of embeddings."""
     import numpy as np
 
-    from bioamla.core.audio.clustering import reduce_dimensions
-
     embeddings = np.load(embeddings_file)
 
     if not quiet:
@@ -36,9 +35,14 @@ def cluster_reduce(embeddings_file: str, output: str, method: str, n_components:
             f"Reducing {embeddings.shape[1]}D embeddings to {n_components}D using {method}..."
         )
 
-    reduced = reduce_dimensions(embeddings, method=method, n_components=n_components)
+    service = ClusteringService()
+    result = service.reduce_dimensions(
+        embeddings, method=method, n_components=n_components, output_path=output
+    )
 
-    np.save(output, reduced)
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
 
     if not quiet:
         click.echo(f"Saved reduced embeddings to: {output}")
@@ -76,27 +80,29 @@ def cluster_cluster(
     """Cluster embeddings."""
     import numpy as np
 
-    from bioamla.core.audio.clustering import AudioClusterer, ClusteringConfig
-
     embeddings = np.load(embeddings_file)
-
-    config = ClusteringConfig(
-        method=method,
-        n_clusters=n_clusters,
-        eps=eps,
-        min_samples=min_samples,
-    )
-    clusterer = AudioClusterer(config=config)
 
     if not quiet:
         click.echo(f"Clustering {len(embeddings)} samples using {method}...")
 
-    labels = clusterer.fit_predict(embeddings)
+    service = ClusteringService()
+    result = service.cluster(
+        embeddings,
+        method=method,
+        n_clusters=n_clusters,
+        min_samples=min_samples,
+        eps=eps,
+    )
 
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    labels = np.array(result.data.labels)
     np.save(output, labels)
 
     if not quiet:
-        click.echo(f"Found {clusterer.n_clusters_} clusters")
+        click.echo(f"Found {result.data.n_clusters} clusters")
         click.echo(f"Saved cluster labels to: {output}")
 
 
@@ -107,28 +113,34 @@ def cluster_cluster(
 @click.option("--quiet", "-q", is_flag=True, help="Suppress output")
 def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: bool):
     """Analyze cluster quality."""
-    import json
     from pathlib import Path
 
     import numpy as np
 
-    from bioamla.core.audio.clustering import analyze_clusters
-
     embeddings = np.load(embeddings_file)
     labels = np.load(labels_file)
 
-    analysis = analyze_clusters(embeddings, labels)
+    service = ClusteringService()
+    result = service.analyze_clusters(embeddings, labels)
+
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    analysis = result.data
 
     if not quiet:
         click.echo("Cluster Analysis:")
-        click.echo(f"  Clusters: {analysis['n_clusters']}")
-        click.echo(f"  Samples: {analysis['n_samples']}")
-        click.echo(f"  Noise: {analysis['n_noise']} ({analysis['noise_percentage']:.1f}%)")
-        click.echo(f"  Silhouette Score: {analysis['silhouette_score']:.4f}")
-        click.echo(f"  Calinski-Harabasz Score: {analysis['calinski_harabasz_score']:.2f}")
+        click.echo(f"  Clusters: {analysis.n_clusters}")
+        click.echo(f"  Samples: {analysis.n_samples}")
+        noise_pct = analysis.n_noise / analysis.n_samples * 100 if analysis.n_samples > 0 else 0
+        click.echo(f"  Noise: {analysis.n_noise} ({noise_pct:.1f}%)")
+        click.echo(f"  Silhouette Score: {analysis.silhouette_score:.4f}")
+        click.echo(f"  Calinski-Harabasz Score: {analysis.calinski_harabasz_score:.2f}")
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
+        file_svc = FileService()
 
         def convert_numpy(obj):
             if isinstance(obj, np.integer):
@@ -143,8 +155,16 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
                 return [convert_numpy(v) for v in obj]
             return obj
 
-        with TextFile(output, mode="w", encoding="utf-8") as f:
-            json.dump(convert_numpy(analysis), f.handle, indent=2)
+        analysis_dict = {
+            "n_clusters": analysis.n_clusters,
+            "n_samples": analysis.n_samples,
+            "n_noise": analysis.n_noise,
+            "noise_percentage": noise_pct,
+            "silhouette_score": analysis.silhouette_score,
+            "calinski_harabasz_score": analysis.calinski_harabasz_score,
+            "cluster_stats": convert_numpy(analysis.cluster_stats),
+        }
+        file_svc.write_json(output, analysis_dict)
         if not quiet:
             click.echo(f"Saved analysis to: {output}")
 
@@ -168,26 +188,31 @@ def cluster_novelty(
     """Detect novel sounds in embeddings."""
     import numpy as np
 
-    from bioamla.core.audio.clustering import discover_novel_sounds
-
     embeddings = np.load(embeddings_file)
     known_labels = np.load(labels) if labels else None
 
     if not quiet:
         click.echo(f"Detecting novel sounds using {method}...")
 
-    is_novel, scores = discover_novel_sounds(
+    service = ClusteringService()
+    result = service.detect_novelty(
         embeddings,
         known_labels=known_labels,
         method=method,
         threshold=threshold,
-        return_scores=True,
     )
 
-    results = np.column_stack([is_novel.astype(int), scores])
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    is_novel = result.metadata.get("is_novel", np.array([]))
+    novelty_scores = result.metadata.get("novelty_scores", np.array([]))
+
+    results = np.column_stack([is_novel.astype(int), novelty_scores])
     np.save(output, results)
 
-    n_novel = is_novel.sum()
+    n_novel = result.data.n_novel
     if not quiet:
-        click.echo(f"Found {n_novel} novel samples ({100 * n_novel / len(embeddings):.1f}%)")
+        click.echo(f"Found {n_novel} novel samples ({result.data.novel_percentage:.1f}%)")
         click.echo(f"Saved novelty results to: {output}")

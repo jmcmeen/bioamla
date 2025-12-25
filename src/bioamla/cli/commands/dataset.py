@@ -2,6 +2,8 @@
 
 import click
 
+from bioamla.services.dataset import DatasetService
+
 
 @click.group()
 def dataset():
@@ -37,9 +39,8 @@ def dataset_merge(
     quiet: bool,
 ):
     """Merge multiple audio datasets into a single dataset."""
-    from bioamla.core.datasets.datasets import merge_datasets as do_merge
-
-    stats = do_merge(
+    service = DatasetService()
+    result = service.merge(
         dataset_paths=list(dataset_paths),
         output_dir=output_dir,
         metadata_filename=metadata_filename,
@@ -49,10 +50,15 @@ def dataset_merge(
         verbose=not quiet,
     )
 
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    stats = result.data
     if quiet:
-        msg = f"Merged {stats['datasets_merged']} datasets: {stats['total_files']} total files"
+        msg = f"Merged {stats.datasets_merged} datasets: {stats.total_files} total files"
         if target_format:
-            msg += f", {stats['files_converted']} converted"
+            msg += f", {stats.files_converted} converted"
         click.echo(msg)
 
 
@@ -73,17 +79,14 @@ def dataset_license(
     """Generate license/attribution file from dataset metadata."""
     from pathlib import Path as PathLib
 
-    from bioamla.core.license import (
-        generate_license_for_dataset,
-        generate_licenses_for_directory,
-    )
-
     path_obj = PathLib(path)
     template_path = PathLib(template) if template else None
 
     if template_path and not template_path.exists():
         click.echo(f"Error: Template file '{template}' not found.")
         raise SystemExit(1)
+
+    service = DatasetService()
 
     if batch:
         if not path_obj.is_dir():
@@ -93,39 +96,40 @@ def dataset_license(
         if not quiet:
             click.echo(f"Scanning directory for datasets: {path}")
 
-        try:
-            stats = generate_licenses_for_directory(
-                audio_dir=path_obj,
-                template_path=template_path,
-                output_filename=output,
-                metadata_filename=metadata_filename,
-            )
-        except FileNotFoundError as e:
-            click.echo(f"Error: {e}")
-            raise SystemExit(1) from e
+        result = service.generate_licenses_batch(
+            directory=str(path_obj),
+            template_path=str(template_path) if template_path else None,
+            output_filename=output,
+            metadata_filename=metadata_filename,
+        )
 
-        if stats["datasets_found"] == 0:
+        if not result.success:
+            click.echo(f"Error: {result.error}")
+            raise SystemExit(1)
+
+        stats = result.data
+        if stats.datasets_found == 0:
             click.echo("No datasets found (no directories with metadata.csv)")
             raise SystemExit(1)
 
         if not quiet:
-            click.echo(f"\nProcessed {stats['datasets_found']} dataset(s):")
-            click.echo(f"  Successful: {stats['datasets_processed']}")
-            click.echo(f"  Failed: {stats['datasets_failed']}")
+            click.echo(f"\nProcessed {stats.datasets_found} dataset(s):")
+            click.echo(f"  Successful: {stats.datasets_processed}")
+            click.echo(f"  Failed: {stats.datasets_failed}")
 
-            for result in stats["results"]:
-                if result["status"] == "success":
+            for item in stats.results:
+                if item["status"] == "success":
                     click.echo(
-                        f"  - {result['dataset_name']}: {result['attributions_count']} attributions"
+                        f"  - {item['dataset_name']}: {item['attributions_count']} attributions"
                     )
                 else:
                     click.echo(
-                        f"  - {result['dataset_name']}: FAILED - {result.get('error', 'Unknown error')}"
+                        f"  - {item['dataset_name']}: FAILED - {item.get('error', 'Unknown error')}"
                     )
         else:
-            click.echo(f"Generated {stats['datasets_processed']} license files")
+            click.echo(f"Generated {stats.datasets_processed} license files")
 
-        if stats["datasets_failed"] > 0:
+        if stats.datasets_failed > 0:
             raise SystemExit(1)
 
     else:
@@ -141,23 +145,24 @@ def dataset_license(
         if not quiet:
             click.echo(f"Generating license file for: {path}")
 
-        try:
-            stats = generate_license_for_dataset(
-                dataset_path=path_obj,
-                template_path=template_path,
-                output_filename=output,
-                metadata_filename=metadata_filename,
-            )
-        except (FileNotFoundError, ValueError) as e:
-            click.echo(f"Error: {e}")
-            raise SystemExit(1) from e
+        result = service.generate_license(
+            dataset_path=str(path_obj),
+            template_path=str(template_path) if template_path else None,
+            output_filename=output,
+            metadata_filename=metadata_filename,
+        )
 
+        if not result.success:
+            click.echo(f"Error: {result.error}")
+            raise SystemExit(1)
+
+        stats = result.data
         if not quiet:
-            click.echo(f"License file generated: {stats['output_path']}")
-            click.echo(f"  Attributions: {stats['attributions_count']}")
-            click.echo(f"  File size: {stats['file_size']:,} bytes")
+            click.echo(f"License file generated: {stats.output_path}")
+            click.echo(f"  Attributions: {stats.attributions_count}")
+            click.echo(f"  File size: {stats.file_size:,} bytes")
         else:
-            click.echo(f"Generated {output} with {stats['attributions_count']} attributions")
+            click.echo(f"Generated {output} with {stats.attributions_count} attributions")
 
 
 def _parse_range(value: str) -> tuple:
@@ -201,62 +206,56 @@ def dataset_augment(
     quiet: bool,
 ):
     """Augment audio files to expand training datasets."""
-    from bioamla.core.augment import AugmentationConfig, batch_augment
+    # Parse augmentation parameters
+    noise_enabled = add_noise is not None
+    noise_min_snr, noise_max_snr = _parse_range(add_noise) if add_noise else (3.0, 30.0)
 
-    config = AugmentationConfig(
-        sample_rate=sample_rate,
-        multiply=multiply,
-    )
+    stretch_enabled = time_stretch is not None
+    stretch_min, stretch_max = _parse_range(time_stretch) if time_stretch else (0.8, 1.2)
 
-    if add_noise:
-        config.add_noise = True
-        min_snr, max_snr = _parse_range(add_noise)
-        config.noise_min_snr = min_snr
-        config.noise_max_snr = max_snr
+    pitch_enabled = pitch_shift is not None
+    pitch_min, pitch_max = _parse_range(pitch_shift) if pitch_shift else (-2.0, 2.0)
 
-    if time_stretch:
-        config.time_stretch = True
-        min_rate, max_rate = _parse_range(time_stretch)
-        config.time_stretch_min = min_rate
-        config.time_stretch_max = max_rate
+    gain_enabled = gain is not None
+    gain_min, gain_max = _parse_range(gain) if gain else (-12.0, 12.0)
 
-    if pitch_shift:
-        config.pitch_shift = True
-        min_semi, max_semi = _parse_range(pitch_shift)
-        config.pitch_shift_min = min_semi
-        config.pitch_shift_max = max_semi
-
-    if gain:
-        config.gain = True
-        min_db, max_db = _parse_range(gain)
-        config.gain_min_db = min_db
-        config.gain_max_db = max_db
-
-    if not any([config.add_noise, config.time_stretch, config.pitch_shift, config.gain]):
+    if not any([noise_enabled, stretch_enabled, pitch_enabled, gain_enabled]):
         click.echo("Error: At least one augmentation option must be specified")
         click.echo("Use --help for available options")
         raise SystemExit(1)
 
-    try:
-        stats = batch_augment(
-            input_dir=input_dir,
-            output_dir=output,
-            config=config,
-            recursive=recursive,
-            verbose=not quiet,
-        )
+    service = DatasetService()
+    result = service.augment(
+        input_dir=input_dir,
+        output_dir=output,
+        add_noise=noise_enabled,
+        noise_min_snr=noise_min_snr,
+        noise_max_snr=noise_max_snr,
+        time_stretch=stretch_enabled,
+        time_stretch_min=stretch_min,
+        time_stretch_max=stretch_max,
+        pitch_shift=pitch_enabled,
+        pitch_shift_min=pitch_min,
+        pitch_shift_max=pitch_max,
+        gain=gain_enabled,
+        gain_min_db=gain_min,
+        gain_max_db=gain_max,
+        multiply=multiply,
+        sample_rate=sample_rate,
+        recursive=recursive,
+        verbose=not quiet,
+    )
 
-        if quiet:
-            click.echo(
-                f"Created {stats['files_created']} augmented files from "
-                f"{stats['files_processed']} source files in {stats['output_dir']}"
-            )
-    except FileNotFoundError as e:
-        click.echo(f"Error: {e}")
-        raise SystemExit(1) from e
-    except Exception as e:
-        click.echo(f"Error during augmentation: {e}")
-        raise SystemExit(1) from e
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+
+    stats = result.data
+    if quiet:
+        click.echo(
+            f"Created {stats.files_created} augmented files from "
+            f"{stats.files_processed} source files in {stats.output_dir}"
+        )
 
 
 @dataset.command("download")
@@ -267,8 +266,6 @@ def dataset_download(url: str, output_dir: str):
     import os
     from urllib.parse import urlparse
 
-    from bioamla.core.utils import download_file
-
     if output_dir == ".":
         output_dir = os.getcwd()
 
@@ -278,7 +275,13 @@ def dataset_download(url: str, output_dir: str):
         filename = "downloaded_file"
 
     output_path = os.path.join(output_dir, filename)
-    download_file(url, output_path)
+
+    service = DatasetService()
+    result = service.download(url, output_path)
+
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
 
 
 @dataset.command("unzip")
@@ -288,12 +291,15 @@ def dataset_unzip(file_path: str, output_path: str):
     """Extract a ZIP archive to the specified output directory."""
     import os
 
-    from bioamla.core.utils import extract_zip_file
-
     if output_path == ".":
         output_path = os.getcwd()
 
-    extract_zip_file(file_path, output_path)
+    service = DatasetService()
+    result = service.extract_zip(file_path, output_path)
+
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
 
 
 @dataset.command("zip")
@@ -301,13 +307,11 @@ def dataset_unzip(file_path: str, output_path: str):
 @click.argument("output_file")
 def dataset_zip(source_path: str, output_file: str):
     """Create a ZIP archive from a file or directory."""
-    import os
+    service = DatasetService()
+    result = service.create_zip(source_path, output_file)
 
-    from bioamla.core.utils import create_zip_file, zip_directory
-
-    if os.path.isdir(source_path):
-        zip_directory(source_path, output_file)
-    else:
-        create_zip_file([source_path], output_file)
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
 
     click.echo(f"Created {output_file}")
