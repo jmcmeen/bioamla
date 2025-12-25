@@ -37,8 +37,7 @@ def audio_list(path: str, recursive: bool):
     """List audio files in a directory."""
     from bioamla.services.audio_transform import AudioTransformService
 
-    controller = AudioTransformService()
-    result = controller.list_files(path, recursive=recursive)
+    result = AudioTransformService().list_files(path, recursive=recursive)
 
     if not result.success:
         click.echo(f"Error: {result.error}")
@@ -71,10 +70,8 @@ def audio_convert(input_path, output_path, sample_rate, channels, bit_depth, for
     """Convert audio file format or properties."""
     from bioamla.services.audio_file import AudioFileService
 
-    controller = AudioFileService()
-
     # Load the audio file
-    open_result = controller.open(input_path)
+    open_result = AudioFileService().open(input_path)
     if not open_result.success:
         click.echo(f"Error: {open_result.error}")
         raise SystemExit(1)
@@ -137,8 +134,7 @@ def audio_segment(input_path, output_dir, duration, overlap, format, prefix):
     """Segment audio file into fixed-duration clips."""
     from bioamla.services.audio_transform import AudioTransformService
 
-    controller = AudioTransformService()
-    result = controller.segment_file(
+    result = AudioTransformService().segment_file(
         input_path=input_path,
         output_dir=output_dir,
         duration=duration,
@@ -196,8 +192,7 @@ def audio_normalize(input_path, output_path, target_db, method):
     """Normalize audio amplitude."""
     from bioamla.services.audio_transform import AudioTransformService
 
-    controller = AudioTransformService()
-    result = controller.normalize_file(
+    result = AudioTransformService().normalize_file(
         input_path=input_path,
         output_path=output_path,
         target_db=target_db,
@@ -219,8 +214,7 @@ def audio_resample(input_path, output_path, sample_rate):
     """Resample audio to a different sample rate."""
     from bioamla.services.audio_transform import AudioTransformService
 
-    controller = AudioTransformService()
-    result = controller.resample_file(
+    result = AudioTransformService().resample_file(
         input_path=input_path,
         output_path=output_path,
         target_rate=sample_rate,
@@ -256,11 +250,9 @@ def audio_visualize(path, output, viz_type, n_fft, hop_length, n_mels, n_mfcc, c
 
     from bioamla.services.audio_transform import AudioTransformService
 
-    controller = AudioTransformService()
-
     if batch:
         output_dir = output if output else str(Path(path) / "visualizations")
-        result = controller.visualize_batch(
+        result = AudioTransformService().visualize_batch(
             input_dir=path,
             output_dir=output_dir,
             viz_type=viz_type,
@@ -279,7 +271,7 @@ def audio_visualize(path, output, viz_type, n_fft, hop_length, n_mels, n_mfcc, c
         click.echo(f"Visualizations saved to: {output_dir}")
     else:
         output_path = output or f"{Path(path).stem}_{viz_type}.png"
-        result = controller.visualize_file(
+        result = AudioTransformService().visualize_file(
             input_path=path,
             output_path=output_path,
             viz_type=viz_type,
