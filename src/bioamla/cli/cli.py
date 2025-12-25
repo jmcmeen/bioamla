@@ -18,7 +18,6 @@ from .commands import (
     config,
     dataset,
     detect,
-    examples,
     indices,
     models,
 )
@@ -51,7 +50,6 @@ cli.add_command(cluster)
 cli.add_command(config)
 cli.add_command(dataset)
 cli.add_command(detect)
-cli.add_command(examples)
 cli.add_command(indices)
 cli.add_command(models)
 cli.add_command(catalogs)
