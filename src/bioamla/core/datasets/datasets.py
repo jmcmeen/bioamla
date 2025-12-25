@@ -17,14 +17,14 @@ from typing import List, Optional, Set
 
 import pandas as pd
 
-from bioamla.core.files.paths import sanitize_filename
-from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
-from bioamla.core.logger import get_logger
 from bioamla.core.audio.metadata import (
     read_metadata_csv,
     write_metadata_csv,
 )
 from bioamla.core.catalogs.species import find_species_name
+from bioamla.core.files.paths import sanitize_filename
+from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
+from bioamla.core.logger import get_logger
 from bioamla.core.utils import get_audio_files
 
 logger = get_logger(__name__)

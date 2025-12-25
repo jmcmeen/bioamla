@@ -469,7 +469,7 @@ class DatasetService(BaseService):
                     f"Metadata file not found: {metadata_path}"
                 )
 
-            with open(metadata_path, "r") as f:
+            with open(metadata_path) as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
 

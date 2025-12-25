@@ -2,7 +2,6 @@
 
 import click
 
-from bioamla.services.annotation import AnnotationService
 from bioamla.services.file import FileService
 
 

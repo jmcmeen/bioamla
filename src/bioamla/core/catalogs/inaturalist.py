@@ -28,17 +28,17 @@ from typing import Any, List, Optional, Union
 import requests
 from pyinaturalist import get_observation_species_counts, get_observations
 
+from bioamla.core.audio.metadata import (
+    get_existing_observation_ids,
+    read_metadata_csv,
+    write_metadata_csv,
+)
 from bioamla.core.files import (
     BinaryFile,
     TextFile,
     get_extension_from_content_type,
     get_extension_from_url,
     sanitize_filename,
-)
-from bioamla.core.audio.metadata import (
-    get_existing_observation_ids,
-    read_metadata_csv,
-    write_metadata_csv,
 )
 
 logger = logging.getLogger(__name__)

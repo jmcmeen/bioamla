@@ -27,7 +27,7 @@ Usage:
     )
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -306,7 +306,6 @@ class CNNService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            import numpy as np
 
             from bioamla.core.ml import ModelConfig, load_model
 

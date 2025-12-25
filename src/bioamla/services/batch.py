@@ -24,7 +24,7 @@ Usage:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import List, Optional
 
 from .base import BaseService, ProgressCallback, ServiceResult
 

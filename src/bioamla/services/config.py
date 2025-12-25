@@ -28,7 +28,7 @@ Usage:
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from .base import BaseService, ServiceResult, ToDictMixin
 
@@ -115,7 +115,6 @@ class ConfigService(BaseService):
             ServiceResult containing list of path strings
         """
         try:
-            from bioamla.core.config import CONFIG_LOCATIONS
             from bioamla.core.config import (
                 get_config_locations as core_get_locations,
             )

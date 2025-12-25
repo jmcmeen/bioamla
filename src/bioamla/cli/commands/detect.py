@@ -264,6 +264,7 @@ def detect_peaks(
         # For sequences, we still need to use core detection for now
         # as the service doesn't have sequence detection
         import librosa
+
         from bioamla.core.detection import CWTPeakDetector, export_detections
 
         detector = CWTPeakDetector(
