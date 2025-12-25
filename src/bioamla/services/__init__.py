@@ -84,6 +84,16 @@ from .species import SpeciesService
 from .ebird import EBirdService
 from .huggingface import HuggingFaceService
 
+# New services for CLI layer separation
+from .file import FileService
+from .config import ConfigService
+from .dependency import DependencyService, DependencyInfo, DependencyReport
+from .detection import DetectionService, DetectionInfo, DetectionResult, BatchDetectionResult
+from .dataset import DatasetService, MergeResult, AugmentResult, LicenseResult
+from .ast import ASTService
+from .cnn import CNNService
+from .birdnet import BirdNETService
+
 __all__ = [
     # Base
     "BaseService",
@@ -125,4 +135,26 @@ __all__ = [
     "SpeciesService",
     "EBirdService",
     "HuggingFaceService",
+    # File I/O
+    "FileService",
+    # Configuration
+    "ConfigService",
+    # System Dependencies
+    "DependencyService",
+    "DependencyInfo",
+    "DependencyReport",
+    # Detection
+    "DetectionService",
+    "DetectionInfo",
+    "DetectionResult",
+    "BatchDetectionResult",
+    # Dataset
+    "DatasetService",
+    "MergeResult",
+    "AugmentResult",
+    "LicenseResult",
+    # Model Services
+    "ASTService",
+    "CNNService",
+    "BirdNETService",
 ]

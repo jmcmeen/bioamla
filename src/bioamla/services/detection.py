@@ -1,0 +1,500 @@
+# services/detection.py
+"""
+Detection Service
+=================
+
+Service for acoustic detection operations.
+
+This service provides a unified interface for various acoustic detection
+algorithms including band-limited energy detection, RIBBIT periodic call
+detection, CWT peak detection, and accelerating pattern detection.
+
+Usage:
+    from bioamla.services import DetectionService
+
+    detection_svc = DetectionService()
+
+    # Detect using energy detector
+    result = detection_svc.detect_energy(
+        filepath="audio.wav",
+        low_freq=500,
+        high_freq=5000,
+        threshold_db=-20,
+    )
+
+    # Batch detection
+    result = detection_svc.batch_detect(
+        directory="./audio",
+        detector_type="energy",
+        output_dir="./detections",
+    )
+"""
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from .base import BaseService, ServiceResult, ToDictMixin
+
+
+@dataclass
+class DetectionInfo(ToDictMixin):
+    """Information about a single detection."""
+
+    start_time: float
+    end_time: float
+    confidence: float
+    label: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class DetectionResult(ToDictMixin):
+    """Result of detection on a single file."""
+
+    filepath: str
+    detector_type: str
+    num_detections: int
+    detections: List[DetectionInfo]
+
+
+@dataclass
+class BatchDetectionResult(ToDictMixin):
+    """Result of batch detection."""
+
+    total_files: int
+    files_with_detections: int
+    total_detections: int
+    output_dir: Optional[str]
+    errors: List[str] = field(default_factory=list)
+
+
+class DetectionService(BaseService):
+    """
+    Service for acoustic detection operations.
+
+    Provides ServiceResult-wrapped methods for various detection algorithms.
+    """
+
+    def detect_energy(
+        self,
+        filepath: str,
+        low_freq: float = 500.0,
+        high_freq: float = 5000.0,
+        threshold_db: float = -20.0,
+        min_duration: float = 0.05,
+    ) -> ServiceResult[DetectionResult]:
+        """
+        Detect sounds using band-limited energy detection.
+
+        Args:
+            filepath: Path to audio file
+            low_freq: Low frequency bound (Hz)
+            high_freq: High frequency bound (Hz)
+            threshold_db: Detection threshold (dB)
+            min_duration: Minimum detection duration (s)
+
+        Returns:
+            ServiceResult containing DetectionResult
+        """
+        error = self._validate_input_path(filepath)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.detection import BandLimitedEnergyDetector
+
+            detector = BandLimitedEnergyDetector(
+                low_freq=low_freq,
+                high_freq=high_freq,
+                threshold_db=threshold_db,
+                min_duration=min_duration,
+            )
+
+            core_detections = detector.detect_from_file(filepath)
+
+            detections = [
+                DetectionInfo(
+                    start_time=d.start_time,
+                    end_time=d.end_time,
+                    confidence=d.confidence,
+                    label=d.label,
+                    metadata=d.metadata,
+                )
+                for d in core_detections
+            ]
+
+            result = DetectionResult(
+                filepath=filepath,
+                detector_type="energy",
+                num_detections=len(detections),
+                detections=detections,
+            )
+
+            return ServiceResult.ok(
+                data=result,
+                message=f"Found {len(detections)} detections",
+            )
+        except Exception as e:
+            return ServiceResult.fail(f"Energy detection failed: {e}")
+
+    def detect_ribbit(
+        self,
+        filepath: str,
+        pulse_rate_hz: float = 10.0,
+        pulse_rate_tolerance: float = 0.2,
+        low_freq: float = 500.0,
+        high_freq: float = 5000.0,
+        window_duration: float = 2.0,
+        min_score: float = 0.3,
+    ) -> ServiceResult[DetectionResult]:
+        """
+        Detect periodic calls using RIBBIT algorithm.
+
+        Args:
+            filepath: Path to audio file
+            pulse_rate_hz: Expected pulse rate in Hz
+            pulse_rate_tolerance: Tolerance around expected pulse rate
+            low_freq: Low frequency bound (Hz)
+            high_freq: High frequency bound (Hz)
+            window_duration: Analysis window duration (s)
+            min_score: Minimum detection score
+
+        Returns:
+            ServiceResult containing DetectionResult
+        """
+        error = self._validate_input_path(filepath)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.detection import RibbitDetector
+
+            detector = RibbitDetector(
+                pulse_rate_hz=pulse_rate_hz,
+                pulse_rate_tolerance=pulse_rate_tolerance,
+                low_freq=low_freq,
+                high_freq=high_freq,
+                window_duration=window_duration,
+                min_score=min_score,
+            )
+
+            core_detections = detector.detect_from_file(filepath)
+
+            detections = [
+                DetectionInfo(
+                    start_time=d.start_time,
+                    end_time=d.end_time,
+                    confidence=d.confidence,
+                    label=d.label,
+                    metadata=d.metadata,
+                )
+                for d in core_detections
+            ]
+
+            result = DetectionResult(
+                filepath=filepath,
+                detector_type="ribbit",
+                num_detections=len(detections),
+                detections=detections,
+            )
+
+            return ServiceResult.ok(
+                data=result,
+                message=f"Found {len(detections)} periodic call detections",
+            )
+        except Exception as e:
+            return ServiceResult.fail(f"RIBBIT detection failed: {e}")
+
+    def detect_peaks(
+        self,
+        filepath: str,
+        snr_threshold: float = 2.0,
+        min_peak_distance: float = 0.01,
+        low_freq: Optional[float] = None,
+        high_freq: Optional[float] = None,
+    ) -> ServiceResult[DetectionResult]:
+        """
+        Detect peaks using Continuous Wavelet Transform (CWT).
+
+        Args:
+            filepath: Path to audio file
+            snr_threshold: Signal-to-noise ratio threshold
+            min_peak_distance: Minimum peak distance (s)
+            low_freq: Low frequency bound (Hz)
+            high_freq: High frequency bound (Hz)
+
+        Returns:
+            ServiceResult containing DetectionResult
+        """
+        error = self._validate_input_path(filepath)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            import librosa
+
+            from bioamla.core.detection import CWTPeakDetector
+
+            detector = CWTPeakDetector(
+                snr_threshold=snr_threshold,
+                min_peak_distance=min_peak_distance,
+                low_freq=low_freq,
+                high_freq=high_freq,
+            )
+
+            audio, sample_rate = librosa.load(filepath, sr=None, mono=True)
+            peaks = detector.detect(audio, sample_rate)
+
+            # Convert peaks to DetectionInfo format
+            detections = [
+                DetectionInfo(
+                    start_time=p.time,
+                    end_time=p.time + p.width,
+                    confidence=p.prominence,
+                    metadata={
+                        "amplitude": p.amplitude,
+                        "width": p.width,
+                    },
+                )
+                for p in peaks
+            ]
+
+            result = DetectionResult(
+                filepath=filepath,
+                detector_type="peaks",
+                num_detections=len(detections),
+                detections=detections,
+            )
+
+            return ServiceResult.ok(
+                data=result,
+                message=f"Found {len(detections)} peaks",
+            )
+        except Exception as e:
+            return ServiceResult.fail(f"Peak detection failed: {e}")
+
+    def detect_accelerating(
+        self,
+        filepath: str,
+        min_pulses: int = 5,
+        acceleration_threshold: float = 1.5,
+        deceleration_threshold: Optional[float] = None,
+        low_freq: float = 500.0,
+        high_freq: float = 5000.0,
+        window_duration: float = 3.0,
+    ) -> ServiceResult[DetectionResult]:
+        """
+        Detect accelerating or decelerating call patterns.
+
+        Args:
+            filepath: Path to audio file
+            min_pulses: Minimum pulses to detect pattern
+            acceleration_threshold: Acceleration threshold (final_rate/initial_rate)
+            deceleration_threshold: Deceleration threshold (optional)
+            low_freq: Low frequency bound (Hz)
+            high_freq: High frequency bound (Hz)
+            window_duration: Analysis window duration (s)
+
+        Returns:
+            ServiceResult containing DetectionResult
+        """
+        error = self._validate_input_path(filepath)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.detection import AcceleratingPatternDetector
+
+            detector = AcceleratingPatternDetector(
+                min_pulses=min_pulses,
+                acceleration_threshold=acceleration_threshold,
+                deceleration_threshold=deceleration_threshold,
+                low_freq=low_freq,
+                high_freq=high_freq,
+                window_duration=window_duration,
+            )
+
+            core_detections = detector.detect_from_file(filepath)
+
+            detections = [
+                DetectionInfo(
+                    start_time=d.start_time,
+                    end_time=d.end_time,
+                    confidence=d.confidence,
+                    label=d.label,
+                    metadata=d.metadata,
+                )
+                for d in core_detections
+            ]
+
+            result = DetectionResult(
+                filepath=filepath,
+                detector_type="accelerating",
+                num_detections=len(detections),
+                detections=detections,
+            )
+
+            return ServiceResult.ok(
+                data=result,
+                message=f"Found {len(detections)} pattern detections",
+            )
+        except Exception as e:
+            return ServiceResult.fail(f"Accelerating pattern detection failed: {e}")
+
+    def batch_detect(
+        self,
+        directory: str,
+        detector_type: str = "energy",
+        output_dir: Optional[str] = None,
+        low_freq: float = 500.0,
+        high_freq: float = 5000.0,
+        recursive: bool = True,
+    ) -> ServiceResult[BatchDetectionResult]:
+        """
+        Run detection on all audio files in a directory.
+
+        Args:
+            directory: Directory containing audio files
+            detector_type: Type of detector (energy, ribbit, peaks, accelerating)
+            output_dir: Output directory for detection files
+            low_freq: Low frequency bound (Hz)
+            high_freq: High frequency bound (Hz)
+            recursive: Search subdirectories
+
+        Returns:
+            ServiceResult containing BatchDetectionResult
+        """
+        error = self._validate_input_path(directory)
+        if error:
+            return ServiceResult.fail(error)
+
+        try:
+            from bioamla.core.detection import (
+                AcceleratingPatternDetector,
+                BandLimitedEnergyDetector,
+                CWTPeakDetector,
+                Detection,
+                RibbitDetector,
+                batch_detect,
+                export_detections,
+            )
+
+            # Create detector
+            if detector_type == "energy":
+                detector = BandLimitedEnergyDetector(
+                    low_freq=low_freq,
+                    high_freq=high_freq,
+                )
+            elif detector_type == "ribbit":
+                detector = RibbitDetector(
+                    low_freq=low_freq,
+                    high_freq=high_freq,
+                )
+            elif detector_type == "peaks":
+                detector = CWTPeakDetector(
+                    low_freq=low_freq,
+                    high_freq=high_freq,
+                )
+            elif detector_type == "accelerating":
+                detector = AcceleratingPatternDetector(
+                    low_freq=low_freq,
+                    high_freq=high_freq,
+                )
+            else:
+                return ServiceResult.fail(
+                    f"Unknown detector type: {detector_type}. "
+                    "Available: energy, ribbit, peaks, accelerating"
+                )
+
+            # Find audio files
+            files = self._get_audio_files(directory, recursive=recursive)
+
+            if not files:
+                return ServiceResult.fail(f"No audio files found in {directory}")
+
+            # Run batch detection
+            results = batch_detect(files, detector, verbose=False)
+
+            # Process results
+            total_detections = 0
+            files_with_detections = 0
+            errors = []
+
+            if output_dir:
+                output_path = Path(output_dir)
+                output_path.mkdir(parents=True, exist_ok=True)
+
+                for filepath, detections in results.items():
+                    if detections:
+                        if isinstance(detections[0], Detection):
+                            output_file = output_path / f"{Path(filepath).stem}_detections.csv"
+                            export_detections(detections, output_file, format="csv")
+                            total_detections += len(detections)
+                            files_with_detections += 1
+
+            result = BatchDetectionResult(
+                total_files=len(files),
+                files_with_detections=files_with_detections,
+                total_detections=total_detections,
+                output_dir=output_dir,
+                errors=errors,
+            )
+
+            return ServiceResult.ok(
+                data=result,
+                message=f"Found {total_detections} detections in {files_with_detections} files",
+            )
+        except Exception as e:
+            return ServiceResult.fail(f"Batch detection failed: {e}")
+
+    def export_detections(
+        self,
+        detections: List[DetectionInfo],
+        output_path: str,
+        format: str = "csv",
+    ) -> ServiceResult[str]:
+        """
+        Export detections to a file.
+
+        Args:
+            detections: List of DetectionInfo objects
+            output_path: Output file path
+            format: Output format (csv, json)
+
+        Returns:
+            ServiceResult containing output path
+        """
+        try:
+            path = Path(output_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            if format == "json":
+                import json
+
+                with open(path, "w") as f:
+                    json.dump([d.to_dict() for d in detections], f, indent=2)
+            else:
+                import csv
+
+                if not detections:
+                    return ServiceResult.fail("No detections to export")
+
+                fieldnames = ["start_time", "end_time", "confidence", "label"]
+                with open(path, "w", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    for d in detections:
+                        writer.writerow({
+                            "start_time": d.start_time,
+                            "end_time": d.end_time,
+                            "confidence": d.confidence,
+                            "label": d.label,
+                        })
+
+            return ServiceResult.ok(
+                data=str(path),
+                message=f"Exported {len(detections)} detections to {path}",
+            )
+        except Exception as e:
+            return ServiceResult.fail(f"Failed to export detections: {e}")
