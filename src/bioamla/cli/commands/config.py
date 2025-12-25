@@ -2,7 +2,8 @@
 
 import click
 
-from bioamla.core.config import get_config
+from bioamla.services.config import ConfigService
+from bioamla.services.dependency import DependencyService
 
 
 @click.group()
@@ -16,7 +17,12 @@ def config_show():
     """Show current configuration."""
     from bioamla.cli.progress import console
 
-    config_obj = get_config()
+    config_svc = ConfigService()
+    result = config_svc.get_config()
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
+    config_obj = result.data
 
     console.print("\n[bold]Current Configuration[/bold]")
     if config_obj._source:
@@ -51,40 +57,48 @@ def config_show():
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing file")
 def config_init(output, force):
     """Create a default configuration file."""
-    from pathlib import Path
-
-    from bioamla.core.config import create_default_config_file
     from bioamla.cli.progress import print_error, print_success
 
-    path = Path(output)
-    if path.exists() and not force:
-        print_error(f"File already exists: {output}")
-        click.echo("Use --force to overwrite.")
+    config_svc = ConfigService()
+    result = config_svc.create_default_config(output, force=force)
+
+    if not result.success:
+        print_error(result.error)
+        if "already exists" in result.error:
+            click.echo("Use --force to overwrite.")
         raise SystemExit(1)
 
-    create_default_config_file(output)
     print_success(f"Created configuration file: {output}")
 
 
 @config.command("path")
 def config_path():
     """Show configuration file search paths."""
-    from bioamla.core.config import CONFIG_LOCATIONS, find_config_file
+    from pathlib import Path
+
     from bioamla.cli.progress import console
+
+    config_svc = ConfigService()
 
     console.print("\n[bold]Configuration File Search Paths[/bold]\n")
     console.print("Files are searched in order (first found wins):\n")
 
-    active_config = find_config_file()
+    # Get active config
+    active_result = config_svc.find_config_file()
+    active_config = Path(active_result.data) if active_result.success and active_result.data else None
 
-    for i, location in enumerate(CONFIG_LOCATIONS, 1):
-        exists = location.exists()
-        status = (
-            "[green]✓ ACTIVE[/green]"
-            if location == active_config
-            else ("[dim]exists[/dim]" if exists else "[dim]not found[/dim]")
-        )
-        console.print(f"  {i}. {location} {status}")
+    # Get all locations
+    locations_result = config_svc.get_config_locations()
+    if locations_result.success:
+        locations = [Path(loc) for loc in locations_result.data]
+        for i, location in enumerate(locations, 1):
+            exists = location.exists()
+            status = (
+                "[green]✓ ACTIVE[/green]"
+                if location == active_config
+                else ("[dim]exists[/dim]" if exists else "[dim]not found[/dim]")
+            )
+            console.print(f"  {i}. {location} {status}")
 
     console.print()
 
@@ -210,31 +224,31 @@ def config_deps(do_install: bool, yes: bool):
         bioamla config deps --install    # Install missing dependencies
         bioamla config deps --install -y # Install without confirmation
     """
-    from bioamla.core.deps import (
-        check_all_dependencies,
-        detect_os,
-        get_full_install_command,
-        run_install,
-    )
     from bioamla.cli.progress import console
 
-    os_type = detect_os()
-    deps = check_all_dependencies()
+    dep_svc = DependencyService()
+
+    # Get OS type
+    os_result = dep_svc.detect_os()
+    os_type = os_result.data if os_result.success else "unknown"
+
+    # Check all dependencies
+    check_result = dep_svc.check_all()
+    if not check_result.success:
+        click.echo(f"Error: {check_result.error}")
+        raise SystemExit(1)
+
+    report = check_result.data
 
     console.print("\n[bold]System Dependencies[/bold]")
     console.print(f"[dim]Detected OS: {os_type}[/dim]\n")
 
-    all_installed = True
-    missing_deps = []
-
-    for dep in deps:
+    for dep in report.dependencies:
         if dep.installed:
             version_str = f" (v{dep.version})" if dep.version else ""
             console.print(f"[green]✓[/green] {dep.name}{version_str}")
             console.print(f"  [dim]{dep.description} - {dep.required_for}[/dim]")
         else:
-            all_installed = False
-            missing_deps.append(dep)
             console.print(f"[red]✗[/red] {dep.name} [red]not installed[/red]")
             console.print(f"  [dim]{dep.description} - {dep.required_for}[/dim]")
             if dep.install_hint:
@@ -242,14 +256,13 @@ def config_deps(do_install: bool, yes: bool):
 
     console.print()
 
-    if all_installed:
+    if report.all_installed:
         console.print("[green]All system dependencies are installed![/green]")
         return
 
-    full_command = get_full_install_command(os_type)
-    if full_command and not do_install:
+    if report.install_command and not do_install:
         console.print("[bold]To install all missing dependencies:[/bold]")
-        console.print(f"  {full_command}")
+        console.print(f"  {report.install_command}")
         console.print()
         console.print("[dim]Or run: bioamla config deps --install[/dim]")
 
@@ -261,17 +274,18 @@ def config_deps(do_install: bool, yes: bool):
                 return
 
         console.print("\n[bold]Installing dependencies...[/bold]")
-        success, message = run_install(os_type)
+        install_result = dep_svc.install(os_type)
 
-        if success:
-            console.print(f"[green]{message}[/green]")
+        if install_result.success:
+            console.print(f"[green]{install_result.message}[/green]")
             console.print("\n[bold]Verifying installation...[/bold]")
-            deps = check_all_dependencies()
-            for dep in deps:
-                if dep.installed:
-                    console.print(f"[green]✓[/green] {dep.name}")
-                else:
-                    console.print(f"[red]✗[/red] {dep.name}")
+            verify_result = dep_svc.check_all()
+            if verify_result.success:
+                for dep in verify_result.data.dependencies:
+                    if dep.installed:
+                        console.print(f"[green]✓[/green] {dep.name}")
+                    else:
+                        console.print(f"[red]✗[/red] {dep.name}")
         else:
-            console.print(f"[red]{message}[/red]")
+            console.print(f"[red]{install_result.error}[/red]")
             raise SystemExit(1)

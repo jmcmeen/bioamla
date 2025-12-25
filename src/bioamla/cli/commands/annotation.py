@@ -2,7 +2,8 @@
 
 import click
 
-from bioamla.core.files import TextFile
+from bioamla.services.annotation import AnnotationService
+from bioamla.services.file import FileService
 
 
 @click.group()
@@ -334,31 +335,26 @@ def annotation_generate_labels(
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    file_svc = FileService()
+
     if output_format == "numpy":
         np.save(output_file, labels_array)
         label_map_file = output_path.with_suffix(".labels.csv")
-        import csv
-
-        with TextFile(label_map_file, mode="w", newline="") as f:
-            writer = csv.writer(f.handle)
-            writer.writerow(["label", "index"])
-            for label, idx in sorted(label_map.items(), key=lambda x: x[1]):
-                writer.writerow([label, idx])
+        rows = [["label", "index"]]
+        for label, idx in sorted(label_map.items(), key=lambda x: x[1]):
+            rows.append([label, idx])
+        file_svc.write_csv(label_map_file, rows[1:], headers=rows[0])
     else:
-        import csv
-
-        with TextFile(output_file, mode="w", newline="") as f:
-            writer = csv.writer(f.handle)
-            header = ["clip_start", "clip_end"] + sorted(
-                label_map.keys(), key=lambda x: label_map[x]
-            )
-            writer.writerow(header)
-
-            for i, clip_labels in enumerate(labels_array):
-                clip_start = i * hop_length
-                clip_end = clip_start + clip_duration
-                row = [f"{clip_start:.3f}", f"{clip_end:.3f}"] + [int(v) for v in clip_labels]
-                writer.writerow(row)
+        header = ["clip_start", "clip_end"] + sorted(
+            label_map.keys(), key=lambda x: label_map[x]
+        )
+        rows = []
+        for i, clip_labels in enumerate(labels_array):
+            clip_start = i * hop_length
+            clip_end = clip_start + clip_duration
+            row = [f"{clip_start:.3f}", f"{clip_end:.3f}"] + [int(v) for v in clip_labels]
+            rows.append(row)
+        file_svc.write_csv(output_file, rows, headers=header)
 
     if not quiet:
         click.echo(f"Generated labels for {num_clips} clips")
