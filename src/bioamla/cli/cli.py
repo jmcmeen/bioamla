@@ -1,8 +1,5 @@
 """
 BioAMLA CLI - Bioacoustic Machine Learning Analysis
-
-A command-line interface for audio analysis, machine learning model training,
-and bioacoustic research.
 """
 
 import click
@@ -26,17 +23,8 @@ from .commands import (
 @click.group()
 @click.version_option(version=__version__, prog_name="bioamla")
 def cli():
-    """BioAMLA - Bioacoustic Machine Learning Analysis
+    """BioAMLA - Bioacoustic & Machine Learning Applications 
 
-    A comprehensive toolkit for bioacoustic research and analysis.
-
-    \b
-    Quick start:
-        bioamla audio info recording.wav     # Get audio file info
-        bioamla models predict ast audio.wav # Run ML inference
-        bioamla indices compute recording.wav # Compute acoustic indices
-
-    \b
     Use 'bioamla COMMAND --help' for more information on a command.
     """
     pass
