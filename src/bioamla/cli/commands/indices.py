@@ -7,7 +7,7 @@ from bioamla.services.indices import IndicesService
 
 
 @click.group()
-def indices():
+def indices() -> None:
     """Acoustic indices for soundscape ecology analysis."""
     pass
 
@@ -30,17 +30,17 @@ def indices():
 @click.option("--db-threshold", default=-50.0, type=float, help="dB threshold for ADI/AEI")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def indices_compute(
-    path,
-    output,
-    output_format,
-    n_fft,
-    aci_min_freq,
-    aci_max_freq,
-    bio_min_freq,
-    bio_max_freq,
-    db_threshold,
-    quiet,
-):
+    path: str,
+    output: str,
+    output_format: str,
+    n_fft: int,
+    aci_min_freq: float,
+    aci_max_freq: float,
+    bio_min_freq: float,
+    bio_max_freq: float,
+    db_threshold: float,
+    quiet: bool,
+) -> None:
     """Compute acoustic indices for audio file(s)."""
     import json as json_lib
     from pathlib import Path as PathLib
@@ -154,7 +154,7 @@ def indices_compute(
     help="Output format",
 )
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def indices_temporal(path, window, hop, output, output_format, quiet):
+def indices_temporal(path: str, window: float, hop: float, output: str, output_format: str, quiet: bool) -> None:
     """Compute acoustic indices over time windows."""
     import json as json_lib
 
@@ -224,7 +224,7 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
 @click.option("--min-freq", default=0.0, type=float, help="Minimum frequency (Hz)")
 @click.option("--max-freq", default=None, type=float, help="Maximum frequency (Hz)")
 @click.option("--n-fft", default=512, type=int, help="FFT window size")
-def indices_aci(path, min_freq, max_freq, n_fft):
+def indices_aci(path: str, min_freq: float, max_freq: float, n_fft: int) -> None:
     """Compute Acoustic Complexity Index (ACI) for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
@@ -256,7 +256,7 @@ def indices_aci(path, min_freq, max_freq, n_fft):
 @click.option("--max-freq", default=10000.0, type=float, help="Maximum frequency (Hz)")
 @click.option("--freq-step", default=1000.0, type=float, help="Frequency band width (Hz)")
 @click.option("--db-threshold", default=-50.0, type=float, help="dB threshold")
-def indices_adi(path, max_freq, freq_step, db_threshold):
+def indices_adi(path: str, max_freq: float, freq_step: float, db_threshold: float) -> None:
     """Compute Acoustic Diversity Index (ADI) for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
@@ -290,7 +290,7 @@ def indices_adi(path, max_freq, freq_step, db_threshold):
 @click.option("--max-freq", default=10000.0, type=float, help="Maximum frequency (Hz)")
 @click.option("--freq-step", default=1000.0, type=float, help="Frequency band width (Hz)")
 @click.option("--db-threshold", default=-50.0, type=float, help="dB threshold")
-def indices_aei(path, max_freq, freq_step, db_threshold):
+def indices_aei(path: str, max_freq: float, freq_step: float, db_threshold: float) -> None:
     """Compute Acoustic Evenness Index (AEI) for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
@@ -323,7 +323,7 @@ def indices_aei(path, max_freq, freq_step, db_threshold):
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--min-freq", default=2000.0, type=float, help="Minimum frequency (Hz)")
 @click.option("--max-freq", default=8000.0, type=float, help="Maximum frequency (Hz)")
-def indices_bio(path, min_freq, max_freq):
+def indices_bio(path: str, min_freq: float, max_freq: float) -> None:
     """Compute Bioacoustic Index (BIO) for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
@@ -357,7 +357,7 @@ def indices_bio(path, min_freq, max_freq):
 @click.option("--anthro-max", default=2000.0, type=float, help="Anthrophony max frequency (Hz)")
 @click.option("--bio-min", default=2000.0, type=float, help="Biophony min frequency (Hz)")
 @click.option("--bio-max", default=8000.0, type=float, help="Biophony max frequency (Hz)")
-def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
+def indices_ndsi(path: str, anthro_min: float, anthro_max: float, bio_min: float, bio_max: float) -> None:
     """Compute Normalized Difference Soundscape Index (NDSI) for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
@@ -391,7 +391,7 @@ def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--spectral", "-s", is_flag=True, help="Compute spectral entropy")
 @click.option("--temporal", "-t", is_flag=True, help="Compute temporal entropy")
-def indices_entropy(path, spectral, temporal):
+def indices_entropy(path: str, spectral: bool, temporal: bool) -> None:
     """Compute entropy-based acoustic indices for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 

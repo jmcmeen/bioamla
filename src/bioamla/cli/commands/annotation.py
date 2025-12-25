@@ -6,7 +6,7 @@ from bioamla.services.file import FileService
 
 
 @click.group()
-def annotation():
+def annotation() -> None:
     """Annotation management commands for audio datasets."""
     pass
 
@@ -195,7 +195,7 @@ def annotation_remap(input_file : str, output_file : str, mapping : str, keep_un
 @click.option("--min-duration", type=float, default=None, help="Minimum duration in seconds")
 @click.option("--max-duration", type=float, default=None, help="Maximum duration in seconds")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def annotation_filter(input_file : str, output_file : str, include, exclude, min_duration, max_duration, quiet):
+def annotation_filter(input_file: str, output_file: str, include: tuple, exclude: tuple, min_duration: float, max_duration: float, quiet: bool) -> None:
     """Filter annotations by label or duration."""
     from pathlib import Path
 
@@ -268,16 +268,16 @@ def annotation_filter(input_file : str, output_file : str, include, exclude, min
 )
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
 def annotation_generate_labels(
-    annotation_file,
-    output_file,
-    audio_duration,
-    clip_duration,
-    hop_length,
-    min_overlap,
-    multi_label,
-    output_format,
-    quiet,
-):
+    annotation_file: str,
+    output_file: str,
+    audio_duration: float,
+    clip_duration: float,
+    hop_length: float,
+    min_overlap: float,
+    multi_label: bool,
+    output_format: str,
+    quiet: bool,
+) -> None:
     """Generate clip-level labels from annotations."""
     from pathlib import Path
 

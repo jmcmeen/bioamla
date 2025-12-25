@@ -6,8 +6,10 @@ from bioamla.services.clustering import ClusteringService
 from bioamla.services.file import FileService
 
 
+from typing import Any
+
 @click.group()
-def cluster():
+def cluster() -> None:
     """Clustering and dimensionality reduction commands."""
     pass
 
@@ -24,7 +26,7 @@ def cluster():
 )
 @click.option("--n-components", "-n", type=int, default=2, help="Number of output dimensions")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress output")
-def cluster_reduce(embeddings_file: str, output: str, method: str, n_components: int, quiet: bool):
+def cluster_reduce(embeddings_file: str, output: str, method: str, n_components: int, quiet: bool) -> None:
     """Reduce dimensionality of embeddings."""
     import numpy as np
 
@@ -76,7 +78,7 @@ def cluster_cluster(
     eps: float,
     min_samples: int,
     quiet: bool,
-):
+) -> None:
     """Cluster embeddings."""
     import numpy as np
 
@@ -111,7 +113,7 @@ def cluster_cluster(
 @click.argument("labels_file")
 @click.option("--output", "-o", help="Output JSON file for analysis results")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress output")
-def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: bool):
+def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: bool) -> None:
     """Analyze cluster quality."""
     from pathlib import Path
 
@@ -142,7 +144,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
         Path(output).parent.mkdir(parents=True, exist_ok=True)
         file_svc = FileService()
 
-        def convert_numpy(obj):
+        def convert_numpy(obj: Any) -> Any:
             if isinstance(obj, np.integer):
                 return int(obj)
             elif isinstance(obj, np.floating):
@@ -184,7 +186,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
 @click.option("--quiet", "-q", is_flag=True, help="Suppress output")
 def cluster_novelty(
     embeddings_file: str, output: str, method: str, threshold: float, labels: str, quiet: bool
-):
+) -> None:
     """Detect novel sounds in embeddings."""
     import numpy as np
 

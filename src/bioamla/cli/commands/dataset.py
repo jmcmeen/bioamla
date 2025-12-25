@@ -6,7 +6,7 @@ from bioamla.services.dataset import DatasetService
 
 
 @click.group()
-def dataset():
+def dataset() -> None:
     """Dataset management commands."""
     pass
 
@@ -37,7 +37,7 @@ def dataset_merge(
     no_organize: bool,
     target_format: str,
     quiet: bool,
-):
+) -> None:
     """Merge multiple audio datasets into a single dataset."""
     service = DatasetService()
     result = service.merge(
@@ -75,7 +75,7 @@ def dataset_merge(
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
 def dataset_license(
     path: str, template: str, output: str, metadata_filename: str, batch: bool, quiet: bool
-):
+) -> None:
     """Generate license/attribution file from dataset metadata."""
     from pathlib import Path as PathLib
 
@@ -165,7 +165,7 @@ def dataset_license(
             click.echo(f"Generated {output} with {stats.attributions_count} attributions")
 
 
-def _parse_range(value: str) -> tuple:
+def _parse_range(value: str) -> tuple[float, float]:
     """Parse a range string like '0.8-1.2' or '-2,2' into (min, max)."""
     if "-" in value and not value.startswith("-"):
         parts = value.split("-")
@@ -204,7 +204,7 @@ def dataset_augment(
     sample_rate: int,
     recursive: bool,
     quiet: bool,
-):
+) -> None:
     """Augment audio files to expand training datasets."""
     # Parse augmentation parameters
     noise_enabled = add_noise is not None
@@ -261,7 +261,7 @@ def dataset_augment(
 @dataset.command("download")
 @click.argument("url", required=True)
 @click.argument("output_dir", required=False, default=".")
-def dataset_download(url: str, output_dir: str):
+def dataset_download(url: str, output_dir: str) -> None:
     """Download a file from the specified URL to the target directory."""
     import os
     from urllib.parse import urlparse
@@ -287,7 +287,7 @@ def dataset_download(url: str, output_dir: str):
 @dataset.command("unzip")
 @click.argument("file_path")
 @click.argument("output_path", required=False, default=".")
-def dataset_unzip(file_path: str, output_path: str):
+def dataset_unzip(file_path: str, output_path: str) -> None:
     """Extract a ZIP archive to the specified output directory."""
     import os
 
@@ -305,7 +305,7 @@ def dataset_unzip(file_path: str, output_path: str):
 @dataset.command("zip")
 @click.argument("source_path")
 @click.argument("output_file")
-def dataset_zip(source_path: str, output_file: str):
+def dataset_zip(source_path: str, output_file: str) -> None:
     """Create a ZIP archive from a file or directory."""
     service = DatasetService()
     result = service.create_zip(source_path, output_file)
