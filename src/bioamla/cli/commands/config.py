@@ -2,6 +2,7 @@
 
 import click
 
+from bioamla.repository.local import LocalFileRepository
 from bioamla.services.config import ConfigService
 from bioamla.services.dependency import DependencyService
 

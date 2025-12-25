@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from bioamla.repository.protocol import FileRepositoryProtocol
+
 from .base import BaseService, ServiceResult, ToDictMixin
 
 
@@ -55,7 +57,16 @@ class DatasetService(BaseService):
     Service for dataset management operations.
 
     Provides ServiceResult-wrapped methods for dataset operations.
+    All file I/O operations are delegated to the file repository.
     """
+
+    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
+        """Initialize the service.
+
+        Args:
+            file_repository: File repository for all file I/O operations (required).
+        """
+        super().__init__(file_repository)
 
     def merge(
         self,
@@ -237,7 +248,7 @@ class DatasetService(BaseService):
             path = Path(dataset_path)
             csv_path = path / metadata_filename
 
-            if not csv_path.exists():
+            if not self.file_repository.exists(csv_path):
                 return ServiceResult.fail(
                     f"Metadata file not found: {csv_path}"
                 )
@@ -430,18 +441,20 @@ class DatasetService(BaseService):
         try:
             import csv
             from collections import Counter
+            from io import StringIO
 
             path = Path(dataset_path)
             metadata_path = path / metadata_filename
 
-            if not metadata_path.exists():
+            if not self.file_repository.exists(metadata_path):
                 return ServiceResult.fail(
                     f"Metadata file not found: {metadata_path}"
                 )
 
-            with open(metadata_path) as f:
-                reader = csv.DictReader(f)
-                rows = list(reader)
+            content = self.file_repository.read_text(metadata_path)
+            buffer = StringIO(content)
+            reader = csv.DictReader(buffer)
+            rows = list(reader)
 
             # Compute stats
             total_files = len(rows)

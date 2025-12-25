@@ -755,17 +755,12 @@ class PipelineEngine:
         params: Dict[str, Any],
     ) -> Any:
         """Run RIBBIT detection."""
-        from bioamla.services.ribbit import RibbitService
-
-        service = RibbitService()
-        result = service.detect_batch(
-            directory=params.get("input"),
-            preset=params.get("preset"),
-            output_csv=params.get("output"),
+        # TODO: Update to use BatchRibbitService when Phase 6 is complete
+        # For now, this action is disabled until batch services are implemented
+        raise NotImplementedError(
+            "RIBBIT batch detection moved to BatchRibbitService - "
+            "will be available in Phase 6 of architecture migration"
         )
-        if not result.success:
-            raise RuntimeError(result.error)
-        return result.data
 
     def _action_util_copy(
         self,

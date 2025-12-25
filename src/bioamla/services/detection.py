@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from bioamla.repository.protocol import FileRepositoryProtocol
+
 from .base import BaseService, ServiceResult, ToDictMixin
 
 
@@ -47,7 +49,16 @@ class DetectionService(BaseService):
     Service for acoustic detection operations.
 
     Provides ServiceResult-wrapped methods for various detection algorithms.
+    All file I/O operations are delegated to the file repository.
     """
+
+    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
+        """Initialize the service.
+
+        Args:
+            file_repository: File repository for all file I/O operations (required).
+        """
+        super().__init__(file_repository)
 
     def detect_energy(
         self,
@@ -315,112 +326,6 @@ class DetectionService(BaseService):
         except Exception as e:
             return ServiceResult.fail(f"Accelerating pattern detection failed: {e}")
 
-    def batch_detect(
-        self,
-        directory: str,
-        detector_type: str = "energy",
-        output_dir: Optional[str] = None,
-        low_freq: float = 500.0,
-        high_freq: float = 5000.0,
-        recursive: bool = True,
-    ) -> ServiceResult[BatchDetectionResult]:
-        """
-        Run detection on all audio files in a directory.
-
-        Args:
-            directory: Directory containing audio files
-            detector_type: Type of detector (energy, ribbit, peaks, accelerating)
-            output_dir: Output directory for detection files
-            low_freq: Low frequency bound (Hz)
-            high_freq: High frequency bound (Hz)
-            recursive: Search subdirectories
-
-        Returns:
-            ServiceResult containing BatchDetectionResult
-        """
-        error = self._validate_input_path(directory)
-        if error:
-            return ServiceResult.fail(error)
-
-        try:
-            from bioamla.core.detection import (
-                AcceleratingPatternDetector,
-                BandLimitedEnergyDetector,
-                CWTPeakDetector,
-                Detection,
-                RibbitDetector,
-                batch_detect,
-                export_detections,
-            )
-
-            # Create detector
-            if detector_type == "energy":
-                detector = BandLimitedEnergyDetector(
-                    low_freq=low_freq,
-                    high_freq=high_freq,
-                )
-            elif detector_type == "ribbit":
-                detector = RibbitDetector(
-                    low_freq=low_freq,
-                    high_freq=high_freq,
-                )
-            elif detector_type == "peaks":
-                detector = CWTPeakDetector(
-                    low_freq=low_freq,
-                    high_freq=high_freq,
-                )
-            elif detector_type == "accelerating":
-                detector = AcceleratingPatternDetector(
-                    low_freq=low_freq,
-                    high_freq=high_freq,
-                )
-            else:
-                return ServiceResult.fail(
-                    f"Unknown detector type: {detector_type}. "
-                    "Available: energy, ribbit, peaks, accelerating"
-                )
-
-            # Find audio files
-            files = self._get_audio_files(directory, recursive=recursive)
-
-            if not files:
-                return ServiceResult.fail(f"No audio files found in {directory}")
-
-            # Run batch detection
-            results = batch_detect(files, detector, verbose=False)
-
-            # Process results
-            total_detections = 0
-            files_with_detections = 0
-            errors = []
-
-            if output_dir:
-                output_path = Path(output_dir)
-                output_path.mkdir(parents=True, exist_ok=True)
-
-                for filepath, detections in results.items():
-                    if detections:
-                        if isinstance(detections[0], Detection):
-                            output_file = output_path / f"{Path(filepath).stem}_detections.csv"
-                            export_detections(detections, output_file, format="csv")
-                            total_detections += len(detections)
-                            files_with_detections += 1
-
-            result = BatchDetectionResult(
-                total_files=len(files),
-                files_with_detections=files_with_detections,
-                total_detections=total_detections,
-                output_dir=output_dir,
-                errors=errors,
-            )
-
-            return ServiceResult.ok(
-                data=result,
-                message=f"Found {total_detections} detections in {files_with_detections} files",
-            )
-        except Exception as e:
-            return ServiceResult.fail(f"Batch detection failed: {e}")
-
     def export_detections(
         self,
         detections: List[DetectionInfo],
@@ -440,30 +345,35 @@ class DetectionService(BaseService):
         """
         try:
             path = Path(output_path)
-            path.parent.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(path.parent, parents=True)
 
             if format == "json":
                 import json
 
-                with open(path, "w") as f:
-                    json.dump([d.to_dict() for d in detections], f, indent=2)
+                content = json.dumps([d.to_dict() for d in detections], indent=2)
+                self.file_repository.write_text(path, content)
             else:
                 import csv
+                from io import StringIO
 
                 if not detections:
                     return ServiceResult.fail("No detections to export")
 
+                # Write CSV to in-memory buffer
+                buffer = StringIO()
                 fieldnames = ["start_time", "end_time", "confidence", "label"]
-                with open(path, "w", newline="") as f:
-                    writer = csv.DictWriter(f, fieldnames=fieldnames)
-                    writer.writeheader()
-                    for d in detections:
-                        writer.writerow({
-                            "start_time": d.start_time,
-                            "end_time": d.end_time,
-                            "confidence": d.confidence,
-                            "label": d.label,
-                        })
+                writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+                writer.writeheader()
+                for d in detections:
+                    writer.writerow({
+                        "start_time": d.start_time,
+                        "end_time": d.end_time,
+                        "confidence": d.confidence,
+                        "label": d.label,
+                    })
+
+                # Write buffer contents to file via repository
+                self.file_repository.write_text(path, buffer.getvalue())
 
             return ServiceResult.ok(
                 data=str(path),

@@ -5,7 +5,10 @@ Base class and utilities for all services.
 
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, Iterator, List, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Dict, Generic, Iterator, List, Optional, TypeVar
+
+if TYPE_CHECKING:
+    from bioamla.repository.protocol import FileRepositoryProtocol
 
 T = TypeVar("T")
 
@@ -173,8 +176,14 @@ class BaseService:
     - Error handling and result formatting
     """
 
-    def __init__(self) -> None:
-        """Initialize the service."""
+    def __init__(self, file_repository: Optional["FileRepositoryProtocol"] = None) -> None:
+        """Initialize the service.
+
+        Args:
+            file_repository: Optional file repository for dependency injection.
+                           Required for file-based services, not needed for API/in-memory services.
+        """
+        self.file_repository = file_repository
         self._progress_callback: Optional[ProgressCallback] = None
 
     def set_progress_callback(self, callback: ProgressCallback) -> None:

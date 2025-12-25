@@ -3,39 +3,14 @@
 Service for audio embedding extraction operations.
 """
 
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from bioamla.models.embedding import EmbeddingInfo
+from bioamla.repository.protocol import FileRepositoryProtocol
+
 from .base import BaseService, ServiceResult
-
-
-@dataclass
-class EmbeddingInfo:
-    """Information about extracted embeddings."""
-
-    filepath: str
-    shape: Tuple[int, ...]
-    embedding_dim: int
-    num_segments: int
-    normalized: bool
-    model: str
-    layer: str
-
-
-@dataclass
-class BatchEmbeddingSummary:
-    """Summary of batch embedding extraction."""
-
-    total_files: int
-    files_processed: int
-    files_failed: int
-    embedding_dim: int
-    total_embeddings: int
-    output_path: Optional[str]
-    errors: List[str] = field(default_factory=list)
 
 
 class EmbeddingService(BaseService):
@@ -44,7 +19,6 @@ class EmbeddingService(BaseService):
 
     Provides high-level methods for:
     - Single file embedding extraction
-    - Batch embedding extraction with progress
     - Dimensionality reduction (PCA, UMAP)
     - Multiple output formats (npy, parquet, csv)
     - Embedding visualization coordinates
@@ -52,6 +26,7 @@ class EmbeddingService(BaseService):
 
     def __init__(
         self,
+        file_repository: FileRepositoryProtocol,
         model_path: Optional[str] = None,
         model_type: str = "ast",
     ) -> None:
@@ -59,10 +34,11 @@ class EmbeddingService(BaseService):
         Initialize embedding service.
 
         Args:
+            file_repository: Repository for file operations (required)
             model_path: Path to model (HuggingFace ID or local path)
             model_type: Model type ("ast", "birdnet")
         """
-        super().__init__()
+        super().__init__(file_repository=file_repository)
         self._model_path = model_path
         self._model_type = model_type
         self._extractor = None
@@ -158,105 +134,6 @@ class EmbeddingService(BaseService):
         except Exception as e:
             return ServiceResult.fail(str(e))
 
-    # =========================================================================
-    # Batch Extraction
-    # =========================================================================
-
-    def extract_batch(
-        self,
-        directory: str,
-        model_path: Optional[str] = None,
-        output_path: Optional[str] = None,
-        output_format: str = "npy",
-        layer: str = "last_hidden_state",
-        aggregate: str = "mean",
-        normalize: bool = True,
-        recursive: bool = True,
-    ) -> ServiceResult[BatchEmbeddingSummary]:
-        """
-        Extract embeddings from multiple audio files.
-
-        Args:
-            directory: Directory containing audio files
-            model_path: Model path (uses controller default if not specified)
-            output_path: Path to save embeddings
-            output_format: Output format ("npy", "parquet", "csv", "npz")
-            layer: Layer to extract embeddings from
-            aggregate: How to aggregate segments ("mean", "first", "all")
-            normalize: Whether to L2-normalize embeddings
-            recursive: Search subdirectories
-
-        Returns:
-            Result with batch embedding summary
-        """
-        error = self._validate_input_path(directory)
-        if error:
-            return ServiceResult.fail(error)
-
-        try:
-            extractor = self._get_extractor(model_path, normalize=normalize)
-            files = self._get_audio_files(directory, recursive=recursive)
-
-            if not files:
-                return ServiceResult.fail(f"No audio files found in {directory}")
-
-            # Extract with progress
-            all_embeddings = []
-            filepaths = []
-            errors = []
-
-            def process_file(filepath: Path):
-                result = extractor.extract(str(filepath), layer=layer)
-                if aggregate == "mean":
-                    return result.mean_embedding()
-                elif aggregate == "first":
-                    return result.embeddings[0]
-                else:
-                    return result.embeddings
-
-            for filepath, embeddings, error in self._process_batch(files, process_file):
-                if error:
-                    errors.append(f"{filepath.name}: {error}")
-                elif embeddings is not None:
-                    all_embeddings.append(embeddings)
-                    filepaths.append(str(filepath))
-
-            if not all_embeddings:
-                return ServiceResult.fail("No embeddings extracted")
-
-            # Stack embeddings
-            stacked = np.vstack(all_embeddings)
-
-            # Save if output path specified
-            saved_path = None
-            if output_path:
-                from bioamla.core.ml.embeddings import save_embeddings
-
-                saved_path = save_embeddings(
-                    stacked,
-                    filepaths,
-                    output_path,
-                    format=output_format,
-                )
-
-            summary = BatchEmbeddingSummary(
-                total_files=len(files),
-                files_processed=len(filepaths),
-                files_failed=len(errors),
-                embedding_dim=stacked.shape[-1],
-                total_embeddings=stacked.shape[0],
-                output_path=saved_path,
-                errors=errors,
-            )
-
-            return ServiceResult.ok(
-                data=summary,
-                message=f"Extracted {stacked.shape[0]} embeddings from {len(filepaths)} files",
-                embeddings=stacked,
-                filepaths=filepaths,
-            )
-        except Exception as e:
-            return ServiceResult.fail(str(e))
 
     # =========================================================================
     # Dimensionality Reduction
