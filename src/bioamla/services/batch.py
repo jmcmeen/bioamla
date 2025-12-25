@@ -57,6 +57,7 @@ class BatchService(BaseService):
         Returns:
             Result with batch processing summary
         """
+        from bioamla.repository.local import LocalFileRepository
         from bioamla.services.audio_file import AudioFileService
 
         error = self._validate_input_path(input_dir)
@@ -75,8 +76,9 @@ class BatchService(BaseService):
             output_path = Path(output_dir)
             output_path.mkdir(parents=True, exist_ok=True)
 
-            # Initialize file service
-            file_svc = AudioFileService()
+            # Initialize file service with repository
+            repository = LocalFileRepository()
+            file_svc = AudioFileService(file_repository=repository)
 
             processed = 0
             failed = 0
