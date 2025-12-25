@@ -64,6 +64,7 @@ from .batch_clustering import BatchClusteringService
 from .batch_detection import BatchDetectionService
 from .batch_indices import BatchIndicesService
 from .batch_inference import BatchInferenceService
+from .factory import ServiceFactory
 from .birdnet import BirdNETService
 from .clustering import ClusteringService
 from .cnn import CNNService
@@ -107,6 +108,8 @@ __all__ = [
     "ServiceResult",
     # Batch Base
     "BatchServiceBase",
+    # Factory
+    "ServiceFactory",
     # Audio
     "AudioFileService",  # File I/O operations
     "AudioTransformService",  # In-memory transforms + file-based batch operations
