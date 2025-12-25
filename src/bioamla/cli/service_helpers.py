@@ -29,12 +29,37 @@ Usage:
         exit_with_error(result.error)
 """
 
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import click
 
 from bioamla.services import ServiceFactory
 from bioamla.services.base import ServiceResult
+
+if TYPE_CHECKING:
+    from bioamla.services.annotation import AnnotationService
+    from bioamla.services.ast import ASTService
+    from bioamla.services.audio_file import AudioFileService
+    from bioamla.services.audio_transform import AudioTransformService
+    from bioamla.services.batch_audio_transform import BatchAudioTransformService
+    from bioamla.services.batch_detection import BatchDetectionService
+    from bioamla.services.batch_indices import BatchIndicesService
+    from bioamla.services.clustering import ClusteringService
+    from bioamla.services.config import ConfigService
+    from bioamla.services.dataset import DatasetService
+    from bioamla.services.dependency import DependencyService
+    from bioamla.services.detection import DetectionService
+    from bioamla.services.ebird import EBirdService
+    from bioamla.services.embedding import EmbeddingService
+    from bioamla.services.file import FileService
+    from bioamla.services.huggingface import HuggingFaceService
+    from bioamla.services.indices import IndicesService
+    from bioamla.services.inference import InferenceService
+    from bioamla.services.inaturalist import INaturalistService
+    from bioamla.services.macaulay import MacaulayService
+    from bioamla.services.ribbit import RibbitService
+    from bioamla.services.species import SpeciesService
+    from bioamla.services.xeno_canto import XenoCantoService
 
 # Type variable for generic result handling
 T = TypeVar("T")
@@ -96,142 +121,119 @@ class _ServiceAccessor:
     """
 
     @property
-    def audio_file(self):
+    def audio_file(self) -> "AudioFileService":
         """Get AudioFileService instance."""
-        from bioamla.services import AudioFileService
         return get_factory().audio_file
 
     @property
-    def audio_transform(self):
+    def audio_transform(self) -> "AudioTransformService":
         """Get AudioTransformService instance."""
-        from bioamla.services import AudioTransformService
         return get_factory().audio_transform
 
     @property
-    def file(self):
+    def file(self) -> "FileService":
         """Get FileService instance."""
-        from bioamla.services import FileService
         return get_factory().file
 
     @property
-    def dataset(self):
+    def dataset(self) -> "DatasetService":
         """Get DatasetService instance."""
-        from bioamla.services import DatasetService
         return get_factory().dataset
 
     @property
-    def annotation(self):
+    def annotation(self) -> "AnnotationService":
         """Get AnnotationService instance."""
-        from bioamla.services import AnnotationService
         return get_factory().annotation
 
     @property
-    def detection(self):
+    def detection(self) -> "DetectionService":
         """Get DetectionService instance."""
-        from bioamla.services import DetectionService
         return get_factory().detection
 
     @property
-    def indices(self):
+    def indices(self) -> "IndicesService":
         """Get IndicesService instance."""
-        from bioamla.services import IndicesService
         return get_factory().indices
 
     @property
-    def ribbit(self):
+    def ribbit(self) -> "RibbitService":
         """Get RibbitService instance."""
-        from bioamla.services import RibbitService
         return get_factory().ribbit
 
     @property
-    def embedding(self):
+    def embedding(self) -> "EmbeddingService":
         """Get EmbeddingService instance."""
-        from bioamla.services import EmbeddingService
         return get_factory().embedding
 
     @property
-    def inference(self):
+    def inference(self) -> "InferenceService":
         """Get InferenceService instance."""
-        from bioamla.services import InferenceService
         return get_factory().inference
 
     @property
-    def ast(self):
+    def ast(self) -> "ASTService":
         """Get ASTService instance."""
-        from bioamla.services import ASTService
         return get_factory().ast
 
     @property
-    def clustering(self):
+    def clustering(self) -> "ClusteringService":
         """Get ClusteringService instance."""
-        from bioamla.services import ClusteringService
         return get_factory().clustering
 
     @property
-    def config(self):
+    def config(self) -> "ConfigService":
         """Get ConfigService instance."""
-        from bioamla.services import ConfigService
         return get_factory().config
 
     @property
-    def inaturalist(self):
+    def inaturalist(self) -> "INaturalistService":
         """Get INaturalistService instance."""
-        from bioamla.services import INaturalistService
         return get_factory().inaturalist
 
     @property
-    def xeno_canto(self):
+    def xeno_canto(self) -> "XenoCantoService":
         """Get XenoCantoService instance."""
-        from bioamla.services import XenoCantoService
         return get_factory().xeno_canto
 
     @property
-    def macaulay(self):
+    def macaulay(self) -> "MacaulayService":
         """Get MacaulayService instance."""
-        from bioamla.services import MacaulayService
         return get_factory().macaulay
 
     @property
-    def ebird(self):
+    def ebird(self) -> "EBirdService":
         """Get EBirdService instance."""
-        from bioamla.services import EBirdService
         return get_factory().ebird
 
     @property
-    def species(self):
+    def species(self) -> "SpeciesService":
         """Get SpeciesService instance."""
-        from bioamla.services import SpeciesService
         return get_factory().species
 
     @property
-    def huggingface(self):
+    def huggingface(self) -> "HuggingFaceService":
         """Get HuggingFaceService instance."""
-        from bioamla.services import HuggingFaceService
         return get_factory().huggingface
 
     @property
-    def dependency(self):
+    def dependency(self) -> "DependencyService":
         """Get DependencyService instance."""
-        from bioamla.services import DependencyService
         return get_factory().dependency
 
     # Add batch services
     @property
-    def batch_audio_transform(self):
+    def batch_audio_transform(self) -> "BatchAudioTransformService":
         """Get BatchAudioTransformService instance."""
-        from bioamla.services import BatchAudioTransformService
         return get_factory().batch_audio_transform
 
     @property
-    def batch_detection(self):
+    def batch_detection(self) -> "BatchDetectionService":
         """Get BatchDetectionService instance."""
-        from bioamla.services import BatchDetectionService
         return get_factory().batch_detection
 
     @property
-    def batch_indices(self):
+    def batch_indices(self) -> "BatchIndicesService":
         """Get BatchIndicesService instance."""
-        from bioamla.services import BatchIndicesService
         return get_factory().batch_indices
 
 
