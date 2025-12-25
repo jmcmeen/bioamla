@@ -34,9 +34,7 @@ class LocalFileRepository:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(data)
 
-    def write_text(
-        self, path: Union[str, Path], content: str, encoding: str = "utf-8"
-    ) -> None:
+    def write_text(self, path: Union[str, Path], content: str, encoding: str = "utf-8") -> None:
         """Write text to file."""
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -86,17 +84,13 @@ class LocalFileRepository:
         else:
             p.rmdir()
 
-    def copy_file(
-        self, source: Union[str, Path], destination: Union[str, Path]
-    ) -> None:
+    def copy_file(self, source: Union[str, Path], destination: Union[str, Path]) -> None:
         """Copy a file."""
         dest_path = Path(destination)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
 
-    def move_file(
-        self, source: Union[str, Path], destination: Union[str, Path]
-    ) -> None:
+    def move_file(self, source: Union[str, Path], destination: Union[str, Path]) -> None:
         """Move/rename a file."""
         dest_path = Path(destination)
         dest_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,7 +1,7 @@
 """Embedding and feature extraction models."""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from bioamla.services.base import ToDictMixin
 

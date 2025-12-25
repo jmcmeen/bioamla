@@ -1,7 +1,12 @@
 """Data models for BioAMLA."""
 
 # File types
-from bioamla.models.file_types import FileMetadata, FileType
+# Annotation models
+from bioamla.models.annotation import (
+    AnnotationResult,
+    ClipExtractionResult,
+    MeasurementResult,
+)
 
 # Audio models
 from bioamla.models.audio import (
@@ -13,24 +18,9 @@ from bioamla.models.audio import (
     TransformResult,
 )
 
-# Detection models
-from bioamla.models.detection import (
-    BatchDetectionResult,
-    DetectionInfo,
-    DetectionResult,
-)
-
-# Annotation models
-from bioamla.models.annotation import (
-    AnnotationResult,
-    ClipExtractionResult,
-    MeasurementResult,
-)
-
-# Embedding models
-from bioamla.models.embedding import (
-    BatchEmbeddingSummary,
-    EmbeddingInfo,
+# Batch models
+from bioamla.models.batch import (
+    BatchConfig,
 )
 
 # Clustering models
@@ -40,12 +30,33 @@ from bioamla.models.clustering import (
     NoveltyDetectionSummary,
 )
 
-# Inference models
-from bioamla.models.inference import (
-    BatchInferenceResult,
-    InferenceSummary,
-    PredictionResult,
+# Dataset models
+from bioamla.models.dataset import (
+    AugmentResult,
+    BatchLicenseResult,
+    LicenseResult,
+    MergeResult,
 )
+
+# Dependency models
+from bioamla.models.dependency import (
+    DependencyInfo,
+    DependencyReport,
+)
+
+# Detection models
+from bioamla.models.detection import (
+    BatchDetectionResult,
+    DetectionInfo,
+    DetectionResult,
+)
+
+# Embedding models
+from bioamla.models.embedding import (
+    BatchEmbeddingSummary,
+    EmbeddingInfo,
+)
+from bioamla.models.file_types import FileMetadata, FileType
 
 # iNaturalist models
 from bioamla.models.inaturalist import (
@@ -63,29 +74,17 @@ from bioamla.models.indices import (
     TemporalIndicesResult,
 )
 
+# Inference models
+from bioamla.models.inference import (
+    BatchInferenceResult,
+    InferenceSummary,
+    PredictionResult,
+)
+
 # RIBBIT models
 from bioamla.models.ribbit import (
     BatchDetectionSummary,
     DetectionSummary,
-)
-
-# Dataset models
-from bioamla.models.dataset import (
-    AugmentResult,
-    BatchLicenseResult,
-    LicenseResult,
-    MergeResult,
-)
-
-# Dependency models
-from bioamla.models.dependency import (
-    DependencyInfo,
-    DependencyReport,
-)
-
-# Batch models
-from bioamla.models.batch import (
-    BatchConfig,
 )
 
 __all__ = [
