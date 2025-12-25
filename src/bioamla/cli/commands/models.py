@@ -580,7 +580,7 @@ def models_embed(
     )
     embeddings = handle_result(result)
 
-    np.save(output, embeddings)
+    services.file.write_npy(output, embeddings)
     click.echo(f"Embeddings saved to {output} (shape: {embeddings.shape})")
 
 

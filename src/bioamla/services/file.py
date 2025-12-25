@@ -380,3 +380,74 @@ class FileService(BaseService):
             )
         except Exception as e:
             return ServiceResult.fail(f"Failed to append to file: {e}")
+
+    def write_npy(
+        self,
+        path: Union[str, Path],
+        array: Any,
+    ) -> ServiceResult[str]:
+        """
+        Write a NumPy array to a .npy file.
+
+        Args:
+            path: Path to the output file
+            array: NumPy array to save
+
+        Returns:
+            ServiceResult containing the output path on success
+        """
+        try:
+            import io
+
+            import numpy as np
+
+            path = Path(path)
+            self.file_repository.mkdir(path.parent, parents=True)
+
+            # Write array to in-memory buffer
+            buffer = io.BytesIO()
+            np.save(buffer, array)
+
+            # Write buffer contents to file via repository
+            self.file_repository.write_bytes(path, buffer.getvalue())
+
+            return ServiceResult.ok(
+                data=str(path),
+                message=f"Wrote NumPy array {array.shape} to {path}",
+            )
+        except Exception as e:
+            return ServiceResult.fail(f"Failed to write NumPy file: {e}")
+
+    def read_npy(
+        self,
+        path: Union[str, Path],
+    ) -> ServiceResult[Any]:
+        """
+        Read a NumPy array from a .npy file.
+
+        Args:
+            path: Path to the input file
+
+        Returns:
+            ServiceResult containing the NumPy array on success
+        """
+        try:
+            import io
+
+            import numpy as np
+
+            path = Path(path)
+            if not self.file_repository.exists(path):
+                return ServiceResult.fail(f"File not found: {path}")
+
+            # Read bytes from repository and load array
+            content = self.file_repository.read_bytes(path)
+            buffer = io.BytesIO(content)
+            array = np.load(buffer)
+
+            return ServiceResult.ok(
+                data=array,
+                message=f"Read NumPy array {array.shape} from {path}",
+            )
+        except Exception as e:
+            return ServiceResult.fail(f"Failed to read NumPy file: {e}")
