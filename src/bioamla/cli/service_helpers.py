@@ -185,6 +185,36 @@ class _ServiceAccessor:
         from bioamla.services import XenoCantoService
         return get_factory().xeno_canto
 
+    @property
+    def macaulay(self):
+        """Get MacaulayService instance."""
+        from bioamla.services import MacaulayService
+        return get_factory().macaulay
+
+    @property
+    def ebird(self):
+        """Get EBirdService instance."""
+        from bioamla.services import EBirdService
+        return get_factory().ebird
+
+    @property
+    def species(self):
+        """Get SpeciesService instance."""
+        from bioamla.services import SpeciesService
+        return get_factory().species
+
+    @property
+    def huggingface(self):
+        """Get HuggingFaceService instance."""
+        from bioamla.services import HuggingFaceService
+        return get_factory().huggingface
+
+    @property
+    def dependency(self):
+        """Get DependencyService instance."""
+        from bioamla.services import DependencyService
+        return get_factory().dependency
+
     # Add batch services
     @property
     def batch_audio_transform(self):

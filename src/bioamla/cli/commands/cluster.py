@@ -2,12 +2,6 @@
 
 import click
 
-from bioamla.repository.local import LocalFileRepository
-from bioamla.services.clustering import ClusteringService
-from bioamla.services.file import FileService
-
-
-from typing import Any
 
 @click.group()
 def cluster() -> None:
@@ -31,6 +25,8 @@ def cluster_reduce(embeddings_file: str, output: str, method: str, n_components:
     """Reduce dimensionality of embeddings."""
     import numpy as np
 
+    from bioamla.cli.service_helpers import handle_result, services
+
     embeddings = np.load(embeddings_file)
 
     if not quiet:
@@ -38,14 +34,10 @@ def cluster_reduce(embeddings_file: str, output: str, method: str, n_components:
             f"Reducing {embeddings.shape[1]}D embeddings to {n_components}D using {method}..."
         )
 
-    service = ClusteringService()
-    result = service.reduce_dimensions(
+    result = services.clustering.reduce_dimensions(
         embeddings, method=method, n_components=n_components, output_path=output
     )
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
+    handle_result(result)
 
     if not quiet:
         click.echo(f"Saved reduced embeddings to: {output}")
@@ -83,29 +75,27 @@ def cluster_cluster(
     """Cluster embeddings."""
     import numpy as np
 
+    from bioamla.cli.service_helpers import handle_result, services
+
     embeddings = np.load(embeddings_file)
 
     if not quiet:
         click.echo(f"Clustering {len(embeddings)} samples using {method}...")
 
-    service = ClusteringService()
-    result = service.cluster(
+    result = services.clustering.cluster(
         embeddings,
         method=method,
         n_clusters=n_clusters,
         min_samples=min_samples,
         eps=eps,
     )
+    cluster_result = handle_result(result)
 
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    labels = np.array(result.data.labels)
+    labels = np.array(cluster_result.labels)
     np.save(output, labels)
 
     if not quiet:
-        click.echo(f"Found {result.data.n_clusters} clusters")
+        click.echo(f"Found {cluster_result.n_clusters} clusters")
         click.echo(f"Saved cluster labels to: {output}")
 
 
@@ -116,21 +106,17 @@ def cluster_cluster(
 @click.option("--quiet", "-q", is_flag=True, help="Suppress output")
 def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: bool) -> None:
     """Analyze cluster quality."""
-    from pathlib import Path
+    from typing import Any
 
     import numpy as np
+
+    from bioamla.cli.service_helpers import handle_result, services
 
     embeddings = np.load(embeddings_file)
     labels = np.load(labels_file)
 
-    service = ClusteringService()
-    result = service.analyze_clusters(embeddings, labels)
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    analysis = result.data
+    result = services.clustering.analyze_clusters(embeddings, labels)
+    analysis = handle_result(result)
 
     if not quiet:
         click.echo("Cluster Analysis:")
@@ -142,11 +128,6 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
         click.echo(f"  Calinski-Harabasz Score: {analysis.calinski_harabasz_score:.2f}")
 
     if output:
-        Path(output).parent.mkdir(parents=True, exist_ok=True)
-        repository = LocalFileRepository()
-
-        file_svc = FileService(file_repository=repository)
-
         def convert_numpy(obj: Any) -> Any:
             if isinstance(obj, np.integer):
                 return int(obj)
@@ -169,7 +150,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
             "calinski_harabasz_score": analysis.calinski_harabasz_score,
             "cluster_stats": convert_numpy(analysis.cluster_stats),
         }
-        file_svc.write_json(output, analysis_dict)
+        services.file.write_json(output, analysis_dict)
         if not quiet:
             click.echo(f"Saved analysis to: {output}")
 
@@ -193,31 +174,29 @@ def cluster_novelty(
     """Detect novel sounds in embeddings."""
     import numpy as np
 
+    from bioamla.cli.service_helpers import handle_result, services
+
     embeddings = np.load(embeddings_file)
     known_labels = np.load(labels) if labels else None
 
     if not quiet:
         click.echo(f"Detecting novel sounds using {method}...")
 
-    service = ClusteringService()
-    result = service.detect_novelty(
+    result = services.clustering.detect_novelty(
         embeddings,
         known_labels=known_labels,
         method=method,
         threshold=threshold,
     )
+    novelty_result = handle_result(result)
 
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    is_novel = result.metadata.get("is_novel", np.array([]))
-    novelty_scores = result.metadata.get("novelty_scores", np.array([]))
+    is_novel = novelty_result.metadata.get("is_novel", np.array([]))
+    novelty_scores = novelty_result.metadata.get("novelty_scores", np.array([]))
 
     results = np.column_stack([is_novel.astype(int), novelty_scores])
     np.save(output, results)
 
-    n_novel = result.data.n_novel
+    n_novel = novelty_result.data.n_novel
     if not quiet:
-        click.echo(f"Found {n_novel} novel samples ({result.data.novel_percentage:.1f}%)")
+        click.echo(f"Found {n_novel} novel samples ({novelty_result.data.novel_percentage:.1f}%)")
         click.echo(f"Saved novelty results to: {output}")
