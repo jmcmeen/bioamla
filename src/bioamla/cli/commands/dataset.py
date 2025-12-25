@@ -2,9 +2,6 @@
 
 import click
 
-from bioamla.repository.local import LocalFileRepository
-from bioamla.services.dataset import DatasetService
-
 
 @click.group()
 def dataset() -> None:
@@ -40,10 +37,9 @@ def dataset_merge(
     quiet: bool,
 ) -> None:
     """Merge multiple audio datasets into a single dataset."""
-    repository = LocalFileRepository()
+    from bioamla.cli.service_helpers import handle_result, services
 
-    service = DatasetService(file_repository=repository)
-    result = service.merge(
+    result = services.dataset.merge(
         dataset_paths=list(dataset_paths),
         output_dir=output_dir,
         metadata_filename=metadata_filename,
@@ -52,12 +48,8 @@ def dataset_merge(
         target_format=target_format,
         verbose=not quiet,
     )
+    stats = handle_result(result)
 
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    stats = result.data
     if quiet:
         msg = f"Merged {stats.datasets_merged} datasets: {stats.total_files} total files"
         if target_format:
@@ -82,17 +74,14 @@ def dataset_license(
     """Generate license/attribution file from dataset metadata."""
     from pathlib import Path as PathLib
 
+    from bioamla.cli.service_helpers import handle_result, services
+
     path_obj = PathLib(path)
     template_path = PathLib(template) if template else None
 
     if template_path and not template_path.exists():
         click.echo(f"Error: Template file '{template}' not found.")
         raise SystemExit(1)
-
-    repository = LocalFileRepository()
-
-
-    service = DatasetService(file_repository=repository)
 
     if batch:
         if not path_obj.is_dir():
@@ -102,18 +91,14 @@ def dataset_license(
         if not quiet:
             click.echo(f"Scanning directory for datasets: {path}")
 
-        result = service.generate_licenses_batch(
+        result = services.dataset.generate_licenses_batch(
             directory=str(path_obj),
             template_path=str(template_path) if template_path else None,
             output_filename=output,
             metadata_filename=metadata_filename,
         )
+        stats = handle_result(result)
 
-        if not result.success:
-            click.echo(f"Error: {result.error}")
-            raise SystemExit(1)
-
-        stats = result.data
         if stats.datasets_found == 0:
             click.echo("No datasets found (no directories with metadata.csv)")
             raise SystemExit(1)
@@ -151,18 +136,14 @@ def dataset_license(
         if not quiet:
             click.echo(f"Generating license file for: {path}")
 
-        result = service.generate_license(
+        result = services.dataset.generate_license(
             dataset_path=str(path_obj),
             template_path=str(template_path) if template_path else None,
             output_filename=output,
             metadata_filename=metadata_filename,
         )
+        stats = handle_result(result)
 
-        if not result.success:
-            click.echo(f"Error: {result.error}")
-            raise SystemExit(1)
-
-        stats = result.data
         if not quiet:
             click.echo(f"License file generated: {stats.output_path}")
             click.echo(f"  Attributions: {stats.attributions_count}")
@@ -212,6 +193,8 @@ def dataset_augment(
     quiet: bool,
 ) -> None:
     """Augment audio files to expand training datasets."""
+    from bioamla.cli.service_helpers import handle_result, services
+
     # Parse augmentation parameters
     noise_enabled = add_noise is not None
     noise_min_snr, noise_max_snr = _parse_range(add_noise) if add_noise else (3.0, 30.0)
@@ -230,11 +213,7 @@ def dataset_augment(
         click.echo("Use --help for available options")
         raise SystemExit(1)
 
-    repository = LocalFileRepository()
-
-
-    service = DatasetService(file_repository=repository)
-    result = service.augment(
+    result = services.dataset.augment(
         input_dir=input_dir,
         output_dir=output,
         add_noise=noise_enabled,
@@ -254,12 +233,8 @@ def dataset_augment(
         recursive=recursive,
         verbose=not quiet,
     )
+    stats = handle_result(result)
 
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
-
-    stats = result.data
     if quiet:
         click.echo(
             f"Created {stats.files_created} augmented files from "
@@ -275,6 +250,8 @@ def dataset_download(url: str, output_dir: str) -> None:
     import os
     from urllib.parse import urlparse
 
+    from bioamla.cli.service_helpers import handle_result, services
+
     if output_dir == ".":
         output_dir = os.getcwd()
 
@@ -285,15 +262,8 @@ def dataset_download(url: str, output_dir: str) -> None:
 
     output_path = os.path.join(output_dir, filename)
 
-    repository = LocalFileRepository()
-
-
-    service = DatasetService(file_repository=repository)
-    result = service.download(url, output_path)
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
+    result = services.dataset.download(url, output_path)
+    handle_result(result)
 
 
 @dataset.command("unzip")
@@ -303,18 +273,13 @@ def dataset_unzip(file_path: str, output_path: str) -> None:
     """Extract a ZIP archive to the specified output directory."""
     import os
 
+    from bioamla.cli.service_helpers import handle_result, services
+
     if output_path == ".":
         output_path = os.getcwd()
 
-    repository = LocalFileRepository()
-
-
-    service = DatasetService(file_repository=repository)
-    result = service.extract_zip(file_path, output_path)
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
+    result = services.dataset.extract_zip(file_path, output_path)
+    handle_result(result)
 
 
 @dataset.command("zip")
@@ -322,13 +287,9 @@ def dataset_unzip(file_path: str, output_path: str) -> None:
 @click.argument("output_file")
 def dataset_zip(source_path: str, output_file: str) -> None:
     """Create a ZIP archive from a file or directory."""
-    repository = LocalFileRepository()
+    from bioamla.cli.service_helpers import handle_result, services
 
-    service = DatasetService(file_repository=repository)
-    result = service.create_zip(source_path, output_file)
-
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
+    result = services.dataset.create_zip(source_path, output_file)
+    handle_result(result)
 
     click.echo(f"Created {output_file}")
