@@ -31,6 +31,7 @@ def audio() -> None:
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_convert(input_dir: str, output_dir: str, sample_rate: int, channels: int, format: str, recursive: bool, quiet: bool) -> None:
     """Batch convert audio files in a directory."""
+    from bioamla.repository.local import LocalFileRepository
     from bioamla.services.batch import BatchService
 
     if not quiet:

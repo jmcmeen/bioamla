@@ -26,6 +26,7 @@ from bioamla.core.audio.annotations import (
     save_raven_selection_table,
     summarize_annotations,
 )
+from bioamla.repository.protocol import FileRepositoryProtocol
 from bioamla.services.base import BaseService, ServiceResult
 
 logger = logging.getLogger(__name__)
@@ -68,15 +69,23 @@ class AnnotationService(BaseService):
     - Extracting audio clips from annotations
     - Computing measurements for annotations
 
+    All file I/O operations are delegated to the file repository.
+
     Usage:
-        svc = AnnotationService()
+        from bioamla.repository.local import LocalFileRepository
+
+        svc = AnnotationService(LocalFileRepository())
         result = svc.import_raven("selections.txt")
         annotations = result.data.annotations
     """
 
-    def __init__(self) -> None:
-        """Initialize AnnotationService."""
-        super().__init__()
+    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
+        """Initialize AnnotationService.
+
+        Args:
+            file_repository: File repository for all file I/O operations (required).
+        """
+        super().__init__(file_repository)
         self._annotations: List[CoreAnnotation] = []
 
     # =========================================================================
@@ -268,7 +277,7 @@ class AnnotationService(BaseService):
 
             # Ensure output path
             path = Path(output_path)
-            path.parent.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(path.parent, parents=True)
 
             df.to_parquet(str(path), index=False)
 
@@ -305,12 +314,11 @@ class AnnotationService(BaseService):
 
         try:
             path = Path(output_path)
-            path.parent.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(path.parent, parents=True)
 
             data = [ann.to_dict() for ann in annotations]
-
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, default=str)
+            content = json.dumps(data, indent=2, default=str)
+            self.file_repository.write_text(path, content)
 
             return ServiceResult.ok(
                 data=str(path),
@@ -423,7 +431,7 @@ class AnnotationService(BaseService):
                 audio_data = audio_data.reshape(-1, 1)
 
             output_path = Path(output_dir)
-            output_path.mkdir(parents=True, exist_ok=True)
+            self.file_repository.mkdir(output_path, parents=True)
 
             padding_samples = int(padding_ms * sample_rate / 1000)
             total_samples = len(audio_data)

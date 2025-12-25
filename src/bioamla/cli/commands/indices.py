@@ -2,6 +2,7 @@
 
 import click
 
+from bioamla.repository.local import LocalFileRepository
 from bioamla.services.file import FileService
 from bioamla.services.indices import IndicesService
 
@@ -59,10 +60,15 @@ def indices_compute(
     if aci_max_freq:
         kwargs["aci_max_freq"] = aci_max_freq
 
-    indices_svc = IndicesService()
+    repository = LocalFileRepository()
+
+
+    indices_svc = IndicesService(file_repository=repository)
 
     if path_obj.is_file():
-        file_svc = AudioFileService()
+        repository = LocalFileRepository()
+
+        file_svc = AudioFileService(file_repository=repository)
         load_result = file_svc.open(str(path_obj))
 
         if not load_result.success:
@@ -110,7 +116,9 @@ def indices_compute(
         if successful:
             fieldnames = list(successful[0].keys())
             if output:
-                file_svc = FileService()
+                repository = LocalFileRepository()
+
+                file_svc = FileService(file_repository=repository)
                 file_svc.write_csv_dicts(output, successful, fieldnames=fieldnames)
                 click.echo(f"Results saved to {output}")
             else:
@@ -160,8 +168,13 @@ def indices_temporal(path: str, window: float, hop: float, output: str, output_f
 
     from bioamla.services.audio_file import AudioFileService
 
-    file_svc = AudioFileService()
-    indices_svc = IndicesService()
+    repository = LocalFileRepository()
+
+
+    file_svc = AudioFileService(file_repository=repository)
+    repository = LocalFileRepository()
+
+    indices_svc = IndicesService(file_repository=repository)
 
     load_result = file_svc.open(path)
     if not load_result.success:
@@ -199,7 +212,9 @@ def indices_temporal(path: str, window: float, hop: float, output: str, output_f
 
         fieldnames = list(results[0].keys())
         if output:
-            file_svc_io = FileService()
+            repository = LocalFileRepository()
+
+            file_svc_io = FileService(file_repository=repository)
             file_svc_io.write_csv_dicts(output, results, fieldnames=fieldnames)
             click.echo(f"Results saved to {output}")
         else:
@@ -228,7 +243,10 @@ def indices_aci(path: str, min_freq: float, max_freq: float, n_fft: int) -> None
     """Compute Acoustic Complexity Index (ACI) for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
-    file_svc = AudioFileService()
+    repository = LocalFileRepository()
+
+
+    file_svc = AudioFileService(file_repository=repository)
     load_result = file_svc.open(path)
 
     if not load_result.success:
@@ -236,7 +254,9 @@ def indices_aci(path: str, min_freq: float, max_freq: float, n_fft: int) -> None
         raise SystemExit(1)
 
     audio_data = load_result.data
-    indices_svc = IndicesService()
+    repository = LocalFileRepository()
+
+    indices_svc = IndicesService(file_repository=repository)
 
     kwargs = {"n_fft": n_fft, "aci_min_freq": min_freq}
     if max_freq:
@@ -260,7 +280,10 @@ def indices_adi(path: str, max_freq: float, freq_step: float, db_threshold: floa
     """Compute Acoustic Diversity Index (ADI) for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
-    file_svc = AudioFileService()
+    repository = LocalFileRepository()
+
+
+    file_svc = AudioFileService(file_repository=repository)
     load_result = file_svc.open(path)
 
     if not load_result.success:
@@ -268,7 +291,9 @@ def indices_adi(path: str, max_freq: float, freq_step: float, db_threshold: floa
         raise SystemExit(1)
 
     audio_data = load_result.data
-    indices_svc = IndicesService()
+    repository = LocalFileRepository()
+
+    indices_svc = IndicesService(file_repository=repository)
 
     result = indices_svc.calculate(
         audio_data,
@@ -294,7 +319,10 @@ def indices_aei(path: str, max_freq: float, freq_step: float, db_threshold: floa
     """Compute Acoustic Evenness Index (AEI) for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
-    file_svc = AudioFileService()
+    repository = LocalFileRepository()
+
+
+    file_svc = AudioFileService(file_repository=repository)
     load_result = file_svc.open(path)
 
     if not load_result.success:
@@ -302,7 +330,9 @@ def indices_aei(path: str, max_freq: float, freq_step: float, db_threshold: floa
         raise SystemExit(1)
 
     audio_data = load_result.data
-    indices_svc = IndicesService()
+    repository = LocalFileRepository()
+
+    indices_svc = IndicesService(file_repository=repository)
 
     result = indices_svc.calculate(
         audio_data,
@@ -327,7 +357,10 @@ def indices_bio(path: str, min_freq: float, max_freq: float) -> None:
     """Compute Bioacoustic Index (BIO) for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
-    file_svc = AudioFileService()
+    repository = LocalFileRepository()
+
+
+    file_svc = AudioFileService(file_repository=repository)
     load_result = file_svc.open(path)
 
     if not load_result.success:
@@ -335,7 +368,9 @@ def indices_bio(path: str, min_freq: float, max_freq: float) -> None:
         raise SystemExit(1)
 
     audio_data = load_result.data
-    indices_svc = IndicesService()
+    repository = LocalFileRepository()
+
+    indices_svc = IndicesService(file_repository=repository)
 
     result = indices_svc.calculate(
         audio_data,
@@ -361,7 +396,10 @@ def indices_ndsi(path: str, anthro_min: float, anthro_max: float, bio_min: float
     """Compute Normalized Difference Soundscape Index (NDSI) for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
-    file_svc = AudioFileService()
+    repository = LocalFileRepository()
+
+
+    file_svc = AudioFileService(file_repository=repository)
     load_result = file_svc.open(path)
 
     if not load_result.success:
@@ -369,7 +407,9 @@ def indices_ndsi(path: str, anthro_min: float, anthro_max: float, bio_min: float
         raise SystemExit(1)
 
     audio_data = load_result.data
-    indices_svc = IndicesService()
+    repository = LocalFileRepository()
+
+    indices_svc = IndicesService(file_repository=repository)
 
     result = indices_svc.calculate(
         audio_data,
@@ -395,7 +435,10 @@ def indices_entropy(path: str, spectral: bool, temporal: bool) -> None:
     """Compute entropy-based acoustic indices for an audio file."""
     from bioamla.services.audio_file import AudioFileService
 
-    file_svc = AudioFileService()
+    repository = LocalFileRepository()
+
+
+    file_svc = AudioFileService(file_repository=repository)
     load_result = file_svc.open(path)
 
     if not load_result.success:
@@ -403,7 +446,9 @@ def indices_entropy(path: str, spectral: bool, temporal: bool) -> None:
         raise SystemExit(1)
 
     audio_data = load_result.data
-    indices_svc = IndicesService()
+    repository = LocalFileRepository()
+
+    indices_svc = IndicesService(file_repository=repository)
 
     if not spectral and not temporal:
         spectral = temporal = True

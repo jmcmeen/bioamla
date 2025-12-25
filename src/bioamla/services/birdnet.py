@@ -4,8 +4,9 @@ Service for BirdNET model operations.
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from bioamla.repository.protocol import FileRepositoryProtocol
 
 from .base import BaseService, ServiceResult, ToDictMixin
 
@@ -28,8 +29,13 @@ class BirdNETService(BaseService):
     Provides ServiceResult-wrapped methods for BirdNET model operations.
     """
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, file_repository: FileRepositoryProtocol) -> None:
+        """Initialize BirdNET service.
+
+        Args:
+            file_repository: Repository for file operations (required)
+        """
+        super().__init__(file_repository=file_repository)
         self._model = None
         self._model_path = None
 
@@ -94,103 +100,6 @@ class BirdNETService(BaseService):
         except Exception as e:
             return ServiceResult.fail(f"Prediction failed: {e}")
 
-    def predict_batch(
-        self,
-        directory: str,
-        model_path: str,
-        output_csv: Optional[str] = None,
-        sample_rate: int = 48000,
-        clip_duration: float = 3.0,
-        overlap: float = 0.0,
-        min_confidence: float = 0.0,
-        batch_size: int = 8,
-        fp16: bool = False,
-        recursive: bool = True,
-    ) -> ServiceResult[Dict[str, Any]]:
-        """
-        Run batch prediction on a directory of audio files.
-
-        Args:
-            directory: Directory containing audio files
-            model_path: Path to BirdNET model
-            output_csv: Output CSV file path
-            sample_rate: Target sample rate
-            clip_duration: Clip duration in seconds
-            overlap: Overlap between clips in seconds
-            min_confidence: Minimum confidence threshold
-            batch_size: Batch size for processing
-            fp16: Use half-precision inference
-            recursive: Search subdirectories
-
-        Returns:
-            ServiceResult containing batch prediction summary
-        """
-        error = self._validate_input_path(directory)
-        if error:
-            return ServiceResult.fail(error)
-
-        try:
-            import csv
-            import time
-
-            from bioamla.core.ml import ModelConfig, load_model
-            from bioamla.core.utils import get_audio_files
-
-            config = ModelConfig(
-                sample_rate=sample_rate,
-                clip_duration=clip_duration,
-                overlap=overlap,
-                min_confidence=min_confidence,
-                batch_size=batch_size,
-                use_fp16=fp16,
-            )
-
-            model = load_model("birdnet", model_path, config, use_fp16=fp16)
-
-            audio_files = get_audio_files(directory)
-            if not audio_files:
-                return ServiceResult.fail(f"No audio files found in {directory}")
-
-            start_time = time.time()
-            all_results = []
-
-            for filepath in audio_files:
-                try:
-                    results = model.predict(filepath)
-                    all_results.extend(results)
-                except Exception:
-                    continue
-
-            elapsed = time.time() - start_time
-
-            if output_csv:
-                output_path = Path(output_csv)
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(output_path, "w", newline="") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(["filepath", "start_time", "end_time", "label", "confidence"])
-                    for r in all_results:
-                        writer.writerow([
-                            r.filepath,
-                            f"{r.start_time:.3f}",
-                            f"{r.end_time:.3f}",
-                            r.label,
-                            f"{r.confidence:.4f}",
-                        ])
-
-            result = {
-                "total_files": len(audio_files),
-                "total_predictions": len(all_results),
-                "output_path": output_csv,
-                "elapsed_seconds": elapsed,
-            }
-
-            return ServiceResult.ok(
-                data=result,
-                message=f"Processed {len(audio_files)} files in {elapsed:.2f}s",
-            )
-        except Exception as e:
-            return ServiceResult.fail(f"Batch prediction failed: {e}")
 
     def extract_embeddings(
         self,

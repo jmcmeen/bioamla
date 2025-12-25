@@ -94,7 +94,8 @@ from .inaturalist import (
 from .indices import BatchIndicesResult, IndicesResult, IndicesService
 from .inference import InferenceService
 from .macaulay import MacaulayService
-from .ribbit import BatchDetectionSummary, DetectionSummary, RibbitService
+from .ribbit import RibbitService
+from bioamla.models.ribbit import BatchDetectionSummary, DetectionSummary
 from .species import SpeciesService
 
 # Catalog services
