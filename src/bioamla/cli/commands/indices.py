@@ -2,7 +2,8 @@
 
 import click
 
-from bioamla.core.files import TextFile
+from bioamla.services.file import FileService
+from bioamla.services.indices import IndicesService
 
 
 @click.group()
@@ -45,7 +46,6 @@ def indices_compute(
     from pathlib import Path as PathLib
 
     from bioamla.services.audio_file import AudioFileService
-    from bioamla.services.indices import IndicesService
 
     path_obj = PathLib(path)
 
@@ -110,10 +110,8 @@ def indices_compute(
         if successful:
             fieldnames = list(successful[0].keys())
             if output:
-                with TextFile(output, mode="w", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
-                    writer.writeheader()
-                    writer.writerows(successful)
+                file_svc = FileService()
+                file_svc.write_csv_dicts(output, successful, fieldnames=fieldnames)
                 click.echo(f"Results saved to {output}")
             else:
                 writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
@@ -161,7 +159,6 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
     import json as json_lib
 
     from bioamla.services.audio_file import AudioFileService
-    from bioamla.services.indices import IndicesService
 
     file_svc = AudioFileService()
     indices_svc = IndicesService()
@@ -202,10 +199,8 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
 
         fieldnames = list(results[0].keys())
         if output:
-            with TextFile(output, mode="w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(results)
+            file_svc_io = FileService()
+            file_svc_io.write_csv_dicts(output, results, fieldnames=fieldnames)
             click.echo(f"Results saved to {output}")
         else:
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
@@ -231,22 +226,29 @@ def indices_temporal(path, window, hop, output, output_format, quiet):
 @click.option("--n-fft", default=512, type=int, help="FFT window size")
 def indices_aci(path, min_freq, max_freq, n_fft):
     """Compute Acoustic Complexity Index (ACI) for an audio file."""
-    import librosa
+    from bioamla.services.audio_file import AudioFileService
 
-    from bioamla.core.audio.indices import compute_aci
+    file_svc = AudioFileService()
+    load_result = file_svc.open(path)
 
-    try:
-        audio, sample_rate = librosa.load(path, sr=None, mono=True)
-    except Exception as e:
-        click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1) from e
+    if not load_result.success:
+        click.echo(f"Error loading audio: {load_result.error}")
+        raise SystemExit(1)
 
-    kwargs = {"n_fft": n_fft, "min_freq": min_freq}
+    audio_data = load_result.data
+    indices_svc = IndicesService()
+
+    kwargs = {"n_fft": n_fft, "aci_min_freq": min_freq}
     if max_freq:
-        kwargs["max_freq"] = max_freq
+        kwargs["aci_max_freq"] = max_freq
 
-    aci = compute_aci(audio, sample_rate, **kwargs)
-    click.echo(f"ACI: {aci:.2f}")
+    result = indices_svc.calculate(audio_data, indices=["aci"], **kwargs)
+
+    if not result.success:
+        click.echo(f"Error computing ACI: {result.error}")
+        raise SystemExit(1)
+
+    click.echo(f"ACI: {result.data.indices.aci:.2f}")
 
 
 @indices.command("adi")
@@ -256,20 +258,31 @@ def indices_aci(path, min_freq, max_freq, n_fft):
 @click.option("--db-threshold", default=-50.0, type=float, help="dB threshold")
 def indices_adi(path, max_freq, freq_step, db_threshold):
     """Compute Acoustic Diversity Index (ADI) for an audio file."""
-    import librosa
+    from bioamla.services.audio_file import AudioFileService
 
-    from bioamla.core.audio.indices import compute_adi
+    file_svc = AudioFileService()
+    load_result = file_svc.open(path)
 
-    try:
-        audio, sample_rate = librosa.load(path, sr=None, mono=True)
-    except Exception as e:
-        click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1) from e
+    if not load_result.success:
+        click.echo(f"Error loading audio: {load_result.error}")
+        raise SystemExit(1)
 
-    adi = compute_adi(
-        audio, sample_rate, max_freq=max_freq, freq_step=freq_step, db_threshold=db_threshold
+    audio_data = load_result.data
+    indices_svc = IndicesService()
+
+    result = indices_svc.calculate(
+        audio_data,
+        indices=["adi"],
+        adi_max_freq=max_freq,
+        adi_freq_step=freq_step,
+        db_threshold=db_threshold,
     )
-    click.echo(f"ADI: {adi:.3f}")
+
+    if not result.success:
+        click.echo(f"Error computing ADI: {result.error}")
+        raise SystemExit(1)
+
+    click.echo(f"ADI: {result.data.indices.adi:.3f}")
 
 
 @indices.command("aei")
@@ -279,20 +292,31 @@ def indices_adi(path, max_freq, freq_step, db_threshold):
 @click.option("--db-threshold", default=-50.0, type=float, help="dB threshold")
 def indices_aei(path, max_freq, freq_step, db_threshold):
     """Compute Acoustic Evenness Index (AEI) for an audio file."""
-    import librosa
+    from bioamla.services.audio_file import AudioFileService
 
-    from bioamla.core.audio.indices import compute_aei
+    file_svc = AudioFileService()
+    load_result = file_svc.open(path)
 
-    try:
-        audio, sample_rate = librosa.load(path, sr=None, mono=True)
-    except Exception as e:
-        click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1) from e
+    if not load_result.success:
+        click.echo(f"Error loading audio: {load_result.error}")
+        raise SystemExit(1)
 
-    aei = compute_aei(
-        audio, sample_rate, max_freq=max_freq, freq_step=freq_step, db_threshold=db_threshold
+    audio_data = load_result.data
+    indices_svc = IndicesService()
+
+    result = indices_svc.calculate(
+        audio_data,
+        indices=["aei"],
+        adi_max_freq=max_freq,
+        adi_freq_step=freq_step,
+        db_threshold=db_threshold,
     )
-    click.echo(f"AEI: {aei:.3f}")
+
+    if not result.success:
+        click.echo(f"Error computing AEI: {result.error}")
+        raise SystemExit(1)
+
+    click.echo(f"AEI: {result.data.indices.aei:.3f}")
 
 
 @indices.command("bio")
@@ -301,18 +325,30 @@ def indices_aei(path, max_freq, freq_step, db_threshold):
 @click.option("--max-freq", default=8000.0, type=float, help="Maximum frequency (Hz)")
 def indices_bio(path, min_freq, max_freq):
     """Compute Bioacoustic Index (BIO) for an audio file."""
-    import librosa
+    from bioamla.services.audio_file import AudioFileService
 
-    from bioamla.core.audio.indices import compute_bio
+    file_svc = AudioFileService()
+    load_result = file_svc.open(path)
 
-    try:
-        audio, sample_rate = librosa.load(path, sr=None, mono=True)
-    except Exception as e:
-        click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1) from e
+    if not load_result.success:
+        click.echo(f"Error loading audio: {load_result.error}")
+        raise SystemExit(1)
 
-    bio = compute_bio(audio, sample_rate, min_freq=min_freq, max_freq=max_freq)
-    click.echo(f"BIO: {bio:.2f}")
+    audio_data = load_result.data
+    indices_svc = IndicesService()
+
+    result = indices_svc.calculate(
+        audio_data,
+        indices=["bio"],
+        bio_min_freq=min_freq,
+        bio_max_freq=max_freq,
+    )
+
+    if not result.success:
+        click.echo(f"Error computing BIO: {result.error}")
+        raise SystemExit(1)
+
+    click.echo(f"BIO: {result.data.indices.bio:.2f}")
 
 
 @indices.command("ndsi")
@@ -323,28 +359,32 @@ def indices_bio(path, min_freq, max_freq):
 @click.option("--bio-max", default=8000.0, type=float, help="Biophony max frequency (Hz)")
 def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
     """Compute Normalized Difference Soundscape Index (NDSI) for an audio file."""
-    import librosa
+    from bioamla.services.audio_file import AudioFileService
 
-    from bioamla.core.audio.indices import compute_ndsi
+    file_svc = AudioFileService()
+    load_result = file_svc.open(path)
 
-    try:
-        audio, sample_rate = librosa.load(path, sr=None, mono=True)
-    except Exception as e:
-        click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1) from e
+    if not load_result.success:
+        click.echo(f"Error loading audio: {load_result.error}")
+        raise SystemExit(1)
 
-    ndsi, anthro, bio = compute_ndsi(
-        audio,
-        sample_rate,
+    audio_data = load_result.data
+    indices_svc = IndicesService()
+
+    result = indices_svc.calculate(
+        audio_data,
+        indices=["ndsi"],
         anthro_min=anthro_min,
         anthro_max=anthro_max,
         bio_min=bio_min,
         bio_max=bio_max,
     )
 
-    click.echo(f"NDSI: {ndsi:.3f}")
-    click.echo(f"  Anthrophony ({anthro_min:.0f}-{anthro_max:.0f} Hz): {anthro:.2f}")
-    click.echo(f"  Biophony ({bio_min:.0f}-{bio_max:.0f} Hz): {bio:.2f}")
+    if not result.success:
+        click.echo(f"Error computing NDSI: {result.error}")
+        raise SystemExit(1)
+
+    click.echo(f"NDSI: {result.data.indices.ndsi:.3f}")
 
 
 @indices.command("entropy")
@@ -353,23 +393,29 @@ def indices_ndsi(path, anthro_min, anthro_max, bio_min, bio_max):
 @click.option("--temporal", "-t", is_flag=True, help="Compute temporal entropy")
 def indices_entropy(path, spectral, temporal):
     """Compute entropy-based acoustic indices for an audio file."""
-    import librosa
+    from bioamla.services.audio_file import AudioFileService
 
-    from bioamla.core.audio.indices import spectral_entropy, temporal_entropy
+    file_svc = AudioFileService()
+    load_result = file_svc.open(path)
 
-    try:
-        audio, sample_rate = librosa.load(path, sr=None, mono=True)
-    except Exception as e:
-        click.echo(f"Error loading audio: {e}")
-        raise SystemExit(1) from e
+    if not load_result.success:
+        click.echo(f"Error loading audio: {load_result.error}")
+        raise SystemExit(1)
+
+    audio_data = load_result.data
+    indices_svc = IndicesService()
 
     if not spectral and not temporal:
         spectral = temporal = True
 
-    if spectral:
-        se = spectral_entropy(audio, sample_rate)
-        click.echo(f"Spectral Entropy: {se:.3f}")
+    result = indices_svc.calculate(audio_data, include_entropy=True)
 
-    if temporal:
-        te = temporal_entropy(audio, sample_rate)
-        click.echo(f"Temporal Entropy: {te:.3f}")
+    if not result.success:
+        click.echo(f"Error computing entropy: {result.error}")
+        raise SystemExit(1)
+
+    if spectral and result.data.h_spectral is not None:
+        click.echo(f"Spectral Entropy: {result.data.h_spectral:.3f}")
+
+    if temporal and result.data.h_temporal is not None:
+        click.echo(f"Temporal Entropy: {result.data.h_temporal:.3f}")

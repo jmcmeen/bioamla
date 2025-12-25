@@ -2,7 +2,8 @@
 
 import click
 
-from bioamla.core.files import TextFile
+from bioamla.services.detection import DetectionService
+from bioamla.services.file import FileService
 
 
 @click.group()
@@ -30,21 +31,12 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.core.detection import BandLimitedEnergyDetector, export_detections
-    from bioamla.core.utils import get_audio_files
-
-    detector = BandLimitedEnergyDetector(
-        low_freq=low_freq,
-        high_freq=high_freq,
-        threshold_db=threshold,
-        min_duration=min_duration,
-    )
-
+    service = DetectionService()
     path_obj = PathLib(path)
     all_detections = []
 
     if path_obj.is_dir():
-        audio_files = get_audio_files(str(path_obj), recursive=True)
+        audio_files = service._get_audio_files(str(path_obj), recursive=True)
         if not audio_files:
             click.echo(f"No audio files found in {path}")
             return
@@ -56,21 +48,38 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
             description="Detecting energy patterns",
         ) as progress:
             for audio_file in audio_files:
-                file_detections = detector.detect_from_file(audio_file)
-                for d in file_detections:
-                    d.metadata["source_file"] = audio_file
-                all_detections.extend(file_detections)
+                result = service.detect_energy(
+                    audio_file,
+                    low_freq=low_freq,
+                    high_freq=high_freq,
+                    threshold_db=threshold,
+                    min_duration=min_duration,
+                )
+                if result.success:
+                    for d in result.data.detections:
+                        d.metadata["source_file"] = audio_file
+                    all_detections.extend(result.data.detections)
                 progress.advance()
 
         print_success(f"Processed {len(audio_files)} files")
     else:
-        all_detections = detector.detect_from_file(path)
-        for d in all_detections:
+        result = service.detect_energy(
+            str(path_obj),
+            low_freq=low_freq,
+            high_freq=high_freq,
+            threshold_db=threshold,
+            min_duration=min_duration,
+        )
+        if not result.success:
+            click.echo(f"Error: {result.error}")
+            raise SystemExit(1)
+        for d in result.data.detections:
             d.metadata["source_file"] = str(path_obj)
+        all_detections = result.data.detections
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
-        export_detections(all_detections, output, format=fmt)
+        service.export_detections(all_detections, output, format=fmt)
         click.echo(f"Saved {len(all_detections)} detections to {output}")
     elif output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
@@ -132,23 +141,12 @@ def detect_ribbit(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.core.detection import RibbitDetector, export_detections
-    from bioamla.core.utils import get_audio_files
-
-    detector = RibbitDetector(
-        pulse_rate_hz=pulse_rate,
-        pulse_rate_tolerance=tolerance,
-        low_freq=low_freq,
-        high_freq=high_freq,
-        window_duration=window,
-        min_score=min_score,
-    )
-
+    service = DetectionService()
     path_obj = PathLib(path)
     all_detections = []
 
     if path_obj.is_dir():
-        audio_files = get_audio_files(str(path_obj), recursive=True)
+        audio_files = service._get_audio_files(str(path_obj), recursive=True)
         if not audio_files:
             click.echo(f"No audio files found in {path}")
             return
@@ -160,21 +158,42 @@ def detect_ribbit(
             description="Detecting RIBBIT patterns",
         ) as progress:
             for audio_file in audio_files:
-                file_detections = detector.detect_from_file(audio_file)
-                for d in file_detections:
-                    d.metadata["source_file"] = audio_file
-                all_detections.extend(file_detections)
+                result = service.detect_ribbit(
+                    audio_file,
+                    pulse_rate_hz=pulse_rate,
+                    pulse_rate_tolerance=tolerance,
+                    low_freq=low_freq,
+                    high_freq=high_freq,
+                    window_duration=window,
+                    min_score=min_score,
+                )
+                if result.success:
+                    for d in result.data.detections:
+                        d.metadata["source_file"] = audio_file
+                    all_detections.extend(result.data.detections)
                 progress.advance()
 
         print_success(f"Processed {len(audio_files)} files")
     else:
-        all_detections = detector.detect_from_file(path)
-        for d in all_detections:
+        result = service.detect_ribbit(
+            str(path_obj),
+            pulse_rate_hz=pulse_rate,
+            pulse_rate_tolerance=tolerance,
+            low_freq=low_freq,
+            high_freq=high_freq,
+            window_duration=window,
+            min_score=min_score,
+        )
+        if not result.success:
+            click.echo(f"Error: {result.error}")
+            raise SystemExit(1)
+        for d in result.data.detections:
             d.metadata["source_file"] = str(path_obj)
+        all_detections = result.data.detections
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
-        export_detections(all_detections, output, format=fmt)
+        service.export_detections(all_detections, output, format=fmt)
         click.echo(f"Saved {len(all_detections)} detections to {output}")
     elif output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
@@ -228,30 +247,31 @@ def detect_peaks(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    import librosa
-
-    from bioamla.core.detection import CWTPeakDetector, export_detections
-    from bioamla.core.utils import get_audio_files
-
-    detector = CWTPeakDetector(
-        snr_threshold=snr,
-        min_peak_distance=min_distance,
-        low_freq=low_freq,
-        high_freq=high_freq,
-    )
-
+    service = DetectionService()
     path_obj = PathLib(path)
 
     if path_obj.is_dir():
-        audio_files = get_audio_files(str(path_obj), recursive=True)
+        audio_files = service._get_audio_files(str(path_obj), recursive=True)
         if not audio_files:
             click.echo(f"No audio files found in {path}")
             return
     else:
         audio_files = [str(path_obj)]
 
+    all_detections = []
+
     if sequences:
-        all_detections = []
+        # For sequences, we still need to use core detection for now
+        # as the service doesn't have sequence detection
+        import librosa
+        from bioamla.core.detection import CWTPeakDetector, export_detections
+
+        detector = CWTPeakDetector(
+            snr_threshold=snr,
+            min_peak_distance=min_distance,
+            low_freq=low_freq,
+            high_freq=high_freq,
+        )
 
         if len(audio_files) > 1:
             from bioamla.cli.progress import ProgressBar, print_success
@@ -313,8 +333,7 @@ def detect_peaks(
         if not output and output_format == "table":
             click.echo(f"\nTotal: {len(all_detections)} sequences")
     else:
-        all_peaks = []
-
+        # Use service for peak detection
         if len(audio_files) > 1:
             from bioamla.cli.progress import ProgressBar, print_success
 
@@ -323,79 +342,95 @@ def detect_peaks(
                 description="Detecting peaks",
             ) as progress:
                 for audio_file in audio_files:
-                    audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
-                    file_peaks = detector.detect(audio, sample_rate)
-                    for p in file_peaks:
-                        p.source_file = audio_file
-                    all_peaks.extend(file_peaks)
+                    result = service.detect_peaks(
+                        audio_file,
+                        snr_threshold=snr,
+                        min_peak_distance=min_distance,
+                        low_freq=low_freq,
+                        high_freq=high_freq,
+                    )
+                    if result.success:
+                        for d in result.data.detections:
+                            d.metadata["source_file"] = audio_file
+                        all_detections.extend(result.data.detections)
                     progress.advance()
 
             print_success(f"Processed {len(audio_files)} files")
         else:
             for audio_file in audio_files:
-                audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
-                file_peaks = detector.detect(audio, sample_rate)
-                for p in file_peaks:
-                    p.source_file = audio_file
-                all_peaks.extend(file_peaks)
+                result = service.detect_peaks(
+                    audio_file,
+                    snr_threshold=snr,
+                    min_peak_distance=min_distance,
+                    low_freq=low_freq,
+                    high_freq=high_freq,
+                )
+                if result.success:
+                    for d in result.data.detections:
+                        d.metadata["source_file"] = audio_file
+                    all_detections.extend(result.data.detections)
 
         if output:
-            import csv
-
-            fieldnames = ["time", "amplitude", "width", "prominence"]
+            file_svc = FileService()
+            fieldnames = ["start_time", "end_time", "confidence", "amplitude", "width"]
             if len(audio_files) > 1:
                 fieldnames.append("source_file")
-            with TextFile(output, mode="w", newline="") as f:
-                writer = csv.DictWriter(f.handle, fieldnames=fieldnames)
-                writer.writeheader()
-                for p in all_peaks:
-                    row = p.to_dict()
-                    if len(audio_files) > 1:
-                        row["source_file"] = getattr(p, "source_file", "")
-                    writer.writerow(row)
-            click.echo(f"Saved {len(all_peaks)} peaks to {output}")
-        elif output_format == "json":
-            peak_dicts = []
-            for p in all_peaks:
-                d = p.to_dict()
+            rows = []
+            for d in all_detections:
+                row = {
+                    "start_time": d.start_time,
+                    "end_time": d.end_time,
+                    "confidence": d.confidence,
+                    "amplitude": d.metadata.get("amplitude", ""),
+                    "width": d.metadata.get("width", ""),
+                }
                 if len(audio_files) > 1:
-                    d["source_file"] = getattr(p, "source_file", "")
-                peak_dicts.append(d)
-            click.echo(json_lib.dumps(peak_dicts, indent=2))
+                    row["source_file"] = d.metadata.get("source_file", "")
+                rows.append(row)
+            file_svc.write_csv_dicts(output, rows, fieldnames=fieldnames)
+            click.echo(f"Saved {len(all_detections)} peaks to {output}")
+        elif output_format == "json":
+            click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
         elif output_format == "csv":
             import csv
             import sys
 
-            if all_peaks:
-                fieldnames = ["time", "amplitude", "width", "prominence"]
+            if all_detections:
+                fieldnames = ["start_time", "end_time", "confidence", "amplitude", "width"]
                 if len(audio_files) > 1:
                     fieldnames.append("source_file")
                 writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
                 writer.writeheader()
-                for p in all_peaks:
-                    row = p.to_dict()
+                for d in all_detections:
+                    row = {
+                        "start_time": d.start_time,
+                        "end_time": d.end_time,
+                        "confidence": d.confidence,
+                        "amplitude": d.metadata.get("amplitude", ""),
+                        "width": d.metadata.get("width", ""),
+                    }
                     if len(audio_files) > 1:
-                        row["source_file"] = getattr(p, "source_file", "")
+                        row["source_file"] = d.metadata.get("source_file", "")
                     writer.writerow(row)
             else:
                 click.echo("No peaks found.")
         else:
-            click.echo(f"Found {len(all_peaks)} peaks:\n")
-            for i, p in enumerate(all_peaks[:20], 1):
-                source = getattr(p, "source_file", "")
+            click.echo(f"Found {len(all_detections)} peaks:\n")
+            for i, d in enumerate(all_detections[:20], 1):
+                source = d.metadata.get("source_file", "")
                 if source and len(audio_files) > 1:
                     source = f" [{PathLib(source).name}]"
                 else:
                     source = ""
                 click.echo(
-                    f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, "
-                    f"width: {p.width:.3f}s){source}"
+                    f"{i}. {d.start_time:.3f}s (amplitude: {d.metadata.get('amplitude', 0):.2f}, "
+                    f"width: {d.metadata.get('width', 0):.3f}s){source}"
                 )
-            if len(all_peaks) > 20:
-                click.echo(f"... and {len(all_peaks) - 20} more peaks")
+            if len(all_detections) > 20:
+                click.echo(f"... and {len(all_detections) - 20} more peaks")
 
         if not output and output_format == "table":
-            click.echo(f"\nTotal: {len(all_peaks)} peaks")
+            click.echo(f"\nTotal: {len(all_detections)} peaks")
 
 
 @detect.command("accelerating")
@@ -429,23 +464,12 @@ def detect_accelerating(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.core.detection import AcceleratingPatternDetector, export_detections
-    from bioamla.core.utils import get_audio_files
-
-    detector = AcceleratingPatternDetector(
-        min_pulses=min_pulses,
-        acceleration_threshold=acceleration,
-        deceleration_threshold=deceleration,
-        low_freq=low_freq,
-        high_freq=high_freq,
-        window_duration=window,
-    )
-
+    service = DetectionService()
     path_obj = PathLib(path)
     all_detections = []
 
     if path_obj.is_dir():
-        audio_files = get_audio_files(str(path_obj), recursive=True)
+        audio_files = service._get_audio_files(str(path_obj), recursive=True)
         if not audio_files:
             click.echo(f"No audio files found in {path}")
             return
@@ -457,21 +481,42 @@ def detect_accelerating(
             description="Detecting accelerating patterns",
         ) as progress:
             for audio_file in audio_files:
-                file_detections = detector.detect_from_file(audio_file)
-                for d in file_detections:
-                    d.metadata["source_file"] = audio_file
-                all_detections.extend(file_detections)
+                result = service.detect_accelerating(
+                    audio_file,
+                    min_pulses=min_pulses,
+                    acceleration_threshold=acceleration,
+                    deceleration_threshold=deceleration,
+                    low_freq=low_freq,
+                    high_freq=high_freq,
+                    window_duration=window,
+                )
+                if result.success:
+                    for d in result.data.detections:
+                        d.metadata["source_file"] = audio_file
+                    all_detections.extend(result.data.detections)
                 progress.advance()
 
         print_success(f"Processed {len(audio_files)} files")
     else:
-        all_detections = detector.detect_from_file(path)
-        for d in all_detections:
+        result = service.detect_accelerating(
+            str(path_obj),
+            min_pulses=min_pulses,
+            acceleration_threshold=acceleration,
+            deceleration_threshold=deceleration,
+            low_freq=low_freq,
+            high_freq=high_freq,
+            window_duration=window,
+        )
+        if not result.success:
+            click.echo(f"Error: {result.error}")
+            raise SystemExit(1)
+        for d in result.data.detections:
             d.metadata["source_file"] = str(path_obj)
+        all_detections = result.data.detections
 
     if output:
         fmt = "json" if output.endswith(".json") else "csv"
-        export_detections(all_detections, output, format=fmt)
+        service.export_detections(all_detections, output, format=fmt)
         click.echo(f"Saved {len(all_detections)} detections to {output}")
     elif output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in all_detections], indent=2))
@@ -526,52 +571,22 @@ def detect_accelerating(
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
     """Run detection on all audio files in a directory."""
-    from pathlib import Path as PathLib
+    service = DetectionService()
 
-    from bioamla.core.detection import (
-        AcceleratingPatternDetector,
-        BandLimitedEnergyDetector,
-        CWTPeakDetector,
-        Detection,
-        RibbitDetector,
-        batch_detect,
-        export_detections,
+    result = service.batch_detect(
+        directory=directory,
+        detector_type=detector,
+        output_dir=output_dir,
+        low_freq=low_freq,
+        high_freq=high_freq,
     )
 
-    if detector == "energy":
-        det = BandLimitedEnergyDetector(low_freq=low_freq, high_freq=high_freq)
-    elif detector == "ribbit":
-        det = RibbitDetector(low_freq=low_freq, high_freq=high_freq)
-    elif detector == "peaks":
-        det = CWTPeakDetector(low_freq=low_freq, high_freq=high_freq)
-    else:
-        det = AcceleratingPatternDetector(low_freq=low_freq, high_freq=high_freq)
+    if not result.success:
+        click.echo(f"Error: {result.error}")
+        raise SystemExit(1)
 
-    directory_path = PathLib(directory)
-    audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
-    files = [f for f in directory_path.rglob("*") if f.suffix.lower() in audio_extensions]
-
-    if not files:
-        click.echo(f"No audio files found in {directory}")
-        return
-
-    if not quiet:
-        click.echo(f"Found {len(files)} audio files")
-
-    results = batch_detect(files, det, verbose=not quiet)
-
-    output_path = PathLib(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    total_detections = 0
-    for filepath, detections in results.items():
-        if detections:
-            if isinstance(detections[0], Detection):
-                output_file = output_path / f"{PathLib(filepath).stem}_detections.csv"
-                export_detections(detections, output_file, format="csv")
-                total_detections += len(detections)
-
+    batch_result = result.data
     click.echo("\nBatch detection complete:")
-    click.echo(f"  Files processed: {len(files)}")
-    click.echo(f"  Total detections: {total_detections}")
+    click.echo(f"  Files processed: {batch_result.total_files}")
+    click.echo(f"  Total detections: {batch_result.total_detections}")
     click.echo(f"  Output directory: {output_dir}")
