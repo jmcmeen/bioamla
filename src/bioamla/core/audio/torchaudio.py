@@ -11,6 +11,7 @@ bioamla package for preparing audio data for model training and inference.
 """
 
 import io
+from typing import Any
 
 import numpy as np
 import torch
@@ -21,7 +22,7 @@ from bioamla.core.ml.config import DefaultConfig
 from bioamla.core.utils import get_files_by_extension
 
 
-def get_wav_info(filepath: str) -> torchaudio.AudioMetaData:
+def get_wav_info(filepath: str) -> Any:
     """
     Get metadata information about a WAV audio file.
 
