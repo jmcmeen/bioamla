@@ -7,13 +7,13 @@ from bioamla.services.dependency import DependencyService
 
 
 @click.group()
-def config():
+def config() -> None:
     """Configuration management commands."""
     pass
 
 
 @config.command("show")
-def config_show():
+def config_show() -> None:
     """Show current configuration."""
     from bioamla.cli.progress import console
 
@@ -55,7 +55,7 @@ def config_show():
 @config.command("init")
 @click.option("--output", "-o", default="bioamla.toml", help="Output file path")
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing file")
-def config_init(output, force):
+def config_init(output: str, force: bool) -> None:
     """Create a default configuration file."""
     from bioamla.cli.progress import print_error, print_success
 
@@ -72,7 +72,7 @@ def config_init(output, force):
 
 
 @config.command("path")
-def config_path():
+def config_path() -> None:
     """Show configuration file search paths."""
     from pathlib import Path
 
@@ -119,7 +119,7 @@ def _format_size(size_bytes: int) -> str:
     "--all", "purge_all", is_flag=True, help="Purge all cached data (models and datasets)"
 )
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
-def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
+def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool) -> None:
     """Purge cached HuggingFace Hub data from local storage.
 
     Examples:
@@ -208,7 +208,7 @@ def config_purge(models: bool, datasets: bool, purge_all: bool, yes: bool):
 @config.command("deps")
 @click.option("--install", "do_install", is_flag=True, help="Install missing system dependencies")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
-def config_deps(do_install: bool, yes: bool):
+def config_deps(do_install: bool, yes: bool) -> None:
     """Check or install system dependencies (FFmpeg, libsndfile, PortAudio).
 
     These system libraries are required for full bioamla functionality:

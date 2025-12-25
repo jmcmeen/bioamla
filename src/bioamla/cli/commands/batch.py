@@ -4,13 +4,13 @@ import click
 
 
 @click.group()
-def batch():
+def batch() -> None:
     """Batch processing operations for multiple files."""
     pass
 
 
 @batch.group()
-def audio():
+def audio() -> None:
     """Batch audio processing operations."""
     pass
 
@@ -29,7 +29,7 @@ def audio():
 )
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_convert(input_dir, output_dir, sample_rate, channels, format, recursive, quiet):
+def audio_convert(input_dir: str, output_dir: str, sample_rate: int, channels: int, format: str, recursive: bool, quiet: bool) -> None:
     """Batch convert audio files in a directory."""
     from bioamla.services.batch import BatchService
 

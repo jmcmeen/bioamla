@@ -51,7 +51,7 @@ class ProgressBar:
         show_time: bool = True,
         transient: bool = False,
         disable: bool = False,
-    ):
+    ) -> None:
         """
         Initialize the progress bar.
 
@@ -188,7 +188,7 @@ def track(
 
 
 @contextmanager
-def status(message: str):
+def status(message: str) -> Iterator[None]:
     """
     Show a status spinner while performing an operation.
 
@@ -337,7 +337,7 @@ class BatchProcessor:
         description: str = "Processing",
         verbose: bool = True,
         stop_on_error: bool = False,
-    ):
+    ) -> None:
         """
         Initialize the batch processor.
 

@@ -22,8 +22,8 @@ from .commands import (
 
 @click.group()
 @click.version_option(version=__version__, prog_name="bioamla")
-def cli():
-    """BioAMLA - Bioacoustic & Machine Learning Applications 
+def cli() -> None:
+    """BioAMLA - Bioacoustic & Machine Learning Applications
 
     Use 'bioamla COMMAND --help' for more information on a command.
     """

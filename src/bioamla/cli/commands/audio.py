@@ -4,14 +4,14 @@ import click
 
 
 @click.group()
-def audio():
+def audio() -> None:
     """Audio file operations (info, convert, segment, visualize)."""
     pass
 
 
 @audio.command("info")
 @click.argument("path")
-def audio_info(path: str):
+def audio_info(path: str) -> None:
     """Display audio file information."""
     from bioamla.services.audio_file import AudioFileService
 
@@ -33,7 +33,7 @@ def audio_info(path: str):
 @audio.command("list")
 @click.argument("path")
 @click.option("--recursive/--no-recursive", "-r", default=True, help="Search subdirectories (default: recursive)")
-def audio_list(path: str, recursive: bool):
+def audio_list(path: str, recursive: bool) -> None:
     """List audio files in a directory."""
     from bioamla.services.audio_transform import AudioTransformService
 
@@ -66,7 +66,7 @@ def audio_list(path: str, recursive: bool):
     type=click.Choice(["wav", "mp3", "flac", "ogg"]),
     help="Output format",
 )
-def audio_convert(input_path : str, output_path : str, sample_rate : int, channels : int, bit_depth : int, format : str):
+def audio_convert(input_path: str, output_path: str, sample_rate: int, channels: int, bit_depth: int, format: str) -> None:
     """Convert audio file format or properties."""
     from bioamla.services.audio_file import AudioFileService
 
@@ -130,7 +130,7 @@ def audio_convert(input_path : str, output_path : str, sample_rate : int, channe
 @click.option(
     "--prefix", "-p", default=None, help="Prefix for output filenames (default: input filename)"
 )
-def audio_segment(input_path, output_dir, duration, overlap, format, prefix):
+def audio_segment(input_path: str, output_dir: str, duration: float, overlap: float, format: str, prefix: str) -> None:
     """Segment audio file into fixed-duration clips."""
     from bioamla.services.audio_transform import AudioTransformService
 
@@ -156,7 +156,7 @@ def audio_segment(input_path, output_dir, duration, overlap, format, prefix):
 @click.option("--start", "-s", default=0.0, type=float, help="Start time in seconds")
 @click.option("--end", "-e", default=None, type=float, help="End time in seconds")
 @click.option("--duration", "-d", default=None, type=float, help="Duration in seconds")
-def audio_trim(input_path, output_path, start, end, duration):
+def audio_trim(input_path: str, output_path: str, start: float, end: float, duration: float) -> None:
     """Trim audio file to specified time range."""
     from bioamla.services.audio_transform import AudioTransformService
 
@@ -188,7 +188,7 @@ def audio_trim(input_path, output_path, start, end, duration):
 @click.argument("output_path")
 @click.option("--target-db", "-t", default=-3.0, type=float, help="Target peak level in dB")
 @click.option("--method", "-m", type=click.Choice(["peak", "rms"]), default="peak", help="Method")
-def audio_normalize(input_path, output_path, target_db, method):
+def audio_normalize(input_path: str, output_path: str, target_db: float, method: str) -> None:
     """Normalize audio amplitude."""
     from bioamla.services.audio_transform import AudioTransformService
 
@@ -210,7 +210,7 @@ def audio_normalize(input_path, output_path, target_db, method):
 @click.argument("input_path")
 @click.argument("output_path")
 @click.option("--sample-rate", "-r", required=True, type=int, help="Target sample rate in Hz")
-def audio_resample(input_path, output_path, sample_rate):
+def audio_resample(input_path: str, output_path: str, sample_rate: int) -> None:
     """Resample audio to a different sample rate."""
     from bioamla.services.audio_transform import AudioTransformService
 
@@ -244,7 +244,7 @@ def audio_resample(input_path, output_path, sample_rate):
 @click.option("--cmap", default="viridis", help="Colormap name")
 @click.option("--dpi", default=100, type=int, help="Output DPI")
 @click.option("--batch", is_flag=True, help="Process directory of files")
-def audio_visualize(path, output, viz_type, n_fft, hop_length, n_mels, n_mfcc, cmap, dpi, batch):
+def audio_visualize(path: str, output: str, viz_type: str, n_fft: int, hop_length: int, n_mels: int, n_mfcc: int, cmap: str, dpi: int, batch: bool) -> None:
     """Generate audio visualization (spectrogram, waveform, MFCC)."""
     from pathlib import Path
 

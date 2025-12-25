@@ -7,7 +7,7 @@ from bioamla.services.file import FileService
 
 
 @click.group()
-def detect():
+def detect() -> None:
     """Advanced acoustic detection algorithms."""
     pass
 
@@ -26,7 +26,7 @@ def detect():
     default="table",
     help="Output format",
 )
-def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, output_format):
+def detect_energy(path: str, low_freq: float, high_freq: float, threshold: float, min_duration: float, output: str, output_format: str) -> None:
     """Detect sounds using band-limited energy detection."""
     import json as json_lib
     from pathlib import Path as PathLib
@@ -135,8 +135,8 @@ def detect_energy(path, low_freq, high_freq, threshold, min_duration, output, ou
     help="Output format",
 )
 def detect_ribbit(
-    path, pulse_rate, tolerance, low_freq, high_freq, window, min_score, output, output_format
-):
+    path: str, pulse_rate: float, tolerance: float, low_freq: float, high_freq: float, window: float, min_score: float, output: str, output_format: str
+) -> None:
     """Detect periodic calls using RIBBIT algorithm."""
     import json as json_lib
     from pathlib import Path as PathLib
@@ -241,8 +241,8 @@ def detect_ribbit(
     help="Output format",
 )
 def detect_peaks(
-    path, snr, min_distance, low_freq, high_freq, sequences, min_peaks, output, output_format
-):
+    path: str, snr: float, min_distance: float, low_freq: float, high_freq: float, sequences: bool, min_peaks: int, output: str, output_format: str
+) -> None:
     """Detect peaks using Continuous Wavelet Transform (CWT)."""
     import json as json_lib
     from pathlib import Path as PathLib
@@ -459,8 +459,8 @@ def detect_peaks(
     help="Output format",
 )
 def detect_accelerating(
-    path, min_pulses, acceleration, deceleration, low_freq, high_freq, window, output, output_format
-):
+    path: str, min_pulses: int, acceleration: float, deceleration: float, low_freq: float, high_freq: float, window: float, output: str, output_format: str
+) -> None:
     """Detect accelerating or decelerating call patterns."""
     import json as json_lib
     from pathlib import Path as PathLib
@@ -570,7 +570,7 @@ def detect_accelerating(
 @click.option("--low-freq", "-l", default=500.0, type=float, help="Low frequency bound (Hz)")
 @click.option("--high-freq", "-h", default=5000.0, type=float, help="High frequency bound (Hz)")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def detect_batch(directory, detector, output_dir, low_freq, high_freq, quiet):
+def detect_batch(directory: str, detector: str, output_dir: str, low_freq: float, high_freq: float, quiet: bool) -> None:
     """Run detection on all audio files in a directory."""
     service = DetectionService()
 

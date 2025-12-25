@@ -11,26 +11,26 @@ from bioamla.services.file import FileService
 
 
 @click.group()
-def models():
+def models() -> None:
     """ML model operations (predict, embed, train, convert)."""
     pass
 
 
 # Subgroups for models
 @models.group()
-def predict():
+def predict() -> None:
     """Run inference with ML models."""
     pass
 
 
 @models.group()
-def train():
+def train() -> None:
     """Train ML models."""
     pass
 
 
 @models.group()
-def evaluate():
+def evaluate() -> None:
     """Evaluate ML models."""
     pass
 
@@ -100,7 +100,7 @@ def ast_predict(
     fp16: bool,
     compile: bool,
     workers: int,
-):
+) -> None:
     """
     Perform prediction on audio file(s).
 
@@ -155,7 +155,7 @@ def _run_batch_inference(
     fp16: bool,
     compile: bool,
     workers: int,
-):
+) -> None:
     """Run batch inference on a directory of audio files."""
     import os
 
@@ -289,7 +289,7 @@ def ast_train(
     mlflow_tracking_uri: str,
     mlflow_experiment_name: str,
     mlflow_run_name: str,
-):
+) -> None:
     """Fine-tune an AST model on a custom dataset."""
     import evaluate
     import numpy as np
@@ -644,7 +644,7 @@ def ast_evaluate(
     batch_size: int,
     fp16: bool,
     quiet: bool,
-):
+) -> None:
     """Evaluate an AST model on a directory of audio files."""
     from pathlib import Path as PathLib
 
@@ -694,7 +694,7 @@ def ast_evaluate(
 
 
 @models.command("list")
-def models_list():
+def models_list() -> None:
     """List available model types."""
     click.echo("Available model types:")
     click.echo("  - ast (Audio Spectrogram Transformer)")
@@ -722,20 +722,20 @@ def models_list():
 @click.option("--fp16/--no-fp16", default=False, help="Use half-precision inference")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
 def predict_generic(
-    path,
-    model_type,
-    model_path,
-    output,
-    batch,
-    min_confidence,
-    top_k,
-    clip_duration,
-    overlap,
-    sample_rate,
-    batch_size,
-    fp16,
-    quiet,
-):
+    path: str,
+    model_type: str,
+    model_path: str,
+    output: str,
+    batch: bool,
+    min_confidence: float,
+    top_k: int,
+    clip_duration: float,
+    overlap: float,
+    sample_rate: int,
+    batch_size: int,
+    fp16: bool,
+    quiet: bool,
+) -> None:
     """Run predictions using an ML model (multi-model interface)."""
     from pathlib import Path as PathLib
 
@@ -833,7 +833,7 @@ def predict_generic(
 @click.option("--layer", default=None, help="Layer to extract embeddings from")
 @click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
-def models_embed(path, model_type, model_path, output, batch, layer, sample_rate, quiet):
+def models_embed(path: str, model_type: str, model_path: str, output: str, batch: bool, layer: str, sample_rate: int, quiet: bool) -> None:
     """Extract embeddings from audio using an ML model."""
     from pathlib import Path as PathLib
 
@@ -952,7 +952,7 @@ def train_cnn(
     lr: float,
     n_classes: int,
     quiet: bool,
-):
+) -> None:
     """Train a CNN-based spectrogram classifier."""
     click.echo(f"Training {model.upper()} classifier with {n_classes} classes...")
     click.echo(f"  Data: {data_dir}")
@@ -985,7 +985,7 @@ def train_spec(
     lr: float,
     n_classes: int,
     quiet: bool,
-):
+) -> None:
     """Train a spectrogram classifier (CNN/CRNN/Attention)."""
     if not quiet:
         click.echo(f"Training {model.upper()} classifier with {n_classes} classes...")
@@ -1011,7 +1011,7 @@ def train_spec(
     default="ast",
     help="Model type",
 )
-def models_convert(input_path, output_path, output_format, model_type):
+def models_convert(input_path: str, output_path: str, output_format: str, model_type: str) -> None:
     """Convert model between formats (PyTorch to ONNX)."""
     click.echo(f"Loading model from {input_path}...")
 
@@ -1041,7 +1041,7 @@ def models_convert(input_path, output_path, output_format, model_type):
     default="ast",
     help="Model type",
 )
-def models_info(model_path, model_type):
+def models_info(model_path: str, model_type: str) -> None:
     """Display information about a model."""
     # Select the appropriate service based on model type
     if model_type == "ast":
@@ -1078,7 +1078,7 @@ def models_info(model_path, model_type):
     help="Ensemble combination strategy",
 )
 @click.option("--weights", "-w", multiple=True, type=float, help="Model weights")
-def models_ensemble(model_dirs, output: str, strategy: str, weights):
+def models_ensemble(model_dirs: tuple[str, ...], output: str, strategy: str, weights: tuple[float, ...]) -> None:
     """Create an ensemble from multiple trained models."""
     click.echo(f"Creating {strategy} ensemble from {len(model_dirs)} models...")
 

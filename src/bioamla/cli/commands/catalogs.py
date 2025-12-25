@@ -21,7 +21,7 @@ from bioamla.services.xeno_canto import XenoCantoService
 
 
 @click.group()
-def catalogs():
+def catalogs() -> None:
     """Access bioacoustic data catalogs and external services."""
     pass
 
@@ -32,7 +32,7 @@ def catalogs():
 
 
 @catalogs.group("inat")
-def catalogs_inat():
+def catalogs_inat() -> None:
     """iNaturalist observation database."""
     pass
 
@@ -59,7 +59,7 @@ def inat_search(
     limit: int,
     output: str,
     quiet: bool,
-):
+) -> None:
     """Search for iNaturalist observations."""
     if not species and not taxon_id and not place_id and not project_id:
         raise click.UsageError(
@@ -136,7 +136,7 @@ def inat_search(
 @click.argument("project_id")
 @click.option("--output", "-o", default=None, help="Output file path for JSON (optional)")
 @click.option("--quiet", is_flag=True, help="Suppress progress output, print only JSON")
-def inat_stats(project_id: str, output: str, quiet: bool):
+def inat_stats(project_id: str, output: str, quiet: bool) -> None:
     """Get statistics for an iNaturalist project."""
     import json
 
@@ -192,7 +192,7 @@ def inat_download(
     quality_grade: str,
     obs_per_taxon: int,
     quiet: bool,
-):
+) -> None:
     """Download audio observations from iNaturalist."""
     # Parse taxon IDs
     taxon_id_list = None
@@ -233,7 +233,7 @@ def inat_download(
 
 
 @catalogs.group("hf")
-def catalogs_hf():
+def catalogs_hf() -> None:
     """HuggingFace Hub model and dataset management."""
     pass
 
@@ -245,7 +245,7 @@ def catalogs_hf():
     "--private/--public", default=False, help="Make the repository private (default: public)"
 )
 @click.option("--commit-message", default=None, help="Custom commit message for the push")
-def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str):
+def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str) -> None:
     """Push a model folder to the HuggingFace Hub."""
     click.echo(f"Pushing model folder {path} to HuggingFace Hub: {repo_id}...")
 
@@ -267,7 +267,7 @@ def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str):
     "--private/--public", default=False, help="Make the repository private (default: public)"
 )
 @click.option("--commit-message", default=None, help="Custom commit message for the push")
-def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str):
+def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str) -> None:
     """Push a dataset folder to the HuggingFace Hub."""
     click.echo(f"Pushing dataset folder {path} to HuggingFace Hub: {repo_id}...")
 
@@ -288,7 +288,7 @@ def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str)
 
 
 @catalogs.group("xc")
-def catalogs_xc():
+def catalogs_xc() -> None:
     """Xeno-canto bird recording database."""
     pass
 
@@ -307,7 +307,7 @@ def catalogs_xc():
     default="table",
     help="Output format",
 )
-def xc_search(species, genus, country, quality, sound_type, max_results, output_format):
+def xc_search(species: str, genus: str, country: str, quality: str, sound_type: str, max_results: int, output_format: str) -> None:
     """Search Xeno-canto for bird recordings."""
     import json as json_lib
 
@@ -359,7 +359,7 @@ def xc_search(species, genus, country, quality, sound_type, max_results, output_
 @click.option("--max-recordings", "-n", default=10, type=int, help="Maximum recordings to download")
 @click.option("--output-dir", "-o", default="./xc_recordings", help="Output directory")
 @click.option("--delay", default=1.0, type=float, help="Delay between downloads in seconds")
-def xc_download(species, genus, country, quality, max_recordings, output_dir, delay):
+def xc_download(species: str, genus: str, country: str, quality: str, max_recordings: int, output_dir: str, delay: float) -> None:
     """Download recordings from Xeno-canto."""
     click.echo("Searching Xeno-canto...")
 
@@ -392,7 +392,7 @@ def xc_download(species, genus, country, quality, max_recordings, output_dir, de
 
 
 @catalogs.group("ml")
-def catalogs_ml():
+def catalogs_ml() -> None:
     """Macaulay Library audio recordings database.
 
     Use 'catalogs ebird species' or 'catalogs ebird search' to look up species codes.
@@ -418,17 +418,17 @@ def catalogs_ml():
     help="Output format",
 )
 def ml_search(
-    species_code,
-    scientific_name,
-    common_name,
-    region,
-    country,
-    taxon_code,
-    hotspot_code,
-    min_rating,
-    max_results,
-    output_format,
-):
+    species_code: str,
+    scientific_name: str,
+    common_name: str,
+    region: str,
+    country: str,
+    taxon_code: str,
+    hotspot_code: str,
+    min_rating: int,
+    max_results: int,
+    output_format: str,
+) -> None:
     """Search Macaulay Library for audio recordings.
 
     Requires at least one filter: species-code, scientific-name, common-name,
@@ -484,17 +484,17 @@ def ml_search(
 @click.option("--max-recordings", "-n", default=10, type=int, help="Maximum recordings to download")
 @click.option("--output-dir", "-o", default="./ml_recordings", help="Output directory")
 def ml_download(
-    species_code,
-    scientific_name,
-    common_name,
-    region,
-    country,
-    taxon_code,
-    hotspot_code,
-    min_rating,
-    max_recordings,
-    output_dir,
-):
+    species_code: str,
+    scientific_name: str,
+    common_name: str,
+    region: str,
+    country: str,
+    taxon_code: str,
+    hotspot_code: str,
+    min_rating: int,
+    max_recordings: int,
+    output_dir: str,
+) -> None:
     """Download recordings from Macaulay Library.
 
     Requires at least one filter: species-code, scientific-name, common-name,
@@ -536,14 +536,14 @@ def ml_download(
 
 
 @catalogs.group("ebird")
-def catalogs_ebird():
+def catalogs_ebird() -> None:
     """eBird bird observation data and taxonomy."""
     pass
 
 
 @catalogs_ebird.command("species")
 @click.argument("name")
-def ebird_species(name: str):
+def ebird_species(name: str) -> None:
     """Look up species in eBird taxonomy.
 
     NAME can be a common name, scientific name, or species code.
@@ -566,7 +566,7 @@ def ebird_species(name: str):
 @catalogs_ebird.command("search")
 @click.argument("query")
 @click.option("--limit", "-n", default=10, type=int, help="Maximum results")
-def ebird_search(query: str, limit: int):
+def ebird_search(query: str, limit: int) -> None:
     """Fuzzy search eBird taxonomy for species."""
     service = SpeciesService()
     result = service.search(query, limit=limit)
@@ -593,7 +593,7 @@ def ebird_search(query: str, limit: int):
 @click.option("--lng", type=float, required=True, help="Longitude")
 @click.option("--api-key", envvar="EBIRD_API_KEY", required=True, help="eBird API key (or set EBIRD_API_KEY)")
 @click.option("--distance", type=float, default=50, help="Search radius in km")
-def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, distance: float):
+def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, distance: float) -> None:
     """Validate if a species is expected at a location."""
     service = EBirdService(api_key=api_key)
     result = service.validate_species(
@@ -628,7 +628,7 @@ def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, dist
 @click.option("--output", "-o", help="Output CSV file")
 def ebird_nearby(
     lat: float, lng: float, api_key: str, distance: float, days: int, limit: int, output: str
-):
+) -> None:
     """Get recent eBird observations near a location."""
     from pathlib import Path
 
