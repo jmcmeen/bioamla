@@ -44,6 +44,7 @@ dependencies = [
 
 [project.scripts]
 bioamla = "bioamla.cli:cli"
+magpy-lite = "bioamla.tui:main"
 
 [project.optional-dependencies]
 dev = [
