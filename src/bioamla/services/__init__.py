@@ -47,6 +47,8 @@ Usage:
     result = transform_svc.resample_batch("input_dir", "output_dir", 16000)
 """
 
+from bioamla.models.ribbit import BatchDetectionSummary, DetectionSummary
+
 from .annotation import AnnotationResult, AnnotationService, ClipExtractionResult
 from .ast import ASTService
 from .audio_file import AudioData, AudioFileService
@@ -58,13 +60,12 @@ from .audio_transform import (
     ProcessedAudio,
 )
 from .base import BaseService, ServiceResult
-from .batch_base import BatchServiceBase
 from .batch_audio_transform import BatchAudioTransformService
+from .batch_base import BatchServiceBase
 from .batch_clustering import BatchClusteringService
 from .batch_detection import BatchDetectionService
 from .batch_indices import BatchIndicesService
 from .batch_inference import BatchInferenceService
-from .factory import ServiceFactory
 from .birdnet import BirdNETService
 from .clustering import ClusteringService
 from .cnn import CNNService
@@ -74,6 +75,7 @@ from .dependency import DependencyInfo, DependencyReport, DependencyService
 from .detection import BatchDetectionResult, DetectionInfo, DetectionResult, DetectionService
 from .ebird import EBirdService
 from .embedding import EmbeddingService
+from .factory import ServiceFactory
 
 # New services for CLI layer separation
 from .file import FileService
@@ -96,7 +98,6 @@ from .indices import BatchIndicesResult, IndicesResult, IndicesService
 from .inference import InferenceService
 from .macaulay import MacaulayService
 from .ribbit import RibbitService
-from bioamla.models.ribbit import BatchDetectionSummary, DetectionSummary
 from .species import SpeciesService
 
 # Catalog services

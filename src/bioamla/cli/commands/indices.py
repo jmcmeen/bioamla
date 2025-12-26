@@ -63,7 +63,7 @@ def indices_compute(
     output_dict.update(indices_result.to_dict())
 
     if output:
-        services.file.write_csv_dicts(output, [output_dict], fieldnames=list(output_dict.keys()))
+        services.file.write_json(output, output_dict)
         click.echo(f"Results saved to {output}")
     elif output_format == "json":
         click.echo(json_lib.dumps(output_dict, indent=2))
@@ -76,14 +76,14 @@ def indices_compute(
         writer.writerow(output_dict)
     else:
         click.echo(f"\n{file}:")
-        click.echo(f"  ACI:  {indices_result.aci:.2f}")
-        click.echo(f"  ADI:  {indices_result.adi:.3f}")
-        click.echo(f"  AEI:  {indices_result.aei:.3f}")
-        click.echo(f"  BIO:  {indices_result.bio:.2f}")
-        click.echo(f"  NDSI: {indices_result.ndsi:.3f}")
-        if hasattr(indices_result, "h_spectral") and indices_result.h_spectral is not None:
+        click.echo(f"  ACI:  {indices_result.indices.aci:.2f}")
+        click.echo(f"  ADI:  {indices_result.indices.adi:.3f}")
+        click.echo(f"  AEI:  {indices_result.indices.aei:.3f}")
+        click.echo(f"  BIO:  {indices_result.indices.bio:.2f}")
+        click.echo(f"  NDSI: {indices_result.indices.ndsi:.3f}")
+        if indices_result.h_spectral is not None:
             click.echo(f"  H (spectral): {indices_result.h_spectral:.3f}")
-        if hasattr(indices_result, "h_temporal") and indices_result.h_temporal is not None:
+        if indices_result.h_temporal is not None:
             click.echo(f"  H (temporal): {indices_result.h_temporal:.3f}")
 
 
@@ -107,34 +107,32 @@ def indices_temporal(file: str, segment_duration: float, output: str, n_fft: int
 
     if output:
         rows = []
-        for i, segment_indices in enumerate(temporal_result.segments):
+        for i, window_indices in enumerate(temporal_result.windows):
             row = {
                 "segment": i,
                 "start_time": i * segment_duration,
-                "aci": segment_indices.aci,
-                "adi": segment_indices.adi,
-                "aei": segment_indices.aei,
-                "bio": segment_indices.bio,
-                "ndsi": segment_indices.ndsi,
+                "aci": window_indices["aci"],
+                "adi": window_indices["adi"],
+                "aei": window_indices["aei"],
+                "bio": window_indices["bio"],
+                "ndsi": window_indices["ndsi"],
             }
             rows.append(row)
-        services.file.write_csv_dicts(
-            output, rows, fieldnames=["segment", "start_time", "aci", "adi", "aei", "bio", "ndsi"]
-        )
+        services.file.write_json(output, rows)
         click.echo(f"Temporal indices saved to {output}")
     else:
         click.echo(f"\n{file} - Temporal indices ({segment_duration}s segments):")
-        for i, segment_indices in enumerate(temporal_result.segments[:10]):
+        for i, window_indices in enumerate(temporal_result.windows[:10]):
             start_time = i * segment_duration
             click.echo(
                 f"  Segment {i} ({start_time:.1f}s): "
-                f"ACI={segment_indices.aci:.2f}, ADI={segment_indices.adi:.3f}, "
-                f"AEI={segment_indices.aei:.3f}, BIO={segment_indices.bio:.2f}, "
-                f"NDSI={segment_indices.ndsi:.3f}"
+                f"ACI={window_indices['aci']:.2f}, ADI={window_indices['adi']:.3f}, "
+                f"AEI={window_indices['aei']:.3f}, BIO={window_indices['bio']:.2f}, "
+                f"NDSI={window_indices['ndsi']:.3f}"
             )
-        if len(temporal_result.segments) > 10:
-            click.echo(f"  ... and {len(temporal_result.segments) - 10} more segments")
-        click.echo(f"\nTotal segments: {len(temporal_result.segments)}")
+        if len(temporal_result.windows) > 10:
+            click.echo(f"  ... and {len(temporal_result.windows) - 10} more segments")
+        click.echo(f"\nTotal segments: {len(temporal_result.windows)}")
 
 
 # Individual index commands for convenience
@@ -152,7 +150,7 @@ def indices_aci(file: str, min_freq: float, max_freq: float, n_fft: int) -> None
         audio_data, n_fft=n_fft, aci_min_freq=min_freq, aci_max_freq=max_freq
     )
     indices_result = handle_result(result)
-    click.echo(f"ACI: {indices_result.aci:.2f}")
+    click.echo(f"ACI: {indices_result.indices.aci:.2f}")
 
 
 @indices.command("adi")
@@ -166,7 +164,7 @@ def indices_adi(file: str, db_threshold: float, n_fft: int) -> None:
     audio_data = handle_result(services.audio_file.open(file))
     result = services.indices.calculate(audio_data, n_fft=n_fft, db_threshold=db_threshold)
     indices_result = handle_result(result)
-    click.echo(f"ADI: {indices_result.adi:.3f}")
+    click.echo(f"ADI: {indices_result.indices.adi:.3f}")
 
 
 @indices.command("aei")
@@ -180,7 +178,7 @@ def indices_aei(file: str, db_threshold: float, n_fft: int) -> None:
     audio_data = handle_result(services.audio_file.open(file))
     result = services.indices.calculate(audio_data, n_fft=n_fft, db_threshold=db_threshold)
     indices_result = handle_result(result)
-    click.echo(f"AEI: {indices_result.aei:.3f}")
+    click.echo(f"AEI: {indices_result.indices.aei:.3f}")
 
 
 @indices.command("bio")
@@ -197,7 +195,7 @@ def indices_bio(file: str, min_freq: float, max_freq: float, n_fft: int) -> None
         audio_data, n_fft=n_fft, bio_min_freq=min_freq, bio_max_freq=max_freq
     )
     indices_result = handle_result(result)
-    click.echo(f"BIO: {indices_result.bio:.2f}")
+    click.echo(f"BIO: {indices_result.indices.bio:.2f}")
 
 
 @indices.command("ndsi")
@@ -210,7 +208,7 @@ def indices_ndsi(file: str, n_fft: int) -> None:
     audio_data = handle_result(services.audio_file.open(file))
     result = services.indices.calculate(audio_data, n_fft=n_fft)
     indices_result = handle_result(result)
-    click.echo(f"NDSI: {indices_result.ndsi:.3f}")
+    click.echo(f"NDSI: {indices_result.indices.ndsi:.3f}")
 
 
 @indices.command("entropy")
