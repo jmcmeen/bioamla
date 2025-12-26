@@ -6,8 +6,6 @@ Service for configuration management operations.
 from pathlib import Path
 from typing import Any, List, Optional
 
-from bioamla.models.config import ConfigInfo
-
 from .base import BaseService, ServiceResult
 
 

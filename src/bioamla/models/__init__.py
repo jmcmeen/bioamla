@@ -11,7 +11,11 @@ from bioamla.models.annotation import (
 # AST models
 from bioamla.models.ast import (
     EvaluationResult as ASTEvaluationResult,
+)
+from bioamla.models.ast import (
     PredictionResult as ASTPredictionResult,
+)
+from bioamla.models.ast import (
     TrainResult as ASTTrainResult,
 )
 
@@ -45,7 +49,11 @@ from bioamla.models.clustering import (
 # CNN models
 from bioamla.models.cnn import (
     EvaluationResult as CNNEvaluationResult,
+)
+from bioamla.models.cnn import (
     PredictionResult as CNNPredictionResult,
+)
+from bioamla.models.cnn import (
     TrainResult as CNNTrainResult,
 )
 
@@ -78,7 +86,11 @@ from bioamla.models.detection import (
 # eBird models
 from bioamla.models.ebird import (
     EBirdObservation,
+)
+from bioamla.models.ebird import (
     NearbyResult as EBirdNearbyResult,
+)
+from bioamla.models.ebird import (
     ValidationResult as EBirdValidationResult,
 )
 
@@ -120,7 +132,11 @@ from bioamla.models.inference import (
 # Macaulay models
 from bioamla.models.macaulay import (
     DownloadResult as MacaulayDownloadResult,
+)
+from bioamla.models.macaulay import (
     MLRecording,
+)
+from bioamla.models.macaulay import (
     SearchResult as MacaulaySearchResult,
 )
 
@@ -146,7 +162,11 @@ from bioamla.models.util import (
 # Xeno-canto models
 from bioamla.models.xeno_canto import (
     DownloadResult as XenoCantoDownloadResult,
+)
+from bioamla.models.xeno_canto import (
     SearchResult as XenoCantoSearchResult,
+)
+from bioamla.models.xeno_canto import (
     XCRecording,
 )
 

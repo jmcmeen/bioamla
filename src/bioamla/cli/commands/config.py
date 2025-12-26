@@ -5,8 +5,65 @@ import click
 
 @click.group()
 def config() -> None:
-    """Configuration management commands."""
+    """Configuration and system information commands."""
     pass
+
+
+@config.command("version")
+def config_version() -> None:
+    """Show bioamla version and environment information."""
+    from bioamla.cli.progress import console
+    from bioamla.cli.service_helpers import handle_result, services
+
+    version_data = handle_result(services.util.get_version())
+
+    console.print("\n[bold]BioAMLA Version Information[/bold]\n")
+    console.print(f"  bioamla:  {version_data.bioamla_version}")
+    console.print(f"  Python:   {version_data.python_version.split()[0]}")
+    console.print(f"  Platform: {version_data.platform}")
+
+    if version_data.pytorch_version:
+        console.print(f"  PyTorch:  {version_data.pytorch_version}")
+    if version_data.cuda_version:
+        console.print(f"  CUDA:     {version_data.cuda_version}")
+
+    console.print()
+
+
+@config.command("devices")
+def config_devices() -> None:
+    """Show available compute devices (GPU, MPS, CPU)."""
+    from bioamla.cli.progress import console
+    from bioamla.cli.service_helpers import handle_result, services
+
+    devices_data = handle_result(services.util.get_device_info())
+
+    console.print("\n[bold]Available Compute Devices[/bold]\n")
+
+    for device in devices_data.devices:
+        if device.device_type == "cuda":
+            memory_str = f" ({device.memory_gb} GB)" if device.memory_gb else ""
+            console.print(f"  [green]✓[/green] {device.name}{memory_str}")
+            console.print(f"    [dim]Device ID: {device.device_id}[/dim]")
+        elif device.device_type == "mps":
+            console.print(f"  [green]✓[/green] {device.name}")
+            console.print(f"    [dim]Device ID: {device.device_id}[/dim]")
+        else:
+            console.print(f"  [dim]• {device.name}[/dim]")
+            console.print(f"    [dim]Device ID: {device.device_id}[/dim]")
+
+    console.print()
+
+    # Summary
+    if devices_data.cuda_available:
+        cuda_count = sum(1 for d in devices_data.devices if d.device_type == "cuda")
+        console.print(f"[green]CUDA available[/green] ({cuda_count} GPU{'s' if cuda_count > 1 else ''})")
+    elif devices_data.mps_available:
+        console.print("[green]Apple MPS available[/green]")
+    else:
+        console.print("[yellow]No GPU acceleration available - using CPU[/yellow]")
+
+    console.print()
 
 
 @config.command("show")

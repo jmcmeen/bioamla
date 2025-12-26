@@ -60,6 +60,7 @@ from .inference import InferenceService
 from .macaulay import MacaulayService
 from .ribbit import RibbitService
 from .species import SpeciesService
+from .util import UtilityService
 from .xeno_canto import XenoCantoService
 
 
@@ -179,6 +180,10 @@ class ServiceFactory:
     def create_dependency_service(self) -> DependencyService:
         """Create DependencyService (system checker, no file repository)."""
         return DependencyService()
+
+    def create_utility_service(self) -> UtilityService:
+        """Create UtilityService (system info, no file repository)."""
+        return UtilityService()
 
     # ========================================================================
     # Batch Services (File-Based)
@@ -317,6 +322,11 @@ class ServiceFactory:
     def dependency(self) -> DependencyService:
         """Convenience property for create_dependency_service()."""
         return self.create_dependency_service()
+
+    @property
+    def util(self) -> UtilityService:
+        """Convenience property for create_utility_service()."""
+        return self.create_utility_service()
 
     @property
     def batch_audio_transform(self) -> BatchAudioTransformService:
