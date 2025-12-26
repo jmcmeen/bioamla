@@ -31,7 +31,6 @@ def audio() -> None:
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_convert(input_dir: str, output_dir: str, sample_rate: int, channels: int, format: str, recursive: bool, quiet: bool) -> None:
     """Batch convert audio files in a directory."""
-    from bioamla.repository.local import LocalFileRepository
     from bioamla.services.batch import BatchService
 
     if not quiet:
@@ -75,9 +74,30 @@ def audio_convert(input_dir: str, output_dir: str, sample_rate: int, channels: i
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_resample(input_dir: str, output_dir: str, sample_rate: int, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch resample audio files to a target sample rate."""
-    # TODO: Implement using BatchAudioTransformService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Resampling audio files from {input_dir} to {output_dir}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    result = services.batch_audio_transform.resample_batch(config, target_sr=sample_rate)
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @audio.command("normalize")
@@ -90,9 +110,30 @@ def audio_resample(input_dir: str, output_dir: str, sample_rate: int, max_worker
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_normalize(input_dir: str, output_dir: str, target_db: float, peak: bool, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch normalize audio levels."""
-    # TODO: Implement using BatchAudioTransformService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Normalizing audio files from {input_dir} to {output_dir}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    result = services.batch_audio_transform.normalize_batch(config, target_db=target_db, peak=peak)
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @audio.command("segment")
@@ -105,9 +146,30 @@ def audio_normalize(input_dir: str, output_dir: str, target_db: float, peak: boo
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_segment(input_dir: str, output_dir: str, duration: float, overlap: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch segment audio files into fixed-duration chunks."""
-    # TODO: Implement using BatchAudioTransformService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Segmenting audio files from {input_dir} to {output_dir}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    result = services.batch_audio_transform.segment_batch(config, segment_duration=duration, overlap=overlap)
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @audio.command("visualize")
@@ -119,9 +181,30 @@ def audio_segment(input_dir: str, output_dir: str, duration: float, overlap: flo
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_visualize(input_dir: str, output_dir: str, plot_type: str, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch generate audio visualizations."""
-    # TODO: Implement using BatchAudioTransformService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Generating {plot_type} visualizations from {input_dir} to {output_dir}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    result = services.batch_audio_transform.visualize_batch(config, plot_type=plot_type)
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 # ==============================================================================
@@ -147,9 +230,37 @@ def detect() -> None:
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_energy(input_dir: str, output_dir: str, low_freq: float, high_freq: float, threshold_db: float, min_duration: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch detect sounds using band-limited energy detection."""
-    # TODO: Implement using BatchDetectionService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Detecting energy from {input_dir}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    result = services.batch_detection.detect_energy_batch(
+        config,
+        low_freq=low_freq,
+        high_freq=high_freq,
+        threshold_db=threshold_db,
+        min_duration=min_duration,
+    )
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        click.echo(f"Results saved to {output_dir}/detections.json")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @detect.command("ribbit")
@@ -166,9 +277,39 @@ def detect_energy(input_dir: str, output_dir: str, low_freq: float, high_freq: f
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_ribbit(input_dir: str, output_dir: str, pulse_rate: float, pulse_tolerance: float, low_freq: float, high_freq: float, window_duration: float, min_score: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch detect periodic calls using RIBBIT algorithm."""
-    # TODO: Implement using BatchDetectionService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Detecting RIBBIT calls from {input_dir}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    result = services.batch_detection.detect_ribbit_batch(
+        config,
+        pulse_rate_hz=pulse_rate,
+        pulse_rate_tolerance=pulse_tolerance,
+        low_freq=low_freq,
+        high_freq=high_freq,
+        window_duration=window_duration,
+        min_score=min_score,
+    )
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        click.echo(f"Results saved to {output_dir}/detections.json")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @detect.command("peaks")
@@ -183,9 +324,37 @@ def detect_ribbit(input_dir: str, output_dir: str, pulse_rate: float, pulse_tole
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_peaks(input_dir: str, output_dir: str, snr_threshold: float, min_peak_distance: float, low_freq: float, high_freq: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch detect peaks using Continuous Wavelet Transform."""
-    # TODO: Implement using BatchDetectionService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Detecting peaks from {input_dir}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    result = services.batch_detection.detect_peaks_batch(
+        config,
+        snr_threshold=snr_threshold,
+        min_peak_distance=min_peak_distance,
+        low_freq=low_freq,
+        high_freq=high_freq,
+    )
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        click.echo(f"Results saved to {output_dir}/detections.json")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @detect.command("accelerating")
@@ -202,9 +371,39 @@ def detect_peaks(input_dir: str, output_dir: str, snr_threshold: float, min_peak
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_accelerating(input_dir: str, output_dir: str, min_pulses: int, accel_threshold: float, decel_threshold: float, low_freq: float, high_freq: float, window_duration: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch detect accelerating or decelerating call patterns."""
-    # TODO: Implement using BatchDetectionService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Detecting accelerating patterns from {input_dir}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    result = services.batch_detection.detect_accelerating_batch(
+        config,
+        min_pulses=min_pulses,
+        acceleration_threshold=accel_threshold,
+        deceleration_threshold=decel_threshold,
+        low_freq=low_freq,
+        high_freq=high_freq,
+        window_duration=window_duration,
+    )
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        click.echo(f"Results saved to {output_dir}/detections.json")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 # ==============================================================================
@@ -227,9 +426,34 @@ def indices() -> None:
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def indices_calculate(input_dir: str, output_dir: str, indices: str, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch calculate acoustic indices for audio files."""
-    # TODO: Implement using BatchIndicesService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Calculating acoustic indices from {input_dir}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    # Parse indices list
+    indices_list = [idx.strip() for idx in indices.split(",")]
+
+    result = services.batch_indices.calculate_batch(config, indices=indices_list)
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        click.echo(f"Results saved to {output_dir}/indices.csv")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 # ==============================================================================
@@ -254,9 +478,36 @@ def models() -> None:
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def models_predict(input_dir: str, output_dir: str, model: str, top_k: int, min_confidence: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch run model predictions on audio files."""
-    # TODO: Implement using BatchInferenceService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Running AST predictions on {input_dir} with model {model}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    result = services.batch_inference.predict_batch(
+        config,
+        model_path=model,
+        top_k=top_k,
+        min_confidence=min_confidence,
+    )
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        click.echo(f"Results saved to {output_dir}/predictions.json")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @models.command("embed")
@@ -268,9 +519,31 @@ def models_predict(input_dir: str, output_dir: str, model: str, top_k: int, min_
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def models_embed(input_dir: str, output_dir: str, model: str, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch extract embeddings from audio files."""
-    # TODO: Implement using BatchInferenceService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Extracting AST embeddings from {input_dir} with model {model}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    result = services.batch_inference.embed_batch(config, model_path=model)
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        click.echo(f"Embeddings saved to {output_dir}/")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 # ==============================================================================
@@ -289,6 +562,34 @@ def models_embed(input_dir: str, output_dir: str, model: str, max_workers: int, 
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def cluster_batch(input_dir: str, output_dir: str, method: str, n_clusters: int, min_cluster_size: int, min_samples: int, recursive: bool, quiet: bool) -> None:
     """Batch cluster embeddings from files."""
-    # TODO: Implement using BatchClusteringService
-    click.echo("Not yet implemented")
-    raise SystemExit(1)
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Clustering embeddings from {input_dir} using {method}...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=1,  # Clustering is not parallelized
+        quiet=quiet,
+    )
+
+    result = services.batch_clustering.cluster_batch(
+        config,
+        method=method,
+        n_clusters=n_clusters,
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+    )
+    batch_result = handle_result(result)
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        click.echo(f"Cluster results saved to {output_dir}/clusters.json")
+        if batch_result.errors:
+            for error in batch_result.errors[:5]:
+                click.echo(f"  Error: {error}")
+            if len(batch_result.errors) > 5:
+                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")

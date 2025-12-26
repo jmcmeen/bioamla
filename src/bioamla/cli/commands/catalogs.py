@@ -603,7 +603,7 @@ def ebird_nearby(
         click.echo(f"  ... and {len(observations) - 10} more")
 
     if output:
-        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        services.file.ensure_directory(Path(output).parent)
         fieldnames = [
             "species_code",
             "common_name",
