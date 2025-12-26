@@ -566,7 +566,6 @@ def models_embed(
     file: str, model_path: str, output: str, layer: str, sample_rate: int
 ) -> None:
     """Extract embeddings from audio using AST model (single file)."""
-    import numpy as np
 
     from bioamla.cli.service_helpers import handle_result, services
 
