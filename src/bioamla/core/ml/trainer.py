@@ -225,7 +225,7 @@ class ModelTrainer:
         >>> model = trainer.train()
     """
 
-    def __init__(self, config: TrainingConfig):
+    def __init__(self, config: TrainingConfig) -> None:
         """
         Initialize trainer.
 

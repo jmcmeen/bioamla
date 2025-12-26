@@ -42,7 +42,7 @@ class ASTModel(BaseAudioModel):
         >>> results = model.predict("audio.wav")
     """
 
-    def __init__(self, config: Optional[ModelConfig] = None):
+    def __init__(self, config: Optional[ModelConfig] = None) -> None:
         """Initialize AST model."""
         super().__init__(config)
         self.feature_extractor: Optional[ASTFeatureExtractor] = None

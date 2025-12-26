@@ -167,7 +167,7 @@ class EmbeddingExtractor:
         self._model = None
         self._reducer = None
 
-    def _get_model(self):
+    def _get_model(self) -> Any:
         """Lazy load the model."""
         if self._model is not None:
             return self._model
@@ -220,7 +220,7 @@ class EmbeddingExtractor:
         if self._reducer is not None or self.config.reduce_method is None:
             return self._reducer
 
-        from bioamla.core.analysis.clustering import IncrementalReducer
+        from bioamla.core.audio.clustering import IncrementalReducer
 
         self._reducer = IncrementalReducer(
             method=self.config.reduce_method,
