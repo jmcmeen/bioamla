@@ -77,13 +77,6 @@ The bioamla CLI is organized into the following command groups:
 - ``bioamla cluster cluster`` - Cluster embeddings
 - ``bioamla cluster novelty`` - Detect novel sounds
 
-**learn** - Active learning:
-
-- ``bioamla learn init`` - Initialize active learning
-- ``bioamla learn query`` - Query samples for annotation
-- ``bioamla learn annotate`` - Add annotations
-- ``bioamla learn status`` - Show learning status
-
 **indices** - Acoustic indices:
 
 - ``bioamla indices compute`` - Compute all indices
@@ -125,11 +118,6 @@ The bioamla CLI is organized into the following command groups:
 
 - ``bioamla services ebird validate`` - Validate species for location
 - ``bioamla services ebird nearby`` - Get nearby observations
-
-**services pg** - PostgreSQL:
-
-- ``bioamla services pg export`` - Export detections to PostgreSQL
-- ``bioamla services pg stats`` - Show database statistics
 
 API Reference
 -------------

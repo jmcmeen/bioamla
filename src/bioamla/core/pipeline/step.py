@@ -11,7 +11,7 @@ Each step defines:
 - Execution logic
 - Resource cleanup
 
-Steps are executed by the PipelineController, which handles:
+Steps are executed by the PipelineService, which handles:
 - Dependency resolution
 - Progress tracking
 - Error handling
@@ -34,9 +34,9 @@ Usage:
             return None
 
         def execute(self, data: AudioData) -> StepResult[AudioData]:
-            from bioamla.controllers import AudioTransformController
-            ctrl = AudioTransformController()
-            result = ctrl.normalize_loudness(data, self.target_db)
+            from bioamla.services import AudioTransformService
+            svc = AudioTransformService()
+            result = svc.normalize_loudness(data, self.target_db)
             if result.success:
                 return StepResult.ok(result.data)
             return StepResult.fail(result.error)
