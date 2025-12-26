@@ -3,21 +3,11 @@
 Service for HuggingFace Hub model and dataset operations.
 """
 
-from dataclasses import dataclass
 from typing import Optional
 
-from .base import BaseService, ServiceResult, ToDictMixin
+from bioamla.models.huggingface import PushResult
 
-
-@dataclass
-class PushResult(ToDictMixin):
-    """Result of a push operation."""
-
-    repo_id: str
-    repo_type: str
-    url: str
-    files_uploaded: int
-    total_size_bytes: int
+from .base import BaseService, ServiceResult
 
 
 class HuggingFaceService(BaseService):

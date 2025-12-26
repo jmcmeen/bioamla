@@ -117,7 +117,7 @@ class BatchClusteringService(BatchServiceBase):
         self._file_mapping = []
 
         start_time = datetime.now()
-        result = BatchResult(start_time=start_time.isoformat())
+        BatchResult(start_time=start_time.isoformat())
 
         # Phase 1: Load all embeddings
         def data_filter(path: Path) -> bool:
