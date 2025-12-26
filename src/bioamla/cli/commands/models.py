@@ -566,7 +566,6 @@ def models_embed(
     file: str, model_path: str, output: str, layer: str, sample_rate: int
 ) -> None:
     """Extract embeddings from audio using AST model (single file)."""
-    import numpy as np
 
     from bioamla.cli.service_helpers import handle_result, services
 
@@ -580,7 +579,7 @@ def models_embed(
     )
     embeddings = handle_result(result)
 
-    np.save(output, embeddings)
+    services.file.write_npy(output, embeddings)
     click.echo(f"Embeddings saved to {output} (shape: {embeddings.shape})")
 
 

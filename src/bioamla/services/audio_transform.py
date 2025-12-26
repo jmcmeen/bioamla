@@ -4,7 +4,7 @@ Service for audio signal processing operations, both in-memory and file-based.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -14,7 +14,6 @@ from bioamla.models.audio import (
     AudioMetadata,
     BatchResult,
     ProcessedAudio,
-    TransformResult,
 )
 from bioamla.repository.protocol import FileRepositoryProtocol
 
@@ -1112,7 +1111,6 @@ class AudioTransformService(BaseService):
         Returns:
             Result with batch processing summary
         """
-        from pathlib import Path
 
         error = self._validate_input_path(input_path)
         if error:
