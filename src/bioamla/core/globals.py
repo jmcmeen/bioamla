@@ -8,6 +8,11 @@ and other package-wide settings.
 
 Usage:
     from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
+
+Note:
+    This module provides minimal global configuration. For more complex
+    configuration needs, consider using bioamla.core.config which provides
+    a more comprehensive configuration management system.
 """
 
 from typing import List

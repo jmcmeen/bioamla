@@ -3,7 +3,7 @@
 Service for system dependency checking and installation.
 """
 
-from typing import List, Optional
+from typing import Optional
 
 from bioamla.models.dependency import DependencyInfo, DependencyReport
 

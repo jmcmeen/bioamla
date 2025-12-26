@@ -4,10 +4,9 @@ Service for acoustic detection operations.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from bioamla.models.detection import (
-    BatchDetectionResult,
     DetectionInfo,
     DetectionResult,
 )

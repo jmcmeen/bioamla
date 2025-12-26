@@ -4,7 +4,6 @@ Service for system information and utility operations.
 
 import platform
 import sys
-from typing import List, Optional
 
 from bioamla.models.util import DeviceInfo, DevicesData, VersionData
 

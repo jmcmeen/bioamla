@@ -5,7 +5,7 @@ Service for CNN-based spectrogram classifier operations.
 
 from typing import Any, Dict, List, Optional
 
-from bioamla.models.cnn import EvaluationResult, PredictionResult, TrainResult
+from bioamla.models.cnn import PredictionResult, TrainResult
 from bioamla.repository.protocol import FileRepositoryProtocol
 
 from .base import BaseService, ServiceResult
