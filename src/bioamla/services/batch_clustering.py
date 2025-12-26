@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 
@@ -63,7 +63,7 @@ class BatchClusteringService(BatchServiceBase):
                 with open(file_path, "rb") as f:
                     embedding = pickle.load(f)
             elif file_path.suffix == ".json":
-                with open(file_path, "r") as f:
+                with open(file_path) as f:
                     data = json.load(f)
                     embedding = np.array(data)
             else:

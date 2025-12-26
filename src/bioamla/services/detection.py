@@ -86,7 +86,7 @@ class DetectionService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.detection import BandLimitedEnergyDetector
+            from bioamla.core.audio.detectors import BandLimitedEnergyDetector
 
             detector = BandLimitedEnergyDetector(
                 low_freq=low_freq,
@@ -152,7 +152,7 @@ class DetectionService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.detection import RibbitDetector
+            from bioamla.core.audio.detectors import RibbitDetector
 
             detector = RibbitDetector(
                 pulse_rate_hz=pulse_rate_hz,
@@ -218,7 +218,7 @@ class DetectionService(BaseService):
         try:
             import librosa
 
-            from bioamla.core.detection import CWTPeakDetector
+            from bioamla.core.audio.detectors import CWTPeakDetector
 
             detector = CWTPeakDetector(
                 snr_threshold=snr_threshold,
@@ -288,7 +288,7 @@ class DetectionService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.detection import AcceleratingPatternDetector
+            from bioamla.core.audio.detectors import AcceleratingPatternDetector
 
             detector = AcceleratingPatternDetector(
                 min_pulses=min_pulses,

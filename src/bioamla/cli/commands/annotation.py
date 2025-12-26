@@ -332,10 +332,10 @@ def annotation_generate_labels(
     labels_array = np.array(all_labels)
 
     output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    services.file.ensure_directory(output_path.parent)
 
     if output_format == "numpy":
-        np.save(output_file, labels_array)
+        services.file.write_npy(output_file, labels_array)
         label_map_file = output_path.with_suffix(".labels.csv")
         rows = [["label", "index"]]
         for label, idx in sorted(label_map.items(), key=lambda x: x[1]):

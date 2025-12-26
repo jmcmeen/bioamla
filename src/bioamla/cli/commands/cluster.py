@@ -92,7 +92,7 @@ def cluster_cluster(
     cluster_result = handle_result(result)
 
     labels = np.array(cluster_result.labels)
-    np.save(output, labels)
+    services.file.write_npy(output, labels)
 
     if not quiet:
         click.echo(f"Found {cluster_result.n_clusters} clusters")
@@ -194,7 +194,7 @@ def cluster_novelty(
     novelty_scores = novelty_result.metadata.get("novelty_scores", np.array([]))
 
     results = np.column_stack([is_novel.astype(int), novelty_scores])
-    np.save(output, results)
+    services.file.write_npy(output, results)
 
     n_novel = novelty_result.data.n_novel
     if not quiet:
