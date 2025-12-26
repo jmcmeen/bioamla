@@ -3,33 +3,11 @@
 Service for species name lookup and conversion operations.
 """
 
-from dataclasses import dataclass
 from typing import List
 
-from .base import BaseService, ServiceResult, ToDictMixin
+from bioamla.models.species import SearchMatch, SpeciesInfo
 
-
-@dataclass
-class SpeciesInfo(ToDictMixin):
-    """Information about a species."""
-
-    scientific_name: str
-    common_name: str
-    species_code: str
-    family: str
-    order: str
-    source: str
-
-
-@dataclass
-class SearchMatch(ToDictMixin):
-    """A search match result."""
-
-    scientific_name: str
-    common_name: str
-    species_code: str
-    family: str
-    score: float
+from .base import BaseService, ServiceResult
 
 
 class SpeciesService(BaseService):

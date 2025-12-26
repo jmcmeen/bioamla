@@ -3,20 +3,12 @@
 Service for configuration management operations.
 """
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional
 
-from .base import BaseService, ServiceResult, ToDictMixin
+from bioamla.models.config import ConfigInfo
 
-
-@dataclass
-class ConfigInfo(ToDictMixin):
-    """Information about the current configuration."""
-
-    source: Optional[str]
-    is_default: bool
-    sections: List[str]
+from .base import BaseService, ServiceResult
 
 
 class ConfigService(BaseService):
