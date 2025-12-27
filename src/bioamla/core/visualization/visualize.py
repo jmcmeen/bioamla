@@ -24,6 +24,10 @@ from typing import Literal, Optional, Tuple, Union
 
 import librosa
 import librosa.display
+import matplotlib
+
+# Use non-interactive backend for thread safety in parallel processing
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -260,7 +264,7 @@ def _plot_stft_spectrogram(
 
     if show_legend:
         ax.set_title(f"STFT Spectrogram - {title}")
-        plt.colorbar(img, ax=ax, format="%+2.0f dB")
+        ax.figure.colorbar(img, ax=ax, format="%+2.0f dB")
     else:
         # Remove all decorations for clean spectrogram
         ax.axis("off")
@@ -311,7 +315,7 @@ def _plot_mel_spectrogram(
 
     if show_legend:
         ax.set_title(f"Mel Spectrogram - {title}")
-        plt.colorbar(img, ax=ax, format="%+2.0f dB")
+        ax.figure.colorbar(img, ax=ax, format="%+2.0f dB")
     else:
         # Remove all decorations for clean spectrogram
         ax.axis("off")
@@ -351,7 +355,7 @@ def _plot_mfcc(
     if show_legend:
         ax.set_title(f"MFCC - {title}")
         ax.set_ylabel("MFCC Coefficient")
-        plt.colorbar(img, ax=ax)
+        ax.figure.colorbar(img, ax=ax)
     else:
         # Remove all decorations for clean spectrogram
         ax.axis("off")
