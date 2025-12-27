@@ -541,14 +541,13 @@ def cluster_batch(input_dir: str, output_dir: str, method: str, n_clusters: int,
         quiet=quiet,
     )
 
-    result = services.batch_clustering.cluster_batch(
+    batch_result = services.batch_clustering.cluster_batch(
         config,
         method=method,
         n_clusters=n_clusters,
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
     )
-    batch_result = handle_result(result)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
