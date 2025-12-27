@@ -53,10 +53,11 @@ class BatchIndicesService(BatchServiceBase):
             raise ValueError("Indices not set. Call calculate_batch first.")
 
         try:
-            # Load audio file
-            import librosa
+            # Load audio file using hybrid loader (soundfile for WAV/FLAC, pydub for M4A/MP3)
+            from bioamla.core.audio.pydub_utils import load_audio
 
-            audio, sample_rate = librosa.load(str(file_path), sr=None, mono=True)
+            # Read audio file (always returns mono float32)
+            audio, sample_rate = load_audio(str(file_path))
 
             # Create AudioData object
             audio_data = AudioData(

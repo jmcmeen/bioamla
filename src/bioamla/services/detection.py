@@ -187,9 +187,8 @@ class DetectionService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            import librosa
-
             from bioamla.core.audio.detectors import CWTPeakDetector
+            from bioamla.core.audio.pydub_utils import load_audio
 
             detector = CWTPeakDetector(
                 snr_threshold=snr_threshold,
@@ -198,7 +197,7 @@ class DetectionService(BaseService):
                 high_freq=high_freq,
             )
 
-            audio, sample_rate = librosa.load(filepath, sr=None, mono=True)
+            audio, sample_rate = load_audio(filepath)
             peaks = detector.detect(audio, sample_rate)
 
             # Convert peaks to DetectionInfo format
