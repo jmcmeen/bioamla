@@ -19,6 +19,57 @@ def audio() -> None:
     pass
 
 
+@audio.command("info")
+@batch_input_options
+@batch_output_options
+@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
+@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def audio_info(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], max_workers: int, recursive: bool, quiet: bool) -> None:
+    """Extract audio file metadata (duration, sample rate, channels, format, etc.)."""
+    import subprocess
+    import sys
+
+    from bioamla.cli.service_helpers import services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Extracting audio metadata...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        input_file=input_file,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    try:
+        batch_result = services.batch_audio_info.info_batch(config)
+
+        if not quiet:
+            click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+            if output_dir:
+                click.echo(f"Results saved to {output_dir}/audio_info.csv")
+            elif input_file:
+                # CSV in-place mode
+                click.echo(f"Results merged into {input_file}")
+            if batch_result.errors:
+                for error in batch_result.errors:
+                    click.echo(f"  Error: {error}")
+    finally:
+        # Force flush all output and reset terminal state
+        sys.stdout.flush()
+        sys.stderr.flush()
+        # Reset terminal to sane state (fixes terminal freeze from parallel processing)
+        if sys.stdout.isatty():
+            try:
+                subprocess.run(["stty", "sane"], check=False, stderr=subprocess.DEVNULL, timeout=1)
+            except Exception:
+                pass  # Silently fail if stty not available
+
+
 @audio.command("convert")
 @batch_input_options
 @batch_output_options
