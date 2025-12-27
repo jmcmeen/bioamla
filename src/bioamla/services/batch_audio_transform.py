@@ -117,7 +117,7 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch(config, file_filter=audio_filter)
+        return self.process_batch_auto(config, file_filter=audio_filter)
 
     def normalize_batch(
         self,
@@ -146,7 +146,7 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch(config, file_filter=audio_filter)
+        return self.process_batch_auto(config, file_filter=audio_filter)
 
     def segment_batch(
         self,
@@ -175,7 +175,7 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch(config, file_filter=audio_filter)
+        return self.process_batch_auto(config, file_filter=audio_filter)
 
     def visualize_batch(
         self,
@@ -201,4 +201,4 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch(config, file_filter=audio_filter)
+        return self.process_batch_auto(config, file_filter=audio_filter)
