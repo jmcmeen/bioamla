@@ -86,8 +86,7 @@ def audio_resample(input_dir: str, output_dir: str, sample_rate: int, max_worker
         quiet=quiet,
     )
 
-    result = services.batch_audio_transform.resample_batch(config, target_sr=sample_rate)
-    batch_result = handle_result(result)
+    batch_result = services.batch_audio_transform.resample_batch(config, target_sr=sample_rate)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
@@ -120,8 +119,7 @@ def audio_normalize(input_dir: str, output_dir: str, target_db: float, peak: boo
         quiet=quiet,
     )
 
-    result = services.batch_audio_transform.normalize_batch(config, target_db=target_db, peak=peak)
-    batch_result = handle_result(result)
+    batch_result = services.batch_audio_transform.normalize_batch(config, target_db=target_db, peak=peak)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
@@ -154,8 +152,7 @@ def audio_segment(input_dir: str, output_dir: str, duration: float, overlap: flo
         quiet=quiet,
     )
 
-    result = services.batch_audio_transform.segment_batch(config, segment_duration=duration, overlap=overlap)
-    batch_result = handle_result(result)
+    batch_result = services.batch_audio_transform.segment_batch(config, segment_duration=duration, overlap=overlap)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
@@ -187,8 +184,7 @@ def audio_visualize(input_dir: str, output_dir: str, plot_type: str, max_workers
         quiet=quiet,
     )
 
-    result = services.batch_audio_transform.visualize_batch(config, plot_type=plot_type)
-    batch_result = handle_result(result)
+    batch_result = services.batch_audio_transform.visualize_batch(config, plot_type=plot_type)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
@@ -234,14 +230,13 @@ def detect_energy(input_dir: str, output_dir: str, low_freq: float, high_freq: f
         quiet=quiet,
     )
 
-    result = services.batch_detection.detect_energy_batch(
+    batch_result = services.batch_detection.detect_energy_batch(
         config,
         low_freq=low_freq,
         high_freq=high_freq,
         threshold_db=threshold_db,
         min_duration=min_duration,
     )
-    batch_result = handle_result(result)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
@@ -279,7 +274,7 @@ def detect_ribbit(input_dir: str, output_dir: str, pulse_rate: float, pulse_tole
         quiet=quiet,
     )
 
-    result = services.batch_detection.detect_ribbit_batch(
+    batch_result = services.batch_detection.detect_ribbit_batch(
         config,
         pulse_rate_hz=pulse_rate,
         pulse_rate_tolerance=pulse_tolerance,
@@ -288,7 +283,6 @@ def detect_ribbit(input_dir: str, output_dir: str, pulse_rate: float, pulse_tole
         window_duration=window_duration,
         min_score=min_score,
     )
-    batch_result = handle_result(result)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
@@ -324,14 +318,13 @@ def detect_peaks(input_dir: str, output_dir: str, snr_threshold: float, min_peak
         quiet=quiet,
     )
 
-    result = services.batch_detection.detect_peaks_batch(
+    batch_result = services.batch_detection.detect_peaks_batch(
         config,
         snr_threshold=snr_threshold,
         min_peak_distance=min_peak_distance,
         low_freq=low_freq,
         high_freq=high_freq,
     )
-    batch_result = handle_result(result)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
@@ -369,7 +362,7 @@ def detect_accelerating(input_dir: str, output_dir: str, min_pulses: int, accel_
         quiet=quiet,
     )
 
-    result = services.batch_detection.detect_accelerating_batch(
+    batch_result = services.batch_detection.detect_accelerating_batch(
         config,
         min_pulses=min_pulses,
         acceleration_threshold=accel_threshold,
@@ -378,7 +371,6 @@ def detect_accelerating(input_dir: str, output_dir: str, min_pulses: int, accel_
         high_freq=high_freq,
         window_duration=window_duration,
     )
-    batch_result = handle_result(result)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
@@ -425,8 +417,7 @@ def indices_calculate(input_dir: str, output_dir: str, indices: str, max_workers
     # Parse indices list
     indices_list = [idx.strip() for idx in indices.split(",")]
 
-    result = services.batch_indices.calculate_batch(config, indices=indices_list)
-    batch_result = handle_result(result)
+    batch_result = services.batch_indices.calculate_batch(config, indices=indices_list)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
@@ -472,13 +463,12 @@ def models_predict(input_dir: str, output_dir: str, model: str, top_k: int, min_
         quiet=quiet,
     )
 
-    result = services.batch_inference.predict_batch(
+    batch_result = services.batch_inference.predict_batch(
         config,
         model_path=model,
         top_k=top_k,
         min_confidence=min_confidence,
     )
-    batch_result = handle_result(result)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
@@ -511,8 +501,7 @@ def models_embed(input_dir: str, output_dir: str, model: str, max_workers: int, 
         quiet=quiet,
     )
 
-    result = services.batch_inference.embed_batch(config, model_path=model)
-    batch_result = handle_result(result)
+    batch_result = services.batch_inference.embed_batch(config, model_path=model)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")

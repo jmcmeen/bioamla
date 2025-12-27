@@ -27,12 +27,11 @@ dependencies = [
   "audiomentations",
   "evaluate",
   "pydantic>=2.0",
-  "pydub",
+  "pydub",  # requires ffmpeg for M4A/MP3/FLAC support
   "textual",
   "matplotlib",
   "scipy",
   "librosa",
-  "soundfile",
   "pyinaturalist",
   "umap-learn>=0.5.0",
   "hdbscan>=0.8.0",
