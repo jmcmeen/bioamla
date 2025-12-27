@@ -88,13 +88,79 @@ class BatchIndicesService(BatchServiceBase):
         except Exception as e:
             raise RuntimeError(f"Failed to calculate indices: {e}")
 
-    def _write_aggregated_results(self, output_dir: str) -> None:
+    def _process_csv_sequential(
+        self, rows: Any, config: BatchConfig, result: BatchResult
+    ) -> BatchResult:
+        """Override to merge indices results into CSV rows.
+
+        Args:
+            rows: List of MetadataRow objects to process
+            config: Batch configuration
+            result: BatchResult to update
+
+        Returns:
+            Updated BatchResult
+        """
+        # Call parent to do the actual processing
+        result = super()._process_csv_sequential(rows, config, result)
+
+        # Merge indices results into CSV rows
+        if self._csv_context is not None and self._csv_handler is not None:
+            # Create a mapping from file path to indices results
+            results_by_path = {Path(r["filepath"]): r for r in self._all_results}
+
+            for row in self._csv_context.rows:
+                if row.file_path in results_by_path:
+                    indices_data = results_by_path[row.file_path].copy()
+                    # Remove filepath from indices data (it's redundant)
+                    indices_data.pop("filepath", None)
+                    # Merge indices into row metadata
+                    self._csv_handler.merge_analysis_results(row, indices_data)
+
+        return result
+
+    def _process_csv_parallel(
+        self, rows: Any, config: BatchConfig, result: BatchResult
+    ) -> BatchResult:
+        """Override to merge indices results into CSV rows during parallel processing.
+
+        Args:
+            rows: List of MetadataRow objects to process
+            config: Batch configuration
+            result: BatchResult to update
+
+        Returns:
+            Updated BatchResult
+        """
+        # Call parent to do the actual processing
+        result = super()._process_csv_parallel(rows, config, result)
+
+        # Merge indices results into CSV rows
+        if self._csv_context is not None and self._csv_handler is not None:
+            # Create a mapping from file path to indices results
+            results_by_path = {Path(r["filepath"]): r for r in self._all_results}
+
+            for row in self._csv_context.rows:
+                if row.file_path in results_by_path:
+                    indices_data = results_by_path[row.file_path].copy()
+                    # Remove filepath from indices data (it's redundant)
+                    indices_data.pop("filepath", None)
+                    # Merge indices into row metadata
+                    self._csv_handler.merge_analysis_results(row, indices_data)
+
+        return result
+
+    def _write_aggregated_results(self, output_dir: Optional[str]) -> None:
         """Write all indices results to a CSV file.
 
         Args:
-            output_dir: Directory to write results to
+            output_dir: Directory to write results to (None for CSV in-place mode)
         """
         if not self._all_results:
+            return
+
+        # In CSV mode without output_dir, results are already merged into metadata CSV
+        if output_dir is None:
             return
 
         output_path = Path(output_dir) / "indices_results.csv"
@@ -138,6 +204,6 @@ class BatchIndicesService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        result = self.process_batch(config, file_filter=audio_filter)
+        result = self.process_batch_auto(config, file_filter=audio_filter)
         self._write_aggregated_results(config.output_dir)
         return result

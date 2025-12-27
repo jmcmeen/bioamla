@@ -450,8 +450,9 @@ class INaturalistService(BaseService):
                                 row = {
                                     "file_name": str(relative_path),
                                     "split": "train",
-                                    "target": taxon_id_val,
+                                    "target": "",
                                     "label": safe_species,
+                                    "inat_obs_id": obs_id,
                                     "attr_id": user,
                                     "attr_lic": license_code,
                                     "attr_url": file_url,
