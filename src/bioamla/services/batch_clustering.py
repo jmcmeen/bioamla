@@ -125,7 +125,7 @@ class BatchClusteringService(BatchServiceBase):
             return path.suffix.lower() in data_exts
 
         # Use parent class to load files
-        load_result = self.process_batch(config, file_filter=data_filter)
+        load_result = self.process_batch_auto(config, file_filter=data_filter)
 
         if load_result.total_files == 0:
             return load_result

@@ -8,10 +8,16 @@ from bioamla.models.base import ToDictMixin
 
 @dataclass
 class BatchConfig(ToDictMixin):
-    """Configuration for batch operations."""
+    """Configuration for batch operations.
 
-    input_dir: str
-    output_dir: str
+    Supports two input modes (mutually exclusive):
+    - Directory mode: Provide input_dir to process all files in directory
+    - CSV metadata mode: Provide input_file pointing to CSV with file_name column
+    """
+
+    input_dir: Optional[str] = None
+    input_file: Optional[str] = None
+    output_dir: str = ""
     recursive: bool = True
     max_workers: int = 1
     continue_on_error: bool = True
@@ -19,6 +25,13 @@ class BatchConfig(ToDictMixin):
     output_template: Optional[str] = None
     filters: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate mutual exclusivity of input_dir and input_file."""
+        if self.input_dir is None and self.input_file is None:
+            raise ValueError("Either input_dir or input_file must be specified")
+        if self.input_dir is not None and self.input_file is not None:
+            raise ValueError("input_dir and input_file are mutually exclusive")
 
 
 @dataclass
