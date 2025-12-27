@@ -218,9 +218,10 @@ def get_audio_info(filepath: str) -> AudioInfo:
 
     info_dict = get_audio_info_pydub(filepath)
 
-    # Pydub doesn't provide bit depth or subtype info, so set to None
-    bit_depth = None
-    subtype = None
+    # Extract bit_depth and subtype from pydub response
+    # These may be None if ffprobe failed and pydub fallback was used
+    bit_depth = info_dict.get("bit_depth")
+    subtype = info_dict.get("subtype")
 
     return AudioInfo(
         duration=info_dict["duration"],
