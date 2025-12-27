@@ -49,7 +49,7 @@ def devices() -> None:
     """List available compute devices (GPU/CPU)."""
     from bioamla.services.util import UtilityService
 
-    result = UtilityService().get_devices()
+    result = UtilityService().get_device_info()
 
     if not result.success:
         click.echo(f"Error: {result.error}", err=True)

@@ -3,32 +3,11 @@
 Service for system dependency checking and installation.
 """
 
-from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
-from .base import BaseService, ServiceResult, ToDictMixin
+from bioamla.models.dependency import DependencyInfo, DependencyReport
 
-
-@dataclass
-class DependencyInfo(ToDictMixin):
-    """Information about a system dependency."""
-
-    name: str
-    description: str
-    required_for: str
-    installed: bool
-    version: Optional[str] = None
-    install_hint: Optional[str] = None
-
-
-@dataclass
-class DependencyReport(ToDictMixin):
-    """Report of all dependency statuses."""
-
-    os_type: str
-    all_installed: bool
-    dependencies: List[DependencyInfo]
-    install_command: Optional[str] = None
+from .base import BaseService, ServiceResult
 
 
 class DependencyService(BaseService):

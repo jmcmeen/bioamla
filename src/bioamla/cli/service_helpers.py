@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from bioamla.services.macaulay import MacaulayService
     from bioamla.services.ribbit import RibbitService
     from bioamla.services.species import SpeciesService
+    from bioamla.services.util import UtilityService
     from bioamla.services.xeno_canto import XenoCantoService
 
 # Type variable for generic result handling
@@ -219,6 +220,11 @@ class _ServiceAccessor:
     def dependency(self) -> "DependencyService":
         """Get DependencyService instance."""
         return get_factory().dependency
+
+    @property
+    def util(self) -> "UtilityService":
+        """Get UtilityService instance."""
+        return get_factory().util
 
     # Add batch services
     @property
