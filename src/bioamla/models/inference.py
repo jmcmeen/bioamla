@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from bioamla.services.base import ToDictMixin
+from bioamla.models.base import ToDictMixin
 
 
 @dataclass

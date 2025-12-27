@@ -162,6 +162,14 @@ def inat_stats(project_id: str, output: str, quiet: bool) -> None:
     default="research",
     help="Quality grade filter",
 )
+@click.option(
+    "--license",
+    "-l",
+    default=None,
+    help="Filter by sound license(s) (comma-separated: cc0, cc-by, cc-by-nc, cc-by-sa, cc-by-nd, cc-by-nc-sa, cc-by-nc-nd)",
+)
+@click.option("--start-date", "-d1", default=None, help="Start date for observations (YYYY-MM-DD)")
+@click.option("--end-date", "-d2", default=None, help="End date for observations (YYYY-MM-DD)")
 @click.option("--obs-per-taxon", default=10, type=int, help="Max observations per taxon")
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
 def inat_download(
@@ -171,6 +179,9 @@ def inat_download(
     place_id: int,
     project_id: str,
     quality_grade: str,
+    license: str,
+    start_date: str,
+    end_date: str,
     obs_per_taxon: int,
     quiet: bool,
 ) -> None:
@@ -180,6 +191,11 @@ def inat_download(
     if taxon_ids:
         taxon_id_list = [int(t.strip()) for t in taxon_ids.split(",")]
 
+    # Parse licenses
+    license_list = None
+    if license:
+        license_list = [lic.strip() for lic in license.split(",")]
+
     result = services.inaturalist.download(
         output_dir=output_dir,
         taxon_ids=taxon_id_list,
@@ -187,6 +203,9 @@ def inat_download(
         place_id=place_id,
         project_id=project_id,
         quality_grade=quality_grade if quality_grade != "any" else None,
+        sound_license=license_list,
+        d1=start_date,
+        d2=end_date,
         obs_per_taxon=obs_per_taxon,
     )
     download_result = handle_result(result)
@@ -194,6 +213,15 @@ def inat_download(
         click.echo("\nDownload complete:")
         click.echo(f"  Observations: {download_result.total_observations}")
         click.echo(f"  Sounds downloaded: {download_result.total_sounds}")
+
+        # Show explanation if counts differ
+        if download_result.observations_with_multiple_sounds > 0:
+            click.echo(
+                f"    ({download_result.observations_with_multiple_sounds} "
+                f"observation{'s' if download_result.observations_with_multiple_sounds > 1 else ''} "
+                f"had multiple sound files)"
+            )
+
         if download_result.skipped_existing > 0:
             click.echo(f"  Skipped (existing): {download_result.skipped_existing}")
         if download_result.failed_downloads > 0:

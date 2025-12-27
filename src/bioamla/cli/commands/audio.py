@@ -233,5 +233,3 @@ def audio_visualize(path: str, output: str, viz_type: str, n_fft: int, hop_lengt
     check_result(result)
 
     click.echo(f"Visualization saved to: {output_path}")
-
-

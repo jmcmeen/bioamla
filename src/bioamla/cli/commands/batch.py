@@ -54,10 +54,8 @@ def audio_convert(input_dir: str, output_dir: str, sample_rate: int, channels: i
     click.echo(f"Converted {data.files_processed} files, {data.files_failed} errors")
 
     if data.errors and not quiet:
-        for error in data.errors[:5]:  # Show first 5 errors
+        for error in data.errors:
             click.echo(f"  {error}")
-        if len(data.errors) > 5:
-            click.echo(f"  ... and {len(data.errors) - 5} more errors")
 
 
 # ==============================================================================
@@ -94,10 +92,8 @@ def audio_resample(input_dir: str, output_dir: str, sample_rate: int, max_worker
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @audio.command("normalize")
@@ -130,10 +126,8 @@ def audio_normalize(input_dir: str, output_dir: str, target_db: float, peak: boo
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @audio.command("segment")
@@ -166,10 +160,8 @@ def audio_segment(input_dir: str, output_dir: str, duration: float, overlap: flo
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @audio.command("visualize")
@@ -201,10 +193,8 @@ def audio_visualize(input_dir: str, output_dir: str, plot_type: str, max_workers
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 # ==============================================================================
@@ -257,10 +247,8 @@ def detect_energy(input_dir: str, output_dir: str, low_freq: float, high_freq: f
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         click.echo(f"Results saved to {output_dir}/detections.json")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @detect.command("ribbit")
@@ -306,10 +294,8 @@ def detect_ribbit(input_dir: str, output_dir: str, pulse_rate: float, pulse_tole
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         click.echo(f"Results saved to {output_dir}/detections.json")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @detect.command("peaks")
@@ -351,10 +337,8 @@ def detect_peaks(input_dir: str, output_dir: str, snr_threshold: float, min_peak
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         click.echo(f"Results saved to {output_dir}/detections.json")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @detect.command("accelerating")
@@ -400,10 +384,8 @@ def detect_accelerating(input_dir: str, output_dir: str, min_pulses: int, accel_
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         click.echo(f"Results saved to {output_dir}/detections.json")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 # ==============================================================================
@@ -450,10 +432,8 @@ def indices_calculate(input_dir: str, output_dir: str, indices: str, max_workers
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         click.echo(f"Results saved to {output_dir}/indices.csv")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 # ==============================================================================
@@ -504,10 +484,8 @@ def models_predict(input_dir: str, output_dir: str, model: str, top_k: int, min_
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         click.echo(f"Results saved to {output_dir}/predictions.json")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 @models.command("embed")
@@ -540,10 +518,8 @@ def models_embed(input_dir: str, output_dir: str, model: str, max_workers: int, 
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         click.echo(f"Embeddings saved to {output_dir}/")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
 
 
 # ==============================================================================
@@ -589,7 +565,5 @@ def cluster_batch(input_dir: str, output_dir: str, method: str, n_clusters: int,
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
         click.echo(f"Cluster results saved to {output_dir}/clusters.json")
         if batch_result.errors:
-            for error in batch_result.errors[:5]:
+            for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
-            if len(batch_result.errors) > 5:
-                click.echo(f"  ... and {len(batch_result.errors) - 5} more errors")
