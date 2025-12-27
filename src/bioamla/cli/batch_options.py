@@ -1,8 +1,9 @@
 """Reusable Click decorators for batch command options."""
 
-import click
 from functools import wraps
 from typing import Callable
+
+import click
 
 
 def batch_input_options(f: Callable) -> Callable:

@@ -1,7 +1,7 @@
 """Base class for batch processing services."""
 
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, List, Optional, TypeVar
@@ -115,8 +115,10 @@ class BatchServiceBase(BaseService, ABC):
     def _process_parallel(
         self, files: List[Path], config: BatchConfig, result: BatchResult
     ) -> BatchResult:
-        """Process files in parallel."""
-        with ThreadPoolExecutor(max_workers=config.max_workers) as executor:
+        """Process files in parallel using ProcessPoolExecutor for true parallelism."""
+        from concurrent.futures import ProcessPoolExecutor
+
+        with ProcessPoolExecutor(max_workers=config.max_workers) as executor:
             futures = {
                 executor.submit(self.process_file, file_path): file_path for file_path in files
             }
@@ -228,10 +230,11 @@ class BatchServiceBase(BaseService, ABC):
     def _process_csv_parallel(
         self, rows: List[Any], config: BatchConfig, result: BatchResult
     ) -> BatchResult:
-        """Process CSV rows in parallel."""
+        """Process CSV rows in parallel using ProcessPoolExecutor for true parallelism."""
         import sys
+        from concurrent.futures import ProcessPoolExecutor
 
-        with ThreadPoolExecutor(max_workers=config.max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=config.max_workers) as executor:
             futures = {}
 
             # Check file existence before submitting to executor (fail fast)

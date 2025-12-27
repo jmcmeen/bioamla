@@ -4,8 +4,6 @@ from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Static
 
-from bioamla import __version__
-
 
 class AboutTabContent(Vertical):
     """About tab displaying application information, credits, and links."""

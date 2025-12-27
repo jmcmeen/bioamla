@@ -38,6 +38,7 @@ from .annotation import AnnotationService
 from .ast import ASTService
 from .audio_file import AudioFileService
 from .audio_transform import AudioTransformService
+from .batch_audio_info import BatchAudioInfoService
 from .batch_audio_transform import BatchAudioTransformService
 from .batch_clustering import BatchClusteringService
 from .batch_detection import BatchDetectionService
@@ -188,6 +189,12 @@ class ServiceFactory:
     # ========================================================================
     # Batch Services (File-Based)
     # ========================================================================
+
+    def create_batch_audio_info_service(self) -> BatchAudioInfoService:
+        """Create BatchAudioInfoService with file repository."""
+        return BatchAudioInfoService(
+            file_repository=self.file_repository,
+        )
 
     def create_batch_audio_transform_service(self) -> BatchAudioTransformService:
         """Create BatchAudioTransformService with file repository and audio transform service."""
@@ -346,6 +353,11 @@ class ServiceFactory:
     def util(self) -> UtilityService:
         """Convenience property for create_utility_service()."""
         return self.create_utility_service()
+
+    @property
+    def batch_audio_info(self) -> BatchAudioInfoService:
+        """Convenience property for create_batch_audio_info_service()."""
+        return self.create_batch_audio_info_service()
 
     @property
     def batch_audio_transform(self) -> BatchAudioTransformService:

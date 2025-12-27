@@ -215,7 +215,12 @@ def ast_train(
         click.echo("Available subsets: HSN, NBP, NES, PER")
         dataset = load_dataset(train_dataset, "HSN", split=split)
     else:
-        dataset = load_dataset(train_dataset, split=split)
+        # Check if it's a local directory path
+        from pathlib import Path
+        if Path(train_dataset).exists() and Path(train_dataset).is_dir():
+            dataset = load_dataset("audiofolder", data_dir=train_dataset, split=split)
+        else:
+            dataset = load_dataset(train_dataset, split=split)
 
     if isinstance(dataset, Dataset):
         class_names = sorted(set(dataset[category_label_column]))

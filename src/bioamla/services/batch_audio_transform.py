@@ -141,8 +141,9 @@ class BatchAudioTransformService(BatchServiceBase):
             )
         elif self._current_operation == "convert":
             # Convert using AudioFileService
-            from bioamla.services.audio_file import AudioFileService
             import numpy as np
+
+            from bioamla.services.audio_file import AudioFileService
 
             audio_file_service = AudioFileService(file_repository=self.file_repository)
             target_format = self._current_config.get("target_format", "wav")
@@ -494,6 +495,7 @@ class BatchAudioTransformService(BatchServiceBase):
         This is a custom implementation that expands CSV rows BEFORE writing the output CSV.
         """
         from datetime import datetime
+
         from bioamla.services.batch_csv import BatchCSVHandler
 
         start_time = datetime.now()

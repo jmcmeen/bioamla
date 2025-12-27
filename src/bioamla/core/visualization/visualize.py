@@ -168,7 +168,10 @@ def generate_spectrogram(
     if show_colorbar:
         plt.tight_layout()
     else:
+        # Remove all margins for borderless output
         plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        # Also remove figure padding
+        fig.tight_layout(pad=0)
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -182,7 +185,16 @@ def generate_spectrogram(
             format = "png"
 
     # Save with appropriate settings for format
-    save_kwargs = {"dpi": dpi, "bbox_inches": "tight"}
+    save_kwargs = {"dpi": dpi}
+
+    # When legend is hidden, ensure completely borderless output
+    if show_colorbar:
+        save_kwargs["bbox_inches"] = "tight"
+    else:
+        # Use bbox_inches='tight' with pad_inches=0 for truly borderless images
+        save_kwargs["bbox_inches"] = "tight"
+        save_kwargs["pad_inches"] = 0
+
     if format == "jpeg":
         save_kwargs["format"] = "jpeg"
         save_kwargs["pil_kwargs"] = {"quality": 95}

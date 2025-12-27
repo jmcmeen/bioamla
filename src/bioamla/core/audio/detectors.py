@@ -351,7 +351,9 @@ class BandLimitedEnergyDetector:
         Returns:
             List of Detection objects.
         """
-        audio, sample_rate = librosa.load(str(filepath), sr=None, mono=True)
+        from bioamla.core.audio.pydub_utils import load_audio
+
+        audio, sample_rate = load_audio(str(filepath))
         return self.detect(audio, sample_rate, **kwargs)
 
 
@@ -637,7 +639,9 @@ class RibbitDetector:
         filepath: Union[str, Path],
     ) -> List[Detection]:
         """Detect periodic calls from an audio file."""
-        audio, sample_rate = librosa.load(str(filepath), sr=None, mono=True)
+        from bioamla.core.audio.pydub_utils import load_audio
+
+        audio, sample_rate = load_audio(str(filepath))
         return self.detect(audio, sample_rate)
 
 
@@ -914,7 +918,9 @@ class CWTPeakDetector:
         **kwargs,
     ) -> List[PeakDetection]:
         """Detect peaks from an audio file."""
-        audio, sample_rate = librosa.load(str(filepath), sr=None, mono=True)
+        from bioamla.core.audio.pydub_utils import load_audio
+
+        audio, sample_rate = load_audio(str(filepath))
         return self.detect(audio, sample_rate, **kwargs)
 
 
@@ -1171,7 +1177,9 @@ class AcceleratingPatternDetector:
         filepath: Union[str, Path],
     ) -> List[Detection]:
         """Detect accelerating patterns from an audio file."""
-        audio, sample_rate = librosa.load(str(filepath), sr=None, mono=True)
+        from bioamla.core.audio.pydub_utils import load_audio
+
+        audio, sample_rate = load_audio(str(filepath))
         return self.detect(audio, sample_rate)
 
 
@@ -1300,7 +1308,9 @@ def batch_detect(
             if hasattr(detector, "detect_from_file"):
                 detections = detector.detect_from_file(filepath)
             else:
-                audio, sr = librosa.load(str(filepath), sr=None, mono=True)
+                from bioamla.core.audio.pydub_utils import load_audio
+
+                audio, sr = load_audio(str(filepath))
                 detections = detector.detect(audio, sr)
 
             results[str(filepath)] = detections
