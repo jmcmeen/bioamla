@@ -351,7 +351,7 @@ def _plot_mfcc(
     if show_legend:
         ax.set_title(f"MFCC - {title}")
         ax.set_ylabel("MFCC Coefficient")
-        plt.colorbar(img, ax=ax)
+        ax.figure.colorbar(img, ax=ax)
     else:
         # Remove all decorations for clean spectrogram
         ax.axis("off")
