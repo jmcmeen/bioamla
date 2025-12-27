@@ -21,6 +21,7 @@ class DownloadResult(ToDictMixin):
 
     total_observations: int
     total_sounds: int
+    observations_with_multiple_sounds: int
     skipped_existing: int
     failed_downloads: int
     output_dir: str
