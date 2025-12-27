@@ -585,6 +585,9 @@ def indices() -> None:
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def indices_calculate(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], indices: str, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch calculate acoustic indices for audio files."""
+    import subprocess
+    import sys
+
     from bioamla.cli.service_helpers import handle_result, services
     from bioamla.models.batch import BatchConfig
 
@@ -603,15 +606,26 @@ def indices_calculate(input_dir: Optional[str], input_file: Optional[str], outpu
     # Parse indices list
     indices_list = [idx.strip() for idx in indices.split(",")]
 
-    batch_result = services.batch_indices.calculate_batch(config, indices=indices_list)
+    try:
+        batch_result = services.batch_indices.calculate_batch(config, indices=indices_list)
 
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if output_dir:
-            click.echo(f"Results saved to {output_dir}/indices.csv")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+        if not quiet:
+            click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+            if output_dir:
+                click.echo(f"Results saved to {output_dir}/indices.csv")
+            if batch_result.errors:
+                for error in batch_result.errors:
+                    click.echo(f"  Error: {error}")
+    finally:
+        # Force flush all output and reset terminal state
+        sys.stdout.flush()
+        sys.stderr.flush()
+        # Reset terminal to sane state (fixes terminal freeze from parallel processing)
+        if sys.stdout.isatty():
+            try:
+                subprocess.run(["stty", "sane"], check=False, stderr=subprocess.DEVNULL, timeout=1)
+            except Exception:
+                pass  # Silently fail if stty not available
 
 
 # ==============================================================================
