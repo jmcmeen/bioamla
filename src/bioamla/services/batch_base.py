@@ -230,15 +230,26 @@ class BatchServiceBase(BaseService, ABC):
     ) -> BatchResult:
         """Process CSV rows in parallel."""
         with ThreadPoolExecutor(max_workers=config.max_workers) as executor:
-            futures = {executor.submit(self.process_file, row.file_path): row for row in rows}
+            futures = {}
+
+            # Check file existence before submitting to executor (fail fast)
+            for row in rows:
+                if not row.file_path.exists():
+                    # Handle missing file immediately
+                    result.failed += 1
+                    error_msg = f"{row.file_path}: File not found"
+                    result.errors.append(error_msg)
+                    if not config.continue_on_error:
+                        raise FileNotFoundError(error_msg)
+                    if not config.quiet:
+                        print(f"Error: {error_msg}")
+                else:
+                    # Submit only existing files
+                    futures[executor.submit(self.process_file, row.file_path)] = row
 
             for future in as_completed(futures):
                 row = futures[future]
                 try:
-                    # Check if file exists
-                    if not row.file_path.exists():
-                        raise FileNotFoundError(f"File not found: {row.file_path}")
-
                     future.result()
                     result.successful += 1
                 except Exception as e:

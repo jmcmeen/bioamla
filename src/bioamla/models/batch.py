@@ -14,6 +14,9 @@ class BatchConfig(ToDictMixin):
     Supports two input modes (mutually exclusive):
     - Directory mode: Provide input_dir to process all files in directory
     - CSV metadata mode: Provide input_file pointing to CSV with file_name column
+
+    Note: For programmatic usage, validation can be bypassed by setting
+    _skip_validation=True. This is useful for testing or advanced use cases.
     """
 
     input_dir: Optional[str] = None
@@ -26,13 +29,26 @@ class BatchConfig(ToDictMixin):
     output_template: Optional[str] = None
     filters: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    _skip_validation: bool = False  # Internal flag for testing/advanced usage
 
     def __post_init__(self) -> None:
-        """Validate mutual exclusivity of input_dir and input_file."""
+        """Validate mutual exclusivity of input_dir and input_file.
+
+        Validation can be skipped by setting _skip_validation=True (for testing/advanced usage).
+        """
+        if self._skip_validation:
+            return
+
         if self.input_dir is None and self.input_file is None:
-            raise ValueError("Either input_dir or input_file must be specified")
+            raise ValueError(
+                "Either input_dir or input_file must be specified. "
+                "For testing or advanced usage, set _skip_validation=True to bypass this check."
+            )
         if self.input_dir is not None and self.input_file is not None:
-            raise ValueError("input_dir and input_file are mutually exclusive")
+            raise ValueError(
+                "input_dir and input_file are mutually exclusive. "
+                "For testing or advanced usage, set _skip_validation=True to bypass this check."
+            )
 
 
 @dataclass

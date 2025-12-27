@@ -260,7 +260,7 @@ def _plot_stft_spectrogram(
 
     if show_legend:
         ax.set_title(f"STFT Spectrogram - {title}")
-        plt.colorbar(img, ax=ax, format="%+2.0f dB")
+        ax.figure.colorbar(img, ax=ax, format="%+2.0f dB")
     else:
         # Remove all decorations for clean spectrogram
         ax.axis("off")
@@ -311,7 +311,7 @@ def _plot_mel_spectrogram(
 
     if show_legend:
         ax.set_title(f"Mel Spectrogram - {title}")
-        plt.colorbar(img, ax=ax, format="%+2.0f dB")
+        ax.figure.colorbar(img, ax=ax, format="%+2.0f dB")
     else:
         # Remove all decorations for clean spectrogram
         ax.axis("off")

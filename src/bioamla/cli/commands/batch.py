@@ -37,6 +37,8 @@ def audio() -> None:
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_convert(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], sample_rate: int, channels: int, format: str, delete_original: bool, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch convert audio files."""
+    import sys
+
     from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
@@ -66,6 +68,10 @@ def audio_convert(input_dir: Optional[str], input_file: Optional[str], output_di
             for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
 
+    # Exit with non-zero status if any files failed
+    if batch_result.failed > 0 or batch_result.errors:
+        sys.exit(1)
+
 
 # ==============================================================================
 # Audio Transform Batch Commands
@@ -81,6 +87,8 @@ def audio_convert(input_dir: Optional[str], input_file: Optional[str], output_di
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_resample(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], sample_rate: int, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch resample audio files to a target sample rate."""
+    import sys
+
     from bioamla.cli.service_helpers import handle_result, services
     from bioamla.models.batch import BatchConfig
 
@@ -103,6 +111,10 @@ def audio_resample(input_dir: Optional[str], input_file: Optional[str], output_d
         if batch_result.errors:
             for error in batch_result.errors:
                 click.echo(f"  Error: {error}")
+
+    # Exit with non-zero status if any files failed
+    if batch_result.failed > 0 or batch_result.errors:
+        sys.exit(1)
 
 
 @audio.command("normalize")
@@ -688,9 +700,10 @@ def models_embed(input_dir: Optional[str], input_file: Optional[str], output_dir
 @click.option("--n-clusters", default=None, type=int, help="Number of clusters (for k-means/agglomerative)")
 @click.option("--min-cluster-size", default=5, type=int, help="Minimum cluster size (for HDBSCAN)")
 @click.option("--min-samples", default=3, type=int, help="Minimum samples per cluster")
+@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def cluster_batch(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], method: str, n_clusters: int, min_cluster_size: int, min_samples: int, recursive: bool, quiet: bool) -> None:
+def cluster_batch(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], method: str, n_clusters: int, min_cluster_size: int, min_samples: int, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch cluster embeddings from files."""
     from bioamla.cli.service_helpers import handle_result, services
     from bioamla.models.batch import BatchConfig
@@ -703,7 +716,7 @@ def cluster_batch(input_dir: Optional[str], input_file: Optional[str], output_di
         input_file=input_file,
         output_dir=output_dir,
         recursive=recursive,
-        max_workers=1,  # Clustering is not parallelized
+        max_workers=max_workers,
         quiet=quiet,
     )
 
