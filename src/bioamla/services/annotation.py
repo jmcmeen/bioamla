@@ -510,8 +510,9 @@ class AnnotationService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.pydub_utils import load_audio_pydub
             from scipy import signal as scipy_signal
+
+            from bioamla.core.audio.pydub_utils import load_audio_pydub
 
             # Load audio region
             audio_data, sample_rate = load_audio_pydub(audio_path)

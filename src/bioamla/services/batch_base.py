@@ -1,7 +1,7 @@
 """Base class for batch processing services."""
 
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, List, Optional, TypeVar

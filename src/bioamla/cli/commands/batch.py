@@ -34,7 +34,7 @@ def audio_info(input_dir: Optional[str], input_file: Optional[str], output_dir: 
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Extracting audio metadata...")
+        click.echo("Extracting audio metadata...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -94,7 +94,7 @@ def audio_convert(input_dir: Optional[str], input_file: Optional[str], output_di
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Converting audio files...")
+        click.echo("Converting audio files...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -140,11 +140,11 @@ def audio_resample(input_dir: Optional[str], input_file: Optional[str], output_d
     """Batch resample audio files to a target sample rate."""
     import sys
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Resampling audio files...")
+        click.echo("Resampling audio files...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -178,11 +178,11 @@ def audio_resample(input_dir: Optional[str], input_file: Optional[str], output_d
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_normalize(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], target_db: float, peak: bool, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch normalize audio levels."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Normalizing audio files...")
+        click.echo("Normalizing audio files...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -218,7 +218,7 @@ def audio_trim(input_dir: Optional[str], input_file: Optional[str], output_dir: 
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Trimming audio files...")
+        click.echo("Trimming audio files...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -349,11 +349,11 @@ def audio_denoise(input_dir: Optional[str], input_file: Optional[str], output_di
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_segment(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], duration: float, overlap: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch segment audio files into fixed-duration chunks."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Segmenting audio files...")
+        click.echo("Segmenting audio files...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -386,7 +386,7 @@ def audio_visualize(input_dir: Optional[str], input_file: Optional[str], output_
     import subprocess
     import sys
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
@@ -444,11 +444,11 @@ def detect() -> None:
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_energy(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], low_freq: float, high_freq: float, threshold_db: float, min_duration: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch detect sounds using band-limited energy detection."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Detecting energy...")
+        click.echo("Detecting energy...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -490,11 +490,11 @@ def detect_energy(input_dir: Optional[str], input_file: Optional[str], output_di
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_ribbit(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], pulse_rate: float, pulse_tolerance: float, low_freq: float, high_freq: float, window_duration: float, min_score: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch detect periodic calls using RIBBIT algorithm."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Detecting RIBBIT calls...")
+        click.echo("Detecting RIBBIT calls...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -536,11 +536,11 @@ def detect_ribbit(input_dir: Optional[str], input_file: Optional[str], output_di
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_peaks(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], snr_threshold: float, min_peak_distance: float, low_freq: float, high_freq: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch detect peaks using Continuous Wavelet Transform."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Detecting peaks...")
+        click.echo("Detecting peaks...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -582,11 +582,11 @@ def detect_peaks(input_dir: Optional[str], input_file: Optional[str], output_dir
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def detect_accelerating(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], min_pulses: int, accel_threshold: float, decel_threshold: float, low_freq: float, high_freq: float, window_duration: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch detect accelerating or decelerating call patterns."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Detecting accelerating patterns...")
+        click.echo("Detecting accelerating patterns...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -639,11 +639,11 @@ def indices_calculate(input_dir: Optional[str], input_file: Optional[str], outpu
     import subprocess
     import sys
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Calculating acoustic indices...")
+        click.echo("Calculating acoustic indices...")
 
     config = BatchConfig(
         input_dir=input_dir,
@@ -701,7 +701,7 @@ def models() -> None:
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def models_predict(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], model: str, top_k: int, min_confidence: float, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch run model predictions on audio files."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
@@ -741,7 +741,7 @@ def models_predict(input_dir: Optional[str], input_file: Optional[str], output_d
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def models_embed(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], model: str, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch extract embeddings from audio files."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
@@ -784,7 +784,7 @@ def models_embed(input_dir: Optional[str], input_file: Optional[str], output_dir
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def cluster_batch(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], method: str, n_clusters: int, min_cluster_size: int, min_samples: int, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch cluster embeddings from files."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cli.service_helpers import services
     from bioamla.models.batch import BatchConfig
 
     if not quiet:
