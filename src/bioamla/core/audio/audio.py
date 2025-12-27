@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-import soundfile as sf
+
+from bioamla.core.audio.pydub_utils import get_audio_info_pydub, load_audio_pydub
 
 logger = logging.getLogger(__name__)
 
@@ -215,33 +216,19 @@ def get_audio_info(filepath: str) -> AudioInfo:
     if not path.exists():
         raise FileNotFoundError(f"Audio file not found: {filepath}")
 
-    with sf.SoundFile(filepath) as f:
-        duration = len(f) / f.samplerate
-        samples = len(f)
-        sample_rate = f.samplerate
-        channels = f.channels
-        subtype = f.subtype
-        format_str = f.format
+    info_dict = get_audio_info_pydub(filepath)
 
-        # Try to determine bit depth from subtype
-        bit_depth = None
-        if subtype:
-            if "16" in subtype:
-                bit_depth = 16
-            elif "24" in subtype:
-                bit_depth = 24
-            elif "32" in subtype:
-                bit_depth = 32
-            elif "8" in subtype:
-                bit_depth = 8
+    # Pydub doesn't provide bit depth or subtype info, so set to None
+    bit_depth = None
+    subtype = None
 
     return AudioInfo(
-        duration=duration,
-        sample_rate=sample_rate,
-        channels=channels,
-        samples=samples,
+        duration=info_dict["duration"],
+        sample_rate=info_dict["sample_rate"],
+        channels=info_dict["channels"],
+        samples=info_dict["samples"],
         bit_depth=bit_depth,
-        format=format_str,
+        format=info_dict["format"],
         subtype=subtype,
     )
 
@@ -742,7 +729,7 @@ def analyze_audio(
     info = get_audio_info(filepath)
 
     # Load audio
-    audio, sr = sf.read(filepath, dtype="float32")
+    audio, sr = load_audio_pydub(filepath)
 
     # Analyze
     amplitude = get_amplitude_stats(audio)

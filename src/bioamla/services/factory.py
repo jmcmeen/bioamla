@@ -198,8 +198,11 @@ class ServiceFactory:
         return BatchDetectionService(file_repository=self.file_repository)
 
     def create_batch_indices_service(self) -> BatchIndicesService:
-        """Create BatchIndicesService with file repository."""
-        return BatchIndicesService(file_repository=self.file_repository)
+        """Create BatchIndicesService with file repository and indices service."""
+        return BatchIndicesService(
+            file_repository=self.file_repository,
+            indices_service=self.create_indices_service(),
+        )
 
     def create_batch_inference_service(self) -> BatchInferenceService:
         """Create BatchInferenceService with file repository (AST-only)."""
