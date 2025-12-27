@@ -240,6 +240,7 @@ class BatchAudioTransformService(BatchServiceBase):
         Returns:
             Updated BatchResult
         """
+        import sys
         from concurrent.futures import ThreadPoolExecutor, as_completed
         from threading import Lock
 
@@ -260,7 +261,7 @@ class BatchAudioTransformService(BatchServiceBase):
                     if not config.continue_on_error:
                         raise FileNotFoundError(error_msg)
                     if not config.quiet:
-                        print(f"Error: {error_msg}")
+                        print(f"Error: {error_msg}", flush=True)
                 else:
                     # Submit only existing files
                     futures[executor.submit(self._process_file_safe, row.file_path, output_paths_lock, local_output_paths)] = row
@@ -277,7 +278,7 @@ class BatchAudioTransformService(BatchServiceBase):
                     if not config.continue_on_error:
                         raise
                     if not config.quiet:
-                        print(f"Error processing {row.file_path}: {e}")
+                        print(f"Error processing {row.file_path}: {e}", flush=True)
 
         # Update CSV rows with new paths (for operations that change files)
         if self._csv_context is not None and self._csv_handler is not None:
@@ -285,6 +286,10 @@ class BatchAudioTransformService(BatchServiceBase):
                 if row.file_path in local_output_paths:
                     new_path = local_output_paths[row.file_path]
                     self._csv_handler.update_row_path(row, new_path, self._csv_context)
+
+        # Ensure all output is flushed before returning
+        sys.stdout.flush()
+        sys.stderr.flush()
 
         return result
 

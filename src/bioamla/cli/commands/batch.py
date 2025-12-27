@@ -332,6 +332,9 @@ def audio_segment(input_dir: Optional[str], input_file: Optional[str], output_di
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_visualize(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], plot_type: str, legend: bool, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch generate audio visualizations."""
+    import subprocess
+    import sys
+
     from bioamla.cli.service_helpers import handle_result, services
     from bioamla.models.batch import BatchConfig
 
@@ -347,13 +350,24 @@ def audio_visualize(input_dir: Optional[str], input_file: Optional[str], output_
         quiet=quiet,
     )
 
-    batch_result = services.batch_audio_transform.visualize_batch(config, plot_type=plot_type, show_legend=legend)
+    try:
+        batch_result = services.batch_audio_transform.visualize_batch(config, plot_type=plot_type, show_legend=legend)
 
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+        if not quiet:
+            click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+            if batch_result.errors:
+                for error in batch_result.errors:
+                    click.echo(f"  Error: {error}")
+    finally:
+        # Force flush all output and reset terminal state
+        sys.stdout.flush()
+        sys.stderr.flush()
+        # Reset terminal to sane state (fixes terminal corruption from parallel processing)
+        if sys.stdout.isatty():
+            try:
+                subprocess.run(["stty", "sane"], check=False, stderr=subprocess.DEVNULL, timeout=1)
+            except Exception:
+                pass  # Silently fail if stty not available
 
 
 # ==============================================================================
