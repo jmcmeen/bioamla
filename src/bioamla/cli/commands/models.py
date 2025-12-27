@@ -126,6 +126,27 @@ def ast_predict(
 )
 @click.option("--mlflow-experiment-name", default=None, help="MLflow experiment name")
 @click.option("--mlflow-run-name", default=None, help="MLflow run name")
+@click.option(
+    "--augment/--no-augment", default=True, help="Enable audio augmentations during training"
+)
+@click.option(
+    "--augment-multiplier",
+    default=1,
+    type=int,
+    help="Create N augmented copies of each training sample (1=no copies, 2=double dataset, etc.)",
+)
+@click.option("--augment-probability", default=0.8, type=float, help="Probability of applying augmentation")
+@click.option("--min-snr-db", default=10.0, type=float, help="Minimum SNR for Gaussian noise (dB)")
+@click.option("--max-snr-db", default=20.0, type=float, help="Maximum SNR for Gaussian noise (dB)")
+@click.option("--min-gain-db", default=-6.0, type=float, help="Minimum gain adjustment (dB)")
+@click.option("--max-gain-db", default=6.0, type=float, help="Maximum gain adjustment (dB)")
+@click.option("--clipping-probability", default=0.5, type=float, help="Probability of clipping distortion")
+@click.option("--min-percentile-threshold", default=0, type=int, help="Min percentile for clipping")
+@click.option("--max-percentile-threshold", default=30, type=int, help="Max percentile for clipping")
+@click.option("--min-time-stretch", default=0.8, type=float, help="Minimum time stretch rate")
+@click.option("--max-time-stretch", default=1.2, type=float, help="Maximum time stretch rate")
+@click.option("--min-pitch-shift", default=-4, type=int, help="Minimum pitch shift (semitones)")
+@click.option("--max-pitch-shift", default=4, type=int, help="Maximum pitch shift (semitones)")
 def ast_train(
     training_dir: str,
     base_model: str,
@@ -155,6 +176,20 @@ def ast_train(
     mlflow_tracking_uri: str,
     mlflow_experiment_name: str,
     mlflow_run_name: str,
+    augment: bool,
+    augment_multiplier: int,
+    augment_probability: float,
+    min_snr_db: float,
+    max_snr_db: float,
+    min_gain_db: float,
+    max_gain_db: float,
+    clipping_probability: float,
+    min_percentile_threshold: int,
+    max_percentile_threshold: int,
+    min_time_stretch: float,
+    max_time_stretch: float,
+    min_pitch_shift: int,
+    max_pitch_shift: int,
 ) -> None:
     """Fine-tune an AST model on a custom dataset."""
     import evaluate
@@ -278,30 +313,58 @@ def ast_train(
             print(f"Warning: Stratified split failed ({e}). Using regular split.")
             dataset = train_data.train_test_split(test_size=test_size, shuffle=True, seed=0)
 
-    audio_augmentations = Compose(
-        [
-            AddGaussianSNR(min_snr_db=10, max_snr_db=20),
-            Gain(min_gain_db=-6, max_gain_db=6),
-            GainTransition(
-                min_gain_db=-6,
-                max_gain_db=6,
-                min_duration=0.01,
-                max_duration=0.3,
-                duration_unit="fraction",
-            ),
-            ClippingDistortion(min_percentile_threshold=0, max_percentile_threshold=30, p=0.5),
-            TimeStretch(min_rate=0.8, max_rate=1.2),
-            PitchShift(min_semitones=-4, max_semitones=4),
-        ],
-        p=0.8,
-        shuffle=True,
-    )
+    # Multiply training dataset if augment_multiplier > 1
+    if augment and augment_multiplier > 1 and isinstance(dataset, DatasetDict) and "train" in dataset:
+        from datasets import concatenate_datasets
+
+        original_train = dataset["train"]
+        original_size = len(original_train)
+        print(f"Multiplying training dataset by {augment_multiplier}x (original: {original_size} samples)")
+
+        # Create copies of the training set
+        train_copies = [original_train]
+        for i in range(augment_multiplier - 1):
+            train_copies.append(original_train)
+
+        dataset["train"] = concatenate_datasets(train_copies)
+        print(f"New training dataset size: {len(dataset['train'])} samples ({augment_multiplier}x augmentation)")
+
+    if augment:
+        audio_augmentations = Compose(
+            [
+                AddGaussianSNR(min_snr_db=min_snr_db, max_snr_db=max_snr_db),
+                Gain(min_gain_db=min_gain_db, max_gain_db=max_gain_db),
+                GainTransition(
+                    min_gain_db=min_gain_db,
+                    max_gain_db=max_gain_db,
+                    min_duration=0.01,
+                    max_duration=0.3,
+                    duration_unit="fraction",
+                ),
+                ClippingDistortion(
+                    min_percentile_threshold=min_percentile_threshold,
+                    max_percentile_threshold=max_percentile_threshold,
+                    p=clipping_probability,
+                ),
+                TimeStretch(min_rate=min_time_stretch, max_rate=max_time_stretch),
+                PitchShift(min_semitones=min_pitch_shift, max_semitones=max_pitch_shift),
+            ],
+            p=augment_probability,
+            shuffle=True,
+        )
+        print(f"Audio augmentations enabled (p={augment_probability})")
+    else:
+        audio_augmentations = None
+        print("Audio augmentations disabled")
 
     def preprocess_audio_with_transforms(batch):
-        wavs = [
-            audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE)
-            for audio in batch["input_values"]
-        ]
+        if audio_augmentations is not None:
+            wavs = [
+                audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE)
+                for audio in batch["input_values"]
+            ]
+        else:
+            wavs = [audio["array"] for audio in batch["input_values"]]
         inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
         return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
 
