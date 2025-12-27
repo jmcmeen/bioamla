@@ -191,6 +191,61 @@ class BatchCSVHandler:
         """
         row.metadata_fields.update(results)
 
+    def expand_row_for_segments(
+        self,
+        parent_row: MetadataRow,
+        segments: List[Any],
+        csv_context: CSVBatchContext,
+    ) -> List[MetadataRow]:
+        """Create multiple output rows from one input row (for segment operation).
+
+        Args:
+            parent_row: Original input row with parent file metadata
+            segments: List of SegmentInfo objects from segment_file()
+            csv_context: CSV batch context
+
+        Returns:
+            List of new MetadataRow objects (one per segment)
+        """
+        new_rows: List[MetadataRow] = []
+
+        for seg_info in segments:
+            # Calculate relative path for segment file
+            try:
+                if csv_context.output_dir:
+                    rel_path = seg_info.segment_path.relative_to(csv_context.output_dir)
+                else:
+                    rel_path = seg_info.segment_path.relative_to(csv_context.csv_dir)
+                file_name = str(rel_path)
+            except ValueError:
+                # If can't make relative, use absolute
+                file_name = str(seg_info.segment_path)
+
+            # Inherit all parent metadata
+            segment_metadata = parent_row.metadata_fields.copy()
+
+            # Add segment-specific fields
+            segment_metadata.update(
+                {
+                    "parent_file": parent_row.file_name,
+                    "segment_id": seg_info.segment_id,
+                    "start_time": seg_info.start_time,
+                    "end_time": seg_info.end_time,
+                    "duration": seg_info.duration,
+                }
+            )
+
+            new_rows.append(
+                MetadataRow(
+                    file_name=file_name,
+                    file_path=seg_info.segment_path,
+                    metadata_fields=segment_metadata,
+                    output_path=seg_info.segment_path,
+                )
+            )
+
+        return new_rows
+
     def write_csv(self, context: CSVBatchContext) -> Path:
         """Write updated metadata CSV to output location.
 

@@ -20,8 +20,8 @@ def audio() -> None:
 
 
 @audio.command("convert")
-@click.argument("input_dir")
-@click.argument("output_dir")
+@batch_input_options
+@batch_output_options
 @click.option("--sample-rate", "-r", default=None, type=int, help="Target sample rate")
 @click.option("--channels", "-c", default=None, type=int, help="Target number of channels")
 @click.option(
@@ -31,35 +31,40 @@ def audio() -> None:
     type=click.Choice(["wav", "mp3", "flac", "ogg"]),
     help="Output format",
 )
+@click.option("--delete-original", is_flag=True, default=False, help="Delete original files after successful conversion")
+@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_convert(input_dir: str, output_dir: str, sample_rate: int, channels: int, format: str, recursive: bool, quiet: bool) -> None:
-    """Batch convert audio files in a directory."""
-    from bioamla.services.batch import BatchService
+def audio_convert(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], sample_rate: int, channels: int, format: str, delete_original: bool, max_workers: int, recursive: bool, quiet: bool) -> None:
+    """Batch convert audio files."""
+    from bioamla.cli.service_helpers import services
+    from bioamla.models.batch import BatchConfig
 
     if not quiet:
-        click.echo(f"Converting audio files from {input_dir} to {output_dir}...")
+        click.echo(f"Converting audio files...")
 
-    controller = BatchService()
-    result = controller.audio_convert(
+    config = BatchConfig(
         input_dir=input_dir,
+        input_file=input_file,
         output_dir=output_dir,
-        format=format,
-        sample_rate=sample_rate,
-        channels=channels,
         recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
     )
 
-    if not result.success:
-        click.echo(f"Error: {result.error}")
-        raise SystemExit(1)
+    batch_result = services.batch_audio_transform.convert_batch(
+        config,
+        target_format=format,
+        target_sr=sample_rate,
+        target_channels=channels,
+        delete_original=delete_original,
+    )
 
-    data = result.data
-    click.echo(f"Converted {data.files_processed} files, {data.files_failed} errors")
-
-    if data.errors and not quiet:
-        for error in data.errors:
-            click.echo(f"  {error}")
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        if batch_result.errors:
+            for error in batch_result.errors:
+                click.echo(f"  Error: {error}")
 
 
 # ==============================================================================
@@ -134,6 +139,143 @@ def audio_normalize(input_dir: Optional[str], input_file: Optional[str], output_
                 click.echo(f"  Error: {error}")
 
 
+@audio.command("trim")
+@batch_input_options
+@batch_output_options
+@click.option("--start", "-s", default=None, type=float, help="Start time in seconds")
+@click.option("--end", "-e", default=None, type=float, help="End time in seconds")
+@click.option("--trim-silence", is_flag=True, help="Trim silence from start/end instead of using time range")
+@click.option("--silence-threshold-db", default=-40.0, type=float, help="Silence threshold in dB (when using --trim-silence)")
+@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
+@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def audio_trim(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], start: Optional[float], end: Optional[float], trim_silence: bool, silence_threshold_db: float, max_workers: int, recursive: bool, quiet: bool) -> None:
+    """Batch trim audio files by time range or remove silence."""
+    from bioamla.cli.service_helpers import services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Trimming audio files...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        input_file=input_file,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    batch_result = services.batch_audio_transform.trim_batch(
+        config,
+        start=start,
+        end=end,
+        trim_silence=trim_silence,
+        silence_threshold_db=silence_threshold_db,
+    )
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        if batch_result.errors:
+            for error in batch_result.errors:
+                click.echo(f"  Error: {error}")
+
+
+@audio.command("filter")
+@batch_input_options
+@batch_output_options
+@click.option("--lowpass", default=None, type=float, help="Lowpass cutoff frequency in Hz")
+@click.option("--highpass", default=None, type=float, help="Highpass cutoff frequency in Hz")
+@click.option("--bandpass-low", default=None, type=float, help="Bandpass low frequency in Hz (requires --bandpass-high)")
+@click.option("--bandpass-high", default=None, type=float, help="Bandpass high frequency in Hz (requires --bandpass-low)")
+@click.option("--order", default=5, type=int, help="Filter order (default: 5)")
+@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
+@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def audio_filter(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], lowpass: Optional[float], highpass: Optional[float], bandpass_low: Optional[float], bandpass_high: Optional[float], order: int, max_workers: int, recursive: bool, quiet: bool) -> None:
+    """Batch apply frequency filters to audio files."""
+    from bioamla.cli.service_helpers import services
+    from bioamla.models.batch import BatchConfig
+
+    # Validate filter options
+    if not any([lowpass, highpass, bandpass_low]):
+        click.echo("Error: Must specify --lowpass, --highpass, or --bandpass-low/--bandpass-high")
+        return
+
+    if (bandpass_low is not None) != (bandpass_high is not None):
+        click.echo("Error: Both --bandpass-low and --bandpass-high must be specified together")
+        return
+
+    bandpass = (bandpass_low, bandpass_high) if bandpass_low is not None else None
+
+    if not quiet:
+        if bandpass:
+            click.echo(f"Applying bandpass filter ({bandpass[0]}-{bandpass[1]} Hz)...")
+        elif lowpass:
+            click.echo(f"Applying lowpass filter ({lowpass} Hz)...")
+        else:
+            click.echo(f"Applying highpass filter ({highpass} Hz)...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        input_file=input_file,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    batch_result = services.batch_audio_transform.filter_batch(
+        config,
+        lowpass=lowpass,
+        highpass=highpass,
+        bandpass=bandpass,
+        order=order,
+    )
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        if batch_result.errors:
+            for error in batch_result.errors:
+                click.echo(f"  Error: {error}")
+
+
+@audio.command("denoise")
+@batch_input_options
+@batch_output_options
+@click.option("--strength", default=1.0, type=float, help="Noise reduction strength (0-2, default: 1.0)")
+@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
+@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def audio_denoise(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], strength: float, max_workers: int, recursive: bool, quiet: bool) -> None:
+    """Batch apply spectral noise reduction to audio files."""
+    from bioamla.cli.service_helpers import services
+    from bioamla.models.batch import BatchConfig
+
+    if not quiet:
+        click.echo(f"Applying spectral noise reduction (strength={strength})...")
+
+    config = BatchConfig(
+        input_dir=input_dir,
+        input_file=input_file,
+        output_dir=output_dir,
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+    batch_result = services.batch_audio_transform.denoise_batch(
+        config,
+        strength=strength,
+    )
+
+    if not quiet:
+        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+        if batch_result.errors:
+            for error in batch_result.errors:
+                click.echo(f"  Error: {error}")
+
+
 @audio.command("segment")
 @batch_input_options
 @batch_output_options
@@ -172,10 +314,11 @@ def audio_segment(input_dir: Optional[str], input_file: Optional[str], output_di
 @batch_input_options
 @batch_output_options
 @click.option("--plot-type", "-t", default="mel", type=click.Choice(["mel", "stft", "mfcc", "waveform"]), help="Visualization type")
+@click.option("--legend/--no-legend", default=True, help="Show axes, title, and colorbar (default: True)")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_visualize(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], plot_type: str, max_workers: int, recursive: bool, quiet: bool) -> None:
+def audio_visualize(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], plot_type: str, legend: bool, max_workers: int, recursive: bool, quiet: bool) -> None:
     """Batch generate audio visualizations."""
     from bioamla.cli.service_helpers import handle_result, services
     from bioamla.models.batch import BatchConfig
@@ -192,7 +335,7 @@ def audio_visualize(input_dir: Optional[str], input_file: Optional[str], output_
         quiet=quiet,
     )
 
-    batch_result = services.batch_audio_transform.visualize_batch(config, plot_type=plot_type)
+    batch_result = services.batch_audio_transform.visualize_batch(config, plot_type=plot_type, show_legend=legend)
 
     if not quiet:
         click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
