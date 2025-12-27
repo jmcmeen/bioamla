@@ -48,24 +48,24 @@ def get_audio_files(
 
 def get_wav_metadata(filepath: str) -> Dict[str, Any]:
     """
-    Get metadata from a WAV file.
+    Get metadata from an audio file (WAV, MP3, FLAC, OGG, M4A, etc.).
 
     Args:
-        filepath: Path to the WAV file
+        filepath: Path to the audio file
 
     Returns:
         Dictionary with audio metadata (sample_rate, channels, duration, etc.)
     """
-    import soundfile as sf
+    from bioamla.core.audio.pydub_utils import get_audio_info_pydub
 
-    info = sf.info(filepath)
+    info = get_audio_info_pydub(filepath)
     return {
-        "sample_rate": info.samplerate,
-        "channels": info.channels,
-        "frames": info.frames,
-        "duration": info.duration,
-        "format": info.format,
-        "subtype": info.subtype,
+        "sample_rate": info["sample_rate"],
+        "channels": info["channels"],
+        "frames": info["samples"],  # pydub calls this "samples"
+        "duration": info["duration"],
+        "format": info["format"],
+        "subtype": None,  # pydub doesn't provide subtype info
     }
 
 
