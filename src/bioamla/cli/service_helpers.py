@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from bioamla.services.ast import ASTService
     from bioamla.services.audio_file import AudioFileService
     from bioamla.services.audio_transform import AudioTransformService
+    from bioamla.services.batch_audio_info import BatchAudioInfoService
     from bioamla.services.batch_audio_transform import BatchAudioTransformService
     from bioamla.services.batch_detection import BatchDetectionService
     from bioamla.services.batch_indices import BatchIndicesService
@@ -227,6 +228,11 @@ class _ServiceAccessor:
         return get_factory().util
 
     # Add batch services
+    @property
+    def batch_audio_info(self) -> "BatchAudioInfoService":
+        """Get BatchAudioInfoService instance."""
+        return get_factory().batch_audio_info
+
     @property
     def batch_audio_transform(self) -> "BatchAudioTransformService":
         """Get BatchAudioTransformService instance."""

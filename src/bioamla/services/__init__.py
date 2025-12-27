@@ -61,6 +61,7 @@ from .audio_transform import (
     ProcessedAudio,
 )
 from .base import BaseService, ServiceResult
+from .batch_audio_info import BatchAudioInfoService
 from .batch_audio_transform import BatchAudioTransformService
 from .batch_base import BatchServiceBase
 from .batch_clustering import BatchClusteringService
