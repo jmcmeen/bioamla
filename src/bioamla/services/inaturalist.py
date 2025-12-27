@@ -278,7 +278,6 @@ class INaturalistService(BaseService):
         delay_between_downloads: float = 1.0,
         organize_by_taxon: bool = True,
         include_metadata: bool = False,
-        file_extensions: Optional[List[str]] = None,
     ) -> ServiceResult[DownloadResult]:
         """
         Download audio files from iNaturalist observations.
@@ -300,7 +299,6 @@ class INaturalistService(BaseService):
             delay_between_downloads: Seconds to wait between file downloads
             organize_by_taxon: If True, organize files into subdirectories by species
             include_metadata: If True, include additional iNaturalist metadata fields
-            file_extensions: List of file extensions to filter by (e.g., ["wav", "mp3"])
 
         Returns:
             ServiceResult with DownloadResult statistics
@@ -320,6 +318,7 @@ class INaturalistService(BaseService):
             stats = {
                 "total_observations": 0,
                 "total_sounds": 0,
+                "observations_with_multiple_sounds": 0,
                 "skipped_existing": 0,
                 "failed_downloads": 0,
             }
@@ -333,14 +332,6 @@ class INaturalistService(BaseService):
             normalized_license = None
             if sound_license:
                 normalized_license = [lic.upper() for lic in sound_license]
-
-            # Normalize file extensions
-            normalized_extensions = None
-            if file_extensions:
-                normalized_extensions = [
-                    ext.lower() if ext.startswith(".") else f".{ext.lower()}"
-                    for ext in file_extensions
-                ]
 
             # Build list of taxon IDs to iterate over
             if taxon_ids:
@@ -428,6 +419,9 @@ class INaturalistService(BaseService):
                         else:
                             species_dir = output_path
 
+                        # Track if this observation has multiple sounds
+                        sound_count_for_obs = 0
+
                         for sound in sounds:
                             sound_id = sound.get("id")
                             file_url = sound.get("file_url")
@@ -437,10 +431,6 @@ class INaturalistService(BaseService):
                                 continue
 
                             ext = get_extension_from_url(file_url)
-
-                            # Skip files that don't match requested extensions
-                            if normalized_extensions and ext.lower() not in normalized_extensions:
-                                continue
 
                             # Skip files that already exist
                             if (obs_id, sound_id) in existing_files:
@@ -454,6 +444,7 @@ class INaturalistService(BaseService):
 
                             if success:
                                 stats["total_sounds"] += 1
+                                sound_count_for_obs += 1
                                 relative_path = filepath.relative_to(output_path)
 
                                 row = {
@@ -488,8 +479,14 @@ class INaturalistService(BaseService):
 
                             time.sleep(delay_between_downloads)
 
-                        observations_processed += 1
-                        stats["total_observations"] += 1
+                        # Only count observation if at least one sound was downloaded
+                        if sound_count_for_obs > 0:
+                            observations_processed += 1
+                            stats["total_observations"] += 1
+
+                            # Track observations with multiple successfully downloaded sounds
+                            if sound_count_for_obs > 1:
+                                stats["observations_with_multiple_sounds"] += 1
 
                     page += 1
 
@@ -519,6 +516,7 @@ class INaturalistService(BaseService):
             result = DownloadResult(
                 total_observations=stats["total_observations"],
                 total_sounds=stats["total_sounds"],
+                observations_with_multiple_sounds=stats["observations_with_multiple_sounds"],
                 skipped_existing=stats["skipped_existing"],
                 failed_downloads=stats["failed_downloads"],
                 output_dir=str(output_path.absolute()),
@@ -605,6 +603,7 @@ class INaturalistService(BaseService):
             result = DownloadResult(
                 total_observations=len(observation_ids),
                 total_sounds=total_sounds,
+                observations_with_multiple_sounds=0,
                 skipped_existing=0,
                 failed_downloads=failed,
                 output_dir=str(output_path),
