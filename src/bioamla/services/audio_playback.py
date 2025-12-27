@@ -164,9 +164,9 @@ class AudioPlayer:
             on_complete: Optional callback when playback completes
             on_position_change: Optional callback for position updates
         """
-        import soundfile as sf
+        from bioamla.core.audio.pydub_utils import load_audio_pydub
 
-        audio, sr = sf.read(filepath, dtype="float32")
+        audio, sr = load_audio_pydub(filepath)
         self.load(audio, sr, on_complete, on_position_change)
 
     def play(self, loop: bool = False) -> None:
