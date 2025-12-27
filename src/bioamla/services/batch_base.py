@@ -229,6 +229,8 @@ class BatchServiceBase(BaseService, ABC):
         self, rows: List[Any], config: BatchConfig, result: BatchResult
     ) -> BatchResult:
         """Process CSV rows in parallel."""
+        import sys
+
         with ThreadPoolExecutor(max_workers=config.max_workers) as executor:
             futures = {}
 
@@ -242,7 +244,7 @@ class BatchServiceBase(BaseService, ABC):
                     if not config.continue_on_error:
                         raise FileNotFoundError(error_msg)
                     if not config.quiet:
-                        print(f"Error: {error_msg}")
+                        print(f"Error: {error_msg}", flush=True)
                 else:
                     # Submit only existing files
                     futures[executor.submit(self.process_file, row.file_path)] = row
@@ -259,7 +261,11 @@ class BatchServiceBase(BaseService, ABC):
                     if not config.continue_on_error:
                         raise
                     if not config.quiet:
-                        print(f"Error processing {row.file_path}: {e}")
+                        print(f"Error processing {row.file_path}: {e}", flush=True)
+
+        # Ensure all output is flushed before returning
+        sys.stdout.flush()
+        sys.stderr.flush()
 
         return result
 

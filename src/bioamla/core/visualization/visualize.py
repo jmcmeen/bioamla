@@ -24,6 +24,10 @@ from typing import Literal, Optional, Tuple, Union
 
 import librosa
 import librosa.display
+import matplotlib
+
+# Use non-interactive backend for thread safety in parallel processing
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
