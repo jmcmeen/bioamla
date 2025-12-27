@@ -1137,28 +1137,54 @@ class AudioTransformService(BaseService):
             if prefix is None:
                 prefix = Path(input_path).stem
 
+            # Calculate hop duration for segment timing
+            hop_duration = step_samples / sr
+            total_duration = len(audio) / sr
+
             # Segment the audio
             segments_created = 0
             errors = []
             position = 0
+            segment_infos = []
 
             while position + segment_samples <= len(audio):
                 segment = audio[position : position + segment_samples]
                 segment_file = output_path / f"{prefix}_{segments_created:04d}.{format}"
+
+                # Calculate temporal bounds for this segment
+                start_time = segments_created * hop_duration
+                end_time = min(start_time + duration, total_duration)
+
                 try:
                     save_audio(str(segment_file), segment, sr)
+
+                    # Track segment info for metadata
+                    from bioamla.models.batch import SegmentInfo
+                    segment_infos.append(
+                        SegmentInfo(
+                            segment_path=segment_file,
+                            segment_id=segments_created,
+                            start_time=start_time,
+                            end_time=end_time,
+                            duration=duration,
+                        )
+                    )
+
                     segments_created += 1
                 except Exception as e:
                     errors.append(f"{segment_file}: {e}")
                 position += step_samples
 
             return ServiceResult.ok(
-                data=BatchResult(
-                    processed=segments_created,
-                    failed=len(errors),
-                    output_path=str(output_path),
-                    errors=errors,
-                ),
+                data={
+                    "batch_result": BatchResult(
+                        processed=segments_created,
+                        failed=len(errors),
+                        output_path=str(output_path),
+                        errors=errors,
+                    ),
+                    "segments": segment_infos,
+                },
                 message=f"Created {segments_created} segments in {output_dir}",
             )
         except Exception as e:
@@ -1265,6 +1291,7 @@ class AudioTransformService(BaseService):
         n_mfcc: int = 20,
         cmap: str = "viridis",
         dpi: int = 100,
+        show_legend: bool = True,
     ) -> ServiceResult[str]:
         """
         Generate audio visualization.
@@ -1279,6 +1306,7 @@ class AudioTransformService(BaseService):
             n_mfcc: Number of MFCCs
             cmap: Colormap name
             dpi: Output DPI
+            show_legend: If True, show axes, title, and colorbar. If False, clean image only.
 
         Returns:
             Result with output path
@@ -1300,6 +1328,7 @@ class AudioTransformService(BaseService):
                 n_mfcc=n_mfcc,
                 cmap=cmap,
                 dpi=dpi,
+                show_colorbar=show_legend,
             )
 
             return ServiceResult.ok(

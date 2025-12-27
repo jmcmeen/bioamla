@@ -1,6 +1,7 @@
 """Batch processing configuration and result models."""
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from bioamla.models.base import ToDictMixin
@@ -32,6 +33,17 @@ class BatchConfig(ToDictMixin):
             raise ValueError("Either input_dir or input_file must be specified")
         if self.input_dir is not None and self.input_file is not None:
             raise ValueError("input_dir and input_file are mutually exclusive")
+
+
+@dataclass
+class SegmentInfo:
+    """Information about a created audio segment."""
+
+    segment_path: Path
+    segment_id: int
+    start_time: float
+    end_time: float
+    duration: float
 
 
 @dataclass
