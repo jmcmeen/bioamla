@@ -65,7 +65,8 @@ def get_wav_metadata(filepath: str) -> Dict[str, Any]:
         "frames": info["samples"],  # pydub calls this "samples"
         "duration": info["duration"],
         "format": info["format"],
-        "subtype": None,  # pydub doesn't provide subtype info
+        "subtype": info.get("subtype"),  # Now available via ffprobe
+        "bit_depth": info.get("bit_depth"),  # Now available via ffprobe
     }
 
 
