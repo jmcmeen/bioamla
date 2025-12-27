@@ -265,7 +265,7 @@ class BatchCSVHandler:
         if context.output_dir:
             output_csv_path = context.output_dir / context.csv_path.name
             # Ensure output directory exists
-            self.file_repository.mkdir(context.output_dir, parents=True)
+            self.file_repository.mkdir(str(context.output_dir), parents=True)
         else:
             output_csv_path = context.csv_path
 

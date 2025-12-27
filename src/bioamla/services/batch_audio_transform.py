@@ -240,15 +240,78 @@ class BatchAudioTransformService(BatchServiceBase):
         Returns:
             Updated BatchResult
         """
-        # Call parent to do the actual processing
-        result = super()._process_csv_parallel(rows, config, result)
+        import sys
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from threading import Lock
+
+        # Thread-safe storage for output paths
+        output_paths_lock = Lock()
+        local_output_paths: Dict[Path, Path] = {}
+
+        with ThreadPoolExecutor(max_workers=config.max_workers) as executor:
+            futures = {}
+
+            # Check file existence before submitting to executor (fail fast)
+            for row in rows:
+                if not row.file_path.exists():
+                    # Handle missing file immediately
+                    result.failed += 1
+                    error_msg = f"{row.file_path}: File not found"
+                    result.errors.append(error_msg)
+                    if not config.continue_on_error:
+                        raise FileNotFoundError(error_msg)
+                    if not config.quiet:
+                        print(f"Error: {error_msg}", flush=True)
+                else:
+                    # Submit only existing files
+                    futures[executor.submit(self._process_file_safe, row.file_path, output_paths_lock, local_output_paths)] = row
+
+            for future in as_completed(futures):
+                row = futures[future]
+                try:
+                    future.result()
+                    result.successful += 1
+                except Exception as e:
+                    result.failed += 1
+                    error_msg = f"{row.file_path}: {str(e)}"
+                    result.errors.append(error_msg)
+                    if not config.continue_on_error:
+                        raise
+                    if not config.quiet:
+                        print(f"Error processing {row.file_path}: {e}", flush=True)
 
         # Update CSV rows with new paths (for operations that change files)
         if self._csv_context is not None and self._csv_handler is not None:
             for row in self._csv_context.rows:
-                if row.file_path in self._output_paths:
-                    new_path = self._output_paths[row.file_path]
+                if row.file_path in local_output_paths:
+                    new_path = local_output_paths[row.file_path]
                     self._csv_handler.update_row_path(row, new_path, self._csv_context)
+
+        # Ensure all output is flushed before returning
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+        return result
+
+    def _process_file_safe(
+        self, file_path: Path, lock: Any, output_paths: Dict[Path, Path]
+    ) -> Any:
+        """Thread-safe wrapper around process_file that collects output paths.
+
+        Args:
+            file_path: Path to file to process
+            lock: Threading lock for output_paths dict
+            output_paths: Dict to collect output paths (thread-safe with lock)
+
+        Returns:
+            Result of process_file
+        """
+        result = self.process_file(file_path)
+
+        # Safely collect output path if in CSV mode
+        if self._csv_context is not None and file_path in self._output_paths:
+            with lock:
+                output_paths[file_path] = self._output_paths[file_path]
 
         return result
 
@@ -280,6 +343,7 @@ class BatchAudioTransformService(BatchServiceBase):
             "output_dir": config.output_dir,
             "delete_original": delete_original,
         }
+        self._output_paths = {}  # Reset for new batch
 
         def audio_filter(path: Path) -> bool:
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
@@ -306,6 +370,7 @@ class BatchAudioTransformService(BatchServiceBase):
             "target_sr": target_sr,
             "output_dir": config.output_dir,
         }
+        self._output_paths = {}  # Reset for new batch
 
         def audio_filter(path: Path) -> bool:
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
@@ -335,6 +400,7 @@ class BatchAudioTransformService(BatchServiceBase):
             "peak": peak,
             "output_dir": config.output_dir,
         }
+        self._output_paths = {}  # Reset for new batch
 
         def audio_filter(path: Path) -> bool:
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
@@ -370,6 +436,7 @@ class BatchAudioTransformService(BatchServiceBase):
             "silence_threshold_db": silence_threshold_db,
             "output_dir": config.output_dir,
         }
+        self._output_paths = {}  # Reset for new batch
 
         def audio_filter(path: Path) -> bool:
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
@@ -503,6 +570,7 @@ class BatchAudioTransformService(BatchServiceBase):
             "show_legend": show_legend,
             "output_dir": config.output_dir,
         }
+        self._output_paths = {}  # Reset for new batch
 
         def audio_filter(path: Path) -> bool:
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
@@ -538,6 +606,7 @@ class BatchAudioTransformService(BatchServiceBase):
             "order": order,
             "output_dir": config.output_dir,
         }
+        self._output_paths = {}  # Reset for new batch
 
         def audio_filter(path: Path) -> bool:
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
@@ -564,6 +633,7 @@ class BatchAudioTransformService(BatchServiceBase):
             "strength": strength,
             "output_dir": config.output_dir,
         }
+        self._output_paths = {}  # Reset for new batch
 
         def audio_filter(path: Path) -> bool:
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
