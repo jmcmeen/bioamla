@@ -22,6 +22,7 @@ Example usage:
 """
 
 import csv
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -36,9 +37,8 @@ from bioamla.core.audio.torchaudio import (
 )
 from bioamla.core.device import get_device
 from bioamla.core.files import TextFile
-from bioamla.core.logger import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @dataclass

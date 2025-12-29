@@ -12,13 +12,13 @@ Note:
 """
 
 import csv
+import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from bioamla.core.files import TextFile, sanitize_filename
 from bioamla.core.http import APIClient, RateLimiter
-from bioamla.core.logger import get_logger
 from bioamla.models.macaulay import (
     ML_SEARCH_URL,
     DownloadResult,
@@ -28,7 +28,7 @@ from bioamla.models.macaulay import (
 
 from .base import BaseService, ServiceResult
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class MacaulayService(BaseService):

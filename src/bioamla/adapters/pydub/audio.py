@@ -11,6 +11,7 @@ Design notes:
 """
 
 import json
+import logging
 import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
@@ -18,9 +19,7 @@ from typing import Optional, Tuple
 import numpy as np
 from pydub import AudioSegment
 
-from bioamla.core.logger import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class PydubAudioAdapter:

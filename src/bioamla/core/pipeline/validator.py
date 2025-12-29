@@ -27,16 +27,15 @@ Example:
             print(f"Error: {error}")
 """
 
+import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from bioamla.core.logger import get_logger
-
 from .parser import Pipeline, PipelineStep
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "ValidationResult",
