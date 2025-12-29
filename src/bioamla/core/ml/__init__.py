@@ -46,7 +46,6 @@ def _ensure_models_registered() -> None:
     from bioamla.core.ml import (
         ast_model,  # noqa: F401
         birdnet,  # noqa: F401
-        opensoundscape,  # noqa: F401
     )
 
 
@@ -89,22 +88,6 @@ def __getattr__(name: str) -> Any:
         from bioamla.core.ml import birdnet
 
         return getattr(birdnet, name)
-    if name in ("OpenSoundscapeModel", "SpectrogramCNN"):
-        from bioamla.core.ml import opensoundscape
-
-        return getattr(opensoundscape, name)
-
-    # Training utilities
-    if name in (
-        "ModelTrainer",
-        "SpectrogramDataset",
-        "TrainingConfig",
-        "TrainingMetrics",
-        "train_model",
-    ):
-        from bioamla.core.ml import trainer
-
-        return getattr(trainer, name)
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
@@ -121,14 +104,6 @@ __all__ = [
     "ASTModel",
     "BirdNETModel",
     "BirdNETEncoder",
-    "OpenSoundscapeModel",
-    "SpectrogramCNN",
-    # Training
-    "ModelTrainer",
-    "TrainingConfig",
-    "TrainingMetrics",
-    "SpectrogramDataset",
-    "train_model",
     # Registry functions
     "register_model",
     "get_model_class",
