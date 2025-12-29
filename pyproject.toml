@@ -44,6 +44,7 @@ dependencies = [
   "bioacoustics-model-zoo>=0.8.0",
   "ai-edge-litert>=1.0.0",
   "tensorflow>=2.15.0",
+  "tf-keras>=2.15.0",
   "timm>=1.0.0",
 ]
 
