@@ -9,6 +9,13 @@ system introspection and troubleshooting support.
 The module offers tools to examine package versions, CUDA device availability,
 and other runtime environment details that are crucial for debugging and
 ensuring proper bioamla functionality across different deployment scenarios.
+
+Status:
+    This module is currently not actively used but is retained for future
+    development and debugging purposes. Related functionality for runtime
+    checks can be found in:
+    - bioamla.services.util (runtime utilities)
+    - bioamla.services.dependency (dependency checking)
 """
 
 import importlib.metadata

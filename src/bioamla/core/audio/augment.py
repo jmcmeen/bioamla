@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-import soundfile as sf
 from audiomentations import (
     AddGaussianSNR,
     Compose,
@@ -27,6 +26,7 @@ from audiomentations import (
     TimeStretch,
 )
 
+from bioamla.core.audio.pydub_utils import save_audio_pydub
 from bioamla.core.audio.torchaudio import load_waveform_tensor
 
 
@@ -200,7 +200,7 @@ def augment_file(
 
     # Save output
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    sf.write(str(output_path), augmented, config.sample_rate)
+    save_audio_pydub(str(output_path), augmented, config.sample_rate)
 
     return str(output_path)
 
@@ -310,7 +310,7 @@ def batch_augment(
 
                 # Save output
                 out_path.parent.mkdir(parents=True, exist_ok=True)
-                sf.write(str(out_path), augmented, config.sample_rate)
+                save_audio_pydub(str(out_path), augmented, config.sample_rate)
 
                 files_created += 1
 

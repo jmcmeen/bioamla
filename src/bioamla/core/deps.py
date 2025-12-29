@@ -2,7 +2,7 @@
 System dependency checking and installation for bioamla.
 
 This module provides utilities to check for and install system-level
-dependencies required by bioamla (FFmpeg, libsndfile, PortAudio).
+dependencies required by bioamla (FFmpeg, PortAudio).
 """
 
 import platform
@@ -83,45 +83,6 @@ def check_ffmpeg() -> DependencyStatus:
     )
 
 
-def check_libsndfile() -> DependencyStatus:
-    """Check if libsndfile is installed."""
-    installed = False
-    version = None
-
-    # Try pkg-config first
-    if shutil.which("pkg-config"):
-        try:
-            result = subprocess.run(
-                ["pkg-config", "--modversion", "sndfile"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                installed = True
-                version = result.stdout.strip()
-        except Exception:
-            pass
-
-    # Fallback: try importing soundfile (will fail if libsndfile missing)
-    if not installed:
-        try:
-            import soundfile
-
-            installed = True
-            version = getattr(soundfile, "__libsndfile_version__", "unknown")
-        except (ImportError, OSError):
-            pass
-
-    return DependencyStatus(
-        name="libsndfile",
-        description="Audio file I/O library",
-        required_for="Reading/writing audio files",
-        installed=installed,
-        version=version,
-    )
-
-
 def check_portaudio() -> DependencyStatus:
     """Check if PortAudio is installed."""
     installed = False
@@ -173,7 +134,6 @@ def check_all_dependencies() -> list[DependencyStatus]:
 
     deps = [
         check_ffmpeg(),
-        check_libsndfile(),
         check_portaudio(),
     ]
 
@@ -197,32 +157,26 @@ def get_install_commands(os_type: str) -> dict[str, str]:
     commands = {
         "debian": {
             "ffmpeg": "sudo apt install ffmpeg",
-            "libsndfile": "sudo apt install libsndfile1",
             "portaudio": "sudo apt install portaudio19-dev",
         },
         "fedora": {
             "ffmpeg": "sudo dnf install ffmpeg",
-            "libsndfile": "sudo dnf install libsndfile",
             "portaudio": "sudo dnf install portaudio",
         },
         "rhel": {
             "ffmpeg": "sudo yum install ffmpeg",
-            "libsndfile": "sudo yum install libsndfile",
             "portaudio": "sudo yum install portaudio",
         },
         "arch": {
             "ffmpeg": "sudo pacman -S ffmpeg",
-            "libsndfile": "sudo pacman -S libsndfile",
             "portaudio": "sudo pacman -S portaudio",
         },
         "macos": {
             "ffmpeg": "brew install ffmpeg",
-            "libsndfile": "brew install libsndfile",
             "portaudio": "brew install portaudio",
         },
         "windows": {
             "ffmpeg": "choco install ffmpeg  # or download from ffmpeg.org",
-            "libsndfile": "pip install soundfile  # usually bundled on Windows",
             "portaudio": "pip install sounddevice  # usually bundled on Windows",
         },
     }
@@ -240,11 +194,11 @@ def get_full_install_command(os_type: str) -> Optional[str]:
         Full install command string, or None if not available.
     """
     commands = {
-        "debian": "sudo apt install ffmpeg libsndfile1 portaudio19-dev",
-        "fedora": "sudo dnf install ffmpeg libsndfile portaudio",
-        "rhel": "sudo yum install ffmpeg libsndfile portaudio",
-        "arch": "sudo pacman -S ffmpeg libsndfile portaudio",
-        "macos": "brew install ffmpeg libsndfile portaudio",
+        "debian": "sudo apt install ffmpeg portaudio19-dev",
+        "fedora": "sudo dnf install ffmpeg portaudio",
+        "rhel": "sudo yum install ffmpeg portaudio",
+        "arch": "sudo pacman -S ffmpeg portaudio",
+        "macos": "brew install ffmpeg portaudio",
     }
     return commands.get(os_type)
 
@@ -266,15 +220,14 @@ def run_install(os_type: Optional[str] = None) -> tuple[bool, str]:
             "Automatic installation not supported on Windows.\n"
             "Please install manually:\n"
             "  - FFmpeg: https://ffmpeg.org/download.html or 'choco install ffmpeg'\n"
-            "  - libsndfile and PortAudio are usually bundled with pip packages"
+            "  - PortAudio is usually bundled with pip packages"
         )
 
     if os_type == "unknown" or os_type == "unknown-linux":
         return False, (
             "Could not detect your operating system.\n"
             "Please install manually:\n"
-            "  - FFmpeg (for audio format support)\n"
-            "  - libsndfile (for audio file I/O)\n"
+            "  - FFmpeg (for audio format support via pydub)\n"
             "  - PortAudio (for real-time recording)"
         )
 
@@ -291,7 +244,7 @@ def run_install(os_type: Optional[str] = None) -> tuple[bool, str]:
         if os_type == "macos":
             # Homebrew command
             result = subprocess.run(
-                ["brew", "install", "ffmpeg", "libsndfile", "portaudio"],
+                ["brew", "install", "ffmpeg", "portaudio"],
                 capture_output=True,
                 text=True,
                 timeout=300,

@@ -38,6 +38,7 @@ from .annotation import AnnotationService
 from .ast import ASTService
 from .audio_file import AudioFileService
 from .audio_transform import AudioTransformService
+from .batch_audio_info import BatchAudioInfoService
 from .batch_audio_transform import BatchAudioTransformService
 from .batch_clustering import BatchClusteringService
 from .batch_detection import BatchDetectionService
@@ -60,6 +61,7 @@ from .inference import InferenceService
 from .macaulay import MacaulayService
 from .ribbit import RibbitService
 from .species import SpeciesService
+from .util import UtilityService
 from .xeno_canto import XenoCantoService
 
 
@@ -180,29 +182,58 @@ class ServiceFactory:
         """Create DependencyService (system checker, no file repository)."""
         return DependencyService()
 
+    def create_utility_service(self) -> UtilityService:
+        """Create UtilityService (system info, no file repository)."""
+        return UtilityService()
+
     # ========================================================================
     # Batch Services (File-Based)
     # ========================================================================
 
+    def create_batch_audio_info_service(self) -> BatchAudioInfoService:
+        """Create BatchAudioInfoService with file repository."""
+        return BatchAudioInfoService(
+            file_repository=self.file_repository,
+        )
+
     def create_batch_audio_transform_service(self) -> BatchAudioTransformService:
-        """Create BatchAudioTransformService with file repository."""
-        return BatchAudioTransformService(file_repository=self.file_repository)
+        """Create BatchAudioTransformService with file repository and audio transform service."""
+        audio_transform_service = self.create_audio_transform_service()
+        return BatchAudioTransformService(
+            file_repository=self.file_repository,
+            audio_transform_service=audio_transform_service,
+        )
 
     def create_batch_detection_service(self) -> BatchDetectionService:
-        """Create BatchDetectionService with file repository."""
-        return BatchDetectionService(file_repository=self.file_repository)
+        """Create BatchDetectionService with file repository and detection service."""
+        detection_service = self.create_detection_service()
+        return BatchDetectionService(
+            file_repository=self.file_repository,
+            detection_service=detection_service,
+        )
 
     def create_batch_indices_service(self) -> BatchIndicesService:
-        """Create BatchIndicesService with file repository."""
-        return BatchIndicesService(file_repository=self.file_repository)
+        """Create BatchIndicesService with file repository and indices service."""
+        return BatchIndicesService(
+            file_repository=self.file_repository,
+            indices_service=self.create_indices_service(),
+        )
 
     def create_batch_inference_service(self) -> BatchInferenceService:
-        """Create BatchInferenceService with file repository (AST-only)."""
-        return BatchInferenceService(file_repository=self.file_repository)
+        """Create BatchInferenceService with file repository and inference service (AST-only)."""
+        inference_service = self.create_inference_service()
+        return BatchInferenceService(
+            file_repository=self.file_repository,
+            inference_service=inference_service,
+        )
 
     def create_batch_clustering_service(self) -> BatchClusteringService:
-        """Create BatchClusteringService with file repository."""
-        return BatchClusteringService(file_repository=self.file_repository)
+        """Create BatchClusteringService with file repository and clustering service."""
+        clustering_service = self.create_clustering_service()
+        return BatchClusteringService(
+            file_repository=self.file_repository,
+            clustering_service=clustering_service,
+        )
 
     # ========================================================================
     # Property-Based Access (Convenience for CLI and other applications)
@@ -317,6 +348,16 @@ class ServiceFactory:
     def dependency(self) -> DependencyService:
         """Convenience property for create_dependency_service()."""
         return self.create_dependency_service()
+
+    @property
+    def util(self) -> UtilityService:
+        """Convenience property for create_utility_service()."""
+        return self.create_utility_service()
+
+    @property
+    def batch_audio_info(self) -> BatchAudioInfoService:
+        """Convenience property for create_batch_audio_info_service()."""
+        return self.create_batch_audio_info_service()
 
     @property
     def batch_audio_transform(self) -> BatchAudioTransformService:

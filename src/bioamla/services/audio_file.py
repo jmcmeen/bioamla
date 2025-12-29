@@ -123,14 +123,14 @@ class AudioFileService(BaseService):
         Returns:
             ServiceResult containing AudioData on success
         """
-        import soundfile as sf
+        from bioamla.core.audio.pydub_utils import load_audio_pydub
 
         error = self._validate_input_path(filepath)
         if error:
             return ServiceResult.fail(error)
 
         try:
-            audio, sr = sf.read(filepath, dtype="float32")
+            audio, sr = load_audio_pydub(filepath)
 
             # Ensure 1D for mono
             if audio.ndim == 1:
@@ -176,7 +176,7 @@ class AudioFileService(BaseService):
         Returns:
             ServiceResult containing the output path on success
         """
-        import soundfile as sf
+        from bioamla.core.audio.pydub_utils import save_audio_pydub
 
         error = self._validate_output_path(output_path)
         if error:
@@ -191,14 +191,15 @@ class AudioFileService(BaseService):
             if format_to_use is None:
                 ext = output.suffix.lower()
                 format_map = {
-                    ".wav": "WAV",
-                    ".flac": "FLAC",
-                    ".ogg": "OGG",
-                    ".mp3": "MP3",
+                    ".wav": "wav",
+                    ".flac": "flac",
+                    ".ogg": "ogg",
+                    ".mp3": "mp3",
+                    ".m4a": "ipod",  # pydub uses "ipod" for M4A/AAC
                 }
-                format_to_use = format_map.get(ext, "WAV")
+                format_to_use = format_map.get(ext, "wav")
 
-            sf.write(
+            save_audio_pydub(
                 str(output),
                 audio_data.samples,
                 audio_data.sample_rate,
@@ -301,7 +302,7 @@ class AudioFileService(BaseService):
         Returns:
             ServiceResult containing the output path on success
         """
-        import soundfile as sf
+        from bioamla.core.audio.pydub_utils import load_audio_pydub, save_audio_pydub
 
         input_error = self._validate_input_path(input_path)
         if input_error:
@@ -313,7 +314,7 @@ class AudioFileService(BaseService):
 
         try:
             # Load input
-            audio, sr = sf.read(str(input_path), dtype="float32")
+            audio, sr = load_audio_pydub(str(input_path))
 
             # Apply transform
             processed, out_sr = transform(audio, sr)
@@ -322,7 +323,7 @@ class AudioFileService(BaseService):
             self.file_repository.mkdir(Path(output_path).parent, parents=True)
 
             # Save
-            sf.write(str(output_path), processed, out_sr)
+            save_audio_pydub(str(output_path), processed, out_sr)
 
             return ServiceResult.ok(
                 data=str(output_path),
@@ -353,7 +354,7 @@ class AudioFileService(BaseService):
         Returns:
             ServiceResult containing the temporary file path
         """
-        import soundfile as sf
+        from bioamla.core.audio.pydub_utils import save_audio_pydub
 
         try:
             temp_dir = self._get_temp_dir()
@@ -365,7 +366,7 @@ class AudioFileService(BaseService):
             temp_path = temp_file.name
             temp_file.close()
 
-            sf.write(temp_path, audio_data.samples, audio_data.sample_rate)
+            save_audio_pydub(temp_path, audio_data.samples, audio_data.sample_rate)
 
             return ServiceResult.ok(
                 data=temp_path,

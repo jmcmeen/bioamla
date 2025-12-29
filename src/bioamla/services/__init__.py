@@ -47,6 +47,7 @@ Usage:
     result = transform_svc.resample_batch("input_dir", "output_dir", 16000)
 """
 
+from bioamla.models.detection import BatchDetectionResult, DetectionInfo, DetectionResult
 from bioamla.models.ribbit import BatchDetectionSummary, DetectionSummary
 
 from .annotation import AnnotationResult, AnnotationService, ClipExtractionResult
@@ -60,6 +61,7 @@ from .audio_transform import (
     ProcessedAudio,
 )
 from .base import BaseService, ServiceResult
+from .batch_audio_info import BatchAudioInfoService
 from .batch_audio_transform import BatchAudioTransformService
 from .batch_base import BatchServiceBase
 from .batch_clustering import BatchClusteringService
@@ -72,7 +74,7 @@ from .cnn import CNNService
 from .config import ConfigService
 from .dataset import AugmentResult, DatasetService, LicenseResult, MergeResult
 from .dependency import DependencyInfo, DependencyReport, DependencyService
-from .detection import BatchDetectionResult, DetectionInfo, DetectionResult, DetectionService
+from .detection import DetectionService
 from .ebird import EBirdService
 from .embedding import EmbeddingService
 from .factory import ServiceFactory

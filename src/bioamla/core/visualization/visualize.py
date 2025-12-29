@@ -24,6 +24,10 @@ from typing import Literal, Optional, Tuple, Union
 
 import librosa
 import librosa.display
+import matplotlib
+
+# Use non-interactive backend for thread safety in parallel processing
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -50,6 +54,7 @@ def generate_spectrogram(
     db_max: Optional[float] = None,
     dpi: int = 150,
     format: Optional[str] = None,
+    show_colorbar: bool = True,
 ) -> str:
     """
     Generate a spectrogram visualization from an audio file.
@@ -72,6 +77,7 @@ def generate_spectrogram(
         db_max: Maximum dB value for scaling (clips values above this)
         dpi: Resolution for output image (dots per inch)
         format: Output format ('png', 'jpg', 'jpeg'). If None, inferred from extension.
+        show_colorbar: Whether to show colorbar legend (default: True)
 
     Returns:
         str: Path to the saved output image
@@ -125,6 +131,7 @@ def generate_spectrogram(
             title=title,
             db_min=db_min,
             db_max=db_max,
+            show_legend=show_colorbar,
         )
     elif viz_type == "mel":
         _plot_mel_spectrogram(
@@ -139,6 +146,7 @@ def generate_spectrogram(
             title=title,
             db_min=db_min,
             db_max=db_max,
+            show_legend=show_colorbar,
         )
     elif viz_type == "mfcc":
         _plot_mfcc(
@@ -151,11 +159,19 @@ def generate_spectrogram(
             window=win_func,
             cmap=cmap,
             title=title,
+            show_legend=show_colorbar,
         )
     elif viz_type == "waveform":
-        _plot_waveform(audio, sample_rate, ax, title=title)
+        _plot_waveform(audio, sample_rate, ax, title=title, show_legend=show_colorbar)
 
-    plt.tight_layout()
+    # Only use tight_layout when legend is shown, otherwise use full canvas
+    if show_colorbar:
+        plt.tight_layout()
+    else:
+        # Remove all margins for borderless output
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        # Also remove figure padding
+        fig.tight_layout(pad=0)
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -169,7 +185,16 @@ def generate_spectrogram(
             format = "png"
 
     # Save with appropriate settings for format
-    save_kwargs = {"dpi": dpi, "bbox_inches": "tight"}
+    save_kwargs = {"dpi": dpi}
+
+    # When legend is hidden, ensure completely borderless output
+    if show_colorbar:
+        save_kwargs["bbox_inches"] = "tight"
+    else:
+        # Use bbox_inches='tight' with pad_inches=0 for truly borderless images
+        save_kwargs["bbox_inches"] = "tight"
+        save_kwargs["pad_inches"] = 0
+
     if format == "jpeg":
         save_kwargs["format"] = "jpeg"
         save_kwargs["pil_kwargs"] = {"quality": 95}
@@ -222,6 +247,7 @@ def _plot_stft_spectrogram(
     title: str,
     db_min: Optional[float] = None,
     db_max: Optional[float] = None,
+    show_legend: bool = True,
 ) -> None:
     """Plot an STFT spectrogram."""
     # Compute STFT
@@ -240,15 +266,20 @@ def _plot_stft_spectrogram(
         stft_db,
         sr=sample_rate,
         hop_length=hop_length,
-        x_axis="time",
-        y_axis="hz",
+        x_axis="time" if show_legend else None,
+        y_axis="hz" if show_legend else None,
         ax=ax,
         cmap=cmap,
         vmin=vmin,
         vmax=vmax,
     )
-    ax.set_title(f"STFT Spectrogram - {title}")
-    plt.colorbar(img, ax=ax, format="%+2.0f dB")
+
+    if show_legend:
+        ax.set_title(f"STFT Spectrogram - {title}")
+        ax.figure.colorbar(img, ax=ax, format="%+2.0f dB")
+    else:
+        # Remove all decorations for clean spectrogram
+        ax.axis("off")
 
 
 def _plot_mel_spectrogram(
@@ -263,6 +294,7 @@ def _plot_mel_spectrogram(
     title: str,
     db_min: Optional[float] = None,
     db_max: Optional[float] = None,
+    show_legend: bool = True,
 ) -> None:
     """Plot a mel spectrogram."""
     # Compute STFT first with custom window
@@ -285,15 +317,20 @@ def _plot_mel_spectrogram(
         mel_spec_db,
         sr=sample_rate,
         hop_length=hop_length,
-        x_axis="time",
-        y_axis="mel",
+        x_axis="time" if show_legend else None,
+        y_axis="mel" if show_legend else None,
         ax=ax,
         cmap=cmap,
         vmin=vmin,
         vmax=vmax,
     )
-    ax.set_title(f"Mel Spectrogram - {title}")
-    plt.colorbar(img, ax=ax, format="%+2.0f dB")
+
+    if show_legend:
+        ax.set_title(f"Mel Spectrogram - {title}")
+        ax.figure.colorbar(img, ax=ax, format="%+2.0f dB")
+    else:
+        # Remove all decorations for clean spectrogram
+        ax.axis("off")
 
 
 def _plot_mfcc(
@@ -306,6 +343,7 @@ def _plot_mfcc(
     window: np.ndarray,
     cmap: str,
     title: str,
+    show_legend: bool = True,
 ) -> None:
     """Plot MFCCs."""
     # Compute STFT first with custom window
@@ -318,11 +356,21 @@ def _plot_mfcc(
     mfccs = librosa.feature.mfcc(S=librosa.power_to_db(mel_spec), n_mfcc=n_mfcc)
 
     img = librosa.display.specshow(
-        mfccs, sr=sample_rate, hop_length=hop_length, x_axis="time", ax=ax, cmap=cmap
+        mfccs,
+        sr=sample_rate,
+        hop_length=hop_length,
+        x_axis="time" if show_legend else None,
+        ax=ax,
+        cmap=cmap,
     )
-    ax.set_title(f"MFCC - {title}")
-    ax.set_ylabel("MFCC Coefficient")
-    plt.colorbar(img, ax=ax)
+
+    if show_legend:
+        ax.set_title(f"MFCC - {title}")
+        ax.set_ylabel("MFCC Coefficient")
+        ax.figure.colorbar(img, ax=ax)
+    else:
+        # Remove all decorations for clean spectrogram
+        ax.axis("off")
 
 
 def _plot_waveform(
@@ -330,14 +378,20 @@ def _plot_waveform(
     sample_rate: int,
     ax: plt.Axes,
     title: str,
+    show_legend: bool = True,
 ) -> None:
     """Plot a time-domain waveform."""
     times = np.arange(len(audio)) / sample_rate
     ax.plot(times, audio, linewidth=0.5)
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Amplitude")
-    ax.set_title(f"Waveform - {title}")
-    ax.set_xlim([0, times[-1]])
+
+    if show_legend:
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel("Amplitude")
+        ax.set_title(f"Waveform - {title}")
+        ax.set_xlim([0, times[-1]])
+    else:
+        # Remove all decorations for clean waveform
+        ax.axis("off")
 
 
 def compute_stft(

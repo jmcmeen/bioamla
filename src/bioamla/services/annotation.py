@@ -421,10 +421,10 @@ class AnnotationService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            import soundfile as sf
+            from bioamla.core.audio.pydub_utils import load_audio_pydub
 
             # Load audio file
-            audio_data, sample_rate = sf.read(audio_path)
+            audio_data, sample_rate = load_audio_pydub(audio_path)
 
             # Handle mono/stereo
             if audio_data.ndim == 1:
@@ -463,7 +463,9 @@ class AnnotationService(BaseService):
                     clip_path = output_path / filename
 
                     # Write clip
-                    sf.write(str(clip_path), clip, sample_rate)
+                    from bioamla.core.audio.pydub_utils import save_audio_pydub
+
+                    save_audio_pydub(str(clip_path), clip, sample_rate)
                     result.extracted_clips.append(str(clip_path))
 
                 except Exception as e:
@@ -508,11 +510,12 @@ class AnnotationService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            import soundfile as sf
             from scipy import signal as scipy_signal
 
+            from bioamla.core.audio.pydub_utils import load_audio_pydub
+
             # Load audio region
-            audio_data, sample_rate = sf.read(audio_path)
+            audio_data, sample_rate = load_audio_pydub(audio_path)
 
             if audio_data.ndim == 1:
                 audio_data = audio_data.reshape(-1, 1)

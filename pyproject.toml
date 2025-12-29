@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.1.6"
+version = "0.1.7"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -27,12 +27,12 @@ dependencies = [
   "audiomentations",
   "evaluate",
   "pydantic>=2.0",
-  "pydub",
+  "pydub",  # requires ffmpeg for M4A/MP3/FLAC support
+  "soundfile",  # fast native C audio I/O for WAV/FLAC/OGG
   "textual",
   "matplotlib",
   "scipy",
   "librosa",
-  "soundfile",
   "pyinaturalist",
   "umap-learn>=0.5.0",
   "hdbscan>=0.8.0",
@@ -44,6 +44,7 @@ dependencies = [
 
 [project.scripts]
 bioamla = "bioamla.cli:cli"
+magpy-lite = "bioamla.tui:main"
 
 [project.optional-dependencies]
 dev = [
