@@ -293,7 +293,7 @@ def evaluate_directory(
     import torch
 
     from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
-    from bioamla.detection.ast import (
+    from bioamla.core.ml.ast import (
         ast_predict,
         extract_features,
         get_cached_feature_extractor,
