@@ -1,4 +1,16 @@
-"""ML model operations - AST (Audio Spectrogram Transformer) only."""
+"""ML model operations - AST and CNN models.
+
+Command structure:
+    bioamla models {architecture} {command}
+
+Examples:
+    bioamla models ast predict audio.wav --model-path my_model
+    bioamla models ast train --train-dataset bioamla/scp-frogs
+    bioamla models ast train --train-dataset ./metadata.csv
+    bioamla models ast train --train-dataset ./audio_by_class/
+    bioamla models cnn predict audio.wav --model-path model.pt
+    bioamla models cnn train --train-csv data.csv --output-dir ./model
+"""
 
 from typing import Dict
 
@@ -7,35 +19,22 @@ import click
 
 @click.group()
 def models() -> None:
-    """ML model operations - AST (Audio Spectrogram Transformer) only."""
-    pass
-
-
-# Subgroups for models
-@models.group()
-def predict() -> None:
-    """Run AST inference."""
-    pass
-
-
-@models.group()
-def train() -> None:
-    """Train AST models."""
-    pass
-
-
-@models.group()
-def evaluate() -> None:
-    """Evaluate AST models."""
+    """ML model operations - AST and CNN models."""
     pass
 
 
 # =============================================================================
-# AST Commands (Audio Spectrogram Transformer)
+# AST Subgroup (Audio Spectrogram Transformer)
 # =============================================================================
 
 
-@predict.command("ast")
+@models.group()
+def ast() -> None:
+    """Audio Spectrogram Transformer (AST) model operations."""
+    pass
+
+
+@ast.command("predict")
 @click.argument("file", type=click.Path(exists=True))
 @click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for inference")
 @click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
@@ -44,11 +43,10 @@ def ast_predict(
     model_path: str,
     resample_freq: int,
 ) -> None:
-    """
-    Perform AST prediction on a single audio file.
+    """Perform AST prediction on a single audio file.
 
     Example:
-        bioamla models predict ast audio.wav --model-path my_model
+        bioamla models ast predict audio.wav --model-path my_model
     """
     from bioamla.cli.service_helpers import handle_result, services
 
@@ -59,7 +57,7 @@ def ast_predict(
         click.echo(f"{pred.predicted_label} ({pred.confidence:.4f})")
 
 
-@train.command("ast")
+@ast.command("train")
 @click.option("--training-dir", default=".", help="Directory to save training outputs")
 @click.option(
     "--base-model",
@@ -67,9 +65,13 @@ def ast_predict(
     help="Base model to fine-tune",
 )
 @click.option(
-    "--train-dataset", default="bioamla/scp-frogs", help="Training dataset from HuggingFace Hub"
+    "--train-dataset",
+    required=True,
+    help="Training data source: HuggingFace dataset (e.g. 'bioamla/scp-frogs'), "
+         "local metadata CSV (with 'file' and 'label' columns), "
+         "or directory with class subdirectories (e.g. ./data/bird/, ./data/frog/)",
 )
-@click.option("--split", default="train", help="Dataset split to use")
+@click.option("--split", default="train", help="Dataset split to use (for HuggingFace datasets)")
 @click.option("--category-id-column", default="target", help="Column name for category IDs")
 @click.option("--category-label-column", default="category", help="Column name for category labels")
 @click.option("--report-to", default="tensorboard", help="Where to report metrics")
@@ -201,7 +203,20 @@ def ast_train(
     min_pitch_shift: int,
     max_pitch_shift: int,
 ) -> None:
-    """Fine-tune an AST model on a custom dataset."""
+    """Fine-tune an AST model on a custom dataset.
+
+    The --train-dataset option accepts three formats:
+
+    \b
+    1. HuggingFace dataset: bioamla/scp-frogs or samuelstevens/BirdSet:HSN
+    2. Metadata CSV: ./data/metadata.csv (must have file and label columns)
+    3. Directory with class subdirs: ./data/ containing bird/, frog/, etc.
+
+    Examples:
+        bioamla models ast train --train-dataset bioamla/scp-frogs
+        bioamla models ast train --train-dataset ./metadata.csv
+        bioamla models ast train --train-dataset ./audio_by_class/
+    """
     import evaluate
     import numpy as np
     import torch
@@ -268,8 +283,110 @@ def ast_train(
     if report_to and "," in report_to:
         report_to = [r.strip() for r in report_to.split(",")]
 
-    if ":" in train_dataset:
+    # Determine dataset source type and load accordingly
+    from pathlib import Path
+    train_path = Path(train_dataset)
+
+    if train_path.exists():
+        # Local file or directory
+        if train_path.is_file() and train_path.suffix.lower() == ".csv":
+            # Metadata CSV file
+            click.echo(f"Loading from metadata CSV: {train_dataset}")
+            import pandas as pd
+
+            # Read CSV and determine structure
+            df = pd.read_csv(train_path)
+
+            # Look for common column names for file path
+            file_col = None
+            for col in ["file", "filepath", "path", "audio", "filename", "file_path", "file_name"]:
+                if col in df.columns:
+                    file_col = col
+                    break
+            if file_col is None:
+                raise click.BadParameter(
+                    f"CSV must have a file column (tried: file, filepath, path, audio, filename, file_path). "
+                    f"Found columns: {list(df.columns)}"
+                )
+
+            # Look for label column
+            label_col = None
+            for col in ["label", "category", "class", "species", category_label_column]:
+                if col in df.columns:
+                    label_col = col
+                    break
+            if label_col is None:
+                raise click.BadParameter(
+                    f"CSV must have a label column (tried: label, category, class, species, {category_label_column}). "
+                    f"Found columns: {list(df.columns)}"
+                )
+
+            # Update category_label_column to the found column
+            category_label_column = label_col
+
+            # Resolve file paths relative to CSV location
+            csv_dir = train_path.parent
+            def resolve_path(p):
+                p = Path(p)
+                if not p.is_absolute():
+                    p = csv_dir / p
+                return str(p)
+
+            df["audio"] = df[file_col].apply(resolve_path)
+            df[category_label_column] = df[label_col]
+
+            # Create HuggingFace dataset from DataFrame
+            dataset = Dataset.from_pandas(df[["audio", category_label_column]])
+            dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
+            click.echo(f"Loaded {len(dataset)} samples from CSV")
+
+        elif train_path.is_dir():
+            # Directory - check for audiofolder structure (subdirs as classes)
+            subdirs = [d for d in train_path.iterdir() if d.is_dir()]
+            audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+
+            if subdirs:
+                # Check if subdirs contain audio files (audiofolder format)
+                has_audio_in_subdirs = any(
+                    any(f.suffix.lower() in audio_extensions for f in subdir.iterdir() if f.is_file())
+                    for subdir in subdirs
+                )
+                if has_audio_in_subdirs:
+                    click.echo(f"Loading from audiofolder directory: {train_dataset}")
+                    click.echo(f"Found class directories: {[d.name for d in subdirs]}")
+                    dataset = load_dataset("audiofolder", data_dir=train_dataset, split=split)
+                    # audiofolder uses 'label' column
+                    category_label_column = "label"
+                else:
+                    raise click.BadParameter(
+                        f"Directory {train_dataset} has subdirectories but they don't contain audio files. "
+                        f"Expected structure: {train_dataset}/class_name/*.wav"
+                    )
+            else:
+                # Flat directory - look for a metadata CSV inside
+                csv_files = list(train_path.glob("*.csv"))
+                if csv_files:
+                    click.echo(f"Found metadata CSV in directory: {csv_files[0]}")
+                    # Recursively call with the CSV path
+                    train_dataset = str(csv_files[0])
+                    train_path = Path(train_dataset)
+                    # Re-process as CSV (this is a bit hacky but avoids code duplication)
+                    raise click.BadParameter(
+                        f"Directory contains CSV files. Please specify the CSV directly: --train-dataset {csv_files[0]}"
+                    )
+                else:
+                    raise click.BadParameter(
+                        f"Directory {train_dataset} must either have class subdirectories (e.g., bird/, frog/) "
+                        f"or contain a metadata CSV file."
+                    )
+        else:
+            raise click.BadParameter(
+                f"Local path {train_dataset} exists but is neither a CSV file nor a directory."
+            )
+    elif ":" in train_dataset:
+        # HuggingFace dataset with config (e.g., 'samuelstevens/BirdSet:HSN')
         dataset_name, config_name = train_dataset.rsplit(":", 1)
+        click.echo(f"Loading from HuggingFace Hub: {dataset_name} (config: {config_name})")
         dataset = load_dataset(dataset_name, config_name, split=split)
     elif "BirdSet" in train_dataset:
         click.echo(
@@ -278,12 +395,9 @@ def ast_train(
         click.echo("Available subsets: HSN, NBP, NES, PER")
         dataset = load_dataset(train_dataset, "HSN", split=split)
     else:
-        # Check if it's a local directory path
-        from pathlib import Path
-        if Path(train_dataset).exists() and Path(train_dataset).is_dir():
-            dataset = load_dataset("audiofolder", data_dir=train_dataset, split=split)
-        else:
-            dataset = load_dataset(train_dataset, split=split)
+        # Assume HuggingFace dataset name
+        click.echo(f"Loading from HuggingFace Hub: {train_dataset}")
+        dataset = load_dataset(train_dataset, split=split)
 
     if isinstance(dataset, Dataset):
         class_names = sorted(set(dataset[category_label_column]))
@@ -573,7 +687,7 @@ def ast_train(
     trainer.save_model(best_model_path)
 
 
-@evaluate.command("ast")
+@ast.command("evaluate")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for evaluation")
 @click.option(
@@ -608,7 +722,11 @@ def ast_evaluate(
     fp16: bool,
     quiet: bool,
 ) -> None:
-    """Evaluate an AST model on a directory of audio files."""
+    """Evaluate an AST model on a directory of audio files.
+
+    Example:
+        bioamla models ast evaluate ./audio_dir --model-path my_model -g labels.csv
+    """
     from pathlib import Path as PathLib
 
     from bioamla.cli.service_helpers import handle_result, services
@@ -652,17 +770,20 @@ def ast_evaluate(
         click.echo(f"Results saved to: {output}")
 
 
-@models.command("embed")
+@ast.command("embed")
 @click.argument("file", type=click.Path(exists=True))
 @click.option("--model-path", required=True, help="Path to AST model or HuggingFace identifier")
 @click.option("--output", "-o", required=True, help="Output file (.npy)")
 @click.option("--layer", default=None, help="Layer to extract embeddings from")
 @click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
-def models_embed(
+def ast_embed(
     file: str, model_path: str, output: str, layer: str, sample_rate: int
 ) -> None:
-    """Extract embeddings from audio using AST model (single file)."""
+    """Extract embeddings from audio using AST model.
 
+    Example:
+        bioamla models ast embed audio.wav --model-path my_model -o embeddings.npy
+    """
     from bioamla.cli.service_helpers import handle_result, services
 
     click.echo(f"Loading AST model from {model_path}...")
@@ -679,10 +800,14 @@ def models_embed(
     click.echo(f"Embeddings saved to {output} (shape: {embeddings.shape})")
 
 
-@models.command("info")
+@ast.command("info")
 @click.argument("model_path")
-def models_info(model_path: str) -> None:
-    """Display information about an AST model."""
+def ast_info(model_path: str) -> None:
+    """Display information about an AST model.
+
+    Example:
+        bioamla models ast info bioamla/scp-frogs
+    """
     from bioamla.cli.service_helpers import handle_result, services
 
     result = services.ast.get_model_info(model_path)
@@ -696,3 +821,219 @@ def models_info(model_path: str) -> None:
         if info.get("has_more_classes"):
             labels += f"... (+{info['num_classes'] - 10} more)"
         click.echo(f"Labels: {labels}")
+
+
+# =============================================================================
+# CNN Subgroup (OpenSoundscape CNN via adapter)
+# =============================================================================
+
+
+@models.group()
+def cnn() -> None:
+    """CNN model operations (OpenSoundscape backend)."""
+    pass
+
+
+@cnn.command("predict")
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--model-path", "-m", required=True, help="Path to trained CNN model (.pt)")
+@click.option("--min-confidence", default=0.0, type=float, help="Minimum confidence threshold")
+@click.option("--top-k", default=1, type=int, help="Number of top predictions per segment")
+@click.option("--batch-size", default=1, type=int, help="Batch size for inference")
+@click.option("--num-workers", default=0, type=int, help="Number of data loader workers")
+def cnn_predict(
+    file: str,
+    model_path: str,
+    min_confidence: float,
+    top_k: int,
+    batch_size: int,
+    num_workers: int,
+) -> None:
+    """Run CNN prediction on a single audio file.
+
+    Example:
+        bioamla models cnn predict audio.wav --model-path model.pt
+    """
+    from bioamla.cli.service_helpers import handle_result, services
+
+    result = services.cnn.predict(
+        filepath=file,
+        model_path=model_path,
+        min_confidence=min_confidence,
+        top_k=top_k,
+        batch_size=batch_size,
+        num_workers=num_workers,
+    )
+    predictions = handle_result(result)
+
+    if not predictions:
+        click.echo("No predictions above threshold.")
+        return
+
+    for pred in predictions:
+        click.echo(
+            f"[{pred.start_time:.1f}s - {pred.end_time:.1f}s] "
+            f"{pred.label} ({pred.confidence:.4f})"
+        )
+
+
+@cnn.command("train")
+@click.option("--train-csv", required=True, help="Training CSV (file column + class columns with 0/1)")
+@click.option("--output-dir", "-o", required=True, help="Output directory for model")
+@click.option("--validation-csv", default=None, help="Validation CSV (same format)")
+@click.option("--classes", "-c", required=True, multiple=True, help="Class names (repeat for each class)")
+@click.option(
+    "--architecture",
+    "-a",
+    default="resnet18",
+    type=click.Choice([
+        "resnet18", "resnet34", "resnet50", "resnet101", "resnet152",
+        "efficientnet_b0", "efficientnet_b1", "efficientnet_b2",
+        "densenet121", "densenet161",
+    ]),
+    help="Model architecture",
+)
+@click.option("--epochs", default=10, type=int, help="Number of training epochs")
+@click.option("--batch-size", default=32, type=int, help="Batch size for training")
+@click.option("--learning-rate", default=None, type=float, help="Learning rate (uses default if not specified)")
+@click.option("--sample-duration", default=3.0, type=float, help="Audio clip duration in seconds")
+@click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
+@click.option("--freeze-backbone/--no-freeze-backbone", default=False, help="Freeze backbone for transfer learning")
+@click.option("--num-workers", default=0, type=int, help="Number of data loader workers")
+def cnn_train(
+    train_csv: str,
+    output_dir: str,
+    validation_csv: str,
+    classes: tuple,
+    architecture: str,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    sample_duration: float,
+    sample_rate: int,
+    freeze_backbone: bool,
+    num_workers: int,
+) -> None:
+    """Train a CNN model on audio data.
+
+    The training CSV should have file paths as the first column (used as index)
+    and class columns with 0/1 values indicating presence/absence.
+
+    Example:
+        bioamla models cnn train --train-csv train.csv --output-dir ./model \\
+            --classes bird --classes frog --architecture resnet18 --epochs 20
+    """
+    from bioamla.cli.service_helpers import handle_result, services
+
+    class_list = list(classes)
+
+    click.echo(f"Creating {architecture} model with {len(class_list)} classes...")
+
+    # First create the model
+    create_result = services.cnn.create_model(
+        classes=class_list,
+        architecture=architecture,
+        sample_duration=sample_duration,
+        sample_rate=sample_rate,
+    )
+    handle_result(create_result)
+
+    click.echo(f"Training for {epochs} epochs...")
+
+    # Then train
+    result = services.cnn.train(
+        train_csv=train_csv,
+        output_dir=output_dir,
+        validation_csv=validation_csv,
+        epochs=epochs,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        freeze_backbone=freeze_backbone,
+        num_workers=num_workers,
+    )
+    train_result = handle_result(result)
+
+    click.echo("\nTraining complete!")
+    click.echo(f"Model saved to: {train_result.model_path}")
+    click.echo(f"Architecture: {train_result.architecture}")
+    click.echo(f"Classes: {train_result.num_classes}")
+
+
+@cnn.command("info")
+@click.argument("model_path", type=click.Path(exists=True))
+def cnn_info(model_path: str) -> None:
+    """Display information about a CNN model.
+
+    Example:
+        bioamla models cnn info model.pt
+    """
+    from bioamla.cli.service_helpers import handle_result, services
+
+    result = services.cnn.get_model_info(model_path)
+    info = handle_result(result)
+
+    click.echo(f"Model: {info['path']}")
+    click.echo(f"Architecture: {info['architecture']}")
+    click.echo(f"Classes: {info['num_classes']}")
+    click.echo(f"Sample Duration: {info['sample_duration']}s")
+
+    if info.get("classes"):
+        labels = ", ".join(info["classes"])
+        if info.get("has_more_classes"):
+            labels += f"... (+{info['num_classes'] - 10} more)"
+        click.echo(f"Labels: {labels}")
+
+
+@cnn.command("architectures")
+def cnn_architectures() -> None:
+    """List available CNN architectures.
+
+    Example:
+        bioamla models cnn architectures
+    """
+    from bioamla.cli.service_helpers import handle_result, services
+
+    result = services.cnn.list_architectures()
+    architectures = handle_result(result)
+
+    click.echo("Available CNN architectures:")
+    click.echo("-" * 30)
+    for arch in architectures:
+        click.echo(f"  {arch}")
+
+
+@cnn.command("embed")
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--model-path", "-m", required=True, help="Path to trained CNN model (.pt)")
+@click.option("--output", "-o", required=True, help="Output file (.npy)")
+@click.option("--layer", default=None, help="Layer to extract embeddings from")
+@click.option("--batch-size", default=1, type=int, help="Batch size for inference")
+@click.option("--num-workers", default=0, type=int, help="Number of data loader workers")
+def cnn_embed(
+    file: str,
+    model_path: str,
+    output: str,
+    layer: str,
+    batch_size: int,
+    num_workers: int,
+) -> None:
+    """Extract embeddings from audio using a CNN model.
+
+    Example:
+        bioamla models cnn embed audio.wav --model-path model.pt --output embeddings.npy
+    """
+    from bioamla.cli.service_helpers import handle_result, services
+
+    click.echo(f"Loading CNN model from {model_path}...")
+
+    result = services.cnn.extract_embeddings(
+        filepath=file,
+        model_path=model_path,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        target_layer=layer,
+    )
+    embeddings = handle_result(result)
+
+    services.file.write_npy(output, embeddings)
+    click.echo(f"Embeddings saved to {output} (shape: {embeddings.shape})")
