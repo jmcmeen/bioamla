@@ -19,6 +19,7 @@ Example usage:
     trainer.train()
 """
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -35,9 +36,7 @@ from audiomentations import (
     TimeStretch,
 )
 
-from bioamla.core.logger import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @dataclass

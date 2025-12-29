@@ -10,6 +10,7 @@ These utilities are essential for ensuring data quality and consistency
 in bioacoustic machine learning projects.
 """
 
+import logging
 import os
 import shutil
 from pathlib import Path
@@ -23,11 +24,10 @@ from bioamla.core.audio.metadata import (
 )
 from bioamla.core.files.paths import sanitize_filename
 from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
-from bioamla.core.logger import get_logger
 from bioamla.core.utils import get_audio_files
 from bioamla.services.species import find_species_name
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def count_audio_files(audio_folder_path: str) -> int:

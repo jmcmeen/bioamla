@@ -13,12 +13,11 @@ Example:
     ...         print(f"{obs.common_name}: {obs.observation_date}")
 """
 
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
 import requests
-
-from bioamla.core.logger import get_logger
 from bioamla.models.ebird import (
     EBIRD_API_URL,
     EBirdChecklist,
@@ -31,7 +30,7 @@ from bioamla.models.ebird import (
 
 from .base import BaseService, ServiceResult
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class EBirdService(BaseService):

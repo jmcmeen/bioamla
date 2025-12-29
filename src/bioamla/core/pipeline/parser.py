@@ -37,14 +37,13 @@ This module provides:
 - render_pipeline: Render Jinja2 templates in pipeline
 """
 
+import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 
-from bioamla.core.logger import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Use tomli for Python < 3.11, tomllib for Python >= 3.11
 if sys.version_info >= (3, 11):

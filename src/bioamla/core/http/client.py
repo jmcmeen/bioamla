@@ -17,6 +17,7 @@ import functools
 import hashlib
 import inspect
 import json
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
@@ -28,9 +29,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from bioamla.core.files import BinaryFile
-from bioamla.core.logger import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 

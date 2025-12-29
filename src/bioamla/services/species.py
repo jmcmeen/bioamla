@@ -20,6 +20,7 @@ Example:
 
 import csv
 import json
+import logging
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -27,7 +28,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from bioamla.core.files import TextFile
 from bioamla.core.http import APICache, APIClient, RateLimiter
-from bioamla.core.logger import get_logger
 from bioamla.models.species import (
     EBIRD_TAXONOMY_URL,
     INAT_TAXA_URL,
@@ -37,7 +37,7 @@ from bioamla.models.species import (
 
 from .base import BaseService, ServiceResult
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class SpeciesService(BaseService):
