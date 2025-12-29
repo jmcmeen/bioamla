@@ -1331,7 +1331,7 @@ class AudioTransformService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.visualization.visualize import generate_spectrogram
+            from bioamla.core.visualize import generate_spectrogram
 
             generate_spectrogram(
                 audio_path=input_path,
