@@ -1,7 +1,6 @@
 """Tests for AudioTransformService - core paths for pre-migration verification."""
 
 import numpy as np
-import pytest
 
 from bioamla.models.audio import AudioData
 from bioamla.repository.local import LocalFileRepository

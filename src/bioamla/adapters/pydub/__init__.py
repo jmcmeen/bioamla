@@ -9,9 +9,9 @@ not depend on it.
 
 from bioamla.adapters.pydub.audio import (
     PydubAudioAdapter,
+    get_audio_info,
     load_audio,
     save_audio,
-    get_audio_info,
 )
 
 __all__ = [

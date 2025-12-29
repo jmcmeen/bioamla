@@ -67,11 +67,12 @@ class RibbitService(BaseService):
 
         try:
             # Lazy import adapter to avoid loading OSS at service init
+            import time
+
             from bioamla.adapters.opensoundscape.ribbit import (
                 ribbit_detect,
                 ribbit_detect_preset,
             )
-            import time
 
             start_time = time.time()
 

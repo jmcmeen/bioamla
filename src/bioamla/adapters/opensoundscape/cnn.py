@@ -1,10 +1,8 @@
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
 import torch
-
 from opensoundscape.ml.cnn import CNN as OSSCNN
 
 

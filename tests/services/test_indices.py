@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 from bioamla.models.audio import AudioData
-from bioamla.repository.local import LocalFileRepository
 from bioamla.services.indices import IndicesService
 
 

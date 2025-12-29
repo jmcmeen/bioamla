@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -190,7 +190,6 @@ def _dataframe_to_detections(
     Returns:
         List of RibbitDetection objects.
     """
-    import pandas as pd
 
     detections = []
 

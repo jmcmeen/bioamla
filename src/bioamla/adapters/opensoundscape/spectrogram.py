@@ -1,7 +1,6 @@
 from typing import Optional
 
 import numpy as np
-from opensoundscape import Audio as OSSAudio
 from opensoundscape import MelSpectrogram as OSSMelSpectrogram
 from opensoundscape import Spectrogram as OSSSpectrogram
 
