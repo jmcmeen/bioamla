@@ -329,14 +329,14 @@ class LiveRecorder:
     def _save_detection(self, event: DetectionEvent) -> None:
         """Save detection to file."""
         try:
-            from bioamla.core.audio.pydub_utils import save_audio_pydub
+            from bioamla.adapters.pydub import save_audio
 
             timestamp_str = event.timestamp.strftime("%Y%m%d_%H%M%S_%f")
             filename = f"{event.label}_{timestamp_str}.wav"
             filepath = self.output_dir / filename
 
             if event.audio_segment is not None:
-                save_audio_pydub(str(filepath), event.audio_segment, self.config.sample_rate)
+                save_audio(str(filepath), event.audio_segment, self.config.sample_rate)
 
             # Save metadata
             meta_path = filepath.with_suffix(".json")

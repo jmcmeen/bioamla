@@ -22,7 +22,7 @@ import librosa
 import numpy as np
 from scipy import signal as scipy_signal
 
-from bioamla.core.audio.pydub_utils import save_audio_pydub
+from bioamla.adapters.pydub import save_audio
 from bioamla.core.audio.torchaudio import load_waveform_tensor
 
 # =============================================================================
@@ -540,7 +540,7 @@ def save_audio(filepath: str, audio: np.ndarray, sample_rate: int) -> str:
     """
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
-    save_audio_pydub(str(path), audio, sample_rate)
+    save_audio(str(path), audio, sample_rate)
     return str(path)
 
 

@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from bioamla.core.audio.pydub_utils import get_audio_info_pydub, load_audio_pydub
+from bioamla.adapters.pydub import get_audio_info, load_audio
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,7 @@ def get_audio_info(filepath: str) -> AudioInfo:
     if not path.exists():
         raise FileNotFoundError(f"Audio file not found: {filepath}")
 
-    info_dict = get_audio_info_pydub(filepath)
+    info_dict = get_audio_info(filepath)
 
     # Extract bit_depth and subtype from pydub response
     # These may be None if ffprobe failed and pydub fallback was used
@@ -730,7 +730,7 @@ def analyze_audio(
     info = get_audio_info(filepath)
 
     # Load audio
-    audio, sr = load_audio_pydub(filepath)
+    audio, sr = load_audio(filepath)
 
     # Analyze
     amplitude = get_amplitude_stats(audio)
