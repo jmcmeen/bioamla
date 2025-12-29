@@ -9,10 +9,14 @@ Catalogs provide access to external bioacoustic databases and services:
 - HuggingFace: Model and dataset hosting
 """
 
+from typing import TYPE_CHECKING
+
 import click
 
-from bioamla.cli.service_helpers import handle_result, services
-from bioamla.services.ebird import EBirdService
+# Lazy imports for CLI performance - services only loaded when commands execute
+if TYPE_CHECKING:
+    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.services.ebird import EBirdService
 
 
 @click.group()
@@ -56,6 +60,8 @@ def inat_search(
     quiet: bool,
 ) -> None:
     """Search for iNaturalist observations."""
+    from bioamla.cli.service_helpers import handle_result, services
+
     if not species and not taxon_id and not place_id and not project_id:
         raise click.UsageError(
             "At least one search filter must be provided (--species, --taxon-id, --place-id, or --project-id)"
@@ -128,6 +134,8 @@ def inat_stats(project_id: str, output: str, quiet: bool) -> None:
     """Get statistics for an iNaturalist project."""
     import json
 
+    from bioamla.cli.service_helpers import handle_result, services
+
     result = services.inaturalist.get_project_stats(project_id=project_id)
     stats = handle_result(result)
 
@@ -186,6 +194,8 @@ def inat_download(
     quiet: bool,
 ) -> None:
     """Download audio observations from iNaturalist."""
+    from bioamla.cli.service_helpers import handle_result, services
+
     # Parse taxon IDs
     taxon_id_list = None
     if taxon_ids:
@@ -250,6 +260,8 @@ def catalogs_hf() -> None:
 @click.option("--commit-message", default=None, help="Custom commit message for the push")
 def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str) -> None:
     """Push a model folder to the HuggingFace Hub."""
+    from bioamla.cli.service_helpers import services
+
     click.echo(f"Pushing model folder {path} to HuggingFace Hub: {repo_id}...")
 
     result = services.huggingface.push_model(path, repo_id, private=private, commit_message=commit_message)
@@ -271,6 +283,8 @@ def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str) -
 @click.option("--commit-message", default=None, help="Custom commit message for the push")
 def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str) -> None:
     """Push a dataset folder to the HuggingFace Hub."""
+    from bioamla.cli.service_helpers import services
+
     click.echo(f"Pushing dataset folder {path} to HuggingFace Hub: {repo_id}...")
 
     result = services.huggingface.push_dataset(path, repo_id, private=private, commit_message=commit_message)
@@ -311,6 +325,8 @@ def catalogs_xc() -> None:
 def xc_search(species: str, genus: str, country: str, quality: str, sound_type: str, max_results: int, output_format: str) -> None:
     """Search Xeno-canto for bird recordings."""
     import json as json_lib
+
+    from bioamla.cli.service_helpers import handle_result, services
 
     result = services.xeno_canto.search(
         species=species,
@@ -356,6 +372,8 @@ def xc_search(species: str, genus: str, country: str, quality: str, sound_type: 
 @click.option("--delay", default=1.0, type=float, help="Delay between downloads in seconds")
 def xc_download(species: str, genus: str, country: str, quality: str, max_recordings: int, output_dir: str, delay: float) -> None:
     """Download recordings from Xeno-canto."""
+    from bioamla.cli.service_helpers import handle_result, services
+
     click.echo("Searching Xeno-canto...")
 
     result = services.xeno_canto.download(
@@ -427,6 +445,8 @@ def ml_search(
     """
     import json as json_lib
 
+    from bioamla.cli.service_helpers import handle_result, services
+
     result = services.macaulay.search(
         species_code=species_code,
         scientific_name=scientific_name,
@@ -485,6 +505,8 @@ def ml_download(
 
     Use 'catalogs ebird species <name>' to look up species codes.
     """
+    from bioamla.cli.service_helpers import handle_result, services
+
     click.echo("Searching Macaulay Library...")
 
     result = services.macaulay.download(
@@ -525,6 +547,8 @@ def ebird_species(name: str) -> None:
 
     NAME can be a common name, scientific name, or species code.
     """
+    from bioamla.cli.service_helpers import services
+
     result = services.species.lookup(name, ebird_only=True)
 
     if not result.success:
@@ -544,6 +568,8 @@ def ebird_species(name: str) -> None:
 @click.option("--limit", "-n", default=10, type=int, help="Maximum results")
 def ebird_search(query: str, limit: int) -> None:
     """Fuzzy search eBird taxonomy for species."""
+    from bioamla.cli.service_helpers import services
+
     result = services.species.search(query, limit=limit)
 
     if not result.success:
@@ -570,6 +596,8 @@ def ebird_search(query: str, limit: int) -> None:
 @click.option("--distance", type=float, default=50, help="Search radius in km")
 def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, distance: float) -> None:
     """Validate if a species is expected at a location."""
+    from bioamla.services.ebird import EBirdService
+
     service = EBirdService(api_key=api_key)
     result = service.validate_species(
         species_code=species_code,
@@ -606,6 +634,9 @@ def ebird_nearby(
 ) -> None:
     """Get recent eBird observations near a location."""
     from pathlib import Path
+
+    from bioamla.cli.service_helpers import services
+    from bioamla.services.ebird import EBirdService
 
     service = EBirdService(api_key=api_key)
     result = service.get_nearby(

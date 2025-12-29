@@ -2,8 +2,6 @@
 
 import click
 
-from bioamla.cli.service_helpers import services
-
 
 @click.group()
 def annotation() -> None:
@@ -283,6 +281,7 @@ def annotation_generate_labels(
 
     import numpy as np
 
+    from bioamla.cli.service_helpers import services
     from bioamla.core.audio.annotations import (
         create_label_map,
         generate_clip_labels,

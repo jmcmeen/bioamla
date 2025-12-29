@@ -11,7 +11,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple
 
 import numpy as np
 import torch
@@ -21,6 +21,32 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau, StepL
 from torch.utils.data import DataLoader, Dataset
 
 from bioamla.core.files import TextFile
+
+
+class SpectrogramPreprocessorProtocol(Protocol):
+    """Protocol for spectrogram preprocessors.
+
+    This allows the trainer to use any preprocessor that implements
+    process_file() and to_tensor(), such as BioamlaPreprocessor from
+    the adapters layer.
+    """
+
+    def process_file(
+        self,
+        filepath: str,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
+    ) -> np.ndarray:
+        """Process an audio file to generate a spectrogram."""
+        ...
+
+    def to_tensor(
+        self,
+        spectrogram: np.ndarray,
+        normalize: bool = True,
+    ) -> torch.Tensor:
+        """Convert spectrogram to PyTorch tensor."""
+        ...
 
 
 @dataclass
@@ -53,6 +79,9 @@ class TrainingConfig:
     # Augmentation
     augment: bool = True
     mixup_alpha: float = 0.0  # 0 = disabled
+
+    # Preprocessing
+    use_oss_preprocessor: bool = False  # Use OpenSoundscape BioamlaPreprocessor
 
     # Hardware
     device: Optional[str] = None
@@ -90,7 +119,11 @@ class TrainingMetrics:
 
 
 class SpectrogramDataset(Dataset):
-    """Dataset for spectrogram-based training."""
+    """Dataset for spectrogram-based training.
+
+    Can use either the built-in torchaudio spectrogram computation or
+    an external preprocessor (e.g., BioamlaPreprocessor from adapters layer).
+    """
 
     def __init__(
         self,
@@ -100,6 +133,7 @@ class SpectrogramDataset(Dataset):
         clip_duration: float = 3.0,
         transform: Optional[Callable] = None,
         augment: bool = False,
+        preprocessor: Optional[SpectrogramPreprocessorProtocol] = None,
     ):
         """
         Initialize the dataset.
@@ -111,6 +145,8 @@ class SpectrogramDataset(Dataset):
             clip_duration: Clip duration in seconds.
             transform: Optional spectrogram transform.
             augment: Apply augmentation.
+            preprocessor: Optional external preprocessor (e.g., BioamlaPreprocessor).
+                If provided, uses it instead of built-in torchaudio processing.
         """
         self.data_dir = Path(data_dir)
         self.class_names = class_names
@@ -119,6 +155,7 @@ class SpectrogramDataset(Dataset):
         self.clip_duration = clip_duration
         self.transform = transform
         self.augment = augment
+        self.preprocessor = preprocessor
 
         # Collect samples
         self.samples: List[Tuple[str, int]] = []
@@ -144,9 +181,37 @@ class SpectrogramDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
-        from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
-
         filepath, label = self.samples[idx]
+
+        # Use external preprocessor if provided
+        if self.preprocessor is not None:
+            return self._get_item_with_preprocessor(filepath, label)
+
+        # Otherwise use built-in torchaudio processing
+        return self._get_item_torchaudio(filepath, label)
+
+    def _get_item_with_preprocessor(
+        self, filepath: str, label: int
+    ) -> Tuple[torch.Tensor, int]:
+        """Get item using external preprocessor."""
+        # Preprocessor handles loading, resampling, duration, and spectrogram
+        spectrogram = self.preprocessor.process_file(filepath)
+        tensor = self.preprocessor.to_tensor(spectrogram, normalize=True)
+
+        if self.transform:
+            tensor = self.transform(tensor)
+
+        # Ensure 2D output (remove channel dim if present)
+        if tensor.dim() == 3:
+            tensor = tensor.squeeze(0)
+
+        return tensor, label
+
+    def _get_item_torchaudio(
+        self, filepath: str, label: int
+    ) -> Tuple[torch.Tensor, int]:
+        """Get item using built-in torchaudio processing."""
+        from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
         # Load audio
         waveform, sr = load_waveform_tensor(filepath)
@@ -258,7 +323,7 @@ class ModelTrainer:
         """
         # Create model if not provided
         if model is None:
-            from bioamla.ml.opensoundscape import SpectrogramCNN
+            from bioamla.core.ml.opensoundscape import SpectrogramCNN
 
             self.model = SpectrogramCNN(
                 num_classes=len(self.config.class_names),
@@ -270,6 +335,13 @@ class ModelTrainer:
 
         self.model.to(self.device)
 
+        # Create preprocessor if configured
+        train_preprocessor = None
+        val_preprocessor = None
+
+        if self.config.use_oss_preprocessor:
+            train_preprocessor, val_preprocessor = self._create_preprocessors()
+
         # Create datasets
         train_dataset = SpectrogramDataset(
             data_dir=self.config.train_dir,
@@ -277,6 +349,7 @@ class ModelTrainer:
             sample_rate=self.config.sample_rate,
             clip_duration=self.config.clip_duration,
             augment=self.config.augment,
+            preprocessor=train_preprocessor,
         )
 
         self.train_loader = DataLoader(
@@ -294,6 +367,7 @@ class ModelTrainer:
                 sample_rate=self.config.sample_rate,
                 clip_duration=self.config.clip_duration,
                 augment=False,
+                preprocessor=val_preprocessor,
             )
 
             self.val_loader = DataLoader(
@@ -313,6 +387,45 @@ class ModelTrainer:
         # Setup mixed precision
         if self.config.use_fp16 and self.device.type == "cuda":
             self.scaler = torch.cuda.amp.GradScaler()
+
+    def _create_preprocessors(
+        self,
+    ) -> Tuple[SpectrogramPreprocessorProtocol, SpectrogramPreprocessorProtocol]:
+        """Create OpenSoundscape preprocessors for training and validation.
+
+        Returns:
+            Tuple of (train_preprocessor, val_preprocessor).
+        """
+        from bioamla.adapters.opensoundscape import (
+            AugmentationConfig,
+            BioamlaPreprocessor,
+        )
+
+        # Training preprocessor with augmentation
+        train_preprocessor = BioamlaPreprocessor(
+            sample_duration=self.config.clip_duration,
+            sample_rate=self.config.sample_rate,
+            height=224,
+            width=224,
+        )
+
+        if self.config.augment:
+            aug_config = AugmentationConfig(
+                time_mask=True,
+                frequency_mask=True,
+            )
+            train_preprocessor.enable_augmentation(aug_config)
+
+        # Validation preprocessor without augmentation
+        val_preprocessor = BioamlaPreprocessor(
+            sample_duration=self.config.clip_duration,
+            sample_rate=self.config.sample_rate,
+            height=224,
+            width=224,
+        )
+        # No augmentation for validation
+
+        return train_preprocessor, val_preprocessor
 
     def _setup_optimizer(self) -> None:
         """Setup optimizer based on config."""
