@@ -68,27 +68,5 @@ def devices() -> None:
             click.echo(f"  [{device.device_id}] {device.name}")
 
 
-@cli.command("version")
-def version() -> None:
-    """Show version information."""
-    from bioamla.services.util import UtilityService
-
-    result = UtilityService().get_version()
-
-    if not result.success:
-        click.echo(f"Error: {result.error}", err=True)
-        raise SystemExit(1)
-
-    data = result.data
-    click.echo(f"bioamla {data.bioamla_version}")
-    click.echo(f"Python {data.python_version}")
-    click.echo(f"Platform: {data.platform}")
-
-    if data.pytorch_version:
-        click.echo(f"PyTorch: {data.pytorch_version}")
-    if data.cuda_version:
-        click.echo(f"CUDA: {data.cuda_version}")
-
-
 if __name__ == "__main__":
     cli()
