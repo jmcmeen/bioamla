@@ -15,8 +15,7 @@ import click
 
 # Lazy imports for CLI performance - services only loaded when commands execute
 if TYPE_CHECKING:
-    from bioamla.cli.service_helpers import handle_result, services
-    from bioamla.services.ebird import EBirdService
+    pass
 
 
 @click.group()

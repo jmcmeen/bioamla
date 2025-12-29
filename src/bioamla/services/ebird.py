@@ -18,6 +18,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 import requests
+
 from bioamla.models.ebird import (
     EBIRD_API_URL,
     EBirdChecklist,

@@ -6,7 +6,7 @@ Uses OpenSoundscape adapters for audio processing operations.
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
