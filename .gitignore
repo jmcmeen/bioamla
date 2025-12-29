@@ -200,3 +200,4 @@ cython_debug/
 /.vscode
 /frog_acoustic_study
 mlflow.db
+/.benchmarks
