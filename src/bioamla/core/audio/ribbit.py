@@ -299,9 +299,9 @@ class RibbitDetector:
         filepath = audio if isinstance(audio, str) else "<array>"
         try:
             if isinstance(audio, str):
-                import soundfile as sf
+                from bioamla.core.audio.pydub_utils import load_audio_pydub
 
-                audio_data, sr = sf.read(audio, dtype="float32")
+                audio_data, sr = load_audio_pydub(audio)
             else:
                 audio_data = audio
                 sr = sample_rate

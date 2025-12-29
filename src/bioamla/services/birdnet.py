@@ -3,23 +3,12 @@
 Service for BirdNET model operations.
 """
 
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from bioamla.models.birdnet import PredictionResult
 from bioamla.repository.protocol import FileRepositoryProtocol
 
-from .base import BaseService, ServiceResult, ToDictMixin
-
-
-@dataclass
-class PredictionResult(ToDictMixin):
-    """Result of a single prediction."""
-
-    filepath: str
-    label: str
-    confidence: float
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
+from .base import BaseService, ServiceResult
 
 
 class BirdNETService(BaseService):

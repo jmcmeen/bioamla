@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from bioamla.services.ast import ASTService
     from bioamla.services.audio_file import AudioFileService
     from bioamla.services.audio_transform import AudioTransformService
+    from bioamla.services.batch_audio_info import BatchAudioInfoService
     from bioamla.services.batch_audio_transform import BatchAudioTransformService
     from bioamla.services.batch_detection import BatchDetectionService
     from bioamla.services.batch_indices import BatchIndicesService
@@ -59,6 +60,7 @@ if TYPE_CHECKING:
     from bioamla.services.macaulay import MacaulayService
     from bioamla.services.ribbit import RibbitService
     from bioamla.services.species import SpeciesService
+    from bioamla.services.util import UtilityService
     from bioamla.services.xeno_canto import XenoCantoService
 
 # Type variable for generic result handling
@@ -220,7 +222,17 @@ class _ServiceAccessor:
         """Get DependencyService instance."""
         return get_factory().dependency
 
+    @property
+    def util(self) -> "UtilityService":
+        """Get UtilityService instance."""
+        return get_factory().util
+
     # Add batch services
+    @property
+    def batch_audio_info(self) -> "BatchAudioInfoService":
+        """Get BatchAudioInfoService instance."""
+        return get_factory().batch_audio_info
+
     @property
     def batch_audio_transform(self) -> "BatchAudioTransformService":
         """Get BatchAudioTransformService instance."""

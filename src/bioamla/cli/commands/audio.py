@@ -196,6 +196,65 @@ def audio_resample(input_path: str, output_path: str, sample_rate: int) -> None:
     click.echo(f"Resampled audio saved to: {output_path}")
 
 
+@audio.command("filter")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option("--lowpass", default=None, type=float, help="Lowpass cutoff frequency in Hz")
+@click.option("--highpass", default=None, type=float, help="Highpass cutoff frequency in Hz")
+@click.option("--bandpass-low", default=None, type=float, help="Bandpass low frequency in Hz")
+@click.option("--bandpass-high", default=None, type=float, help="Bandpass high frequency in Hz")
+@click.option("--order", default=5, type=int, help="Filter order (default: 5)")
+def audio_filter(input_path: str, output_path: str, lowpass: float, highpass: float, bandpass_low: float, bandpass_high: float, order: int) -> None:
+    """Apply frequency filter to audio file."""
+    from bioamla.cli.service_helpers import check_result, services
+
+    # Validate filter options
+    if not any([lowpass, highpass, bandpass_low]):
+        click.echo("Error: Must specify --lowpass, --highpass, or --bandpass-low/--bandpass-high")
+        return
+
+    if (bandpass_low is not None) != (bandpass_high is not None):
+        click.echo("Error: Both --bandpass-low and --bandpass-high must be specified together")
+        return
+
+    bandpass = (bandpass_low, bandpass_high) if bandpass_low is not None else None
+
+    result = services.audio_transform.filter_file(
+        input_path=input_path,
+        output_path=output_path,
+        lowpass=lowpass,
+        highpass=highpass,
+        bandpass=bandpass,
+        order=order,
+    )
+    check_result(result)
+
+    if bandpass:
+        click.echo(f"Applied bandpass filter ({bandpass[0]}-{bandpass[1]} Hz) to: {output_path}")
+    elif lowpass:
+        click.echo(f"Applied lowpass filter ({lowpass} Hz) to: {output_path}")
+    else:
+        click.echo(f"Applied highpass filter ({highpass} Hz) to: {output_path}")
+
+
+@audio.command("denoise")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option("--strength", default=1.0, type=float, help="Noise reduction strength (0-2, default: 1.0)")
+def audio_denoise(input_path: str, output_path: str, strength: float) -> None:
+    """Apply spectral noise reduction to audio file."""
+    from bioamla.cli.service_helpers import check_result, services
+
+    result = services.audio_transform.denoise_file(
+        input_path=input_path,
+        output_path=output_path,
+        strength=strength,
+    )
+    check_result(result)
+
+    click.echo(f"Denoised audio saved to: {output_path}")
+
+
 @audio.command("visualize")
 @click.argument("path")
 @click.option("--output", "-o", default=None, help="Output image file path")
@@ -212,7 +271,8 @@ def audio_resample(input_path: str, output_path: str, sample_rate: int) -> None:
 @click.option("--n-mfcc", default=20, type=int, help="Number of MFCCs")
 @click.option("--cmap", default="viridis", help="Colormap name")
 @click.option("--dpi", default=100, type=int, help="Output DPI")
-def audio_visualize(path: str, output: str, viz_type: str, n_fft: int, hop_length: int, n_mels: int, n_mfcc: int, cmap: str, dpi: int) -> None:
+@click.option("--legend/--no-legend", default=True, help="Show axes, title, and colorbar (default: True)")
+def audio_visualize(path: str, output: str, viz_type: str, n_fft: int, hop_length: int, n_mels: int, n_mfcc: int, cmap: str, dpi: int, legend: bool) -> None:
     """Generate audio visualization (spectrogram, waveform, MFCC) for a single file."""
     from pathlib import Path
 
@@ -229,9 +289,8 @@ def audio_visualize(path: str, output: str, viz_type: str, n_fft: int, hop_lengt
         n_mfcc=n_mfcc,
         cmap=cmap,
         dpi=dpi,
+        show_legend=legend,
     )
     check_result(result)
 
     click.echo(f"Visualization saved to: {output_path}")
-
-

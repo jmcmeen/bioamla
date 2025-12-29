@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from bioamla.services.base import ToDictMixin
+from bioamla.models.base import ToDictMixin
 
 
 @dataclass
