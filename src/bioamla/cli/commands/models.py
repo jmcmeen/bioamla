@@ -135,12 +135,22 @@ def ast_predict(
     type=int,
     help="Create N augmented copies of each training sample (1=no copies, 2=double dataset, etc.)",
 )
-@click.option("--augment-probability", default=0.8, type=float, help="Probability of applying augmentation")
+@click.option(
+    "--augment-probability",
+    default=0.8,
+    type=click.FloatRange(0.0, 1.0),
+    help="Probability of applying augmentation (0-1)",
+)
 @click.option("--min-snr-db", default=10.0, type=float, help="Minimum SNR for Gaussian noise (dB)")
 @click.option("--max-snr-db", default=20.0, type=float, help="Maximum SNR for Gaussian noise (dB)")
 @click.option("--min-gain-db", default=-6.0, type=float, help="Minimum gain adjustment (dB)")
 @click.option("--max-gain-db", default=6.0, type=float, help="Maximum gain adjustment (dB)")
-@click.option("--clipping-probability", default=0.5, type=float, help="Probability of clipping distortion")
+@click.option(
+    "--clipping-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Probability of clipping distortion (0-1)",
+)
 @click.option("--min-percentile-threshold", default=0, type=int, help="Min percentile for clipping")
 @click.option("--max-percentile-threshold", default=30, type=int, help="Max percentile for clipping")
 @click.option("--min-time-stretch", default=0.8, type=float, help="Minimum time stretch rate")
@@ -214,6 +224,24 @@ def ast_train(
     )
 
     from bioamla.cli.service_helpers import services
+
+    # Validate min/max ranges
+    if min_snr_db > max_snr_db:
+        raise click.BadParameter(f"--min-snr-db ({min_snr_db}) must be <= --max-snr-db ({max_snr_db})")
+    if min_gain_db > max_gain_db:
+        raise click.BadParameter(f"--min-gain-db ({min_gain_db}) must be <= --max-gain-db ({max_gain_db})")
+    if min_percentile_threshold > max_percentile_threshold:
+        raise click.BadParameter(
+            f"--min-percentile-threshold ({min_percentile_threshold}) must be <= --max-percentile-threshold ({max_percentile_threshold})"
+        )
+    if min_time_stretch > max_time_stretch:
+        raise click.BadParameter(
+            f"--min-time-stretch ({min_time_stretch}) must be <= --max-time-stretch ({max_time_stretch})"
+        )
+    if min_pitch_shift > max_pitch_shift:
+        raise click.BadParameter(
+            f"--min-pitch-shift ({min_pitch_shift}) must be <= --max-pitch-shift ({max_pitch_shift})"
+        )
 
     output_dir = training_dir + "/runs"
     logging_dir = training_dir + "/logs"
