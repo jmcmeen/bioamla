@@ -5,7 +5,9 @@ Command structure:
 
 Examples:
     bioamla models ast predict audio.wav --model-path my_model
-    bioamla models ast train --training-dir ./output --train-dataset my_data
+    bioamla models ast train --train-dataset bioamla/scp-frogs
+    bioamla models ast train --train-dataset ./metadata.csv
+    bioamla models ast train --train-dataset ./audio_by_class/
     bioamla models cnn predict audio.wav --model-path model.pt
     bioamla models cnn train --train-csv data.csv --output-dir ./model
 """
@@ -63,9 +65,13 @@ def ast_predict(
     help="Base model to fine-tune",
 )
 @click.option(
-    "--train-dataset", default="bioamla/scp-frogs", help="Training dataset from HuggingFace Hub"
+    "--train-dataset",
+    required=True,
+    help="Training data source: HuggingFace dataset (e.g. 'bioamla/scp-frogs'), "
+         "local metadata CSV (with 'file' and 'label' columns), "
+         "or directory with class subdirectories (e.g. ./data/bird/, ./data/frog/)",
 )
-@click.option("--split", default="train", help="Dataset split to use")
+@click.option("--split", default="train", help="Dataset split to use (for HuggingFace datasets)")
 @click.option("--category-id-column", default="target", help="Column name for category IDs")
 @click.option("--category-label-column", default="category", help="Column name for category labels")
 @click.option("--report-to", default="tensorboard", help="Where to report metrics")
@@ -199,8 +205,17 @@ def ast_train(
 ) -> None:
     """Fine-tune an AST model on a custom dataset.
 
-    Example:
-        bioamla models ast train --training-dir ./output --train-dataset my_data
+    The --train-dataset option accepts three formats:
+
+    \b
+    1. HuggingFace dataset: bioamla/scp-frogs or samuelstevens/BirdSet:HSN
+    2. Metadata CSV: ./data/metadata.csv (must have file and label columns)
+    3. Directory with class subdirs: ./data/ containing bird/, frog/, etc.
+
+    Examples:
+        bioamla models ast train --train-dataset bioamla/scp-frogs
+        bioamla models ast train --train-dataset ./metadata.csv
+        bioamla models ast train --train-dataset ./audio_by_class/
     """
     import evaluate
     import numpy as np
@@ -268,8 +283,110 @@ def ast_train(
     if report_to and "," in report_to:
         report_to = [r.strip() for r in report_to.split(",")]
 
-    if ":" in train_dataset:
+    # Determine dataset source type and load accordingly
+    from pathlib import Path
+    train_path = Path(train_dataset)
+
+    if train_path.exists():
+        # Local file or directory
+        if train_path.is_file() and train_path.suffix.lower() == ".csv":
+            # Metadata CSV file
+            click.echo(f"Loading from metadata CSV: {train_dataset}")
+            import pandas as pd
+
+            # Read CSV and determine structure
+            df = pd.read_csv(train_path)
+
+            # Look for common column names for file path
+            file_col = None
+            for col in ["file", "filepath", "path", "audio", "filename", "file_path", "file_name"]:
+                if col in df.columns:
+                    file_col = col
+                    break
+            if file_col is None:
+                raise click.BadParameter(
+                    f"CSV must have a file column (tried: file, filepath, path, audio, filename, file_path). "
+                    f"Found columns: {list(df.columns)}"
+                )
+
+            # Look for label column
+            label_col = None
+            for col in ["label", "category", "class", "species", category_label_column]:
+                if col in df.columns:
+                    label_col = col
+                    break
+            if label_col is None:
+                raise click.BadParameter(
+                    f"CSV must have a label column (tried: label, category, class, species, {category_label_column}). "
+                    f"Found columns: {list(df.columns)}"
+                )
+
+            # Update category_label_column to the found column
+            category_label_column = label_col
+
+            # Resolve file paths relative to CSV location
+            csv_dir = train_path.parent
+            def resolve_path(p):
+                p = Path(p)
+                if not p.is_absolute():
+                    p = csv_dir / p
+                return str(p)
+
+            df["audio"] = df[file_col].apply(resolve_path)
+            df[category_label_column] = df[label_col]
+
+            # Create HuggingFace dataset from DataFrame
+            dataset = Dataset.from_pandas(df[["audio", category_label_column]])
+            dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
+            click.echo(f"Loaded {len(dataset)} samples from CSV")
+
+        elif train_path.is_dir():
+            # Directory - check for audiofolder structure (subdirs as classes)
+            subdirs = [d for d in train_path.iterdir() if d.is_dir()]
+            audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+
+            if subdirs:
+                # Check if subdirs contain audio files (audiofolder format)
+                has_audio_in_subdirs = any(
+                    any(f.suffix.lower() in audio_extensions for f in subdir.iterdir() if f.is_file())
+                    for subdir in subdirs
+                )
+                if has_audio_in_subdirs:
+                    click.echo(f"Loading from audiofolder directory: {train_dataset}")
+                    click.echo(f"Found class directories: {[d.name for d in subdirs]}")
+                    dataset = load_dataset("audiofolder", data_dir=train_dataset, split=split)
+                    # audiofolder uses 'label' column
+                    category_label_column = "label"
+                else:
+                    raise click.BadParameter(
+                        f"Directory {train_dataset} has subdirectories but they don't contain audio files. "
+                        f"Expected structure: {train_dataset}/class_name/*.wav"
+                    )
+            else:
+                # Flat directory - look for a metadata CSV inside
+                csv_files = list(train_path.glob("*.csv"))
+                if csv_files:
+                    click.echo(f"Found metadata CSV in directory: {csv_files[0]}")
+                    # Recursively call with the CSV path
+                    train_dataset = str(csv_files[0])
+                    train_path = Path(train_dataset)
+                    # Re-process as CSV (this is a bit hacky but avoids code duplication)
+                    raise click.BadParameter(
+                        f"Directory contains CSV files. Please specify the CSV directly: --train-dataset {csv_files[0]}"
+                    )
+                else:
+                    raise click.BadParameter(
+                        f"Directory {train_dataset} must either have class subdirectories (e.g., bird/, frog/) "
+                        f"or contain a metadata CSV file."
+                    )
+        else:
+            raise click.BadParameter(
+                f"Local path {train_dataset} exists but is neither a CSV file nor a directory."
+            )
+    elif ":" in train_dataset:
+        # HuggingFace dataset with config (e.g., 'samuelstevens/BirdSet:HSN')
         dataset_name, config_name = train_dataset.rsplit(":", 1)
+        click.echo(f"Loading from HuggingFace Hub: {dataset_name} (config: {config_name})")
         dataset = load_dataset(dataset_name, config_name, split=split)
     elif "BirdSet" in train_dataset:
         click.echo(
@@ -278,12 +395,9 @@ def ast_train(
         click.echo("Available subsets: HSN, NBP, NES, PER")
         dataset = load_dataset(train_dataset, "HSN", split=split)
     else:
-        # Check if it's a local directory path
-        from pathlib import Path
-        if Path(train_dataset).exists() and Path(train_dataset).is_dir():
-            dataset = load_dataset("audiofolder", data_dir=train_dataset, split=split)
-        else:
-            dataset = load_dataset(train_dataset, split=split)
+        # Assume HuggingFace dataset name
+        click.echo(f"Loading from HuggingFace Hub: {train_dataset}")
+        dataset = load_dataset(train_dataset, split=split)
 
     if isinstance(dataset, Dataset):
         class_names = sorted(set(dataset[category_label_column]))
