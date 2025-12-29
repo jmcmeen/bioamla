@@ -2,10 +2,10 @@
 BioAmla - Bioacoustics & Machine Learning Applications
 ======================================================
 
-Version: 0.1.6
+Version: 0.1.7
 """
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 
 # Re-export commonly used utilities for convenience
 from bioamla.core.utils import (
