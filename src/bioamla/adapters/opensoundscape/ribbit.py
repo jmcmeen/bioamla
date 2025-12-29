@@ -1,11 +1,3 @@
-"""RIBBIT adapter for OpenSoundscape.
-
-This module provides a direct adapter to OpenSoundscape's RIBBIT algorithm
-for detecting periodic vocalizations (frog calls, insect songs, etc.).
-
-Only the services layer should import from this module.
-"""
-
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 

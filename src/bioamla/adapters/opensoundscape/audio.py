@@ -1,6 +1,3 @@
-"""AudioAdapter - bioamla-compatible interface over OpenSoundscape Audio.
-"""
-
 from typing import Optional
 
 import numpy as np

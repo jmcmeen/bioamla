@@ -1,7 +1,3 @@
-"""SpectrogramAdapter - bioamla-compatible interface over OpenSoundscape spectrograms.
-
-"""
-
 from typing import Optional
 
 import numpy as np
