@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.1.7"
+version = "0.1.8"
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
@@ -27,8 +27,8 @@ dependencies = [
   "audiomentations",
   "evaluate",
   "pydantic>=2.0",
-  "pydub",  # requires ffmpeg for M4A/MP3/FLAC support
-  "soundfile",  # fast native C audio I/O for WAV/FLAC/OGG
+  "pydub",
+  "soundfile",
   "textual",
   "matplotlib",
   "scipy",
@@ -40,6 +40,12 @@ dependencies = [
   "sounddevice>=0.4.0",
   "requests>=2.28.0",
   "onnx>=1.14.0",
+  "opensoundscape>=0.12.0",
+  "bioacoustics-model-zoo>=0.8.0",
+  "ai-edge-litert>=1.0.0",
+  "tensorflow>=2.15.0",
+  "tf-keras>=2.15.0",
+  "timm>=1.0.0",
 ]
 
 [project.scripts]
@@ -52,6 +58,7 @@ dev = [
   "pytest-cov",
   "pytest-mock",
   "pytest-asyncio",
+  "pytest-benchmark>=4.0",
   "ruff",
   "build",
   "twine",
@@ -67,6 +74,7 @@ all = [
   "pytest-cov",
   "pytest-mock",
   "pytest-asyncio",
+  "pytest-benchmark>=4.0",
   "ruff",
   "build",
   "twine",
@@ -98,11 +106,13 @@ addopts = [
   "-v",
   "--tb=short",
   "--strict-markers",
+  "-n", "4",
 ]
 markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
   "integration: marks tests as integration tests",
   "requires_cuda: marks tests that require CUDA",
+  "benchmark: marks tests as benchmarks (run with pytest --benchmark-only)",
 ]
 
 [tool.coverage.run]

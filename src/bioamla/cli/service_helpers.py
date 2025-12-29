@@ -13,6 +13,7 @@ Architecture:
 - Module-level singleton factory for consistent service instances across CLI
 - Error handling utilities for consistent user feedback
 - CLI-specific conveniences without polluting the reusable ServiceFactory
+- LAZY IMPORTS: ServiceFactory is not imported until first service access
 
 Usage:
     from bioamla.cli.service_helpers import services, handle_result
@@ -33,8 +34,11 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import click
 
-from bioamla.services import ServiceFactory
-from bioamla.services.base import ServiceResult
+# LAZY IMPORT: ServiceFactory is only imported when first service is accessed
+# This avoids loading all service dependencies (pyinaturalist, pandas, etc.) at CLI startup
+if TYPE_CHECKING:
+    from bioamla.services import ServiceFactory
+    from bioamla.services.base import ServiceResult
 
 if TYPE_CHECKING:
     from bioamla.services.annotation import AnnotationService
@@ -46,6 +50,7 @@ if TYPE_CHECKING:
     from bioamla.services.batch_detection import BatchDetectionService
     from bioamla.services.batch_indices import BatchIndicesService
     from bioamla.services.clustering import ClusteringService
+    from bioamla.services.cnn import CNNService
     from bioamla.services.config import ConfigService
     from bioamla.services.dataset import DatasetService
     from bioamla.services.dependency import DependencyService
@@ -73,10 +78,11 @@ T = TypeVar("T")
 
 # Module-level singleton factory for CLI commands
 # All CLI commands share this factory instance for consistency
-_factory: ServiceFactory | None = None
+# Type annotation uses string to avoid import at module level
+_factory: "ServiceFactory | None" = None
 
 
-def get_factory() -> ServiceFactory:
+def get_factory() -> "ServiceFactory":
     """
     Get the singleton ServiceFactory instance for CLI.
 
@@ -88,11 +94,14 @@ def get_factory() -> ServiceFactory:
     """
     global _factory
     if _factory is None:
+        # Lazy import to avoid loading all service dependencies at CLI startup
+        from bioamla.services import ServiceFactory
+
         _factory = ServiceFactory()
     return _factory
 
 
-def set_factory(factory: ServiceFactory) -> None:
+def set_factory(factory: "ServiceFactory") -> None:
     """
     Set a custom ServiceFactory instance.
 
@@ -178,6 +187,11 @@ class _ServiceAccessor:
         return get_factory().ast
 
     @property
+    def cnn(self) -> "CNNService":
+        """Get CNNService instance."""
+        return get_factory().cnn
+
+    @property
     def clustering(self) -> "ClusteringService":
         """Get ClusteringService instance."""
         return get_factory().clustering
@@ -258,7 +272,7 @@ services = _ServiceAccessor()
 # ============================================================================
 
 
-def handle_result(result: ServiceResult[T]) -> T:
+def handle_result(result: "ServiceResult[T]") -> T:
     """
     Handle a service result, exiting with error if failed.
 
@@ -299,7 +313,7 @@ def exit_with_error(message: str, code: int = 1) -> None:
     raise SystemExit(code)
 
 
-def check_result(result: ServiceResult[Any], error_message: str | None = None) -> bool:
+def check_result(result: "ServiceResult[Any]", error_message: str | None = None) -> bool:
     """
     Check if a result is successful, exit with error if not.
 

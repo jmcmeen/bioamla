@@ -1,10 +1,12 @@
 # services/audio_transform.py
 """
 Service for audio signal processing operations, both in-memory and file-based.
+
+Uses OpenSoundscape adapters for audio processing operations.
 """
 
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import numpy as np
 
@@ -75,7 +77,7 @@ class AudioTransformService(BaseService):
         order: int = 5,
     ) -> ServiceResult[AudioData]:
         """
-        Apply a lowpass filter.
+        Apply a lowpass filter using OpenSoundscape.
 
         Args:
             audio: Input AudioData
@@ -86,9 +88,12 @@ class AudioTransformService(BaseService):
             ServiceResult with filtered AudioData
         """
         try:
-            from bioamla.core.audio.signal import lowpass_filter
+            from bioamla.adapters.opensoundscape import AudioAdapter
 
-            filtered = lowpass_filter(audio.samples, audio.sample_rate, cutoff_hz, order)
+            # Use OpenSoundscape adapter for filtering
+            adapter = AudioAdapter.from_samples(audio.samples, audio.sample_rate)
+            filtered_adapter = adapter.lowpass(cutoff_hz, order=order)
+            filtered = filtered_adapter.to_samples()
 
             result_audio = AudioData(
                 samples=filtered,
@@ -117,7 +122,7 @@ class AudioTransformService(BaseService):
         order: int = 5,
     ) -> ServiceResult[AudioData]:
         """
-        Apply a highpass filter.
+        Apply a highpass filter using OpenSoundscape.
 
         Args:
             audio: Input AudioData
@@ -128,9 +133,12 @@ class AudioTransformService(BaseService):
             ServiceResult with filtered AudioData
         """
         try:
-            from bioamla.core.audio.signal import highpass_filter
+            from bioamla.adapters.opensoundscape import AudioAdapter
 
-            filtered = highpass_filter(audio.samples, audio.sample_rate, cutoff_hz, order)
+            # Use OpenSoundscape adapter for filtering
+            adapter = AudioAdapter.from_samples(audio.samples, audio.sample_rate)
+            filtered_adapter = adapter.highpass(cutoff_hz, order=order)
+            filtered = filtered_adapter.to_samples()
 
             result_audio = AudioData(
                 samples=filtered,
@@ -160,7 +168,7 @@ class AudioTransformService(BaseService):
         order: int = 5,
     ) -> ServiceResult[AudioData]:
         """
-        Apply a bandpass filter.
+        Apply a bandpass filter using OpenSoundscape.
 
         Args:
             audio: Input AudioData
@@ -172,9 +180,12 @@ class AudioTransformService(BaseService):
             ServiceResult with filtered AudioData
         """
         try:
-            from bioamla.core.audio.signal import bandpass_filter
+            from bioamla.adapters.opensoundscape import AudioAdapter
 
-            filtered = bandpass_filter(audio.samples, audio.sample_rate, low_hz, high_hz, order)
+            # Use OpenSoundscape adapter for filtering
+            adapter = AudioAdapter.from_samples(audio.samples, audio.sample_rate)
+            filtered_adapter = adapter.bandpass(low_hz, high_hz, order=order)
+            filtered = filtered_adapter.to_samples()
 
             result_audio = AudioData(
                 samples=filtered,
@@ -206,7 +217,7 @@ class AudioTransformService(BaseService):
         target_peak: float = 0.99,
     ) -> ServiceResult[AudioData]:
         """
-        Normalize audio to a target peak amplitude.
+        Normalize audio to a target peak amplitude using OpenSoundscape.
 
         Args:
             audio: Input AudioData
@@ -216,9 +227,12 @@ class AudioTransformService(BaseService):
             ServiceResult with normalized AudioData
         """
         try:
-            from bioamla.core.audio.signal import peak_normalize
+            from bioamla.adapters.opensoundscape import AudioAdapter
 
-            normalized = peak_normalize(audio.samples, target_peak=target_peak)
+            # Use OpenSoundscape adapter for normalization
+            adapter = AudioAdapter.from_samples(audio.samples, audio.sample_rate)
+            normalized_adapter = adapter.normalize(peak_level=target_peak)
+            normalized = normalized_adapter.to_samples()
 
             result_audio = AudioData(
                 samples=normalized,
@@ -290,7 +304,7 @@ class AudioTransformService(BaseService):
         target_sample_rate: int,
     ) -> ServiceResult[AudioData]:
         """
-        Resample audio to a different sample rate.
+        Resample audio to a different sample rate using OpenSoundscape.
 
         Args:
             audio: Input AudioData
@@ -306,9 +320,12 @@ class AudioTransformService(BaseService):
             )
 
         try:
-            from bioamla.core.audio.signal import resample_audio
+            from bioamla.adapters.opensoundscape import AudioAdapter
 
-            resampled = resample_audio(audio.samples, audio.sample_rate, target_sample_rate)
+            # Use OpenSoundscape adapter for resampling
+            adapter = AudioAdapter.from_samples(audio.samples, audio.sample_rate)
+            resampled_adapter = adapter.resample(target_sample_rate)
+            resampled = resampled_adapter.to_samples()
 
             result_audio = AudioData(
                 samples=resampled,
@@ -342,7 +359,7 @@ class AudioTransformService(BaseService):
         end_time: Optional[float] = None,
     ) -> ServiceResult[AudioData]:
         """
-        Trim audio to a time range.
+        Trim audio to a time range using OpenSoundscape.
 
         Args:
             audio: Input AudioData
@@ -353,17 +370,15 @@ class AudioTransformService(BaseService):
             ServiceResult with trimmed AudioData
         """
         try:
-            from bioamla.core.audio.signal import trim_audio
-
-            trimmed = trim_audio(
-                audio.samples,
-                audio.sample_rate,
-                start_time=start_time,
-                end_time=end_time,
-            )
+            from bioamla.adapters.opensoundscape import AudioAdapter
 
             start = start_time or 0.0
             end = end_time or audio.duration
+
+            # Use OpenSoundscape adapter for trimming
+            adapter = AudioAdapter.from_samples(audio.samples, audio.sample_rate)
+            trimmed_adapter = adapter.trim(start, end)
+            trimmed = trimmed_adapter.to_samples()
 
             result_audio = AudioData(
                 samples=trimmed,
