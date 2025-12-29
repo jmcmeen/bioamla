@@ -187,8 +187,8 @@ class DetectionService(BaseService):
             return ServiceResult.fail(error)
 
         try:
+            from bioamla.adapters.pydub import load_audio
             from bioamla.core.audio.detectors import CWTPeakDetector
-            from bioamla.core.audio.pydub_utils import load_audio
 
             detector = CWTPeakDetector(
                 snr_threshold=snr_threshold,

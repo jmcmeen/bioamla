@@ -123,14 +123,14 @@ class AudioFileService(BaseService):
         Returns:
             ServiceResult containing AudioData on success
         """
-        from bioamla.core.audio.pydub_utils import load_audio_pydub
+        from bioamla.adapters.pydub import load_audio
 
         error = self._validate_input_path(filepath)
         if error:
             return ServiceResult.fail(error)
 
         try:
-            audio, sr = load_audio_pydub(filepath)
+            audio, sr = load_audio(filepath)
 
             # Ensure 1D for mono
             if audio.ndim == 1:
@@ -176,7 +176,7 @@ class AudioFileService(BaseService):
         Returns:
             ServiceResult containing the output path on success
         """
-        from bioamla.core.audio.pydub_utils import save_audio_pydub
+        from bioamla.adapters.pydub import save_audio
 
         error = self._validate_output_path(output_path)
         if error:
@@ -186,24 +186,11 @@ class AudioFileService(BaseService):
             output = Path(output_path)
             self.file_repository.mkdir(output.parent, parents=True)
 
-            # Determine format from extension if not specified
-            format_to_use = format
-            if format_to_use is None:
-                ext = output.suffix.lower()
-                format_map = {
-                    ".wav": "wav",
-                    ".flac": "flac",
-                    ".ogg": "ogg",
-                    ".mp3": "mp3",
-                    ".m4a": "ipod",  # pydub uses "ipod" for M4A/AAC
-                }
-                format_to_use = format_map.get(ext, "wav")
-
-            save_audio_pydub(
+            save_audio(
                 str(output),
                 audio_data.samples,
                 audio_data.sample_rate,
-                format=format_to_use,
+                format=format,
             )
 
             return ServiceResult.ok(
@@ -302,7 +289,7 @@ class AudioFileService(BaseService):
         Returns:
             ServiceResult containing the output path on success
         """
-        from bioamla.core.audio.pydub_utils import load_audio_pydub, save_audio_pydub
+        from bioamla.adapters.pydub import load_audio, save_audio
 
         input_error = self._validate_input_path(input_path)
         if input_error:
@@ -314,7 +301,7 @@ class AudioFileService(BaseService):
 
         try:
             # Load input
-            audio, sr = load_audio_pydub(str(input_path))
+            audio, sr = load_audio(str(input_path))
 
             # Apply transform
             processed, out_sr = transform(audio, sr)
@@ -323,7 +310,7 @@ class AudioFileService(BaseService):
             self.file_repository.mkdir(Path(output_path).parent, parents=True)
 
             # Save
-            save_audio_pydub(str(output_path), processed, out_sr)
+            save_audio(str(output_path), processed, out_sr)
 
             return ServiceResult.ok(
                 data=str(output_path),
@@ -354,7 +341,7 @@ class AudioFileService(BaseService):
         Returns:
             ServiceResult containing the temporary file path
         """
-        from bioamla.core.audio.pydub_utils import save_audio_pydub
+        from bioamla.adapters.pydub import save_audio
 
         try:
             temp_dir = self._get_temp_dir()
@@ -366,7 +353,7 @@ class AudioFileService(BaseService):
             temp_path = temp_file.name
             temp_file.close()
 
-            save_audio_pydub(temp_path, audio_data.samples, audio_data.sample_rate)
+            save_audio(temp_path, audio_data.samples, audio_data.sample_rate)
 
             return ServiceResult.ok(
                 data=temp_path,

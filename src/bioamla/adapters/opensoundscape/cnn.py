@@ -1,10 +1,4 @@
 """CNNAdapter - bioamla-compatible wrapper over OpenSoundscape CNN.
-
-This module provides an adapter for OpenSoundscape's CNN class, enabling
-training and inference with ResNet/EfficientNet architectures for audio
-classification.
-
-Only the services layer should import from this module.
 """
 
 from pathlib import Path

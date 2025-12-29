@@ -771,7 +771,7 @@ def compute_indices_from_file(
         >>> indices = compute_indices_from_file("recording.wav")
         >>> print(indices.to_dict())
     """
-    from bioamla.core.audio.pydub_utils import load_audio
+    from bioamla.adapters.pydub import load_audio
 
     audio, sample_rate = load_audio(str(filepath))
     return compute_all_indices(audio, sample_rate, **kwargs)

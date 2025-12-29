@@ -56,9 +56,9 @@ def get_wav_metadata(filepath: str) -> Dict[str, Any]:
     Returns:
         Dictionary with audio metadata (sample_rate, channels, duration, etc.)
     """
-    from bioamla.core.audio.pydub_utils import get_audio_info_pydub
+    from bioamla.adapters.pydub import get_audio_info
 
-    info = get_audio_info_pydub(filepath)
+    info = get_audio_info(filepath)
     return {
         "sample_rate": info["sample_rate"],
         "channels": info["channels"],

@@ -277,9 +277,9 @@ class EmbeddingExtractor:
         segments = []
         if filepath:
             try:
-                from bioamla.core.audio.pydub_utils import get_audio_info_pydub
+                from bioamla.adapters.pydub import get_audio_info
 
-                info = get_audio_info_pydub(filepath)
+                info = get_audio_info(filepath)
                 duration = info["duration"]
                 clip_dur = self.config.clip_duration
                 overlap = self.config.overlap
