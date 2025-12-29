@@ -273,7 +273,8 @@ def compute_aci(
         min_freq: Minimum frequency to consider in Hz.
         max_freq: Maximum frequency to consider in Hz (default: Nyquist).
         j: Number of temporal steps to cluster (default: 5).
-        precomputed_spec: Optional precomputed (spectrogram, frequencies, times) tuple.
+        precomputed_spec: Optional precomputed (spectrogram, frequencies, times) tuple
+            in LINEAR AMPLITUDE format (not dB).
 
     Returns:
         Acoustic Complexity Index value.
@@ -348,6 +349,8 @@ def compute_adi(
         max_freq: Maximum frequency to analyze in Hz.
         freq_step: Frequency band width in Hz.
         db_threshold: Threshold in dB for considering sound present.
+        precomputed_spec: Optional precomputed (spectrogram, frequencies, times) tuple
+            in LINEAR AMPLITUDE format (not dB).
 
     Returns:
         Acoustic Diversity Index value.
@@ -357,7 +360,9 @@ def compute_adi(
     """
     # Use precomputed spectrogram if available (performance optimization)
     if precomputed_spec is not None:
-        spectrogram_db, frequencies, _ = precomputed_spec
+        spectrogram, frequencies, _ = precomputed_spec
+        # Convert to dB
+        spectrogram_db = librosa.amplitude_to_db(spectrogram, ref=np.max)
     else:
         spectrogram, frequencies, _ = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
         # Convert to dB
@@ -434,6 +439,8 @@ def compute_aei(
         max_freq: Maximum frequency to analyze in Hz.
         freq_step: Frequency band width in Hz.
         db_threshold: Threshold in dB for considering sound present.
+        precomputed_spec: Optional precomputed (spectrogram, frequencies, times) tuple
+            in LINEAR AMPLITUDE format (not dB).
 
     Returns:
         Acoustic Evenness Index value (Gini coefficient).
@@ -443,7 +450,9 @@ def compute_aei(
     """
     # Use precomputed spectrogram if available (performance optimization)
     if precomputed_spec is not None:
-        spectrogram_db, frequencies, _ = precomputed_spec
+        spectrogram, frequencies, _ = precomputed_spec
+        # Convert to dB
+        spectrogram_db = librosa.amplitude_to_db(spectrogram, ref=np.max)
     else:
         spectrogram, frequencies, _ = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
         # Convert to dB
@@ -518,6 +527,8 @@ def compute_bio(
         min_freq: Minimum frequency in Hz (default: 2000).
         max_freq: Maximum frequency in Hz (default: 8000).
         db_threshold: Threshold in dB for baseline.
+        precomputed_spec: Optional precomputed (spectrogram, frequencies, times) tuple
+            in LINEAR AMPLITUDE format (not dB).
 
     Returns:
         Bioacoustic Index value.
@@ -527,9 +538,7 @@ def compute_bio(
     """
     # Use precomputed spectrogram if available (performance optimization)
     if precomputed_spec is not None:
-        spectrogram_db, frequencies, _ = precomputed_spec
-        # BIO needs linear scale, convert back from dB
-        spectrogram = librosa.db_to_amplitude(spectrogram_db)
+        spectrogram, frequencies, _ = precomputed_spec
     else:
         spectrogram, frequencies, _ = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
 
@@ -680,19 +689,17 @@ def compute_all_indices(
     duration = len(audio) / sample_rate
 
     # OPTIMIZATION: Compute spectrogram ONCE for n_fft=512 (used by most indices)
+    # All indices now expect LINEAR AMPLITUDE format for precomputed_spec
     spec_512, freq_512, times_512 = _compute_spectrogram(audio, sample_rate, n_fft, hop_length)
 
-    # Convert to dB for indices that need it
-    spec_512_db = librosa.amplitude_to_db(spec_512, ref=np.max)
-
-    # Compute ACI (uses spec_512)
+    # Compute ACI (uses linear spec)
     aci = compute_aci(
         audio, sample_rate, n_fft, hop_length,
         min_freq=aci_min_freq, max_freq=aci_max_freq,
         precomputed_spec=(spec_512, freq_512, times_512)
     )
 
-    # Compute ADI (uses spec_512_db)
+    # Compute ADI (uses linear spec, converts to dB internally)
     adi = compute_adi(
         audio,
         sample_rate,
@@ -701,10 +708,10 @@ def compute_all_indices(
         max_freq=adi_max_freq,
         freq_step=adi_freq_step,
         db_threshold=db_threshold,
-        precomputed_spec=(spec_512_db, freq_512, times_512)
+        precomputed_spec=(spec_512, freq_512, times_512)
     )
 
-    # Compute AEI (uses spec_512_db)
+    # Compute AEI (uses linear spec, converts to dB internally)
     aei = compute_aei(
         audio,
         sample_rate,
@@ -713,10 +720,10 @@ def compute_all_indices(
         max_freq=adi_max_freq,
         freq_step=adi_freq_step,
         db_threshold=db_threshold,
-        precomputed_spec=(spec_512_db, freq_512, times_512)
+        precomputed_spec=(spec_512, freq_512, times_512)
     )
 
-    # Compute BIO (uses spec_512_db)
+    # Compute BIO (uses linear spec, converts to dB internally)
     bio = compute_bio(
         audio,
         sample_rate,
@@ -725,7 +732,7 @@ def compute_all_indices(
         min_freq=bio_min_freq,
         max_freq=bio_max_freq,
         db_threshold=db_threshold,
-        precomputed_spec=(spec_512_db, freq_512, times_512)
+        precomputed_spec=(spec_512, freq_512, times_512)
     )
 
     # Compute NDSI (needs n_fft=1024, computed separately)
