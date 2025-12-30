@@ -629,6 +629,7 @@ def ast_train(
         bf16=bf16,
         gradient_accumulation_steps=gradient_accumulation_steps,
         dataloader_num_workers=dataloader_num_workers,
+        dataloader_persistent_workers=False,  # Prevent hang on exit
         torch_compile=torch_compile,
         run_name=mlflow_run_name,
     )
@@ -694,6 +695,16 @@ def ast_train(
     del model
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+    # End MLflow run if active
+    try:
+        import mlflow
+
+        if mlflow.active_run():
+            mlflow.end_run()
+    except ImportError:
+        pass
+
     import gc
     gc.collect()
 
