@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from bioamla.core.audio.indices import (
+from bioamla.core.indices import (
     AcousticIndices,
     compute_aci,
     compute_adi,

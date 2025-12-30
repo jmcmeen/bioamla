@@ -270,7 +270,7 @@ class AudioTransformService(BaseService):
             ServiceResult with normalized AudioData
         """
         try:
-            from bioamla.core.audio.signal import normalize_loudness
+            from bioamla.core.signal import normalize_loudness
 
             normalized = normalize_loudness(audio.samples, audio.sample_rate, target_db=target_db)
 
@@ -420,7 +420,7 @@ class AudioTransformService(BaseService):
             ServiceResult with trimmed AudioData
         """
         try:
-            from bioamla.core.audio.signal import trim_silence
+            from bioamla.core.signal import trim_silence
 
             trimmed = trim_silence(
                 audio.samples,
@@ -471,7 +471,7 @@ class AudioTransformService(BaseService):
             ServiceResult with denoised AudioData
         """
         try:
-            from bioamla.core.audio.signal import spectral_denoise
+            from bioamla.core.signal import spectral_denoise
 
             denoised = spectral_denoise(
                 audio.samples,
@@ -882,7 +882,7 @@ class AudioTransformService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.signal import load_audio, resample_audio, save_audio
+            from bioamla.core.signal import load_audio, resample_audio, save_audio
 
             audio, sr = load_audio(input_path)
             resampled = resample_audio(audio, sr, target_rate)
@@ -932,7 +932,7 @@ class AudioTransformService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.signal import (
+            from bioamla.core.signal import (
                 load_audio,
                 normalize_loudness,
                 peak_normalize,
@@ -998,7 +998,7 @@ class AudioTransformService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.signal import (
+            from bioamla.core.signal import (
                 bandpass_filter,
                 highpass_filter,
                 load_audio,
@@ -1069,12 +1069,12 @@ class AudioTransformService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.signal import (
+            from bioamla.core.signal import (
                 load_audio,
                 save_audio,
                 trim_audio,
             )
-            from bioamla.core.audio.signal import (
+            from bioamla.core.signal import (
                 trim_silence as do_trim_silence,
             )
 
@@ -1132,7 +1132,7 @@ class AudioTransformService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.signal import load_audio, save_audio
+            from bioamla.core.signal import load_audio, save_audio
 
             audio, sr = load_audio(input_path)
 
@@ -1231,7 +1231,7 @@ class AudioTransformService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.signal import load_audio, save_audio, spectral_denoise
+            from bioamla.core.signal import load_audio, save_audio, spectral_denoise
 
             audio, sr = load_audio(input_path)
             denoised = spectral_denoise(audio, sr, noise_reduce_factor=strength)
@@ -1273,7 +1273,7 @@ class AudioTransformService(BaseService):
 
         try:
             from bioamla.core.audio import analyze_audio
-            from bioamla.core.audio.signal import load_audio
+            from bioamla.core.signal import load_audio
 
             audio, sr = load_audio(filepath)
             analysis = analyze_audio(audio, sr, silence_threshold_db=silence_threshold_db)

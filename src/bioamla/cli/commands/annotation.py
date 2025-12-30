@@ -146,7 +146,7 @@ def annotation_remap(input_file : str, output_file : str, mapping : str, keep_un
     """Remap annotation labels using a mapping file."""
     from pathlib import Path
 
-    from bioamla.core.audio.annotations import (
+    from bioamla.core.annotations import (
         load_label_mapping,
         remap_labels,
     )
@@ -199,7 +199,7 @@ def annotation_filter(input_file: str, output_file: str, include: tuple, exclude
     """Filter annotations by label or duration."""
     from pathlib import Path
 
-    from bioamla.core.audio.annotations import filter_labels
+    from bioamla.core.annotations import filter_labels
     from bioamla.services.annotation import (
         load_csv_annotations,
         load_raven_selection_table,
@@ -284,7 +284,7 @@ def annotation_generate_labels(
     import numpy as np
 
     from bioamla.cli.service_helpers import services
-    from bioamla.core.audio.annotations import (
+    from bioamla.core.annotations import (
         create_label_map,
         generate_clip_labels,
     )

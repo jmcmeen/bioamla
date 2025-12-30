@@ -224,7 +224,7 @@ class AudioFileService(BaseService):
         data_to_save = audio_data
         if target_sample_rate and target_sample_rate != audio_data.sample_rate:
             try:
-                from bioamla.core.audio.signal import resample_audio
+                from bioamla.core.signal import resample_audio
 
                 resampled = resample_audio(
                     audio_data.samples,

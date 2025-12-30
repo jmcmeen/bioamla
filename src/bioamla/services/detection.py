@@ -57,7 +57,7 @@ class DetectionService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.detectors import BandLimitedEnergyDetector
+            from bioamla.core.detectors import BandLimitedEnergyDetector
 
             detector = BandLimitedEnergyDetector(
                 low_freq=low_freq,
@@ -123,7 +123,7 @@ class DetectionService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.detectors import RibbitDetector
+            from bioamla.core.detectors import RibbitDetector
 
             detector = RibbitDetector(
                 pulse_rate_hz=pulse_rate_hz,
@@ -188,7 +188,7 @@ class DetectionService(BaseService):
 
         try:
             from bioamla.adapters.pydub import load_audio
-            from bioamla.core.audio.detectors import CWTPeakDetector
+            from bioamla.core.detectors import CWTPeakDetector
 
             detector = CWTPeakDetector(
                 snr_threshold=snr_threshold,
@@ -258,7 +258,7 @@ class DetectionService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.detectors import AcceleratingPatternDetector
+            from bioamla.core.detectors import AcceleratingPatternDetector
 
             detector = AcceleratingPatternDetector(
                 min_pulses=min_pulses,

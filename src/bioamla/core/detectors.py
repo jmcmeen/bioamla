@@ -43,7 +43,7 @@ import numpy as np
 from scipy import ndimage
 from scipy.signal import find_peaks
 
-from bioamla.core.audio.signal import bandpass_filter
+from bioamla.core.signal import bandpass_filter
 from bioamla.core.files import TextFile
 
 logger = logging.getLogger(__name__)

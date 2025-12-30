@@ -211,8 +211,8 @@ class ASTService(BaseService):
         import torch
 
         # Lazy imports for AST functionality
-        from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
-        from bioamla.core.ml.ast import (
+        from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
+        from bioamla.core.ast import (
             ast_predict,
             extract_features,
             get_cached_feature_extractor,
@@ -401,7 +401,7 @@ class ASTService(BaseService):
             import torch
             from transformers import ASTFeatureExtractor, AutoModel
 
-            from bioamla.core.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
+            from bioamla.core.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
             # Load audio
             waveform, orig_sr = load_waveform_tensor(filepath)

@@ -23,7 +23,7 @@ import numpy as np
 from scipy import signal as scipy_signal
 
 from bioamla.adapters.pydub import save_audio
-from bioamla.core.audio.torchaudio import load_waveform_tensor
+from bioamla.core.torchaudio import load_waveform_tensor
 
 # =============================================================================
 # Filter Functions
