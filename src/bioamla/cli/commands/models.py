@@ -686,6 +686,17 @@ def ast_train(
     services.file.ensure_directory(best_model_path)
     trainer.save_model(best_model_path)
 
+    # Cleanup to prevent hanging from dataloader workers
+    # Free the accelerator which holds references to dataloaders
+    if hasattr(trainer, "accelerator") and trainer.accelerator is not None:
+        trainer.accelerator.free_memory()
+    del trainer
+    del model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    import gc
+    gc.collect()
+
 
 @ast.command("evaluate")
 @click.argument("path", type=click.Path(exists=True))
