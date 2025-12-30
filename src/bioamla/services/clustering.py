@@ -113,7 +113,7 @@ class ClusteringService(BaseService):
         )
 
         try:
-            from bioamla.core.audio.clustering import AudioClusterer, ClusteringConfig
+            from bioamla.core.clustering import AudioClusterer, ClusteringConfig
 
             config = ClusteringConfig(
                 method=method,
@@ -196,7 +196,7 @@ class ClusteringService(BaseService):
             Result with optimal k and scores
         """
         try:
-            from bioamla.core.audio.clustering import find_optimal_clusters
+            from bioamla.core.clustering import find_optimal_clusters
 
             optimal_k = find_optimal_clusters(
                 embeddings,
@@ -233,7 +233,7 @@ class ClusteringService(BaseService):
             Result with detailed cluster analysis
         """
         try:
-            from bioamla.core.audio.clustering import analyze_clusters
+            from bioamla.core.clustering import analyze_clusters
 
             metadata = None
             if filepaths:
@@ -283,7 +283,7 @@ class ClusteringService(BaseService):
             Result with reduced embeddings
         """
         try:
-            from bioamla.core.audio.clustering import reduce_dimensions
+            from bioamla.core.clustering import reduce_dimensions
 
             reduced = reduce_dimensions(
                 embeddings,
@@ -374,7 +374,7 @@ class ClusteringService(BaseService):
             Result with novelty detection summary
         """
         try:
-            from bioamla.core.audio.clustering import NoveltyDetector
+            from bioamla.core.clustering import NoveltyDetector
 
             detector = NoveltyDetector(
                 method=method,
@@ -440,7 +440,7 @@ class ClusteringService(BaseService):
             Result with indices and scores of most novel samples
         """
         try:
-            from bioamla.core.audio.clustering import NoveltyDetector
+            from bioamla.core.clustering import NoveltyDetector
 
             detector = NoveltyDetector(method=method)
 
@@ -491,7 +491,7 @@ class ClusteringService(BaseService):
             Result with similarity matrix
         """
         try:
-            from bioamla.core.audio.clustering import compute_cluster_similarity
+            from bioamla.core.clustering import compute_cluster_similarity
 
             similarity = compute_cluster_similarity(embeddings, labels, metric=metric)
 
@@ -524,7 +524,7 @@ class ClusteringService(BaseService):
             Result with sorted cluster order
         """
         try:
-            from bioamla.core.audio.clustering import sort_clusters_by_similarity
+            from bioamla.core.clustering import sort_clusters_by_similarity
 
             sorted_labels = sort_clusters_by_similarity(
                 embeddings, labels, reference_label=reference_cluster
@@ -564,7 +564,7 @@ class ClusteringService(BaseService):
             Result with export info
         """
         try:
-            from bioamla.core.audio.clustering import export_clusters
+            from bioamla.core.clustering import export_clusters
 
             output_path = export_clusters(labels, filepaths, output_dir, copy_files=copy_files)
 

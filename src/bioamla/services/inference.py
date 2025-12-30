@@ -45,7 +45,7 @@ class InferenceService(BaseService):
 
         # Only reload if path changed
         if self._model is None or path != self._model_path:
-            from bioamla.core.ml.inference import ASTInference
+            from bioamla.core.inference import ASTInference
 
             self._model = ASTInference(model_path=path)
             self._model_path = path

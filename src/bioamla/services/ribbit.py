@@ -1,6 +1,8 @@
 # services/ribbit.py
 """
 Service for RIBBIT periodic vocalization detection operations.
+
+Uses OpenSoundscape RIBBIT adapter for detection.
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,6 +17,8 @@ class RibbitService(BaseService):
     """
     Service for RIBBIT periodic vocalization detection.
 
+    Uses OpenSoundscape RIBBIT adapter for high-quality detection.
+
     Provides high-level methods for:
     - Single file detection with preset or custom profiles
     - Profile management and listing
@@ -28,37 +32,6 @@ class RibbitService(BaseService):
             file_repository: Repository for file operations (required)
         """
         super().__init__(file_repository=file_repository)
-        self._detector = None
-        self._current_profile = None
-
-    def _get_detector(
-        self,
-        preset: Optional[str] = None,
-        profile: Optional[Dict[str, Any]] = None,
-    ) -> "RibbitDetector":
-        """Get or create detector with specified profile."""
-        from bioamla.core.audio.ribbit import RibbitDetector, RibbitProfile
-
-        if preset:
-            # Use preset profile
-            if self._current_profile != preset:
-                self._detector = RibbitDetector.from_preset(preset)
-                self._current_profile = preset
-            return self._detector
-
-        if profile:
-            # Use custom profile
-            ribbit_profile = RibbitProfile.from_dict(profile)
-            self._detector = RibbitDetector(ribbit_profile)
-            self._current_profile = profile.get("name", "custom")
-            return self._detector
-
-        # Default to generic mid-frequency
-        if self._detector is None:
-            self._detector = RibbitDetector.from_preset("generic_mid_freq")
-            self._current_profile = "generic_mid_freq"
-
-        return self._detector
 
     # =========================================================================
     # Single File Detection
@@ -73,10 +46,17 @@ class RibbitService(BaseService):
         """
         Run RIBBIT detection on a single audio file.
 
+        Uses OpenSoundscape RIBBIT implementation via adapter.
+
         Args:
             filepath: Path to audio file
-            preset: Name of preset profile to use
-            profile: Custom profile dictionary
+            preset: Name of preset profile to use (e.g., "american_bullfrog", "spring_peeper")
+            profile: Custom profile dictionary with keys:
+                - signal_band: (low_hz, high_hz)
+                - pulse_rate_range: (min_hz, max_hz)
+                - noise_bands: [(low, high), ...] (optional)
+                - clip_duration: float (optional)
+                - score_threshold: float (optional)
 
         Returns:
             Result with detection summary
@@ -86,31 +66,69 @@ class RibbitService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            detector = self._get_detector(preset=preset, profile=profile)
-            result = detector.detect(filepath)
+            # Lazy import adapter to avoid loading OSS at service init
+            import time
 
-            if result.error:
-                return ServiceResult.fail(result.error)
+            from bioamla.adapters.opensoundscape.ribbit import (
+                ribbit_detect,
+                ribbit_detect_preset,
+            )
+
+            start_time = time.time()
+
+            if preset:
+                # Use preset profile
+                score_threshold = profile.get("score_threshold") if profile else None
+                detections, metadata = ribbit_detect_preset(
+                    audio_path=filepath,
+                    preset=preset,
+                    score_threshold=score_threshold,
+                )
+                profile_name = preset
+            elif profile:
+                # Use custom profile
+                detections, metadata = ribbit_detect(
+                    audio_path=filepath,
+                    signal_band=profile["signal_band"],
+                    pulse_rate_range=profile["pulse_rate_range"],
+                    noise_bands=profile.get("noise_bands"),
+                    clip_duration=profile.get("clip_duration", 2.0),
+                    score_threshold=profile.get("score_threshold", 0.5),
+                )
+                profile_name = profile.get("name", "custom")
+            else:
+                # Default to generic mid-frequency
+                detections, metadata = ribbit_detect_preset(
+                    audio_path=filepath,
+                    preset="generic_mid_freq",
+                )
+                profile_name = "generic_mid_freq"
+
+            processing_time = time.time() - start_time
+
+            # Calculate detection metrics
+            total_detection_time = sum(d.duration for d in detections)
+            duration = metadata.get("duration", 0.0)
+            detection_percentage = (total_detection_time / duration * 100) if duration > 0 else 0.0
 
             summary = DetectionSummary(
-                filepath=result.filepath,
-                profile_name=result.profile_name,
-                num_detections=result.num_detections,
-                total_detection_time=result.total_detection_time,
-                detection_percentage=result.detection_percentage,
-                duration=result.duration,
-                processing_time=result.processing_time,
+                filepath=filepath,
+                profile_name=profile_name,
+                num_detections=len(detections),
+                total_detection_time=total_detection_time,
+                detection_percentage=detection_percentage,
+                duration=duration,
+                processing_time=processing_time,
             )
 
             return ServiceResult.ok(
                 data=summary,
-                message=f"Found {result.num_detections} detections",
-                detections=[d.to_dict() for d in result.detections],
-                result=result,
+                message=f"Found {len(detections)} detections",
+                detections=[d.to_dict() for d in detections],
+                metadata=metadata,
             )
         except Exception as e:
             return ServiceResult.fail(str(e))
-
 
     # =========================================================================
     # Profile Management
@@ -124,19 +142,22 @@ class RibbitService(BaseService):
             Result with list of preset info
         """
         try:
-            from bioamla.core.audio.ribbit import get_preset_profiles
+            from bioamla.adapters.opensoundscape.ribbit import (
+                RIBBIT_PRESETS,
+                list_ribbit_presets,
+            )
 
-            profiles = get_preset_profiles()
             preset_list = []
-
-            for name, profile in profiles.items():
+            for name in list_ribbit_presets():
+                params = RIBBIT_PRESETS[name]
                 preset_list.append(
                     {
                         "name": name,
-                        "species": profile.species,
-                        "description": profile.description,
-                        "signal_band": list(profile.signal_band),
-                        "pulse_rate_range": list(profile.pulse_rate_range),
+                        "signal_band": list(params["signal_band"]),
+                        "pulse_rate_range": list(params["pulse_rate_range"]),
+                        "noise_bands": params.get("noise_bands", []),
+                        "clip_duration": params.get("clip_duration", 2.0),
+                        "score_threshold": params.get("score_threshold", 0.5),
                     }
                 )
 
@@ -158,21 +179,15 @@ class RibbitService(BaseService):
             Result with profile details
         """
         try:
-            from bioamla.core.audio.ribbit import get_preset_profiles
+            from bioamla.adapters.opensoundscape.ribbit import get_ribbit_preset
 
-            profiles = get_preset_profiles()
-
-            if preset_name not in profiles:
-                available = ", ".join(profiles.keys())
-                return ServiceResult.fail(
-                    f"Unknown preset: {preset_name}. Available: {available}"
-                )
-
-            profile = profiles[preset_name]
+            params = get_ribbit_preset(preset_name)
             return ServiceResult.ok(
-                data=profile.to_dict(),
+                data=params,
                 message=f"Profile: {preset_name}",
             )
+        except ValueError as e:
+            return ServiceResult.fail(str(e))
         except Exception as e:
             return ServiceResult.fail(str(e))
 
@@ -182,7 +197,7 @@ class RibbitService(BaseService):
         signal_band: Tuple[float, float],
         pulse_rate_range: Tuple[float, float],
         noise_bands: Optional[List[Tuple[float, float]]] = None,
-        window_length: float = 2.0,
+        clip_duration: float = 2.0,
         score_threshold: float = 0.5,
         description: str = "",
         species: Optional[str] = None,
@@ -195,7 +210,7 @@ class RibbitService(BaseService):
             signal_band: Frequency range (low_hz, high_hz)
             pulse_rate_range: Pulse rate range (min_hz, max_hz)
             noise_bands: List of noise estimation bands
-            window_length: Analysis window length (seconds)
+            clip_duration: Analysis clip length (seconds)
             score_threshold: Detection threshold (0-1)
             description: Profile description
             species: Species name
@@ -204,27 +219,36 @@ class RibbitService(BaseService):
             Result with created profile
         """
         try:
-            from bioamla.core.audio.ribbit import RibbitProfile
+            # Validate signal band
+            if signal_band[0] >= signal_band[1]:
+                return ServiceResult.fail("signal_band low must be less than high")
+            if signal_band[0] < 0:
+                return ServiceResult.fail("signal_band frequencies must be positive")
 
-            profile = RibbitProfile(
-                name=name,
-                signal_band=signal_band,
-                pulse_rate_range=pulse_rate_range,
-                noise_bands=noise_bands or [],
-                window_length=window_length,
-                score_threshold=score_threshold,
-                description=description,
-                species=species,
-            )
+            # Validate pulse rate range
+            if pulse_rate_range[0] >= pulse_rate_range[1]:
+                return ServiceResult.fail("pulse_rate_range min must be less than max")
+            if pulse_rate_range[0] <= 0:
+                return ServiceResult.fail("pulse_rate_range must be positive")
 
-            error = profile.validate()
-            if error:
-                return ServiceResult.fail(f"Invalid profile: {error}")
+            # Validate threshold
+            if not 0 <= score_threshold <= 1:
+                return ServiceResult.fail("score_threshold must be between 0 and 1")
+
+            profile = {
+                "name": name,
+                "signal_band": signal_band,
+                "pulse_rate_range": pulse_rate_range,
+                "noise_bands": noise_bands or [],
+                "clip_duration": clip_duration,
+                "score_threshold": score_threshold,
+                "description": description,
+                "species": species,
+            }
 
             return ServiceResult.ok(
-                data=profile.to_dict(),
+                data=profile,
                 message=f"Created profile: {name}",
-                profile=profile,
             )
         except Exception as e:
             return ServiceResult.fail(str(e))
@@ -235,14 +259,16 @@ class RibbitService(BaseService):
 
     def get_detection_timeline(
         self,
-        result,  # RibbitResult
+        detections: List[Dict[str, Any]],
+        duration: float,
         resolution: float = 1.0,
     ) -> ServiceResult[Dict[str, Any]]:
         """
         Generate timeline data for visualization.
 
         Args:
-            result: RibbitResult from detection
+            detections: List of detection dicts from detect() result
+            duration: Total audio duration in seconds
             resolution: Time resolution in seconds
 
         Returns:
@@ -251,15 +277,15 @@ class RibbitService(BaseService):
         try:
             import numpy as np
 
-            duration = result.duration
             n_bins = int(np.ceil(duration / resolution))
             timeline = np.zeros(n_bins)
             times = np.arange(n_bins) * resolution
 
-            for detection in result.detections:
-                start_bin = int(detection.start_time / resolution)
-                end_bin = int(np.ceil(detection.end_time / resolution))
-                timeline[start_bin:end_bin] = detection.score
+            for detection in detections:
+                start_bin = int(detection["start_time"] / resolution)
+                end_bin = int(np.ceil(detection["end_time"] / resolution))
+                end_bin = min(end_bin, n_bins)  # Clamp to array size
+                timeline[start_bin:end_bin] = detection.get("score", 1.0)
 
             return ServiceResult.ok(
                 data={

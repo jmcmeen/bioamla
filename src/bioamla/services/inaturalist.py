@@ -8,6 +8,7 @@ audio files for use in bioacoustic machine learning workflows.
 """
 
 import csv
+import logging
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -15,7 +16,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import requests
 from pyinaturalist import get_observation_species_counts, get_observations
 
-from bioamla.core.audio.metadata import (
+from bioamla.core.metadata import (
     get_existing_observation_ids,
     read_metadata_csv,
     write_metadata_csv,
@@ -27,7 +28,6 @@ from bioamla.core.files import (
     get_extension_from_url,
     sanitize_filename,
 )
-from bioamla.core.logger import get_logger
 from bioamla.models.inaturalist import (
     DownloadResult,
     ObservationInfo,
@@ -38,7 +38,7 @@ from bioamla.models.inaturalist import (
 
 from .base import BaseService, ServiceResult
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class INaturalistService(BaseService):
