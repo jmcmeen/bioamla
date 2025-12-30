@@ -691,6 +691,13 @@ def ast_train(
     # Free the accelerator which holds references to dataloaders
     if hasattr(trainer, "accelerator") and trainer.accelerator is not None:
         trainer.accelerator.free_memory()
+
+    # Explicitly delete dataloaders to terminate worker processes
+    if hasattr(trainer, "_train_dataloader"):
+        del trainer._train_dataloader
+    if hasattr(trainer, "_eval_dataloader"):
+        del trainer._eval_dataloader
+
     del trainer
     del model
     if torch.cuda.is_available():
@@ -707,6 +714,12 @@ def ast_train(
 
     import gc
     gc.collect()
+
+    # Force cleanup of any remaining multiprocessing resources
+    import multiprocessing
+    for child in multiprocessing.active_children():
+        child.terminate()
+        child.join(timeout=1)
 
 
 @ast.command("evaluate")
