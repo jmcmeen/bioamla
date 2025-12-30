@@ -26,8 +26,8 @@ from bioamla.core.files import (
     TextFile,
     get_extension_from_content_type,
     get_extension_from_url,
-    sanitize_filename,
 )
+from bioamla.core.paths import sanitize_filename
 from bioamla.models.inaturalist import (
     DownloadResult,
     ObservationInfo,
