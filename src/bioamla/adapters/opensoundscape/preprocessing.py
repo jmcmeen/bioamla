@@ -1,11 +1,3 @@
-"""BioamlaPreprocessor - bioamla-compatible wrapper over OpenSoundscape spectrograms.
-
-This module provides a preprocessing pipeline adapter that uses OpenSoundscape's
-spectrogram generation with optional augmentation for training.
-
-Only the services layer should import from this module.
-"""
-
 from dataclasses import dataclass, field
 from typing import Any, Optional
 

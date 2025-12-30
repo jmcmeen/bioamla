@@ -1,18 +1,4 @@
-"""Model adapters for bioacoustics-model-zoo models.
-
-This module provides adapters for pre-trained models from the bioacoustics-model-zoo
-package, including BirdNET and Perch.
-
-Only the services layer should import from this module.
-
-Note: Some models require additional dependencies:
-- BirdNET: requires ai_edge_litert (tflite)
-- Perch: requires tensorflow
-- HawkEars: requires timm and torchaudio (usually available)
-"""
-
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np

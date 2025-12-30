@@ -7,19 +7,19 @@ This service provides high-level methods for searching and downloading recording
 """
 
 import csv
+import logging
 import os
 import time
 from pathlib import Path
 from typing import List, Optional, Union
 
 from bioamla.core.files import TextFile, sanitize_filename
-from bioamla.core.http import APIClient, RateLimiter
-from bioamla.core.logger import get_logger
+from bioamla.core.constants import APIClient, RateLimiter
 from bioamla.models.xeno_canto import DownloadResult, SearchResult, XCRecording
 
 from .base import BaseService, ServiceResult
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Xeno-canto API base URL (v3 requires API key)
 XC_API_URL = "https://xeno-canto.org/api/3/recordings"

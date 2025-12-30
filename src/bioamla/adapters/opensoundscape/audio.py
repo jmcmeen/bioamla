@@ -1,10 +1,3 @@
-"""AudioAdapter - bioamla-compatible interface over OpenSoundscape Audio.
-
-This adapter wraps opensoundscape.Audio to provide a consistent interface
-for audio processing operations. Only the services layer should import
-from this module.
-"""
-
 from typing import Optional
 
 import numpy as np
