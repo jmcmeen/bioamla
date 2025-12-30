@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from bioamla.core.files import TextFile
-from bioamla.core.http import APICache, APIClient, RateLimiter
+from bioamla.core.constants import APICache, APIClient, RateLimiter
 from bioamla.models.species import (
     EBIRD_TAXONOMY_URL,
     INAT_TAXA_URL,

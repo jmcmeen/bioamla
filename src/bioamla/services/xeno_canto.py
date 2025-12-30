@@ -13,9 +13,8 @@ import time
 from pathlib import Path
 from typing import List, Optional, Union
 
-from bioamla.core.files import TextFile
-from bioamla.core.http import APIClient, RateLimiter
-from bioamla.core.paths import sanitize_filename
+from bioamla.core.files import TextFile, sanitize_filename
+from bioamla.core.constants import APIClient, RateLimiter
 from bioamla.models.xeno_canto import DownloadResult, SearchResult, XCRecording
 
 from .base import BaseService, ServiceResult

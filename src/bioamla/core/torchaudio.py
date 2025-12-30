@@ -18,7 +18,7 @@ import torch
 import torchaudio
 from torchaudio.transforms import Resample
 
-from bioamla.core.ml_config import DefaultConfig
+from bioamla.core.constants import DefaultConfig
 from bioamla.core.utils import get_files_by_extension
 
 

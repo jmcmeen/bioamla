@@ -345,7 +345,7 @@ def merge_datasets(
         dict: Summary statistics
     """
     from bioamla.core.metadata import read_metadata_csv, write_metadata_csv
-    from bioamla.core.paths import sanitize_filename
+    from bioamla.core.files import sanitize_filename
     from bioamla.services.species import find_species_name
 
     if not dataset_paths:
