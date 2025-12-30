@@ -646,50 +646,29 @@ def reset_config() -> None:
     _global_config = None
 
 
-def get_config_locations(include_project: bool = True) -> List[Path]:
+def get_config_locations() -> List[Path]:
     """
     Get configuration file search locations in priority order.
-
-    Args:
-        include_project: Whether to include project config location
 
     Returns:
         List of paths to search, in priority order (highest first)
     """
-    locations = []
-
-    # Project config (highest priority after explicit path)
-    if include_project:
-        try:
-            from bioamla.core.project import PROJECT_MARKER, find_project_root
-
-            project_root = find_project_root()
-            if project_root:
-                locations.append(project_root / PROJECT_MARKER / "config.toml")
-        except ImportError:
-            pass
-
-    # Standard locations
-    locations.extend(CONFIG_LOCATIONS)
-
-    return locations
+    return CONFIG_LOCATIONS.copy()
 
 
 def load_config_cascade(
     explicit_path: Optional[str] = None,
-    include_project: bool = True,
 ) -> Config:
     """
     Load configuration with full cascade support.
 
     Merges configs from all levels in priority order:
-    defaults -> system -> user -> current dir -> project -> explicit
+    defaults -> system -> user -> current dir -> explicit
 
     Higher priority configs override lower priority ones.
 
     Args:
         explicit_path: Explicit config file path (highest priority)
-        include_project: Whether to include project config in cascade
 
     Returns:
         Config object with merged settings from all sources
@@ -699,7 +678,7 @@ def load_config_cascade(
     source = "defaults"
 
     # Get all config locations (in priority order: highest to lowest)
-    locations = get_config_locations(include_project=include_project)
+    locations = get_config_locations()
 
     # Load in reverse order (lowest to highest priority) so higher overrides lower
     for location in reversed(locations):
@@ -733,31 +712,3 @@ def load_config_cascade(
     return Config.from_dict(config_data, source=source)
 
 
-def is_in_project() -> bool:
-    """
-    Check if currently in a bioamla project.
-
-    Returns:
-        True if in a bioamla project, False otherwise
-    """
-    try:
-        from bioamla.core.project import is_in_project as _is_in_project
-
-        return _is_in_project()
-    except ImportError:
-        return False
-
-
-def get_project_root() -> Optional[Path]:
-    """
-    Get the root directory of the current bioamla project.
-
-    Returns:
-        Path to project root, or None if not in a project
-    """
-    try:
-        from bioamla.core.project import find_project_root
-
-        return find_project_root()
-    except ImportError:
-        return None

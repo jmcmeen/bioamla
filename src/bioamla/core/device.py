@@ -13,14 +13,13 @@ Usage:
     model = move_to_device(model)
 """
 
+import logging
 from typing import Optional, Union
 
 import torch
 from torch import nn
 
-from bioamla.core.logger import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def get_device(prefer_cuda: bool = True) -> torch.device:

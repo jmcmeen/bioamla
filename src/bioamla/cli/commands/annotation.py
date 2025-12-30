@@ -2,8 +2,6 @@
 
 import click
 
-from bioamla.cli.service_helpers import services
-
 
 @click.group()
 def annotation() -> None:
@@ -34,7 +32,7 @@ def annotation_convert(input_file : str, output_file : str, from_format : str, t
     """Convert annotation files between formats."""
     from pathlib import Path
 
-    from bioamla.core.audio.annotations import (
+    from bioamla.services.annotation import (
         load_csv_annotations,
         load_raven_selection_table,
         save_csv_annotations,
@@ -90,7 +88,7 @@ def annotation_summary(path : str, file_format : str, output_json : str) -> None
     import json
     from pathlib import Path
 
-    from bioamla.core.audio.annotations import (
+    from bioamla.services.annotation import (
         load_csv_annotations,
         load_raven_selection_table,
         summarize_annotations,
@@ -148,11 +146,13 @@ def annotation_remap(input_file : str, output_file : str, mapping : str, keep_un
     """Remap annotation labels using a mapping file."""
     from pathlib import Path
 
-    from bioamla.core.audio.annotations import (
-        load_csv_annotations,
+    from bioamla.core.annotations import (
         load_label_mapping,
-        load_raven_selection_table,
         remap_labels,
+    )
+    from bioamla.services.annotation import (
+        load_csv_annotations,
+        load_raven_selection_table,
         save_csv_annotations,
         save_raven_selection_table,
     )
@@ -199,8 +199,8 @@ def annotation_filter(input_file: str, output_file: str, include: tuple, exclude
     """Filter annotations by label or duration."""
     from pathlib import Path
 
-    from bioamla.core.audio.annotations import (
-        filter_labels,
+    from bioamla.core.annotations import filter_labels
+    from bioamla.services.annotation import (
         load_csv_annotations,
         load_raven_selection_table,
         save_csv_annotations,
@@ -283,9 +283,12 @@ def annotation_generate_labels(
 
     import numpy as np
 
-    from bioamla.core.audio.annotations import (
+    from bioamla.cli.service_helpers import services
+    from bioamla.core.annotations import (
         create_label_map,
         generate_clip_labels,
+    )
+    from bioamla.services.annotation import (
         get_unique_labels,
         load_csv_annotations,
         load_raven_selection_table,
