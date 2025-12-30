@@ -17,9 +17,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from bioamla.core.files import TextFile
-from bioamla.core.http import APIClient, RateLimiter
-from bioamla.core.paths import sanitize_filename
+from bioamla.core.files import TextFile, sanitize_filename
+from bioamla.core.constants import APIClient, RateLimiter
 from bioamla.models.macaulay import (
     ML_SEARCH_URL,
     DownloadResult,

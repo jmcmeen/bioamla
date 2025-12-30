@@ -22,8 +22,8 @@ from bioamla.core.files import (
     get_files_by_extension,
 )
 
-# Re-export from globals (single source of truth for constants)
-from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
+# Re-export from constants (single source of truth for constants)
+from bioamla.core.constants import SUPPORTED_AUDIO_EXTENSIONS
 
 
 def get_audio_files(
