@@ -187,8 +187,8 @@ class EmbeddingExtractor:
         model_type = self.config.model_type.lower()
 
         if model_type == "ast":
-            from bioamla.core.ml.ast_model import ASTModel
-            from bioamla.core.ml.base import ModelConfig
+            from bioamla.core.ast_model import ASTModel
+            from bioamla.core.base import ModelConfig
 
             model_config = ModelConfig(
                 sample_rate=self.config.sample_rate,
@@ -205,8 +205,8 @@ class EmbeddingExtractor:
 
         elif model_type == "birdnet":
             try:
-                from bioamla.core.ml.base import ModelConfig
-                from bioamla.core.ml.birdnet import BirdNETModel
+                from bioamla.core.base import ModelConfig
+                from bioamla.core.birdnet import BirdNETModel
 
                 model_config = ModelConfig(
                     sample_rate=self.config.sample_rate,
@@ -232,7 +232,7 @@ class EmbeddingExtractor:
         if self._reducer is not None or self.config.reduce_method is None:
             return self._reducer
 
-        from bioamla.core.audio.clustering import IncrementalReducer
+        from bioamla.core.clustering import IncrementalReducer
 
         self._reducer = IncrementalReducer(
             method=self.config.reduce_method,
@@ -802,7 +802,7 @@ class EmbeddingService(BaseService):
             Result with reduced embeddings info
         """
         try:
-            from bioamla.core.audio.clustering import reduce_dimensions
+            from bioamla.core.clustering import reduce_dimensions
 
             reduced = reduce_dimensions(
                 embeddings,

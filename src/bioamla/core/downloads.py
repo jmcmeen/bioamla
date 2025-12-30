@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Union
 from urllib.request import urlretrieve
 
-from bioamla.core.files.paths import ensure_directory
+from bioamla.core.paths import ensure_directory
 
 logger = logging.getLogger(__name__)
 

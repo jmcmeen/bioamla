@@ -192,7 +192,7 @@ def batch_augment(
             - output_dir: Path to output directory
     """
     from bioamla.adapters.pydub import save_audio
-    from bioamla.core.audio.torchaudio import load_waveform_tensor
+    from bioamla.core.torchaudio import load_waveform_tensor
     from bioamla.core.utils import get_files_by_extension
 
     input_dir = Path(input_dir)
@@ -344,8 +344,8 @@ def merge_datasets(
     Returns:
         dict: Summary statistics
     """
-    from bioamla.core.audio.metadata import read_metadata_csv, write_metadata_csv
-    from bioamla.core.files.paths import sanitize_filename
+    from bioamla.core.metadata import read_metadata_csv, write_metadata_csv
+    from bioamla.core.paths import sanitize_filename
     from bioamla.services.species import find_species_name
 
     if not dataset_paths:

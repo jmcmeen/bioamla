@@ -18,11 +18,11 @@ from typing import List, Optional, Set
 
 import pandas as pd
 
-from bioamla.core.audio.metadata import (
+from bioamla.core.metadata import (
     read_metadata_csv,
     write_metadata_csv,
 )
-from bioamla.core.files.paths import sanitize_filename
+from bioamla.core.paths import sanitize_filename
 from bioamla.core.globals import SUPPORTED_AUDIO_EXTENSIONS
 from bioamla.core.utils import get_audio_files
 from bioamla.services.species import find_species_name

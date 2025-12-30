@@ -1209,7 +1209,7 @@ class AnnotationService(BaseService):
             return ServiceResult.fail(error)
 
         try:
-            from bioamla.core.audio.annotations import load_annotations_from_directory
+            from bioamla.core.annotations import load_annotations_from_directory
 
             all_annotations_dict = load_annotations_from_directory(
                 directory, file_pattern=file_pattern, format=format
