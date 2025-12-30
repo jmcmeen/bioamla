@@ -1,6 +1,5 @@
 """Tests for DetectionService - core paths for pre-migration verification."""
 
-import pytest
 
 from bioamla.repository.local import LocalFileRepository
 from bioamla.services.detection import DetectionService

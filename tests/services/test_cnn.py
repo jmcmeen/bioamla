@@ -1,6 +1,5 @@
 """Tests for CNNService - CNN model operations via adapter."""
 
-import numpy as np
 import pytest
 
 from bioamla.services.cnn import CNNPrediction, CNNService, CNNTrainResult

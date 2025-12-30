@@ -54,7 +54,7 @@ class BatchIndicesService(BatchServiceBase):
 
         try:
             # Load audio file using hybrid loader (soundfile for WAV/FLAC, pydub for M4A/MP3)
-            from bioamla.core.audio.pydub_utils import load_audio
+            from bioamla.adapters.pydub import load_audio
 
             # Read audio file (always returns mono float32)
             audio, sample_rate = load_audio(str(file_path))

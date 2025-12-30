@@ -43,10 +43,10 @@ class BatchAudioInfoService(BatchServiceBase):
         """
         try:
             # Use fast ffprobe-based metadata extraction
-            from bioamla.core.audio.pydub_utils import get_audio_info_pydub
+            from bioamla.adapters.pydub import get_audio_info
 
             # Get audio metadata
-            info = get_audio_info_pydub(str(file_path))
+            info = get_audio_info(str(file_path))
 
             # Add filepath to result
             result = {

@@ -1,6 +1,5 @@
 """Tests for Batch services - core paths for pre-migration verification."""
 
-import pytest
 from pathlib import Path
 
 from bioamla.models.batch import BatchConfig, BatchResult
