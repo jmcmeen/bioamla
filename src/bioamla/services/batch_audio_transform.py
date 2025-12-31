@@ -1,7 +1,8 @@
 """Batch audio transformation service."""
 
+import gc
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from bioamla.models.batch import BatchConfig, BatchResult
 from bioamla.repository.protocol import FileRepositoryProtocol
@@ -33,6 +34,19 @@ class BatchAudioTransformService(BatchServiceBase):
         self._current_config: Dict[str, Any] = {}
         self._output_paths: Dict[Path, Path] = {}  # Track input -> output path mapping for CSV updates
         self._segment_mapping: Dict[Path, List[Any]] = {}  # Track input -> segment list for CSV row expansion
+
+    def _cleanup_batch_state(self) -> None:
+        """Clean up batch state and force garbage collection.
+
+        Called after batch processing to free memory.
+        """
+        self._output_paths.clear()
+        self._segment_mapping.clear()
+        self._current_config.clear()
+        self._current_operation = None
+        self._csv_handler = None
+        self._csv_context = None
+        gc.collect()
 
     def process_file(self, file_path: Path) -> Any:
         """Process a single audio file by delegating to AudioTransformService.
@@ -69,9 +83,20 @@ class BatchAudioTransformService(BatchServiceBase):
             # For segment operation, we need output_dir to be the parent of output_path
             output_dir = output_path.parent
         else:
-            # Directory mode: use output_dir from config
+            # Directory mode: use output_dir from config and preserve directory structure
             output_dir = Path(self._current_config.get("output_dir", "."))
-            output_path = output_dir / file_path.name
+            input_dir = self._current_config.get("input_dir")
+
+            if input_dir:
+                # Calculate relative path from input_dir to preserve directory structure
+                try:
+                    relative_path = file_path.relative_to(input_dir)
+                    output_path = output_dir / relative_path
+                except ValueError:
+                    # File is not under input_dir, fall back to just filename
+                    output_path = output_dir / file_path.name
+            else:
+                output_path = output_dir / file_path.name
 
         # Ensure output directory exists
         self.file_repository.mkdir(str(output_path.parent), parents=True)
@@ -233,6 +258,9 @@ class BatchAudioTransformService(BatchServiceBase):
     ) -> BatchResult:
         """Override to update CSV rows during parallel processing.
 
+        Uses ProcessPoolExecutor for memory isolation - each worker runs in its
+        own process, preventing memory accumulation from torch/numpy operations.
+
         Args:
             rows: List of MetadataRow objects to process
             config: Batch configuration
@@ -241,15 +269,14 @@ class BatchAudioTransformService(BatchServiceBase):
         Returns:
             Updated BatchResult
         """
+        import gc
         import sys
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        from threading import Lock
+        from concurrent.futures import ProcessPoolExecutor, as_completed
 
-        # Thread-safe storage for output paths
-        output_paths_lock = Lock()
+        # Collect output paths from worker results
         local_output_paths: Dict[Path, Path] = {}
 
-        with ThreadPoolExecutor(max_workers=config.max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=config.max_workers) as executor:
             futures = {}
 
             # Check file existence before submitting to executor (fail fast)
@@ -264,14 +291,26 @@ class BatchAudioTransformService(BatchServiceBase):
                     if not config.quiet:
                         print(f"Error: {error_msg}", flush=True)
                 else:
-                    # Submit only existing files
-                    futures[executor.submit(self._process_file_safe, row.file_path, output_paths_lock, local_output_paths)] = row
+                    # Submit only existing files - pass serializable args only
+                    futures[executor.submit(self.process_file, row.file_path)] = row
 
             for future in as_completed(futures):
                 row = futures[future]
                 try:
                     future.result()
                     result.successful += 1
+                    # Track output path for CSV update (compute from config)
+                    if self._csv_context is not None and self._csv_handler is not None:
+                        new_extension = None
+                        if self._current_operation == "convert":
+                            target_format = self._current_config.get("target_format", "wav")
+                            new_extension = f".{target_format}"
+                        elif self._current_operation == "visualize":
+                            new_extension = ".png"
+                        output_path = self._csv_handler.resolve_output_path(
+                            row.file_path, self._csv_context, new_extension=new_extension
+                        )
+                        local_output_paths[row.file_path] = output_path
                 except Exception as e:
                     result.failed += 1
                     error_msg = f"{row.file_path}: {str(e)}"
@@ -288,31 +327,12 @@ class BatchAudioTransformService(BatchServiceBase):
                     new_path = local_output_paths[row.file_path]
                     self._csv_handler.update_row_path(row, new_path, self._csv_context)
 
+        # Force garbage collection to free any lingering references
+        gc.collect()
+
         # Ensure all output is flushed before returning
         sys.stdout.flush()
         sys.stderr.flush()
-
-        return result
-
-    def _process_file_safe(
-        self, file_path: Path, lock: Any, output_paths: Dict[Path, Path]
-    ) -> Any:
-        """Thread-safe wrapper around process_file that collects output paths.
-
-        Args:
-            file_path: Path to file to process
-            lock: Threading lock for output_paths dict
-            output_paths: Dict to collect output paths (thread-safe with lock)
-
-        Returns:
-            Result of process_file
-        """
-        result = self.process_file(file_path)
-
-        # Safely collect output path if in CSV mode
-        if self._csv_context is not None and file_path in self._output_paths:
-            with lock:
-                output_paths[file_path] = self._output_paths[file_path]
 
         return result
 
@@ -341,6 +361,7 @@ class BatchAudioTransformService(BatchServiceBase):
             "target_format": target_format,
             "target_sr": target_sr,
             "target_channels": target_channels,
+            "input_dir": config.input_dir,
             "output_dir": config.output_dir,
             "delete_original": delete_original,
         }
@@ -350,7 +371,10 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch_auto(config, file_filter=audio_filter)
+        try:
+            return self.process_batch_auto(config, file_filter=audio_filter)
+        finally:
+            self._cleanup_batch_state()
 
     def resample_batch(
         self,
@@ -369,6 +393,7 @@ class BatchAudioTransformService(BatchServiceBase):
         self._current_operation = "resample"
         self._current_config = {
             "target_sr": target_sr,
+            "input_dir": config.input_dir,
             "output_dir": config.output_dir,
         }
         self._output_paths = {}  # Reset for new batch
@@ -377,7 +402,10 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch_auto(config, file_filter=audio_filter)
+        try:
+            return self.process_batch_auto(config, file_filter=audio_filter)
+        finally:
+            self._cleanup_batch_state()
 
     def normalize_batch(
         self,
@@ -399,6 +427,7 @@ class BatchAudioTransformService(BatchServiceBase):
         self._current_config = {
             "target_db": target_db,
             "peak": peak,
+            "input_dir": config.input_dir,
             "output_dir": config.output_dir,
         }
         self._output_paths = {}  # Reset for new batch
@@ -407,7 +436,10 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch_auto(config, file_filter=audio_filter)
+        try:
+            return self.process_batch_auto(config, file_filter=audio_filter)
+        finally:
+            self._cleanup_batch_state()
 
     def trim_batch(
         self,
@@ -435,6 +467,7 @@ class BatchAudioTransformService(BatchServiceBase):
             "end": end,
             "trim_silence": trim_silence,
             "silence_threshold_db": silence_threshold_db,
+            "input_dir": config.input_dir,
             "output_dir": config.output_dir,
         }
         self._output_paths = {}  # Reset for new batch
@@ -443,7 +476,10 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch_auto(config, file_filter=audio_filter)
+        try:
+            return self.process_batch_auto(config, file_filter=audio_filter)
+        finally:
+            self._cleanup_batch_state()
 
     def segment_batch(
         self,
@@ -467,6 +503,7 @@ class BatchAudioTransformService(BatchServiceBase):
         self._current_config = {
             "segment_duration": segment_duration,
             "overlap": overlap,
+            "input_dir": config.input_dir,
             "output_dir": config.output_dir,
         }
         self._segment_mapping = {}  # Initialize tracking
@@ -476,14 +513,15 @@ class BatchAudioTransformService(BatchServiceBase):
             return path.suffix.lower() in audio_exts
 
         # For CSV mode, we need to override the processing to expand rows BEFORE CSV write
-        if config.input_file:
-            # CSV mode - manually process with custom post-processing
-            result = self._segment_batch_csv(config, audio_filter)
-        else:
-            # Directory mode - standard processing
-            result = self.process_batch_auto(config, file_filter=audio_filter)
-
-        return result
+        try:
+            if config.input_file:
+                # CSV mode - manually process with custom post-processing
+                return self._segment_batch_csv(config, audio_filter)
+            else:
+                # Directory mode - standard processing
+                return self.process_batch_auto(config, file_filter=audio_filter)
+        finally:
+            self._cleanup_batch_state()
 
     def _segment_batch_csv(
         self,
@@ -570,6 +608,7 @@ class BatchAudioTransformService(BatchServiceBase):
         self._current_config = {
             "plot_type": plot_type,
             "show_legend": show_legend,
+            "input_dir": config.input_dir,
             "output_dir": config.output_dir,
         }
         self._output_paths = {}  # Reset for new batch
@@ -578,7 +617,10 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch_auto(config, file_filter=audio_filter)
+        try:
+            return self.process_batch_auto(config, file_filter=audio_filter)
+        finally:
+            self._cleanup_batch_state()
 
     def filter_batch(
         self,
@@ -606,6 +648,7 @@ class BatchAudioTransformService(BatchServiceBase):
             "highpass": highpass,
             "bandpass": bandpass,
             "order": order,
+            "input_dir": config.input_dir,
             "output_dir": config.output_dir,
         }
         self._output_paths = {}  # Reset for new batch
@@ -614,7 +657,10 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch_auto(config, file_filter=audio_filter)
+        try:
+            return self.process_batch_auto(config, file_filter=audio_filter)
+        finally:
+            self._cleanup_batch_state()
 
     def denoise_batch(
         self,
@@ -633,6 +679,7 @@ class BatchAudioTransformService(BatchServiceBase):
         self._current_operation = "denoise"
         self._current_config = {
             "strength": strength,
+            "input_dir": config.input_dir,
             "output_dir": config.output_dir,
         }
         self._output_paths = {}  # Reset for new batch
@@ -641,4 +688,7 @@ class BatchAudioTransformService(BatchServiceBase):
             audio_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
             return path.suffix.lower() in audio_exts
 
-        return self.process_batch_auto(config, file_filter=audio_filter)
+        try:
+            return self.process_batch_auto(config, file_filter=audio_filter)
+        finally:
+            self._cleanup_batch_state()
