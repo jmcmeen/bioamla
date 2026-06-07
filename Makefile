@@ -11,7 +11,7 @@ TESTS := tests
 .PHONY: help install sync lock upgrade dev shell \
         test test-fast cov bench \
         lint fmt fmt-check check \
-        build publish publish-test clean docs
+        clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -62,25 +62,8 @@ fmt-check: ## Check formatting without modifying files
 
 check: lint fmt-check test ## Run lint, format check, and tests
 
-## --- Packaging ---
-
-build: clean ## Build sdist and wheel
-	$(UV) build
-
-publish-test: build ## Publish to TestPyPI
-	$(UV) run twine upload --repository testpypi dist/*
-
-publish: build ## Publish to PyPI
-	$(UV) run twine upload dist/*
-
-## --- Docs ---
-
-docs: ## Build Sphinx documentation
-	$(UV) run --extra docs sphinx-build -b html docs/source docs/_build/html
-
 ## --- Housekeeping ---
 
-clean: ## Remove build artifacts and caches
-	rm -rf dist build *.egg-info src/*.egg-info
+clean: ## Remove caches and test/coverage artifacts
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
