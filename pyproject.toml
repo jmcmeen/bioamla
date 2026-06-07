@@ -58,8 +58,6 @@ dev = [
   "pytest-asyncio",
   "pytest-benchmark>=4.0",
   "ruff",
-  "build",
-  "twine",
 ]
 mlflow = [
   "mlflow>=2.0",
@@ -71,8 +69,6 @@ all = [
   "pytest-asyncio",
   "pytest-benchmark>=4.0",
   "ruff",
-  "build",
-  "twine",
   "mlflow>=2.0",
 ]
 
