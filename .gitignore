@@ -201,3 +201,4 @@ cython_debug/
 /frog_acoustic_study
 mlflow.db
 /.benchmarks
+/.claude
