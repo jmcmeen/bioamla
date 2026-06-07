@@ -4,7 +4,7 @@ Dataset Exploration Utilities
 
 This module provides data structures and utilities for exploring audio datasets
 in the bioamla package. It supports loading audio file information, metadata,
-and preparing data for display in the TUI dashboard.
+and aggregating dataset statistics.
 """
 
 from dataclasses import dataclass, field

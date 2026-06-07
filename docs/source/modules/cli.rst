@@ -12,7 +12,6 @@ The bioamla CLI is organized into the following command groups:
 
 - ``bioamla version`` - Display version information
 - ``bioamla devices`` - Display CUDA/GPU device information
-- ``bioamla explore`` - Launch interactive TUI dashboard
 
 **config** - Configuration management:
 
