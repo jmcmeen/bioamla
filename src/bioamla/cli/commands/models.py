@@ -629,6 +629,7 @@ def ast_train(
         bf16=bf16,
         gradient_accumulation_steps=gradient_accumulation_steps,
         dataloader_num_workers=dataloader_num_workers,
+        dataloader_persistent_workers=False,  # Prevent hang on exit
         torch_compile=torch_compile,
         run_name=mlflow_run_name,
     )
@@ -685,6 +686,40 @@ def ast_train(
 
     services.file.ensure_directory(best_model_path)
     trainer.save_model(best_model_path)
+
+    # Cleanup to prevent hanging from dataloader workers
+    # Free the accelerator which holds references to dataloaders
+    if hasattr(trainer, "accelerator") and trainer.accelerator is not None:
+        trainer.accelerator.free_memory()
+
+    # Explicitly delete dataloaders to terminate worker processes
+    if hasattr(trainer, "_train_dataloader"):
+        del trainer._train_dataloader
+    if hasattr(trainer, "_eval_dataloader"):
+        del trainer._eval_dataloader
+
+    del trainer
+    del model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    # End MLflow run if active
+    try:
+        import mlflow
+
+        if mlflow.active_run():
+            mlflow.end_run()
+    except ImportError:
+        pass
+
+    import gc
+    gc.collect()
+
+    # Force cleanup of any remaining multiprocessing resources
+    import multiprocessing
+    for child in multiprocessing.active_children():
+        child.terminate()
+        child.join(timeout=1)
 
 
 @ast.command("evaluate")
