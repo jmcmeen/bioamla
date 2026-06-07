@@ -1,11 +1,14 @@
 """
 BioAmla - Bioacoustics & Machine Learning Applications
 ======================================================
-
-Version: 0.1.9
 """
 
-__version__ = "0.1.8"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("bioamla")
+except PackageNotFoundError:  # package not installed (e.g. source checkout)
+    __version__ = "0.0.0"
 
 # Re-export commonly used utilities for convenience
 from bioamla.core.utils import (
