@@ -15,10 +15,32 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
+# Slim core: lightweight audio / signal / indices / catalogs / CLI.
+# Heavy ML and other optional capabilities live in extras below.
 dependencies = [
   "click",
   "rich",
   "tomli>=2.0; python_version < '3.11'",
+  "pydantic>=2.0",
+  "numpy",
+  "scipy",
+  "numba",
+  "pandas",
+  "librosa",
+  "soundfile",
+  "pydub",
+  "matplotlib",
+  "requests>=2.28.0",
+  "huggingface_hub",
+  "pyinaturalist",
+]
+
+[project.scripts]
+bioamla = "bioamla.cli:cli"
+
+[project.optional-dependencies]
+# AST inference / training / embeddings (PyTorch + HuggingFace stack)
+ml = [
   "torch",
   "torchvision",
   "torchaudio",
@@ -26,31 +48,36 @@ dependencies = [
   "datasets[audio]",
   "audiomentations",
   "evaluate",
-  "pydantic>=2.0",
-  "pydub",
-  "soundfile",
-  "matplotlib",
-  "scipy",
-  "librosa",
-  "pyinaturalist",
+]
+# OpenSoundscape-backed detectors (e.g. ribbit)
+detect = [
+  "opensoundscape>=0.12.0",
+]
+# Embedding clustering / dimensionality reduction
+cluster = [
+  "umap-learn>=0.5.0",
+  "hdbscan>=0.8.0",
+  "scikit-learn>=1.0.0",
+]
+# Local audio playback
+playback = [
+  "sounddevice>=0.4.0",
+]
+# All runtime capabilities (no dev/test tooling)
+all = [
+  "torch",
+  "torchvision",
+  "torchaudio",
+  "transformers[torch]",
+  "datasets[audio]",
+  "audiomentations",
+  "evaluate",
+  "opensoundscape>=0.12.0",
   "umap-learn>=0.5.0",
   "hdbscan>=0.8.0",
   "scikit-learn>=1.0.0",
   "sounddevice>=0.4.0",
-  "requests>=2.28.0",
-  "onnx>=1.14.0",
-  "opensoundscape>=0.12.0",
-  "bioacoustics-model-zoo>=0.8.0",
-  "ai-edge-litert>=1.0.0",
-  "tensorflow>=2.15.0",
-  "tf-keras>=2.15.0",
-  "timm>=1.0.0",
 ]
-
-[project.scripts]
-bioamla = "bioamla.cli:cli"
-
-[project.optional-dependencies]
 dev = [
   "pytest>=7.0",
   "pytest-cov",
@@ -60,15 +87,6 @@ dev = [
   "ruff",
 ]
 mlflow = [
-  "mlflow>=2.0",
-]
-all = [
-  "pytest>=7.0",
-  "pytest-cov",
-  "pytest-mock",
-  "pytest-asyncio",
-  "pytest-benchmark>=4.0",
-  "ruff",
   "mlflow>=2.0",
 ]
 
@@ -117,6 +135,8 @@ exclude_lines = [
 ]
 
 [tool.ruff]
+# TODO(phase5): bump to py310 (project requires >=3.10) and run `ruff check --fix`
+# to modernize Optional[X] -> X | None across the codebase.
 target-version = "py38"
 line-length = 100
 src = ["src", "tests"]
