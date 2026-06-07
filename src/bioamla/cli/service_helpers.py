@@ -50,7 +50,6 @@ if TYPE_CHECKING:
     from bioamla.services.batch_detection import BatchDetectionService
     from bioamla.services.batch_indices import BatchIndicesService
     from bioamla.services.clustering import ClusteringService
-    from bioamla.services.cnn import CNNService
     from bioamla.services.config import ConfigService
     from bioamla.services.dataset import DatasetService
     from bioamla.services.dependency import DependencyService
@@ -185,11 +184,6 @@ class _ServiceAccessor:
     def ast(self) -> "ASTService":
         """Get ASTService instance."""
         return get_factory().ast
-
-    @property
-    def cnn(self) -> "CNNService":
-        """Get CNNService instance."""
-        return get_factory().cnn
 
     @property
     def clustering(self) -> "ClusteringService":

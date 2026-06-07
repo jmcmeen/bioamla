@@ -46,10 +46,6 @@ Example configuration file (bioamla.toml):
     default_ast_model = "MIT/ast-finetuned-audioset-10-10-0.4593"
     prediction_threshold = 0.5
 
-    [models.birdnet]
-    sample_rate = 48000
-    min_confidence = 0.1
-
     [inference]
     batch_size = 8
     use_fp16 = false
@@ -193,12 +189,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "default_ast_model": "MIT/ast-finetuned-audioset-10-10-0.4593",
         "cache_dir": None,  # None = use HuggingFace default
         "prediction_threshold": 0.5,
-        "birdnet": {
-            "model_path": None,
-            "labels_path": None,
-            "sample_rate": 48000,
-            "min_confidence": 0.1,
-        },
     },
     "inference": {
         "batch_size": 8,
@@ -312,7 +302,7 @@ class Config:
         project: Project metadata
         audio: Audio processing settings
         visualize: Visualization settings
-        models: Model configuration (AST, BirdNET)
+        models: Model configuration (AST)
         inference: Inference settings
         training: Training settings with scheduler options
         analysis: Analysis settings (silence detection, etc.)

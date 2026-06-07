@@ -68,9 +68,7 @@ from .batch_clustering import BatchClusteringService
 from .batch_detection import BatchDetectionService
 from .batch_indices import BatchIndicesService
 from .batch_inference import BatchInferenceService
-from .birdnet import BirdNETService
 from .clustering import ClusteringService
-from .cnn import CNNService
 from .config import ConfigService
 from .dataset import AugmentResult, DatasetService, LicenseResult, MergeResult
 from .dependency import DependencyInfo, DependencyReport, DependencyService
@@ -176,6 +174,4 @@ __all__ = [
     "LicenseResult",
     # Model Services
     "ASTService",
-    "CNNService",
-    "BirdNETService",
 ]

@@ -44,9 +44,7 @@ from .batch_clustering import BatchClusteringService
 from .batch_detection import BatchDetectionService
 from .batch_indices import BatchIndicesService
 from .batch_inference import BatchInferenceService
-from .birdnet import BirdNETService
 from .clustering import ClusteringService
-from .cnn import CNNService
 from .config import ConfigService
 from .dataset import DatasetService
 from .dependency import DependencyService
@@ -133,14 +131,6 @@ class ServiceFactory:
     def create_ast_service(self) -> ASTService:
         """Create ASTService with file repository (AST-only for now)."""
         return ASTService(file_repository=self.file_repository)
-
-    def create_birdnet_service(self) -> BirdNETService:
-        """Create BirdNETService with file repository (deferred to future)."""
-        return BirdNETService(file_repository=self.file_repository)
-
-    def create_cnn_service(self) -> CNNService:
-        """Create CNNService with file repository (deferred to future)."""
-        return CNNService(file_repository=self.file_repository)
 
     # ========================================================================
     # Single-File Services (Non-File-Based)
@@ -293,16 +283,6 @@ class ServiceFactory:
     def ast(self) -> ASTService:
         """Convenience property for create_ast_service()."""
         return self.create_ast_service()
-
-    @property
-    def birdnet(self) -> BirdNETService:
-        """Convenience property for create_birdnet_service()."""
-        return self.create_birdnet_service()
-
-    @property
-    def cnn(self) -> CNNService:
-        """Convenience property for create_cnn_service()."""
-        return self.create_cnn_service()
 
     @property
     def inaturalist(self) -> INaturalistService:

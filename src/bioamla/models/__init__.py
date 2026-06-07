@@ -34,27 +34,11 @@ from bioamla.models.batch import (
     BatchConfig,
 )
 
-# BirdNET models
-from bioamla.models.birdnet import (
-    PredictionResult as BirdNETPredictionResult,
-)
-
 # Clustering models
 from bioamla.models.clustering import (
     ClusterAnalysis,
     ClusteringSummary,
     NoveltyDetectionSummary,
-)
-
-# CNN models
-from bioamla.models.cnn import (
-    EvaluationResult as CNNEvaluationResult,
-)
-from bioamla.models.cnn import (
-    PredictionResult as CNNPredictionResult,
-)
-from bioamla.models.cnn import (
-    TrainResult as CNNTrainResult,
 )
 
 # Config models
@@ -214,12 +198,6 @@ __all__ = [
     "ASTPredictionResult",
     "ASTTrainResult",
     "ASTEvaluationResult",
-    # BirdNET models
-    "BirdNETPredictionResult",
-    # CNN models
-    "CNNPredictionResult",
-    "CNNTrainResult",
-    "CNNEvaluationResult",
     # Config models
     "ConfigInfo",
     # eBird models

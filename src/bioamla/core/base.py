@@ -8,9 +8,6 @@ inference, embedding extraction, and batch processing.
 
 Supported model backends:
 - AST (Audio Spectrogram Transformer)
-- BirdNET (bird species classification)
-- OpenSoundscape (ResNet18/50 CNNs)
-- Custom CNN (transfer learning)
 """
 
 from abc import ABC, abstractmethod
@@ -28,9 +25,7 @@ class ModelBackend(Enum):
     """Supported model backends."""
 
     AST = "ast"
-    BIRDNET = "birdnet"
     OPENSOUNDSCAPE = "opensoundscape"
-    CUSTOM_CNN = "custom_cnn"
 
 
 @dataclass

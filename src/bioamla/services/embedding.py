@@ -7,8 +7,6 @@ Provides unified embedding extraction from audio using various model backends.
 
 This module supports:
 - AST (Audio Spectrogram Transformer) embeddings
-- BirdNET embeddings
-- Custom model adapters
 - Batch processing with GPU memory management
 - Multiple output formats (npy, parquet, csv)
 
@@ -66,7 +64,7 @@ class EmbeddingConfig:
 
     # Model settings
     model_path: str = "MIT/ast-finetuned-audioset-10-10-0.4593"
-    model_type: str = "ast"  # "ast", "birdnet", "custom"
+    model_type: str = "ast"  # "ast"
     layer: str = "last_hidden_state"  # Layer to extract embeddings from
 
     # Audio settings
@@ -146,7 +144,7 @@ class EmbeddingExtractor:
     Unified embedding extractor supporting multiple model backends.
 
     This class provides a consistent interface for extracting embeddings
-    from audio files using AST, BirdNET, or custom models.
+    from audio files using AST models.
 
     Example:
         extractor = EmbeddingExtractor(model_path="MIT/ast-finetuned-audioset")
@@ -202,24 +200,6 @@ class EmbeddingExtractor:
                 self.config.model_path,
                 use_fp16=self.config.use_fp16,
             )
-
-        elif model_type == "birdnet":
-            try:
-                from bioamla.core.base import ModelConfig
-                from bioamla.core.birdnet import BirdNETModel
-
-                model_config = ModelConfig(
-                    sample_rate=self.config.sample_rate,
-                    clip_duration=self.config.clip_duration,
-                    device=self.config.device,
-                )
-                self._model = BirdNETModel(config=model_config)
-                self._model.load(self.config.model_path)
-            except ImportError as err:
-                raise ImportError(
-                    "BirdNET support requires additional dependencies. "
-                    "Install with: pip install birdnetlib"
-                ) from err
 
         else:
             raise ValueError(f"Unknown model type: {model_type}")
@@ -452,7 +432,7 @@ def extract_embeddings(
     Args:
         audio: Audio file path or numpy array
         model_path: Path to model or HuggingFace model ID
-        model_type: Model type ("ast", "birdnet")
+        model_type: Model type ("ast")
         layer: Layer to extract from
         sample_rate: Sample rate (required if audio is array)
         normalize: Whether to L2-normalize embeddings
@@ -487,7 +467,7 @@ def extract_embeddings_batch(
     Args:
         audio_files: List of audio file paths
         model_path: Path to model or HuggingFace model ID
-        model_type: Model type ("ast", "birdnet")
+        model_type: Model type ("ast")
         output_path: Optional path to save embeddings
         output_format: Output format ("npy", "parquet", "csv")
         aggregate: How to aggregate segments ("mean", "first", "all")
@@ -682,7 +662,7 @@ class EmbeddingService(BaseService):
         Args:
             file_repository: Repository for file operations (required)
             model_path: Path to model (HuggingFace ID or local path)
-            model_type: Model type ("ast", "birdnet")
+            model_type: Model type ("ast")
         """
         super().__init__(file_repository=file_repository)
         self._model_path = model_path
