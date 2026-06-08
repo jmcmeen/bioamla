@@ -48,6 +48,30 @@ pip install "bioamla[all]"          # everything above
 Requires Python ≥ 3.10. Audio I/O uses `ffmpeg`/`ffprobe` — install them via your OS package
 manager (`bioamla config deps` checks what's available).
 
+## Configuration (API keys)
+
+The `bioamla.catalogs` providers need API keys to reach their services:
+
+| Variable | Used by | Get a key |
+| --- | --- | --- |
+| `EBIRD_API_KEY` | eBird catalog | <https://ebird.org/api/keygen> |
+| `XC_API_KEY` | Xeno-canto catalog | <https://xeno-canto.org/account> |
+| `HF_TOKEN` | HuggingFace push/pull (datasets, models) | <https://huggingface.co/settings/tokens> |
+
+You can either export these as environment variables, or drop them in a `.env` file in your
+working directory — `bioamla` loads it automatically on import (for both the CLI and library
+use). A real exported variable always takes precedence over the file.
+
+```bash
+# .env
+EBIRD_API_KEY=your_key_here
+XC_API_KEY=your_key_here
+# HF_TOKEN=your_token_here
+```
+
+Keys are only required for the catalog/HuggingFace features that use them; the rest of the
+library works without any configuration.
+
 ## Library quickstart
 
 ```python
