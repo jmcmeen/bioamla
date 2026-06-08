@@ -11,6 +11,7 @@ TESTS := tests
 .PHONY: help install sync lock upgrade dev shell \
         test test-fast cov bench \
         lint fmt fmt-check check \
+        docs docs-serve \
         clean
 
 help: ## Show this help
@@ -21,6 +22,9 @@ help: ## Show this help
 
 install: ## Create venv and install the project with dev extras
 	$(UV) sync --extra dev
+
+dev: ## Install EVERYTHING for local dev (all runtime extras + dev + docs tooling)
+	$(UV) sync --all-extras
 
 sync: ## Sync the environment to the lockfile (all extras)
 	$(UV) sync --all-extras
@@ -62,8 +66,16 @@ fmt-check: ## Check formatting without modifying files
 
 check: lint fmt-check test ## Run lint, format check, and tests
 
+## --- Documentation (mkdocs) ---
+
+docs: ## Build the documentation site into ./site
+	$(UV) run --extra docs mkdocs build
+
+docs-serve: ## Serve docs locally with live reload at http://127.0.0.1:8000
+	$(UV) run --extra docs mkdocs serve
+
 ## --- Housekeeping ---
 
-clean: ## Remove caches and test/coverage artifacts
-	rm -rf .pytest_cache .ruff_cache .coverage htmlcov
+clean: ## Remove caches and test/coverage/docs build artifacts
+	rm -rf .pytest_cache .ruff_cache .coverage htmlcov site
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
