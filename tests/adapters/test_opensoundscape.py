@@ -2,6 +2,8 @@
 
 import numpy as np
 import pytest
+
+pytest.importorskip("opensoundscape")
 import scipy.io.wavfile as wav
 
 from bioamla.adapters.opensoundscape import AudioAdapter, SpectrogramAdapter

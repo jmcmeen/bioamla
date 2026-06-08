@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.scripts]
-bioamla = "bioamla.cli:cli"
+bioamla = "bioamla.cli.cli:main"
 
 [project.optional-dependencies]
 # AST inference / training / embeddings (PyTorch + HuggingFace stack)
@@ -135,9 +135,7 @@ exclude_lines = [
 ]
 
 [tool.ruff]
-# TODO(phase5): bump to py310 (project requires >=3.10) and run `ruff check --fix`
-# to modernize Optional[X] -> X | None across the codebase.
-target-version = "py38"
+target-version = "py310"
 line-length = 100
 src = ["src", "tests"]
 

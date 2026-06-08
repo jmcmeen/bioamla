@@ -14,6 +14,8 @@ from typing import Dict
 
 import click
 
+from bioamla.exceptions import BioamlaError
+
 
 @click.group()
 def models() -> None:
@@ -46,13 +48,16 @@ def ast_predict(
     Example:
         bioamla models ast predict audio.wav --model-path my_model
     """
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.ml import predict_file
 
-    result = services.inference.predict(filepath=file, model_path=model_path)
-    predictions = handle_result(result)
+    try:
+        prediction = predict_file(
+            filepath=file, model_path=model_path, resample_freq=resample_freq
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
-    for pred in predictions:
-        click.echo(f"{pred.predicted_label} ({pred.confidence:.4f})")
+    click.echo(f"{prediction.predicted_label} ({prediction.confidence:.4f})")
 
 
 @ast.command("train")
@@ -227,7 +232,6 @@ def ast_train(
         PitchShift,
         TimeStretch,
     )
-    from datasets import Audio, Dataset, DatasetDict, load_dataset
     from transformers import (
         ASTConfig,
         ASTFeatureExtractor,
@@ -236,7 +240,7 @@ def ast_train(
         TrainingArguments,
     )
 
-    from bioamla.cli.service_helpers import services
+    from datasets import Audio, Dataset, DatasetDict, load_dataset
 
     # Validate min/max ranges
     if min_snr_db > max_snr_db:
@@ -463,7 +467,7 @@ def ast_train(
 
         # Create copies of the training set
         train_copies = [original_train]
-        for i in range(augment_multiplier - 1):
+        for _ in range(augment_multiplier - 1):
             train_copies.append(original_train)
 
         dataset["train"] = concatenate_datasets(train_copies)
@@ -682,7 +686,7 @@ def ast_train(
 
     trainer.train()
 
-    services.file.ensure_directory(best_model_path)
+    Path(best_model_path).mkdir(parents=True, exist_ok=True)
     trainer.save_model(best_model_path)
 
     # Cleanup to prevent hanging from dataloader workers
@@ -760,31 +764,23 @@ def ast_evaluate(
     Example:
         bioamla models ast evaluate ./audio_dir --model-path my_model -g labels.csv
     """
+    import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.ml import evaluate_directory
 
-    path_obj = PathLib(path)
-    if not path_obj.exists():
-        click.echo(f"Error: Path not found: {path}")
-        raise SystemExit(1)
-
-    gt_path = PathLib(ground_truth)
-    if not gt_path.exists():
-        click.echo(f"Error: Ground truth file not found: {ground_truth}")
-        raise SystemExit(1)
-
-    result = services.ast.evaluate(
-        audio_dir=path,
-        model_path=model_path,
-        ground_truth_csv=ground_truth,
-        file_column=file_column,
-        label_column=label_column,
-        resample_freq=resample_freq,
-        batch_size=batch_size,
-        fp16=fp16,
-    )
-    eval_result = handle_result(result)
+    try:
+        eval_result = evaluate_directory(
+            audio_dir=path,
+            model_path=model_path,
+            ground_truth_csv=ground_truth,
+            file_column=file_column,
+            label_column=label_column,
+            resample_freq=resample_freq,
+            use_fp16=fp16,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if not quiet:
         click.echo("\nEvaluation Results:")
@@ -796,10 +792,12 @@ def ast_evaluate(
     click.echo(f"Total Samples: {eval_result.total_samples}")
 
     if output:
+        out_path = PathLib(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         if output_format == "json":
-            services.file.write_json(output, eval_result.to_dict())
+            out_path.write_text(json_lib.dumps(eval_result.to_dict(), indent=2), encoding="utf-8")
         else:
-            services.file.write_text(output, str(eval_result.to_dict()))
+            out_path.write_text(str(eval_result.to_dict()), encoding="utf-8")
         click.echo(f"Results saved to: {output}")
 
 
@@ -817,19 +815,27 @@ def ast_embed(
     Example:
         bioamla models ast embed audio.wav --model-path my_model -o embeddings.npy
     """
-    from bioamla.cli.service_helpers import handle_result, services
+    from pathlib import Path
+
+    import numpy as np
+
+    from bioamla.ml import extract_embeddings_file
 
     click.echo(f"Loading AST model from {model_path}...")
 
-    result = services.ast.extract_embeddings(
-        filepath=file,
-        model_path=model_path,
-        layer=layer,
-        sample_rate=sample_rate,
-    )
-    embeddings = handle_result(result)
+    try:
+        result = extract_embeddings_file(
+            filepath=file,
+            model_path=model_path,
+            layer=layer,
+            sample_rate=sample_rate,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
-    services.file.write_npy(output, embeddings)
+    embeddings = result["embeddings"]
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    np.save(output, embeddings)
     click.echo(f"Embeddings saved to {output} (shape: {embeddings.shape})")
 
 
@@ -841,16 +847,18 @@ def ast_info(model_path: str) -> None:
     Example:
         bioamla models ast info bioamla/scp-frogs
     """
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.ml import get_model_info
 
-    result = services.ast.get_model_info(model_path)
-    info = handle_result(result)
+    try:
+        info = get_model_info(model_path)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"Model: {info['path']}")
-    click.echo(f"Backend: {info['backend']}")
+    click.echo(f"Type: {info['model_type']}")
     click.echo(f"Classes: {info['num_classes']}")
     if info.get("classes"):
-        labels = ", ".join(info["classes"])
+        labels = ", ".join(str(c) for c in info["classes"])
         if info.get("has_more_classes"):
             labels += f"... (+{info['num_classes'] - 10} more)"
         click.echo(f"Labels: {labels}")

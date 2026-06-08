@@ -1,0 +1,146 @@
+"""HuggingFace Hub model and dataset publishing.
+
+Push local model/dataset folders to the HuggingFace Hub. ``huggingface_hub`` is
+a core dependency, but the import is performed lazily so a malformed install
+surfaces a clear :class:`~bioamla.exceptions.DependencyError` rather than an
+opaque ImportError.
+
+Upload failures raise :class:`~bioamla.exceptions.CatalogError`; a missing path
+raises :class:`~bioamla.exceptions.InvalidInputError`.
+"""
+import logging
+from pathlib import Path
+from typing import Optional
+
+from bioamla.catalogs._models import PushResult
+from bioamla.exceptions import CatalogError, DependencyError, InvalidInputError
+
+logger = logging.getLogger(__name__)
+
+
+def _get_folder_size(path: str, limit: Optional[int] = None) -> int:
+    """Calculate the total size of a folder in bytes (optionally short-circuiting)."""
+    total_size = 0
+    for p in Path(path).glob("**/*"):
+        if p.is_file():
+            total_size += p.stat().st_size
+            if limit is not None and total_size > limit:
+                return total_size
+    return total_size
+
+
+def _count_files(path: str, limit: Optional[int] = None) -> int:
+    """Count the total number of files in a folder (optionally short-circuiting)."""
+    count = 0
+    for p in Path(path).glob("**/*"):
+        if p.is_file():
+            count += 1
+            if limit is not None and count > limit:
+                return count
+    return count
+
+
+def _is_large_folder(
+    path: str,
+    size_threshold_gb: float = 5.0,
+    file_count_threshold: int = 1000,
+) -> bool:
+    """Return True if a folder should use ``upload_large_folder``."""
+    size_threshold_bytes = int(size_threshold_gb * 1024 * 1024 * 1024)
+    file_count = _count_files(path, limit=file_count_threshold)
+    if file_count > file_count_threshold:
+        return True
+    folder_size = _get_folder_size(path, limit=size_threshold_bytes)
+    return folder_size > size_threshold_bytes
+
+
+def _get_hf_api():
+    """Import and instantiate HfApi, raising DependencyError if unavailable."""
+    try:
+        from huggingface_hub import HfApi
+    except ImportError as e:
+        raise DependencyError(
+            "HuggingFace Hub features require huggingface_hub — install bioamla[hf]"
+        ) from e
+    return HfApi()
+
+
+def _push_folder(
+    path: str,
+    repo_id: str,
+    repo_type: str,
+    private: bool,
+    commit_message: Optional[str],
+    url: str,
+) -> PushResult:
+    """Shared implementation for pushing a model or dataset folder."""
+    if not Path(path).is_dir():
+        raise InvalidInputError(f"Path '{path}' does not exist or is not a directory")
+
+    api = _get_hf_api()
+    default_message = f"Upload {repo_type}"
+    try:
+        api.create_repo(repo_id=repo_id, repo_type=repo_type, private=private, exist_ok=True)
+        upload = api.upload_large_folder if _is_large_folder(path) else api.upload_folder
+        upload(
+            folder_path=path,
+            repo_id=repo_id,
+            repo_type=repo_type,
+            commit_message=commit_message or default_message,
+        )
+    except Exception as e:
+        raise CatalogError(f"Push failed: {e}") from e
+
+    return PushResult(
+        repo_id=repo_id,
+        repo_type=repo_type,
+        url=url,
+        files_uploaded=_count_files(path),
+        total_size_bytes=_get_folder_size(path),
+    )
+
+
+def push_model(
+    path: str,
+    repo_id: str,
+    private: bool = False,
+    commit_message: Optional[str] = None,
+) -> PushResult:
+    """Push a model folder to the HuggingFace Hub.
+
+    Raises:
+        InvalidInputError: if ``path`` is not a directory.
+        DependencyError: if ``huggingface_hub`` is not installed.
+        CatalogError: on upload failure.
+    """
+    return _push_folder(
+        path=path,
+        repo_id=repo_id,
+        repo_type="model",
+        private=private,
+        commit_message=commit_message,
+        url=f"https://huggingface.co/{repo_id}",
+    )
+
+
+def push_dataset(
+    path: str,
+    repo_id: str,
+    private: bool = False,
+    commit_message: Optional[str] = None,
+) -> PushResult:
+    """Push a dataset folder to the HuggingFace Hub.
+
+    Raises:
+        InvalidInputError: if ``path`` is not a directory.
+        DependencyError: if ``huggingface_hub`` is not installed.
+        CatalogError: on upload failure.
+    """
+    return _push_folder(
+        path=path,
+        repo_id=repo_id,
+        repo_type="dataset",
+        private=private,
+        commit_message=commit_message,
+        url=f"https://huggingface.co/datasets/{repo_id}",
+    )

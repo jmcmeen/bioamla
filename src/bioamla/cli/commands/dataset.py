@@ -2,6 +2,8 @@
 
 import click
 
+from bioamla.exceptions import BioamlaError
+
 
 @click.group()
 def dataset() -> None:
@@ -37,23 +39,25 @@ def dataset_merge(
     quiet: bool,
 ) -> None:
     """Merge multiple audio datasets into a single dataset."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.datasets import merge_datasets
 
-    result = services.dataset.merge(
-        dataset_paths=list(dataset_paths),
-        output_dir=output_dir,
-        metadata_filename=metadata_filename,
-        skip_existing=not overwrite,
-        organize_by_category=not no_organize,
-        target_format=target_format,
-        verbose=not quiet,
-    )
-    stats = handle_result(result)
+    try:
+        stats = merge_datasets(
+            dataset_paths=list(dataset_paths),
+            output_dir=output_dir,
+            metadata_filename=metadata_filename,
+            skip_existing=not overwrite,
+            organize_by_category=not no_organize,
+            target_format=target_format,
+            verbose=not quiet,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if quiet:
-        msg = f"Merged {stats.datasets_merged} datasets: {stats.total_files} total files"
+        msg = f"Merged {stats['datasets_merged']} datasets: {stats['total_files']} total files"
         if target_format:
-            msg += f", {stats.files_converted} converted"
+            msg += f", {stats['files_converted']} converted"
         click.echo(msg)
 
 
@@ -72,12 +76,15 @@ def dataset_license(
     path: str, template: str, output: str, metadata_filename: str, batch: bool, quiet: bool
 ) -> None:
     """Generate license/attribution file from dataset metadata."""
-    from pathlib import Path as PathLib
+    from pathlib import Path
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.datasets import (
+        generate_license_for_dataset,
+        generate_licenses_for_directory,
+    )
 
-    path_obj = PathLib(path)
-    template_path = PathLib(template) if template else None
+    path_obj = Path(path)
+    template_path = Path(template) if template else None
 
     if template_path and not template_path.exists():
         click.echo(f"Error: Template file '{template}' not found.")
@@ -91,36 +98,39 @@ def dataset_license(
         if not quiet:
             click.echo(f"Scanning directory for datasets: {path}")
 
-        result = services.dataset.generate_licenses_batch(
-            directory=str(path_obj),
-            template_path=str(template_path) if template_path else None,
-            output_filename=output,
-            metadata_filename=metadata_filename,
-        )
-        stats = handle_result(result)
+        try:
+            stats = generate_licenses_for_directory(
+                audio_dir=path_obj,
+                template_path=template_path,
+                output_filename=output,
+                metadata_filename=metadata_filename,
+            )
+        except BioamlaError as e:
+            raise click.ClickException(str(e)) from e
 
-        if stats.datasets_found == 0:
+        if stats["datasets_found"] == 0:
             click.echo("No datasets found (no directories with metadata.csv)")
             raise SystemExit(1)
 
         if not quiet:
-            click.echo(f"\nProcessed {stats.datasets_found} dataset(s):")
-            click.echo(f"  Successful: {stats.datasets_processed}")
-            click.echo(f"  Failed: {stats.datasets_failed}")
+            click.echo(f"\nProcessed {stats['datasets_found']} dataset(s):")
+            click.echo(f"  Successful: {stats['datasets_processed']}")
+            click.echo(f"  Failed: {stats['datasets_failed']}")
 
-            for item in stats.results:
+            for item in stats["results"]:
                 if item["status"] == "success":
                     click.echo(
                         f"  - {item['dataset_name']}: {item['attributions_count']} attributions"
                     )
                 else:
                     click.echo(
-                        f"  - {item['dataset_name']}: FAILED - {item.get('error', 'Unknown error')}"
+                        f"  - {item['dataset_name']}: FAILED - "
+                        f"{item.get('error', 'Unknown error')}"
                     )
         else:
-            click.echo(f"Generated {stats.datasets_processed} license files")
+            click.echo(f"Generated {stats['datasets_processed']} license files")
 
-        if stats.datasets_failed > 0:
+        if stats["datasets_failed"] > 0:
             raise SystemExit(1)
 
     else:
@@ -136,20 +146,22 @@ def dataset_license(
         if not quiet:
             click.echo(f"Generating license file for: {path}")
 
-        result = services.dataset.generate_license(
-            dataset_path=str(path_obj),
-            template_path=str(template_path) if template_path else None,
-            output_filename=output,
-            metadata_filename=metadata_filename,
-        )
-        stats = handle_result(result)
+        try:
+            stats = generate_license_for_dataset(
+                dataset_path=path_obj,
+                template_path=template_path,
+                output_filename=output,
+                metadata_filename=metadata_filename,
+            )
+        except BioamlaError as e:
+            raise click.ClickException(str(e)) from e
 
         if not quiet:
-            click.echo(f"License file generated: {stats.output_path}")
-            click.echo(f"  Attributions: {stats.attributions_count}")
-            click.echo(f"  File size: {stats.file_size:,} bytes")
+            click.echo(f"License file generated: {stats['output_path']}")
+            click.echo(f"  Attributions: {stats['attributions_count']}")
+            click.echo(f"  File size: {stats['file_size']:,} bytes")
         else:
-            click.echo(f"Generated {output} with {stats.attributions_count} attributions")
+            click.echo(f"Generated {output} with {stats['attributions_count']} attributions")
 
 
 def _parse_range(value: str) -> tuple[float, float]:
@@ -193,9 +205,8 @@ def dataset_augment(
     quiet: bool,
 ) -> None:
     """Augment audio files to expand training datasets."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.datasets import AugmentationConfig, batch_augment
 
-    # Parse augmentation parameters
     noise_enabled = add_noise is not None
     noise_min_snr, noise_max_snr = _parse_range(add_noise) if add_noise else (3.0, 30.0)
 
@@ -213,9 +224,9 @@ def dataset_augment(
         click.echo("Use --help for available options")
         raise SystemExit(1)
 
-    result = services.dataset.augment(
-        input_dir=input_dir,
-        output_dir=output,
+    config = AugmentationConfig(
+        sample_rate=sample_rate,
+        multiply=multiply,
         add_noise=noise_enabled,
         noise_min_snr=noise_min_snr,
         noise_max_snr=noise_max_snr,
@@ -228,17 +239,23 @@ def dataset_augment(
         gain=gain_enabled,
         gain_min_db=gain_min,
         gain_max_db=gain_max,
-        multiply=multiply,
-        sample_rate=sample_rate,
-        recursive=recursive,
-        verbose=not quiet,
     )
-    stats = handle_result(result)
+
+    try:
+        stats = batch_augment(
+            input_dir=input_dir,
+            output_dir=output,
+            config=config,
+            recursive=recursive,
+            verbose=not quiet,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if quiet:
         click.echo(
-            f"Created {stats.files_created} augmented files from "
-            f"{stats.files_processed} source files in {stats.output_dir}"
+            f"Created {stats['files_created']} augmented files from "
+            f"{stats['files_processed']} source files in {stats['output_dir']}"
         )
 
 
@@ -250,20 +267,23 @@ def dataset_download(url: str, output_dir: str) -> None:
     import os
     from urllib.parse import urlparse
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.common.files import download_file
 
     if output_dir == ".":
         output_dir = os.getcwd()
 
     parsed_url = urlparse(url)
-    filename = os.path.basename(parsed_url.path)
-    if not filename:
-        filename = "downloaded_file"
-
+    filename = os.path.basename(parsed_url.path) or "downloaded_file"
     output_path = os.path.join(output_dir, filename)
 
-    result = services.dataset.download(url, output_path)
-    handle_result(result)
+    try:
+        download_file(url, output_path)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    except OSError as e:
+        raise click.ClickException(f"Download failed: {e}") from e
+
+    click.echo(f"Downloaded to {output_path}")
 
 
 @dataset.command("unzip")
@@ -273,13 +293,19 @@ def dataset_unzip(file_path: str, output_path: str) -> None:
     """Extract a ZIP archive to the specified output directory."""
     import os
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.common.files import extract_zip_file
 
     if output_path == ".":
         output_path = os.getcwd()
 
-    result = services.dataset.extract_zip(file_path, output_path)
-    handle_result(result)
+    try:
+        extract_zip_file(file_path, output_path)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    except OSError as e:
+        raise click.ClickException(f"Extraction failed: {e}") from e
+
+    click.echo(f"Extracted to {output_path}")
 
 
 @dataset.command("zip")
@@ -287,9 +313,18 @@ def dataset_unzip(file_path: str, output_path: str) -> None:
 @click.argument("output_file")
 def dataset_zip(source_path: str, output_file: str) -> None:
     """Create a ZIP archive from a file or directory."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from pathlib import Path
 
-    result = services.dataset.create_zip(source_path, output_file)
-    handle_result(result)
+    from bioamla.common.files import create_zip_file, zip_directory
+
+    try:
+        if Path(source_path).is_dir():
+            zip_directory(source_path, output_file)
+        else:
+            create_zip_file([source_path], output_file)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    except OSError as e:
+        raise click.ClickException(f"ZIP creation failed: {e}") from e
 
     click.echo(f"Created {output_file}")

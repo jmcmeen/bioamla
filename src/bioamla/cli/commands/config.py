@@ -2,6 +2,8 @@
 
 import click
 
+from bioamla.exceptions import BioamlaError
+
 
 @click.group()
 def config() -> None:
@@ -13,9 +15,12 @@ def config() -> None:
 def config_version() -> None:
     """Show bioamla version and environment information."""
     from bioamla.cli.progress import console
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.system import util
 
-    version_data = handle_result(services.util.get_version())
+    try:
+        version_data = util.get_version()
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     console.print("\n[bold]BioAMLA Version Information[/bold]\n")
     console.print(f"  bioamla:  {version_data.bioamla_version}")
@@ -34,9 +39,12 @@ def config_version() -> None:
 def config_devices() -> None:
     """Show available compute devices (GPU, MPS, CPU)."""
     from bioamla.cli.progress import console
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.system import util
 
-    devices_data = handle_result(services.util.get_device_info())
+    try:
+        devices_data = util.get_device_info()
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     console.print("\n[bold]Available Compute Devices[/bold]\n")
 
@@ -70,9 +78,12 @@ def config_devices() -> None:
 def config_show() -> None:
     """Show current configuration."""
     from bioamla.cli.progress import console
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.system import config as system_config
 
-    config_obj = handle_result(services.config.get_config())
+    try:
+        config_obj = system_config.get_config()
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     console.print("\n[bold]Current Configuration[/bold]")
     if config_obj._source:
@@ -107,16 +118,19 @@ def config_show() -> None:
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing file")
 def config_init(output: str, force: bool) -> None:
     """Create a default configuration file."""
-    from bioamla.cli.progress import print_error, print_success
-    from bioamla.cli.service_helpers import services
+    from bioamla.cli.progress import print_success
+    from bioamla.exceptions import InvalidInputError
+    from bioamla.system import config as system_config
 
-    result = services.config.create_default_config(output, force=force)
-
-    if not result.success:
-        print_error(result.error)
-        if "already exists" in result.error:
+    try:
+        system_config.create_default_config(output, force=force)
+    except InvalidInputError as e:
+        click.echo(str(e), err=True)
+        if "already exists" in str(e):
             click.echo("Use --force to overwrite.")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     print_success(f"Created configuration file: {output}")
 
@@ -127,32 +141,31 @@ def config_path() -> None:
     from pathlib import Path
 
     from bioamla.cli.progress import console
-    from bioamla.cli.service_helpers import services
+    from bioamla.system import config as system_config
 
     console.print("\n[bold]Configuration File Search Paths[/bold]\n")
     console.print("Files are searched in order (first found wins):\n")
 
-    # Get active config
-    active_result = services.config.find_config_file()
-    active_config = Path(active_result.data) if active_result.success and active_result.data else None
+    try:
+        active_path = system_config.find_config_file()
+        active_config = Path(active_path) if active_path else None
+        locations = [Path(loc) for loc in system_config.get_config_locations()]
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
-    # Get all locations
-    locations_result = services.config.get_config_locations()
-    if locations_result.success:
-        locations = [Path(loc) for loc in locations_result.data]
-        for i, location in enumerate(locations, 1):
-            exists = location.exists()
-            status = (
-                "[green]✓ ACTIVE[/green]"
-                if location == active_config
-                else ("[dim]exists[/dim]" if exists else "[dim]not found[/dim]")
-            )
-            console.print(f"  {i}. {location} {status}")
+    for i, location in enumerate(locations, 1):
+        exists = location.exists()
+        status = (
+            "[green]✓ ACTIVE[/green]"
+            if location == active_config
+            else ("[dim]exists[/dim]" if exists else "[dim]not found[/dim]")
+        )
+        console.print(f"  {i}. {location} {status}")
 
     console.print()
 
 
-def _format_size(size_bytes: int) -> str:
+def _format_size(size_bytes: float) -> str:
     """Format bytes into human-readable size."""
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size_bytes < 1024:
@@ -272,17 +285,15 @@ def config_deps(do_install: bool, yes: bool) -> None:
         bioamla config deps --install -y # Install without confirmation
     """
     from bioamla.cli.progress import console
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.system import dependency
 
-    # Get OS type
-    os_result = services.dependency.detect_os()
-    os_type = os_result.data if os_result.success else "unknown"
-
-    # Check all dependencies
-    report = handle_result(services.dependency.check_all())
+    try:
+        report = dependency.check_all()
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     console.print("\n[bold]System Dependencies[/bold]")
-    console.print(f"[dim]Detected OS: {os_type}[/dim]\n")
+    console.print(f"[dim]Detected OS: {report.os_type}[/dim]\n")
 
     for dep in report.dependencies:
         if dep.installed:
@@ -315,18 +326,17 @@ def config_deps(do_install: bool, yes: bool) -> None:
                 return
 
         console.print("\n[bold]Installing dependencies...[/bold]")
-        install_result = services.dependency.install(os_type)
+        try:
+            message = dependency.install(report.os_type)
+        except BioamlaError as e:
+            console.print(f"[red]{e}[/red]")
+            raise SystemExit(1) from e
 
-        if install_result.success:
-            console.print(f"[green]{install_result.message}[/green]")
-            console.print("\n[bold]Verifying installation...[/bold]")
-            verify_result = services.dependency.check_all()
-            if verify_result.success:
-                for dep in verify_result.data.dependencies:
-                    if dep.installed:
-                        console.print(f"[green]✓[/green] {dep.name}")
-                    else:
-                        console.print(f"[red]✗[/red] {dep.name}")
-        else:
-            console.print(f"[red]{install_result.error}[/red]")
-            raise SystemExit(1)
+        console.print(f"[green]{message}[/green]")
+        console.print("\n[bold]Verifying installation...[/bold]")
+        verify = dependency.check_all()
+        for dep in verify.dependencies:
+            if dep.installed:
+                console.print(f"[green]✓[/green] {dep.name}")
+            else:
+                console.print(f"[red]✗[/red] {dep.name}")

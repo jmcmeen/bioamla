@@ -204,7 +204,7 @@ def _load_via_pydub(filepath: str) -> Tuple[np.ndarray, int]:
         segment = AudioSegment.from_file(str(path))
         return _audiosegment_to_numpy(segment)
     except Exception as e:
-        raise Exception(f"Error opening '{filepath}': {e}")
+        raise Exception(f"Error opening '{filepath}': {e}") from e
 
 
 def load_audio(filepath: str) -> Tuple[np.ndarray, int]:
@@ -292,7 +292,7 @@ def save_audio(
         segment = _numpy_to_audiosegment(audio, sample_rate, channels)
         segment.export(str(path), format=format_to_use)
     except Exception as e:
-        raise Exception(f"Failed to save audio to '{filepath}': {e}")
+        raise Exception(f"Failed to save audio to '{filepath}': {e}") from e
 
 
 def _get_metadata_ffprobe(filepath: str) -> Optional[dict]:
@@ -441,4 +441,4 @@ def get_audio_info(filepath: str) -> dict:
             "subtype": subtype,
         }
     except Exception as e:
-        raise Exception(f"Failed to get audio info from '{filepath}': {e}")
+        raise Exception(f"Failed to get audio info from '{filepath}': {e}") from e

@@ -1,16 +1,359 @@
-"""Batch processing operations."""
+"""Batch processing operations.
 
-from typing import Optional
+Each subcommand supports two input modes:
+
+- Directory mode (``--input-dir``): discover and process every audio file under
+  a directory, writing results (transformed audio, aggregated JSON/CSV) to
+  ``--output-dir``.
+- CSV-metadata mode (``--input-file``): process each file listed in a metadata
+  CSV (paths resolved relative to the CSV's directory) and write the results
+  back to a CSV — in-place when no ``--output-dir`` is given, else into
+  ``--output-dir`` — merging new result columns, updating processed-file paths,
+  or expanding one input row into many for segmentation.
+
+Subcommands wire to the NEW domain helpers (audio / detect / indices / ml /
+cluster) and the generic engine in :mod:`bioamla.batch`. Each body wraps its
+call in ``try/except BioamlaError -> ClickException`` so the central CLI error
+handler reports failures cleanly.
+"""
+
+import functools
+from pathlib import Path
+from typing import Callable, Optional
 
 import click
+import numpy as np
 
+from bioamla.batch import (
+    BatchConfig,
+    CSVBatchContext,
+    expand_row_for_segments,
+    load_csv,
+    merge_analysis_results,
+    run_csv_batch,
+    update_row_path,
+    write_csv,
+)
 from bioamla.cli.batch_options import batch_input_options, batch_output_options
+from bioamla.exceptions import BioamlaError, InvalidInputError
+
+# =============================================================================
+# Shared helpers
+# =============================================================================
+
+
+def _build_config(
+    input_dir: Optional[str],
+    input_file: Optional[str],
+    output_dir: Optional[str],
+    recursive: bool,
+    max_workers: int,
+    quiet: bool,
+) -> BatchConfig:
+    """Build a :class:`BatchConfig` from the shared batch CLI options."""
+    return BatchConfig(
+        input_dir=input_dir,
+        input_file=input_file,
+        output_dir=output_dir or "",
+        recursive=recursive,
+        max_workers=max_workers,
+        quiet=quiet,
+    )
+
+
+def _require_input_dir(config: BatchConfig) -> str:
+    """Return the input directory, or raise if it was not provided."""
+    if not config.input_dir:
+        raise InvalidInputError("--input-dir is required for this command.")
+    return config.input_dir
+
+
+def _report(result, output_dir: Optional[str], quiet: bool, saved_hint: Optional[str] = None) -> None:
+    """Print a standard BatchResult summary."""
+    if quiet:
+        return
+    click.echo(
+        f"Processed {result.total_files} files: "
+        f"{result.successful} successful, {result.failed} failed"
+    )
+    if output_dir and saved_hint:
+        click.echo(f"Results saved to {output_dir}/{saved_hint}")
+    for error in result.errors:
+        click.echo(f"  Error: {error}")
+
+
+def _stty_sane() -> None:
+    """Flush output and reset the terminal to a sane state (parallel cleanup)."""
+    import subprocess
+    import sys
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if sys.stdout.isatty():
+        try:
+            subprocess.run(["stty", "sane"], check=False, stderr=subprocess.DEVNULL, timeout=1)
+        except Exception:
+            pass
+
+
+# =============================================================================
+# CSV-metadata dispatch helpers (shared across commands)
+# =============================================================================
+
+
+def _csv_context(config: BatchConfig) -> CSVBatchContext:
+    """Load the CSV metadata context for ``config.input_file``."""
+    output_dir = config.output_dir or None
+    return load_csv(config.input_file, output_dir)
+
+
+def _run_csv_merge(
+    config: BatchConfig,
+    analyze_row: Callable[[Path], dict],
+) -> object:
+    """CSV mode for analysis commands (audio info, indices).
+
+    Runs ``analyze_row`` over each listed file, merges the returned column dict
+    into the row, and writes the updated CSV (column-union, file_name first).
+    """
+    context = _csv_context(config)
+
+    def _process(row) -> str:
+        results = analyze_row(row.file_path)
+        merge_analysis_results(row, results)
+        return str(row.file_path)
+
+    result = run_csv_batch(
+        context,
+        _process,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        quiet=config.quiet,
+    )
+    out_csv = write_csv(context)
+    if not config.quiet:
+        click.echo(f"Updated metadata CSV written to: {out_csv}")
+    return result
+
+
+def _run_csv_transform(
+    config: BatchConfig,
+    transform_row: Callable[[Path, Path], Path],
+    *,
+    new_extension: Optional[str] = None,
+) -> object:
+    """CSV mode for file-changing commands (resample/normalize/trim/filter/
+    denoise/convert).
+
+    Computes the output path via the CSV context (in-place vs output_dir),
+    invokes ``transform_row(input_path, output_path)``, and updates the row's
+    ``file_name`` to the new path before writing the CSV.
+    """
+    from bioamla.batch import resolve_output_path
+
+    context = _csv_context(config)
+
+    def _process(row) -> str:
+        out_path = resolve_output_path(row.file_path, context, new_extension=new_extension)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        final_path = transform_row(row.file_path, out_path)
+        update_row_path(row, Path(final_path), context)
+        return str(final_path)
+
+    result = run_csv_batch(
+        context,
+        _process,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        quiet=config.quiet,
+    )
+    out_csv = write_csv(context)
+    if not config.quiet:
+        click.echo(f"Updated metadata CSV written to: {out_csv}")
+    return result
+
+
+def _run_csv_process(
+    config: BatchConfig,
+    process_row: Callable[[Path], object],
+) -> object:
+    """CSV mode for commands that process files but do not change the CSV rows
+    (detect, models predict/embed).
+
+    Runs ``process_row`` per file; the CSV is written back unchanged (rows
+    preserved, paths re-resolved relative to the output CSV location).
+    """
+    context = _csv_context(config)
+
+    def _process(row) -> str:
+        process_row(row.file_path)
+        return str(row.file_path)
+
+    result = run_csv_batch(
+        context,
+        _process,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        quiet=config.quiet,
+    )
+    write_csv(context)
+    return result
+
+
+def _run_csv_segment(
+    config: BatchConfig,
+    segment_row: Callable[[Path, Path], list],
+) -> object:
+    """CSV mode for segmentation: expands one input row into many output rows.
+
+    ``segment_row(input_path, output_dir)`` returns a list of
+    :class:`bioamla.batch.SegmentInfo`. Each parent row is replaced by one row
+    per segment (carrying ``parent_file``/``segment_id``/``start_time``/
+    ``end_time``/``duration``), then the expanded CSV is written.
+    """
+    from bioamla.batch import resolve_output_path
+
+    context = _csv_context(config)
+    segment_mapping: dict = {}
+
+    def _process(row) -> str:
+        # Segments are written next to the resolved output location for the file.
+        out_path = resolve_output_path(row.file_path, context)
+        seg_dir = out_path.parent
+        seg_dir.mkdir(parents=True, exist_ok=True)
+        segments = segment_row(row.file_path, seg_dir)
+        if segments:
+            segment_mapping[row.file_path] = segments
+        return str(row.file_path)
+
+    result = run_csv_batch(
+        context,
+        _process,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        quiet=config.quiet,
+    )
+
+    # Expand rows BEFORE writing the CSV.
+    new_rows = []
+    for row in context.rows:
+        if row.file_path in segment_mapping:
+            new_rows.extend(
+                expand_row_for_segments(row, segment_mapping[row.file_path], context)
+            )
+        else:
+            new_rows.append(row)
+    context.rows = new_rows
+
+    for field in ("parent_file", "segment_id", "start_time", "end_time", "duration"):
+        if field not in context.fieldnames:
+            context.fieldnames.append(field)
+
+    out_csv = write_csv(context)
+    if not config.quiet:
+        click.echo(f"Updated metadata CSV written to: {out_csv}")
+    return result
+
+
+# =============================================================================
+# Module-level audio processors (picklable for parallel execution)
+# =============================================================================
+
+
+def _proc_normalize_rms(audio: np.ndarray, sr: int, *, target_db: float) -> np.ndarray:
+    from bioamla.audio.processing import normalize_loudness
+
+    return normalize_loudness(audio, sr, target_db=target_db)
+
+
+def _proc_normalize_peak(audio: np.ndarray, sr: int) -> np.ndarray:
+    from bioamla.audio.processing import peak_normalize
+
+    return peak_normalize(audio)
+
+
+def _proc_trim_range(
+    audio: np.ndarray, sr: int, *, start: Optional[float], end: Optional[float]
+) -> np.ndarray:
+    from bioamla.audio.processing import trim_audio
+
+    return trim_audio(audio, sr, start_time=start, end_time=end)
+
+
+def _proc_trim_silence(audio: np.ndarray, sr: int, *, threshold_db: float) -> np.ndarray:
+    from bioamla.audio.processing import trim_silence
+
+    return trim_silence(audio, sr, threshold_db=threshold_db)
+
+
+def _proc_denoise(audio: np.ndarray, sr: int, *, strength: float) -> np.ndarray:
+    from bioamla.audio.processing import spectral_denoise
+
+    return spectral_denoise(audio, sr, noise_reduce_factor=strength)
+
+
+def _proc_filter(
+    audio: np.ndarray,
+    sr: int,
+    *,
+    lowpass: Optional[float],
+    highpass: Optional[float],
+    bandpass: Optional[tuple],
+    order: int,
+) -> np.ndarray:
+    from bioamla.audio.processing import bandpass_filter, highpass_filter, lowpass_filter
+
+    if bandpass is not None:
+        return bandpass_filter(audio, sr, bandpass[0], bandpass[1], order=order)
+    if lowpass is not None:
+        return lowpass_filter(audio, sr, lowpass, order=order)
+    return highpass_filter(audio, sr, highpass, order=order)
+
+
+def _passthrough(audio: np.ndarray, sr: int) -> np.ndarray:
+    """Identity processor used by resample."""
+    return audio
+
+
+def _run_audio_transform(config: BatchConfig, processor, *, sample_rate=None) -> object:
+    """Run an audio per-file transform in directory OR CSV mode."""
+    from bioamla.audio.batch import batch_transform_files
+    from bioamla.audio.io import process_file
+
+    if config.input_file:
+
+        def _transform_row(in_path: Path, out_path: Path) -> Path:
+            # Per-file transforms emit .wav; the CSV output path keeps the
+            # original name unless an extension change is requested elsewhere.
+            wav_out = out_path.with_suffix(".wav")
+            saved = process_file(str(in_path), str(wav_out), processor, sample_rate)
+            return Path(saved)
+
+        return _run_csv_transform(config, _transform_row, new_extension=".wav")
+
+    input_dir = _require_input_dir(config)
+    if not config.output_dir:
+        raise InvalidInputError("--output-dir is required for this command.")
+    return batch_transform_files(
+        input_dir,
+        config.output_dir,
+        processor_fn=processor,
+        sample_rate=sample_rate,
+        recursive=config.recursive,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+    )
 
 
 @click.group()
 def batch() -> None:
     """Batch processing operations for multiple files."""
     pass
+
+
+# =============================================================================
+# Audio batch commands
+# =============================================================================
 
 
 @batch.group()
@@ -25,49 +368,58 @@ def audio() -> None:
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_info(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], max_workers: int, recursive: bool, quiet: bool) -> None:
+def audio_info(input_dir, input_file, output_dir, max_workers, recursive, quiet) -> None:
     """Extract audio file metadata (duration, sample rate, channels, format, etc.)."""
-    import subprocess
-    import sys
+    import csv
 
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo("Extracting audio metadata...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
+    from bioamla.audio.discovery import list_audio_files
+    from bioamla.audio.info import get_audio_info
+    from bioamla.batch import run_batch
 
     try:
-        batch_result = services.batch_audio_info.info_batch(config)
-
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
         if not quiet:
-            click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-            if output_dir:
-                click.echo(f"Results saved to {output_dir}/audio_info.csv")
-            elif input_file:
-                # CSV in-place mode
-                click.echo(f"Results merged into {input_file}")
-            if batch_result.errors:
-                for error in batch_result.errors:
-                    click.echo(f"  Error: {error}")
+            click.echo("Extracting audio metadata...")
+
+        def _analyze(path: Path) -> dict:
+            info = get_audio_info(str(path))
+            return {
+                "duration": info.duration,
+                "sample_rate": info.sample_rate,
+                "channels": info.channels,
+                "samples": info.samples,
+                "format": info.format,
+            }
+
+        if config.input_file:
+            result = _run_csv_merge(config, _analyze)
+            _report(result, None, quiet)
+            return
+
+        files = list_audio_files(_require_input_dir(config), recursive=recursive)
+        rows: list = []
+
+        def _info(path):
+            data = {"file_name": str(path)}
+            data.update(_analyze(path))
+            rows.append(data)
+            return str(path)
+
+        result = run_batch(files, _info, continue_on_error=True)
+
+        if output_dir and rows:
+            out_path = Path(output_dir) / "audio_info.csv"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            with out_path.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                writer.writeheader()
+                writer.writerows(rows)
+
+        _report(result, output_dir, quiet, saved_hint="audio_info.csv")
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
     finally:
-        # Force flush all output and reset terminal state
-        sys.stdout.flush()
-        sys.stderr.flush()
-        # Reset terminal to sane state (fixes terminal freeze from parallel processing)
-        if sys.stdout.isatty():
-            try:
-                subprocess.run(["stty", "sane"], check=False, stderr=subprocess.DEVNULL, timeout=1)
-            except Exception:
-                pass  # Silently fail if stty not available
+        _stty_sane()
 
 
 @audio.command("convert")
@@ -78,55 +430,71 @@ def audio_info(input_dir: Optional[str], input_file: Optional[str], output_dir: 
 @click.option(
     "--format",
     "-f",
+    "out_format",
     default="wav",
     type=click.Choice(["wav", "mp3", "flac", "ogg"]),
     help="Output format",
 )
-@click.option("--delete-original", is_flag=True, default=False, help="Delete original files after successful conversion")
+@click.option(
+    "--delete-original",
+    is_flag=True,
+    default=False,
+    help="Delete original files after successful conversion",
+)
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_convert(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], sample_rate: int, channels: int, format: str, delete_original: bool, max_workers: int, recursive: bool, quiet: bool) -> None:
-    """Batch convert audio files."""
-    import sys
+def audio_convert(
+    input_dir, input_file, output_dir, sample_rate, channels, out_format, delete_original, max_workers, recursive, quiet
+) -> None:
+    """Batch convert audio files to a target format (optionally resample/re-channel)."""
+    from bioamla.audio.batch import batch_convert_files
+    from bioamla.audio.convert import convert_audio_file
 
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo("Converting audio files...")
 
-    if not quiet:
-        click.echo("Converting audio files...")
+        if config.input_file:
 
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
+            def _convert_row(in_path: Path, out_path: Path) -> Path:
+                saved = convert_audio_file(
+                    in_path,
+                    out_path,
+                    target_format=out_format,
+                    target_sample_rate=sample_rate,
+                    target_channels=channels,
+                    delete_original=delete_original,
+                )
+                return Path(saved)
 
-    batch_result = services.batch_audio_transform.convert_batch(
-        config,
-        target_format=format,
-        target_sr=sample_rate,
-        target_channels=channels,
-        delete_original=delete_original,
-    )
+            result = _run_csv_transform(
+                config, _convert_row, new_extension=f".{out_format}"
+            )
+            _report(result, None, quiet)
+            return
 
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+        _require_input_dir(config)
+        if not output_dir:
+            raise InvalidInputError("--output-dir is required for this command.")
 
-    # Exit with non-zero status if any files failed
-    if batch_result.failed > 0 or batch_result.errors:
-        sys.exit(1)
-
-
-# ==============================================================================
-# Audio Transform Batch Commands
-# ==============================================================================
+        result = batch_convert_files(
+            input_dir,
+            output_dir,
+            target_format=out_format,
+            sample_rate=sample_rate,
+            channels=channels,
+            delete_original=delete_original,
+            recursive=recursive,
+            max_workers=max_workers,
+            continue_on_error=config.continue_on_error,
+        )
+        _report(result, output_dir, quiet)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    finally:
+        _stty_sane()
 
 
 @audio.command("resample")
@@ -136,36 +504,16 @@ def audio_convert(input_dir: Optional[str], input_file: Optional[str], output_di
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_resample(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], sample_rate: int, max_workers: int, recursive: bool, quiet: bool) -> None:
+def audio_resample(input_dir, input_file, output_dir, sample_rate, max_workers, recursive, quiet) -> None:
     """Batch resample audio files to a target sample rate."""
-    import sys
-
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo("Resampling audio files...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
-
-    batch_result = services.batch_audio_transform.resample_batch(config, target_sr=sample_rate)
-
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
-
-    # Exit with non-zero status if any files failed
-    if batch_result.failed > 0 or batch_result.errors:
-        sys.exit(1)
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo("Resampling audio files...")
+        result = _run_audio_transform(config, _passthrough, sample_rate=sample_rate)
+        _report(result, output_dir if not config.input_file else None, quiet)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @audio.command("normalize")
@@ -176,30 +524,21 @@ def audio_resample(input_dir: Optional[str], input_file: Optional[str], output_d
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_normalize(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], target_db: float, peak: bool, max_workers: int, recursive: bool, quiet: bool) -> None:
+def audio_normalize(input_dir, input_file, output_dir, target_db, peak, max_workers, recursive, quiet) -> None:
     """Batch normalize audio levels."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo("Normalizing audio files...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
-
-    batch_result = services.batch_audio_transform.normalize_batch(config, target_db=target_db, peak=peak)
-
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo("Normalizing audio files...")
+        processor = (
+            _proc_normalize_peak
+            if peak
+            else functools.partial(_proc_normalize_rms, target_db=target_db)
+        )
+        result = _run_audio_transform(config, processor)
+        _report(result, output_dir if not config.input_file else None, quiet)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @audio.command("trim")
@@ -207,41 +546,25 @@ def audio_normalize(input_dir: Optional[str], input_file: Optional[str], output_
 @batch_output_options
 @click.option("--start", "-s", default=None, type=float, help="Start time in seconds")
 @click.option("--end", "-e", default=None, type=float, help="End time in seconds")
-@click.option("--trim-silence", is_flag=True, help="Trim silence from start/end instead of using time range")
-@click.option("--silence-threshold-db", default=-40.0, type=float, help="Silence threshold in dB (when using --trim-silence)")
+@click.option("--trim-silence", "trim_silence_flag", is_flag=True, help="Trim silence from start/end instead of time range")
+@click.option("--silence-threshold-db", default=-40.0, type=float, help="Silence threshold in dB (with --trim-silence)")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_trim(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], start: Optional[float], end: Optional[float], trim_silence: bool, silence_threshold_db: float, max_workers: int, recursive: bool, quiet: bool) -> None:
+def audio_trim(input_dir, input_file, output_dir, start, end, trim_silence_flag, silence_threshold_db, max_workers, recursive, quiet) -> None:
     """Batch trim audio files by time range or remove silence."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo("Trimming audio files...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
-
-    batch_result = services.batch_audio_transform.trim_batch(
-        config,
-        start=start,
-        end=end,
-        trim_silence=trim_silence,
-        silence_threshold_db=silence_threshold_db,
-    )
-
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo("Trimming audio files...")
+        if trim_silence_flag:
+            processor = functools.partial(_proc_trim_silence, threshold_db=silence_threshold_db)
+        else:
+            processor = functools.partial(_proc_trim_range, start=start, end=end)
+        result = _run_audio_transform(config, processor)
+        _report(result, output_dir if not config.input_file else None, quiet)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @audio.command("filter")
@@ -249,94 +572,61 @@ def audio_trim(input_dir: Optional[str], input_file: Optional[str], output_dir: 
 @batch_output_options
 @click.option("--lowpass", default=None, type=float, help="Lowpass cutoff frequency in Hz")
 @click.option("--highpass", default=None, type=float, help="Highpass cutoff frequency in Hz")
-@click.option("--bandpass-low", default=None, type=float, help="Bandpass low frequency in Hz (requires --bandpass-high)")
-@click.option("--bandpass-high", default=None, type=float, help="Bandpass high frequency in Hz (requires --bandpass-low)")
+@click.option("--bandpass-low", default=None, type=float, help="Bandpass low frequency in Hz")
+@click.option("--bandpass-high", default=None, type=float, help="Bandpass high frequency in Hz")
 @click.option("--order", default=5, type=int, help="Filter order (default: 5)")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_filter(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], lowpass: Optional[float], highpass: Optional[float], bandpass_low: Optional[float], bandpass_high: Optional[float], order: int, max_workers: int, recursive: bool, quiet: bool) -> None:
+def audio_filter(input_dir, input_file, output_dir, lowpass, highpass, bandpass_low, bandpass_high, order, max_workers, recursive, quiet) -> None:
     """Batch apply frequency filters to audio files."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
+    try:
+        if not any([lowpass, highpass, bandpass_low]):
+            raise InvalidInputError(
+                "Must specify --lowpass, --highpass, or --bandpass-low/--bandpass-high"
+            )
+        if (bandpass_low is not None) != (bandpass_high is not None):
+            raise InvalidInputError(
+                "Both --bandpass-low and --bandpass-high must be specified together"
+            )
 
-    # Validate filter options
-    if not any([lowpass, highpass, bandpass_low]):
-        click.echo("Error: Must specify --lowpass, --highpass, or --bandpass-low/--bandpass-high")
-        return
+        bandpass = (bandpass_low, bandpass_high) if bandpass_low is not None else None
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            if bandpass:
+                click.echo(f"Applying bandpass filter ({bandpass[0]}-{bandpass[1]} Hz)...")
+            elif lowpass:
+                click.echo(f"Applying lowpass filter ({lowpass} Hz)...")
+            else:
+                click.echo(f"Applying highpass filter ({highpass} Hz)...")
 
-    if (bandpass_low is not None) != (bandpass_high is not None):
-        click.echo("Error: Both --bandpass-low and --bandpass-high must be specified together")
-        return
-
-    bandpass = (bandpass_low, bandpass_high) if bandpass_low is not None else None
-
-    if not quiet:
-        if bandpass:
-            click.echo(f"Applying bandpass filter ({bandpass[0]}-{bandpass[1]} Hz)...")
-        elif lowpass:
-            click.echo(f"Applying lowpass filter ({lowpass} Hz)...")
-        else:
-            click.echo(f"Applying highpass filter ({highpass} Hz)...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
-
-    batch_result = services.batch_audio_transform.filter_batch(
-        config,
-        lowpass=lowpass,
-        highpass=highpass,
-        bandpass=bandpass,
-        order=order,
-    )
-
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+        processor = functools.partial(
+            _proc_filter, lowpass=lowpass, highpass=highpass, bandpass=bandpass, order=order
+        )
+        result = _run_audio_transform(config, processor)
+        _report(result, output_dir if not config.input_file else None, quiet)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @audio.command("denoise")
 @batch_input_options
 @batch_output_options
-@click.option("--strength", default=1.0, type=float, help="Noise reduction strength (0-2, default: 1.0)")
+@click.option("--strength", default=1.0, type=float, help="Noise reduction strength (0-2)")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_denoise(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], strength: float, max_workers: int, recursive: bool, quiet: bool) -> None:
+def audio_denoise(input_dir, input_file, output_dir, strength, max_workers, recursive, quiet) -> None:
     """Batch apply spectral noise reduction to audio files."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo(f"Applying spectral noise reduction (strength={strength})...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
-
-    batch_result = services.batch_audio_transform.denoise_batch(
-        config,
-        strength=strength,
-    )
-
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo(f"Applying spectral noise reduction (strength={strength})...")
+        processor = functools.partial(_proc_denoise, strength=strength)
+        result = _run_audio_transform(config, processor)
+        _report(result, output_dir if not config.input_file else None, quiet)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @audio.command("segment")
@@ -347,89 +637,130 @@ def audio_denoise(input_dir: Optional[str], input_file: Optional[str], output_di
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_segment(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], duration: float, overlap: float, max_workers: int, recursive: bool, quiet: bool) -> None:
+def audio_segment(input_dir, input_file, output_dir, duration, overlap, max_workers, recursive, quiet) -> None:
     """Batch segment audio files into fixed-duration chunks."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
+    from bioamla.audio.batch import segment_audio_file
+    from bioamla.audio.discovery import list_audio_files
+    from bioamla.batch import run_batch
 
-    if not quiet:
-        click.echo("Segmenting audio files...")
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if duration <= 0:
+            raise InvalidInputError("--duration must be positive.")
+        if not quiet:
+            click.echo("Segmenting audio files...")
 
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
+        if config.input_file:
 
-    batch_result = services.batch_audio_transform.segment_batch(config, segment_duration=duration, overlap=overlap)
+            def _segment_row(in_path: Path, seg_dir: Path) -> list:
+                return segment_audio_file(
+                    str(in_path), str(seg_dir), duration=duration, overlap=overlap
+                )
 
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+            result = _run_csv_segment(config, _segment_row)
+            _report(result, None, quiet)
+            return
+
+        in_dir = _require_input_dir(config)
+        if not output_dir:
+            raise InvalidInputError("--output-dir is required for this command.")
+
+        in_path = Path(in_dir)
+        out_path = Path(output_dir)
+        out_path.mkdir(parents=True, exist_ok=True)
+        files = [Path(f) for f in list_audio_files(in_dir, recursive=recursive)]
+
+        def _segment(path: Path) -> str:
+            try:
+                rel = path.relative_to(in_path)
+            except ValueError:
+                rel = Path(path.name)
+            seg_dir = out_path / rel.parent
+            segment_audio_file(str(path), str(seg_dir), duration=duration, overlap=overlap)
+            return str(path)
+
+        result = run_batch(files, _segment, continue_on_error=True)
+        _report(result, output_dir, quiet)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @audio.command("visualize")
 @batch_input_options
 @batch_output_options
 @click.option("--plot-type", "-t", default="mel", type=click.Choice(["mel", "stft", "mfcc", "waveform"]), help="Visualization type")
-@click.option("--legend/--no-legend", default=True, help="Show axes, title, and colorbar (default: True)")
+@click.option("--legend/--no-legend", default=True, help="Show axes, title, and colorbar")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_visualize(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], plot_type: str, legend: bool, max_workers: int, recursive: bool, quiet: bool) -> None:
+def audio_visualize(input_dir, input_file, output_dir, plot_type, legend, max_workers, recursive, quiet) -> None:
     """Batch generate audio visualizations."""
-    import subprocess
-    import sys
-
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo(f"Generating {plot_type} visualizations...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
+    from bioamla.viz import batch_generate_spectrograms
 
     try:
-        batch_result = services.batch_audio_transform.visualize_batch(config, plot_type=plot_type, show_legend=legend)
-
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        in_dir = _require_input_dir(config)
+        if not output_dir:
+            raise InvalidInputError("--output-dir is required for this command.")
         if not quiet:
-            click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-            if batch_result.errors:
-                for error in batch_result.errors:
-                    click.echo(f"  Error: {error}")
+            click.echo(f"Generating {plot_type} visualizations...")
+
+        stats = batch_generate_spectrograms(
+            in_dir,
+            output_dir,
+            viz_type=plot_type,
+            recursive=recursive,
+            verbose=not quiet,
+        )
+        if not quiet:
+            click.echo(
+                f"Processed {stats['files_processed']} files, "
+                f"{stats['files_failed']} failed"
+            )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
     finally:
-        # Force flush all output and reset terminal state
-        sys.stdout.flush()
-        sys.stderr.flush()
-        # Reset terminal to sane state (fixes terminal corruption from parallel processing)
-        if sys.stdout.isatty():
-            try:
-                subprocess.run(["stty", "sane"], check=False, stderr=subprocess.DEVNULL, timeout=1)
-            except Exception:
-                pass  # Silently fail if stty not available
+        _stty_sane()
 
 
-# ==============================================================================
-# Detection Batch Commands
-# ==============================================================================
+# =============================================================================
+# Detection batch commands
+# =============================================================================
 
 
 @batch.group()
 def detect() -> None:
     """Batch detection operations."""
     pass
+
+
+def _run_detect(config: BatchConfig, method: str, output_dir, quiet, recursive, **params) -> None:
+    """Shared dispatch for detection commands (directory or CSV mode)."""
+    from bioamla.detect import batch_detect_dir
+
+    if config.input_file:
+        from bioamla.detect.batch import _build_detector
+
+        detector = _build_detector(method, params)
+
+        def _process(path: Path) -> None:
+            detector.detect_from_file(path)
+
+        result = _run_csv_process(config, _process)
+        _report(result, None, quiet)
+        return
+
+    in_dir = _require_input_dir(config)
+    out_dir = output_dir or in_dir
+    result = batch_detect_dir(
+        in_dir,
+        out_dir,
+        method=method,
+        recursive=recursive,
+        max_workers=config.max_workers,
+        **params,
+    )
+    _report(result, output_dir, quiet, saved_hint=f"detections_{method}.json")
 
 
 @detect.command("energy")
@@ -442,38 +773,25 @@ def detect() -> None:
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def detect_energy(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], low_freq: float, high_freq: float, threshold_db: float, min_duration: float, max_workers: int, recursive: bool, quiet: bool) -> None:
+def detect_energy(input_dir, input_file, output_dir, low_freq, high_freq, threshold_db, min_duration, max_workers, recursive, quiet) -> None:
     """Batch detect sounds using band-limited energy detection."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo("Detecting energy...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
-
-    batch_result = services.batch_detection.detect_energy_batch(
-        config,
-        low_freq=low_freq,
-        high_freq=high_freq,
-        threshold_db=threshold_db,
-        min_duration=min_duration,
-    )
-
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if output_dir:
-            click.echo(f"Results saved to {output_dir}/detections.json")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo("Detecting energy...")
+        _run_detect(
+            config,
+            "energy",
+            output_dir,
+            quiet,
+            recursive,
+            low_freq=low_freq,
+            high_freq=high_freq,
+            threshold_db=threshold_db,
+            min_duration=min_duration,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @detect.command("ribbit")
@@ -488,40 +806,27 @@ def detect_energy(input_dir: Optional[str], input_file: Optional[str], output_di
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def detect_ribbit(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], pulse_rate: float, pulse_tolerance: float, low_freq: float, high_freq: float, window_duration: float, min_score: float, max_workers: int, recursive: bool, quiet: bool) -> None:
+def detect_ribbit(input_dir, input_file, output_dir, pulse_rate, pulse_tolerance, low_freq, high_freq, window_duration, min_score, max_workers, recursive, quiet) -> None:
     """Batch detect periodic calls using RIBBIT algorithm."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo("Detecting RIBBIT calls...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
-
-    batch_result = services.batch_detection.detect_ribbit_batch(
-        config,
-        pulse_rate_hz=pulse_rate,
-        pulse_rate_tolerance=pulse_tolerance,
-        low_freq=low_freq,
-        high_freq=high_freq,
-        window_duration=window_duration,
-        min_score=min_score,
-    )
-
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if output_dir:
-            click.echo(f"Results saved to {output_dir}/detections.json")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo("Detecting RIBBIT calls...")
+        _run_detect(
+            config,
+            "ribbit",
+            output_dir,
+            quiet,
+            recursive,
+            pulse_rate_hz=pulse_rate,
+            pulse_rate_tolerance=pulse_tolerance,
+            low_freq=low_freq,
+            high_freq=high_freq,
+            window_duration=window_duration,
+            min_score=min_score,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @detect.command("peaks")
@@ -534,38 +839,25 @@ def detect_ribbit(input_dir: Optional[str], input_file: Optional[str], output_di
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def detect_peaks(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], snr_threshold: float, min_peak_distance: float, low_freq: float, high_freq: float, max_workers: int, recursive: bool, quiet: bool) -> None:
+def detect_peaks(input_dir, input_file, output_dir, snr_threshold, min_peak_distance, low_freq, high_freq, max_workers, recursive, quiet) -> None:
     """Batch detect peaks using Continuous Wavelet Transform."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo("Detecting peaks...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
-
-    batch_result = services.batch_detection.detect_peaks_batch(
-        config,
-        snr_threshold=snr_threshold,
-        min_peak_distance=min_peak_distance,
-        low_freq=low_freq,
-        high_freq=high_freq,
-    )
-
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if output_dir:
-            click.echo(f"Results saved to {output_dir}/detections.json")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo("Detecting peaks...")
+        _run_detect(
+            config,
+            "peaks",
+            output_dir,
+            quiet,
+            recursive,
+            snr_threshold=snr_threshold,
+            min_peak_distance=min_peak_distance,
+            low_freq=low_freq,
+            high_freq=high_freq,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @detect.command("accelerating")
@@ -580,45 +872,32 @@ def detect_peaks(input_dir: Optional[str], input_file: Optional[str], output_dir
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def detect_accelerating(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], min_pulses: int, accel_threshold: float, decel_threshold: float, low_freq: float, high_freq: float, window_duration: float, max_workers: int, recursive: bool, quiet: bool) -> None:
+def detect_accelerating(input_dir, input_file, output_dir, min_pulses, accel_threshold, decel_threshold, low_freq, high_freq, window_duration, max_workers, recursive, quiet) -> None:
     """Batch detect accelerating or decelerating call patterns."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo("Detecting accelerating patterns...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
-
-    batch_result = services.batch_detection.detect_accelerating_batch(
-        config,
-        min_pulses=min_pulses,
-        acceleration_threshold=accel_threshold,
-        deceleration_threshold=decel_threshold,
-        low_freq=low_freq,
-        high_freq=high_freq,
-        window_duration=window_duration,
-    )
-
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if output_dir:
-            click.echo(f"Results saved to {output_dir}/detections.json")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo("Detecting accelerating patterns...")
+        _run_detect(
+            config,
+            "accelerating",
+            output_dir,
+            quiet,
+            recursive,
+            min_pulses=min_pulses,
+            acceleration_threshold=accel_threshold,
+            deceleration_threshold=decel_threshold,
+            low_freq=low_freq,
+            high_freq=high_freq,
+            window_duration=window_duration,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
-# ==============================================================================
-# Indices Batch Commands
-# ==============================================================================
+# =============================================================================
+# Indices batch commands
+# =============================================================================
 
 
 @batch.group()
@@ -630,58 +909,71 @@ def indices() -> None:
 @indices.command("calculate")
 @batch_input_options
 @batch_output_options
-@click.option("--indices", default="aci,adi,aei,bio,ndsi,h_spectral,h_temporal", help="Comma-separated list of indices to calculate")
+@click.option("--indices", default="aci,adi,aei,bio,ndsi,h_spectral,h_temporal", help="Comma-separated indices")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def indices_calculate(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], indices: str, max_workers: int, recursive: bool, quiet: bool) -> None:
+def indices_calculate(input_dir, input_file, output_dir, indices, max_workers, recursive, quiet) -> None:
     """Batch calculate acoustic indices for audio files."""
-    import subprocess
-    import sys
+    import csv
 
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
-
-    if not quiet:
-        click.echo("Calculating acoustic indices...")
-
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
-
-    # Parse indices list
-    indices_list = [idx.strip() for idx in indices.split(",")]
+    from bioamla.audio.discovery import list_audio_files
+    from bioamla.indices import batch_compute_indices, compute_indices_from_file
 
     try:
-        batch_result = services.batch_indices.calculate_batch(config, indices=indices_list)
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo("Calculating acoustic indices...")
+
+        if config.input_file:
+
+            def _analyze(path: Path) -> dict:
+                result = compute_indices_from_file(path).to_dict()
+                # Drop redundant filename/path-ish keys before merge.
+                result.pop("filepath", None)
+                result.pop("filename", None)
+                return result
+
+            result = _run_csv_merge(config, _analyze)
+            _report(result, None, quiet)
+            return
+
+        filepaths = list_audio_files(_require_input_dir(config), recursive=recursive)
+        results = batch_compute_indices(filepaths, verbose=not quiet)
+
+        if output_dir and results:
+            out_path = Path(output_dir) / "indices.csv"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            fieldnames: list = []
+            for row in results:
+                for key in row.keys():
+                    if key not in fieldnames:
+                        fieldnames.append(key)
+            with out_path.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(results)
 
         if not quiet:
-            click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
+            successful = sum(1 for r in results if r.get("success"))
+            failed = len(results) - successful
+            click.echo(
+                f"Processed {len(results)} files: {successful} successful, {failed} failed"
+            )
             if output_dir:
                 click.echo(f"Results saved to {output_dir}/indices.csv")
-            if batch_result.errors:
-                for error in batch_result.errors:
-                    click.echo(f"  Error: {error}")
+            for r in results:
+                if not r.get("success"):
+                    click.echo(f"  Error: {r.get('filepath')}: {r.get('error')}")
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
     finally:
-        # Force flush all output and reset terminal state
-        sys.stdout.flush()
-        sys.stderr.flush()
-        # Reset terminal to sane state (fixes terminal freeze from parallel processing)
-        if sys.stdout.isatty():
-            try:
-                subprocess.run(["stty", "sane"], check=False, stderr=subprocess.DEVNULL, timeout=1)
-            except Exception:
-                pass  # Silently fail if stty not available
+        _stty_sane()
 
 
-# ==============================================================================
-# Model Inference Batch Commands
-# ==============================================================================
+# =============================================================================
+# Model inference batch commands
+# =============================================================================
 
 
 @batch.group()
@@ -693,124 +985,172 @@ def models() -> None:
 @models.command("predict")
 @batch_input_options
 @batch_output_options
-@click.option("--model", "-m", required=True, help="Model path (HuggingFace ID or local path)")
+@click.option("--model", "--model-path", "-m", "model", required=True, help="Model path (HuggingFace ID or local path)")
 @click.option("--top-k", default=5, type=int, help="Number of top predictions to return")
 @click.option("--min-confidence", default=0.0, type=float, help="Minimum confidence threshold")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def models_predict(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], model: str, top_k: int, min_confidence: float, max_workers: int, recursive: bool, quiet: bool) -> None:
-    """Batch run model predictions on audio files."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
+def models_predict(input_dir, input_file, output_dir, model, top_k, min_confidence, max_workers, recursive, quiet) -> None:
+    """Batch run AST model predictions on audio files."""
+    import json
 
-    if not quiet:
-        click.echo(f"Running AST predictions with model {model}...")
+    from bioamla.ml import batch_predict_files
 
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            click.echo(f"Running AST predictions with model {model}...")
 
-    batch_result = services.batch_inference.predict_batch(
-        config,
-        model_path=model,
-        top_k=top_k,
-        min_confidence=min_confidence,
-    )
+        if config.input_file:
+            from bioamla.ml.inference import ASTInference
 
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if output_dir:
-            click.echo(f"Results saved to {output_dir}/predictions.json")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+            inference = ASTInference(model_path=model)
+            predictions: list = []
+
+            def _process(path: Path) -> None:
+                pred = inference.predict_topk(
+                    str(path), top_k=top_k, min_confidence=min_confidence
+                )
+                predictions.append(
+                    {
+                        "filepath": str(path),
+                        "predicted_label": pred.predicted_label,
+                        "confidence": pred.confidence,
+                        "top_k_labels": pred.top_k_labels,
+                        "top_k_scores": pred.top_k_scores,
+                    }
+                )
+
+            result = _run_csv_process(config, _process)
+            if output_dir and predictions:
+                out_path = Path(output_dir) / "predictions.json"
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(json.dumps(predictions, indent=2), encoding="utf-8")
+            _report(result, output_dir, quiet, saved_hint="predictions.json")
+            return
+
+        in_dir = _require_input_dir(config)
+        result = batch_predict_files(
+            in_dir,
+            model_path=model,
+            top_k=top_k,
+            min_confidence=min_confidence,
+            recursive=recursive,
+            max_workers=max_workers,
+        )
+
+        predictions = result.metadata.get("predictions", [])
+        if output_dir and predictions:
+            out_path = Path(output_dir) / "predictions.json"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(predictions, indent=2), encoding="utf-8")
+
+        _report(result, output_dir, quiet, saved_hint="predictions.json")
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @models.command("embed")
 @batch_input_options
 @batch_output_options
-@click.option("--model", "-m", required=True, help="Model path (HuggingFace ID or local path)")
+@click.option("--model", "--model-path", "-m", "model", required=True, help="Model path (HuggingFace ID or local path)")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def models_embed(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], model: str, max_workers: int, recursive: bool, quiet: bool) -> None:
+def models_embed(input_dir, input_file, output_dir, model, max_workers, recursive, quiet) -> None:
     """Batch extract embeddings from audio files."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
+    from bioamla.ml import batch_embed_files
 
-    if not quiet:
-        click.echo(f"Extracting AST embeddings with model {model}...")
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not output_dir:
+            raise InvalidInputError("--output-dir is required for this command.")
+        if not quiet:
+            click.echo(f"Extracting AST embeddings with model {model}...")
 
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
+        if config.input_file:
+            import numpy as _np
 
-    batch_result = services.batch_inference.embed_batch(config, model_path=model)
+            from bioamla.ml.embedding import EmbeddingConfig, EmbeddingExtractor
 
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if output_dir:
-            click.echo(f"Embeddings saved to {output_dir}/")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+            out_dir = Path(output_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            extractor = EmbeddingExtractor(config=EmbeddingConfig(model_path=model))
+
+            def _process(path: Path) -> None:
+                emb = extractor.extract(str(path))
+                _np.save(str(out_dir / f"{path.stem}_embeddings.npy"), emb.embeddings)
+
+            result = _run_csv_process(config, _process)
+            _report(result, output_dir, quiet)
+            return
+
+        _require_input_dir(config)
+        result = batch_embed_files(
+            input_dir,
+            output_dir,
+            model_path=model,
+            recursive=recursive,
+            max_workers=max_workers,
+        )
+        _report(result, output_dir, quiet)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
 
-# ==============================================================================
-# Clustering Batch Commands
-# ==============================================================================
+# =============================================================================
+# Clustering batch command
+# =============================================================================
 
 
 @batch.command("cluster")
 @batch_input_options
 @batch_output_options
 @click.option("--method", default="hdbscan", type=click.Choice(["hdbscan", "kmeans", "dbscan", "agglomerative"]), help="Clustering method")
-@click.option("--n-clusters", default=None, type=int, help="Number of clusters (for k-means/agglomerative)")
-@click.option("--min-cluster-size", default=5, type=int, help="Minimum cluster size (for HDBSCAN)")
+@click.option("--n-clusters", default=None, type=int, help="Number of clusters (k-means/agglomerative)")
+@click.option("--min-cluster-size", default=5, type=int, help="Minimum cluster size (HDBSCAN)")
 @click.option("--min-samples", default=3, type=int, help="Minimum samples per cluster")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def cluster_batch(input_dir: Optional[str], input_file: Optional[str], output_dir: Optional[str], method: str, n_clusters: int, min_cluster_size: int, min_samples: int, max_workers: int, recursive: bool, quiet: bool) -> None:
-    """Batch cluster embeddings from files."""
-    from bioamla.cli.service_helpers import services
-    from bioamla.models.batch import BatchConfig
+def cluster_batch(input_dir, input_file, output_dir, method, n_clusters, min_cluster_size, min_samples, max_workers, recursive, quiet) -> None:
+    """Batch cluster embedding files from a directory or a metadata CSV."""
+    from bioamla.cluster import cluster_batch_files
 
-    if not quiet:
-        click.echo(f"Clustering embeddings using {method}...")
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not output_dir:
+            raise InvalidInputError("--output-dir is required for this command.")
+        if not quiet:
+            click.echo(f"Clustering embeddings using {method}...")
 
-    config = BatchConfig(
-        input_dir=input_dir,
-        input_file=input_file,
-        output_dir=output_dir,
-        recursive=recursive,
-        max_workers=max_workers,
-        quiet=quiet,
-    )
+        if config.input_file:
+            from bioamla.cluster.batch import cluster_embedding_files
 
-    batch_result = services.batch_clustering.cluster_batch(
-        config,
-        method=method,
-        n_clusters=n_clusters,
-        min_cluster_size=min_cluster_size,
-        min_samples=min_samples,
-    )
+            context = _csv_context(config)
+            embedding_paths = [str(row.file_path) for row in context.rows]
+            result = cluster_embedding_files(
+                embedding_paths,
+                output_dir,
+                method=method,
+                n_clusters=n_clusters,
+                min_cluster_size=min_cluster_size,
+                min_samples=min_samples,
+            )
+            write_csv(context)
+            _report(result, output_dir, quiet, saved_hint="cluster_assignments.json")
+            return
 
-    if not quiet:
-        click.echo(f"Processed {batch_result.total_files} files: {batch_result.successful} successful, {batch_result.failed} failed")
-        if output_dir:
-            click.echo(f"Cluster results saved to {output_dir}/clusters.json")
-        if batch_result.errors:
-            for error in batch_result.errors:
-                click.echo(f"  Error: {error}")
+        result = cluster_batch_files(
+            input_dir,
+            output_dir,
+            method=method,
+            n_clusters=n_clusters,
+            min_cluster_size=min_cluster_size,
+            min_samples=min_samples,
+            recursive=recursive,
+        )
+        _report(result, output_dir, quiet, saved_hint="cluster_assignments.json")
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e

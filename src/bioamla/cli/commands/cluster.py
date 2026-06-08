@@ -2,6 +2,8 @@
 
 import click
 
+from bioamla.exceptions import BioamlaError
+
 
 @click.group()
 def cluster() -> None:
@@ -21,23 +23,29 @@ def cluster() -> None:
 )
 @click.option("--n-components", "-n", type=int, default=2, help="Number of output dimensions")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress output")
-def cluster_reduce(embeddings_file: str, output: str, method: str, n_components: int, quiet: bool) -> None:
+def cluster_reduce(
+    embeddings_file: str, output: str, method: str, n_components: int, quiet: bool
+) -> None:
     """Reduce dimensionality of embeddings."""
     import numpy as np
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cluster import reduce_dimensions
 
-    embeddings = np.load(embeddings_file)
+    try:
+        embeddings = np.load(embeddings_file)
 
-    if not quiet:
-        click.echo(
-            f"Reducing {embeddings.shape[1]}D embeddings to {n_components}D using {method}..."
-        )
+        if not quiet:
+            click.echo(
+                f"Reducing {embeddings.shape[1]}D embeddings to {n_components}D using {method}..."
+            )
 
-    result = services.clustering.reduce_dimensions(
-        embeddings, method=method, n_components=n_components, output_path=output
-    )
-    handle_result(result)
+        reduced = reduce_dimensions(embeddings, method=method, n_components=n_components)
+        from pathlib import Path
+
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        np.save(output, reduced)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if not quiet:
         click.echo(f"Saved reduced embeddings to: {output}")
@@ -75,27 +83,32 @@ def cluster_cluster(
     """Cluster embeddings."""
     import numpy as np
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cluster import AudioClusterer, ClusteringConfig
 
-    embeddings = np.load(embeddings_file)
+    try:
+        embeddings = np.load(embeddings_file)
+
+        if not quiet:
+            click.echo(f"Clustering {len(embeddings)} samples using {method}...")
+
+        config = ClusteringConfig(
+            method=method,
+            n_clusters=n_clusters,
+            min_samples=min_samples,
+            eps=eps,
+        )
+        clusterer = AudioClusterer(config=config)
+        labels = clusterer.fit_predict(embeddings)
+        labels = np.asarray(labels)
+        from pathlib import Path
+
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        np.save(output, labels)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(f"Clustering {len(embeddings)} samples using {method}...")
-
-    result = services.clustering.cluster(
-        embeddings,
-        method=method,
-        n_clusters=n_clusters,
-        min_samples=min_samples,
-        eps=eps,
-    )
-    cluster_result = handle_result(result)
-
-    labels = np.array(cluster_result.labels)
-    services.file.write_npy(output, labels)
-
-    if not quiet:
-        click.echo(f"Found {cluster_result.n_clusters} clusters")
+        click.echo(f"Found {clusterer.n_clusters_} clusters")
         click.echo(f"Saved cluster labels to: {output}")
 
 
@@ -106,28 +119,33 @@ def cluster_cluster(
 @click.option("--quiet", "-q", is_flag=True, help="Suppress output")
 def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: bool) -> None:
     """Analyze cluster quality."""
+    import json
+    from pathlib import Path
     from typing import Any
 
     import numpy as np
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cluster import analyze_clusters_summary
 
-    embeddings = np.load(embeddings_file)
-    labels = np.load(labels_file)
+    try:
+        embeddings = np.load(embeddings_file)
+        labels = np.load(labels_file)
+        analysis = analyze_clusters_summary(embeddings, labels)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
-    result = services.clustering.analyze_clusters(embeddings, labels)
-    analysis = handle_result(result)
+    noise_pct = analysis.n_noise / analysis.n_samples * 100 if analysis.n_samples > 0 else 0
 
     if not quiet:
         click.echo("Cluster Analysis:")
         click.echo(f"  Clusters: {analysis.n_clusters}")
         click.echo(f"  Samples: {analysis.n_samples}")
-        noise_pct = analysis.n_noise / analysis.n_samples * 100 if analysis.n_samples > 0 else 0
         click.echo(f"  Noise: {analysis.n_noise} ({noise_pct:.1f}%)")
         click.echo(f"  Silhouette Score: {analysis.silhouette_score:.4f}")
         click.echo(f"  Calinski-Harabasz Score: {analysis.calinski_harabasz_score:.2f}")
 
     if output:
+
         def convert_numpy(obj: Any) -> Any:
             if isinstance(obj, np.integer):
                 return int(obj)
@@ -136,7 +154,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
             elif isinstance(obj, np.ndarray):
                 return obj.tolist()
             elif isinstance(obj, dict):
-                return {k: convert_numpy(v) for k, v in obj.items()}
+                return {convert_numpy(k): convert_numpy(v) for k, v in obj.items()}
             elif isinstance(obj, list):
                 return [convert_numpy(v) for v in obj]
             return obj
@@ -150,7 +168,8 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
             "calinski_harabasz_score": analysis.calinski_harabasz_score,
             "cluster_stats": convert_numpy(analysis.cluster_stats),
         }
-        services.file.write_json(output, analysis_dict)
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(json.dumps(analysis_dict, indent=2), encoding="utf-8")
         if not quiet:
             click.echo(f"Saved analysis to: {output}")
 
@@ -174,29 +193,30 @@ def cluster_novelty(
     """Detect novel sounds in embeddings."""
     import numpy as np
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.cluster import detect_novelty
 
-    embeddings = np.load(embeddings_file)
-    known_labels = np.load(labels) if labels else None
+    try:
+        embeddings = np.load(embeddings_file)
+        known_labels = np.load(labels) if labels else None
+
+        if not quiet:
+            click.echo(f"Detecting novel sounds using {method}...")
+
+        summary, is_novel, novelty_scores = detect_novelty(
+            embeddings,
+            known_labels=known_labels,
+            method=method,
+            threshold=threshold,
+        )
+
+        results = np.column_stack([is_novel.astype(int), novelty_scores])
+        from pathlib import Path
+
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        np.save(output, results)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(f"Detecting novel sounds using {method}...")
-
-    result = services.clustering.detect_novelty(
-        embeddings,
-        known_labels=known_labels,
-        method=method,
-        threshold=threshold,
-    )
-    novelty_result = handle_result(result)
-
-    is_novel = novelty_result.metadata.get("is_novel", np.array([]))
-    novelty_scores = novelty_result.metadata.get("novelty_scores", np.array([]))
-
-    results = np.column_stack([is_novel.astype(int), novelty_scores])
-    services.file.write_npy(output, results)
-
-    n_novel = novelty_result.data.n_novel
-    if not quiet:
-        click.echo(f"Found {n_novel} novel samples ({novelty_result.data.novel_percentage:.1f}%)")
+        click.echo(f"Found {summary.n_novel} novel samples ({summary.novel_percentage:.1f}%)")
         click.echo(f"Saved novelty results to: {output}")
