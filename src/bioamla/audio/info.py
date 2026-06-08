@@ -120,7 +120,7 @@ def get_audio_info(filepath: str) -> AudioInfo:
         NotFoundError: If the file does not exist.
         AudioLoadError: If metadata cannot be extracted.
     """
-    from bioamla.adapters.pydub import get_audio_info as _pydub_get_audio_info
+    from bioamla.audio._pydub import get_audio_info as _pydub_get_audio_info
 
     path = Path(filepath)
     if not path.exists():
@@ -183,7 +183,7 @@ def analyze_audio(
         NotFoundError: If the file does not exist.
         AudioLoadError: If the audio cannot be loaded.
     """
-    from bioamla.adapters.pydub import load_audio
+    from bioamla.audio._pydub import load_audio
 
     path = Path(filepath)
     if not path.exists():

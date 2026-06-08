@@ -64,7 +64,7 @@ def get_wav_metadata(filepath: str) -> dict[str, Any]:
     Raises:
         DependencyError: If the pydub adapter / ffmpeg backend is unavailable.
     """
-    from bioamla.adapters.pydub import get_audio_info
+    from bioamla.audio._pydub import get_audio_info
 
     info = get_audio_info(filepath)
     return {

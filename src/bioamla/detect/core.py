@@ -84,7 +84,7 @@ def _load_audio_file(filepath: str | Path) -> tuple[np.ndarray, int]:
     Wraps the pydub adapter loader so file-not-found / decode errors surface as
     a domain-level :class:`AudioLoadError` rather than a bare exception.
     """
-    from bioamla.adapters.pydub import load_audio
+    from bioamla.audio import load_audio
 
     try:
         return load_audio(str(filepath))

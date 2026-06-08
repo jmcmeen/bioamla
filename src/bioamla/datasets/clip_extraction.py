@@ -41,7 +41,7 @@ def extract_audio_clips(
     if not Path(audio_path).exists():
         raise NotFoundError(f"Audio file not found: {audio_path}")
 
-    from bioamla.adapters.pydub import load_audio, save_audio
+    from bioamla.audio import load_audio, save_audio
 
     try:
         audio_data, sample_rate = load_audio(audio_path)

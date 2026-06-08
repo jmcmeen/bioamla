@@ -39,7 +39,7 @@ def load_audio_data(filepath: str | Path, *, sample_rate: int | None = None) -> 
         NotFoundError: If the file does not exist.
         AudioLoadError: If decoding fails.
     """
-    from bioamla.adapters.pydub import load_audio
+    from bioamla.audio._pydub import load_audio
 
     path = require_exists(filepath)
 
@@ -101,7 +101,7 @@ def save_audio_data(
     Raises:
         AudioSaveError: If encoding/writing fails.
     """
-    from bioamla.adapters.pydub import save_audio
+    from bioamla.audio._pydub import save_audio
 
     output = prepare_output_path(output_path)
 
@@ -182,7 +182,7 @@ def create_temp_audio_file(audio: AudioData, suffix: str = ".wav") -> Path:
     Raises:
         AudioSaveError: If encoding/writing fails.
     """
-    from bioamla.adapters.pydub import save_audio
+    from bioamla.audio._pydub import save_audio
 
     temp_file = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
     temp_path = Path(temp_file.name)
@@ -215,7 +215,7 @@ def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     Raises:
         AudioLoadError: If decoding fails.
     """
-    from bioamla.adapters.pydub import load_audio as _pydub_load_audio
+    from bioamla.audio._pydub import load_audio as _pydub_load_audio
 
     try:
         audio, sr = _pydub_load_audio(filepath)
@@ -247,7 +247,7 @@ def save_audio(
     Raises:
         AudioSaveError: If encoding/writing fails.
     """
-    from bioamla.adapters.pydub import save_audio as _pydub_save_audio
+    from bioamla.audio._pydub import save_audio as _pydub_save_audio
 
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)

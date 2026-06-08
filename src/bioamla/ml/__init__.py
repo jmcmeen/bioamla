@@ -91,6 +91,9 @@ from bioamla.ml.inference import (
     run_batch_inference,
 )
 
+# --- Preprocessing / augmentation --------------------------------------------
+from bioamla.ml.preprocessing import AugmentationConfig, BioamlaPreprocessor
+
 __all__ = [
     # Device
     "get_device",
@@ -149,4 +152,7 @@ __all__ = [
     # Batch
     "batch_predict_files",
     "batch_embed_files",
+    # Preprocessing / augmentation
+    "AugmentationConfig",
+    "BioamlaPreprocessor",
 ]

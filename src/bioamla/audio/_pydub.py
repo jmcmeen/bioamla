@@ -1,7 +1,10 @@
-"""PydubAudioAdapter - unified audio I/O using pydub/ffmpeg.
+"""Low-level audio I/O backend using soundfile / pydub / ffprobe.
 
-This module consolidates audio loading, saving, and metadata extraction
-into a single adapter with simple function interfaces.
+This private module is the raw decode/encode/metadata backend for
+:mod:`bioamla.audio`. Higher-level modules (:mod:`bioamla.audio.io`,
+:mod:`bioamla.audio.info`) wrap these functions to add exception translation
+and dataclass return types; external callers should use the public
+``bioamla.audio`` API rather than importing this directly.
 
 Design notes:
 - All audio loading returns mono float32 in [-1.0, 1.0]
@@ -19,79 +22,6 @@ import numpy as np
 from pydub import AudioSegment
 
 logger = logging.getLogger(__name__)
-
-
-class PydubAudioAdapter:
-    """Adapter for audio I/O operations using pydub/ffmpeg.
-
-    Provides methods to load, save, and get metadata from audio files.
-    All methods return numpy arrays (mono float32) for compatibility
-    with the bioamla services layer.
-
-    Example:
-        >>> adapter = PydubAudioAdapter()
-        >>> audio, sr = adapter.load("audio.m4a")
-        >>> adapter.save("output.wav", audio, sr)
-        >>> info = adapter.get_info("audio.m4a")
-    """
-
-    def load(self, filepath: str) -> tuple[np.ndarray, int]:
-        """Load audio file using the fastest available backend.
-
-        Routes to optimal loader:
-        - soundfile (native C) for WAV/FLAC/OGG: ~10-30x faster
-        - pydub (ffmpeg subprocess) for M4A/MP3: slower but wider format support
-
-        Args:
-            filepath: Path to audio file.
-
-        Returns:
-            Tuple of (audio_array, sample_rate) where audio is mono float32 [-1.0, 1.0].
-
-        Raises:
-            FileNotFoundError: If file doesn't exist.
-            Exception: If file cannot be loaded.
-        """
-        return load_audio(filepath)
-
-    def save(
-        self,
-        filepath: str,
-        audio: np.ndarray,
-        sample_rate: int,
-        format: str | None = None,
-    ) -> None:
-        """Save numpy audio array to file.
-
-        Args:
-            filepath: Destination file path.
-            audio: Audio data as numpy array (float32).
-            sample_rate: Sample rate in Hz.
-            format: Output format (auto-detected from extension if None).
-
-        Raises:
-            Exception: If file cannot be saved.
-        """
-        save_audio(filepath, audio, sample_rate, format)
-
-    def get_info(self, filepath: str) -> dict:
-        """Get audio file metadata without loading full audio data.
-
-        Uses ffprobe for fast header-only extraction, falls back to
-        pydub full decode if ffprobe fails.
-
-        Args:
-            filepath: Path to audio file.
-
-        Returns:
-            Dictionary with keys: duration, sample_rate, channels, samples,
-            format, codec, bit_depth, subtype.
-
-        Raises:
-            FileNotFoundError: If file doesn't exist.
-            Exception: If metadata cannot be extracted.
-        """
-        return get_audio_info(filepath)
 
 
 def _audiosegment_to_numpy(segment: AudioSegment) -> tuple[np.ndarray, int]:

@@ -8,7 +8,7 @@ pytest.importorskip("opensoundscape")
 import scipy.io.wavfile as wav
 import torch
 
-from bioamla.adapters.opensoundscape import (
+from bioamla.ml import (
     AugmentationConfig,
     BioamlaPreprocessor,
 )

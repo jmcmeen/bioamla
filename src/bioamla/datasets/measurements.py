@@ -46,7 +46,7 @@ def compute_measurements(
             "Acoustic measurements require numpy and scipy — install bioamla[detect]"
         ) from e
 
-    from bioamla.adapters.pydub import load_audio
+    from bioamla.audio import load_audio
 
     try:
         audio_data, sample_rate = load_audio(audio_path)

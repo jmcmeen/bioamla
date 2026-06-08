@@ -177,7 +177,7 @@ def batch_augment(
         AugmentationError: If no augmentations are enabled.
         DependencyError: If augmentation dependencies are missing.
     """
-    from bioamla.adapters.pydub import save_audio
+    from bioamla.audio import save_audio
     from bioamla.common.files import get_files_by_extension
 
     input_path = Path(input_dir)

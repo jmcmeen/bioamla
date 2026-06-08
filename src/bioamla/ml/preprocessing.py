@@ -1,12 +1,47 @@
+"""Mel-spectrogram preprocessing and SpecAugment for AST training.
+
+Wraps OpenSoundscape's spectrogram pipeline to generate mel spectrograms from
+audio files or samples, with optional augmentation (time/frequency masking,
+random gain, noise) for training. Heavy dependencies (opensoundscape, torch) are
+imported lazily and raise :class:`~bioamla.exceptions.DependencyError` if the
+``ml`` extra is not installed.
+"""
+
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import torch
-from opensoundscape import Audio as OSSAudio
-from opensoundscape import MelSpectrogram as OSSMelSpectrogram
-from opensoundscape.preprocess.preprocessors import SpectrogramPreprocessor
-from opensoundscape.sample import AudioSample
+
+from bioamla.exceptions import DependencyError
+
+if TYPE_CHECKING:
+    import torch
+    from opensoundscape import Audio as OSSAudio
+
+
+def _require_torch():
+    """Import and return the torch module, or raise DependencyError."""
+    try:
+        import torch
+    except ImportError as e:
+        raise DependencyError("Spectrogram preprocessing requires torch — install bioamla[ml]") from e
+    return torch
+
+
+def _require_opensoundscape():
+    """Import and return required opensoundscape symbols, or raise DependencyError."""
+    try:
+        from opensoundscape import Audio as OSSAudio
+        from opensoundscape import MelSpectrogram as OSSMelSpectrogram
+        from opensoundscape.preprocess.preprocessors import SpectrogramPreprocessor
+        from opensoundscape.sample import AudioSample
+    except ImportError as e:
+        raise DependencyError(
+            "Spectrogram preprocessing requires opensoundscape — install bioamla[ml]"
+        ) from e
+    return OSSAudio, OSSMelSpectrogram, SpectrogramPreprocessor, AudioSample
 
 
 @dataclass
@@ -43,9 +78,6 @@ class BioamlaPreprocessor:
     mel spectrograms from audio files or samples, with optional augmentation
     for training via the SpectrogramPreprocessor pipeline.
 
-    The adapter isolates OpenSoundscape dependencies from the core bioamla code,
-    enabling future replacement if needed.
-
     For file-based processing with augmentation (training), uses SpectrogramPreprocessor.
     For samples processing (inference), uses MelSpectrogram directly.
 
@@ -56,7 +88,7 @@ class BioamlaPreprocessor:
         (128, 313)  # (n_mels, time_frames)
 
         >>> # With augmentation for training
-        >>> from bioamla.adapters.opensoundscape.preprocessing import AugmentationConfig
+        >>> from bioamla.ml import AugmentationConfig
         >>> aug_config = AugmentationConfig(time_mask=True, frequency_mask=True)
         >>> preprocessor.enable_augmentation(aug_config)
         >>> augmented_spec = preprocessor.process_file("audio.wav")
@@ -98,11 +130,12 @@ class BioamlaPreprocessor:
         self.width = width
 
         self._augmentation_config: AugmentationConfig | None = None
-        self._preprocessor: SpectrogramPreprocessor | None = None
+        self._preprocessor: Any = None
         self._init_preprocessor()
 
     def _init_preprocessor(self) -> None:
         """Initialize the underlying OpenSoundscape preprocessor."""
+        _, _, SpectrogramPreprocessor, _ = _require_opensoundscape()
         self._preprocessor = SpectrogramPreprocessor(
             sample_duration=self.sample_duration,
         )
@@ -204,6 +237,9 @@ class BioamlaPreprocessor:
         Returns:
             Mel spectrogram as 2D numpy array (frequency x time).
         """
+        torch = _require_torch()
+        _, _, _, AudioSample = _require_opensoundscape()
+
         # Create AudioSample for the preprocessor
         start = start_time or 0.0
         sample = AudioSample(
@@ -249,6 +285,8 @@ class BioamlaPreprocessor:
         Returns:
             Mel spectrogram as 2D numpy array (frequency x time).
         """
+        OSSAudio, OSSMelSpectrogram, _, _ = _require_opensoundscape()
+
         # Create OSS Audio from samples
         audio = OSSAudio(samples, sample_rate)
 
@@ -284,6 +322,7 @@ class BioamlaPreprocessor:
         Returns:
             Audio trimmed or padded to target duration.
         """
+        OSSAudio, _, _, _ = _require_opensoundscape()
         target_samples = int(self.sample_duration * self.sample_rate)
 
         samples = audio.samples
@@ -314,6 +353,8 @@ class BioamlaPreprocessor:
         if spectrogram.shape == (target_height, target_width):
             return spectrogram
 
+        torch = _require_torch()
+
         # Use torch for interpolation
         spec_tensor = torch.from_numpy(spectrogram).float()
         spec_tensor = spec_tensor.unsqueeze(0).unsqueeze(0)  # Add batch and channel dims
@@ -341,6 +382,7 @@ class BioamlaPreprocessor:
         Returns:
             Spectrogram as PyTorch tensor.
         """
+        torch = _require_torch()
         tensor = torch.from_numpy(spectrogram).float()
 
         if normalize:
