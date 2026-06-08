@@ -25,10 +25,19 @@ Domains:
 import importlib
 from importlib.metadata import PackageNotFoundError, version
 
+from dotenv import load_dotenv
+
 try:
     __version__ = version("bioamla")
 except PackageNotFoundError:  # package not installed (e.g. source checkout)
     __version__ = "0.0.0"
+
+# Load API keys (EBIRD_API_KEY, XC_API_KEY, HF_TOKEN, ...) from a .env file in
+# the current working directory or any parent. Catalog access (xeno-canto,
+# eBird) can't function without these, so we load on import so both the CLI and
+# library-import usage "just work". override=False means a real exported
+# environment variable always wins over the file (important for CI / shells).
+load_dotenv(override=False)
 
 from bioamla.batch import BatchConfig, BatchResult, SegmentInfo
 
