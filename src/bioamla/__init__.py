@@ -27,6 +27,11 @@ from importlib.metadata import PackageNotFoundError, version
 
 from dotenv import load_dotenv
 
+from bioamla.batch import BatchConfig, BatchResult, SegmentInfo
+
+# Exception hierarchy base — catch the whole family with a single except.
+from bioamla.exceptions import BioamlaError
+
 try:
     __version__ = version("bioamla")
 except PackageNotFoundError:  # package not installed (e.g. source checkout)
@@ -37,12 +42,8 @@ except PackageNotFoundError:  # package not installed (e.g. source checkout)
 # eBird) can't function without these, so we load on import so both the CLI and
 # library-import usage "just work". override=False means a real exported
 # environment variable always wins over the file (important for CI / shells).
+# Keys are read lazily at call time, so this only needs to run before first use.
 load_dotenv(override=False)
-
-from bioamla.batch import BatchConfig, BatchResult, SegmentInfo
-
-# Exception hierarchy base — catch the whole family with a single except.
-from bioamla.exceptions import BioamlaError
 
 # Domain subpackages are loaded LAZILY (PEP 562) so that `import bioamla` and
 # `bioamla --help` stay fast: accessing e.g. ``bioamla.audio`` imports it on first
