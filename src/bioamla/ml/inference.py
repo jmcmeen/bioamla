@@ -53,9 +53,7 @@ def _require_transformers():
     try:
         from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
     except ImportError as e:
-        raise DependencyError(
-            "AST inference requires transformers — install bioamla[ml]"
-        ) from e
+        raise DependencyError("AST inference requires transformers — install bioamla[ml]") from e
     return ASTFeatureExtractor, AutoModelForAudioClassification
 
 
@@ -68,9 +66,7 @@ def _torchaudio_helpers():
             split_waveform_tensor,
         )
     except ImportError as e:
-        raise DependencyError(
-            "AST inference requires torchaudio — install bioamla[ml]"
-        ) from e
+        raise DependencyError("AST inference requires torchaudio — install bioamla[ml]") from e
     return load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
 
 
@@ -258,7 +254,7 @@ class ASTInference:
         top_scores, top_indices = torch.topk(probs, k)
         labels: list[str] = []
         scores: list[float] = []
-        for score, idx in zip(top_scores.cpu().tolist(), top_indices.cpu().tolist()):
+        for score, idx in zip(top_scores.cpu().tolist(), top_indices.cpu().tolist(), strict=False):
             if score >= min_confidence:
                 labels.append(self.id2label[idx])
                 scores.append(float(score))
@@ -293,7 +289,9 @@ class ASTInference:
             ModelError: If loading the audio or running inference fails.
         """
         torch = _require_torch()
-        load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor = _torchaudio_helpers()
+        load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor = (
+            _torchaudio_helpers()
+        )
 
         try:
             waveform, orig_sr = load_waveform_tensor(audio_path)

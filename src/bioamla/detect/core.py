@@ -1417,8 +1417,7 @@ def export_detections(
             else:
                 # Write empty file with header
                 output_path.write_text(
-                    "start_time,end_time,confidence,duration,"
-                    "frequency_low,frequency_high,label\n",
+                    "start_time,end_time,confidence,duration,frequency_low,frequency_high,label\n",
                     encoding="utf-8",
                 )
     except OSError as e:
@@ -1429,7 +1428,10 @@ def export_detections(
 
 def batch_detect(
     filepaths: list[str | Path],
-    detector: BandLimitedEnergyDetector | RibbitDetector | CWTPeakDetector | AcceleratingPatternDetector,
+    detector: BandLimitedEnergyDetector
+    | RibbitDetector
+    | CWTPeakDetector
+    | AcceleratingPatternDetector,
     verbose: bool = True,
 ) -> dict[str, list[Detection]]:
     """

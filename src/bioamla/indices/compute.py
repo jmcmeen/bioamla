@@ -704,9 +704,13 @@ def compute_all_indices(
 
     # Compute ACI (uses linear spec)
     aci = compute_aci(
-        audio, sample_rate, n_fft, hop_length,
-        min_freq=aci_min_freq, max_freq=aci_max_freq,
-        precomputed_spec=(spec_512, freq_512, times_512)
+        audio,
+        sample_rate,
+        n_fft,
+        hop_length,
+        min_freq=aci_min_freq,
+        max_freq=aci_max_freq,
+        precomputed_spec=(spec_512, freq_512, times_512),
     )
 
     # Compute ADI (uses linear spec, converts to dB internally)
@@ -718,7 +722,7 @@ def compute_all_indices(
         max_freq=adi_max_freq,
         freq_step=adi_freq_step,
         db_threshold=db_threshold,
-        precomputed_spec=(spec_512, freq_512, times_512)
+        precomputed_spec=(spec_512, freq_512, times_512),
     )
 
     # Compute AEI (uses linear spec, converts to dB internally)
@@ -730,7 +734,7 @@ def compute_all_indices(
         max_freq=adi_max_freq,
         freq_step=adi_freq_step,
         db_threshold=db_threshold,
-        precomputed_spec=(spec_512, freq_512, times_512)
+        precomputed_spec=(spec_512, freq_512, times_512),
     )
 
     # Compute BIO (uses linear spec, converts to dB internally)
@@ -742,7 +746,7 @@ def compute_all_indices(
         min_freq=bio_min_freq,
         max_freq=bio_max_freq,
         db_threshold=db_threshold,
-        precomputed_spec=(spec_512, freq_512, times_512)
+        precomputed_spec=(spec_512, freq_512, times_512),
     )
 
     # Compute NDSI (needs n_fft=1024, computed separately)
@@ -1027,27 +1031,39 @@ def compute_index(
     name = index_name.lower()
     if name == "aci":
         return compute_aci(
-            audio, sample_rate, n_fft, hop_length,
+            audio,
+            sample_rate,
+            n_fft,
+            hop_length,
             min_freq=kwargs.get("min_freq", 0.0),
             max_freq=kwargs.get("max_freq", None),
         )
     if name == "adi":
         return compute_adi(
-            audio, sample_rate, n_fft, hop_length,
+            audio,
+            sample_rate,
+            n_fft,
+            hop_length,
             max_freq=kwargs.get("max_freq", 10000.0),
             freq_step=kwargs.get("freq_step", 1000.0),
             db_threshold=kwargs.get("db_threshold", -50.0),
         )
     if name == "aei":
         return compute_aei(
-            audio, sample_rate, n_fft, hop_length,
+            audio,
+            sample_rate,
+            n_fft,
+            hop_length,
             max_freq=kwargs.get("max_freq", 10000.0),
             freq_step=kwargs.get("freq_step", 1000.0),
             db_threshold=kwargs.get("db_threshold", -50.0),
         )
     if name == "bio":
         return compute_bio(
-            audio, sample_rate, n_fft, hop_length,
+            audio,
+            sample_rate,
+            n_fft,
+            hop_length,
             min_freq=kwargs.get("min_freq", 2000.0),
             max_freq=kwargs.get("max_freq", 8000.0),
             db_threshold=kwargs.get("db_threshold", -50.0),

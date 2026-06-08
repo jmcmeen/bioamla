@@ -140,9 +140,7 @@ def write_metadata_csv(
             fieldnames.discard(fld)
     final_fieldnames.extend(sorted(fieldnames))
 
-    normalized_rows = [
-        {fld: row.get(fld, "") for fld in final_fieldnames} for row in all_rows
-    ]
+    normalized_rows = [{fld: row.get(fld, "") for fld in final_fieldnames} for row in all_rows]
 
     with filepath.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=final_fieldnames)

@@ -817,7 +817,7 @@ class NoveltyDetector:
             scores = -self.detector.score_samples(embeddings)
             predictions = self.detector.predict(embeddings)
 
-            for i, (score, pred) in enumerate(zip(scores, predictions)):
+            for i, (score, pred) in enumerate(zip(scores, predictions, strict=False)):
                 results.append(
                     NoveltyResult(
                         sample_idx=i,
@@ -830,9 +830,7 @@ class NoveltyDetector:
 
         return results
 
-    def get_novel_samples(
-        self, embeddings: np.ndarray, n_samples: int | None = None
-    ) -> list[int]:
+    def get_novel_samples(self, embeddings: np.ndarray, n_samples: int | None = None) -> list[int]:
         """
         Get indices of most novel samples.
 
@@ -1287,7 +1285,7 @@ def export_clusters_to_csv(
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=fieldnames)
     writer.writeheader()
-    for i, (fp, label) in enumerate(zip(filepaths, labels)):
+    for i, (fp, label) in enumerate(zip(filepaths, labels, strict=False)):
         row = {"filepath": fp, "cluster": int(label)}
         if include_xy:
             row["x"] = float(reduced_embeddings[i, 0])

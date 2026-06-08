@@ -208,8 +208,6 @@ class TestIndicesCsvCli:
         bad = tmp_path / "bad.csv"
         bad.write_text("path,site\nfoo.wav,A\n", encoding="utf-8")
         runner = CliRunner()
-        res = runner.invoke(
-            batch, ["indices", "calculate", "--input-file", str(bad), "--quiet"]
-        )
+        res = runner.invoke(batch, ["indices", "calculate", "--input-file", str(bad), "--quiet"])
         assert res.exit_code == 1
         assert "file_name" in res.output

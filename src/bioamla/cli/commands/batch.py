@@ -238,9 +238,7 @@ def _run_csv_segment(
     new_rows = []
     for row in context.rows:
         if row.file_path in segment_mapping:
-            new_rows.extend(
-                expand_row_for_segments(row, segment_mapping[row.file_path], context)
-            )
+            new_rows.extend(expand_row_for_segments(row, segment_mapping[row.file_path], context))
         else:
             new_rows.append(row)
     context.rows = new_rows
@@ -445,7 +443,16 @@ def audio_info(input_dir, input_file, output_dir, max_workers, recursive, quiet)
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def audio_convert(
-    input_dir, input_file, output_dir, sample_rate, channels, out_format, delete_original, max_workers, recursive, quiet
+    input_dir,
+    input_file,
+    output_dir,
+    sample_rate,
+    channels,
+    out_format,
+    delete_original,
+    max_workers,
+    recursive,
+    quiet,
 ) -> None:
     """Batch convert audio files to a target format (optionally resample/re-channel)."""
     from bioamla.audio.batch import batch_convert_files
@@ -469,9 +476,7 @@ def audio_convert(
                 )
                 return Path(saved)
 
-            result = _run_csv_transform(
-                config, _convert_row, new_extension=f".{out_format}"
-            )
+            result = _run_csv_transform(config, _convert_row, new_extension=f".{out_format}")
             _report(result, None, quiet)
             return
 
@@ -504,7 +509,9 @@ def audio_convert(
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_resample(input_dir, input_file, output_dir, sample_rate, max_workers, recursive, quiet) -> None:
+def audio_resample(
+    input_dir, input_file, output_dir, sample_rate, max_workers, recursive, quiet
+) -> None:
     """Batch resample audio files to a target sample rate."""
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
@@ -524,7 +531,9 @@ def audio_resample(input_dir, input_file, output_dir, sample_rate, max_workers, 
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_normalize(input_dir, input_file, output_dir, target_db, peak, max_workers, recursive, quiet) -> None:
+def audio_normalize(
+    input_dir, input_file, output_dir, target_db, peak, max_workers, recursive, quiet
+) -> None:
     """Batch normalize audio levels."""
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
@@ -546,12 +555,33 @@ def audio_normalize(input_dir, input_file, output_dir, target_db, peak, max_work
 @batch_output_options
 @click.option("--start", "-s", default=None, type=float, help="Start time in seconds")
 @click.option("--end", "-e", default=None, type=float, help="End time in seconds")
-@click.option("--trim-silence", "trim_silence_flag", is_flag=True, help="Trim silence from start/end instead of time range")
-@click.option("--silence-threshold-db", default=-40.0, type=float, help="Silence threshold in dB (with --trim-silence)")
+@click.option(
+    "--trim-silence",
+    "trim_silence_flag",
+    is_flag=True,
+    help="Trim silence from start/end instead of time range",
+)
+@click.option(
+    "--silence-threshold-db",
+    default=-40.0,
+    type=float,
+    help="Silence threshold in dB (with --trim-silence)",
+)
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_trim(input_dir, input_file, output_dir, start, end, trim_silence_flag, silence_threshold_db, max_workers, recursive, quiet) -> None:
+def audio_trim(
+    input_dir,
+    input_file,
+    output_dir,
+    start,
+    end,
+    trim_silence_flag,
+    silence_threshold_db,
+    max_workers,
+    recursive,
+    quiet,
+) -> None:
     """Batch trim audio files by time range or remove silence."""
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
@@ -578,7 +608,19 @@ def audio_trim(input_dir, input_file, output_dir, start, end, trim_silence_flag,
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_filter(input_dir, input_file, output_dir, lowpass, highpass, bandpass_low, bandpass_high, order, max_workers, recursive, quiet) -> None:
+def audio_filter(
+    input_dir,
+    input_file,
+    output_dir,
+    lowpass,
+    highpass,
+    bandpass_low,
+    bandpass_high,
+    order,
+    max_workers,
+    recursive,
+    quiet,
+) -> None:
     """Batch apply frequency filters to audio files."""
     try:
         if not any([lowpass, highpass, bandpass_low]):
@@ -616,7 +658,9 @@ def audio_filter(input_dir, input_file, output_dir, lowpass, highpass, bandpass_
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_denoise(input_dir, input_file, output_dir, strength, max_workers, recursive, quiet) -> None:
+def audio_denoise(
+    input_dir, input_file, output_dir, strength, max_workers, recursive, quiet
+) -> None:
     """Batch apply spectral noise reduction to audio files."""
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
@@ -633,11 +677,15 @@ def audio_denoise(input_dir, input_file, output_dir, strength, max_workers, recu
 @batch_input_options
 @batch_output_options
 @click.option("--duration", "-d", required=True, type=float, help="Segment duration in seconds")
-@click.option("--overlap", "-o", default=0.0, type=float, help="Overlap between segments in seconds")
+@click.option(
+    "--overlap", "-o", default=0.0, type=float, help="Overlap between segments in seconds"
+)
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_segment(input_dir, input_file, output_dir, duration, overlap, max_workers, recursive, quiet) -> None:
+def audio_segment(
+    input_dir, input_file, output_dir, duration, overlap, max_workers, recursive, quiet
+) -> None:
     """Batch segment audio files into fixed-duration chunks."""
     from bioamla.audio.batch import segment_audio_file
     from bioamla.audio.discovery import list_audio_files
@@ -688,12 +736,20 @@ def audio_segment(input_dir, input_file, output_dir, duration, overlap, max_work
 @audio.command("visualize")
 @batch_input_options
 @batch_output_options
-@click.option("--plot-type", "-t", default="mel", type=click.Choice(["mel", "stft", "mfcc", "waveform"]), help="Visualization type")
+@click.option(
+    "--plot-type",
+    "-t",
+    default="mel",
+    type=click.Choice(["mel", "stft", "mfcc", "waveform"]),
+    help="Visualization type",
+)
 @click.option("--legend/--no-legend", default=True, help="Show axes, title, and colorbar")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def audio_visualize(input_dir, input_file, output_dir, plot_type, legend, max_workers, recursive, quiet) -> None:
+def audio_visualize(
+    input_dir, input_file, output_dir, plot_type, legend, max_workers, recursive, quiet
+) -> None:
     """Batch generate audio visualizations."""
     from bioamla.viz import batch_generate_spectrograms
 
@@ -714,8 +770,7 @@ def audio_visualize(input_dir, input_file, output_dir, plot_type, legend, max_wo
         )
         if not quiet:
             click.echo(
-                f"Processed {stats['files_processed']} files, "
-                f"{stats['files_failed']} failed"
+                f"Processed {stats['files_processed']} files, {stats['files_failed']} failed"
             )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
@@ -773,7 +828,18 @@ def _run_detect(config: BatchConfig, method: str, output_dir, quiet, recursive, 
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def detect_energy(input_dir, input_file, output_dir, low_freq, high_freq, threshold_db, min_duration, max_workers, recursive, quiet) -> None:
+def detect_energy(
+    input_dir,
+    input_file,
+    output_dir,
+    low_freq,
+    high_freq,
+    threshold_db,
+    min_duration,
+    max_workers,
+    recursive,
+    quiet,
+) -> None:
     """Batch detect sounds using band-limited energy detection."""
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
@@ -806,7 +872,20 @@ def detect_energy(input_dir, input_file, output_dir, low_freq, high_freq, thresh
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def detect_ribbit(input_dir, input_file, output_dir, pulse_rate, pulse_tolerance, low_freq, high_freq, window_duration, min_score, max_workers, recursive, quiet) -> None:
+def detect_ribbit(
+    input_dir,
+    input_file,
+    output_dir,
+    pulse_rate,
+    pulse_tolerance,
+    low_freq,
+    high_freq,
+    window_duration,
+    min_score,
+    max_workers,
+    recursive,
+    quiet,
+) -> None:
     """Batch detect periodic calls using RIBBIT algorithm."""
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
@@ -839,7 +918,18 @@ def detect_ribbit(input_dir, input_file, output_dir, pulse_rate, pulse_tolerance
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def detect_peaks(input_dir, input_file, output_dir, snr_threshold, min_peak_distance, low_freq, high_freq, max_workers, recursive, quiet) -> None:
+def detect_peaks(
+    input_dir,
+    input_file,
+    output_dir,
+    snr_threshold,
+    min_peak_distance,
+    low_freq,
+    high_freq,
+    max_workers,
+    recursive,
+    quiet,
+) -> None:
     """Batch detect peaks using Continuous Wavelet Transform."""
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
@@ -872,7 +962,20 @@ def detect_peaks(input_dir, input_file, output_dir, snr_threshold, min_peak_dist
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def detect_accelerating(input_dir, input_file, output_dir, min_pulses, accel_threshold, decel_threshold, low_freq, high_freq, window_duration, max_workers, recursive, quiet) -> None:
+def detect_accelerating(
+    input_dir,
+    input_file,
+    output_dir,
+    min_pulses,
+    accel_threshold,
+    decel_threshold,
+    low_freq,
+    high_freq,
+    window_duration,
+    max_workers,
+    recursive,
+    quiet,
+) -> None:
     """Batch detect accelerating or decelerating call patterns."""
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
@@ -909,11 +1012,17 @@ def indices() -> None:
 @indices.command("calculate")
 @batch_input_options
 @batch_output_options
-@click.option("--indices", default="aci,adi,aei,bio,ndsi,h_spectral,h_temporal", help="Comma-separated indices")
+@click.option(
+    "--indices",
+    default="aci,adi,aei,bio,ndsi,h_spectral,h_temporal",
+    help="Comma-separated indices",
+)
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def indices_calculate(input_dir, input_file, output_dir, indices, max_workers, recursive, quiet) -> None:
+def indices_calculate(
+    input_dir, input_file, output_dir, indices, max_workers, recursive, quiet
+) -> None:
     """Batch calculate acoustic indices for audio files."""
     import csv
 
@@ -957,9 +1066,7 @@ def indices_calculate(input_dir, input_file, output_dir, indices, max_workers, r
         if not quiet:
             successful = sum(1 for r in results if r.get("success"))
             failed = len(results) - successful
-            click.echo(
-                f"Processed {len(results)} files: {successful} successful, {failed} failed"
-            )
+            click.echo(f"Processed {len(results)} files: {successful} successful, {failed} failed")
             if output_dir:
                 click.echo(f"Results saved to {output_dir}/indices.csv")
             for r in results:
@@ -985,13 +1092,22 @@ def models() -> None:
 @models.command("predict")
 @batch_input_options
 @batch_output_options
-@click.option("--model", "--model-path", "-m", "model", required=True, help="Model path (HuggingFace ID or local path)")
+@click.option(
+    "--model",
+    "--model-path",
+    "-m",
+    "model",
+    required=True,
+    help="Model path (HuggingFace ID or local path)",
+)
 @click.option("--top-k", default=5, type=int, help="Number of top predictions to return")
 @click.option("--min-confidence", default=0.0, type=float, help="Minimum confidence threshold")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def models_predict(input_dir, input_file, output_dir, model, top_k, min_confidence, max_workers, recursive, quiet) -> None:
+def models_predict(
+    input_dir, input_file, output_dir, model, top_k, min_confidence, max_workers, recursive, quiet
+) -> None:
     """Batch run AST model predictions on audio files."""
     import json
 
@@ -1009,9 +1125,7 @@ def models_predict(input_dir, input_file, output_dir, model, top_k, min_confiden
             predictions: list = []
 
             def _process(path: Path) -> None:
-                pred = inference.predict_topk(
-                    str(path), top_k=top_k, min_confidence=min_confidence
-                )
+                pred = inference.predict_topk(str(path), top_k=top_k, min_confidence=min_confidence)
                 predictions.append(
                     {
                         "filepath": str(path),
@@ -1054,7 +1168,14 @@ def models_predict(input_dir, input_file, output_dir, model, top_k, min_confiden
 @models.command("embed")
 @batch_input_options
 @batch_output_options
-@click.option("--model", "--model-path", "-m", "model", required=True, help="Model path (HuggingFace ID or local path)")
+@click.option(
+    "--model",
+    "--model-path",
+    "-m",
+    "model",
+    required=True,
+    help="Model path (HuggingFace ID or local path)",
+)
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
@@ -1107,14 +1228,32 @@ def models_embed(input_dir, input_file, output_dir, model, max_workers, recursiv
 @batch.command("cluster")
 @batch_input_options
 @batch_output_options
-@click.option("--method", default="hdbscan", type=click.Choice(["hdbscan", "kmeans", "dbscan", "agglomerative"]), help="Clustering method")
-@click.option("--n-clusters", default=None, type=int, help="Number of clusters (k-means/agglomerative)")
+@click.option(
+    "--method",
+    default="hdbscan",
+    type=click.Choice(["hdbscan", "kmeans", "dbscan", "agglomerative"]),
+    help="Clustering method",
+)
+@click.option(
+    "--n-clusters", default=None, type=int, help="Number of clusters (k-means/agglomerative)"
+)
 @click.option("--min-cluster-size", default=5, type=int, help="Minimum cluster size (HDBSCAN)")
 @click.option("--min-samples", default=3, type=int, help="Minimum samples per cluster")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def cluster_batch(input_dir, input_file, output_dir, method, n_clusters, min_cluster_size, min_samples, max_workers, recursive, quiet) -> None:
+def cluster_batch(
+    input_dir,
+    input_file,
+    output_dir,
+    method,
+    n_clusters,
+    min_cluster_size,
+    min_samples,
+    max_workers,
+    recursive,
+    quiet,
+) -> None:
     """Batch cluster embedding files from a directory or a metadata CSV."""
     from bioamla.cluster import cluster_batch_files
 

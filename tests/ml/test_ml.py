@@ -92,9 +92,7 @@ class TestConfigPlumbing:
     def test_batch_inference_config(self) -> None:
         from bioamla.ml import BatchInferenceConfig
 
-        cfg = BatchInferenceConfig(
-            model_path="m", input_dir="in", output_csv="out.csv"
-        )
+        cfg = BatchInferenceConfig(model_path="m", input_dir="in", output_csv="out.csv")
         assert cfg.clip_length == 10
         assert cfg.sample_rate == 16000
 
@@ -306,6 +304,11 @@ class TestAstHelpers:
         cfg = InferenceConfig(batch_size=0)
         with pytest.raises(InvalidInputError, match="batch_size must be positive"):
             _process_segments_batched(
-                "x.wav", [], model=None, freq=16000, config=cfg,
-                feature_extractor=None, device=None,
+                "x.wav",
+                [],
+                model=None,
+                freq=16000,
+                config=cfg,
+                feature_extractor=None,
+                device=None,
             )

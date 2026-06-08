@@ -6,6 +6,7 @@ with sounds and download audio for bioacoustic ML workflows.
 Failures raise :class:`~bioamla.exceptions.CatalogError`; bad arguments raise
 :class:`~bioamla.exceptions.InvalidInputError`.
 """
+
 import csv
 import logging
 import time
@@ -383,23 +384,23 @@ def download(
                                 "attr_note": "",
                             }
                             if include_metadata:
-                                row.update({
-                                    "observation_id": obs_id,
-                                    "sound_id": sound_id,
-                                    "common_name": common_name,
-                                    "taxon_id": taxon_id_val,
-                                    "observed_on": observed_on,
-                                    "location": location,
-                                    "place_guess": place_guess,
-                                    "observer": user,
-                                    "quality_grade": quality,
-                                    "observation_url": f"https://www.inaturalist.org/observations/{obs_id}",
-                                })
+                                row.update(
+                                    {
+                                        "observation_id": obs_id,
+                                        "sound_id": sound_id,
+                                        "common_name": common_name,
+                                        "taxon_id": taxon_id_val,
+                                        "observed_on": observed_on,
+                                        "location": location,
+                                        "place_guess": place_guess,
+                                        "observer": user,
+                                        "quality_grade": quality,
+                                        "observation_url": f"https://www.inaturalist.org/observations/{obs_id}",
+                                    }
+                                )
                             metadata_rows.append(row)
                             if progress_callback:
-                                progress_callback(
-                                    stats["total_sounds"], len(sounds), str(filepath)
-                                )
+                                progress_callback(stats["total_sounds"], len(sounds), str(filepath))
                         else:
                             stats["failed_downloads"] += 1
                             errors.append(
@@ -558,12 +559,14 @@ def get_taxa(
                 break
             for item in results:
                 taxon = item.get("taxon", {})
-                taxa_list.append({
-                    "taxon_id": taxon.get("id"),
-                    "name": taxon.get("name", "unknown"),
-                    "common_name": taxon.get("preferred_common_name", ""),
-                    "observation_count": item.get("count", 0),
-                })
+                taxa_list.append(
+                    {
+                        "taxon_id": taxon.get("id"),
+                        "name": taxon.get("name", "unknown"),
+                        "common_name": taxon.get("preferred_common_name", ""),
+                        "observation_count": item.get("count", 0),
+                    }
+                )
             if len(results) < per_page:
                 break
             page += 1
@@ -602,9 +605,7 @@ def get_project_stats(project_id: str) -> ProjectStats:
             raise CatalogError(f"Project '{project_id}' not found")
         project = results[0]
 
-        obs_url = (
-            f"https://api.inaturalist.org/v1/observations?project_id={project_id}&per_page=0"
-        )
+        obs_url = f"https://api.inaturalist.org/v1/observations?project_id={project_id}&per_page=0"
         obs_response = requests.get(obs_url, timeout=30)
         obs_response.raise_for_status()
         observation_count = obs_response.json().get("total_results", 0)

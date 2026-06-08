@@ -24,9 +24,7 @@ from bioamla.common.files import prepare_output_path, require_exists
 from bioamla.exceptions import AudioLoadError, AudioSaveError, DependencyError
 
 
-def load_audio_data(
-    filepath: str | Path, *, sample_rate: int | None = None
-) -> AudioData:
+def load_audio_data(filepath: str | Path, *, sample_rate: int | None = None) -> AudioData:
     """
     Load an audio file into an :class:`AudioData`.
 

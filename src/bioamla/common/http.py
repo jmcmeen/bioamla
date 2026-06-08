@@ -340,9 +340,7 @@ class ConfigAwareMixin:
         config_value = section_config.get(key)
 
         if config_value is not None:
-            logger.debug(
-                f"Using config default for {key}: [{section_name}].{key} = {config_value}"
-            )
+            logger.debug(f"Using config default for {key}: [{section_name}].{key} = {config_value}")
 
         return config_value
 
@@ -421,9 +419,7 @@ class RateLimiter:
         with self._lock:
             now = time.monotonic()
             elapsed = now - self._last_update
-            self._tokens = min(
-                self.burst_size, self._tokens + elapsed * self.requests_per_second
-            )
+            self._tokens = min(self.burst_size, self._tokens + elapsed * self.requests_per_second)
             self._last_update = now
 
             if self._tokens >= tokens:
@@ -449,9 +445,7 @@ class RateLimiter:
         with self._lock:
             now = time.monotonic()
             elapsed = now - self._last_update
-            self._tokens = min(
-                self.burst_size, self._tokens + elapsed * self.requests_per_second
-            )
+            self._tokens = min(self.burst_size, self._tokens + elapsed * self.requests_per_second)
             self._last_update = now
 
             if self._tokens >= tokens:

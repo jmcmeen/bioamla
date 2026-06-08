@@ -10,6 +10,7 @@ structures, so they are exported under catalog-prefixed names
 (``INaturalistSearchResult``, ``MacaulaySearchResult``, ``XenoCantoSearchResult``,
 etc.) to avoid name collisions.
 """
+
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any

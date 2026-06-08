@@ -92,15 +92,17 @@ def inat_search(
                 observed_on = observed_on_raw.strftime("%Y-%m-%d")
             else:
                 observed_on = str(observed_on_raw) if observed_on_raw else ""
-            rows.append({
-                "observation_id": obs.get("id"),
-                "scientific_name": taxon.get("name", ""),
-                "common_name": taxon.get("preferred_common_name", ""),
-                "sound_count": len(obs.get("sounds", [])),
-                "observed_on": observed_on,
-                "location": obs.get("place_guess", ""),
-                "url": f"https://www.inaturalist.org/observations/{obs.get('id')}",
-            })
+            rows.append(
+                {
+                    "observation_id": obs.get("id"),
+                    "scientific_name": taxon.get("name", ""),
+                    "common_name": taxon.get("preferred_common_name", ""),
+                    "sound_count": len(obs.get("sounds", [])),
+                    "observed_on": observed_on,
+                    "location": obs.get("place_guess", ""),
+                    "url": f"https://www.inaturalist.org/observations/{obs.get('id')}",
+                }
+            )
         fieldnames = [
             "observation_id",
             "scientific_name",
@@ -638,7 +640,9 @@ def ebird_search(query: str, limit: int) -> None:
     "--api-key", envvar="EBIRD_API_KEY", required=True, help="eBird API key (or set EBIRD_API_KEY)"
 )
 @click.option("--distance", type=float, default=50, help="Search radius in km")
-def ebird_validate(species_code: str, lat: float, lng: float, api_key: str, distance: float) -> None:
+def ebird_validate(
+    species_code: str, lat: float, lng: float, api_key: str, distance: float
+) -> None:
     """Validate if a species is expected at a location."""
     from bioamla.catalogs.ebird import EBirdService
 

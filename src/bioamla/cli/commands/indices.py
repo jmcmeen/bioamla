@@ -167,8 +167,12 @@ def indices_aci(file: str, min_freq: float, max_freq: float, n_fft: int) -> None
     try:
         audio = load_audio_data(file)
         value = compute_index(
-            audio.samples, audio.sample_rate, "aci", n_fft=n_fft,
-            min_freq=min_freq, max_freq=max_freq,
+            audio.samples,
+            audio.sample_rate,
+            "aci",
+            n_fft=n_fft,
+            min_freq=min_freq,
+            max_freq=max_freq,
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
@@ -226,8 +230,12 @@ def indices_bio(file: str, min_freq: float, max_freq: float, n_fft: int) -> None
     try:
         audio = load_audio_data(file)
         value = compute_index(
-            audio.samples, audio.sample_rate, "bio", n_fft=n_fft,
-            min_freq=min_freq, max_freq=max_freq,
+            audio.samples,
+            audio.sample_rate,
+            "bio",
+            n_fft=n_fft,
+            min_freq=min_freq,
+            max_freq=max_freq,
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e

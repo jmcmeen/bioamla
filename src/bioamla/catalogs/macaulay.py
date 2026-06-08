@@ -8,6 +8,7 @@ to look up codes.
 Failures raise :class:`~bioamla.exceptions.CatalogError`; bad arguments raise
 :class:`~bioamla.exceptions.InvalidInputError`.
 """
+
 import csv
 import logging
 import time
@@ -245,24 +246,26 @@ def download(
                 )
                 stats["downloaded"] += 1
                 relative_path = filepath.relative_to(output_path)
-                metadata_rows.append({
-                    "file_name": str(relative_path),
-                    "ml_id": recording.catalog_id,
-                    "asset_id": recording.asset_id,
-                    "scientific_name": recording.scientific_name,
-                    "common_name": recording.common_name,
-                    "species_code": recording.species_code,
-                    "contributor": recording.user_display_name,
-                    "country": recording.country,
-                    "region": recording.region,
-                    "location": recording.location,
-                    "latitude": recording.latitude,
-                    "longitude": recording.longitude,
-                    "rating": recording.rating,
-                    "media_type": recording.media_type,
-                    "date": recording.date,
-                    "duration": recording.duration,
-                })
+                metadata_rows.append(
+                    {
+                        "file_name": str(relative_path),
+                        "ml_id": recording.catalog_id,
+                        "asset_id": recording.asset_id,
+                        "scientific_name": recording.scientific_name,
+                        "common_name": recording.common_name,
+                        "species_code": recording.species_code,
+                        "contributor": recording.user_display_name,
+                        "country": recording.country,
+                        "region": recording.region,
+                        "location": recording.location,
+                        "latitude": recording.latitude,
+                        "longitude": recording.longitude,
+                        "rating": recording.rating,
+                        "media_type": recording.media_type,
+                        "date": recording.date,
+                        "duration": recording.duration,
+                    }
+                )
             except CatalogError as e:
                 stats["failed"] += 1
                 errors.append(f"ML{recording.catalog_id}: {e}")

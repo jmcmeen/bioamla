@@ -44,17 +44,13 @@ class TestComputeSingleIndex:
         ["aci", "adi", "aei", "bio", "ndsi", "h_spectral", "h_temporal"],
     )
     def test_compute_index(self, sample_audio_data: AudioData, index_name: str) -> None:
-        value = compute_index(
-            sample_audio_data.samples, sample_audio_data.sample_rate, index_name
-        )
+        value = compute_index(sample_audio_data.samples, sample_audio_data.sample_rate, index_name)
         assert isinstance(value, float)
         assert not np.isnan(value)
 
     def test_compute_index_invalid_name(self, sample_audio_data: AudioData) -> None:
         with pytest.raises(InvalidInputError, match="Unknown index"):
-            compute_index(
-                sample_audio_data.samples, sample_audio_data.sample_rate, "invalid_index"
-            )
+            compute_index(sample_audio_data.samples, sample_audio_data.sample_rate, "invalid_index")
 
 
 class TestTemporalIndices:

@@ -124,8 +124,7 @@ def dataset_license(
                     )
                 else:
                     click.echo(
-                        f"  - {item['dataset_name']}: FAILED - "
-                        f"{item.get('error', 'Unknown error')}"
+                        f"  - {item['dataset_name']}: FAILED - {item.get('error', 'Unknown error')}"
                     )
         else:
             click.echo(f"Generated {stats['datasets_processed']} license files")

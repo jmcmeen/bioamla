@@ -121,9 +121,7 @@ class TestExportTaxonomy:
 class TestFindSpeciesName:
     def test_subspecies_resolves_to_species(self) -> None:
         all_cats = {"Lithobates sphenocephalus", "Lithobates sphenocephalus utricularius"}
-        result = species.find_species_name(
-            "Lithobates sphenocephalus utricularius", all_cats
-        )
+        result = species.find_species_name("Lithobates sphenocephalus utricularius", all_cats)
         assert result == "Lithobates sphenocephalus"
 
     def test_no_match_returns_original(self) -> None:

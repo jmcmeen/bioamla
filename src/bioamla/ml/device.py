@@ -33,9 +33,7 @@ def _require_torch():
     try:
         import torch
     except ImportError as e:
-        raise DependencyError(
-            "Device management requires torch — install bioamla[ml]"
-        ) from e
+        raise DependencyError("Device management requires torch — install bioamla[ml]") from e
     return torch
 
 

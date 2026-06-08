@@ -65,7 +65,9 @@ def config_devices() -> None:
     # Summary
     if devices_data.cuda_available:
         cuda_count = sum(1 for d in devices_data.devices if d.device_type == "cuda")
-        console.print(f"[green]CUDA available[/green] ({cuda_count} GPU{'s' if cuda_count > 1 else ''})")
+        console.print(
+            f"[green]CUDA available[/green] ({cuda_count} GPU{'s' if cuda_count > 1 else ''})"
+        )
     elif devices_data.mps_available:
         console.print("[green]Apple MPS available[/green]")
     else:

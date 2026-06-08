@@ -343,12 +343,12 @@ def _compute_metrics(y_true: list[str], y_pred: list[str]) -> dict[str, Any]:
     n_classes = len(labels)
 
     confusion = np.zeros((n_classes, n_classes), dtype=np.int64)
-    for true_label, pred_label in zip(y_true, y_pred):
+    for true_label, pred_label in zip(y_true, y_pred, strict=False):
         if true_label in label_to_idx and pred_label in label_to_idx:
             confusion[label_to_idx[true_label], label_to_idx[pred_label]] += 1
 
     total_samples = len(y_true)
-    correct = sum(1 for t, p in zip(y_true, y_pred) if t == p)
+    correct = sum(1 for t, p in zip(y_true, y_pred, strict=False) if t == p)
     accuracy = correct / total_samples if total_samples > 0 else 0.0
 
     precisions = []

@@ -311,9 +311,7 @@ def run_install(os_type: str | None = None) -> tuple[bool, str]:
                 timeout=300,
             )
         else:
-            result = subprocess.run(
-                command.split(), capture_output=True, text=True, timeout=300
-            )
+            result = subprocess.run(command.split(), capture_output=True, text=True, timeout=300)
 
         if result.returncode == 0:
             return True, "Dependencies installed successfully!"

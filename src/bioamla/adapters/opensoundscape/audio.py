@@ -1,4 +1,3 @@
-
 import numpy as np
 from opensoundscape import Audio as OSSAudio
 
@@ -26,9 +25,7 @@ class AudioAdapter:
         self._audio = oss_audio
 
     @classmethod
-    def from_file(
-        cls, path: str, sample_rate: int | None = None
-    ) -> "AudioAdapter":
+    def from_file(cls, path: str, sample_rate: int | None = None) -> "AudioAdapter":
         """Load audio from a file.
 
         Args:
@@ -41,9 +38,7 @@ class AudioAdapter:
         return cls(OSSAudio.from_file(path, sample_rate=sample_rate))
 
     @classmethod
-    def from_samples(
-        cls, samples: np.ndarray, sample_rate: int
-    ) -> "AudioAdapter":
+    def from_samples(cls, samples: np.ndarray, sample_rate: int) -> "AudioAdapter":
         """Create adapter from a numpy array of samples.
 
         Args:
@@ -101,9 +96,7 @@ class AudioAdapter:
         """
         return AudioAdapter(self._audio.trim(start, end))
 
-    def bandpass(
-        self, low_f: float, high_f: float, order: int = 4
-    ) -> "AudioAdapter":
+    def bandpass(self, low_f: float, high_f: float, order: int = 4) -> "AudioAdapter":
         """Apply bandpass filter to audio.
 
         Args:

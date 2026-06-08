@@ -214,7 +214,7 @@ def cluster_embedding_files(
         # Phase 3: map labels back to their source files and persist.
         assignments = []
         label_idx = 0
-        for file_path, embedding in zip(filepaths, embeddings):
+        for file_path, embedding in zip(filepaths, embeddings, strict=False):
             n_samples = embedding.shape[0]
             file_labels = labels[label_idx : label_idx + n_samples]
             assignments.append(

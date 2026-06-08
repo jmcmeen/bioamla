@@ -8,6 +8,7 @@ https://ebird.org/api/keygen and pass it to :class:`EBirdService` or set the
 Failures raise :class:`~bioamla.exceptions.CatalogError`; a missing API key
 raises :class:`~bioamla.exceptions.InvalidInputError`.
 """
+
 import logging
 import os
 from typing import Any
@@ -174,9 +175,7 @@ class EBirdService:
             CatalogError: on API failure.
         """
         try:
-            nearby = self.get_nearby(
-                lat=lat, lng=lng, distance_km=distance_km, days=30, limit=100
-            )
+            nearby = self.get_nearby(lat=lat, lng=lng, distance_km=distance_km, days=30, limit=100)
             observations = nearby.observations
             species_obs = [o for o in observations if o.species_code == species_code]
             all_species = {o.species_code for o in observations}
@@ -316,9 +315,7 @@ def match_detections_to_ebird(
     Raises:
         CatalogError: if the nearby-observations query fails.
     """
-    nearby = service.get_nearby(
-        lat=latitude, lng=longitude, distance_km=25, days=30
-    )
+    nearby = service.get_nearby(lat=latitude, lng=longitude, distance_km=25, days=30)
     nearby_species = {obs.species_code: obs for obs in nearby.observations}
 
     results = []

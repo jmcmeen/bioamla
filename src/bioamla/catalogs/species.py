@@ -6,6 +6,7 @@ the eBird taxonomy (cached in memory) with an optional iNaturalist fallback.
 Failures raise :class:`~bioamla.exceptions.SpeciesError`; unknown indices/empty
 queries raise :class:`~bioamla.exceptions.InvalidInputError`.
 """
+
 import csv
 import json
 import logging
@@ -83,9 +84,7 @@ def _load_ebird_taxonomy() -> None:
 def _search_inat_taxon(name: str) -> SpeciesInfo | None:
     """Search iNaturalist for a taxon by name; returns None on failure/miss."""
     try:
-        response = _client.get(
-            INAT_TAXA_URL, params={"q": name, "is_active": True, "per_page": 5}
-        )
+        response = _client.get(INAT_TAXA_URL, params={"q": name, "is_active": True, "per_page": 5})
         for taxon in response.get("results", []):
             if taxon.get("rank") in ("species", "subspecies"):
                 return SpeciesInfo.from_inat_response(taxon)
@@ -204,9 +203,7 @@ def search(query: str, limit: int = 10, min_score: float = 0.5) -> list[SearchMa
         if sci_name in seen:
             continue
 
-        sci_score = SequenceMatcher(
-            None, query_normalized, _normalize_name(sci_name)
-        ).ratio()
+        sci_score = SequenceMatcher(None, query_normalized, _normalize_name(sci_name)).ratio()
         common_score = SequenceMatcher(
             None, query_normalized, _normalize_name(entry.get("common_name", ""))
         ).ratio()

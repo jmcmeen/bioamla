@@ -233,7 +233,7 @@ class ASTModel(BaseAudioModel):
             top_k = min(self.config.top_k, len(probs))
             top_probs, top_indices = torch.topk(probs, top_k)
 
-            for prob, idx in zip(top_probs, top_indices):
+            for prob, idx in zip(top_probs, top_indices, strict=False):
                 label = self.id2label[idx.item()]
                 confidence = prob.item()
                 if confidence >= self.config.min_confidence:

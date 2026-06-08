@@ -78,9 +78,7 @@ def batch_predict_files(
     predictions: list = []
 
     def _process_one(audio_path: Path) -> str:
-        pred = inference.predict_topk(
-            str(audio_path), top_k=top_k, min_confidence=min_confidence
-        )
+        pred = inference.predict_topk(str(audio_path), top_k=top_k, min_confidence=min_confidence)
         predictions.append(
             {
                 "filepath": str(audio_path),

@@ -8,6 +8,7 @@ opaque ImportError.
 Upload failures raise :class:`~bioamla.exceptions.CatalogError`; a missing path
 raises :class:`~bioamla.exceptions.InvalidInputError`.
 """
+
 import logging
 from pathlib import Path
 

@@ -74,8 +74,7 @@ def detect_energy(
         click.echo(f"Found {len(detections)} detections:\n")
         for i, d in enumerate(detections, 1):
             click.echo(
-                f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                f"(confidence: {d.confidence:.2f})"
+                f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s (confidence: {d.confidence:.2f})"
             )
         click.echo(f"\nTotal: {len(detections)} detections")
 
@@ -242,10 +241,7 @@ def detect_peaks(
     else:
         click.echo(f"Found {len(peaks)} peaks:\n")
         for i, p in enumerate(peaks[:20], 1):
-            click.echo(
-                f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, "
-                f"width: {p.width:.3f}s)"
-            )
+            click.echo(f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, width: {p.width:.3f}s)")
         if len(peaks) > 20:
             click.echo(f"... and {len(peaks) - 20} more peaks")
         click.echo(f"\nTotal: {len(peaks)} peaks")

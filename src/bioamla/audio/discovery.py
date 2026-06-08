@@ -34,9 +34,7 @@ def get_audio_files(
     return get_files_by_extension(directory, extensions, recursive)
 
 
-def list_audio_files(
-    directory: str | Path, recursive: bool = True
-) -> list[Path]:
+def list_audio_files(directory: str | Path, recursive: bool = True) -> list[Path]:
     """
     List audio files in a directory as :class:`~pathlib.Path` objects.
 

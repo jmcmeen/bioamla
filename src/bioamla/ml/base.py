@@ -38,9 +38,7 @@ def _require_torch():
     try:
         import torch
     except ImportError as e:
-        raise DependencyError(
-            "ML models require torch — install bioamla[ml]"
-        ) from e
+        raise DependencyError("ML models require torch — install bioamla[ml]") from e
     return torch
 
 

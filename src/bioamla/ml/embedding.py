@@ -196,8 +196,7 @@ class EmbeddingExtractor:
             from bioamla.cluster import IncrementalReducer
         except ImportError as e:
             raise DependencyError(
-                "Dimensionality reduction requires the clustering extra — "
-                "install bioamla[cluster]"
+                "Dimensionality reduction requires the clustering extra — install bioamla[cluster]"
             ) from e
 
         self._reducer = IncrementalReducer(
@@ -575,7 +574,9 @@ def load_embeddings(
         embeddings = np.load(str(filepath))
         mapping_path = filepath.with_suffix(".files.txt")
         if mapping_path.exists():
-            filepaths = [line.strip() for line in mapping_path.read_text(encoding="utf-8").splitlines()]
+            filepaths = [
+                line.strip() for line in mapping_path.read_text(encoding="utf-8").splitlines()
+            ]
         else:
             filepaths = []
         return embeddings, filepaths

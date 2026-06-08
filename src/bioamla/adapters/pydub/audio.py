@@ -307,8 +307,10 @@ def _get_metadata_ffprobe(filepath: str) -> dict | None:
         result = subprocess.run(
             [
                 "ffprobe",
-                "-v", "quiet",
-                "-print_format", "json",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
                 "-show_format",
                 "-show_streams",
                 str(filepath),
@@ -335,15 +337,11 @@ def _get_metadata_ffprobe(filepath: str) -> dict | None:
 
         sample_rate = int(audio_stream.get("sample_rate", 0))
         channels = int(audio_stream.get("channels", 0))
-        duration = float(
-            audio_stream.get("duration") or data.get("format", {}).get("duration", 0)
-        )
+        duration = float(audio_stream.get("duration") or data.get("format", {}).get("duration", 0))
         samples = int(duration * sample_rate) if duration and sample_rate else 0
         codec = audio_stream.get("codec_name", "unknown")
 
-        bit_depth = audio_stream.get("bits_per_sample") or audio_stream.get(
-            "bits_per_raw_sample"
-        )
+        bit_depth = audio_stream.get("bits_per_sample") or audio_stream.get("bits_per_raw_sample")
         if bit_depth:
             bit_depth = int(bit_depth)
 

@@ -55,9 +55,7 @@ class TestAmplitudeAnalysis:
 
 class TestFrequencyAnalysis:
     def test_frequency_stats_peak(self, sample_audio_data: AudioData) -> None:
-        stats = get_frequency_stats(
-            sample_audio_data.samples, sample_audio_data.sample_rate
-        )
+        stats = get_frequency_stats(sample_audio_data.samples, sample_audio_data.sample_rate)
         # 440 Hz sine -> peak frequency should be near 440 Hz
         assert 300 < stats.peak_frequency < 600
 
@@ -80,16 +78,12 @@ class TestFilters:
         assert out.shape == sample_audio_data.samples.shape
 
     def test_bandpass(self, sample_audio_data: AudioData) -> None:
-        out = bandpass_filter(
-            sample_audio_data.samples, sample_audio_data.sample_rate, 200, 2000
-        )
+        out = bandpass_filter(sample_audio_data.samples, sample_audio_data.sample_rate, 200, 2000)
         assert out.shape == sample_audio_data.samples.shape
 
     def test_bandpass_invalid_range_raises(self, sample_audio_data: AudioData) -> None:
         with pytest.raises(ValueError):
-            bandpass_filter(
-                sample_audio_data.samples, sample_audio_data.sample_rate, 2000, 200
-            )
+            bandpass_filter(sample_audio_data.samples, sample_audio_data.sample_rate, 2000, 200)
 
 
 class TestNormalize:
@@ -132,17 +126,13 @@ class TestTrim:
             )
 
     def test_trim_silence(self, sample_audio_with_silence: AudioData) -> None:
-        out = trim_silence(
-            sample_audio_with_silence.samples, sample_audio_with_silence.sample_rate
-        )
+        out = trim_silence(sample_audio_with_silence.samples, sample_audio_with_silence.sample_rate)
         assert len(out) < len(sample_audio_with_silence.samples)
 
 
 class TestDenoise:
     def test_denoise_runs(self, sample_audio_with_noise: AudioData) -> None:
-        out = spectral_denoise(
-            sample_audio_with_noise.samples, sample_audio_with_noise.sample_rate
-        )
+        out = spectral_denoise(sample_audio_with_noise.samples, sample_audio_with_noise.sample_rate)
         assert out.dtype == np.float32
         assert len(out) > 0
 
@@ -191,9 +181,7 @@ class TestFileIO:
         audio, sr = load_audio(str(out))
         assert sr == sample_audio_data.sample_rate
 
-    def test_save_audio_data_roundtrip(
-        self, sample_audio_data: AudioData, tmp_path
-    ) -> None:
+    def test_save_audio_data_roundtrip(self, sample_audio_data: AudioData, tmp_path) -> None:
         out = tmp_path / "out.wav"
         save_audio_data(sample_audio_data, str(out))
         assert out.exists()

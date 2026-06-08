@@ -1,4 +1,3 @@
-
 import numpy as np
 from opensoundscape import MelSpectrogram as OSSMelSpectrogram
 from opensoundscape import Spectrogram as OSSSpectrogram

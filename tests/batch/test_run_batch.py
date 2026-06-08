@@ -59,7 +59,5 @@ class TestDiscoverFiles:
         assert discover_files(tmp_path / "nope") == []
 
     def test_file_filter_applied(self, test_audio_dir):
-        files = discover_files(
-            test_audio_dir, file_filter=lambda p: p.name == "audio_0.wav"
-        )
+        files = discover_files(test_audio_dir, file_filter=lambda p: p.name == "audio_0.wav")
         assert [f.name for f in files] == ["audio_0.wav"]

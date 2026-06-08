@@ -95,9 +95,7 @@ def audio_convert(
                 audio_data.channels = 1
             elif channels == 2 and audio_data.channels == 1:
                 # Mono to stereo: duplicate channel
-                audio_data.samples = np.column_stack(
-                    [audio_data.samples, audio_data.samples]
-                )
+                audio_data.samples = np.column_stack([audio_data.samples, audio_data.samples])
                 audio_data.channels = 2
 
         save_audio_data_as(
@@ -198,9 +196,7 @@ def audio_trim(
 
     try:
         audio, sr = load_audio(input_path)
-        trimmed = trim_audio(
-            audio, sr, start_time=start if start != 0.0 else None, end_time=end
-        )
+        trimmed = trim_audio(audio, sr, start_time=start if start != 0.0 else None, end_time=end)
         save_audio(output_path, trimmed, sr)
     except (BioamlaError, ValueError) as e:
         raise click.ClickException(str(e)) from e
@@ -213,9 +209,7 @@ def audio_trim(
 @click.argument("output_path")
 @click.option("--target-db", "-t", default=-3.0, type=float, help="Target peak level in dB")
 @click.option("--method", "-m", type=click.Choice(["peak", "rms"]), default="peak", help="Method")
-def audio_normalize(
-    input_path: str, output_path: str, target_db: float, method: str
-) -> None:
+def audio_normalize(input_path: str, output_path: str, target_db: float, method: str) -> None:
     """Normalize audio amplitude."""
     from bioamla.audio import (
         load_audio,

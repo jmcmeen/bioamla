@@ -261,7 +261,9 @@ class AudioPlayer:
             # Clamp to valid range
             self._position = max(0, min(new_position, len(self._audio)))
 
-    def _audio_callback(self, outdata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
+    def _audio_callback(
+        self, outdata: np.ndarray, frames: int, time_info: Any, status: Any
+    ) -> None:
         """Callback for sounddevice output stream."""
         import sounddevice as sd
 

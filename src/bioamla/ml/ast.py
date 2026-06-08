@@ -49,9 +49,7 @@ def _require_transformers():
     try:
         from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
     except ImportError as e:
-        raise DependencyError(
-            "AST requires transformers — install bioamla[ml]"
-        ) from e
+        raise DependencyError("AST requires transformers — install bioamla[ml]") from e
     return ASTFeatureExtractor, AutoModelForAudioClassification
 
 
@@ -73,9 +71,7 @@ def _torchaudio_helpers():
             split_waveform_tensor,
         )
     except ImportError as e:
-        raise DependencyError(
-            "AST inference requires torchaudio — install bioamla[ml]"
-        ) from e
+        raise DependencyError("AST inference requires torchaudio — install bioamla[ml]") from e
     return load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
 
 

@@ -276,9 +276,7 @@ class TestRibbitPresets:
 
 
 class TestRibbitDetectOpenSoundscape:
-    @pytest.mark.skipif(
-        not OPENSOUNDSCAPE_AVAILABLE, reason="opensoundscape not installed"
-    )
+    @pytest.mark.skipif(not OPENSOUNDSCAPE_AVAILABLE, reason="opensoundscape not installed")
     def test_ribbit_detect_preset_runs(self, test_audio_path_3s) -> None:
         from bioamla.detect import ribbit_detect_preset
 
@@ -287,13 +285,9 @@ class TestRibbitDetectOpenSoundscape:
         assert all(isinstance(d, RibbitDetection) for d in detections)
         assert "duration" in metadata
 
-    @pytest.mark.skipif(
-        OPENSOUNDSCAPE_AVAILABLE, reason="opensoundscape is installed"
-    )
+    @pytest.mark.skipif(OPENSOUNDSCAPE_AVAILABLE, reason="opensoundscape is installed")
     def test_ribbit_detect_missing_dependency(self, test_audio_path_3s) -> None:
         from bioamla.detect import ribbit_detect
 
         with pytest.raises(DependencyError, match="opensoundscape"):
-            ribbit_detect(
-                test_audio_path_3s, signal_band=(500, 2000), pulse_rate_range=(3.0, 15.0)
-            )
+            ribbit_detect(test_audio_path_3s, signal_band=(500, 2000), pulse_rate_range=(3.0, 15.0))

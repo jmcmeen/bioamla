@@ -26,9 +26,7 @@ def _torchaudio_available() -> bool:
 
 class TestComputeFunctions:
     def test_compute_stft(self, sample_audio_data: AudioData) -> None:
-        freqs, times, mag = compute_stft(
-            sample_audio_data.samples, sample_audio_data.sample_rate
-        )
+        freqs, times, mag = compute_stft(sample_audio_data.samples, sample_audio_data.sample_rate)
         assert mag.ndim == 2
         assert len(freqs) == mag.shape[0]
         assert len(times) == mag.shape[1]
@@ -41,9 +39,7 @@ class TestComputeFunctions:
         assert len(times) == mel.shape[1]
 
     def test_spectrogram_to_db(self, sample_audio_data: AudioData) -> None:
-        _, _, mag = compute_stft(
-            sample_audio_data.samples, sample_audio_data.sample_rate
-        )
+        _, _, mag = compute_stft(sample_audio_data.samples, sample_audio_data.sample_rate)
         db = spectrogram_to_db(mag**2)
         assert db.shape == mag.shape
         assert np.all(db <= 0.0 + 1e-6)
@@ -63,30 +59,20 @@ class TestSpectrogramToImage:
 class TestGenerateSpectrogram:
     def test_missing_file_raises(self, tmp_path) -> None:
         with pytest.raises(NotFoundError):
-            generate_spectrogram(
-                str(tmp_path / "missing.wav"), str(tmp_path / "out.png")
-            )
+            generate_spectrogram(str(tmp_path / "missing.wav"), str(tmp_path / "out.png"))
 
     def test_invalid_type_raises(self, test_audio_path: str, tmp_path) -> None:
         with pytest.raises(ValueError):
-            generate_spectrogram(
-                test_audio_path, str(tmp_path / "out.png"), viz_type="nope"
-            )
+            generate_spectrogram(test_audio_path, str(tmp_path / "out.png"), viz_type="nope")
 
-    @pytest.mark.skipif(
-        not _torchaudio_available(), reason="torchaudio not installed"
-    )
+    @pytest.mark.skipif(not _torchaudio_available(), reason="torchaudio not installed")
     def test_generate_writes_png(self, test_audio_path: str, tmp_path) -> None:
         out = tmp_path / "spec.png"
-        result = generate_spectrogram(
-            test_audio_path, str(out), viz_type="mel", sample_rate=16000
-        )
+        result = generate_spectrogram(test_audio_path, str(out), viz_type="mel", sample_rate=16000)
         assert out.exists()
         assert result == str(out)
 
-    def test_generate_without_torchaudio_raises(
-        self, test_audio_path: str, tmp_path
-    ) -> None:
+    def test_generate_without_torchaudio_raises(self, test_audio_path: str, tmp_path) -> None:
         if _torchaudio_available():
             pytest.skip("torchaudio installed; dependency path not exercised")
         with pytest.raises(DependencyError):
@@ -94,14 +80,10 @@ class TestGenerateSpectrogram:
 
 
 class TestBatch:
-    @pytest.mark.skipif(
-        not _torchaudio_available(), reason="torchaudio not installed"
-    )
+    @pytest.mark.skipif(not _torchaudio_available(), reason="torchaudio not installed")
     def test_batch_generate(self, test_audio_dir: str, tmp_path) -> None:
         out_dir = tmp_path / "out"
-        result = batch_generate_spectrograms(
-            test_audio_dir, str(out_dir), verbose=False
-        )
+        result = batch_generate_spectrograms(test_audio_dir, str(out_dir), verbose=False)
         assert result["files_processed"] == 3
         assert result["files_failed"] == 0
 

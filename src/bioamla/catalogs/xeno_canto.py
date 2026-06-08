@@ -10,6 +10,7 @@ sounds. API v3 requires an API key, resolved (in priority order) from:
 Failures raise :class:`~bioamla.exceptions.CatalogError`; a missing API key or
 empty query raises :class:`~bioamla.exceptions.InvalidInputError`.
 """
+
 import logging
 import math
 import os
@@ -234,9 +235,7 @@ def get_recording(recording_id: str) -> XCRecording:
         raise InvalidInputError(_API_KEY_HELP)
 
     try:
-        response = _client.get(
-            XC_API_URL, params={"query": f"nr:{recording_id}", "key": api_key}
-        )
+        response = _client.get(XC_API_URL, params={"query": f"nr:{recording_id}", "key": api_key})
         recordings = response.get("recordings", [])
         if recordings:
             return XCRecording.from_api_response(recordings[0])
@@ -342,24 +341,26 @@ def download(
                 )
                 stats["downloaded"] += 1
                 relative_path = filepath.relative_to(output_path)
-                metadata_rows.append({
-                    "file_name": str(relative_path),
-                    "xc_id": recording.id,
-                    "scientific_name": recording.scientific_name,
-                    "common_name": recording.common_name,
-                    "recordist": recording.recordist,
-                    "country": recording.country,
-                    "location": recording.location,
-                    "latitude": recording.latitude,
-                    "longitude": recording.longitude,
-                    "quality": recording.quality,
-                    "sound_type": recording.sound_type,
-                    "date": recording.date,
-                    "length": recording.length,
-                    "license": recording.license,
-                    "url": recording.url,
-                    "remarks": recording.remarks,
-                })
+                metadata_rows.append(
+                    {
+                        "file_name": str(relative_path),
+                        "xc_id": recording.id,
+                        "scientific_name": recording.scientific_name,
+                        "common_name": recording.common_name,
+                        "recordist": recording.recordist,
+                        "country": recording.country,
+                        "location": recording.location,
+                        "latitude": recording.latitude,
+                        "longitude": recording.longitude,
+                        "quality": recording.quality,
+                        "sound_type": recording.sound_type,
+                        "date": recording.date,
+                        "length": recording.length,
+                        "license": recording.license,
+                        "url": recording.url,
+                        "remarks": recording.remarks,
+                    }
+                )
             except CatalogError as e:
                 stats["failed"] += 1
                 errors.append(f"XC{recording.id}: {e}")

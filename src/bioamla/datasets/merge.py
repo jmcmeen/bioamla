@@ -227,10 +227,7 @@ def merge_datasets(
             stats["datasets_merged"] += 1
 
             if verbose:
-                msg = (
-                    f"  Copied: {files_copied_from_source}, "
-                    f"Skipped: {files_skipped_from_source}"
-                )
+                msg = f"  Copied: {files_copied_from_source}, Skipped: {files_skipped_from_source}"
                 if target_format:
                     msg += f", Converted: {files_converted_from_source}"
                 print(msg)

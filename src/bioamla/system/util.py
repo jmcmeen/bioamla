@@ -78,9 +78,7 @@ def get_device_info() -> DevicesData:
     try:
         import torch
     except ImportError as e:
-        raise DependencyError(
-            "device info requires torch — install bioamla[ml]"
-        ) from e
+        raise DependencyError("device info requires torch — install bioamla[ml]") from e
 
     devices: list[DeviceInfo] = []
     cuda_available = torch.cuda.is_available()

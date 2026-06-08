@@ -5,6 +5,7 @@ catalog batch commands to functions that already live in this package. Each
 helper maps an item (species name) to a per-item catalog call and aggregates the
 results into a :class:`~bioamla.batch.BatchResult`.
 """
+
 from collections.abc import Callable
 
 from bioamla.batch import BatchResult, run_batch

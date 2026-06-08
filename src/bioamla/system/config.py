@@ -96,9 +96,7 @@ def create_default_config(filepath: str | None = None, force: bool = False) -> s
     """
     path = Path(filepath) if filepath else Path("bioamla.toml")
     if path.exists() and not force:
-        raise InvalidInputError(
-            f"File already exists: {path}. Use force=True to overwrite."
-        )
+        raise InvalidInputError(f"File already exists: {path}. Use force=True to overwrite.")
     try:
         return _create_default_config_file(str(path))
     except Exception as e:

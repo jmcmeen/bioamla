@@ -106,7 +106,7 @@ class TestCsvRoundTrip:
         loaded = load_csv_annotations(str(out))
 
         assert len(loaded) == len(anns)
-        for orig, got in zip(anns, loaded):
+        for orig, got in zip(anns, loaded, strict=False):
             assert got.start_time == pytest.approx(orig.start_time)
             assert got.end_time == pytest.approx(orig.end_time)
             assert got.label == orig.label
@@ -131,7 +131,7 @@ class TestRavenRoundTrip:
         loaded = load_raven_selection_table(str(out))
 
         assert len(loaded) == len(anns)
-        for orig, got in zip(anns, loaded):
+        for orig, got in zip(anns, loaded, strict=False):
             assert got.start_time == pytest.approx(orig.start_time, abs=1e-5)
             assert got.end_time == pytest.approx(orig.end_time, abs=1e-5)
             assert got.label == orig.label
@@ -334,9 +334,7 @@ class TestMergeDatasets:
 
     def test_merge_skip_existing(self, tmp_path) -> None:
         fields = ["file_name", "category"]
-        ds1 = _write_dataset(
-            tmp_path, "ds1", [{"file_name": "a.wav", "category": "robin"}], fields
-        )
+        ds1 = _write_dataset(tmp_path, "ds1", [{"file_name": "a.wav", "category": "robin"}], fields)
         out = tmp_path / "merged"
         merge_datasets([str(ds1)], str(out), verbose=False)
         # Merge again: should skip the already-present file

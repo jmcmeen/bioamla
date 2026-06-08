@@ -10,7 +10,6 @@ Examples:
     bioamla models ast train --train-dataset ./audio_by_class/
 """
 
-
 import click
 
 from bioamla.exceptions import BioamlaError
@@ -50,9 +49,7 @@ def ast_predict(
     from bioamla.ml import predict_file
 
     try:
-        prediction = predict_file(
-            filepath=file, model_path=model_path, resample_freq=resample_freq
-        )
+        prediction = predict_file(filepath=file, model_path=model_path, resample_freq=resample_freq)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -70,8 +67,8 @@ def ast_predict(
     "--train-dataset",
     required=True,
     help="Training data source: HuggingFace dataset (e.g. 'bioamla/scp-frogs'), "
-         "local metadata CSV (with 'file' and 'label' columns), "
-         "or directory with class subdirectories (e.g. ./data/bird/, ./data/frog/)",
+    "local metadata CSV (with 'file' and 'label' columns), "
+    "or directory with class subdirectories (e.g. ./data/bird/, ./data/frog/)",
 )
 @click.option("--split", default="train", help="Dataset split to use (for HuggingFace datasets)")
 @click.option("--category-id-column", default="target", help="Column name for category IDs")
@@ -156,7 +153,9 @@ def ast_predict(
     help="Probability of clipping distortion (0-1)",
 )
 @click.option("--min-percentile-threshold", default=0, type=int, help="Min percentile for clipping")
-@click.option("--max-percentile-threshold", default=30, type=int, help="Max percentile for clipping")
+@click.option(
+    "--max-percentile-threshold", default=30, type=int, help="Max percentile for clipping"
+)
 @click.option("--min-time-stretch", default=0.8, type=float, help="Minimum time stretch rate")
 @click.option("--max-time-stretch", default=1.2, type=float, help="Maximum time stretch rate")
 @click.option("--min-pitch-shift", default=-4, type=int, help="Minimum pitch shift (semitones)")
@@ -243,9 +242,13 @@ def ast_train(
 
     # Validate min/max ranges
     if min_snr_db > max_snr_db:
-        raise click.BadParameter(f"--min-snr-db ({min_snr_db}) must be <= --max-snr-db ({max_snr_db})")
+        raise click.BadParameter(
+            f"--min-snr-db ({min_snr_db}) must be <= --max-snr-db ({max_snr_db})"
+        )
     if min_gain_db > max_gain_db:
-        raise click.BadParameter(f"--min-gain-db ({min_gain_db}) must be <= --max-gain-db ({max_gain_db})")
+        raise click.BadParameter(
+            f"--min-gain-db ({min_gain_db}) must be <= --max-gain-db ({max_gain_db})"
+        )
     if min_percentile_threshold > max_percentile_threshold:
         raise click.BadParameter(
             f"--min-percentile-threshold ({min_percentile_threshold}) must be <= --max-percentile-threshold ({max_percentile_threshold})"
@@ -286,6 +289,7 @@ def ast_train(
 
     # Determine dataset source type and load accordingly
     from pathlib import Path
+
     train_path = Path(train_dataset)
 
     if train_path.exists():
@@ -327,6 +331,7 @@ def ast_train(
 
             # Resolve file paths relative to CSV location
             csv_dir = train_path.parent
+
             def resolve_path(p):
                 p = Path(p)
                 if not p.is_absolute():
@@ -349,7 +354,11 @@ def ast_train(
             if subdirs:
                 # Check if subdirs contain audio files (audiofolder format)
                 has_audio_in_subdirs = any(
-                    any(f.suffix.lower() in audio_extensions for f in subdir.iterdir() if f.is_file())
+                    any(
+                        f.suffix.lower() in audio_extensions
+                        for f in subdir.iterdir()
+                        if f.is_file()
+                    )
                     for subdir in subdirs
                 )
                 if has_audio_in_subdirs:
@@ -457,12 +466,19 @@ def ast_train(
             dataset = train_data.train_test_split(test_size=test_size, shuffle=True, seed=0)
 
     # Multiply training dataset if augment_multiplier > 1
-    if augment and augment_multiplier > 1 and isinstance(dataset, DatasetDict) and "train" in dataset:
+    if (
+        augment
+        and augment_multiplier > 1
+        and isinstance(dataset, DatasetDict)
+        and "train" in dataset
+    ):
         from datasets import concatenate_datasets
 
         original_train = dataset["train"]
         original_size = len(original_train)
-        print(f"Multiplying training dataset by {augment_multiplier}x (original: {original_size} samples)")
+        print(
+            f"Multiplying training dataset by {augment_multiplier}x (original: {original_size} samples)"
+        )
 
         # Create copies of the training set
         train_copies = [original_train]
@@ -470,7 +486,9 @@ def ast_train(
             train_copies.append(original_train)
 
         dataset["train"] = concatenate_datasets(train_copies)
-        print(f"New training dataset size: {len(dataset['train'])} samples ({augment_multiplier}x augmentation)")
+        print(
+            f"New training dataset size: {len(dataset['train'])} samples ({augment_multiplier}x augmentation)"
+        )
 
     if augment:
         audio_augmentations = Compose(
@@ -714,10 +732,12 @@ def ast_train(
         pass
 
     import gc
+
     gc.collect()
 
     # Force cleanup of any remaining multiprocessing resources
     import multiprocessing
+
     for child in multiprocessing.active_children():
         child.terminate()
         child.join(timeout=1)
@@ -806,9 +826,7 @@ def ast_evaluate(
 @click.option("--output", "-o", required=True, help="Output file (.npy)")
 @click.option("--layer", default=None, help="Layer to extract embeddings from")
 @click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
-def ast_embed(
-    file: str, model_path: str, output: str, layer: str, sample_rate: int
-) -> None:
+def ast_embed(file: str, model_path: str, output: str, layer: str, sample_rate: int) -> None:
     """Extract embeddings from audio using AST model.
 
     Example:
