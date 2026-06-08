@@ -12,7 +12,7 @@ import csv
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from bioamla.catalogs._models import (
     ML_SEARCH_URL,
@@ -35,17 +35,17 @@ _client = APIClient(
 
 
 def search(
-    species_code: Optional[str] = None,
-    scientific_name: Optional[str] = None,
-    common_name: Optional[str] = None,
+    species_code: str | None = None,
+    scientific_name: str | None = None,
+    common_name: str | None = None,
     media_type: str = "audio",
-    region: Optional[str] = None,
-    country: Optional[str] = None,
-    taxon_code: Optional[str] = None,
-    hotspot_code: Optional[str] = None,
+    region: str | None = None,
+    country: str | None = None,
+    taxon_code: str | None = None,
+    hotspot_code: str | None = None,
     min_rating: int = 0,
-    year: Optional[int] = None,
-    month: Optional[int] = None,
+    year: int | None = None,
+    month: int | None = None,
     sort: str = "rating_rank_desc",
     max_results: int = 100,
 ) -> MacaulaySearchResult:
@@ -59,7 +59,7 @@ def search(
         CatalogError: on API failure.
     """
     try:
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "mediaType": media_type if media_type != "all" else None,
             "sort": sort,
             "count": min(max_results, 100),
@@ -140,9 +140,9 @@ def get_recording(asset_id: str) -> MLRecording:
 
 
 def download_recording(
-    recording: Union[MLRecording, str],
-    output_dir: Union[str, Path],
-    filename: Optional[str] = None,
+    recording: MLRecording | str,
+    output_dir: str | Path,
+    filename: str | None = None,
     organize_by_species: bool = True,
 ) -> Path:
     """Download a single recording.
@@ -192,13 +192,13 @@ def download_recording(
 
 
 def download(
-    species_code: Optional[str] = None,
-    scientific_name: Optional[str] = None,
-    common_name: Optional[str] = None,
-    region: Optional[str] = None,
-    country: Optional[str] = None,
-    taxon_code: Optional[str] = None,
-    hotspot_code: Optional[str] = None,
+    species_code: str | None = None,
+    scientific_name: str | None = None,
+    common_name: str | None = None,
+    region: str | None = None,
+    country: str | None = None,
+    taxon_code: str | None = None,
+    hotspot_code: str | None = None,
     min_rating: int = 3,
     max_recordings: int = 10,
     output_dir: str = "./ml_recordings",
@@ -235,8 +235,8 @@ def download(
         output_path.mkdir(parents=True, exist_ok=True)
 
         stats = {"total": len(recordings), "downloaded": 0, "failed": 0, "skipped": 0}
-        errors: List[str] = []
-        metadata_rows: List[Dict[str, Any]] = []
+        errors: list[str] = []
+        metadata_rows: list[dict[str, Any]] = []
 
         for i, recording in enumerate(recordings, 1):
             try:
@@ -310,9 +310,9 @@ def get_species_count(species_code: str, media_type: str = "audio") -> int:
 
 
 def search_audio(
-    species_code: Optional[str] = None,
-    scientific_name: Optional[str] = None,
-    region: Optional[str] = None,
+    species_code: str | None = None,
+    scientific_name: str | None = None,
+    region: str | None = None,
     min_rating: int = 0,
     max_results: int = 100,
 ) -> MacaulaySearchResult:

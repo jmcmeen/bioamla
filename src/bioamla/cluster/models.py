@@ -7,7 +7,7 @@ single canonical home.
 """
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -20,10 +20,10 @@ class ClusteringSummary:
     noise_percentage: float
     silhouette_score: float
     method: str
-    labels: List[int] = field(default_factory=list)
-    cluster_sizes: Dict[int, int] = field(default_factory=dict)
+    labels: list[int] = field(default_factory=list)
+    cluster_sizes: dict[int, int] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dictionary."""
         return asdict(self)
 
@@ -37,10 +37,10 @@ class NoveltyDetectionSummary:
     n_known: int
     novel_percentage: float
     method: str
-    threshold: Optional[float] = None
-    novel_indices: List[int] = field(default_factory=list)
+    threshold: float | None = None
+    novel_indices: list[int] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dictionary."""
         return asdict(self)
 
@@ -54,8 +54,8 @@ class ClusterAnalysis:
     n_noise: int
     silhouette_score: float
     calinski_harabasz_score: float
-    cluster_stats: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    cluster_stats: dict[int, dict[str, Any]] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dictionary."""
         return asdict(self)

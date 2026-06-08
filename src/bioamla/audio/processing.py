@@ -12,7 +12,6 @@ return processed arrays.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 import librosa
 import numpy as np
@@ -192,7 +191,7 @@ def segment_on_silence(
     silence_threshold_db: float = -40,
     min_silence_duration: float = 0.3,
     min_segment_duration: float = 0.5,
-) -> List[AudioSegment]:
+) -> list[AudioSegment]:
     """
     Split audio on silence.
 
@@ -242,7 +241,7 @@ def split_audio_on_silence(
     silence_threshold_db: float = -40,
     min_silence_duration: float = 0.3,
     min_segment_duration: float = 0.5,
-) -> List[Tuple[np.ndarray, float, float]]:
+) -> list[tuple[np.ndarray, float, float]]:
     """
     Split audio on silence and return audio chunks.
 
@@ -286,7 +285,7 @@ def detect_onsets(
     sample_rate: int,
     method: str = "energy",
     threshold: float = 0.1,
-) -> List[AudioEvent]:
+) -> list[AudioEvent]:
     """
     Detect onset events in audio.
 
@@ -432,8 +431,8 @@ def resample_audio(
 def trim_audio(
     audio: np.ndarray,
     sample_rate: int,
-    start_time: Optional[float] = None,
-    end_time: Optional[float] = None,
+    start_time: float | None = None,
+    end_time: float | None = None,
 ) -> np.ndarray:
     """
     Trim audio to specified time range.

@@ -17,7 +17,7 @@ Usage:
 """
 
 import logging
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Union
 
 from bioamla.exceptions import DependencyError
 
@@ -77,7 +77,7 @@ def get_device_string(prefer_cuda: bool = True) -> str:
 
 
 def move_to_device(
-    model: "nn.Module", device: Optional[Union[str, "torch.device"]] = None
+    model: "nn.Module", device: Union[str, "torch.device"] | None = None
 ) -> "nn.Module":
     """
     Move a model to the specified device.
@@ -114,7 +114,7 @@ def get_device_count() -> int:
     return 0
 
 
-def get_current_device_index() -> Optional[int]:
+def get_current_device_index() -> int | None:
     """Get the current CUDA device index, or None if not available."""
     torch = _require_torch()
     if torch.cuda.is_available():
@@ -122,7 +122,7 @@ def get_current_device_index() -> Optional[int]:
     return None
 
 
-def get_device_name(device_index: int = 0) -> Optional[str]:
+def get_device_name(device_index: int = 0) -> str | None:
     """
     Get the name of a CUDA device.
 
@@ -180,7 +180,7 @@ class DeviceContext:
         if isinstance(device, str):
             device = torch.device(device)
         self.device = device
-        self.original_device: Optional[int] = None
+        self.original_device: int | None = None
 
     def __enter__(self):
         torch = _require_torch()

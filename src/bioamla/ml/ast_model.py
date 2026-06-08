@@ -14,7 +14,7 @@ using :class:`ASTModel` without them raises
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 
@@ -77,10 +77,10 @@ class ASTModel(BaseAudioModel):
         >>> results = model.predict("audio.wav")
     """
 
-    def __init__(self, config: Optional[ModelConfig] = None) -> None:
+    def __init__(self, config: ModelConfig | None = None) -> None:
         """Initialize AST model."""
         super().__init__(config)
-        self.feature_extractor: Optional[ASTFeatureExtractor] = None
+        self.feature_extractor: ASTFeatureExtractor | None = None
         self._hook_handles: list = []
 
     @property
@@ -138,7 +138,7 @@ class ASTModel(BaseAudioModel):
     def _load_waveform(
         self,
         audio: Union[str, np.ndarray, "torch.Tensor"],
-        sample_rate: Optional[int],
+        sample_rate: int | None,
     ):
         """Coerce ``audio`` to a (waveform, sample_rate, filepath) triple."""
         torch = _require_torch()
@@ -168,8 +168,8 @@ class ASTModel(BaseAudioModel):
     def predict(
         self,
         audio: Union[str, np.ndarray, "torch.Tensor"],
-        sample_rate: Optional[int] = None,
-    ) -> List[PredictionResult]:
+        sample_rate: int | None = None,
+    ) -> list[PredictionResult]:
         """
         Run prediction on audio, returning one result per segment.
 
@@ -253,8 +253,8 @@ class ASTModel(BaseAudioModel):
     def extract_embeddings(
         self,
         audio: Union[str, np.ndarray, "torch.Tensor"],
-        sample_rate: Optional[int] = None,
-        layer: Optional[str] = None,
+        sample_rate: int | None = None,
+        layer: str | None = None,
     ) -> np.ndarray:
         """
         Extract embeddings from audio (mean-pooled hidden state).
@@ -322,8 +322,8 @@ class ASTModel(BaseAudioModel):
     def get_attention_weights(
         self,
         audio: Union[str, np.ndarray, "torch.Tensor"],
-        sample_rate: Optional[int] = None,
-    ) -> List[np.ndarray]:
+        sample_rate: int | None = None,
+    ) -> list[np.ndarray]:
         """
         Get per-layer attention weight matrices for the audio.
 

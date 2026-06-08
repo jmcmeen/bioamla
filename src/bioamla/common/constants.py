@@ -16,14 +16,13 @@ Usage:
     )
 """
 
-from typing import List
 
 # =============================================================================
 # Audio Format Constants
 # =============================================================================
 
 # Supported audio file extensions
-SUPPORTED_AUDIO_EXTENSIONS: List[str] = [
+SUPPORTED_AUDIO_EXTENSIONS: list[str] = [
     ".wav",
     ".mp3",
     ".flac",

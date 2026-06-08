@@ -19,7 +19,7 @@ Heavy/optional backends are imported lazily:
 """
 
 from pathlib import Path
-from typing import Literal, Optional, Tuple, Union
+from typing import Literal
 
 import librosa
 import numpy as np
@@ -84,13 +84,13 @@ def generate_spectrogram(
     hop_length: int = 512,
     n_fft: int = 2048,
     window: WindowType = "hann",
-    figsize: Tuple[int, int] = (10, 4),
+    figsize: tuple[int, int] = (10, 4),
     cmap: str = "magma",
-    title: Optional[str] = None,
-    db_min: Optional[float] = None,
-    db_max: Optional[float] = None,
+    title: str | None = None,
+    db_min: float | None = None,
+    db_max: float | None = None,
     dpi: int = 150,
-    format: Optional[str] = None,
+    format: str | None = None,
     show_colorbar: bool = True,
 ) -> str:
     """
@@ -261,8 +261,8 @@ def _plot_stft_spectrogram(
     window: np.ndarray,
     cmap: str,
     title: str,
-    db_min: Optional[float] = None,
-    db_max: Optional[float] = None,
+    db_min: float | None = None,
+    db_max: float | None = None,
     show_legend: bool = True,
 ) -> None:
     """Plot an STFT spectrogram."""
@@ -307,8 +307,8 @@ def _plot_mel_spectrogram(
     window: np.ndarray,
     cmap: str,
     title: str,
-    db_min: Optional[float] = None,
-    db_max: Optional[float] = None,
+    db_min: float | None = None,
+    db_max: float | None = None,
     show_legend: bool = True,
 ) -> None:
     """Plot a mel spectrogram."""
@@ -408,7 +408,7 @@ def compute_stft(
     n_fft: int = 2048,
     hop_length: int = 512,
     window: WindowType = "hann",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute the Short-Time Fourier Transform of an audio signal.
 
@@ -439,8 +439,8 @@ def compute_mel_spectrogram(
     n_mels: int = 128,
     window: WindowType = "hann",
     fmin: float = 0.0,
-    fmax: Optional[float] = None,
-) -> Tuple[np.ndarray, np.ndarray]:
+    fmax: float | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute a mel spectrogram from an audio signal.
 
@@ -475,9 +475,9 @@ def compute_mel_spectrogram(
 
 def spectrogram_to_db(
     spectrogram: np.ndarray,
-    ref: Union[float, str] = "max",
+    ref: float | str = "max",
     amin: float = 1e-10,
-    top_db: Optional[float] = 80.0,
+    top_db: float | None = 80.0,
 ) -> np.ndarray:
     """
     Convert a spectrogram to decibel (dB) scale.
@@ -510,16 +510,16 @@ def spectrogram_to_image(
     spectrogram: np.ndarray,
     output_path: str,
     cmap: str = "magma",
-    figsize: Tuple[int, int] = (10, 4),
+    figsize: tuple[int, int] = (10, 4),
     dpi: int = 150,
-    format: Optional[str] = None,
-    title: Optional[str] = None,
+    format: str | None = None,
+    title: str | None = None,
     xlabel: str = "Time",
     ylabel: str = "Frequency",
     colorbar: bool = True,
-    colorbar_label: Optional[str] = None,
-    vmin: Optional[float] = None,
-    vmax: Optional[float] = None,
+    colorbar_label: str | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
 ) -> str:
     """
     Export a spectrogram array to an image file.

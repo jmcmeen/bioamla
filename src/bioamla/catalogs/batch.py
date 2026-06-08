@@ -5,7 +5,7 @@ catalog batch commands to functions that already live in this package. Each
 helper maps an item (species name) to a per-item catalog call and aggregates the
 results into a :class:`~bioamla.batch.BatchResult`.
 """
-from typing import Callable, List, Optional
+from collections.abc import Callable
 
 from bioamla.batch import BatchResult, run_batch
 from bioamla.catalogs import macaulay, xeno_canto
@@ -13,14 +13,14 @@ from bioamla.catalogs import species as species_mod
 
 
 def batch_download_xeno_canto(
-    species_list: List[str],
+    species_list: list[str],
     output_dir: str = "./xc_recordings",
     quality: str = "A",
     max_recordings: int = 10,
     *,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """Download Xeno-canto recordings for each species in ``species_list``."""
 
@@ -43,14 +43,14 @@ def batch_download_xeno_canto(
 
 
 def batch_download_macaulay(
-    species_codes: List[str],
+    species_codes: list[str],
     output_dir: str = "./ml_recordings",
     min_rating: int = 3,
     max_recordings: int = 10,
     *,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """Download Macaulay Library recordings for each eBird species code."""
 
@@ -73,11 +73,11 @@ def batch_download_macaulay(
 
 
 def batch_lookup_species(
-    names: List[str],
+    names: list[str],
     ebird_only: bool = False,
     *,
     continue_on_error: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """Look up each name via :func:`bioamla.catalogs.species.lookup`.
 

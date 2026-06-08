@@ -15,7 +15,6 @@ import math
 import os
 import time
 from pathlib import Path
-from typing import List, Optional, Union
 
 from bioamla.catalogs._models import (
     XC_API_URL,
@@ -45,7 +44,7 @@ _client = APIClient(
 )
 
 # Runtime-set API key (highest priority).
-_api_key: Optional[str] = None
+_api_key: str | None = None
 
 
 def set_xc_api_key(key: str) -> None:
@@ -54,7 +53,7 @@ def set_xc_api_key(key: str) -> None:
     _api_key = key
 
 
-def get_xc_api_key() -> Optional[str]:
+def get_xc_api_key() -> str | None:
     """Resolve the Xeno-canto API key from runtime, env var, then config.
 
     Returns None if no key is configured anywhere.
@@ -80,26 +79,26 @@ def get_xc_api_key() -> Optional[str]:
 
 
 def _build_query_string(
-    species: Optional[str] = None,
-    genus: Optional[str] = None,
-    recordist: Optional[str] = None,
-    country: Optional[str] = None,
-    location: Optional[str] = None,
-    quality: Optional[str] = None,
-    sound_type: Optional[str] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-    box: Optional[tuple] = None,
-    since: Optional[str] = None,
-    year: Optional[int] = None,
-    month: Optional[int] = None,
-    query: Optional[str] = None,
+    species: str | None = None,
+    genus: str | None = None,
+    recordist: str | None = None,
+    country: str | None = None,
+    location: str | None = None,
+    quality: str | None = None,
+    sound_type: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    box: tuple | None = None,
+    since: str | None = None,
+    year: int | None = None,
+    month: int | None = None,
+    query: str | None = None,
 ) -> str:
     """Build the tagged query string for the Xeno-canto API v3."""
     if query:
         return query
 
-    parts: List[str] = []
+    parts: list[str] = []
     if species:
         species_parts = species.strip().split()
         if len(species_parts) >= 2:
@@ -136,22 +135,22 @@ def _build_query_string(
 
 
 def search(
-    species: Optional[str] = None,
-    genus: Optional[str] = None,
-    recordist: Optional[str] = None,
-    country: Optional[str] = None,
-    location: Optional[str] = None,
-    quality: Optional[str] = None,
-    sound_type: Optional[str] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-    box: Optional[tuple] = None,
-    since: Optional[str] = None,
-    year: Optional[int] = None,
-    month: Optional[int] = None,
-    query: Optional[str] = None,
+    species: str | None = None,
+    genus: str | None = None,
+    recordist: str | None = None,
+    country: str | None = None,
+    location: str | None = None,
+    quality: str | None = None,
+    sound_type: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    box: tuple | None = None,
+    since: str | None = None,
+    year: int | None = None,
+    month: int | None = None,
+    query: str | None = None,
     page: int = 1,
-    max_results: Optional[int] = None,
+    max_results: int | None = None,
 ) -> XenoCantoSearchResult:
     """Search Xeno-canto for bird recordings.
 
@@ -183,7 +182,7 @@ def search(
         raise InvalidInputError(_API_KEY_HELP)
 
     try:
-        all_recordings: List[XCRecording] = []
+        all_recordings: list[XCRecording] = []
         current_page = page
         total_pages = 1
 
@@ -250,9 +249,9 @@ def get_recording(recording_id: str) -> XCRecording:
 
 
 def download_recording(
-    recording: Union[XCRecording, str],
-    output_dir: Union[str, Path],
-    filename: Optional[str] = None,
+    recording: XCRecording | str,
+    output_dir: str | Path,
+    filename: str | None = None,
     organize_by_species: bool = True,
 ) -> Path:
     """Download a single recording.
@@ -298,10 +297,10 @@ def download_recording(
 
 
 def download(
-    species: Optional[str] = None,
-    genus: Optional[str] = None,
-    country: Optional[str] = None,
-    quality: Optional[str] = "A",
+    species: str | None = None,
+    genus: str | None = None,
+    country: str | None = None,
+    quality: str | None = "A",
     max_recordings: int = 10,
     output_dir: str = "./xc_recordings",
     organize_by_species: bool = True,
@@ -333,7 +332,7 @@ def download(
         output_path.mkdir(parents=True, exist_ok=True)
 
         stats = {"total": len(recordings), "downloaded": 0, "failed": 0, "skipped": 0}
-        errors: List[str] = []
+        errors: list[str] = []
         metadata_rows = []
 
         for i, recording in enumerate(recordings, 1):
@@ -421,8 +420,8 @@ def search_by_location(
     latitude: float,
     longitude: float,
     radius_km: float = 50.0,
-    quality: Optional[str] = None,
-    max_results: Optional[int] = None,
+    quality: str | None = None,
+    max_results: int | None = None,
 ) -> XenoCantoSearchResult:
     """Search for recordings near a geographic location.
 

@@ -22,9 +22,10 @@ Example:
 """
 
 import logging
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 
@@ -55,10 +56,10 @@ class EmbeddingConfig:
     # Processing settings
     batch_size: int = 8
     use_fp16: bool = False
-    device: Optional[str] = None
+    device: str | None = None
 
     # Reduction settings
-    reduce_method: Optional[str] = None  # None, "pca", "umap"
+    reduce_method: str | None = None  # None, "pca", "umap"
     n_components: int = 128
     normalize: bool = True
 
@@ -70,8 +71,8 @@ class EmbeddingResult:
     filepath: str
     embeddings: np.ndarray
     sample_rate: int
-    segments: List[Tuple[float, float]] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    segments: list[tuple[float, float]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def embedding_dim(self) -> int:
@@ -95,13 +96,13 @@ class BatchEmbeddingResult:
     """Result from batch embedding extraction."""
 
     embeddings: np.ndarray
-    filepaths: List[str]
+    filepaths: list[str]
     total_files: int
     files_processed: int
     files_failed: int
-    output_path: Optional[str] = None
-    errors: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    output_path: str | None = None
+    errors: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def embedding_dim(self) -> int:
@@ -131,8 +132,8 @@ class EmbeddingExtractor:
 
     def __init__(
         self,
-        model_path: Optional[str] = None,
-        config: Optional[EmbeddingConfig] = None,
+        model_path: str | None = None,
+        config: EmbeddingConfig | None = None,
     ):
         """
         Initialize the embedding extractor.
@@ -207,9 +208,9 @@ class EmbeddingExtractor:
 
     def extract(
         self,
-        audio: Union[str, np.ndarray],
-        sample_rate: Optional[int] = None,
-        layer: Optional[str] = None,
+        audio: str | np.ndarray,
+        sample_rate: int | None = None,
+        layer: str | None = None,
     ) -> EmbeddingResult:
         """
         Extract embeddings from a single audio file or array.
@@ -278,8 +279,8 @@ class EmbeddingExtractor:
 
     def extract_iter(
         self,
-        audio_files: List[str],
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        audio_files: list[str],
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> Iterator[EmbeddingResult]:
         """
         Extract embeddings from multiple files, yielding per-file results.
@@ -313,9 +314,9 @@ class EmbeddingExtractor:
 
     def extract_batch(
         self,
-        audio_files: List[str],
+        audio_files: list[str],
         aggregate: str = "mean",
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> BatchEmbeddingResult:
         """
         Extract embeddings from multiple files into a single stacked array.
@@ -385,11 +386,11 @@ class EmbeddingExtractor:
 
 
 def extract_embeddings(
-    audio: Union[str, np.ndarray],
+    audio: str | np.ndarray,
     model_path: str = "MIT/ast-finetuned-audioset-10-10-0.4593",
     model_type: str = "ast",
     layer: str = "last_hidden_state",
-    sample_rate: Optional[int] = None,
+    sample_rate: int | None = None,
     normalize: bool = True,
 ) -> np.ndarray:
     """
@@ -424,14 +425,14 @@ def extract_embeddings(
 
 
 def extract_embeddings_batch(
-    audio_files: List[str],
+    audio_files: list[str],
     model_path: str = "MIT/ast-finetuned-audioset-10-10-0.4593",
     model_type: str = "ast",
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
     output_format: str = "npy",
     aggregate: str = "mean",
     normalize: bool = True,
-    progress_callback: Optional[Callable[[int, int], None]] = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> BatchEmbeddingResult:
     """
     Extract embeddings from multiple audio files, optionally saving them.
@@ -475,10 +476,10 @@ def extract_embeddings_batch(
 
 def save_embeddings(
     embeddings: np.ndarray,
-    filepaths: List[str],
+    filepaths: list[str],
     output_path: str,
     format: str = "npy",
-    metadata: Optional[Dict[str, Any]] = None,
+    metadata: dict[str, Any] | None = None,
 ) -> str:
     """
     Save embeddings to disk.
@@ -549,8 +550,8 @@ def save_embeddings(
 
 def load_embeddings(
     filepath: str,
-    format: Optional[str] = None,
-) -> Tuple[np.ndarray, List[str]]:
+    format: str | None = None,
+) -> tuple[np.ndarray, list[str]]:
     """
     Load embeddings from disk.
 
@@ -605,7 +606,7 @@ def load_embeddings(
         raise InvalidInputError(f"Unknown format: {format}")
 
 
-def get_ast_model_info(model_path: str) -> Dict[str, Any]:
+def get_ast_model_info(model_path: str) -> dict[str, Any]:
     """
     Return lightweight information about an AST model from its config.
 

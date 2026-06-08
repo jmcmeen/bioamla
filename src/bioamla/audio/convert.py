@@ -12,7 +12,6 @@ helpers); ``numpy`` is the only hard dependency at import time.
 """
 
 from pathlib import Path
-from typing import Optional, Union
 
 import numpy as np
 
@@ -48,12 +47,12 @@ def _rechannel(audio: np.ndarray, current_channels: int, target_channels: int) -
 
 
 def convert_audio_file(
-    input_path: Union[str, Path],
-    output_path: Union[str, Path],
+    input_path: str | Path,
+    output_path: str | Path,
     *,
     target_format: str = "wav",
-    target_sample_rate: Optional[int] = None,
-    target_channels: Optional[int] = None,
+    target_sample_rate: int | None = None,
+    target_channels: int | None = None,
     delete_original: bool = False,
 ) -> str:
     """Convert an audio file to a target format, optionally re-channel/resample.

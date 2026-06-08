@@ -29,7 +29,7 @@ import csv
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from bioamla.exceptions import DependencyError, ModelError, NotFoundError
 
@@ -85,7 +85,7 @@ class BatchInferenceConfig:
     overlap: int = 0
     sample_rate: int = 16000
     recursive: bool = True
-    file_extensions: Optional[List[str]] = None
+    file_extensions: list[str] | None = None
     verbose: bool = True
 
 
@@ -103,9 +103,9 @@ class ASTPredictionResult:
     end_time: float
     predicted_label: str
     confidence: float
-    logits: Optional[List[float]] = None
-    top_k_labels: Optional[List[str]] = None
-    top_k_scores: Optional[List[float]] = None
+    logits: list[float] | None = None
+    top_k_labels: list[str] | None = None
+    top_k_scores: list[float] | None = None
 
 
 class ASTInference:
@@ -124,7 +124,7 @@ class ASTInference:
         self,
         model_path: str,
         sample_rate: int = 16000,
-        device: Optional[Union[str, "torch.device"]] = None,
+        device: Union[str, "torch.device"] | None = None,
     ):
         """
         Initialize the inference engine and load the model.
@@ -256,8 +256,8 @@ class ASTInference:
 
         k = min(max(top_k, 1), probs.shape[-1])
         top_scores, top_indices = torch.topk(probs, k)
-        labels: List[str] = []
-        scores: List[float] = []
+        labels: list[str] = []
+        scores: list[float] = []
         for score, idx in zip(top_scores.cpu().tolist(), top_indices.cpu().tolist()):
             if score >= min_confidence:
                 labels.append(self.id2label[idx])
@@ -276,7 +276,7 @@ class ASTInference:
 
     def predict_segments(
         self, audio_path: str, clip_length: int = 10, overlap: int = 0, return_logits: bool = False
-    ) -> List[ASTPredictionResult]:
+    ) -> list[ASTPredictionResult]:
         """
         Run inference on an audio file split into segments.
 
@@ -343,7 +343,7 @@ class ASTInference:
         return inputs.input_values.to(self.device)
 
 
-def run_batch_inference(config: BatchInferenceConfig) -> Dict[str, Any]:
+def run_batch_inference(config: BatchInferenceConfig) -> dict[str, Any]:
     """
     Run segmented AST inference over a directory of audio files, writing a CSV.
 

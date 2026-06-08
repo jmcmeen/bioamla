@@ -14,8 +14,8 @@ Heavy/optional backends (pydub/ffmpeg) are imported lazily inside the functions.
 """
 
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 
@@ -25,7 +25,7 @@ from bioamla.exceptions import AudioLoadError, AudioSaveError, DependencyError
 
 
 def load_audio_data(
-    filepath: Union[str, Path], *, sample_rate: Optional[int] = None
+    filepath: str | Path, *, sample_rate: int | None = None
 ) -> AudioData:
     """
     Load an audio file into an :class:`AudioData`.
@@ -87,7 +87,7 @@ def load_audio_data(
 
 
 def save_audio_data(
-    audio: AudioData, output_path: Union[str, Path], *, format: Optional[str] = None
+    audio: AudioData, output_path: str | Path, *, format: str | None = None
 ) -> Path:
     """
     Save :class:`AudioData` to a file.
@@ -122,10 +122,10 @@ def save_audio_data(
 
 def save_audio_data_as(
     audio: AudioData,
-    output_path: Union[str, Path],
+    output_path: str | Path,
     *,
-    target_sample_rate: Optional[int] = None,
-    format: Optional[str] = None,
+    target_sample_rate: int | None = None,
+    format: str | None = None,
 ) -> Path:
     """
     Save :class:`AudioData` to a new file, optionally resampling.
@@ -204,7 +204,7 @@ def create_temp_audio_file(audio: AudioData, suffix: str = ".wav") -> Path:
 # =============================================================================
 
 
-def load_audio(filepath: str) -> Tuple[np.ndarray, int]:
+def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     """
     Load an audio file as a mono ``numpy`` array.
 
@@ -232,7 +232,7 @@ def load_audio(filepath: str) -> Tuple[np.ndarray, int]:
 
 
 def save_audio(
-    filepath: str, audio: np.ndarray, sample_rate: int, format: Optional[str] = None
+    filepath: str, audio: np.ndarray, sample_rate: int, format: str | None = None
 ) -> str:
     """
     Save a ``numpy`` audio array to a file.
@@ -292,7 +292,7 @@ def process_file(
     input_path: str,
     output_path: str,
     processor_fn: Callable[[np.ndarray, int], np.ndarray],
-    sample_rate: Optional[int] = None,
+    sample_rate: int | None = None,
 ) -> str:
     """
     Load, process, and save a single audio file.
@@ -330,7 +330,7 @@ def batch_process(
     input_dir: str,
     output_dir: str,
     processor_fn: Callable[[np.ndarray, int], np.ndarray],
-    sample_rate: Optional[int] = None,
+    sample_rate: int | None = None,
     recursive: bool = True,
     verbose: bool = True,
 ) -> dict:

@@ -11,7 +11,7 @@ genuinely bad parameters and otherwise do not raise domain exceptions.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -41,7 +41,7 @@ class AmplitudeStats:
     crest_factor: float
     dynamic_range: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "rms": self.rms,
@@ -78,7 +78,7 @@ class FrequencyStats:
     spectral_centroid: float
     spectral_rolloff: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "peak_frequency": self.peak_frequency,
@@ -109,11 +109,11 @@ class SilenceInfo:
     is_silent: bool
     silence_ratio: float
     sound_ratio: float
-    silent_segments: List[Tuple[float, float]] = field(default_factory=list)
-    sound_segments: List[Tuple[float, float]] = field(default_factory=list)
+    silent_segments: list[tuple[float, float]] = field(default_factory=list)
+    sound_segments: list[tuple[float, float]] = field(default_factory=list)
     threshold_used: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "is_silent": self.is_silent,
@@ -223,9 +223,9 @@ def get_peak_frequency(
     audio: np.ndarray,
     sample_rate: int,
     n_fft: int = 2048,
-    min_freq: Optional[float] = None,
-    max_freq: Optional[float] = None,
-) -> Tuple[float, float]:
+    min_freq: float | None = None,
+    max_freq: float | None = None,
+) -> tuple[float, float]:
     """
     Find the frequency with the highest magnitude.
 

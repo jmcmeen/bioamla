@@ -19,7 +19,7 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from bioamla.exceptions import ConfigError
 
@@ -36,7 +36,7 @@ else:
 
 
 # Default configuration values
-DEFAULT_CONFIG: Dict[str, Any] = {
+DEFAULT_CONFIG: dict[str, Any] = {
     "project": {
         "name": "",
         "version": "1.0.0",
@@ -199,24 +199,24 @@ class Config:
         _source: Path to the config file that was loaded
     """
 
-    project: Dict[str, Any] = field(default_factory=dict)
-    audio: Dict[str, Any] = field(default_factory=dict)
-    visualize: Dict[str, Any] = field(default_factory=dict)
-    models: Dict[str, Any] = field(default_factory=dict)
-    inference: Dict[str, Any] = field(default_factory=dict)
-    training: Dict[str, Any] = field(default_factory=dict)
-    analysis: Dict[str, Any] = field(default_factory=dict)
-    detection: Dict[str, Any] = field(default_factory=dict)
-    batch: Dict[str, Any] = field(default_factory=dict)
-    output: Dict[str, Any] = field(default_factory=dict)
-    progress: Dict[str, Any] = field(default_factory=dict)
-    logging: Dict[str, Any] = field(default_factory=dict)
-    api: Dict[str, Any] = field(default_factory=dict)
-    realtime: Dict[str, Any] = field(default_factory=dict)
-    augmentation: Dict[str, Any] = field(default_factory=dict)
-    active_learning: Dict[str, Any] = field(default_factory=dict)
-    execution: Dict[str, Any] = field(default_factory=dict)
-    _source: Optional[str] = None
+    project: dict[str, Any] = field(default_factory=dict)
+    audio: dict[str, Any] = field(default_factory=dict)
+    visualize: dict[str, Any] = field(default_factory=dict)
+    models: dict[str, Any] = field(default_factory=dict)
+    inference: dict[str, Any] = field(default_factory=dict)
+    training: dict[str, Any] = field(default_factory=dict)
+    analysis: dict[str, Any] = field(default_factory=dict)
+    detection: dict[str, Any] = field(default_factory=dict)
+    batch: dict[str, Any] = field(default_factory=dict)
+    output: dict[str, Any] = field(default_factory=dict)
+    progress: dict[str, Any] = field(default_factory=dict)
+    logging: dict[str, Any] = field(default_factory=dict)
+    api: dict[str, Any] = field(default_factory=dict)
+    realtime: dict[str, Any] = field(default_factory=dict)
+    augmentation: dict[str, Any] = field(default_factory=dict)
+    active_learning: dict[str, Any] = field(default_factory=dict)
+    execution: dict[str, Any] = field(default_factory=dict)
+    _source: str | None = None
 
     def get(self, section: str, key: str, default: Any = None) -> Any:
         """Get a configuration value."""
@@ -231,7 +231,7 @@ class Config:
         if section_dict is not None:
             section_dict[key] = value
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary."""
         return {
             "project": self.project,
@@ -254,7 +254,7 @@ class Config:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], source: Optional[str] = None) -> "Config":
+    def from_dict(cls, data: dict[str, Any], source: str | None = None) -> "Config":
         """Create Config from dictionary."""
         return cls(
             project=data.get("project", {}),
@@ -278,7 +278,7 @@ class Config:
         )
 
 
-def load_toml(filepath: Union[str, Path]) -> Dict[str, Any]:
+def load_toml(filepath: str | Path) -> dict[str, Any]:
     """
     Load a TOML configuration file.
 
@@ -308,7 +308,7 @@ def load_toml(filepath: Union[str, Path]) -> Dict[str, Any]:
         raise ConfigError(f"Failed to parse TOML config {filepath}: {e}") from e
 
 
-def save_toml(config: Dict[str, Any], filepath: Union[str, Path]) -> str:
+def save_toml(config: dict[str, Any], filepath: str | Path) -> str:
     """
     Save configuration to a TOML file.
 
@@ -343,7 +343,7 @@ def save_toml(config: Dict[str, Any], filepath: Union[str, Path]) -> str:
     return str(path)
 
 
-def find_config_file(config_path: Optional[str] = None) -> Optional[Path]:
+def find_config_file(config_path: str | None = None) -> Path | None:
     """
     Find the configuration file to use.
 
@@ -369,7 +369,7 @@ def find_config_file(config_path: Optional[str] = None) -> Optional[Path]:
     return None
 
 
-def load_config(config_path: Optional[str] = None) -> Config:
+def load_config(config_path: str | None = None) -> Config:
     """
     Load configuration from file or use defaults.
 
@@ -405,7 +405,7 @@ def get_default_config() -> Config:
     return Config.from_dict(_deep_copy_dict(DEFAULT_CONFIG))
 
 
-def create_default_config_file(filepath: Optional[str] = None) -> str:
+def create_default_config_file(filepath: str | None = None) -> str:
     """
     Create a default configuration file.
 
@@ -421,7 +421,7 @@ def create_default_config_file(filepath: Optional[str] = None) -> str:
     return save_toml(DEFAULT_CONFIG, filepath)
 
 
-def _deep_copy_dict(d: Dict[str, Any]) -> Dict[str, Any]:
+def _deep_copy_dict(d: dict[str, Any]) -> dict[str, Any]:
     """Create a deep copy of a dictionary."""
     result = {}
     for key, value in d.items():
@@ -434,7 +434,7 @@ def _deep_copy_dict(d: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def _merge_dicts(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Merge two dictionaries, with override taking precedence."""
     result = _deep_copy_dict(base)
     for key, value in override.items():
@@ -451,7 +451,7 @@ _DEPRECATED_KEYS = {
 }
 
 
-def _migrate_deprecated_keys(config_data: Dict[str, Any]) -> Dict[str, Any]:
+def _migrate_deprecated_keys(config_data: dict[str, Any]) -> dict[str, Any]:
     """
     Migrate deprecated config keys to their new names.
 
@@ -495,7 +495,7 @@ def _migrate_deprecated_keys(config_data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # Global configuration instance
-_global_config: Optional[Config] = None
+_global_config: Config | None = None
 
 
 def get_config() -> Config:
@@ -518,7 +518,7 @@ def reset_config() -> None:
     _global_config = None
 
 
-def get_config_locations() -> List[Path]:
+def get_config_locations() -> list[Path]:
     """
     Get configuration file search locations in priority order.
 
@@ -529,7 +529,7 @@ def get_config_locations() -> List[Path]:
 
 
 def load_config_cascade(
-    explicit_path: Optional[str] = None,
+    explicit_path: str | None = None,
 ) -> Config:
     """
     Load configuration with full cascade support.

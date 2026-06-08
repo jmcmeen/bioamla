@@ -15,7 +15,7 @@ functions (no ServiceResult, no repository DI). The presets and the
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -52,7 +52,7 @@ class RibbitDetection:
         """Detection duration in seconds."""
         return self.end_time - self.start_time
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "start_time": self.start_time,
@@ -76,14 +76,14 @@ def _import_opensoundscape():
 
 def ribbit_detect(
     audio_path: str,
-    signal_band: Tuple[float, float],
-    pulse_rate_range: Tuple[float, float],
-    noise_bands: Optional[List[Tuple[float, float]]] = None,
+    signal_band: tuple[float, float],
+    pulse_rate_range: tuple[float, float],
+    noise_bands: list[tuple[float, float]] | None = None,
     clip_duration: float = 2.0,
     clip_overlap: float = 0.5,
     score_threshold: float = 0.5,
     min_detection_duration: float = 0.5,
-) -> Tuple[List[RibbitDetection], Dict[str, Any]]:
+) -> tuple[list[RibbitDetection], dict[str, Any]]:
     """Run RIBBIT detection on an audio file using OpenSoundscape.
 
     RIBBIT (Repeat-Interval Based Bioacoustic Identification Tool) detects
@@ -159,14 +159,14 @@ def ribbit_detect(
 def ribbit_detect_samples(
     samples: np.ndarray,
     sample_rate: int,
-    signal_band: Tuple[float, float],
-    pulse_rate_range: Tuple[float, float],
-    noise_bands: Optional[List[Tuple[float, float]]] = None,
+    signal_band: tuple[float, float],
+    pulse_rate_range: tuple[float, float],
+    noise_bands: list[tuple[float, float]] | None = None,
     clip_duration: float = 2.0,
     clip_overlap: float = 0.5,
     score_threshold: float = 0.5,
     min_detection_duration: float = 0.5,
-) -> Tuple[List[RibbitDetection], Dict[str, Any]]:
+) -> tuple[list[RibbitDetection], dict[str, Any]]:
     """Run RIBBIT detection on audio samples using OpenSoundscape.
 
     Args:
@@ -236,7 +236,7 @@ def _dataframe_to_detections(
     result_df,
     threshold: float,
     min_duration: float,
-) -> List[RibbitDetection]:
+) -> list[RibbitDetection]:
     """Convert RIBBIT result DataFrame to detection objects.
 
     Args:
@@ -273,7 +273,7 @@ def _dataframe_to_detections(
 
 
 # Preset profiles for common species
-RIBBIT_PRESETS: Dict[str, Dict[str, Any]] = {
+RIBBIT_PRESETS: dict[str, dict[str, Any]] = {
     "american_bullfrog": {
         "signal_band": (100, 400),
         "pulse_rate_range": (1.0, 4.0),
@@ -329,9 +329,9 @@ RIBBIT_PRESETS: Dict[str, Dict[str, Any]] = {
 def ribbit_detect_preset(
     audio_path: str,
     preset: str,
-    score_threshold: Optional[float] = None,
+    score_threshold: float | None = None,
     min_detection_duration: float = 0.5,
-) -> Tuple[List[RibbitDetection], Dict[str, Any]]:
+) -> tuple[list[RibbitDetection], dict[str, Any]]:
     """Run RIBBIT detection using a preset profile.
 
     Args:
@@ -370,12 +370,12 @@ def ribbit_detect_preset(
     )
 
 
-def list_ribbit_presets() -> List[str]:
+def list_ribbit_presets() -> list[str]:
     """Get list of available RIBBIT preset names."""
     return list(RIBBIT_PRESETS.keys())
 
 
-def get_ribbit_preset(preset: str) -> Dict[str, Any]:
+def get_ribbit_preset(preset: str) -> dict[str, Any]:
     """Get parameters for a RIBBIT preset.
 
     Args:
@@ -396,14 +396,14 @@ def get_ribbit_preset(preset: str) -> Dict[str, Any]:
 
 def create_ribbit_profile(
     name: str,
-    signal_band: Tuple[float, float],
-    pulse_rate_range: Tuple[float, float],
-    noise_bands: Optional[List[Tuple[float, float]]] = None,
+    signal_band: tuple[float, float],
+    pulse_rate_range: tuple[float, float],
+    noise_bands: list[tuple[float, float]] | None = None,
     clip_duration: float = 2.0,
     score_threshold: float = 0.5,
     description: str = "",
-    species: Optional[str] = None,
-) -> Dict[str, Any]:
+    species: str | None = None,
+) -> dict[str, Any]:
     """Create a validated custom RIBBIT profile dictionary.
 
     Args:

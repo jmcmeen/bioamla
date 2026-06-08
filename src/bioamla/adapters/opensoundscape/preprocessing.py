@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import torch
@@ -70,9 +70,9 @@ class BioamlaPreprocessor:
         n_fft: int = 2048,
         hop_length: int = 512,
         f_min: float = 0.0,
-        f_max: Optional[float] = None,
-        height: Optional[int] = None,
-        width: Optional[int] = None,
+        f_max: float | None = None,
+        height: int | None = None,
+        width: int | None = None,
     ) -> None:
         """Initialize the preprocessor.
 
@@ -97,8 +97,8 @@ class BioamlaPreprocessor:
         self.height = height
         self.width = width
 
-        self._augmentation_config: Optional[AugmentationConfig] = None
-        self._preprocessor: Optional[SpectrogramPreprocessor] = None
+        self._augmentation_config: AugmentationConfig | None = None
+        self._preprocessor: SpectrogramPreprocessor | None = None
         self._init_preprocessor()
 
     def _init_preprocessor(self) -> None:
@@ -188,8 +188,8 @@ class BioamlaPreprocessor:
     def process_file(
         self,
         filepath: str,
-        start_time: Optional[float] = None,
-        end_time: Optional[float] = None,
+        start_time: float | None = None,
+        end_time: float | None = None,
     ) -> np.ndarray:
         """Process an audio file to generate a mel spectrogram.
 

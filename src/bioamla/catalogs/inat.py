@@ -9,8 +9,9 @@ Failures raise :class:`~bioamla.exceptions.CatalogError`; bad arguments raise
 import csv
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
 import requests
 from pyinaturalist import get_observation_species_counts, get_observations
@@ -72,21 +73,21 @@ def _download_file(url: str, filepath: Path, verbose: bool = True) -> bool:
 
 
 def _discover_taxa_from_query(
-    taxon_name: Optional[str] = None,
-    place_id: Optional[int] = None,
-    user_id: Optional[str] = None,
-    project_id: Optional[str] = None,
-    quality_grade: Optional[str] = None,
-    sound_license: Optional[List[str]] = None,
-    d1: Optional[str] = None,
-    d2: Optional[str] = None,
-) -> List[int]:
+    taxon_name: str | None = None,
+    place_id: int | None = None,
+    user_id: str | None = None,
+    project_id: str | None = None,
+    quality_grade: str | None = None,
+    sound_license: list[str] | None = None,
+    d1: str | None = None,
+    d2: str | None = None,
+) -> list[int]:
     """Discover unique taxa matching a query, for per-taxon download limits.
 
     Returns an empty list on failure (caller treats this as "no discovery").
     """
     try:
-        all_taxa: List[int] = []
+        all_taxa: list[int] = []
         page = 1
         per_page = 500
         while True:
@@ -119,7 +120,7 @@ def _discover_taxa_from_query(
         return []
 
 
-def _load_taxon_ids_from_csv(csv_path: Union[str, Path]) -> List[int]:
+def _load_taxon_ids_from_csv(csv_path: str | Path) -> list[int]:
     """Load taxon IDs from a CSV with a 'taxon_id' column.
 
     Raises:
@@ -129,7 +130,7 @@ def _load_taxon_ids_from_csv(csv_path: Union[str, Path]) -> List[int]:
     if not csv_path.exists():
         raise InvalidInputError(f"Taxon CSV file not found: {csv_path}")
 
-    taxon_ids: List[int] = []
+    taxon_ids: list[int] = []
     with csv_path.open("r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         if reader.fieldnames is None or "taxon_id" not in reader.fieldnames:
@@ -159,10 +160,10 @@ def _load_taxon_ids_from_csv(csv_path: Union[str, Path]) -> List[int]:
 
 
 def search(
-    taxon_id: Optional[int] = None,
-    taxon_name: Optional[str] = None,
-    place_id: Optional[int] = None,
-    quality_grade: Optional[str] = "research",
+    taxon_id: int | None = None,
+    taxon_name: str | None = None,
+    place_id: int | None = None,
+    quality_grade: str | None = "research",
     per_page: int = 30,
 ) -> INaturalistSearchResult:
     """Search for iNaturalist observations with sounds.
@@ -201,22 +202,22 @@ def search(
 
 def download(
     output_dir: str,
-    taxon_ids: Optional[List[int]] = None,
-    taxon_csv: Optional[str] = None,
-    taxon_name: Optional[str] = None,
-    place_id: Optional[int] = None,
-    user_id: Optional[str] = None,
-    project_id: Optional[str] = None,
-    quality_grade: Optional[str] = "research",
-    sound_license: Optional[List[str]] = None,
-    d1: Optional[str] = None,
-    d2: Optional[str] = None,
+    taxon_ids: list[int] | None = None,
+    taxon_csv: str | None = None,
+    taxon_name: str | None = None,
+    place_id: int | None = None,
+    user_id: str | None = None,
+    project_id: str | None = None,
+    quality_grade: str | None = "research",
+    sound_license: list[str] | None = None,
+    d1: str | None = None,
+    d2: str | None = None,
     obs_per_taxon: int = 100,
     per_page: int = 30,
     delay_between_downloads: float = 1.0,
     organize_by_taxon: bool = True,
     include_metadata: bool = False,
-    progress_callback: Optional[ProgressCallback] = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> INaturalistDownloadResult:
     """Download audio files from iNaturalist observations.
 
@@ -259,8 +260,8 @@ def download(
             "skipped_existing": 0,
             "failed_downloads": 0,
         }
-        errors: List[str] = []
-        metadata_rows: List[Dict[str, Any]] = []
+        errors: list[str] = []
+        metadata_rows: list[dict[str, Any]] = []
 
         existing_files = get_existing_observation_ids(output_path / "metadata.csv")
 
@@ -269,7 +270,7 @@ def download(
             normalized_license = [lic.upper() for lic in sound_license]
 
         if taxon_ids:
-            taxon_list: List[Optional[int]] = list(taxon_ids)
+            taxon_list: list[int | None] = list(taxon_ids)
         else:
             discovered_taxa = _discover_taxa_from_query(
                 taxon_name=taxon_name,
@@ -452,7 +453,7 @@ def download(
 
 
 def download_from_observations(
-    observation_ids: List[int],
+    observation_ids: list[int],
     output_dir: str,
     organize_by_taxon: bool = True,
 ) -> INaturalistDownloadResult:
@@ -467,7 +468,7 @@ def download_from_observations(
 
         total_sounds = 0
         failed = 0
-        errors: List[str] = []
+        errors: list[str] = []
 
         for obs_id in observation_ids:
             try:
@@ -525,11 +526,11 @@ def download_from_observations(
 
 
 def get_taxa(
-    place_id: Optional[int] = None,
-    project_id: Optional[str] = None,
-    quality_grade: Optional[str] = "research",
-    parent_taxon_id: Optional[int] = None,
-) -> List[TaxonInfo]:
+    place_id: int | None = None,
+    project_id: str | None = None,
+    quality_grade: str | None = "research",
+    parent_taxon_id: int | None = None,
+) -> list[TaxonInfo]:
     """Get taxa with observations in a place or project, sorted by count desc.
 
     Raises:
@@ -540,7 +541,7 @@ def get_taxa(
         raise InvalidInputError("At least one of place_id or project_id must be provided")
 
     try:
-        taxa_list: List[Dict[str, Any]] = []
+        taxa_list: list[dict[str, Any]] = []
         page = 1
         per_page = 500
         while True:

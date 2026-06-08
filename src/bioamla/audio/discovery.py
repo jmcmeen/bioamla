@@ -8,15 +8,15 @@ for metadata extraction.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from bioamla.common.constants import SUPPORTED_AUDIO_EXTENSIONS
 from bioamla.common.files import get_files_by_extension
 
 
 def get_audio_files(
-    directory: Union[str, Path], extensions: Optional[List[str]] = None, recursive: bool = True
-) -> List[str]:
+    directory: str | Path, extensions: list[str] | None = None, recursive: bool = True
+) -> list[str]:
     """
     Get a list of audio files in a directory.
 
@@ -35,8 +35,8 @@ def get_audio_files(
 
 
 def list_audio_files(
-    directory: Union[str, Path], recursive: bool = True
-) -> List[Path]:
+    directory: str | Path, recursive: bool = True
+) -> list[Path]:
     """
     List audio files in a directory as :class:`~pathlib.Path` objects.
 
@@ -52,7 +52,7 @@ def list_audio_files(
     return [Path(p) for p in get_audio_files(directory, recursive=recursive)]
 
 
-def get_wav_metadata(filepath: str) -> Dict[str, Any]:
+def get_wav_metadata(filepath: str) -> dict[str, Any]:
     """
     Get metadata from an audio file (WAV, MP3, FLAC, OGG, M4A, etc.).
 

@@ -11,7 +11,7 @@ does not exist and :class:`AudioLoadError` when decoding fails.
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -52,11 +52,11 @@ class AudioInfo:
     sample_rate: int
     channels: int
     samples: int
-    bit_depth: Optional[int] = None
-    format: Optional[str] = None
-    subtype: Optional[str] = None
+    bit_depth: int | None = None
+    format: str | None = None
+    subtype: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "duration": self.duration,
@@ -88,7 +88,7 @@ class AudioAnalysis:
     frequency: FrequencyStats
     silence: SilenceInfo
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "file_path": self.file_path,
@@ -213,10 +213,10 @@ def analyze_audio(
 
 
 def analyze_audio_batch(
-    filepaths: List[str],
+    filepaths: list[str],
     silence_threshold_db: float = -40,
     verbose: bool = True,
-) -> List[AudioAnalysis]:
+) -> list[AudioAnalysis]:
     """
     Analyze multiple audio files.
 
@@ -247,7 +247,7 @@ def analyze_audio_batch(
     return results
 
 
-def summarize_analysis(analyses: List[AudioAnalysis]) -> Dict[str, Any]:
+def summarize_analysis(analyses: list[AudioAnalysis]) -> dict[str, Any]:
     """
     Summarize analysis results from multiple files.
 

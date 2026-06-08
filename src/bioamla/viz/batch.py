@@ -9,8 +9,8 @@ progress is reported via an optional callback / simple prints, and file
 discovery uses pathlib instead of the file repository.
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional, Tuple
 
 from bioamla.audio.discovery import list_audio_files
 from bioamla.exceptions import NotFoundError
@@ -31,15 +31,15 @@ def batch_generate_spectrograms(
     hop_length: int = 512,
     n_fft: int = 2048,
     window: WindowType = "hann",
-    figsize: Tuple[int, int] = (10, 4),
+    figsize: tuple[int, int] = (10, 4),
     cmap: str = "magma",
-    db_min: Optional[float] = None,
-    db_max: Optional[float] = None,
+    db_min: float | None = None,
+    db_max: float | None = None,
     dpi: int = 150,
     format: str = "png",
     recursive: bool = True,
     verbose: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict:
     """
     Generate spectrograms for all audio files in a directory.

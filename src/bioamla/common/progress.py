@@ -6,8 +6,9 @@ Stdlib-only helpers for reporting progress during batch operations and a
 free ``process_batch`` function adapted from the old ``BaseService._process_batch``.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional, Tuple, TypeVar
+from typing import TypeVar
 
 T = TypeVar("T")
 I = TypeVar("I")  # noqa: E741 - item type
@@ -19,8 +20,8 @@ class BatchProgress:
 
     total: int
     completed: int = 0
-    current_file: Optional[str] = None
-    errors: List[str] = field(default_factory=list)
+    current_file: str | None = None
+    errors: list[str] = field(default_factory=list)
 
     @property
     def percent(self) -> float:
@@ -46,14 +47,14 @@ class BatchProcessResult:
         errors: List of ``(item, exception)`` tuples for items that failed.
     """
 
-    results: List[T] = field(default_factory=list)
-    errors: List[Tuple[object, Exception]] = field(default_factory=list)
+    results: list[T] = field(default_factory=list)
+    errors: list[tuple[object, Exception]] = field(default_factory=list)
 
 
 def process_batch(
-    items: List[I],
+    items: list[I],
     processor: Callable[[I], T],
-    on_progress: Optional[ProgressCallback] = None,
+    on_progress: ProgressCallback | None = None,
     continue_on_error: bool = True,
 ) -> BatchProcessResult:
     """

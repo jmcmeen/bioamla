@@ -12,7 +12,7 @@ numpy-only; no heavy/optional dependencies.
 
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -25,7 +25,7 @@ class ToDictMixin:
     Override ``_to_dict_extra()`` to add custom serialization logic.
     """
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert dataclass to dictionary, handling nested structures."""
         if not is_dataclass(self):
             raise TypeError(f"{self.__class__.__name__} is not a dataclass")
@@ -61,7 +61,7 @@ class ToDictMixin:
         # Fallback for other types
         return str(value)
 
-    def _to_dict_extra(self) -> Optional[Dict[str, Any]]:
+    def _to_dict_extra(self) -> dict[str, Any] | None:
         """Override to add extra fields to dict output."""
         return None
 
@@ -87,9 +87,9 @@ class AudioData(ToDictMixin):
     samples: np.ndarray
     sample_rate: int
     channels: int = 1
-    source_path: Optional[str] = None
+    source_path: str | None = None
     is_modified: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def duration(self) -> float:
@@ -137,8 +137,8 @@ class AudioMetadata(ToDictMixin):
     duration_seconds: float
     sample_rate: int
     channels: int
-    bit_depth: Optional[int] = None
-    format: Optional[str] = None
+    bit_depth: int | None = None
+    format: str | None = None
 
 
 @dataclass

@@ -1,4 +1,3 @@
-from typing import Optional
 
 import numpy as np
 from opensoundscape import MelSpectrogram as OSSMelSpectrogram
@@ -27,7 +26,7 @@ class SpectrogramAdapter:
         n_mels: int = 128,
         window_samples: int = 512,
         overlap_fraction: float = 0.5,
-        fft_size: Optional[int] = None,
+        fft_size: int | None = None,
     ) -> np.ndarray:
         """Generate a mel spectrogram from audio.
 
@@ -83,11 +82,11 @@ class SpectrogramAdapter:
     @staticmethod
     def mel_from_file(
         path: str,
-        sample_rate: Optional[int] = None,
+        sample_rate: int | None = None,
         n_mels: int = 128,
         window_samples: int = 512,
         overlap_fraction: float = 0.5,
-        fft_size: Optional[int] = None,
+        fft_size: int | None = None,
     ) -> np.ndarray:
         """Generate a mel spectrogram directly from a file.
 

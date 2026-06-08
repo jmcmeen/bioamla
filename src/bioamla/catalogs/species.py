@@ -12,7 +12,7 @@ import logging
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from bioamla.catalogs._models import (
     EBIRD_TAXONOMY_URL,
@@ -35,7 +35,7 @@ _client = APIClient(
 )
 
 # Module-level in-memory taxonomy cache (must persist across calls).
-_taxonomy_cache: Dict[str, Dict[str, Any]] = {}
+_taxonomy_cache: dict[str, dict[str, Any]] = {}
 _taxonomy_loaded: bool = False
 
 
@@ -80,7 +80,7 @@ def _load_ebird_taxonomy() -> None:
         logger.warning(f"Failed to load eBird taxonomy: {e}")
 
 
-def _search_inat_taxon(name: str) -> Optional[SpeciesInfo]:
+def _search_inat_taxon(name: str) -> SpeciesInfo | None:
     """Search iNaturalist for a taxon by name; returns None on failure/miss."""
     try:
         response = _client.get(
@@ -182,7 +182,7 @@ def common_to_scientific(common_name: str, fallback_inat: bool = True) -> str:
     raise SpeciesError(f"No scientific name found for: {common_name}")
 
 
-def search(query: str, limit: int = 10, min_score: float = 0.5) -> List[SearchMatch]:
+def search(query: str, limit: int = 10, min_score: float = 0.5) -> list[SearchMatch]:
     """Fuzzy search for species by name.
 
     Args:
@@ -196,7 +196,7 @@ def search(query: str, limit: int = 10, min_score: float = 0.5) -> List[SearchMa
     _load_ebird_taxonomy()
 
     query_normalized = _normalize_name(query)
-    matches: List[Tuple[float, SearchMatch]] = []
+    matches: list[tuple[float, SearchMatch]] = []
     seen: set = set()
 
     for _key, entry in _taxonomy_cache.items():
@@ -253,7 +253,7 @@ def get_species_code(name: str) -> str:
     raise SpeciesError(f"No species code found for: {name}")
 
 
-def code_to_name(species_code: str) -> Tuple[str, str]:
+def code_to_name(species_code: str) -> tuple[str, str]:
     """Convert an eBird species code to a ``(scientific_name, common_name)`` tuple.
 
     Raises:
@@ -270,9 +270,9 @@ def code_to_name(species_code: str) -> Tuple[str, str]:
 
 
 def batch_convert(
-    names: List[str],
+    names: list[str],
     direction: str = "scientific_to_common",
-) -> Dict[str, Optional[str]]:
+) -> dict[str, str | None]:
     """Convert a batch of names.
 
     Args:
@@ -283,7 +283,7 @@ def batch_convert(
         Dict mapping each input name to its converted name (or ``None`` if the
         conversion failed for that name). Does not raise on individual misses.
     """
-    results: Dict[str, Optional[str]] = {}
+    results: dict[str, str | None] = {}
     for name in names:
         try:
             if direction == "scientific_to_common":
@@ -305,9 +305,9 @@ def validate_name(name: str) -> bool:
 
 
 def export_taxonomy(
-    output_path: Union[str, Path],
+    output_path: str | Path,
     format: str = "csv",
-    taxa_filter: Optional[str] = None,
+    taxa_filter: str | None = None,
 ) -> Path:
     """Export the loaded taxonomy to a file.
 
@@ -328,7 +328,7 @@ def export_taxonomy(
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        species: Dict[str, Dict[str, Any]] = {}
+        species: dict[str, dict[str, Any]] = {}
         for entry in _taxonomy_cache.values():
             sci_name = entry.get("scientific_name", "")
             if sci_name and sci_name not in species:

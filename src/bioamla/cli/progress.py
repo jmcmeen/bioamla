@@ -4,8 +4,9 @@ for batch operations in bioamla CLI.
 """
 
 import sys
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
-from typing import Any, Callable, Iterable, Iterator, Optional, TypeVar
+from typing import Any, TypeVar
 
 from rich.console import Console
 from rich.panel import Panel
@@ -45,7 +46,7 @@ class ProgressBar:
 
     def __init__(
         self,
-        total: Optional[int] = None,
+        total: int | None = None,
         description: str = "Processing",
         show_speed: bool = True,
         show_time: bool = True,
@@ -69,8 +70,8 @@ class ProgressBar:
         self.show_time = show_time
         self.transient = transient
         self.disable = disable
-        self._progress: Optional[Progress] = None
-        self._task_id: Optional[TaskID] = None
+        self._progress: Progress | None = None
+        self._task_id: TaskID | None = None
         self._completed = 0
 
     def _create_progress(self) -> Progress:
@@ -119,7 +120,7 @@ class ProgressBar:
             self._progress.advance(self._task_id, amount)
             self._completed += amount
 
-    def update(self, completed: Optional[int] = None, description: Optional[str] = None) -> None:
+    def update(self, completed: int | None = None, description: str | None = None) -> None:
         """Update the progress bar state."""
         if self._progress and self._task_id is not None:
             kwargs = {}
@@ -146,7 +147,7 @@ class ProgressBar:
 def track(
     iterable: Iterable[T],
     description: str = "Processing",
-    total: Optional[int] = None,
+    total: int | None = None,
     transient: bool = False,
     disable: bool = False,
 ) -> Iterator[T]:
@@ -251,7 +252,7 @@ def print_table(
 
 def print_panel(
     content: str,
-    title: Optional[str] = None,
+    title: str | None = None,
     style: str = "blue",
 ) -> None:
     """

@@ -12,7 +12,7 @@ etc.) to avoid name collisions.
 """
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # =============================================================================
 # API endpoints / constants
@@ -35,12 +35,12 @@ XC_API_URL = "https://xeno-canto.org/api/3/recordings"
 class ToDictMixin:
     """Mixin adding ``to_dict()`` to dataclasses, handling nested structures."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert dataclass to dictionary, recursing into nested structures."""
         if not is_dataclass(self):
             raise TypeError(f"{self.__class__.__name__} is not a dataclass")
 
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
         for f in fields(self):
             result[f.name] = self._serialize_value(getattr(self, f.name))
         return result
@@ -78,17 +78,17 @@ class EBirdObservation(ToDictMixin):
     location_id: str
     location_name: str
     observation_date: str
-    how_many: Optional[int] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    how_many: int | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     observation_valid: bool = True
     observation_reviewed: bool = False
     location_private: bool = False
-    subid: Optional[str] = None
-    obs_id: Optional[str] = None
+    subid: str | None = None
+    obs_id: str | None = None
 
     @classmethod
-    def from_api_response(cls, data: Dict[str, Any]) -> "EBirdObservation":
+    def from_api_response(cls, data: dict[str, Any]) -> "EBirdObservation":
         """Create from eBird API response."""
         return cls(
             species_code=data.get("speciesCode", ""),
@@ -116,14 +116,14 @@ class EBirdChecklist(ToDictMixin):
     location_id: str
     location_name: str
     observation_date: str
-    observation_time: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    duration_minutes: Optional[int] = None
-    distance_km: Optional[float] = None
-    num_observers: Optional[int] = None
+    observation_time: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    duration_minutes: int | None = None
+    distance_km: float | None = None
+    num_observers: int | None = None
     species_count: int = 0
-    observations: List[EBirdObservation] = field(default_factory=list)
+    observations: list[EBirdObservation] = field(default_factory=list)
 
 
 @dataclass
@@ -136,11 +136,11 @@ class EBirdHotspot(ToDictMixin):
     subnational1_code: str
     latitude: float
     longitude: float
-    latest_obs_dt: Optional[str] = None
-    num_species_all_time: Optional[int] = None
+    latest_obs_dt: str | None = None
+    num_species_all_time: int | None = None
 
     @classmethod
-    def from_api_response(cls, data: Dict[str, Any]) -> "EBirdHotspot":
+    def from_api_response(cls, data: dict[str, Any]) -> "EBirdHotspot":
         """Create from eBird API response."""
         return cls(
             loc_id=data.get("locId", ""),
@@ -162,23 +162,23 @@ class ValidationResult(ToDictMixin):
     is_valid: bool
     nearby_observations: int
     total_species_in_area: int
-    most_recent_observation: Optional[str] = None
+    most_recent_observation: str | None = None
 
 
 @dataclass
 class NearbyResult(ToDictMixin):
     """Result of nearby observations query."""
 
-    observations: List[EBirdObservation]
+    observations: list[EBirdObservation]
     total_count: int
-    query_params: Dict[str, Any]
+    query_params: dict[str, Any]
 
 
 @dataclass
 class RegionResult(ToDictMixin):
     """Result of regional observations query."""
 
-    observations: List[EBirdObservation]
+    observations: list[EBirdObservation]
     total_count: int
     region_code: str
 
@@ -195,7 +195,7 @@ class SpeciesInfo(ToDictMixin):
     scientific_name: str
     common_name: str = ""
     species_code: str = ""
-    taxon_id: Optional[int] = None
+    taxon_id: int | None = None
     family: str = ""
     order: str = ""
     genus: str = ""
@@ -204,7 +204,7 @@ class SpeciesInfo(ToDictMixin):
     source: str = ""
 
     @classmethod
-    def from_ebird_response(cls, data: Dict[str, Any]) -> "SpeciesInfo":
+    def from_ebird_response(cls, data: dict[str, Any]) -> "SpeciesInfo":
         """Create SpeciesInfo from eBird taxonomy API response data."""
         sci_name = data.get("sciName", "")
         parts = sci_name.split()
@@ -221,7 +221,7 @@ class SpeciesInfo(ToDictMixin):
         )
 
     @classmethod
-    def from_inat_response(cls, data: Dict[str, Any]) -> "SpeciesInfo":
+    def from_inat_response(cls, data: dict[str, Any]) -> "SpeciesInfo":
         """Create SpeciesInfo from iNaturalist taxa API response data."""
         sci_name = data.get("name", "")
         parts = sci_name.split()
@@ -258,8 +258,8 @@ class INaturalistSearchResult(ToDictMixin):
     """Result of an iNaturalist search."""
 
     total_results: int
-    observations: List[Dict[str, Any]]
-    query_params: Dict[str, Any]
+    observations: list[dict[str, Any]]
+    query_params: dict[str, Any]
 
 
 @dataclass
@@ -273,7 +273,7 @@ class INaturalistDownloadResult(ToDictMixin):
     failed_downloads: int
     output_dir: str
     metadata_file: str
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -315,7 +315,7 @@ class ObservationInfo(ToDictMixin):
     place_guess: str
     observer: str
     quality_grade: str
-    sounds: List[Dict[str, Any]]
+    sounds: list[dict[str, Any]]
     url: str
 
 
@@ -334,20 +334,20 @@ class MLRecording(ToDictMixin):
     common_name: str
     scientific_name: str
     rating: int
-    duration: Optional[float]
+    duration: float | None
     location: str
     country: str
     user_display_name: str
     download_url: str
     media_type: str = "audio"
     region: str = ""
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    latitude: float | None = None
+    longitude: float | None = None
     date: str = ""
     preview_url: str = ""
 
     @classmethod
-    def from_api_response(cls, data: Dict[str, Any]) -> "MLRecording":
+    def from_api_response(cls, data: dict[str, Any]) -> "MLRecording":
         """Create a recording from Macaulay Library API response data."""
         asset_id = str(data.get("assetId", data.get("catalogId", "")))
         catalog_id = str(data.get("catalogId", ""))
@@ -387,8 +387,8 @@ class MacaulaySearchResult(ToDictMixin):
     """Result of a Macaulay Library search."""
 
     total_results: int
-    recordings: List[MLRecording]
-    query_params: Dict[str, Any]
+    recordings: list[MLRecording]
+    query_params: dict[str, Any]
 
 
 @dataclass
@@ -400,7 +400,7 @@ class MacaulayDownloadResult(ToDictMixin):
     failed: int
     skipped: int
     output_dir: str
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 # =============================================================================
@@ -427,14 +427,14 @@ class XCRecording(ToDictMixin):
     genus: str = ""
     species: str = ""
     subspecies: str = ""
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    latitude: float | None = None
+    longitude: float | None = None
     date: str = ""
     time: str = ""
     remarks: str = ""
 
     @classmethod
-    def from_api_response(cls, data: Dict[str, Any]) -> "XCRecording":
+    def from_api_response(cls, data: dict[str, Any]) -> "XCRecording":
         """Create a recording from Xeno-canto API response data."""
         lat = data.get("lat")
         lng = data.get("lng")
@@ -477,8 +477,8 @@ class XenoCantoSearchResult(ToDictMixin):
     """Result of a Xeno-canto search."""
 
     total_results: int
-    recordings: List[XCRecording]
-    query_params: Dict[str, Any]
+    recordings: list[XCRecording]
+    query_params: dict[str, Any]
 
 
 @dataclass
@@ -490,7 +490,7 @@ class XenoCantoDownloadResult(ToDictMixin):
     failed: int
     skipped: int
     output_dir: str
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 # =============================================================================

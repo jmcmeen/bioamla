@@ -41,7 +41,7 @@ Example:
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import librosa
 import numpy as np
@@ -78,7 +78,7 @@ __all__ = [
 # =============================================================================
 
 
-def _load_audio_file(filepath: Union[str, Path]) -> Tuple[np.ndarray, int]:
+def _load_audio_file(filepath: str | Path) -> tuple[np.ndarray, int]:
     """Load an audio file, raising :class:`AudioLoadError` on failure.
 
     Wraps the pydub adapter loader so file-not-found / decode errors surface as
@@ -117,10 +117,10 @@ class Detection:
     start_time: float
     end_time: float
     confidence: float = 1.0
-    frequency_low: Optional[float] = None
-    frequency_high: Optional[float] = None
+    frequency_low: float | None = None
+    frequency_high: float | None = None
     label: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def duration(self) -> float:
@@ -132,7 +132,7 @@ class Detection:
         """Center time of detection in seconds."""
         return (self.start_time + self.end_time) / 2
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "start_time": self.start_time,
@@ -163,9 +163,9 @@ class PeakDetection:
     amplitude: float
     width: float = 0.0
     prominence: float = 0.0
-    frequency: Optional[float] = None
+    frequency: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "time": self.time,
@@ -230,7 +230,7 @@ class BandLimitedEnergyDetector:
         audio: np.ndarray,
         sample_rate: int,
         hop_length: int = 256,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Compute band-limited energy envelope.
 
@@ -273,7 +273,7 @@ class BandLimitedEnergyDetector:
         audio: np.ndarray,
         sample_rate: int,
         hop_length: int = 256,
-    ) -> List[Detection]:
+    ) -> list[Detection]:
         """
         Detect sounds in the specified frequency band.
 
@@ -298,7 +298,7 @@ class BandLimitedEnergyDetector:
         audio: np.ndarray,
         sample_rate: int,
         hop_length: int,
-    ) -> List[Detection]:
+    ) -> list[Detection]:
         # Ensure mono
         if audio.ndim > 1:
             audio = audio.mean(axis=0)
@@ -356,7 +356,7 @@ class BandLimitedEnergyDetector:
 
         return detections
 
-    def _merge_detections(self, detections: List[Detection]) -> List[Detection]:
+    def _merge_detections(self, detections: list[Detection]) -> list[Detection]:
         """Merge detections that are close together."""
         if len(detections) <= 1:
             return detections
@@ -387,9 +387,9 @@ class BandLimitedEnergyDetector:
 
     def detect_from_file(
         self,
-        filepath: Union[str, Path],
+        filepath: str | Path,
         **kwargs,
-    ) -> List[Detection]:
+    ) -> list[Detection]:
         """
         Detect sounds from an audio file.
 
@@ -574,7 +574,7 @@ class RibbitDetector:
         self,
         audio: np.ndarray,
         sample_rate: int,
-    ) -> List[Detection]:
+    ) -> list[Detection]:
         """
         Detect periodic calls using RIBBIT algorithm.
 
@@ -597,7 +597,7 @@ class RibbitDetector:
         self,
         audio: np.ndarray,
         sample_rate: int,
-    ) -> List[Detection]:
+    ) -> list[Detection]:
         # Ensure mono
         if audio.ndim > 1:
             audio = audio.mean(axis=0)
@@ -638,7 +638,7 @@ class RibbitDetector:
 
         return detections
 
-    def _merge_overlapping(self, detections: List[Detection]) -> List[Detection]:
+    def _merge_overlapping(self, detections: list[Detection]) -> list[Detection]:
         """Merge overlapping detections."""
         if len(detections) <= 1:
             return detections
@@ -670,7 +670,7 @@ class RibbitDetector:
         self,
         audio: np.ndarray,
         sample_rate: int,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Compute RIBBIT scores over time.
 
@@ -705,8 +705,8 @@ class RibbitDetector:
 
     def detect_from_file(
         self,
-        filepath: Union[str, Path],
-    ) -> List[Detection]:
+        filepath: str | Path,
+    ) -> list[Detection]:
         """Detect periodic calls from an audio file.
 
         Raises:
@@ -757,8 +757,8 @@ class CWTPeakDetector:
         n_scales: int = 20,
         snr_threshold: float = 2.0,
         min_peak_distance: float = 0.01,
-        low_freq: Optional[float] = None,
-        high_freq: Optional[float] = None,
+        low_freq: float | None = None,
+        high_freq: float | None = None,
     ):
         if low_freq is not None and high_freq is not None:
             _validate_freq_band(low_freq, high_freq)
@@ -774,7 +774,7 @@ class CWTPeakDetector:
         self,
         signal: np.ndarray,
         sample_rate: int,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Compute Continuous Wavelet Transform using convolution.
 
@@ -814,7 +814,7 @@ class CWTPeakDetector:
         self,
         cwt_matrix: np.ndarray,
         sample_rate: int,
-    ) -> List[PeakDetection]:
+    ) -> list[PeakDetection]:
         """
         Find peaks along ridges in CWT matrix.
 
@@ -878,7 +878,7 @@ class CWTPeakDetector:
         audio: np.ndarray,
         sample_rate: int,
         hop_length: int = 256,
-    ) -> List[PeakDetection]:
+    ) -> list[PeakDetection]:
         """
         Detect peaks using CWT analysis.
 
@@ -903,7 +903,7 @@ class CWTPeakDetector:
         audio: np.ndarray,
         sample_rate: int,
         hop_length: int,
-    ) -> List[PeakDetection]:
+    ) -> list[PeakDetection]:
         # Ensure mono
         if audio.ndim > 1:
             audio = audio.mean(axis=0)
@@ -940,7 +940,7 @@ class CWTPeakDetector:
         sample_rate: int,
         min_peaks: int = 3,
         max_gap: float = 1.0,
-    ) -> List[Detection]:
+    ) -> list[Detection]:
         """
         Detect sequences of peaks as detections.
 
@@ -1009,9 +1009,9 @@ class CWTPeakDetector:
 
     def detect_from_file(
         self,
-        filepath: Union[str, Path],
+        filepath: str | Path,
         **kwargs,
-    ) -> List[PeakDetection]:
+    ) -> list[PeakDetection]:
         """Detect peaks from an audio file.
 
         Raises:
@@ -1064,7 +1064,7 @@ class AcceleratingPatternDetector:
         self,
         min_pulses: int = 5,
         acceleration_threshold: float = 1.5,
-        deceleration_threshold: Optional[float] = None,
+        deceleration_threshold: float | None = None,
         low_freq: float = 500.0,
         high_freq: float = 5000.0,
         min_pulse_rate: float = 2.0,
@@ -1094,7 +1094,7 @@ class AcceleratingPatternDetector:
     def analyze_intervals(
         self,
         peak_times: np.ndarray,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze inter-peak intervals for acceleration pattern.
 
@@ -1175,7 +1175,7 @@ class AcceleratingPatternDetector:
         self,
         audio: np.ndarray,
         sample_rate: int,
-    ) -> List[Detection]:
+    ) -> list[Detection]:
         """
         Detect accelerating/decelerating call patterns.
 
@@ -1200,7 +1200,7 @@ class AcceleratingPatternDetector:
         self,
         audio: np.ndarray,
         sample_rate: int,
-    ) -> List[Detection]:
+    ) -> list[Detection]:
         # Ensure mono
         if audio.ndim > 1:
             audio = audio.mean(axis=0)
@@ -1256,7 +1256,7 @@ class AcceleratingPatternDetector:
 
         return detections
 
-    def _merge_overlapping(self, detections: List[Detection]) -> List[Detection]:
+    def _merge_overlapping(self, detections: list[Detection]) -> list[Detection]:
         """Merge overlapping detections of the same type."""
         if len(detections) <= 1:
             return detections
@@ -1292,8 +1292,8 @@ class AcceleratingPatternDetector:
 
     def detect_from_file(
         self,
-        filepath: Union[str, Path],
-    ) -> List[Detection]:
+        filepath: str | Path,
+    ) -> list[Detection]:
         """Detect accelerating patterns from an audio file.
 
         Raises:
@@ -1327,12 +1327,10 @@ def _validate_freq_band(low_freq: float, high_freq: float) -> None:
 def detect_all(
     audio: np.ndarray,
     sample_rate: int,
-    detectors: List[
-        Union[
-            BandLimitedEnergyDetector, RibbitDetector, CWTPeakDetector, AcceleratingPatternDetector
-        ]
+    detectors: list[
+        BandLimitedEnergyDetector | RibbitDetector | CWTPeakDetector | AcceleratingPatternDetector
     ],
-) -> List[Detection]:
+) -> list[Detection]:
     """
     Run multiple detectors and combine results.
 
@@ -1377,8 +1375,8 @@ def detect_all(
 
 
 def export_detections(
-    detections: List[Detection],
-    output_path: Union[str, Path],
+    detections: list[Detection],
+    output_path: str | Path,
     format: str = "csv",
 ) -> Path:
     """
@@ -1430,12 +1428,10 @@ def export_detections(
 
 
 def batch_detect(
-    filepaths: List[Union[str, Path]],
-    detector: Union[
-        BandLimitedEnergyDetector, RibbitDetector, CWTPeakDetector, AcceleratingPatternDetector
-    ],
+    filepaths: list[str | Path],
+    detector: BandLimitedEnergyDetector | RibbitDetector | CWTPeakDetector | AcceleratingPatternDetector,
     verbose: bool = True,
-) -> Dict[str, List[Detection]]:
+) -> dict[str, list[Detection]]:
     """
     Run detection on multiple files.
 
@@ -1450,7 +1446,7 @@ def batch_detect(
     Returns:
         Dictionary mapping filepath to list of detections.
     """
-    results: Dict[str, List[Detection]] = {}
+    results: dict[str, list[Detection]] = {}
 
     for i, filepath in enumerate(filepaths, 1):
         if verbose:

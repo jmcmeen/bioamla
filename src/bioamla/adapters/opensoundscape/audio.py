@@ -1,4 +1,3 @@
-from typing import Optional
 
 import numpy as np
 from opensoundscape import Audio as OSSAudio
@@ -28,7 +27,7 @@ class AudioAdapter:
 
     @classmethod
     def from_file(
-        cls, path: str, sample_rate: Optional[int] = None
+        cls, path: str, sample_rate: int | None = None
     ) -> "AudioAdapter":
         """Load audio from a file.
 

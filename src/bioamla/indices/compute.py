@@ -32,7 +32,7 @@ Example:
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import librosa
 import numpy as np
@@ -69,10 +69,10 @@ class AcousticIndices:
     biophony: float = 0.0
     sample_rate: int = 0
     duration: float = 0.0
-    h_spectral: Optional[float] = None
-    h_temporal: Optional[float] = None
+    h_spectral: float | None = None
+    h_temporal: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         result = {
             "aci": self.aci,
@@ -195,9 +195,9 @@ def _compute_spectrogram(
     audio: np.ndarray,
     sample_rate: int,
     n_fft: int = 512,
-    hop_length: Optional[int] = None,
+    hop_length: int | None = None,
     window: str = "hann",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute spectrogram for acoustic index calculations.
 
@@ -252,11 +252,11 @@ def compute_aci(
     audio: np.ndarray,
     sample_rate: int,
     n_fft: int = 512,
-    hop_length: Optional[int] = None,
+    hop_length: int | None = None,
     min_freq: float = 0.0,
-    max_freq: Optional[float] = None,
+    max_freq: float | None = None,
     j: int = 5,
-    precomputed_spec: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None,
+    precomputed_spec: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None,
 ) -> float:
     """
     Compute the Acoustic Complexity Index (ACI).
@@ -331,11 +331,11 @@ def compute_adi(
     audio: np.ndarray,
     sample_rate: int,
     n_fft: int = 512,
-    hop_length: Optional[int] = None,
+    hop_length: int | None = None,
     max_freq: float = 10000.0,
     freq_step: float = 1000.0,
     db_threshold: float = -50.0,
-    precomputed_spec: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None,
+    precomputed_spec: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None,
 ) -> float:
     """
     Compute the Acoustic Diversity Index (ADI).
@@ -421,11 +421,11 @@ def compute_aei(
     audio: np.ndarray,
     sample_rate: int,
     n_fft: int = 512,
-    hop_length: Optional[int] = None,
+    hop_length: int | None = None,
     max_freq: float = 10000.0,
     freq_step: float = 1000.0,
     db_threshold: float = -50.0,
-    precomputed_spec: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None,
+    precomputed_spec: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None,
 ) -> float:
     """
     Compute the Acoustic Evenness Index (AEI).
@@ -508,11 +508,11 @@ def compute_bio(
     audio: np.ndarray,
     sample_rate: int,
     n_fft: int = 512,
-    hop_length: Optional[int] = None,
+    hop_length: int | None = None,
     min_freq: float = 2000.0,
     max_freq: float = 8000.0,
     db_threshold: float = -50.0,
-    precomputed_spec: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None,
+    precomputed_spec: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None,
 ) -> float:
     """
     Compute the Bioacoustic Index (BIO).
@@ -584,12 +584,12 @@ def compute_ndsi(
     audio: np.ndarray,
     sample_rate: int,
     n_fft: int = 1024,
-    hop_length: Optional[int] = None,
+    hop_length: int | None = None,
     anthro_min: float = 1000.0,
     anthro_max: float = 2000.0,
     bio_min: float = 2000.0,
     bio_max: float = 8000.0,
-) -> Tuple[float, float, float]:
+) -> tuple[float, float, float]:
     """
     Compute the Normalized Difference Soundscape Index (NDSI).
 
@@ -650,9 +650,9 @@ def compute_all_indices(
     audio: np.ndarray,
     sample_rate: int,
     n_fft: int = 512,
-    hop_length: Optional[int] = None,
+    hop_length: int | None = None,
     aci_min_freq: float = 0.0,
-    aci_max_freq: Optional[float] = None,
+    aci_max_freq: float | None = None,
     adi_max_freq: float = 10000.0,
     adi_freq_step: float = 1000.0,
     bio_min_freq: float = 2000.0,
@@ -773,7 +773,7 @@ def compute_all_indices(
 
 
 def compute_indices_from_file(
-    filepath: Union[str, Path],
+    filepath: str | Path,
     **kwargs,
 ) -> AcousticIndices:
     """
@@ -797,10 +797,10 @@ def compute_indices_from_file(
 
 
 def batch_compute_indices(
-    filepaths: List[Union[str, Path]],
+    filepaths: list[str | Path],
     verbose: bool = True,
     **kwargs,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Compute acoustic indices for multiple audio files.
 
@@ -849,9 +849,9 @@ def temporal_indices(
     audio: np.ndarray,
     sample_rate: int,
     window_duration: float = 60.0,
-    hop_duration: Optional[float] = None,
+    hop_duration: float | None = None,
     **kwargs,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Compute acoustic indices over time windows.
 
@@ -907,7 +907,7 @@ def spectral_entropy(
     audio: np.ndarray,
     sample_rate: int,
     n_fft: int = 512,
-    hop_length: Optional[int] = None,
+    hop_length: int | None = None,
 ) -> float:
     """
     Compute spectral entropy of the audio signal.
@@ -950,7 +950,7 @@ def temporal_entropy(
     audio: np.ndarray,
     sample_rate: int,
     n_fft: int = 512,
-    hop_length: Optional[int] = None,
+    hop_length: int | None = None,
 ) -> float:
     """
     Compute temporal entropy of the audio signal.
@@ -1006,7 +1006,7 @@ INDEX_DESCRIPTIONS = {
 }
 
 
-def describe_index(index_name: str) -> Optional[str]:
+def describe_index(index_name: str) -> str | None:
     """Return a human-readable description of an acoustic index, or None if unknown."""
     return INDEX_DESCRIPTIONS.get(index_name.lower())
 
@@ -1016,7 +1016,7 @@ def compute_index(
     sample_rate: int,
     index_name: str,
     n_fft: int = 512,
-    hop_length: Optional[int] = None,
+    hop_length: int | None = None,
     **kwargs: Any,
 ) -> float:
     """Compute a single acoustic index by name.

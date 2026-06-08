@@ -14,8 +14,8 @@ functions; on a slim install they raise
 :class:`~bioamla.exceptions.DependencyError` when actually used.
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from bioamla.batch import BatchResult, discover_files, run_batch
 from bioamla.exceptions import NotFoundError
@@ -38,7 +38,7 @@ def batch_predict_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """
     Run AST prediction over every audio file in a directory.
@@ -115,7 +115,7 @@ def batch_embed_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """
     Extract AST embeddings for every audio file in a directory, saving one

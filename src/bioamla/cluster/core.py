@@ -29,7 +29,7 @@ import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 
@@ -71,8 +71,8 @@ class ReductionConfig:
 
 def reduce_dimensions(
     embeddings: np.ndarray,
-    config: Optional[ReductionConfig] = None,
-    method: Optional[str] = None,
+    config: ReductionConfig | None = None,
+    method: str | None = None,
     n_components: int = 2,
     random_state: int = 42,
     **kwargs: Any,
@@ -247,7 +247,7 @@ class ClusteringConfig:
 
     # Agglomerative parameters
     linkage: str = "ward"
-    distance_threshold: Optional[float] = None
+    distance_threshold: float | None = None
 
 
 class AudioClusterer:
@@ -259,8 +259,8 @@ class AudioClusterer:
 
     def __init__(
         self,
-        config: Optional[ClusteringConfig] = None,
-        method: Optional[str] = None,
+        config: ClusteringConfig | None = None,
+        method: str | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -407,7 +407,7 @@ class AudioClusterer:
         self._cluster_centers = np.array(centers)
         return self._cluster_centers
 
-    def get_cluster_stats(self, embeddings: np.ndarray) -> Dict[int, Dict[str, Any]]:
+    def get_cluster_stats(self, embeddings: np.ndarray) -> dict[int, dict[str, Any]]:
         """Get statistics for each cluster."""
         if self.labels_ is None:
             raise ClusteringError("Clusterer must be fitted first")
@@ -432,7 +432,7 @@ class AudioClusterer:
 def find_optimal_clusters(
     embeddings: np.ndarray,
     method: str = "silhouette",
-    k_range: Tuple[int, int] = (2, 20),
+    k_range: tuple[int, int] = (2, 20),
 ) -> int:
     """
     Find optimal number of clusters.
@@ -542,7 +542,7 @@ def compute_cluster_similarity(
 
 def sort_by_similarity(
     embeddings: np.ndarray,
-    reference: Optional[np.ndarray] = None,
+    reference: np.ndarray | None = None,
     method: str = "nearest_neighbor",
 ) -> np.ndarray:
     """
@@ -609,8 +609,8 @@ def sort_by_similarity(
 
 
 def sort_clusters_by_similarity(
-    embeddings: np.ndarray, labels: np.ndarray, reference_label: Optional[int] = None
-) -> List[int]:
+    embeddings: np.ndarray, labels: np.ndarray, reference_label: int | None = None
+) -> list[int]:
     """
     Sort cluster labels by similarity to each other.
 
@@ -686,7 +686,7 @@ class NoveltyDetector:
     def __init__(
         self,
         method: str = "distance",
-        threshold: Optional[float] = None,
+        threshold: float | None = None,
         contamination: float = 0.1,
     ) -> None:
         """
@@ -704,7 +704,7 @@ class NoveltyDetector:
         self.cluster_radii = None
         self.detector = None
 
-    def fit(self, embeddings: np.ndarray, labels: Optional[np.ndarray] = None) -> "NoveltyDetector":
+    def fit(self, embeddings: np.ndarray, labels: np.ndarray | None = None) -> "NoveltyDetector":
         """
         Fit the novelty detector.
 
@@ -780,7 +780,7 @@ class NoveltyDetector:
         self.cluster_centers = np.array(self.cluster_centers)
         self.cluster_radii = np.array(self.cluster_radii)
 
-    def predict(self, embeddings: np.ndarray) -> List[NoveltyResult]:
+    def predict(self, embeddings: np.ndarray) -> list[NoveltyResult]:
         """
         Detect novel sounds in new embeddings.
 
@@ -831,8 +831,8 @@ class NoveltyDetector:
         return results
 
     def get_novel_samples(
-        self, embeddings: np.ndarray, n_samples: Optional[int] = None
-    ) -> List[int]:
+        self, embeddings: np.ndarray, n_samples: int | None = None
+    ) -> list[int]:
         """
         Get indices of most novel samples.
 
@@ -855,11 +855,11 @@ class NoveltyDetector:
 
 def discover_novel_sounds(
     embeddings: np.ndarray,
-    known_labels: Optional[np.ndarray] = None,
+    known_labels: np.ndarray | None = None,
     method: str = "distance",
-    threshold: Optional[float] = None,
+    threshold: float | None = None,
     return_scores: bool = False,
-) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """
     Discover novel sound types in embeddings.
 
@@ -900,7 +900,7 @@ def discover_novel_sounds(
 
 
 def extract_embeddings_batch(
-    model, dataloader, device=None, layer_name: Optional[str] = None
+    model, dataloader, device=None, layer_name: str | None = None
 ) -> np.ndarray:
     """
     Extract embeddings from a model for a batch of data.
@@ -981,8 +981,8 @@ def extract_embeddings_batch(
 
 
 def analyze_clusters(
-    embeddings: np.ndarray, labels: np.ndarray, metadata: Optional[List[Dict[str, Any]]] = None
-) -> Dict[str, Any]:
+    embeddings: np.ndarray, labels: np.ndarray, metadata: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """
     Comprehensive cluster analysis.
 
@@ -1049,7 +1049,7 @@ def analyze_clusters(
 
 
 def export_clusters(
-    labels: np.ndarray, filepaths: List[str], output_dir: str, copy_files: bool = False
+    labels: np.ndarray, filepaths: list[str], output_dir: str, copy_files: bool = False
 ) -> str:
     """
     Export clustering results to directory structure.
@@ -1102,7 +1102,7 @@ def export_clusters(
 def cluster_embeddings(
     embeddings: np.ndarray,
     method: str = "hdbscan",
-    n_clusters: Optional[int] = None,
+    n_clusters: int | None = None,
     min_cluster_size: int = 5,
     min_samples: int = 3,
     **kwargs: Any,
@@ -1175,7 +1175,7 @@ def cluster_embeddings(
 def analyze_clusters_summary(
     embeddings: np.ndarray,
     labels: np.ndarray,
-    filepaths: Optional[List[str]] = None,
+    filepaths: list[str] | None = None,
 ) -> ClusterAnalysis:
     """
     Perform detailed analysis of clustering results and return a dataclass.
@@ -1206,12 +1206,12 @@ def analyze_clusters_summary(
 
 def detect_novelty(
     embeddings: np.ndarray,
-    known_embeddings: Optional[np.ndarray] = None,
-    known_labels: Optional[np.ndarray] = None,
+    known_embeddings: np.ndarray | None = None,
+    known_labels: np.ndarray | None = None,
     method: str = "distance",
-    threshold: Optional[float] = None,
+    threshold: float | None = None,
     contamination: float = 0.1,
-) -> Tuple[NoveltyDetectionSummary, np.ndarray, np.ndarray]:
+) -> tuple[NoveltyDetectionSummary, np.ndarray, np.ndarray]:
     """
     Detect novel/outlier samples in embeddings.
 
@@ -1260,9 +1260,9 @@ def detect_novelty(
 
 def export_clusters_to_csv(
     labels: np.ndarray,
-    filepaths: List[str],
+    filepaths: list[str],
     output_path: str,
-    reduced_embeddings: Optional[np.ndarray] = None,
+    reduced_embeddings: np.ndarray | None = None,
 ) -> str:
     """
     Export clustering results to a CSV file.

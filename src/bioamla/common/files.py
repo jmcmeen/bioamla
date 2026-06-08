@@ -18,7 +18,6 @@ dataclass hierarchy.
 import logging
 import zipfile
 from pathlib import Path
-from typing import List, Optional, Union
 from urllib.request import urlretrieve
 
 from bioamla.exceptions import NotFoundError
@@ -31,7 +30,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-def read_text(filepath: Union[str, Path], encoding: str = "utf-8") -> str:
+def read_text(filepath: str | Path, encoding: str = "utf-8") -> str:
     """
     Read entire text file contents.
 
@@ -45,7 +44,7 @@ def read_text(filepath: Union[str, Path], encoding: str = "utf-8") -> str:
     return Path(filepath).read_text(encoding=encoding)
 
 
-def write_text(filepath: Union[str, Path], content: str, encoding: str = "utf-8") -> int:
+def write_text(filepath: str | Path, content: str, encoding: str = "utf-8") -> int:
     """
     Write content to a text file, creating parent directories as needed.
 
@@ -63,7 +62,7 @@ def write_text(filepath: Union[str, Path], content: str, encoding: str = "utf-8"
     return len(content)
 
 
-def read_binary(filepath: Union[str, Path]) -> bytes:
+def read_binary(filepath: str | Path) -> bytes:
     """
     Read entire binary file contents.
 
@@ -76,7 +75,7 @@ def read_binary(filepath: Union[str, Path]) -> bytes:
     return Path(filepath).read_bytes()
 
 
-def write_binary(filepath: Union[str, Path], content: bytes) -> int:
+def write_binary(filepath: str | Path, content: bytes) -> int:
     """
     Write content to a binary file, creating parent directories as needed.
 
@@ -93,7 +92,7 @@ def write_binary(filepath: Union[str, Path], content: bytes) -> int:
     return len(content)
 
 
-def append_text(filepath: Union[str, Path], content: str, encoding: str = "utf-8") -> int:
+def append_text(filepath: str | Path, content: str, encoding: str = "utf-8") -> int:
     """
     Append content to a text file, creating parent directories as needed.
 
@@ -111,7 +110,7 @@ def append_text(filepath: Union[str, Path], content: str, encoding: str = "utf-8
         return f.write(content)
 
 
-def append_binary(filepath: Union[str, Path], content: bytes) -> int:
+def append_binary(filepath: str | Path, content: bytes) -> int:
     """
     Append content to a binary file, creating parent directories as needed.
 
@@ -134,8 +133,8 @@ def append_binary(filepath: Union[str, Path], content: bytes) -> int:
 
 
 def get_files_by_extension(
-    directory: Union[str, Path], extensions: Optional[List[str]] = None, recursive: bool = True
-) -> List[str]:
+    directory: str | Path, extensions: list[str] | None = None, recursive: bool = True
+) -> list[str]:
     """
     Get a list of files in a directory filtered by extension.
 
@@ -174,17 +173,17 @@ def get_files_by_extension(
     return sorted(files)
 
 
-def file_exists(path: Union[str, Path]) -> bool:
+def file_exists(path: str | Path) -> bool:
     """Check if a file exists."""
     return Path(path).is_file()
 
 
-def directory_exists(path: Union[str, Path]) -> bool:
+def directory_exists(path: str | Path) -> bool:
     """Check if a directory exists."""
     return Path(path).is_dir()
 
 
-def create_directory(path: Union[str, Path]) -> Path:
+def create_directory(path: str | Path) -> Path:
     """
     Create a directory and all parent directories if they don't exist.
 
@@ -199,7 +198,7 @@ def create_directory(path: Union[str, Path]) -> Path:
     return path
 
 
-def ensure_directory(path: Union[str, Path]) -> Path:
+def ensure_directory(path: str | Path) -> Path:
     """
     Ensure a directory exists, creating it (and parents) if necessary.
 
@@ -219,7 +218,7 @@ def ensure_directory(path: Union[str, Path]) -> Path:
 # =============================================================================
 
 
-def require_exists(path: Union[str, Path]) -> Path:
+def require_exists(path: str | Path) -> Path:
     """
     Return ``Path(path)`` if it exists, else raise :class:`NotFoundError`.
 
@@ -238,7 +237,7 @@ def require_exists(path: Union[str, Path]) -> Path:
     return p
 
 
-def prepare_output_path(path: Union[str, Path]) -> Path:
+def prepare_output_path(path: str | Path) -> Path:
     """
     Return ``Path(path)`` after ensuring its parent directory exists.
 
@@ -317,7 +316,7 @@ def get_extension_from_content_type(content_type: str) -> str:
     return mapping.get(content_type, "")
 
 
-def download_file(url: str, output_path: Union[str, Path], show_progress: bool = True) -> Path:
+def download_file(url: str, output_path: str | Path, show_progress: bool = True) -> Path:
     """
     Download a file from a URL.
 
@@ -412,7 +411,7 @@ def get_relative_path(filepath: Path, base_path: Path) -> str:
 # =============================================================================
 
 
-def extract_zip_file(zip_path: Union[str, Path], extract_to: Union[str, Path]) -> List[str]:
+def extract_zip_file(zip_path: str | Path, extract_to: str | Path) -> list[str]:
     """
     Extract a ZIP file to a directory.
 
@@ -435,7 +434,7 @@ def extract_zip_file(zip_path: Union[str, Path], extract_to: Union[str, Path]) -
     return extracted_files
 
 
-def create_zip_file(files: List[Union[str, Path]], zip_path: Union[str, Path]) -> str:
+def create_zip_file(files: list[str | Path], zip_path: str | Path) -> str:
     """
     Create a ZIP file from a list of files.
 
@@ -457,7 +456,7 @@ def create_zip_file(files: List[Union[str, Path]], zip_path: Union[str, Path]) -
     return str(zip_path)
 
 
-def zip_directory(directory: Union[str, Path], zip_path: Union[str, Path]) -> str:
+def zip_directory(directory: str | Path, zip_path: str | Path) -> str:
     """
     Create a ZIP file from a directory.
 

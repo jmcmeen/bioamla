@@ -8,8 +8,8 @@ wired to the datasets domain at cut-over time. Functions raise
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from bioamla.batch import BatchResult, discover_files, run_batch
 from bioamla.datasets.annotations import (

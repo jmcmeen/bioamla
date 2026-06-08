@@ -13,9 +13,10 @@ telling the user to install ``bioamla[playback]``.
 
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Optional, Union
+from typing import Any
 
 import numpy as np
 
@@ -69,15 +70,15 @@ class AudioPlayer:
 
     def __init__(self) -> None:
         """Initialize the audio player."""
-        self._audio: Optional[np.ndarray] = None
+        self._audio: np.ndarray | None = None
         self._sample_rate: int = 44100
         self._position: int = 0
         self._state: PlaybackState = PlaybackState.STOPPED
         self._stream = None
         self._loop: bool = False
         self._lock = threading.Lock()
-        self._on_complete: Optional[Callable[[], None]] = None
-        self._on_position_change: Optional[Callable[[PlaybackPosition], None]] = None
+        self._on_complete: Callable[[], None] | None = None
+        self._on_position_change: Callable[[PlaybackPosition], None] | None = None
 
     @property
     def state(self) -> PlaybackState:
@@ -127,8 +128,8 @@ class AudioPlayer:
         self,
         audio: np.ndarray,
         sample_rate: int,
-        on_complete: Optional[Callable[[], None]] = None,
-        on_position_change: Optional[Callable[[PlaybackPosition], None]] = None,
+        on_complete: Callable[[], None] | None = None,
+        on_position_change: Callable[[PlaybackPosition], None] | None = None,
     ) -> None:
         """
         Load audio data for playback.
@@ -164,8 +165,8 @@ class AudioPlayer:
     def load_file(
         self,
         filepath: str,
-        on_complete: Optional[Callable[[], None]] = None,
-        on_position_change: Optional[Callable[[PlaybackPosition], None]] = None,
+        on_complete: Callable[[], None] | None = None,
+        on_position_change: Callable[[PlaybackPosition], None] | None = None,
     ) -> None:
         """
         Load audio from a file for playback.
@@ -239,7 +240,7 @@ class AudioPlayer:
                 self._stream.close()
                 self._stream = None
 
-    def seek(self, time_or_sample: Union[float, int], by_sample: bool = False) -> None:
+    def seek(self, time_or_sample: float | int, by_sample: bool = False) -> None:
         """
         Seek to a specific position.
 
@@ -349,12 +350,12 @@ class AudioPlayer:
 # =============================================================================
 
 # Global player instance for simple playback
-_global_player: Optional[AudioPlayer] = None
+_global_player: AudioPlayer | None = None
 
 
 def play_audio(
-    audio_or_filepath: Union[np.ndarray, str],
-    sample_rate: Optional[int] = None,
+    audio_or_filepath: np.ndarray | str,
+    sample_rate: int | None = None,
     loop: bool = False,
     block: bool = False,
 ) -> AudioPlayer:

@@ -16,7 +16,7 @@ on missing deps a :class:`~bioamla.exceptions.DependencyError` is raised.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from bioamla.exceptions import (
     DependencyError,
@@ -35,9 +35,9 @@ class EvaluationResult:
     recall: float
     f1_score: float
     total_samples: int
-    confusion_matrix: Optional[List[List[int]]] = None
+    confusion_matrix: list[list[int]] | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dict."""
         d = {
             "accuracy": self.accuracy,
@@ -57,10 +57,10 @@ class TrainResult:
 
     model_path: str
     epochs: int
-    final_accuracy: Optional[float] = None
-    final_loss: Optional[float] = None
+    final_accuracy: float | None = None
+    final_loss: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dict."""
         return {
             "model_path": self.model_path,
@@ -102,9 +102,9 @@ def predict_file(
 def extract_embeddings_file(
     filepath: str,
     model_path: str,
-    layer: Optional[str] = None,
+    layer: str | None = None,
     sample_rate: int = 16000,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Extract AST embeddings from a single file (CLS-token of the base model).
 
@@ -183,7 +183,7 @@ def extract_embeddings_file(
     }
 
 
-def get_model_info(model_path: str) -> Dict[str, Any]:
+def get_model_info(model_path: str) -> dict[str, Any]:
     """
     Return lightweight info about an AST model from its config.
 
@@ -304,7 +304,7 @@ def evaluate_directory(
     )
 
 
-def _load_ground_truth(csv_path: str, file_column: str, label_column: str) -> Dict[str, str]:
+def _load_ground_truth(csv_path: str, file_column: str, label_column: str) -> dict[str, str]:
     """Load ground-truth labels from a CSV (keyed by base file name)."""
     try:
         import pandas as pd
@@ -329,7 +329,7 @@ def _load_ground_truth(csv_path: str, file_column: str, label_column: str) -> Di
     return ground_truth
 
 
-def _compute_metrics(y_true: List[str], y_pred: List[str]) -> Dict[str, Any]:
+def _compute_metrics(y_true: list[str], y_pred: list[str]) -> dict[str, Any]:
     """Compute accuracy plus macro precision/recall/F1 from label lists."""
     import numpy as np
 

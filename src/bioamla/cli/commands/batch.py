@@ -18,8 +18,8 @@ handler reports failures cleanly.
 """
 
 import functools
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 import click
 import numpy as np
@@ -43,9 +43,9 @@ from bioamla.exceptions import BioamlaError, InvalidInputError
 
 
 def _build_config(
-    input_dir: Optional[str],
-    input_file: Optional[str],
-    output_dir: Optional[str],
+    input_dir: str | None,
+    input_file: str | None,
+    output_dir: str | None,
     recursive: bool,
     max_workers: int,
     quiet: bool,
@@ -68,7 +68,7 @@ def _require_input_dir(config: BatchConfig) -> str:
     return config.input_dir
 
 
-def _report(result, output_dir: Optional[str], quiet: bool, saved_hint: Optional[str] = None) -> None:
+def _report(result, output_dir: str | None, quiet: bool, saved_hint: str | None = None) -> None:
     """Print a standard BatchResult summary."""
     if quiet:
         return
@@ -140,7 +140,7 @@ def _run_csv_transform(
     config: BatchConfig,
     transform_row: Callable[[Path, Path], Path],
     *,
-    new_extension: Optional[str] = None,
+    new_extension: str | None = None,
 ) -> object:
     """CSV mode for file-changing commands (resample/normalize/trim/filter/
     denoise/convert).
@@ -273,7 +273,7 @@ def _proc_normalize_peak(audio: np.ndarray, sr: int) -> np.ndarray:
 
 
 def _proc_trim_range(
-    audio: np.ndarray, sr: int, *, start: Optional[float], end: Optional[float]
+    audio: np.ndarray, sr: int, *, start: float | None, end: float | None
 ) -> np.ndarray:
     from bioamla.audio.processing import trim_audio
 
@@ -296,9 +296,9 @@ def _proc_filter(
     audio: np.ndarray,
     sr: int,
     *,
-    lowpass: Optional[float],
-    highpass: Optional[float],
-    bandpass: Optional[tuple],
+    lowpass: float | None,
+    highpass: float | None,
+    bandpass: tuple | None,
     order: int,
 ) -> np.ndarray:
     from bioamla.audio.processing import bandpass_filter, highpass_filter, lowpass_filter

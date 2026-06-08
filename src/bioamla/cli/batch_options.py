@@ -1,7 +1,7 @@
 """Reusable Click decorators for batch command options."""
 
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable
 
 import click
 

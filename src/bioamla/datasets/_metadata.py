@@ -9,7 +9,6 @@ import csv
 import logging
 import warnings
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +38,13 @@ OPTIONAL_INAT_FIELDS = [
 ]
 
 
-def read_metadata_csv(filepath: Path) -> Tuple[List[dict], Set[str]]:
+def read_metadata_csv(filepath: Path) -> tuple[list[dict], set[str]]:
     """Read metadata rows and field names from a CSV file.
 
     Returns an empty list and empty set if the file does not exist.
     """
-    rows: List[dict] = []
-    fieldnames: Set[str] = set()
+    rows: list[dict] = []
+    fieldnames: set[str] = set()
 
     if not filepath.exists():
         return rows, fieldnames
@@ -63,8 +62,8 @@ def read_metadata_csv(filepath: Path) -> Tuple[List[dict], Set[str]]:
 
 def write_metadata_csv(
     filepath: Path,
-    rows: List[dict],
-    fieldnames: Optional[Set[str]] = None,
+    rows: list[dict],
+    fieldnames: set[str] | None = None,
     merge_existing: bool = True,
 ) -> int:
     """Write metadata rows to a CSV file.
@@ -111,8 +110,8 @@ def write_metadata_csv(
                     row.pop(fld, None)
             fieldnames = set(REQUIRED_FIELDS)
 
-        seen_files: Set[str] = set()
-        deduplicated_rows: List[dict] = []
+        seen_files: set[str] = set()
+        deduplicated_rows: list[dict] = []
         for row in existing_rows:
             file_name = row.get("file_name", "")
             if file_name and file_name not in seen_files:
@@ -130,7 +129,7 @@ def write_metadata_csv(
             logger.info(f"Skipped {skipped} duplicate entries during merge")
         all_rows = deduplicated_rows
 
-    final_fieldnames: List[str] = []
+    final_fieldnames: list[str] = []
     for fld in REQUIRED_FIELDS:
         if fld in fieldnames:
             final_fieldnames.append(fld)

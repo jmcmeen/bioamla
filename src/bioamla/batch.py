@@ -23,11 +23,12 @@ Public surface:
 import csv
 import io
 import sys
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 from bioamla.exceptions import InvalidInputError, NotFoundError
 
@@ -53,16 +54,16 @@ class BatchConfig:
     ``_skip_validation=True`` (useful for testing or advanced use cases).
     """
 
-    input_dir: Optional[str] = None
-    input_file: Optional[str] = None
+    input_dir: str | None = None
+    input_file: str | None = None
     output_dir: str = ""
     recursive: bool = True
     max_workers: int = 1
     continue_on_error: bool = True
     quiet: bool = False
-    output_template: Optional[str] = None
-    filters: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    output_template: str | None = None
+    filters: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     _skip_validation: bool = False  # Internal flag for testing/advanced usage
 
     def __post_init__(self) -> None:
@@ -81,7 +82,7 @@ class BatchConfig:
                 "For testing or advanced usage, set _skip_validation=True to bypass this check."
             )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dictionary."""
         return asdict(self)
 
@@ -96,7 +97,7 @@ class SegmentInfo:
     end_time: float
     duration: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dictionary (paths stringified)."""
         data = asdict(self)
         data["segment_path"] = str(self.segment_path)
@@ -114,11 +115,11 @@ class BatchResult:
     start_time: str = ""
     end_time: str = ""
     duration_seconds: float = 0.0
-    output_files: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    output_files: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dictionary."""
         return asdict(self)
 
@@ -129,11 +130,11 @@ class BatchResult:
 
 
 def discover_files(
-    input_dir: Union[str, Path],
+    input_dir: str | Path,
     *,
     recursive: bool = True,
-    file_filter: Optional[Callable[[Path], bool]] = None,
-) -> List[Path]:
+    file_filter: Callable[[Path], bool] | None = None,
+) -> list[Path]:
     """
     Discover files under a directory using stdlib globbing.
 
@@ -162,12 +163,12 @@ def discover_files(
 
 
 def run_batch(
-    items: List[I],
+    items: list[I],
     process_fn: Callable[[I], T],
     *,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """
     Run ``process_fn`` over ``items`` sequentially or in parallel.
@@ -251,8 +252,8 @@ class MetadataRow:
 
     file_name: str  # Original relative path from CSV
     file_path: Path  # Resolved absolute path for processing
-    metadata_fields: Dict[str, Any] = field(default_factory=dict)  # All other CSV columns
-    output_path: Optional[Path] = None  # Updated path after processing
+    metadata_fields: dict[str, Any] = field(default_factory=dict)  # All other CSV columns
+    output_path: Path | None = None  # Updated path after processing
 
 
 @dataclass
@@ -261,10 +262,10 @@ class CSVBatchContext:
 
     csv_path: Path  # Input CSV location
     csv_dir: Path  # CSV directory (base for relative paths)
-    output_dir: Optional[Path]  # Output directory if specified
-    rows: List[MetadataRow] = field(default_factory=list)  # All CSV rows
-    fieldnames: List[str] = field(default_factory=list)  # CSV column names (preserved order)
-    new_fieldnames: List[str] = field(default_factory=list)  # New columns added during processing
+    output_dir: Path | None  # Output directory if specified
+    rows: list[MetadataRow] = field(default_factory=list)  # All CSV rows
+    fieldnames: list[str] = field(default_factory=list)  # CSV column names (preserved order)
+    new_fieldnames: list[str] = field(default_factory=list)  # New columns added during processing
 
 
 def resolve_file_path(file_name: str, csv_dir: Path) -> Path:
@@ -284,7 +285,7 @@ def resolve_file_path(file_name: str, csv_dir: Path) -> Path:
     return (csv_dir / file_path).resolve()
 
 
-def load_csv(csv_path: Union[str, Path], output_dir: Optional[str] = None) -> CSVBatchContext:
+def load_csv(csv_path: str | Path, output_dir: str | None = None) -> CSVBatchContext:
     """
     Load a metadata CSV and resolve file paths relative to the CSV directory.
 
@@ -313,7 +314,7 @@ def load_csv(csv_path: Union[str, Path], output_dir: Optional[str] = None) -> CS
     if "file_name" not in fieldnames:
         raise InvalidInputError(f"CSV must have 'file_name' column. Found: {fieldnames}")
 
-    rows: List[MetadataRow] = []
+    rows: list[MetadataRow] = []
     for row_dict in reader:
         file_name = row_dict["file_name"]
         file_path = resolve_file_path(file_name, csv_dir)
@@ -334,7 +335,7 @@ def load_csv(csv_path: Union[str, Path], output_dir: Optional[str] = None) -> CS
 def resolve_output_path(
     input_path: Path,
     csv_context: CSVBatchContext,
-    new_extension: Optional[str] = None,
+    new_extension: str | None = None,
 ) -> Path:
     """
     Calculate the output path for a processed file.
@@ -392,7 +393,7 @@ def update_row_path(row: MetadataRow, new_path: Path, csv_context: CSVBatchConte
             row.file_name = str(new_path)
 
 
-def merge_analysis_results(row: MetadataRow, results: Dict[str, Any]) -> None:
+def merge_analysis_results(row: MetadataRow, results: dict[str, Any]) -> None:
     """
     Merge analysis results into a row's metadata fields.
 
@@ -405,9 +406,9 @@ def merge_analysis_results(row: MetadataRow, results: Dict[str, Any]) -> None:
 
 def expand_row_for_segments(
     parent_row: MetadataRow,
-    segments: List[Any],
+    segments: list[Any],
     csv_context: CSVBatchContext,
-) -> List[MetadataRow]:
+) -> list[MetadataRow]:
     """
     Create multiple output rows from one input row (for the segment operation).
 
@@ -419,7 +420,7 @@ def expand_row_for_segments(
     Returns:
         List of new :class:`MetadataRow` objects (one per segment).
     """
-    new_rows: List[MetadataRow] = []
+    new_rows: list[MetadataRow] = []
 
     for seg_info in segments:
         try:
@@ -461,7 +462,7 @@ def run_csv_batch(
     max_workers: int = 1,
     continue_on_error: bool = True,
     quiet: bool = False,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """Run ``process_row`` over every row of a loaded CSV context.
 

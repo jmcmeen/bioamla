@@ -14,7 +14,6 @@ import json
 import logging
 import subprocess
 from pathlib import Path
-from typing import Optional, Tuple
 
 import numpy as np
 from pydub import AudioSegment
@@ -36,7 +35,7 @@ class PydubAudioAdapter:
         >>> info = adapter.get_info("audio.m4a")
     """
 
-    def load(self, filepath: str) -> Tuple[np.ndarray, int]:
+    def load(self, filepath: str) -> tuple[np.ndarray, int]:
         """Load audio file using the fastest available backend.
 
         Routes to optimal loader:
@@ -60,7 +59,7 @@ class PydubAudioAdapter:
         filepath: str,
         audio: np.ndarray,
         sample_rate: int,
-        format: Optional[str] = None,
+        format: str | None = None,
     ) -> None:
         """Save numpy audio array to file.
 
@@ -95,7 +94,7 @@ class PydubAudioAdapter:
         return get_audio_info(filepath)
 
 
-def _audiosegment_to_numpy(segment: AudioSegment) -> Tuple[np.ndarray, int]:
+def _audiosegment_to_numpy(segment: AudioSegment) -> tuple[np.ndarray, int]:
     """Convert pydub AudioSegment to numpy float32 array.
 
     Always returns mono audio - stereo/multi-channel files are
@@ -153,7 +152,7 @@ def _audiosegment_to_numpy(segment: AudioSegment) -> Tuple[np.ndarray, int]:
 
 
 def _numpy_to_audiosegment(
-    audio: np.ndarray, sample_rate: int, channels: Optional[int] = None
+    audio: np.ndarray, sample_rate: int, channels: int | None = None
 ) -> AudioSegment:
     """Convert numpy float32 array to pydub AudioSegment.
 
@@ -183,7 +182,7 @@ def _numpy_to_audiosegment(
     )
 
 
-def _load_via_pydub(filepath: str) -> Tuple[np.ndarray, int]:
+def _load_via_pydub(filepath: str) -> tuple[np.ndarray, int]:
     """Load audio file via pydub/ffmpeg.
 
     Args:
@@ -207,7 +206,7 @@ def _load_via_pydub(filepath: str) -> Tuple[np.ndarray, int]:
         raise Exception(f"Error opening '{filepath}': {e}") from e
 
 
-def load_audio(filepath: str) -> Tuple[np.ndarray, int]:
+def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     """Load audio file using the fastest available backend.
 
     Routes to optimal loader:
@@ -259,7 +258,7 @@ def save_audio(
     filepath: str,
     audio: np.ndarray,
     sample_rate: int,
-    format: Optional[str] = None,
+    format: str | None = None,
 ) -> None:
     """Save numpy audio array to file.
 
@@ -295,7 +294,7 @@ def save_audio(
         raise Exception(f"Failed to save audio to '{filepath}': {e}") from e
 
 
-def _get_metadata_ffprobe(filepath: str) -> Optional[dict]:
+def _get_metadata_ffprobe(filepath: str) -> dict | None:
     """Extract audio metadata using ffprobe (header-only, no decoding).
 
     Args:

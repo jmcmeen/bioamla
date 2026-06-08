@@ -14,9 +14,10 @@ from __future__ import annotations
 import copy
 import csv
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any
 
 from bioamla.datasets.annotations import Annotation
 from bioamla.exceptions import InvalidInputError, NotFoundError

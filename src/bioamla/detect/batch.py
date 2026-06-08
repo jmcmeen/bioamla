@@ -11,7 +11,7 @@ direct ``pathlib`` I/O (no repository DI, no ServiceResult).
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from bioamla.batch import BatchResult, run_batch
 from bioamla.batch import discover_files as _discover_files
@@ -34,7 +34,7 @@ def _is_audio(path: Path) -> bool:
     return path.suffix.lower() in _AUDIO_EXTS
 
 
-def _build_detector(method: str, params: Dict[str, Any]):
+def _build_detector(method: str, params: dict[str, Any]):
     """Construct a detector instance for the given method name."""
     if method == "energy":
         return BandLimitedEnergyDetector(
@@ -72,8 +72,8 @@ def _build_detector(method: str, params: Dict[str, Any]):
 
 
 def batch_detect_dir(
-    input_dir: Union[str, Path],
-    output_dir: Union[str, Path],
+    input_dir: str | Path,
+    output_dir: str | Path,
     method: str = "energy",
     *,
     recursive: bool = True,
@@ -109,12 +109,12 @@ def batch_detect_dir(
 
     files = _discover_files(input_dir, recursive=recursive, file_filter=_is_audio)
 
-    aggregated: List[Dict[str, Any]] = []
+    aggregated: list[dict[str, Any]] = []
 
     def _process(path: Path) -> str:
         if method == "peaks":
             peaks = detector.detect_from_file(path)
-            detections: List[Detection] = [
+            detections: list[Detection] = [
                 Detection(
                     start_time=p.time,
                     end_time=p.time + p.width,
@@ -143,7 +143,7 @@ def batch_detect_dir(
         continue_on_error=continue_on_error,
     )
 
-    output_path: Optional[Path] = None
+    output_path: Path | None = None
     if aggregated:
         output_path = Path(output_dir) / f"detections_{method}.json"
         output_path.parent.mkdir(parents=True, exist_ok=True)

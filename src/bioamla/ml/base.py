@@ -18,10 +18,11 @@ Supported model backends:
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 
@@ -56,14 +57,14 @@ class PredictionResult:
 
     label: str
     confidence: float
-    logits: Optional[np.ndarray] = None
-    embeddings: Optional[np.ndarray] = None
+    logits: np.ndarray | None = None
+    embeddings: np.ndarray | None = None
     start_time: float = 0.0
     end_time: float = 0.0
-    filepath: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    filepath: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         d = {
             "label": self.label,
@@ -82,13 +83,13 @@ class PredictionResult:
 class BatchPredictionResult:
     """Results from batch prediction."""
 
-    predictions: List[PredictionResult]
+    predictions: list[PredictionResult]
     total_files: int
     files_processed: int
     files_failed: int
     processing_time: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "predictions": [p.to_dict() for p in self.predictions],
@@ -111,7 +112,7 @@ class ModelConfig:
     batch_size: int = 8
     num_workers: int = 4
     use_fp16: bool = False
-    device: Optional[str] = None
+    device: str | None = None
 
     def get_device(self) -> "torch.device":
         """Get the torch device."""
@@ -130,7 +131,7 @@ class BaseAudioModel(ABC):
     and result filtering.
     """
 
-    def __init__(self, config: Optional[ModelConfig] = None):
+    def __init__(self, config: ModelConfig | None = None):
         """
         Initialize the model.
 
@@ -140,8 +141,8 @@ class BaseAudioModel(ABC):
         self.config = config or ModelConfig()
         self.device = self.config.get_device()
         self.model = None
-        self.id2label: Dict[int, str] = {}
-        self.label2id: Dict[str, int] = {}
+        self.id2label: dict[int, str] = {}
+        self.label2id: dict[str, int] = {}
 
     @property
     @abstractmethod
@@ -155,7 +156,7 @@ class BaseAudioModel(ABC):
         return len(self.id2label)
 
     @property
-    def classes(self) -> List[str]:
+    def classes(self) -> list[str]:
         """Return list of class labels."""
         return list(self.id2label.values())
 
@@ -177,8 +178,8 @@ class BaseAudioModel(ABC):
     def predict(
         self,
         audio: Union[str, np.ndarray, "torch.Tensor"],
-        sample_rate: Optional[int] = None,
-    ) -> List[PredictionResult]:
+        sample_rate: int | None = None,
+    ) -> list[PredictionResult]:
         """
         Run prediction on audio.
 
@@ -191,7 +192,7 @@ class BaseAudioModel(ABC):
         """
         pass
 
-    def predict_file(self, filepath: str) -> List[PredictionResult]:
+    def predict_file(self, filepath: str) -> list[PredictionResult]:
         """
         Run prediction on an audio file.
 
@@ -207,8 +208,8 @@ class BaseAudioModel(ABC):
     def extract_embeddings(
         self,
         audio: Union[str, np.ndarray, "torch.Tensor"],
-        sample_rate: Optional[int] = None,
-        layer: Optional[str] = None,
+        sample_rate: int | None = None,
+        layer: str | None = None,
     ) -> np.ndarray:
         """
         Extract embeddings from audio.
@@ -225,8 +226,8 @@ class BaseAudioModel(ABC):
 
     def predict_batch(
         self,
-        audio_files: List[str],
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        audio_files: list[str],
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> BatchPredictionResult:
         """
         Run batch prediction on multiple files.
@@ -269,11 +270,11 @@ class BaseAudioModel(ABC):
 
     def filter_predictions(
         self,
-        predictions: List[PredictionResult],
-        min_confidence: Optional[float] = None,
-        labels: Optional[List[str]] = None,
-        exclude_labels: Optional[List[str]] = None,
-    ) -> List[PredictionResult]:
+        predictions: list[PredictionResult],
+        min_confidence: float | None = None,
+        labels: list[str] | None = None,
+        exclude_labels: list[str] | None = None,
+    ) -> list[PredictionResult]:
         """
         Filter predictions by confidence and labels.
 
@@ -393,7 +394,7 @@ class BaseAudioModel(ABC):
 
 
 # Cache for the lazily-built torch-backed AudioDataset class.
-_AUDIO_DATASET_CLASS: Optional[type] = None
+_AUDIO_DATASET_CLASS: type | None = None
 
 
 def _audio_dataset_class() -> type:
@@ -414,10 +415,10 @@ def _audio_dataset_class() -> type:
 
         def __init__(
             self,
-            filepaths: List[str],
+            filepaths: list[str],
             sample_rate: int = 16000,
             clip_duration: float = 3.0,
-            transform: Optional[Callable] = None,
+            transform: Callable | None = None,
         ):
             self.filepaths = filepaths
             self.sample_rate = sample_rate
@@ -427,7 +428,7 @@ def _audio_dataset_class() -> type:
         def __len__(self) -> int:
             return len(self.filepaths)
 
-        def __getitem__(self, idx: int) -> Tuple["torch.Tensor", str]:
+        def __getitem__(self, idx: int) -> tuple["torch.Tensor", str]:
             import torch
 
             from bioamla.audio.torchaudio import (
@@ -459,10 +460,10 @@ def _audio_dataset_class() -> type:
 
 
 def AudioDataset(
-    filepaths: List[str],
+    filepaths: list[str],
     sample_rate: int = 16000,
     clip_duration: float = 3.0,
-    transform: Optional[Callable] = None,
+    transform: Callable | None = None,
 ):
     """Create an AudioDataset (torch ``Dataset``) for batch audio processing.
 
@@ -489,9 +490,9 @@ def AudioDataset(
 
 
 def create_dataloader(
-    filepaths: List[str],
+    filepaths: list[str],
     config: ModelConfig,
-    transform: Optional[Callable] = None,
+    transform: Callable | None = None,
 ) -> "DataLoader":
     """
     Create a DataLoader for batch processing.
@@ -527,7 +528,7 @@ def create_dataloader(
 
 
 # Model registry for dynamic loading
-_MODEL_REGISTRY: Dict[str, type] = {}
+_MODEL_REGISTRY: dict[str, type] = {}
 
 
 def register_model(name: str):
@@ -547,7 +548,7 @@ def get_model_class(name: str) -> type:
     return _MODEL_REGISTRY[name]
 
 
-def list_models() -> List[str]:
+def list_models() -> list[str]:
     """List all registered model names."""
     return list(_MODEL_REGISTRY.keys())
 

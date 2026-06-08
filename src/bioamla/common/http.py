@@ -20,9 +20,10 @@ import json
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -84,7 +85,7 @@ class APICache:
     ttl_seconds: int = 86400  # 24 hours default
     enabled: bool = True
 
-    def make_key(self, url: str, params: Optional[Dict[str, Any]] = None) -> str:
+    def make_key(self, url: str, params: dict[str, Any] | None = None) -> str:
         """Generate a cache key from URL and parameters."""
         key_data = url + json.dumps(params or {}, sort_keys=True)
         return hashlib.md5(key_data.encode()).hexdigest()
@@ -93,7 +94,7 @@ class APICache:
         """Get the file path for a cache key."""
         return get_cache_dir() / f"{key}.json"
 
-    def get(self, key: str) -> Optional[Dict[str, Any]]:
+    def get(self, key: str) -> dict[str, Any] | None:
         """
         Get a cached response if it exists and hasn't expired.
 
@@ -125,7 +126,7 @@ class APICache:
         except (json.JSONDecodeError, OSError, KeyError):
             return None
 
-    def set(self, key: str, data: Dict[str, Any]) -> None:
+    def set(self, key: str, data: dict[str, Any]) -> None:
         """
         Cache a response.
 
@@ -152,7 +153,7 @@ class APICache:
 
 def config_aware(
     section: str,
-    mapping: Optional[Dict[str, str]] = None,
+    mapping: dict[str, str] | None = None,
 ) -> Callable[[F], F]:
     """
     Decorator to make API methods configuration-aware.
@@ -202,7 +203,7 @@ def config_aware(
         params = sig.parameters
 
         # Build list of configurable parameters (those with None defaults)
-        configurable_params: Dict[str, str] = {}
+        configurable_params: dict[str, str] = {}
         for param_name, param in params.items():
             if param.default is None:
                 # Map parameter name to config key
@@ -315,7 +316,7 @@ class ConfigAwareMixin:
         self,
         key: str,
         value: Any,
-        section: Optional[str] = None,
+        section: str | None = None,
     ) -> Any:
         """
         Get a configuration default if value is None.
@@ -347,9 +348,9 @@ class ConfigAwareMixin:
 
     def _get_config_defaults(
         self,
-        section: Optional[str] = None,
+        section: str | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get multiple configuration defaults at once.
 
@@ -486,11 +487,11 @@ class APIClient:
     def __init__(
         self,
         base_url: str = "",
-        rate_limiter: Optional[RateLimiter] = None,
+        rate_limiter: RateLimiter | None = None,
         timeout: int = 30,
         max_retries: int = 3,
         user_agent: str = "bioamla/1.0",
-        cache: Optional[APICache] = None,
+        cache: APICache | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.rate_limiter = rate_limiter
@@ -514,10 +515,10 @@ class APIClient:
     def get(
         self,
         endpoint: str,
-        params: Optional[Dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
         use_cache: bool = True,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Make a GET request.
 
@@ -568,10 +569,10 @@ class APIClient:
     def post(
         self,
         endpoint: str,
-        data: Optional[Dict[str, Any]] = None,
-        json_data: Optional[Dict[str, Any]] = None,
+        data: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Make a POST request.
 
@@ -602,9 +603,9 @@ class APIClient:
     def download(
         self,
         url: str,
-        filepath: Union[str, Path],
+        filepath: str | Path,
         chunk_size: int = 8192,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> Path:
         """
         Download a file from URL.

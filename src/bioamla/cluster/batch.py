@@ -16,7 +16,7 @@ direct ``pathlib`` I/O.
 import json
 import pickle
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 
@@ -28,7 +28,7 @@ from bioamla.exceptions import InvalidInputError
 EMBEDDING_EXTENSIONS = {".npy", ".pkl", ".pickle", ".json"}
 
 
-def load_embedding_file(file_path: Union[str, Path]) -> np.ndarray:
+def load_embedding_file(file_path: str | Path) -> np.ndarray:
     """
     Load a single embedding file as a 2D array.
 
@@ -68,10 +68,10 @@ def load_embedding_file(file_path: Union[str, Path]) -> np.ndarray:
 
 
 def load_embeddings_batch(
-    input_dir: Union[str, Path],
+    input_dir: str | Path,
     *,
     recursive: bool = True,
-) -> Tuple[List[np.ndarray], List[str]]:
+) -> tuple[list[np.ndarray], list[str]]:
     """
     Phase 1: discover and load every embedding file under ``input_dir``.
 
@@ -89,8 +89,8 @@ def load_embeddings_batch(
 
     files = _discover_files(input_dir, recursive=recursive, file_filter=_is_embedding)
 
-    embeddings: List[np.ndarray] = []
-    filepaths: List[str] = []
+    embeddings: list[np.ndarray] = []
+    filepaths: list[str] = []
     for path in files:
         embeddings.append(load_embedding_file(path))
         filepaths.append(str(path))
@@ -99,11 +99,11 @@ def load_embeddings_batch(
 
 
 def cluster_batch_files(
-    input_dir: Union[str, Path],
-    output_dir: Union[str, Path],
+    input_dir: str | Path,
+    output_dir: str | Path,
     *,
     method: str = "hdbscan",
-    n_clusters: Optional[int] = None,
+    n_clusters: int | None = None,
     min_cluster_size: int = 5,
     min_samples: int = 3,
     recursive: bool = True,
@@ -149,11 +149,11 @@ def cluster_batch_files(
 
 
 def cluster_embedding_files(
-    files: List[Union[str, Path]],
-    output_dir: Union[str, Path],
+    files: list[str | Path],
+    output_dir: str | Path,
     *,
     method: str = "hdbscan",
-    n_clusters: Optional[int] = None,
+    n_clusters: int | None = None,
     min_cluster_size: int = 5,
     min_samples: int = 3,
     continue_on_error: bool = True,
@@ -183,9 +183,9 @@ def cluster_embedding_files(
     files = [Path(f) for f in files]
 
     # Phase 1: load each file, recording successes/failures.
-    loaded: List[Tuple[str, np.ndarray]] = []
+    loaded: list[tuple[str, np.ndarray]] = []
 
-    def _load(path: Path) -> Optional[str]:
+    def _load(path: Path) -> str | None:
         loaded.append((str(path), load_embedding_file(path)))
         return None
 

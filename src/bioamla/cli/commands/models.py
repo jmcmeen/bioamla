@@ -10,7 +10,6 @@ Examples:
     bioamla models ast train --train-dataset ./audio_by_class/
 """
 
-from typing import Dict
 
 import click
 
@@ -643,12 +642,12 @@ def ast_train(
 
     AVERAGE = "macro" if config.num_labels > 2 else "binary"
 
-    def compute_metrics(eval_pred) -> Dict[str, float]:
+    def compute_metrics(eval_pred) -> dict[str, float]:
         logits = eval_pred.predictions
         predictions = np.argmax(logits, axis=1)
 
         accuracy_result = accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
-        metrics: Dict[str, float] = accuracy_result if accuracy_result is not None else {}
+        metrics: dict[str, float] = accuracy_result if accuracy_result is not None else {}
 
         precision_result = precision.compute(
             predictions=predictions, references=eval_pred.label_ids, average=AVERAGE

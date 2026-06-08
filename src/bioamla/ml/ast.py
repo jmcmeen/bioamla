@@ -25,7 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 from bioamla.exceptions import DependencyError, InvalidInputError, ModelError
 
@@ -90,7 +90,7 @@ class InferenceConfig:
 
 
 @lru_cache(maxsize=4)
-def get_cached_feature_extractor(model_path: Optional[str] = None) -> "ASTFeatureExtractor":
+def get_cached_feature_extractor(model_path: str | None = None) -> "ASTFeatureExtractor":
     """
     Get a cached AST feature extractor instance.
 
@@ -225,7 +225,7 @@ def ast_predict(input_values, model: "AutoModelForAudioClassification") -> str:
 
 def ast_predict_batch(
     input_values: "torch.Tensor", model: "AutoModelForAudioClassification"
-) -> List[str]:
+) -> list[str]:
     """
     Run an AST model on a batch of preprocessed features.
 
@@ -291,7 +291,7 @@ def segmented_wave_file_inference(
     freq: int,
     segment_duration: int,
     segment_overlap: int,
-    config: Optional[InferenceConfig] = None,
+    config: InferenceConfig | None = None,
     feature_extractor: Optional["ASTFeatureExtractor"] = None,
     device: Optional["torch.device"] = None,
 ) -> "pd.DataFrame":
@@ -357,7 +357,7 @@ def wave_file_batch_inference(
     segment_duration: int,
     segment_overlap: int,
     output_csv: str,
-    config: Optional[InferenceConfig] = None,
+    config: InferenceConfig | None = None,
     feature_extractor: Optional["ASTFeatureExtractor"] = None,
 ) -> None:
     """
@@ -478,12 +478,12 @@ def _batch_inference_parallel(
 
 def _process_segments_sequential(
     filepath: str,
-    segments: List[Tuple["torch.Tensor", int, int]],
+    segments: list[tuple["torch.Tensor", int, int]],
     model: "AutoModelForAudioClassification",
     freq: int,
     feature_extractor: "ASTFeatureExtractor",
     device: "torch.device",
-) -> List[dict]:
+) -> list[dict]:
     """Process segments one at a time."""
     rows = []
     for waveform, start, stop in segments:
@@ -495,13 +495,13 @@ def _process_segments_sequential(
 
 def _process_segments_batched(
     filepath: str,
-    segments: List[Tuple["torch.Tensor", int, int]],
+    segments: list[tuple["torch.Tensor", int, int]],
     model: "AutoModelForAudioClassification",
     freq: int,
     config: InferenceConfig,
     feature_extractor: "ASTFeatureExtractor",
     device: "torch.device",
-) -> List[dict]:
+) -> list[dict]:
     """Process segments in batches for improved GPU utilization."""
     # Validate arguments before requiring the heavy optional dependency, so bad
     # input is reported even on a slim (no-torch) install.

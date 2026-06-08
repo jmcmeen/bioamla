@@ -10,8 +10,8 @@ Each wrapper discovers audio files under a directory, applies a per-file
 transform, and returns a :class:`bioamla.batch.BatchResult`.
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, List, Optional
 
 import numpy as np
 
@@ -28,11 +28,11 @@ def batch_transform_files(
     output_dir: str,
     processor_fn: Callable[[np.ndarray, int], np.ndarray],
     *,
-    sample_rate: Optional[int] = None,
+    sample_rate: int | None = None,
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """
     Apply a per-file transform to every audio file in a directory.
@@ -96,7 +96,7 @@ def batch_resample_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """
     Resample every audio file in a directory to ``target_sample_rate``.
@@ -120,13 +120,13 @@ def batch_convert_files(
     output_dir: str,
     *,
     target_format: str = "wav",
-    sample_rate: Optional[int] = None,
-    channels: Optional[int] = None,
+    sample_rate: int | None = None,
+    channels: int | None = None,
     delete_original: bool = False,
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """
     Convert every audio file in a directory to ``target_format``.
@@ -180,8 +180,8 @@ def segment_audio_file(
     *,
     duration: float,
     overlap: float = 0.0,
-    prefix: Optional[str] = None,
-) -> List[SegmentInfo]:
+    prefix: str | None = None,
+) -> list[SegmentInfo]:
     """
     Split one audio file into fixed-duration segments written under ``output_dir``.
 
@@ -214,7 +214,7 @@ def segment_audio_file(
         raise InvalidInputError("overlap must be smaller than duration.")
 
     n = audio.shape[-1] if audio.ndim > 1 else len(audio)
-    segments: List[SegmentInfo] = []
+    segments: list[SegmentInfo] = []
     count = 0
     start_idx = 0
     while start_idx < n:

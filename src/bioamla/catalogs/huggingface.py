@@ -10,7 +10,6 @@ raises :class:`~bioamla.exceptions.InvalidInputError`.
 """
 import logging
 from pathlib import Path
-from typing import Optional
 
 from bioamla.catalogs._models import PushResult
 from bioamla.exceptions import CatalogError, DependencyError, InvalidInputError
@@ -18,7 +17,7 @@ from bioamla.exceptions import CatalogError, DependencyError, InvalidInputError
 logger = logging.getLogger(__name__)
 
 
-def _get_folder_size(path: str, limit: Optional[int] = None) -> int:
+def _get_folder_size(path: str, limit: int | None = None) -> int:
     """Calculate the total size of a folder in bytes (optionally short-circuiting)."""
     total_size = 0
     for p in Path(path).glob("**/*"):
@@ -29,7 +28,7 @@ def _get_folder_size(path: str, limit: Optional[int] = None) -> int:
     return total_size
 
 
-def _count_files(path: str, limit: Optional[int] = None) -> int:
+def _count_files(path: str, limit: int | None = None) -> int:
     """Count the total number of files in a folder (optionally short-circuiting)."""
     count = 0
     for p in Path(path).glob("**/*"):
@@ -70,7 +69,7 @@ def _push_folder(
     repo_id: str,
     repo_type: str,
     private: bool,
-    commit_message: Optional[str],
+    commit_message: str | None,
     url: str,
 ) -> PushResult:
     """Shared implementation for pushing a model or dataset folder."""
@@ -104,7 +103,7 @@ def push_model(
     path: str,
     repo_id: str,
     private: bool = False,
-    commit_message: Optional[str] = None,
+    commit_message: str | None = None,
 ) -> PushResult:
     """Push a model folder to the HuggingFace Hub.
 
@@ -127,7 +126,7 @@ def push_dataset(
     path: str,
     repo_id: str,
     private: bool = False,
-    commit_message: Optional[str] = None,
+    commit_message: str | None = None,
 ) -> PushResult:
     """Push a dataset folder to the HuggingFace Hub.
 

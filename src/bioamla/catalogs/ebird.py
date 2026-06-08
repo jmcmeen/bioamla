@@ -10,7 +10,7 @@ raises :class:`~bioamla.exceptions.InvalidInputError`.
 """
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -42,9 +42,9 @@ class EBirdService:
         >>> print(result.total_count)
     """
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         self._api_key = api_key
-        self._session: Optional[requests.Session] = None
+        self._session: requests.Session | None = None
 
     def _get_api_key(self) -> str:
         if self._api_key:
@@ -65,7 +65,7 @@ class EBirdService:
     def _request(
         self,
         endpoint: str,
-        params: Optional[Dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
     ) -> Any:
         session = self._get_session()
         url = f"{EBIRD_API_URL}/{endpoint}"
@@ -78,7 +78,7 @@ class EBirdService:
         region_code: str,
         back: int = 14,
         max_results: int = 100,
-        species_code: Optional[str] = None,
+        species_code: str | None = None,
     ) -> RegionResult:
         """Get recent observations for a region.
 
@@ -193,7 +193,7 @@ class EBirdService:
             logger.error(f"Species validation failed: {e}")
             raise CatalogError(f"Validation failed: {e}") from e
 
-    def get_species_list(self, region_code: str) -> List[str]:
+    def get_species_list(self, region_code: str) -> list[str]:
         """Get list of species codes observed in a region.
 
         Raises:
@@ -209,9 +209,9 @@ class EBirdService:
 
     def get_taxonomy(
         self,
-        species_codes: Optional[List[str]] = None,
+        species_codes: list[str] | None = None,
         category: str = "species",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get eBird taxonomy data.
 
         Args:
@@ -222,7 +222,7 @@ class EBirdService:
             CatalogError: on API failure.
         """
         try:
-            params: Dict[str, Any] = {"cat": category, "fmt": "json"}
+            params: dict[str, Any] = {"cat": category, "fmt": "json"}
             if species_codes:
                 params["species"] = ",".join(species_codes)
             return self._request("ref/taxonomy/ebird", params)
@@ -232,7 +232,7 @@ class EBirdService:
             logger.error(f"Failed to get taxonomy: {e}")
             raise CatalogError(f"Query failed: {e}") from e
 
-    def get_hotspots(self, region_code: str, back: int = 14) -> List[EBirdHotspot]:
+    def get_hotspots(self, region_code: str, back: int = 14) -> list[EBirdHotspot]:
         """Get eBird hotspots in a region.
 
         Args:
@@ -295,12 +295,12 @@ class EBirdService:
 
 
 def match_detections_to_ebird(
-    detections: List[Dict[str, Any]],
+    detections: list[dict[str, Any]],
     service: EBirdService,
     latitude: float,
     longitude: float,
-    species_mapping: Optional[Dict[str, str]] = None,
-) -> List[Dict[str, Any]]:
+    species_mapping: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
     """Match detection labels to eBird taxonomy and validate against nearby observations.
 
     Args:
