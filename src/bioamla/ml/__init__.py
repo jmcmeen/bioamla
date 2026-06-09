@@ -6,10 +6,8 @@ Audio Spectrogram Transformer (AST) inference, training, and embeddings, on top
 of the device / base-model foundations.
 
 PyTorch / torchaudio / transformers ship in the base install but are imported
-lazily inside functions/methods so this package imports fast; if an import ever
-fails, *using* the ML functionality raises
-:class:`~bioamla.exceptions.DependencyError`. Load / inference failures raise
-:class:`~bioamla.exceptions.ModelError`.
+lazily inside functions/methods so this package imports fast. Load / inference
+failures raise :class:`~bioamla.exceptions.ModelError`.
 
 Example:
     >>> from bioamla.ml import ASTInference

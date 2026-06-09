@@ -3,11 +3,9 @@ BioAmla - Bioacoustics & Machine Learning Applications
 ======================================================
 
 A flat, domain-oriented library for bioacoustic analysis. The public surface is
-organized into domain subpackages, all importable without pulling in heavy
-optional dependencies (torch/transformers, umap/hdbscan/sklearn,
-sounddevice) — those are imported lazily inside the functions that need them and
-raise :class:`bioamla.exceptions.DependencyError` if the relevant extra is not
-installed.
+organized into domain subpackages. The heavy runtime deps (torch/transformers,
+umap/hdbscan/sklearn, sounddevice) ship in the base install but are imported
+lazily inside the functions that need them, so ``import bioamla`` stays fast.
 
 Domains:
 - :mod:`bioamla.audio` — audio I/O, analysis, signal processing, playback.

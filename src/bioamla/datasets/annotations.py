@@ -558,15 +558,10 @@ def save_parquet_annotations(annotations: list[Annotation], filepath: str) -> st
         Path to the saved file
 
     Raises:
-        DependencyError: If pandas/pyarrow are not installed.
         AnnotationError: If the file cannot be written.
     """
-    from bioamla.exceptions import DependencyError
 
-    try:
-        import pandas as pd
-    except ImportError as e:
-        raise DependencyError("Parquet export requires pandas and pyarrow") from e
+    import pandas as pd
 
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)

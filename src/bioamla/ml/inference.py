@@ -7,9 +7,7 @@ High-level inference for Audio Spectrogram Transformer (AST) models:
 :func:`run_batch_inference` (directory -> CSV).
 
 PyTorch / transformers / torchaudio ship in the base install but are imported
-lazily so this module imports fast; if an import ever fails, constructing /
-using :class:`ASTInference` raises
-:class:`~bioamla.exceptions.DependencyError`. Load / inference failures raise
+lazily so this module imports fast. Load / inference failures raise
 :class:`~bioamla.exceptions.ModelError`; missing input paths raise
 :class:`~bioamla.exceptions.NotFoundError`.
 
@@ -31,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
 
-from bioamla.exceptions import DependencyError, ModelError, NotFoundError
+from bioamla.exceptions import ModelError, NotFoundError
 
 if TYPE_CHECKING:
     import torch
@@ -40,33 +38,25 @@ logger = logging.getLogger(__name__)
 
 
 def _require_torch():
-    """Import and return the torch module, or raise DependencyError."""
-    try:
-        import torch
-    except ImportError as e:
-        raise DependencyError("AST inference requires torch") from e
+    """Import and return the torch module."""
+    import torch
     return torch
 
 
 def _require_transformers():
-    """Import and return AST transformers symbols, or raise DependencyError."""
-    try:
-        from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
-    except ImportError as e:
-        raise DependencyError("AST inference requires transformers") from e
+    """Import and return AST transformers symbols."""
+    from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
     return ASTFeatureExtractor, AutoModelForAudioClassification
 
 
 def _torchaudio_helpers():
     """Lazily import the torchaudio waveform helpers."""
-    try:
-        from bioamla.audio.torchaudio import (
-            load_waveform_tensor,
-            resample_waveform_tensor,
-            split_waveform_tensor,
-        )
-    except ImportError as e:
-        raise DependencyError("AST inference requires torchaudio") from e
+    from bioamla.audio.torchaudio import (
+        load_waveform_tensor,
+        resample_waveform_tensor,
+        split_waveform_tensor,
+    )
+
     return load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
 
 
@@ -112,7 +102,6 @@ class ASTInference:
     classification.
 
     Raises:
-        DependencyError: If torch / transformers / torchaudio are missing.
         ModelError: If the model cannot be loaded.
     """
 
@@ -352,7 +341,6 @@ def run_batch_inference(config: BatchInferenceConfig) -> dict[str, Any]:
         A dict of summary statistics.
 
     Raises:
-        DependencyError: If torch / transformers / torchaudio are missing.
         NotFoundError: If the input directory does not exist or has no audio.
         ModelError: If the model cannot be loaded.
     """

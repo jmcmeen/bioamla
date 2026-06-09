@@ -11,8 +11,7 @@ Clustering and discovery capabilities for bioacoustic analysis:
 
 All functions return plain data and raise :class:`~bioamla.exceptions.BioamlaError`
 subclasses on failure. Heavy backends (umap-learn, hdbscan, scikit-learn, torch)
-ship in the base install but are imported lazily; if an import ever fails a
-:class:`~bioamla.exceptions.DependencyError` is raised.
+ship in the base install but are imported lazily for fast startup.
 
 Example:
     >>> from bioamla.cluster import AudioClusterer, reduce_dimensions
@@ -92,7 +91,6 @@ def reduce_dimensions(
         Reduced embeddings of shape (n_samples, n_components)
 
     Raises:
-        DependencyError: If a required reduction backend is not installed.
         InvalidInputError: If the reduction method is unknown.
     """
     if config is None:
@@ -104,10 +102,7 @@ def reduce_dimensions(
     logger.info(f"Reducing dimensions with {config.method} to {config.n_components}D")
 
     if config.method == "umap":
-        try:
-            import umap
-        except ImportError as err:
-            raise DependencyError("UMAP reduction requires umap-learn") from err
+        import umap
 
         reducer = umap.UMAP(
             n_components=config.n_components,
@@ -120,10 +115,7 @@ def reduce_dimensions(
         return reducer.fit_transform(embeddings)
 
     elif config.method == "tsne":
-        try:
-            from sklearn.manifold import TSNE
-        except ImportError as err:
-            raise DependencyError("t-SNE reduction requires scikit-learn") from err
+        from sklearn.manifold import TSNE
 
         reducer = TSNE(
             n_components=config.n_components,
@@ -136,10 +128,7 @@ def reduce_dimensions(
         return reducer.fit_transform(embeddings)
 
     elif config.method == "pca":
-        try:
-            from sklearn.decomposition import PCA
-        except ImportError as err:
-            raise DependencyError("PCA reduction requires scikit-learn") from err
+        from sklearn.decomposition import PCA
 
         reducer = PCA(
             n_components=config.n_components,
@@ -178,17 +167,11 @@ class IncrementalReducer:
     def fit(self, embeddings: np.ndarray) -> "IncrementalReducer":
         """Fit the reducer on embeddings."""
         if self.method == "umap":
-            try:
-                import umap
-            except ImportError as err:
-                raise DependencyError("UMAP reduction requires umap-learn") from err
+            import umap
 
             self.reducer = umap.UMAP(n_components=self.n_components, **self.kwargs)
         elif self.method == "pca":
-            try:
-                from sklearn.decomposition import PCA
-            except ImportError as err:
-                raise DependencyError("PCA reduction requires scikit-learn") from err
+            from sklearn.decomposition import PCA
 
             self.reducer = PCA(n_components=self.n_components, **self.kwargs)
         else:
@@ -307,10 +290,7 @@ class AudioClusterer:
     def _create_clusterer(self) -> None:
         """Create the clustering algorithm."""
         if self.config.method == "hdbscan":
-            try:
-                import hdbscan
-            except ImportError as err:
-                raise DependencyError("HDBSCAN clustering requires hdbscan") from err
+            import hdbscan
 
             self.clusterer = hdbscan.HDBSCAN(
                 min_cluster_size=self.config.min_cluster_size,
@@ -322,10 +302,7 @@ class AudioClusterer:
             )
 
         elif self.config.method == "kmeans":
-            try:
-                from sklearn.cluster import KMeans
-            except ImportError as err:
-                raise DependencyError("K-means clustering requires scikit-learn") from err
+            from sklearn.cluster import KMeans
 
             self.clusterer = KMeans(
                 n_clusters=self.config.n_clusters,
@@ -336,20 +313,14 @@ class AudioClusterer:
             )
 
         elif self.config.method == "dbscan":
-            try:
-                from sklearn.cluster import DBSCAN
-            except ImportError as err:
-                raise DependencyError("DBSCAN clustering requires scikit-learn") from err
+            from sklearn.cluster import DBSCAN
 
             self.clusterer = DBSCAN(
                 eps=self.config.eps, min_samples=self.config.min_samples, **self.kwargs
             )
 
         elif self.config.method == "agglomerative":
-            try:
-                from sklearn.cluster import AgglomerativeClustering
-            except ImportError as err:
-                raise DependencyError("Agglomerative clustering requires scikit-learn") from err
+            from sklearn.cluster import AgglomerativeClustering
 
             self.clusterer = AgglomerativeClustering(
                 n_clusters=self.config.n_clusters
@@ -427,14 +398,9 @@ def find_optimal_clusters(
     Returns:
         Optimal number of clusters
 
-    Raises:
-        DependencyError: If scikit-learn is not installed.
     """
-    try:
-        from sklearn.cluster import KMeans
-        from sklearn.metrics import silhouette_score
-    except ImportError as err:
-        raise DependencyError("find_optimal_clusters requires scikit-learn") from err
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
 
     scores = []
     k_values = range(k_range[0], k_range[1] + 1)
@@ -484,7 +450,6 @@ def compute_cluster_similarity(
         Similarity matrix of shape (n_clusters, n_clusters)
 
     Raises:
-        DependencyError: If scikit-learn is required (euclidean) but missing.
         InvalidInputError: If the metric is unknown.
     """
     unique_labels = sorted(set(labels))
@@ -505,10 +470,7 @@ def compute_cluster_similarity(
         centers_norm = centers / (norms + 1e-10)
         similarity = centers_norm @ centers_norm.T
     elif metric == "euclidean":
-        try:
-            from sklearn.metrics import pairwise_distances
-        except ImportError as err:
-            raise DependencyError("euclidean cluster similarity requires scikit-learn") from err
+        from sklearn.metrics import pairwise_distances
 
         distances = pairwise_distances(centers, metric="euclidean")
         similarity = 1 / (1 + distances)
@@ -535,7 +497,6 @@ def sort_by_similarity(
         Sorted indices
 
     Raises:
-        DependencyError: If scikit-learn is required (spectral) but missing.
         InvalidInputError: If the method is unknown.
     """
     n_samples = len(embeddings)
@@ -562,10 +523,7 @@ def sort_by_similarity(
 
     elif method == "spectral":
         # Use spectral ordering for global structure
-        try:
-            from sklearn.metrics import pairwise_distances
-        except ImportError as err:
-            raise DependencyError("spectral sorting requires scikit-learn") from err
+        from sklearn.metrics import pairwise_distances
 
         distances = pairwise_distances(embeddings)
         similarity = 1 / (1 + distances)
@@ -692,7 +650,6 @@ class NoveltyDetector:
             self
 
         Raises:
-            DependencyError: If scikit-learn is required but missing.
             InvalidInputError: If the method is unknown.
         """
         if self.method == "distance":
@@ -705,21 +662,13 @@ class NoveltyDetector:
                 self._fit_distance_based(embeddings, labels)
 
         elif self.method == "isolation_forest":
-            try:
-                from sklearn.ensemble import IsolationForest
-            except ImportError as err:
-                raise DependencyError(
-                    "isolation_forest novelty detection requires scikit-learn"
-                ) from err
+            from sklearn.ensemble import IsolationForest
 
             self.detector = IsolationForest(contamination=self.contamination, random_state=42)
             self.detector.fit(embeddings)
 
         elif self.method == "lof":
-            try:
-                from sklearn.neighbors import LocalOutlierFactor
-            except ImportError as err:
-                raise DependencyError("lof novelty detection requires scikit-learn") from err
+            from sklearn.neighbors import LocalOutlierFactor
 
             self.detector = LocalOutlierFactor(
                 n_neighbors=20, contamination=self.contamination, novelty=True
@@ -885,13 +834,8 @@ def extract_embeddings_batch(
     Returns:
         Embeddings array of shape (n_samples, embedding_dim)
 
-    Raises:
-        DependencyError: If torch is not installed.
     """
-    try:
-        import torch
-    except ImportError as err:
-        raise DependencyError("extract_embeddings_batch requires torch") from err
+    import torch
 
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -963,13 +907,8 @@ def analyze_clusters(
     Returns:
         Analysis results as a dictionary
 
-    Raises:
-        DependencyError: If scikit-learn is not installed.
     """
-    try:
-        from sklearn.metrics import calinski_harabasz_score, silhouette_score
-    except ImportError as err:
-        raise DependencyError("analyze_clusters requires scikit-learn") from err
+    from sklearn.metrics import calinski_harabasz_score, silhouette_score
 
     unique_labels = sorted(set(labels))
     n_noise = (labels == -1).sum() if -1 in labels else 0
@@ -1090,7 +1029,6 @@ def cluster_embeddings(
         cluster assignments.
 
     Raises:
-        DependencyError: If a required clustering backend is not installed.
         ClusteringError: If clustering fails for any other reason.
     """
     config = ClusteringConfig(
@@ -1116,10 +1054,7 @@ def cluster_embeddings(
 
     silhouette = 0.0
     if n_clusters_found > 1:
-        try:
-            from sklearn.metrics import silhouette_score
-        except ImportError as err:
-            raise DependencyError("silhouette scoring requires scikit-learn") from err
+        from sklearn.metrics import silhouette_score
 
         mask = labels >= 0
         if mask.sum() > n_clusters_found:
@@ -1153,8 +1088,6 @@ def analyze_clusters_summary(
     Returns:
         A :class:`ClusterAnalysis` with quality metrics and per-cluster stats.
 
-    Raises:
-        DependencyError: If scikit-learn is not installed.
     """
     metadata = [{"filepath": fp} for fp in filepaths] if filepaths else None
     analysis = analyze_clusters(embeddings, labels, metadata)
@@ -1192,8 +1125,6 @@ def detect_novelty(
         Tuple of ``(summary, is_novel, novelty_scores)`` where ``is_novel`` is a
         boolean array and ``novelty_scores`` a float array, both per sample.
 
-    Raises:
-        DependencyError: If scikit-learn is required but not installed.
     """
     detector = NoveltyDetector(method=method, threshold=threshold, contamination=contamination)
 

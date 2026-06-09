@@ -10,8 +10,7 @@ Each wrapper discovers audio files under a directory, runs AST predict / embed
 per file, and returns a :class:`bioamla.batch.BatchResult`.
 
 Heavy deps (torch / transformers) are loaded lazily by the underlying ml
-functions; if an import ever fails they raise
-:class:`~bioamla.exceptions.DependencyError` when actually used.
+functions for fast startup.
 """
 
 from collections.abc import Callable
@@ -64,7 +63,7 @@ def batch_predict_files(
 
     Raises:
         NotFoundError: If the input directory does not exist.
-        DependencyError / ModelError: On missing deps or model-load failure.
+        ModelError: On model-load or inference failure.
     """
     in_dir = Path(input_dir)
     if not in_dir.exists():
@@ -137,7 +136,7 @@ def batch_embed_files(
 
     Raises:
         NotFoundError: If the input directory does not exist.
-        DependencyError / ModelError: On missing deps or model-load failure.
+        ModelError: On model-load or inference failure.
     """
     import numpy as np
 

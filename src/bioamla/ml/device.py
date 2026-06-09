@@ -6,8 +6,7 @@ Centralized device management for PyTorch operations: device detection and
 model placement.
 
 PyTorch ships in the base install but is imported lazily inside each function so
-this module imports fast; if the torch import ever fails, calling any function
-raises :class:`~bioamla.exceptions.DependencyError`.
+this module imports fast.
 
 Usage:
     from bioamla.ml.device import get_device, move_to_device
@@ -19,8 +18,6 @@ Usage:
 import logging
 from typing import TYPE_CHECKING, Union
 
-from bioamla.exceptions import DependencyError
-
 if TYPE_CHECKING:
     import torch
     from torch import nn
@@ -29,11 +26,8 @@ logger = logging.getLogger(__name__)
 
 
 def _require_torch():
-    """Import and return the torch module, or raise DependencyError."""
-    try:
-        import torch
-    except ImportError as e:
-        raise DependencyError("Device management requires torch") from e
+    """Import and return the torch module."""
+    import torch
     return torch
 
 

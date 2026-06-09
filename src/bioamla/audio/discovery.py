@@ -61,8 +61,6 @@ def get_wav_metadata(filepath: str) -> dict[str, Any]:
         Dictionary with audio metadata (sample_rate, channels, frames, duration,
         format, subtype, bit_depth).
 
-    Raises:
-        DependencyError: If the pydub adapter / ffmpeg backend is unavailable.
     """
     from bioamla.audio._pydub import get_audio_info
 

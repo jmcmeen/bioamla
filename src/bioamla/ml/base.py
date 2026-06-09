@@ -7,8 +7,7 @@ interface for model loading, inference, embedding extraction, and batch
 processing.
 
 PyTorch / torchaudio ship in the base install but are imported lazily so this
-module imports fast; if a torch import ever fails, constructing/using the
-torch-backed classes raises :class:`~bioamla.exceptions.DependencyError`.
+module imports fast.
 
 numpy is imported at module level.
 
@@ -25,19 +24,14 @@ from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 
-from bioamla.exceptions import DependencyError
-
 if TYPE_CHECKING:
     import torch
     from torch.utils.data import DataLoader
 
 
 def _require_torch():
-    """Import and return the torch module, or raise DependencyError."""
-    try:
-        import torch
-    except ImportError as e:
-        raise DependencyError("ML models require torch") from e
+    """Import and return the torch module."""
+    import torch
     return torch
 
 
@@ -473,8 +467,6 @@ def AudioDataset(
         clip_duration: Clip duration in seconds.
         transform: Optional transform to apply.
 
-    Raises:
-        DependencyError: If torch is not installed.
     """
     cls = _audio_dataset_class()
     return cls(
@@ -501,8 +493,6 @@ def create_dataloader(
     Returns:
         DataLoader instance.
 
-    Raises:
-        DependencyError: If torch is not installed.
     """
     _require_torch()
     from torch.utils.data import DataLoader

@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from bioamla.datasets.annotations import Annotation
-from bioamla.exceptions import AnnotationError, DependencyError, NotFoundError
+from bioamla.exceptions import AnnotationError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -32,17 +32,13 @@ def compute_measurements(
 
     Raises:
         NotFoundError: If the audio file doesn't exist.
-        DependencyError: If numpy/scipy are not installed.
         AnnotationError: If the audio cannot be loaded or measured.
     """
     if not Path(audio_path).exists():
         raise NotFoundError(f"Audio file not found: {audio_path}")
 
-    try:
-        import numpy as np
-        from scipy import signal as scipy_signal
-    except ImportError as e:
-        raise DependencyError("Acoustic measurements require numpy and scipy") from e
+    import numpy as np
+    from scipy import signal as scipy_signal
 
     from bioamla.audio import load_audio
 

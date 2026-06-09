@@ -1,9 +1,7 @@
 """HuggingFace Hub model and dataset publishing.
 
 Push local model/dataset folders to the HuggingFace Hub. ``huggingface_hub`` is
-a core dependency, but the import is performed lazily so a malformed install
-surfaces a clear :class:`~bioamla.exceptions.DependencyError` rather than an
-opaque ImportError.
+a base dependency, imported lazily so importing this module stays light.
 
 Upload failures raise :class:`~bioamla.exceptions.CatalogError`; a missing path
 raises :class:`~bioamla.exceptions.InvalidInputError`.
@@ -13,7 +11,7 @@ import logging
 from pathlib import Path
 
 from bioamla.catalogs._models import PushResult
-from bioamla.exceptions import CatalogError, DependencyError, InvalidInputError
+from bioamla.exceptions import CatalogError, InvalidInputError
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +53,8 @@ def _is_large_folder(
 
 
 def _get_hf_api():
-    """Import and instantiate HfApi, raising DependencyError if unavailable."""
-    try:
-        from huggingface_hub import HfApi
-    except ImportError as e:
-        raise DependencyError("HuggingFace Hub features require huggingface_hub") from e
+    """Import and instantiate ``HfApi`` (lazy import)."""
+    from huggingface_hub import HfApi
     return HfApi()
 
 
@@ -108,7 +103,6 @@ def push_model(
 
     Raises:
         InvalidInputError: if ``path`` is not a directory.
-        DependencyError: if ``huggingface_hub`` is not installed.
         CatalogError: on upload failure.
     """
     return _push_folder(
@@ -131,7 +125,6 @@ def push_dataset(
 
     Raises:
         InvalidInputError: if ``path`` is not a directory.
-        DependencyError: if ``huggingface_hub`` is not installed.
         CatalogError: on upload failure.
     """
     return _push_folder(

@@ -8,10 +8,8 @@ prediction, batched prediction, feature extraction, and segmented / batch
 file inference.
 
 PyTorch / transformers / pandas ship in the base install but are imported lazily
-inside each function so this module imports fast; if an import ever fails,
-calling the affected function raises
-:class:`~bioamla.exceptions.DependencyError`. Model-load / inference failures
-raise :class:`~bioamla.exceptions.ModelError`.
+inside each function so this module imports fast. Model-load / inference
+failures raise :class:`~bioamla.exceptions.ModelError`.
 
 Performance features:
 - Cached feature extractor (avoids recreation per segment)
@@ -27,7 +25,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from bioamla.exceptions import DependencyError, InvalidInputError, ModelError
+from bioamla.exceptions import InvalidInputError, ModelError
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -36,42 +34,31 @@ if TYPE_CHECKING:
 
 
 def _require_torch():
-    """Import and return the torch module, or raise DependencyError."""
-    try:
-        import torch
-    except ImportError as e:
-        raise DependencyError("AST requires torch") from e
+    """Import and return the torch module."""
+    import torch
     return torch
 
 
 def _require_transformers():
-    """Import and return AST transformers symbols, or raise DependencyError."""
-    try:
-        from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
-    except ImportError as e:
-        raise DependencyError("AST requires transformers") from e
+    """Import and return AST transformers symbols."""
+    from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
     return ASTFeatureExtractor, AutoModelForAudioClassification
 
 
 def _require_pandas():
-    """Import and return the pandas module, or raise DependencyError."""
-    try:
-        import pandas as pd
-    except ImportError as e:
-        raise DependencyError("AST inference requires pandas") from e
+    """Import and return the pandas module."""
+    import pandas as pd
     return pd
 
 
 def _torchaudio_helpers():
     """Lazily import the torchaudio waveform helpers."""
-    try:
-        from bioamla.audio.torchaudio import (
-            load_waveform_tensor,
-            resample_waveform_tensor,
-            split_waveform_tensor,
-        )
-    except ImportError as e:
-        raise DependencyError("AST inference requires torchaudio") from e
+    from bioamla.audio.torchaudio import (
+        load_waveform_tensor,
+        resample_waveform_tensor,
+        split_waveform_tensor,
+    )
+
     return load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
 
 
@@ -101,8 +88,6 @@ def get_cached_feature_extractor(model_path: str | None = None) -> "ASTFeatureEx
     Returns:
         ASTFeatureExtractor: Cached feature extractor instance.
 
-    Raises:
-        DependencyError: If transformers is not installed.
     """
     ASTFeatureExtractor, _ = _require_transformers()
     if model_path:
@@ -129,7 +114,6 @@ def load_pretrained_ast_model(
         The loaded AST model, ready for inference.
 
     Raises:
-        DependencyError: If torch / transformers are not installed.
         ModelError: If the model cannot be loaded.
     """
     torch = _require_torch()
@@ -174,8 +158,6 @@ def extract_features(
     Returns:
         Extracted features (``input_values``) ready for model input.
 
-    Raises:
-        DependencyError: If torch / transformers are not installed.
     """
     torch = _require_torch()
 
@@ -206,7 +188,6 @@ def ast_predict(input_values, model: "AutoModelForAudioClassification") -> str:
         The predicted class label.
 
     Raises:
-        DependencyError: If torch is not installed.
         ModelError: If inference fails.
     """
     torch = _require_torch()
@@ -233,7 +214,6 @@ def ast_predict_batch(
         Predicted class labels, one per item in the batch.
 
     Raises:
-        DependencyError: If torch is not installed.
         ModelError: If inference fails.
     """
     torch = _require_torch()
@@ -262,7 +242,6 @@ def wav_ast_inference(wave_path: str, model_path: str, sample_rate: int) -> str:
         The predicted class label.
 
     Raises:
-        DependencyError: If torch / transformers / torchaudio are not installed.
         ModelError: If loading or inference fails.
     """
     torch = _require_torch()
@@ -311,7 +290,6 @@ def segmented_wave_file_inference(
         A DataFrame with columns ``['filepath', 'start', 'stop', 'prediction']``.
 
     Raises:
-        DependencyError: If torch / transformers / torchaudio / pandas are missing.
         ModelError: If loading or inference fails.
     """
     pd = _require_pandas()
@@ -375,7 +353,6 @@ def wave_file_batch_inference(
         feature_extractor: Optional cached feature extractor.
 
     Raises:
-        DependencyError: If torch / transformers / torchaudio / pandas are missing.
         ModelError: If loading or inference fails.
     """
     if config is None:

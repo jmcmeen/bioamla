@@ -15,15 +15,10 @@ from typing import Any
 import librosa
 import numpy as np
 
-from bioamla.exceptions import DependencyError
-
 
 def _require_torch():
-    """Import and return the torch module, or raise DependencyError."""
-    try:
-        import torch
-    except ImportError as e:
-        raise DependencyError("spectrogram tensor conversion / resizing requires torch") from e
+    """Import and return the torch module."""
+    import torch
     return torch
 
 

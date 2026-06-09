@@ -125,7 +125,6 @@ def generate_spectrogram(
         NotFoundError: If the audio file does not exist.
         ValueError: If an invalid visualization type or window is specified.
         AudioLoadError: If the audio cannot be loaded.
-        DependencyError: If backend='torch' but torch is not installed.
         ProcessingError: If the image cannot be written.
     """
     audio_path = Path(audio_path)

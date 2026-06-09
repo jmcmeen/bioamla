@@ -29,7 +29,7 @@ from typing import Any
 
 import numpy as np
 
-from bioamla.exceptions import DependencyError, ModelError
+from bioamla.exceptions import ModelError
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,6 @@ class EmbeddingExtractor:
         """Lazy-load the backing model.
 
         Raises:
-            DependencyError: If the ML extra is not installed.
             InvalidInputError: If the configured model type is unknown.
             ModelError: If the model fails to load.
         """
@@ -186,18 +185,11 @@ class EmbeddingExtractor:
     def _get_reducer(self):
         """Get or create the dimensionality reducer.
 
-        Raises:
-            DependencyError: If the clustering extra is not installed.
         """
         if self._reducer is not None or self.config.reduce_method is None:
             return self._reducer
 
-        try:
-            from bioamla.cluster import IncrementalReducer
-        except ImportError as e:
-            raise DependencyError(
-                "Dimensionality reduction requires the clustering stack (umap-learn / scikit-learn)"
-            ) from e
+        from bioamla.cluster import IncrementalReducer
 
         self._reducer = IncrementalReducer(
             method=self.config.reduce_method,
@@ -223,7 +215,6 @@ class EmbeddingExtractor:
             An :class:`EmbeddingResult`.
 
         Raises:
-            DependencyError: If the ML / clustering extra is missing.
             ModelError: If extraction fails.
         """
         model = self._get_model()
@@ -409,7 +400,6 @@ def extract_embeddings(
         Embedding array of shape ``(n_segments, embedding_dim)``.
 
     Raises:
-        DependencyError: If the ML extra is missing.
         ModelError: If extraction fails.
     """
     config = EmbeddingConfig(
@@ -494,7 +484,6 @@ def save_embeddings(
         The path written to.
 
     Raises:
-        DependencyError: If pandas/pyarrow are required but missing.
         InvalidInputError: If the format is unknown.
     """
     output_path = Path(output_path)
@@ -516,10 +505,7 @@ def save_embeddings(
         logger.info(f"Saved embeddings to {output_path}")
 
     elif format == "parquet":
-        try:
-            import pandas as pd
-        except ImportError as err:
-            raise DependencyError("Parquet output requires pandas and pyarrow") from err
+        import pandas as pd
         df = pd.DataFrame(embeddings)
         df.columns = [f"dim_{i}" for i in range(embeddings.shape[1])]
         df["filepath"] = filepaths
@@ -527,10 +513,7 @@ def save_embeddings(
         logger.info(f"Saved embeddings to {output_path}")
 
     elif format == "csv":
-        try:
-            import pandas as pd
-        except ImportError as err:
-            raise DependencyError("CSV output requires pandas") from err
+        import pandas as pd
         df = pd.DataFrame(embeddings)
         df.columns = [f"dim_{i}" for i in range(embeddings.shape[1])]
         df["filepath"] = filepaths
@@ -560,7 +543,6 @@ def load_embeddings(
         ``(embeddings, filepaths)``.
 
     Raises:
-        DependencyError: If pandas is required but missing.
         InvalidInputError: If the format is unknown.
     """
     filepath = Path(filepath)
@@ -586,10 +568,7 @@ def load_embeddings(
         return embeddings, filepaths
 
     elif format in ("parquet", "csv"):
-        try:
-            import pandas as pd
-        except ImportError as err:
-            raise DependencyError(f"Loading {format} embeddings requires pandas") from err
+        import pandas as pd
         reader = pd.read_parquet if format == "parquet" else pd.read_csv
         df = reader(str(filepath))
         filepaths = df["filepath"].tolist() if "filepath" in df.columns else []
@@ -617,13 +596,9 @@ def get_ast_model_info(model_path: str) -> dict[str, Any]:
         ``has_more_classes``, and ``hidden_size``.
 
     Raises:
-        DependencyError: If transformers is not installed.
         ModelError: If the config cannot be loaded.
     """
-    try:
-        from transformers import AutoConfig
-    except ImportError as e:
-        raise DependencyError("Model info requires transformers") from e
+    from transformers import AutoConfig
 
     try:
         config = AutoConfig.from_pretrained(model_path)

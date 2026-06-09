@@ -32,10 +32,11 @@ class AudioSaveError(BioamlaError):
 
 
 class DependencyError(BioamlaError):
-    """An optional dependency (an install extra) is required but not installed.
+    """A required dependency is unavailable at runtime.
 
-    The message should tell the user which extra to install, e.g.
-    ``raise DependencyError("AST inference requires torch")``.
+    All Python dependencies ship in the base install, so this is reserved for
+    genuine environment problems (e.g. a missing system library or a broken
+    install).
     """
 
 

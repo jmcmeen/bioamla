@@ -10,8 +10,8 @@ raise :class:`~bioamla.exceptions.BioamlaError` subclasses on failure.
 This module is internal to :mod:`bioamla.ml`; the curated public API re-exports
 the pieces that callers (and the CLI) need.
 
-Heavy deps (torch / transformers / torchaudio / pandas) are imported lazily;
-on missing deps a :class:`~bioamla.exceptions.DependencyError` is raised.
+Heavy deps (torch / transformers / torchaudio / pandas) are imported lazily for
+fast startup.
 """
 
 from dataclasses import dataclass
@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any
 
 from bioamla.exceptions import (
-    DependencyError,
     InvalidInputError,
     ModelError,
     NotFoundError,
@@ -88,7 +87,7 @@ def predict_file(
 
     Raises:
         NotFoundError: If the file does not exist.
-        DependencyError / ModelError: On missing deps or inference failure.
+        ModelError: On inference failure.
     """
     if not Path(filepath).exists():
         raise NotFoundError(f"Audio file not found: {filepath}")
@@ -123,21 +122,15 @@ def extract_embeddings_file(
 
     Raises:
         NotFoundError: If the file does not exist.
-        DependencyError / ModelError: On missing deps or failure.
+        ModelError: On model-load or inference failure.
     """
     if not Path(filepath).exists():
         raise NotFoundError(f"Audio file not found: {filepath}")
 
-    try:
-        import torch
-        from transformers import ASTFeatureExtractor, AutoModel
-    except ImportError as e:
-        raise DependencyError("AST embeddings require torch") from e
+    import torch
+    from transformers import ASTFeatureExtractor, AutoModel
 
-    try:
-        from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
-    except ImportError as e:
-        raise DependencyError("AST embeddings require torchaudio") from e
+    from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
     try:
         waveform, orig_sr = load_waveform_tensor(filepath)
@@ -195,7 +188,7 @@ def get_model_info(model_path: str) -> dict[str, Any]:
         ``has_more_classes``, and ``hidden_size``.
 
     Raises:
-        DependencyError / ModelError: On missing deps or failure.
+        ModelError: On model-load or inference failure.
     """
     from bioamla.ml.embedding import get_ast_model_info
 
@@ -234,23 +227,16 @@ def evaluate_directory(
     Raises:
         NotFoundError: If a required path or matching audio is missing.
         InvalidInputError: If the CSV is malformed.
-        DependencyError / ModelError: On missing deps or failure.
+        ModelError: On model-load or inference failure.
     """
     if not Path(audio_dir).exists():
         raise NotFoundError(f"Audio directory not found: {audio_dir}")
     if not Path(ground_truth_csv).exists():
         raise NotFoundError(f"Ground truth file not found: {ground_truth_csv}")
 
-    try:
-        import torch
-    except ImportError as e:
-        raise DependencyError("AST evaluation requires torch") from e
+    import torch
 
-    try:
-        from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
-    except ImportError as e:
-        raise DependencyError("AST evaluation requires torchaudio") from e
-
+    from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
     from bioamla.ml.ast import (
         ast_predict,
         extract_features,
@@ -306,10 +292,7 @@ def evaluate_directory(
 
 def _load_ground_truth(csv_path: str, file_column: str, label_column: str) -> dict[str, str]:
     """Load ground-truth labels from a CSV (keyed by base file name)."""
-    try:
-        import pandas as pd
-    except ImportError as e:
-        raise DependencyError("Reading ground truth requires pandas") from e
+    import pandas as pd
 
     df = pd.read_csv(csv_path)
 

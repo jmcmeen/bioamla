@@ -17,8 +17,6 @@ import logging
 import librosa
 import numpy as np
 
-from bioamla.exceptions import DependencyError
-
 logger = logging.getLogger(__name__)
 
 Backend = str  # "librosa" | "torch"
@@ -46,17 +44,11 @@ def select_backend(prefer: str = "auto") -> Backend:
     Returns:
         ``"librosa"`` or ``"torch"``.
 
-    Raises:
-        DependencyError: Only when ``prefer="torch"`` but torch is not installed.
-            ``"auto"`` never raises; it falls back to librosa.
     """
     if prefer == "librosa":
         return "librosa"
     if prefer == "torch":
-        try:
-            import torch  # noqa: F401
-        except ImportError as e:
-            raise DependencyError("the torch spectrogram backend requires torch") from e
+        import torch  # noqa: F401
         return "torch"
     # auto
     return "torch" if _torch_gpu_available() else "librosa"

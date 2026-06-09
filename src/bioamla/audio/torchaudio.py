@@ -7,9 +7,7 @@ These are used by the ML domain (AST training/inference) and the dataset
 augmentation pipeline.
 
 ``torch`` / ``torchaudio`` ship in the base install but are imported lazily
-inside each function so importing this module stays light; if an import ever
-fails, calling a function raises
-:class:`~bioamla.exceptions.DependencyError`.
+inside each function so importing this module stays light.
 """
 
 from __future__ import annotations
@@ -21,27 +19,21 @@ import numpy as np
 
 from bioamla.common.constants import DefaultConfig
 from bioamla.common.files import get_files_by_extension
-from bioamla.exceptions import AudioLoadError, DependencyError
+from bioamla.exceptions import AudioLoadError
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     import torch
 
 
 def _import_torchaudio() -> Any:
-    """Import and return the ``torchaudio`` module, or raise DependencyError."""
-    try:
-        import torchaudio
-    except ImportError as e:
-        raise DependencyError("torchaudio waveform helpers require torchaudio") from e
+    """Import and return the ``torchaudio`` module."""
+    import torchaudio
     return torchaudio
 
 
 def _import_torch() -> Any:
-    """Import and return the ``torch`` module, or raise DependencyError."""
-    try:
-        import torch
-    except ImportError as e:
-        raise DependencyError("torchaudio waveform helpers require torch") from e
+    """Import and return the ``torch`` module."""
+    import torch
     return torch
 
 
@@ -81,7 +73,6 @@ def load_waveform_tensor(filepath: str) -> tuple[torch.Tensor, int]:
         Tuple of (waveform tensor, sample rate).
 
     Raises:
-        DependencyError: If ``torchaudio`` is not installed.
         AudioLoadError: If decoding fails.
     """
     torchaudio = _import_torchaudio()
@@ -136,8 +127,6 @@ def resample_waveform_tensor(
     Returns:
         Resampled waveform tensor.
 
-    Raises:
-        DependencyError: If ``torchaudio`` is not installed.
     """
     torchaudio = _import_torchaudio()
     resampler = torchaudio.transforms.Resample(orig_freq=orig_freq, new_freq=new_freq)
@@ -158,7 +147,6 @@ def load_audio_from_bytes(
         Tuple of (audio_array, sample_rate).
 
     Raises:
-        DependencyError: If ``torch`` / ``torchaudio`` are not installed.
         ValueError: If the audio bytes cannot be processed.
     """
     torch = _import_torch()

@@ -2,9 +2,8 @@
 
 Wraps the ``audiomentations`` pipeline (noise/time-stretch/pitch-shift/gain) and
 provides a batch helper that walks an input directory and writes augmented WAVs.
-All heavy dependencies (audiomentations, torch, torchaudio) are imported lazily;
-if an import ever fails the augmentation functions raise
-:class:`~bioamla.exceptions.DependencyError`.
+All heavy dependencies (audiomentations, torch, torchaudio) are imported lazily
+for fast startup.
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from bioamla.exceptions import AugmentationError, DependencyError, NotFoundError
+from bioamla.exceptions import AugmentationError, NotFoundError
 
 if TYPE_CHECKING:
     import numpy as np
@@ -71,19 +70,14 @@ def create_augmentation_pipeline(config: AugmentationConfig) -> Any:
     Returns:
         A ``Compose`` pipeline, or None if no augmentations are enabled.
 
-    Raises:
-        DependencyError: If ``audiomentations`` is not installed.
     """
-    try:
-        from audiomentations import (
-            AddGaussianSNR,
-            Compose,
-            Gain,
-            PitchShift,
-            TimeStretch,
-        )
-    except ImportError as e:
-        raise DependencyError("Audio augmentation requires audiomentations") from e
+    from audiomentations import (
+        AddGaussianSNR,
+        Compose,
+        Gain,
+        PitchShift,
+        TimeStretch,
+    )
 
     transforms = []
 
@@ -173,7 +167,6 @@ def batch_augment(
     Raises:
         NotFoundError: If the input directory doesn't exist.
         AugmentationError: If no augmentations are enabled.
-        DependencyError: If augmentation dependencies are missing.
     """
     from bioamla.audio import save_audio
     from bioamla.common.files import get_files_by_extension
@@ -267,10 +260,7 @@ def batch_augment(
 
 def _load_waveform(path: str) -> tuple[np.ndarray, int]:
     """Load a mono float waveform via torchaudio (lazy import)."""
-    try:
-        from bioamla.audio.torchaudio import load_waveform_tensor
-    except ImportError as e:
-        raise DependencyError("Audio augmentation requires torchaudio") from e
+    from bioamla.audio.torchaudio import load_waveform_tensor
 
     waveform, orig_sr = load_waveform_tensor(path)
     audio = waveform.numpy()
@@ -283,11 +273,8 @@ def _load_waveform(path: str) -> tuple[np.ndarray, int]:
 
 def _resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
     """Resample a mono waveform with torchaudio (lazy import)."""
-    try:
-        import torch
-        import torchaudio
-    except ImportError as e:
-        raise DependencyError("Resampling requires torch and torchaudio") from e
+    import torch
+    import torchaudio
 
     waveform_tensor = torch.from_numpy(audio).unsqueeze(0)
     resampler = torchaudio.transforms.Resample(orig_sr, target_sr)

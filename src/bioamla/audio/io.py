@@ -273,7 +273,6 @@ def load_waveform_tensor(filepath: str):  # noqa: ANN201 - torch optional
         Tuple of (waveform tensor, sample rate).
 
     Raises:
-        DependencyError: If ``torchaudio`` is not installed.
         AudioLoadError: If decoding fails.
     """
     from bioamla.audio.torchaudio import load_waveform_tensor as _load_waveform_tensor

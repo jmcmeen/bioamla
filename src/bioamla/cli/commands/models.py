@@ -12,7 +12,7 @@ Examples:
 
 import click
 
-from bioamla.exceptions import BioamlaError, DependencyError
+from bioamla.exceptions import BioamlaError
 
 
 @click.group()
@@ -218,31 +218,27 @@ def ast_train(
         bioamla models ast train --train-dataset ./metadata.csv
         bioamla models ast train --train-dataset ./audio_by_class/
     """
+    import evaluate
     import numpy as np
+    import torch
+    from audiomentations import (
+        AddGaussianSNR,
+        ClippingDistortion,
+        Compose,
+        Gain,
+        GainTransition,
+        PitchShift,
+        TimeStretch,
+    )
+    from transformers import (
+        ASTConfig,
+        ASTFeatureExtractor,
+        ASTForAudioClassification,
+        Trainer,
+        TrainingArguments,
+    )
 
-    try:
-        import evaluate
-        import torch
-        from audiomentations import (
-            AddGaussianSNR,
-            ClippingDistortion,
-            Compose,
-            Gain,
-            GainTransition,
-            PitchShift,
-            TimeStretch,
-        )
-        from transformers import (
-            ASTConfig,
-            ASTFeatureExtractor,
-            ASTForAudioClassification,
-            Trainer,
-            TrainingArguments,
-        )
-
-        from datasets import Audio, Dataset, DatasetDict, load_dataset
-    except ImportError as e:
-        raise DependencyError("AST training requires the ML stack") from e
+    from datasets import Audio, Dataset, DatasetDict, load_dataset
 
     # Validate min/max ranges
     if min_snr_db > max_snr_db:

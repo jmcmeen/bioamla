@@ -7,9 +7,7 @@ interface for HuggingFace Audio Spectrogram Transformer models, providing
 prediction, embedding extraction, and attention-weight inspection.
 
 PyTorch / transformers / torchaudio ship in the base install but are imported
-lazily so this module imports fast; if an import ever fails, constructing /
-using :class:`ASTModel` raises
-:class:`~bioamla.exceptions.DependencyError`. Load / inference failures raise
+lazily so this module imports fast. Load / inference failures raise
 :class:`~bioamla.exceptions.ModelError`.
 """
 
@@ -18,7 +16,7 @@ from typing import TYPE_CHECKING, Union
 
 import numpy as np
 
-from bioamla.exceptions import DependencyError, ModelError
+from bioamla.exceptions import ModelError
 from bioamla.ml.base import (
     BaseAudioModel,
     ModelBackend,
@@ -33,33 +31,25 @@ if TYPE_CHECKING:
 
 
 def _require_torch():
-    """Import and return the torch module, or raise DependencyError."""
-    try:
-        import torch
-    except ImportError as e:
-        raise DependencyError("AST requires torch") from e
+    """Import and return the torch module."""
+    import torch
     return torch
 
 
 def _require_transformers():
-    """Import and return AST transformers symbols, or raise DependencyError."""
-    try:
-        from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
-    except ImportError as e:
-        raise DependencyError("AST requires transformers") from e
+    """Import and return AST transformers symbols."""
+    from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
     return ASTFeatureExtractor, AutoModelForAudioClassification
 
 
 def _torchaudio_helpers():
     """Lazily import the torchaudio waveform helpers."""
-    try:
-        from bioamla.audio.torchaudio import (
-            load_waveform_tensor,
-            resample_waveform_tensor,
-            split_waveform_tensor,
-        )
-    except ImportError as e:
-        raise DependencyError("AST requires torchaudio") from e
+    from bioamla.audio.torchaudio import (
+        load_waveform_tensor,
+        resample_waveform_tensor,
+        split_waveform_tensor,
+    )
+
     return load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
 
 
@@ -102,7 +92,6 @@ class ASTModel(BaseAudioModel):
             Self, for method chaining.
 
         Raises:
-            DependencyError: If torch / transformers are not installed.
             ModelError: If the model cannot be loaded.
         """
         torch = _require_torch()
@@ -181,7 +170,6 @@ class ASTModel(BaseAudioModel):
             List of prediction results.
 
         Raises:
-            DependencyError: If torch / transformers / torchaudio are missing.
             ModelError: If the model is not loaded or inference fails.
         """
         torch = _require_torch()
@@ -269,7 +257,6 @@ class ASTModel(BaseAudioModel):
             Embedding vectors as a numpy array.
 
         Raises:
-            DependencyError: If torch / transformers / torchaudio are missing.
             ModelError: If the model is not loaded or inference fails.
         """
         torch = _require_torch()
@@ -335,7 +322,6 @@ class ASTModel(BaseAudioModel):
             List of attention weight matrices, one per layer.
 
         Raises:
-            DependencyError: If torch / transformers / torchaudio are missing.
             ModelError: If the model is not loaded or inference fails.
         """
         torch = _require_torch()

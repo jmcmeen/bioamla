@@ -13,8 +13,7 @@ exceptions on failure:
 
 All failures raise a :class:`~bioamla.exceptions.CatalogError` (or its subclass
 :class:`~bioamla.exceptions.SpeciesError`); bad arguments / missing API keys
-raise :class:`~bioamla.exceptions.InvalidInputError`; absent optional installs
-raise :class:`~bioamla.exceptions.DependencyError`.
+raise :class:`~bioamla.exceptions.InvalidInputError`.
 
 Example:
     >>> from bioamla.catalogs import species

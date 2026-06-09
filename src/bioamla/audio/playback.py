@@ -7,8 +7,7 @@ Real-time audio playback via ``sounddevice``, folded from
 threading, and position logic are unchanged.
 
 ``sounddevice`` ships in the base install but is imported lazily inside the
-methods that need it (so importing this module stays light); if the import ever
-fails, a :class:`DependencyError` is raised.
+methods that need it, so importing this module stays light.
 """
 
 import logging
@@ -19,8 +18,6 @@ from enum import Enum
 from typing import Any
 
 import numpy as np
-
-from bioamla.exceptions import DependencyError
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +42,8 @@ class PlaybackPosition:
 
 
 def _import_sounddevice() -> Any:
-    """Import sounddevice lazily, raising DependencyError if it is missing."""
-    try:
-        import sounddevice as sd
-    except ImportError as err:
-        raise DependencyError("audio playback requires sounddevice") from err
+    """Import and return the sounddevice module (lazy import)."""
+    import sounddevice as sd
     return sd
 
 
@@ -187,7 +181,6 @@ class AudioPlayer:
 
         Raises:
             RuntimeError: If no audio has been loaded.
-            DependencyError: If ``sounddevice`` is not installed.
         """
         if self._audio is None:
             raise RuntimeError("No audio loaded. Call load() first.")
@@ -376,7 +369,6 @@ def play_audio(
 
     Raises:
         ValueError: If a numpy array is given without a sample rate.
-        DependencyError: If ``sounddevice`` is not installed.
     """
     global _global_player
 
