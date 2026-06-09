@@ -19,13 +19,21 @@ def _read_template_file(template_path: Path) -> str:
 
 
 def _parse_license_csv(csv_path: Path) -> list[dict[str, str]]:
-    """Parse a metadata CSV into attribution records.
+    """Parse a metadata CSV into normalized attribution records.
+
+    Reads the canonical license/attribution fields with graceful fallback so a
+    dataset from any catalog works: xeno-canto/macaulay populate ``license`` /
+    ``attribution`` (canonical), while iNaturalist uses the ``attr_*`` block.
+    Per row: ``attr_id <- attr_id|attribution``, ``attr_lic <- attr_lic|license``,
+    ``attr_url <- attr_url``, plus optional context (``source``,
+    ``scientific_name``, ``common_name``, ``date``). A row is kept when it has a
+    ``file_name`` and at least one license/attribution signal.
 
     Raises:
-        InvalidInputError: If the CSV is empty/invalid or missing required fields.
+        InvalidInputError: If the CSV is empty/headerless, has no ``file_name``
+            column, or yields no attribution records.
     """
-    required_fields = ["file_name", "attr_id", "attr_lic", "attr_url", "attr_note"]
-    attributions: list[dict[str, str]] = []
+    records: list[dict[str, str]] = []
 
     with open(csv_path, encoding="utf-8", newline="") as f:
         sample = f.readline()
@@ -39,20 +47,39 @@ def _parse_license_csv(csv_path: Path) -> list[dict[str, str]]:
 
         if not reader.fieldnames:
             raise InvalidInputError("CSV file appears to be empty or invalid")
+        if "file_name" not in reader.fieldnames:
+            raise InvalidInputError("Missing required field in CSV: file_name")
 
-        missing_fields = [field for field in required_fields if field not in reader.fieldnames]
-        if missing_fields:
-            raise InvalidInputError(f"Missing required fields in CSV: {', '.join(missing_fields)}")
-
-        for row_num, row in enumerate(reader, start=2):
-            cleaned_row = {key: str(value).strip() if value else "" for key, value in row.items()}
-            if not cleaned_row.get("file_name"):
+        for row in reader:
+            cleaned = {key: (str(value).strip() if value else "") for key, value in row.items()}
+            file_name = cleaned.get("file_name", "")
+            if not file_name:
                 continue
-            attribution = {field: cleaned_row.get(field, "") for field in required_fields}
-            attribution["row_number"] = str(row_num)
-            attributions.append(attribution)
 
-    return attributions
+            attr_id = cleaned.get("attr_id") or cleaned.get("attribution") or ""
+            attr_lic = cleaned.get("attr_lic") or cleaned.get("license") or ""
+            attr_url = cleaned.get("attr_url") or ""
+            if not (attr_id or attr_lic or attr_url):
+                continue  # no license/attribution signal — skip
+
+            records.append(
+                {
+                    "file_name": file_name,
+                    "attr_id": attr_id,
+                    "attr_lic": attr_lic,
+                    "attr_url": attr_url,
+                    "attr_note": cleaned.get("attr_note", ""),
+                    "source": cleaned.get("source", ""),
+                    "scientific_name": cleaned.get("scientific_name", ""),
+                    "common_name": cleaned.get("common_name", ""),
+                    "date": cleaned.get("date", ""),
+                }
+            )
+
+    if not records:
+        raise InvalidInputError("No license/attribution data found in metadata file")
+
+    return records
 
 
 def _format_attribution(attribution: dict[str, str]) -> str:
@@ -61,13 +88,20 @@ def _format_attribution(attribution: dict[str, str]) -> str:
     formatted = f"File: {file_name}\n"
     formatted += "-" * (len(file_name) + 6) + "\n"
 
-    if attribution["attr_id"]:
-        formatted += f"Attribution ID: {attribution['attr_id']}\n"
-    if attribution["attr_lic"]:
+    if attribution.get("source"):
+        formatted += f"Source: {attribution['source']}\n"
+    species = attribution.get("scientific_name") or attribution.get("common_name")
+    if species:
+        formatted += f"Species: {species}\n"
+    if attribution.get("attr_id"):
+        formatted += f"Attribution: {attribution['attr_id']}\n"
+    if attribution.get("attr_lic"):
         formatted += f"License: {attribution['attr_lic']}\n"
-    if attribution["attr_url"]:
+    if attribution.get("attr_url"):
         formatted += f"Source URL: {attribution['attr_url']}\n"
-    if attribution["attr_note"]:
+    if attribution.get("date"):
+        formatted += f"Date: {attribution['date']}\n"
+    if attribution.get("attr_note"):
         formatted += f"Notes: {attribution['attr_note']}\n"
 
     return formatted
