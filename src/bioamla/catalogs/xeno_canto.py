@@ -79,6 +79,19 @@ def get_xc_api_key() -> str | None:
     return None
 
 
+def _tag(name: str, value: object) -> str:
+    """Format a ``tag:value`` term, double-quoting values that contain spaces.
+
+    The Xeno-canto API v3 rejects a bare space-separated word as an invalid
+    free-text term (HTTP 400), so multi-word values like ``cnt:United States``
+    must be sent as ``cnt:"United States"``.
+    """
+    text = str(value)
+    if " " in text:
+        return f'{name}:"{text}"'
+    return f"{name}:{text}"
+
+
 def _build_query_string(
     species: str | None = None,
     genus: str | None = None,
@@ -103,34 +116,34 @@ def _build_query_string(
     if species:
         species_parts = species.strip().split()
         if len(species_parts) >= 2:
-            parts.append(f"gen:{species_parts[0]}")
-            parts.append(f"sp:{species_parts[1]}")
+            parts.append(_tag("gen", species_parts[0]))
+            parts.append(_tag("sp", species_parts[1]))
         else:
-            parts.append(f"en:{species}")
+            parts.append(_tag("en", species))
     if genus:
-        parts.append(f"gen:{genus}")
+        parts.append(_tag("gen", genus))
     if recordist:
-        parts.append(f"rec:{recordist}")
+        parts.append(_tag("rec", recordist))
     if country:
-        parts.append(f"cnt:{country}")
+        parts.append(_tag("cnt", country))
     if location:
-        parts.append(f"loc:{location}")
+        parts.append(_tag("loc", location))
     if quality:
-        parts.append(f"q:{quality}")
+        parts.append(_tag("q", quality))
     if sound_type:
-        parts.append(f"type:{sound_type}")
+        parts.append(_tag("type", sound_type))
     if latitude is not None and longitude is not None:
-        parts.append(f"lat:{latitude}")
-        parts.append(f"lon:{longitude}")
+        parts.append(_tag("lat", latitude))
+        parts.append(_tag("lon", longitude))
     if box:
         lat_min, lat_max, lon_min, lon_max = box
         parts.append(f"box:{lat_min},{lon_min},{lat_max},{lon_max}")
     if since:
-        parts.append(f"since:{since}")
+        parts.append(_tag("since", since))
     if year:
-        parts.append(f"year:{year}")
+        parts.append(_tag("year", year))
     if month:
-        parts.append(f"month:{month}")
+        parts.append(_tag("month", month))
 
     return " ".join(parts) if parts else ""
 
@@ -406,9 +419,9 @@ def get_species_recordings_count(species: str) -> int:
     try:
         species_parts = species.strip().split()
         if len(species_parts) >= 2:
-            query = f"gen:{species_parts[0]} sp:{species_parts[1]}"
+            query = f"{_tag('gen', species_parts[0])} {_tag('sp', species_parts[1])}"
         else:
-            query = f"en:{species}"
+            query = _tag("en", species)
 
         response = _client.get(XC_API_URL, params={"query": query, "key": api_key})
         return int(response.get("numRecordings", 0))

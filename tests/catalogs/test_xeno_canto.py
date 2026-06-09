@@ -20,8 +20,15 @@ class TestQueryBuilding:
     def test_filters_combine(self) -> None:
         q = xc._build_query_string(genus="Turdus", country="United States", quality="A")
         assert "gen:Turdus" in q
-        assert "cnt:United States" in q
+        # Multi-word values must be double-quoted for the v3 API (else HTTP 400).
+        assert 'cnt:"United States"' in q
         assert "q:A" in q
+
+    def test_multiword_value_is_quoted(self) -> None:
+        assert xc._tag("cnt", "United States") == 'cnt:"United States"'
+
+    def test_single_word_value_is_unquoted(self) -> None:
+        assert xc._tag("q", "A") == "q:A"
 
     def test_raw_query_overrides(self) -> None:
         assert xc._build_query_string(species="x", query="raw:value") == "raw:value"
