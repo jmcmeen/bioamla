@@ -1,8 +1,64 @@
 """Annotation management commands for audio datasets."""
 
+from pathlib import Path
+
 import click
 
 from bioamla.exceptions import BioamlaError
+
+# Supported annotation file formats for the --from/--to/--format options.
+_FORMAT_CHOICES = ["raven", "csv", "bioamla"]
+
+
+def _detect_format(path: Path, explicit: str | None = None) -> str:
+    """Resolve an annotation format from an explicit flag or the file extension.
+
+    ``.txt`` -> raven selection table, ``.json`` -> bioamla format, anything
+    else -> flat CSV.
+    """
+    if explicit:
+        return explicit
+    suffix = path.suffix.lower()
+    if suffix == ".txt":
+        return "raven"
+    if suffix == ".json":
+        return "bioamla"
+    return "csv"
+
+
+def _load(path: Path, fmt: str, label_column: str | None = None):
+    """Load annotations in the given format, returning ``(annotations, metadata)``.
+
+    Only the bioamla format carries file-level metadata; the others return an
+    empty metadata dict so callers can treat every format uniformly.
+    """
+    from bioamla.datasets import (
+        load_bioamla_annotations,
+        load_csv_annotations,
+        load_raven_selection_table,
+    )
+
+    if fmt == "raven":
+        return load_raven_selection_table(str(path), label_column=label_column), {}
+    if fmt == "bioamla":
+        return load_bioamla_annotations(str(path))
+    return load_csv_annotations(str(path)), {}
+
+
+def _save(annotations, path: Path, fmt: str, metadata: dict | None = None) -> None:
+    """Save annotations in the given format, preserving metadata for bioamla."""
+    from bioamla.datasets import (
+        save_bioamla_annotations,
+        save_csv_annotations,
+        save_raven_selection_table,
+    )
+
+    if fmt == "raven":
+        save_raven_selection_table(annotations, str(path))
+    elif fmt == "bioamla":
+        save_bioamla_annotations(annotations, str(path), metadata=metadata)
+    else:
+        save_csv_annotations(annotations, str(path))
 
 
 @click.group()
@@ -11,20 +67,94 @@ def annotation() -> None:
     pass
 
 
+@annotation.command("template")
+@click.argument("audio_file")
+@click.argument("output_file")
+@click.option(
+    "--format",
+    "out_format",
+    type=click.Choice(_FORMAT_CHOICES),
+    default=None,
+    help="Output format (auto-detected from extension if not specified)",
+)
+@click.option("--label", default="", help="Label for the placeholder full-file row")
+@click.option("--empty", is_flag=True, help="Write metadata only, with no placeholder row")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def annotation_template(
+    audio_file: str,
+    output_file: str,
+    out_format: str,
+    label: str,
+    empty: bool,
+    quiet: bool,
+) -> None:
+    """Generate a starter annotation file from an audio file.
+
+    Reads the recording's duration and sample rate and writes a skeleton
+    annotation file pre-filled with that metadata plus (unless --empty) a single
+    placeholder row spanning the whole file, ready to edit. The bioamla (.json)
+    format stores the audio metadata in the file; raven/csv hold the rows only.
+    """
+    from datetime import datetime, timezone
+
+    from bioamla.audio import get_audio_info
+    from bioamla.datasets import Annotation
+
+    audio_path = Path(audio_file)
+    if not audio_path.exists():
+        click.echo(f"Error: Audio file not found: {audio_file}")
+        raise SystemExit(1)
+
+    output_path = Path(output_file)
+    fmt = _detect_format(output_path, out_format)
+
+    try:
+        info = get_audio_info(audio_file)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    annotations = []
+    if not empty:
+        annotations.append(Annotation(start_time=0.0, end_time=info.duration, label=label))
+
+    metadata = {
+        "audio_file": audio_path.name,
+        "sample_rate": info.sample_rate,
+        "duration": round(info.duration, 6),
+        "channels": info.channels,
+        "created": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        _save(annotations, output_path, fmt, metadata=metadata)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        click.echo(f"Created {fmt} annotation template: {output_file}")
+        click.echo(
+            f"  audio: {audio_path.name}  "
+            f"duration: {info.duration:.2f}s  sr: {info.sample_rate} Hz"
+        )
+        click.echo(f"  rows: {len(annotations)}")
+        if fmt != "bioamla":
+            click.echo("  note: audio metadata is only persisted in the bioamla (.json) format")
+
+
 @annotation.command("convert")
 @click.argument("input_file")
 @click.argument("output_file")
 @click.option(
     "--from",
     "from_format",
-    type=click.Choice(["raven", "csv"]),
+    type=click.Choice(_FORMAT_CHOICES),
     default=None,
     help="Input format (auto-detected from extension if not specified)",
 )
 @click.option(
     "--to",
     "to_format",
-    type=click.Choice(["raven", "csv"]),
+    type=click.Choice(_FORMAT_CHOICES),
     default=None,
     help="Output format (auto-detected from extension if not specified)",
 )
@@ -39,15 +169,6 @@ def annotation_convert(
     quiet: bool,
 ) -> None:
     """Convert annotation files between formats."""
-    from pathlib import Path
-
-    from bioamla.datasets import (
-        load_csv_annotations,
-        load_raven_selection_table,
-        save_csv_annotations,
-        save_raven_selection_table,
-    )
-
     input_path = Path(input_file)
     output_path = Path(output_file)
 
@@ -55,22 +176,12 @@ def annotation_convert(
         click.echo(f"Error: Input file not found: {input_file}")
         raise SystemExit(1)
 
-    if from_format is None:
-        from_format = "raven" if input_path.suffix.lower() == ".txt" else "csv"
-
-    if to_format is None:
-        to_format = "raven" if output_path.suffix.lower() == ".txt" else "csv"
+    from_format = _detect_format(input_path, from_format)
+    to_format = _detect_format(output_path, to_format)
 
     try:
-        if from_format == "raven":
-            annotations = load_raven_selection_table(input_file, label_column=label_column)
-        else:
-            annotations = load_csv_annotations(input_file)
-
-        if to_format == "raven":
-            save_raven_selection_table(annotations, output_file)
-        else:
-            save_csv_annotations(annotations, output_file)
+        annotations, metadata = _load(input_path, from_format, label_column=label_column)
+        _save(annotations, output_path, to_format, metadata=metadata)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -84,7 +195,7 @@ def annotation_convert(
 @click.option(
     "--format",
     "file_format",
-    type=click.Choice(["raven", "csv"]),
+    type=click.Choice(_FORMAT_CHOICES),
     default=None,
     help="Annotation format (auto-detected from extension if not specified)",
 )
@@ -92,13 +203,8 @@ def annotation_convert(
 def annotation_summary(path: str, file_format: str, output_json: str) -> None:
     """Display summary statistics for an annotation file."""
     import json
-    from pathlib import Path
 
-    from bioamla.datasets import (
-        load_csv_annotations,
-        load_raven_selection_table,
-        summarize_annotations,
-    )
+    from bioamla.datasets import summarize_annotations
 
     input_path = Path(path)
 
@@ -106,14 +212,10 @@ def annotation_summary(path: str, file_format: str, output_json: str) -> None:
         click.echo(f"Error: File not found: {path}")
         raise SystemExit(1)
 
-    if file_format is None:
-        file_format = "raven" if input_path.suffix.lower() == ".txt" else "csv"
+    file_format = _detect_format(input_path, file_format)
 
     try:
-        if file_format == "raven":
-            annotations = load_raven_selection_table(path)
-        else:
-            annotations = load_csv_annotations(path)
+        annotations, metadata = _load(input_path, file_format)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -124,6 +226,10 @@ def annotation_summary(path: str, file_format: str, output_json: str) -> None:
     else:
         click.echo(f"\nAnnotation Summary: {path}")
         click.echo("=" * 50)
+        if metadata.get("audio_file"):
+            click.echo(f"Audio file: {metadata['audio_file']}")
+        if metadata.get("duration") is not None:
+            click.echo(f"Audio duration: {float(metadata['duration']):.2f}s")
         click.echo(f"Total annotations: {summary['total_annotations']}")
         click.echo(f"Unique labels: {summary['unique_labels']}")
         click.echo("\nDuration statistics:")
@@ -152,16 +258,7 @@ def annotation_remap(
     input_file: str, output_file: str, mapping: str, keep_unmapped: bool, quiet: bool
 ) -> None:
     """Remap annotation labels using a mapping file."""
-    from pathlib import Path
-
-    from bioamla.datasets import (
-        load_csv_annotations,
-        load_label_mapping,
-        load_raven_selection_table,
-        remap_labels,
-        save_csv_annotations,
-        save_raven_selection_table,
-    )
+    from bioamla.datasets import load_label_mapping, remap_labels
 
     input_path = Path(input_file)
     output_path = Path(output_file)
@@ -170,23 +267,15 @@ def annotation_remap(
         click.echo(f"Error: Input file not found: {input_file}")
         raise SystemExit(1)
 
+    in_format = _detect_format(input_path)
+    out_format = _detect_format(output_path) if output_path.suffix else in_format
+
     try:
         label_mapping = load_label_mapping(mapping)
-
-        if input_path.suffix.lower() == ".txt":
-            annotations = load_raven_selection_table(input_file)
-            is_raven = True
-        else:
-            annotations = load_csv_annotations(input_file)
-            is_raven = False
-
+        annotations, metadata = _load(input_path, in_format)
         original_count = len(annotations)
         remapped = remap_labels(annotations, label_mapping, keep_unmapped=keep_unmapped)
-
-        if output_path.suffix.lower() == ".txt" or is_raven:
-            save_raven_selection_table(remapped, output_file)
-        else:
-            save_csv_annotations(remapped, output_file)
+        _save(remapped, output_path, out_format, metadata=metadata)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -213,15 +302,7 @@ def annotation_filter(
     quiet: bool,
 ) -> None:
     """Filter annotations by label or duration."""
-    from pathlib import Path
-
-    from bioamla.datasets import (
-        filter_labels,
-        load_csv_annotations,
-        load_raven_selection_table,
-        save_csv_annotations,
-        save_raven_selection_table,
-    )
+    from bioamla.datasets import filter_labels
 
     input_path = Path(input_file)
     output_path = Path(output_file)
@@ -230,14 +311,11 @@ def annotation_filter(
         click.echo(f"Error: Input file not found: {input_file}")
         raise SystemExit(1)
 
-    try:
-        if input_path.suffix.lower() == ".txt":
-            annotations = load_raven_selection_table(input_file)
-            is_raven = True
-        else:
-            annotations = load_csv_annotations(input_file)
-            is_raven = False
+    in_format = _detect_format(input_path)
+    out_format = _detect_format(output_path) if output_path.suffix else in_format
 
+    try:
+        annotations, metadata = _load(input_path, in_format)
         original_count = len(annotations)
 
         include_set = set(include) if include else None
@@ -251,10 +329,7 @@ def annotation_filter(
         if max_duration is not None:
             filtered = [a for a in filtered if a.duration <= max_duration]
 
-        if output_path.suffix.lower() == ".txt" or is_raven:
-            save_raven_selection_table(filtered, output_file)
-        else:
-            save_csv_annotations(filtered, output_file)
+        _save(filtered, output_path, out_format, metadata=metadata)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -266,7 +341,12 @@ def annotation_filter(
 @annotation.command("generate-labels")
 @click.argument("annotation_file")
 @click.argument("output_file")
-@click.option("--audio-duration", type=float, required=True, help="Total audio duration in seconds")
+@click.option(
+    "--audio-duration",
+    type=float,
+    default=None,
+    help="Total audio duration in seconds (inferred from bioamla metadata if omitted)",
+)
 @click.option("--clip-duration", type=float, required=True, help="Duration of each clip in seconds")
 @click.option(
     "--hop-length",
@@ -301,7 +381,6 @@ def annotation_generate_labels(
 ) -> None:
     """Generate clip-level labels from annotations."""
     import csv as csv_lib
-    from pathlib import Path
 
     import numpy as np
 
@@ -309,8 +388,6 @@ def annotation_generate_labels(
         create_label_map,
         generate_clip_labels,
         get_unique_labels,
-        load_csv_annotations,
-        load_raven_selection_table,
     )
 
     input_path = Path(annotation_file)
@@ -319,15 +396,23 @@ def annotation_generate_labels(
         click.echo(f"Error: Annotation file not found: {annotation_file}")
         raise SystemExit(1)
 
+    in_format = _detect_format(input_path)
+
     try:
-        if input_path.suffix.lower() == ".txt":
-            annotations = load_raven_selection_table(annotation_file)
-        else:
-            annotations = load_csv_annotations(annotation_file)
+        annotations, metadata = _load(input_path, in_format)
 
         if not annotations:
             click.echo("Error: No annotations found in file")
             raise SystemExit(1)
+
+        # Fall back to the duration embedded in a bioamla file when not given.
+        if audio_duration is None:
+            if metadata.get("duration") is not None:
+                audio_duration = float(metadata["duration"])
+            else:
+                raise click.ClickException(
+                    "--audio-duration is required (no duration metadata in this file)"
+                )
 
         labels = get_unique_labels(annotations)
         label_map = create_label_map(labels)

@@ -547,6 +547,105 @@ def save_json_annotations(annotations: list[Annotation], filepath: str) -> str:
     return str(path)
 
 
+# =============================================================================
+# Bioamla Annotation Format (JSON container with metadata header)
+# =============================================================================
+
+# Versioned format identifier written into every bioamla annotation file. Bump
+# the trailing number on breaking schema changes so loaders can adapt.
+BIOAMLA_ANNOTATION_FORMAT = "bioamla-annotations/1"
+
+# Header fields managed by the format itself; everything else in a loaded
+# header is returned to the caller as free-form metadata.
+_BIOAMLA_RESERVED_KEYS = {"format", "annotations"}
+
+
+def save_bioamla_annotations(
+    annotations: list[Annotation],
+    filepath: str,
+    metadata: dict[str, Any] | None = None,
+) -> str:
+    """Save annotations in the bioamla JSON format.
+
+    Unlike a flat CSV/Raven table, this format carries a file-level metadata
+    header (e.g. ``audio_file``, ``sample_rate``, ``duration``) alongside the
+    annotation records, so an annotation file is self-describing and stays
+    linked to the recording it describes.
+
+    Args:
+        annotations: List of Annotation objects.
+        filepath: Output file path (``.json``).
+        metadata: Optional file-level metadata (audio_file, sample_rate,
+            duration, channels, or any custom keys) merged into the header.
+
+    Returns:
+        Path to the saved file.
+
+    Raises:
+        AnnotationError: If the file cannot be written.
+    """
+    import json
+
+    path = Path(filepath)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    header: dict[str, Any] = {"format": BIOAMLA_ANNOTATION_FORMAT}
+    if metadata:
+        # Never let caller metadata clobber the reserved keys.
+        header.update({k: v for k, v in metadata.items() if k not in _BIOAMLA_RESERVED_KEYS})
+    header["annotations"] = [ann.to_dict() for ann in annotations]
+
+    try:
+        path.write_text(json.dumps(header, indent=2, default=str), encoding="utf-8")
+    except OSError as e:
+        raise AnnotationError(f"Failed to write bioamla annotations {filepath}: {e}") from e
+
+    logger.info(f"Saved {len(annotations)} annotations to {filepath}")
+    return str(path)
+
+
+def load_bioamla_annotations(filepath: str) -> tuple[list[Annotation], dict[str, Any]]:
+    """Load annotations from a bioamla JSON format file.
+
+    Args:
+        filepath: Path to a ``.json`` file in the bioamla annotation format.
+
+    Returns:
+        A ``(annotations, metadata)`` tuple, where ``metadata`` is the
+        file-level header (audio_file, sample_rate, etc.) with the reserved
+        ``format`` and ``annotations`` keys removed.
+
+    Raises:
+        NotFoundError: If the file doesn't exist.
+        AnnotationError: If the file cannot be parsed or has the wrong shape.
+    """
+    import json
+
+    path = Path(filepath)
+    if not path.exists():
+        raise NotFoundError(f"Bioamla annotation file not found: {filepath}")
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        raise AnnotationError(f"Failed to read bioamla annotations {filepath}: {e}") from e
+
+    if not isinstance(data, dict) or "annotations" not in data:
+        raise AnnotationError(
+            f"Not a bioamla annotation file (missing 'annotations' key): {filepath}"
+        )
+
+    records = data.get("annotations", [])
+    if not isinstance(records, list):
+        raise AnnotationError(f"'annotations' must be a list in {filepath}")
+
+    annotations = [Annotation.from_dict(rec) for rec in records]
+    metadata = {k: v for k, v in data.items() if k not in _BIOAMLA_RESERVED_KEYS}
+
+    logger.info(f"Loaded {len(annotations)} annotations from {filepath}")
+    return annotations, metadata
+
+
 def save_parquet_annotations(annotations: list[Annotation], filepath: str) -> str:
     """Save annotations to a Parquet file.
 

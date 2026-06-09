@@ -9,6 +9,7 @@ import csv
 import pytest
 
 from bioamla.datasets import (
+    BIOAMLA_ANNOTATION_FORMAT,
     Annotation,
     AnnotationSet,
     annotations_to_one_hot,
@@ -21,11 +22,13 @@ from bioamla.datasets import (
     generate_licenses_for_directory,
     get_dataset_stats,
     get_unique_labels,
+    load_bioamla_annotations,
     load_csv_annotations,
     load_label_mapping,
     load_raven_selection_table,
     merge_datasets,
     remap_labels,
+    save_bioamla_annotations,
     save_csv_annotations,
     save_label_mapping,
     save_raven_selection_table,
@@ -146,6 +149,56 @@ class TestRavenRoundTrip:
     def test_load_missing_raven_raises(self, tmp_path) -> None:
         with pytest.raises(NotFoundError):
             load_raven_selection_table(str(tmp_path / "missing.txt"))
+
+
+class TestBioamlaFormat:
+    def test_roundtrip_preserves_annotations_and_metadata(self, tmp_path) -> None:
+        anns = _sample_annotations()
+        meta = {"audio_file": "rec.wav", "sample_rate": 48000, "duration": 60.0}
+        out = tmp_path / "ann.json"
+        save_bioamla_annotations(anns, str(out), metadata=meta)
+
+        loaded, loaded_meta = load_bioamla_annotations(str(out))
+
+        assert len(loaded) == len(anns)
+        for orig, got in zip(anns, loaded, strict=False):
+            assert got.start_time == pytest.approx(orig.start_time, abs=1e-9)
+            assert got.label == orig.label
+        assert loaded_meta["audio_file"] == "rec.wav"
+        assert loaded_meta["sample_rate"] == 48000
+        assert loaded_meta["duration"] == pytest.approx(60.0)
+
+    def test_header_records_format_version(self, tmp_path) -> None:
+        import json
+
+        out = tmp_path / "ann.json"
+        save_bioamla_annotations(_sample_annotations(), str(out))
+        data = json.loads(out.read_text(encoding="utf-8"))
+        assert data["format"] == BIOAMLA_ANNOTATION_FORMAT
+        assert isinstance(data["annotations"], list)
+
+    def test_metadata_cannot_clobber_reserved_keys(self, tmp_path) -> None:
+        import json
+
+        out = tmp_path / "ann.json"
+        save_bioamla_annotations(
+            _sample_annotations(),
+            str(out),
+            metadata={"format": "evil", "annotations": "evil"},
+        )
+        data = json.loads(out.read_text(encoding="utf-8"))
+        assert data["format"] == BIOAMLA_ANNOTATION_FORMAT
+        assert isinstance(data["annotations"], list)
+
+    def test_load_missing_raises(self, tmp_path) -> None:
+        with pytest.raises(NotFoundError):
+            load_bioamla_annotations(str(tmp_path / "missing.json"))
+
+    def test_load_wrong_shape_raises(self, tmp_path) -> None:
+        bad = tmp_path / "bad.json"
+        bad.write_text('{"not_annotations": []}', encoding="utf-8")
+        with pytest.raises(AnnotationError):
+            load_bioamla_annotations(str(bad))
 
 
 class TestCrossFormatConversion:
