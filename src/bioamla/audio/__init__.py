@@ -69,16 +69,20 @@ from bioamla.audio.playback import (
 from bioamla.audio.processing import (
     AudioEvent,
     AudioSegment,
+    add_noise,
+    apply_gain,
     bandpass_filter,
     detect_onsets,
     highpass_filter,
     lowpass_filter,
     normalize_loudness,
     peak_normalize,
+    pitch_shift,
     resample_audio,
     segment_on_silence,
     spectral_denoise,
     split_audio_on_silence,
+    time_stretch,
     trim_audio,
     trim_silence,
 )
@@ -146,6 +150,11 @@ __all__ = [
     "resample_audio",
     "trim_audio",
     "trim_silence",
+    # Editing transforms
+    "pitch_shift",
+    "time_stretch",
+    "add_noise",
+    "apply_gain",
     # Playback
     "PlaybackState",
     "PlaybackPosition",

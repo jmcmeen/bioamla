@@ -462,6 +462,104 @@ def trim_audio(
     return audio[start_sample:end_sample]
 
 
+# =============================================================================
+# Editing Transforms
+# =============================================================================
+#
+# Deterministic, single-file edits — peers of the filter/normalize ops above.
+# These are *editing* operations (apply once with explicit parameters), distinct
+# from the randomized pre-training augmentation layer in ``bioamla.datasets``
+# (``create_augmentation_pipeline``), which composes these kinds of effects with
+# random parameters to synthesize training data.
+
+
+def pitch_shift(
+    audio: np.ndarray,
+    sample_rate: int,
+    n_steps: float,
+) -> np.ndarray:
+    """
+    Shift the pitch of audio up or down without changing its duration.
+
+    Args:
+        audio: Audio data as numpy array.
+        sample_rate: Sample rate in Hz.
+        n_steps: Number of (fractional) semitones to shift; positive raises pitch.
+
+    Returns:
+        Pitch-shifted audio as numpy array.
+    """
+    shifted = librosa.effects.pitch_shift(y=audio, sr=sample_rate, n_steps=n_steps)
+    return shifted.astype(np.float32)
+
+
+def time_stretch(
+    audio: np.ndarray,
+    rate: float,
+) -> np.ndarray:
+    """
+    Time-stretch audio without changing its pitch.
+
+    Args:
+        audio: Audio data as numpy array.
+        rate: Stretch factor; ``> 1`` speeds up (shorter), ``< 1`` slows down.
+
+    Returns:
+        Time-stretched audio as numpy array.
+
+    Raises:
+        ValueError: If ``rate`` is not positive.
+    """
+    if rate <= 0:
+        raise ValueError(f"Time-stretch rate must be positive, got {rate}")
+    stretched = librosa.effects.time_stretch(y=audio, rate=rate)
+    return stretched.astype(np.float32)
+
+
+def add_noise(
+    audio: np.ndarray,
+    snr_db: float,
+    seed: int | None = None,
+) -> np.ndarray:
+    """
+    Add Gaussian white noise at a target signal-to-noise ratio.
+
+    Args:
+        audio: Audio data as numpy array.
+        snr_db: Target SNR in dB; lower values add more noise.
+        seed: Optional RNG seed for reproducible noise.
+
+    Returns:
+        Noisy audio as numpy array.
+    """
+    signal_power = np.mean(audio**2)
+    if signal_power == 0:
+        return audio.astype(np.float32)
+
+    noise_power = signal_power / (10 ** (snr_db / 10))
+    rng = np.random.default_rng(seed)
+    noise = rng.normal(0.0, np.sqrt(noise_power), size=audio.shape)
+    return (audio + noise).astype(np.float32)
+
+
+def apply_gain(
+    audio: np.ndarray,
+    gain_db: float,
+) -> np.ndarray:
+    """
+    Apply a fixed gain (in dB) to audio, clipping to [-1, 1].
+
+    Args:
+        audio: Audio data as numpy array.
+        gain_db: Gain to apply in dB; positive amplifies, negative attenuates.
+
+    Returns:
+        Gain-adjusted audio as numpy array.
+    """
+    gained = audio * (10 ** (gain_db / 20))
+    return np.clip(gained, -1.0, 1.0).astype(np.float32)
+
+
 def trim_silence(
     audio: np.ndarray,
     sample_rate: int,

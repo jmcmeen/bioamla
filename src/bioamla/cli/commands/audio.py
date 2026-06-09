@@ -329,6 +329,83 @@ def audio_denoise(input_path: str, output_path: str, strength: float) -> None:
     click.echo(f"Denoised audio saved to: {output_path}")
 
 
+@audio.command("pitch-shift")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option(
+    "--steps", "-n", required=True, type=float, help="Semitones to shift (positive raises pitch)"
+)
+def audio_pitch_shift(input_path: str, output_path: str, steps: float) -> None:
+    """Shift pitch up/down without changing duration."""
+    from bioamla.audio import load_audio, pitch_shift, save_audio
+
+    try:
+        audio, sr = load_audio(input_path)
+        shifted = pitch_shift(audio, sr, steps)
+        save_audio(output_path, shifted, sr)
+    except (BioamlaError, ValueError) as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Pitch-shifted audio ({steps:+g} semitones) saved to: {output_path}")
+
+
+@audio.command("time-stretch")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option(
+    "--rate", "-r", required=True, type=float, help="Stretch factor (>1 faster, <1 slower)"
+)
+def audio_time_stretch(input_path: str, output_path: str, rate: float) -> None:
+    """Time-stretch audio without changing pitch."""
+    from bioamla.audio import load_audio, save_audio, time_stretch
+
+    try:
+        audio, sr = load_audio(input_path)
+        stretched = time_stretch(audio, rate)
+        save_audio(output_path, stretched, sr)
+    except (BioamlaError, ValueError) as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Time-stretched audio (rate {rate:g}) saved to: {output_path}")
+
+
+@audio.command("add-noise")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option("--snr-db", required=True, type=float, help="Target SNR in dB (lower = more noise)")
+@click.option("--seed", default=None, type=int, help="RNG seed for reproducible noise")
+def audio_add_noise(input_path: str, output_path: str, snr_db: float, seed: int) -> None:
+    """Add Gaussian white noise at a target SNR."""
+    from bioamla.audio import add_noise, load_audio, save_audio
+
+    try:
+        audio, sr = load_audio(input_path)
+        noisy = add_noise(audio, snr_db, seed=seed)
+        save_audio(output_path, noisy, sr)
+    except (BioamlaError, ValueError) as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Noisy audio (SNR {snr_db:g} dB) saved to: {output_path}")
+
+
+@audio.command("gain")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option("--gain-db", required=True, type=float, help="Gain in dB (positive amplifies)")
+def audio_gain(input_path: str, output_path: str, gain_db: float) -> None:
+    """Apply a fixed gain (dB) to audio."""
+    from bioamla.audio import apply_gain, load_audio, save_audio
+
+    try:
+        audio, sr = load_audio(input_path)
+        gained = apply_gain(audio, gain_db)
+        save_audio(output_path, gained, sr)
+    except (BioamlaError, ValueError) as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Gain-adjusted audio ({gain_db:+g} dB) saved to: {output_path}")
+
+
 @audio.command("visualize")
 @click.argument("path")
 @click.option("--output", "-o", default=None, help="Output image file path")

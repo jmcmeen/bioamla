@@ -8,7 +8,9 @@ from bioamla.audio import (
     AudioData,
     AudioInfo,
     AudioPlayer,
+    add_noise,
     analyze_audio,
+    apply_gain,
     bandpass_filter,
     detect_silence,
     get_amplitude_stats,
@@ -22,12 +24,14 @@ from bioamla.audio import (
     lowpass_filter,
     normalize_loudness,
     peak_normalize,
+    pitch_shift,
     resample_audio,
     save_audio,
     save_audio_data,
     segment_on_silence,
     spectral_denoise,
     split_audio_on_silence,
+    time_stretch,
     trim_audio,
     trim_silence,
 )
@@ -135,6 +139,45 @@ class TestDenoise:
         out = spectral_denoise(sample_audio_with_noise.samples, sample_audio_with_noise.sample_rate)
         assert out.dtype == np.float32
         assert len(out) > 0
+
+
+class TestEditingTransforms:
+    def test_pitch_shift_preserves_length(self, sample_audio_data: AudioData) -> None:
+        out = pitch_shift(sample_audio_data.samples, sample_audio_data.sample_rate, n_steps=2.0)
+        assert out.dtype == np.float32
+        assert len(out) == len(sample_audio_data.samples)
+
+    def test_time_stretch_changes_length(self, sample_audio_data: AudioData) -> None:
+        faster = time_stretch(sample_audio_data.samples, rate=2.0)
+        slower = time_stretch(sample_audio_data.samples, rate=0.5)
+        assert len(faster) < len(sample_audio_data.samples) < len(slower)
+
+    def test_time_stretch_invalid_rate_raises(self, sample_audio_data: AudioData) -> None:
+        with pytest.raises(ValueError):
+            time_stretch(sample_audio_data.samples, rate=0.0)
+
+    def test_add_noise_lowers_snr_and_is_seeded(self, sample_audio_data: AudioData) -> None:
+        a = add_noise(sample_audio_data.samples, snr_db=10.0, seed=0)
+        b = add_noise(sample_audio_data.samples, snr_db=10.0, seed=0)
+        assert a.dtype == np.float32
+        assert len(a) == len(sample_audio_data.samples)
+        # Reproducible with a fixed seed; actually adds energy.
+        assert np.allclose(a, b)
+        assert np.mean((a - sample_audio_data.samples) ** 2) > 0
+
+    def test_add_noise_silent_input_is_noop(self) -> None:
+        silent = np.zeros(1000, dtype=np.float32)
+        out = add_noise(silent, snr_db=10.0, seed=0)
+        assert np.array_equal(out, silent)
+
+    def test_apply_gain_amplifies_and_clips(self) -> None:
+        sig = np.full(100, 0.5, dtype=np.float32)
+        louder = apply_gain(sig, gain_db=6.0)
+        assert np.all(louder > 0.5)
+        # Large gain clips to 1.0
+        clipped = apply_gain(sig, gain_db=60.0)
+        assert clipped.max() <= 1.0
+        assert np.all(clipped == 1.0)
 
 
 class TestSegment:
