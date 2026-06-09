@@ -1,10 +1,9 @@
 """Spectrogram compute backend selection (librosa CPU / torch GPU).
 
-Visualization works on a slim install using librosa (CPU). When a CUDA GPU is
-available and torch is installed, the STFT can be computed on the GPU for a
-speedup — useful for batch spectrogram generation. This is purely an
-accelerator: ``select_backend("auto")`` silently falls back to librosa when
-torch/GPU are absent and never raises.
+Visualization computes on the CPU with librosa by default. When a CUDA GPU is
+available, the STFT can be computed on the GPU for a speedup — useful for batch
+spectrogram generation. This is purely an accelerator: ``select_backend("auto")``
+silently falls back to librosa when no GPU is present and never raises.
 
 The torch path mirrors the librosa computation (``torch.stft`` magnitude, then
 the same ``librosa.filters.mel`` filterbank) so output matches the CPU path
@@ -57,9 +56,7 @@ def select_backend(prefer: str = "auto") -> Backend:
         try:
             import torch  # noqa: F401
         except ImportError as e:
-            raise DependencyError(
-                "the torch spectrogram backend requires torch — install bioamla[ml]"
-            ) from e
+            raise DependencyError("the torch spectrogram backend requires torch") from e
         return "torch"
     # auto
     return "torch" if _torch_gpu_available() else "librosa"

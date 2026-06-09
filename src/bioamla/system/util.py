@@ -1,8 +1,8 @@
 """System information utilities (version, compute devices).
 
 Folds the former ``services/util.py`` into plain raising functions and
-dataclasses. Device info requires ``torch`` (the ``[ml]`` extra) and raises
-:class:`~bioamla.exceptions.DependencyError` when it is not installed.
+dataclasses. Device info uses ``torch`` (imported lazily); if that import ever
+fails it raises :class:`~bioamla.exceptions.DependencyError`.
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ def get_device_info() -> DevicesData:
     try:
         import torch
     except ImportError as e:
-        raise DependencyError("device info requires torch — install bioamla[ml]") from e
+        raise DependencyError("device info requires torch") from e
 
     devices: list[DeviceInfo] = []
     cuda_available = torch.cuda.is_available()

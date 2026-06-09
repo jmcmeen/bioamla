@@ -6,12 +6,11 @@ Abstract base classes and common utilities for ML models in bioamla: a unified
 interface for model loading, inference, embedding extraction, and batch
 processing.
 
-PyTorch / torchaudio are optional extras (``bioamla[ml]``). They are imported
-lazily so this module imports on a slim install; constructing/using the
-torch-backed classes without torch raises
-:class:`~bioamla.exceptions.DependencyError`.
+PyTorch / torchaudio ship in the base install but are imported lazily so this
+module imports fast; if a torch import ever fails, constructing/using the
+torch-backed classes raises :class:`~bioamla.exceptions.DependencyError`.
 
-numpy is a core dependency and is imported at module level.
+numpy is imported at module level.
 
 Supported model backends:
 - AST (Audio Spectrogram Transformer)
@@ -38,7 +37,7 @@ def _require_torch():
     try:
         import torch
     except ImportError as e:
-        raise DependencyError("ML models require torch — install bioamla[ml]") from e
+        raise DependencyError("ML models require torch") from e
     return torch
 
 

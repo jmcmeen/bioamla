@@ -59,9 +59,7 @@ def _get_hf_api():
     try:
         from huggingface_hub import HfApi
     except ImportError as e:
-        raise DependencyError(
-            "HuggingFace Hub features require huggingface_hub — install bioamla[hf]"
-        ) from e
+        raise DependencyError("HuggingFace Hub features require huggingface_hub") from e
     return HfApi()
 
 

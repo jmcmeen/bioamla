@@ -35,7 +35,7 @@ class DependencyError(BioamlaError):
     """An optional dependency (an install extra) is required but not installed.
 
     The message should tell the user which extra to install, e.g.
-    ``raise DependencyError("AST inference requires torch — install bioamla[ml]")``.
+    ``raise DependencyError("AST inference requires torch")``.
     """
 
 

@@ -34,8 +34,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
-      - name: Install (all extras + dev)
-        run: uv sync --all-extras
+      - name: Install (full stack + dev tooling)
+        run: uv sync --extra dev
 
       - name: Lint
         run: uv run ruff check src tests
@@ -46,8 +46,8 @@ jobs:
       - name: Test
         run: uv run pytest
 
-  slim:
-    name: slim-install import guard
+  lazy-imports:
+    name: lazy-import guard
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,19 +61,18 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
-      - name: Install core + dev only (no heavy extras)
+      - name: Install (full stack + dev tooling)
         run: uv sync --extra dev
 
-      - name: '`import bioamla` must not pull heavy modules'
+      - name: '`import bioamla` must not eagerly pull heavy modules'
         run: |
           uv run python - <<'PY'
           import sys
           import bioamla  # noqa: F401
           import bioamla.cli.cli  # noqa: F401
-          eager = [m for m in ("torch", "transformers", "opensoundscape", "librosa", "numba") if m in sys.modules]
-          assert not eager, f"slim import pulled heavy modules: {eager}"
-          print("slim import OK; version", bioamla.__version__)
+          # Heavy deps now ship in base, but lazy imports must keep startup fast:
+          # a bare `import bioamla` / CLI load must not import these eagerly.
+          eager = [m for m in ("torch", "transformers", "librosa", "numba") if m in sys.modules]
+          assert not eager, f"import pulled heavy modules eagerly: {eager}"
+          print("lazy import OK; version", bioamla.__version__)
           PY
-
-      - name: Test (optional-extra tests skip cleanly)
-        run: uv run pytest

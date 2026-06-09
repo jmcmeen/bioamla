@@ -10,9 +10,9 @@ Clustering and discovery capabilities for bioacoustic analysis:
 - Novel sound type discovery
 
 All functions return plain data and raise :class:`~bioamla.exceptions.BioamlaError`
-subclasses on failure. Heavy optional dependencies (umap-learn, hdbscan,
-scikit-learn, torch) are imported lazily; a missing dependency raises
-:class:`~bioamla.exceptions.DependencyError` telling the user which extra to install.
+subclasses on failure. Heavy backends (umap-learn, hdbscan, scikit-learn, torch)
+ship in the base install but are imported lazily; if an import ever fails a
+:class:`~bioamla.exceptions.DependencyError` is raised.
 
 Example:
     >>> from bioamla.cluster import AudioClusterer, reduce_dimensions
@@ -107,9 +107,7 @@ def reduce_dimensions(
         try:
             import umap
         except ImportError as err:
-            raise DependencyError(
-                "UMAP reduction requires umap-learn — install bioamla[cluster]"
-            ) from err
+            raise DependencyError("UMAP reduction requires umap-learn") from err
 
         reducer = umap.UMAP(
             n_components=config.n_components,
@@ -125,9 +123,7 @@ def reduce_dimensions(
         try:
             from sklearn.manifold import TSNE
         except ImportError as err:
-            raise DependencyError(
-                "t-SNE reduction requires scikit-learn — install bioamla[cluster]"
-            ) from err
+            raise DependencyError("t-SNE reduction requires scikit-learn") from err
 
         reducer = TSNE(
             n_components=config.n_components,
@@ -143,9 +139,7 @@ def reduce_dimensions(
         try:
             from sklearn.decomposition import PCA
         except ImportError as err:
-            raise DependencyError(
-                "PCA reduction requires scikit-learn — install bioamla[cluster]"
-            ) from err
+            raise DependencyError("PCA reduction requires scikit-learn") from err
 
         reducer = PCA(
             n_components=config.n_components,
@@ -187,18 +181,14 @@ class IncrementalReducer:
             try:
                 import umap
             except ImportError as err:
-                raise DependencyError(
-                    "UMAP reduction requires umap-learn — install bioamla[cluster]"
-                ) from err
+                raise DependencyError("UMAP reduction requires umap-learn") from err
 
             self.reducer = umap.UMAP(n_components=self.n_components, **self.kwargs)
         elif self.method == "pca":
             try:
                 from sklearn.decomposition import PCA
             except ImportError as err:
-                raise DependencyError(
-                    "PCA reduction requires scikit-learn — install bioamla[cluster]"
-                ) from err
+                raise DependencyError("PCA reduction requires scikit-learn") from err
 
             self.reducer = PCA(n_components=self.n_components, **self.kwargs)
         else:
@@ -320,9 +310,7 @@ class AudioClusterer:
             try:
                 import hdbscan
             except ImportError as err:
-                raise DependencyError(
-                    "HDBSCAN clustering requires hdbscan — install bioamla[cluster]"
-                ) from err
+                raise DependencyError("HDBSCAN clustering requires hdbscan") from err
 
             self.clusterer = hdbscan.HDBSCAN(
                 min_cluster_size=self.config.min_cluster_size,
@@ -337,9 +325,7 @@ class AudioClusterer:
             try:
                 from sklearn.cluster import KMeans
             except ImportError as err:
-                raise DependencyError(
-                    "K-means clustering requires scikit-learn — install bioamla[cluster]"
-                ) from err
+                raise DependencyError("K-means clustering requires scikit-learn") from err
 
             self.clusterer = KMeans(
                 n_clusters=self.config.n_clusters,
@@ -353,9 +339,7 @@ class AudioClusterer:
             try:
                 from sklearn.cluster import DBSCAN
             except ImportError as err:
-                raise DependencyError(
-                    "DBSCAN clustering requires scikit-learn — install bioamla[cluster]"
-                ) from err
+                raise DependencyError("DBSCAN clustering requires scikit-learn") from err
 
             self.clusterer = DBSCAN(
                 eps=self.config.eps, min_samples=self.config.min_samples, **self.kwargs
@@ -365,9 +349,7 @@ class AudioClusterer:
             try:
                 from sklearn.cluster import AgglomerativeClustering
             except ImportError as err:
-                raise DependencyError(
-                    "Agglomerative clustering requires scikit-learn — install bioamla[cluster]"
-                ) from err
+                raise DependencyError("Agglomerative clustering requires scikit-learn") from err
 
             self.clusterer = AgglomerativeClustering(
                 n_clusters=self.config.n_clusters
@@ -452,9 +434,7 @@ def find_optimal_clusters(
         from sklearn.cluster import KMeans
         from sklearn.metrics import silhouette_score
     except ImportError as err:
-        raise DependencyError(
-            "find_optimal_clusters requires scikit-learn — install bioamla[cluster]"
-        ) from err
+        raise DependencyError("find_optimal_clusters requires scikit-learn") from err
 
     scores = []
     k_values = range(k_range[0], k_range[1] + 1)
@@ -528,9 +508,7 @@ def compute_cluster_similarity(
         try:
             from sklearn.metrics import pairwise_distances
         except ImportError as err:
-            raise DependencyError(
-                "euclidean cluster similarity requires scikit-learn — install bioamla[cluster]"
-            ) from err
+            raise DependencyError("euclidean cluster similarity requires scikit-learn") from err
 
         distances = pairwise_distances(centers, metric="euclidean")
         similarity = 1 / (1 + distances)
@@ -587,9 +565,7 @@ def sort_by_similarity(
         try:
             from sklearn.metrics import pairwise_distances
         except ImportError as err:
-            raise DependencyError(
-                "spectral sorting requires scikit-learn — install bioamla[cluster]"
-            ) from err
+            raise DependencyError("spectral sorting requires scikit-learn") from err
 
         distances = pairwise_distances(embeddings)
         similarity = 1 / (1 + distances)
@@ -733,8 +709,7 @@ class NoveltyDetector:
                 from sklearn.ensemble import IsolationForest
             except ImportError as err:
                 raise DependencyError(
-                    "isolation_forest novelty detection requires scikit-learn "
-                    "— install bioamla[cluster]"
+                    "isolation_forest novelty detection requires scikit-learn"
                 ) from err
 
             self.detector = IsolationForest(contamination=self.contamination, random_state=42)
@@ -744,9 +719,7 @@ class NoveltyDetector:
             try:
                 from sklearn.neighbors import LocalOutlierFactor
             except ImportError as err:
-                raise DependencyError(
-                    "lof novelty detection requires scikit-learn — install bioamla[cluster]"
-                ) from err
+                raise DependencyError("lof novelty detection requires scikit-learn") from err
 
             self.detector = LocalOutlierFactor(
                 n_neighbors=20, contamination=self.contamination, novelty=True
@@ -918,9 +891,7 @@ def extract_embeddings_batch(
     try:
         import torch
     except ImportError as err:
-        raise DependencyError(
-            "extract_embeddings_batch requires torch — install bioamla[ml]"
-        ) from err
+        raise DependencyError("extract_embeddings_batch requires torch") from err
 
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -998,9 +969,7 @@ def analyze_clusters(
     try:
         from sklearn.metrics import calinski_harabasz_score, silhouette_score
     except ImportError as err:
-        raise DependencyError(
-            "analyze_clusters requires scikit-learn — install bioamla[cluster]"
-        ) from err
+        raise DependencyError("analyze_clusters requires scikit-learn") from err
 
     unique_labels = sorted(set(labels))
     n_noise = (labels == -1).sum() if -1 in labels else 0
@@ -1150,9 +1119,7 @@ def cluster_embeddings(
         try:
             from sklearn.metrics import silhouette_score
         except ImportError as err:
-            raise DependencyError(
-                "silhouette scoring requires scikit-learn — install bioamla[cluster]"
-            ) from err
+            raise DependencyError("silhouette scoring requires scikit-learn") from err
 
         mask = labels >= 0
         if mask.sum() > n_clusters_found:

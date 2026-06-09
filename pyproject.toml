@@ -15,17 +15,17 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-# Slim core: lightweight audio / signal / indices / catalogs / CLI.
-# Heavy ML and other optional capabilities live in extras below.
+
 dependencies = [
   "click",
   "rich",
   "tomli>=2.0; python_version < '3.11'",
-  "pydantic>=2.0",
+  "python-dotenv>=1.0",
   "numpy",
   "scipy",
   "numba",
   "pandas",
+  "pyarrow",
   "librosa",
   "soundfile",
   "pydub",
@@ -33,47 +33,24 @@ dependencies = [
   "requests>=2.28.0",
   "huggingface_hub",
   "pyinaturalist",
-  "python-dotenv>=1.0",
+  "torch",
+  "torchvision",
+  "torchaudio",
+  "transformers[torch]",
+  "datasets[audio]",
+  "audiomentations",
+  "evaluate",
+  "umap-learn>=0.5.0",
+  "hdbscan>=0.8.0",
+  "scikit-learn>=1.0.0",
+  "sounddevice>=0.4.0",
+  "mlflow>=2.0",
 ]
 
 [project.scripts]
 bioamla = "bioamla.cli.cli:main"
 
 [project.optional-dependencies]
-# AST inference / training / embeddings (PyTorch + HuggingFace stack)
-ml = [
-  "torch",
-  "torchvision",
-  "torchaudio",
-  "transformers[torch]",
-  "datasets[audio]",
-  "audiomentations",
-  "evaluate",
-]
-# Embedding clustering / dimensionality reduction
-cluster = [
-  "umap-learn>=0.5.0",
-  "hdbscan>=0.8.0",
-  "scikit-learn>=1.0.0",
-]
-# Local audio playback
-playback = [
-  "sounddevice>=0.4.0",
-]
-# All runtime capabilities (no dev/test tooling)
-all = [
-  "torch",
-  "torchvision",
-  "torchaudio",
-  "transformers[torch]",
-  "datasets[audio]",
-  "audiomentations",
-  "evaluate",
-  "umap-learn>=0.5.0",
-  "hdbscan>=0.8.0",
-  "scikit-learn>=1.0.0",
-  "sounddevice>=0.4.0",
-]
 dev = [
   "pytest>=7.0",
   "pytest-cov",
@@ -81,14 +58,9 @@ dev = [
   "pytest-asyncio",
   "pytest-benchmark>=4.0",
   "ruff",
-]
-docs = [
   "mkdocs>=1.6",
   "mkdocs-material>=9.5",
   "mkdocstrings[python]>=0.26",
-]
-mlflow = [
-  "mlflow>=2.0",
 ]
 
 [project.urls]

@@ -5,9 +5,9 @@ Device Management
 Centralized device management for PyTorch operations: device detection and
 model placement.
 
-PyTorch is an optional extra (``bioamla[ml]``). It is imported lazily inside
-each function so this module imports on a slim install; calling any function
-without torch raises :class:`~bioamla.exceptions.DependencyError`.
+PyTorch ships in the base install but is imported lazily inside each function so
+this module imports fast; if the torch import ever fails, calling any function
+raises :class:`~bioamla.exceptions.DependencyError`.
 
 Usage:
     from bioamla.ml.device import get_device, move_to_device
@@ -33,7 +33,7 @@ def _require_torch():
     try:
         import torch
     except ImportError as e:
-        raise DependencyError("Device management requires torch — install bioamla[ml]") from e
+        raise DependencyError("Device management requires torch") from e
     return torch
 
 

@@ -31,9 +31,9 @@ jobs:
           enable-cache: true
 
       - name: Install docs dependencies
-        run: uv sync --extra docs
+        run: uv sync --extra dev
 
-      - name: Build (mkdocstrings analyzes source statically — no heavy extras needed)
+      - name: Build (mkdocstrings analyzes source statically)
         run: uv run mkdocs build
 
       - name: Upload Pages artifact

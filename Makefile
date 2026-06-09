@@ -20,14 +20,14 @@ help: ## Show this help
 
 ## --- Environment & dependencies (uv) ---
 
-install: ## Create venv and install the project with dev extras
+install: ## Create venv and install the project with dev tooling
 	$(UV) sync --extra dev
 
-dev: ## Install EVERYTHING for local dev (all runtime extras + dev + docs tooling)
-	$(UV) sync --all-extras
+dev: ## Install the full stack + dev tooling (runtime deps are all in base)
+	$(UV) sync --extra dev
 
-sync: ## Sync the environment to the lockfile (all extras)
-	$(UV) sync --all-extras
+sync: ## Sync the environment to the lockfile (incl. dev tooling)
+	$(UV) sync --extra dev
 
 lock: ## Resolve and write uv.lock
 	$(UV) lock
@@ -69,10 +69,10 @@ check: lint fmt-check test ## Run lint, format check, and tests
 ## --- Documentation (mkdocs) ---
 
 docs: ## Build the documentation site into ./site
-	$(UV) run --extra docs mkdocs build
+	$(UV) run --extra dev mkdocs build
 
 docs-serve: ## Serve docs locally with live reload at http://127.0.0.1:8000
-	$(UV) run --extra docs mkdocs serve
+	$(UV) run --extra dev mkdocs serve
 
 ## --- Housekeeping ---
 

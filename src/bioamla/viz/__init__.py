@@ -2,8 +2,8 @@
 bioamla.viz — audio visualization domain.
 
 Spectrogram and waveform rendering built on matplotlib and librosa. matplotlib
-(with the ``Agg`` backend) and torchaudio are imported lazily inside the
-functions that need them, so this package imports cleanly on a slim install.
+(with the ``Agg`` backend) is imported lazily inside the functions that need it,
+so importing this package stays fast.
 
 Example:
     >>> from bioamla.viz import generate_spectrogram

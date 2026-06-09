@@ -6,9 +6,9 @@ Real-time audio playback via ``sounddevice``, folded from
 ``services/audio_playback.py``. The :class:`AudioPlayer` state machine,
 threading, and position logic are unchanged.
 
-``sounddevice`` is an optional dependency. It is imported lazily inside the
-methods that need it; if it is missing a :class:`DependencyError` is raised
-telling the user to install ``bioamla[playback]``.
+``sounddevice`` ships in the base install but is imported lazily inside the
+methods that need it (so importing this module stays light); if the import ever
+fails, a :class:`DependencyError` is raised.
 """
 
 import logging
@@ -49,9 +49,7 @@ def _import_sounddevice() -> Any:
     try:
         import sounddevice as sd
     except ImportError as err:
-        raise DependencyError(
-            "audio playback requires sounddevice — install bioamla[playback]"
-        ) from err
+        raise DependencyError("audio playback requires sounddevice") from err
     return sd
 
 
@@ -64,8 +62,7 @@ class AudioPlayer:
     (by time or sample), looping, and playback-event callbacks.
 
     Note:
-        Requires the optional ``sounddevice`` dependency
-        (``pip install bioamla[playback]``).
+        Uses ``sounddevice`` (a base dependency) for audio output.
     """
 
     def __init__(self) -> None:

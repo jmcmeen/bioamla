@@ -29,19 +29,17 @@ Two conventions matter for consumers:
 - **Errors are exceptions.** Functions return plain data and raise from a single hierarchy
   rooted at `bioamla.exceptions.BioamlaError` (e.g. `AudioLoadError`, `InvalidInputError`,
   `DependencyError`). Catch the base class to handle everything.
-- **Heavy dependencies are optional.** The base install is lightweight; `import bioamla` pulls
-  no torch/transformers/etc. Those load lazily when you call a feature that needs them and
-  raise `DependencyError` telling you which extra to install.
+- **Batteries included.** A single `pip install bioamla` installs the full runtime stack —
+  audio/signal/indices/detect/viz, the PyTorch + AST ML stack, clustering, and playback. Heavy
+  imports are still **lazy**, so `import bioamla` and `bioamla --help` stay fast and don't load
+  torch until you actually call a feature that needs it.
 
 ## Install
 
 ```bash
-pip install bioamla                 # slim core (audio, viz, indices, detect, catalogs, CLI)
+pip install bioamla                 # the full library + CLI
 
-pip install "bioamla[ml]"           # + AST inference/training/embeddings (torch, transformers)
-pip install "bioamla[cluster]"      # + UMAP / HDBSCAN clustering
-pip install "bioamla[playback]"     # + local audio playback (sounddevice)
-pip install "bioamla[all]"          # everything above
+pip install "bioamla[dev]"          # + contributor tooling (pytest, ruff, mkdocs)
 ```
 
 Requires Python ≥ 3.10. Audio I/O uses `ffmpeg`/`ffprobe` — install them via your OS package
@@ -90,7 +88,7 @@ except BioamlaError as e:
     print(f"failed: {e}")
 ```
 
-AST inference (needs `bioamla[ml]`):
+AST inference:
 
 ```python
 from bioamla.ml import predict_file
@@ -115,20 +113,20 @@ bioamla batch audio convert --input-dir ./wavs --output-dir ./flac --format flac
 
 # Catalogs, models, datasets, config:
 bioamla catalogs xeno-canto search --species "Hyla cinerea"
-bioamla models ast predict frog.wav --model-path bioamla/scp-frogs     # needs [ml]
+bioamla models ast predict frog.wav --model-path bioamla/scp-frogs
 bioamla config deps                                                    # check system deps
 ```
 
 ## Development
 
 ```bash
-make install        # uv sync with dev extras
+make install        # uv sync --extra dev (full stack + tooling)
 make test           # pytest
 make check          # lint + format-check + test
 ```
 
-The test suite skips tests whose optional extra isn't installed, so it is green on a slim
-install and exhaustive with `bioamla[all]`.
+`make install` brings in the full runtime stack plus contributor tooling, so the whole test
+suite runs.
 
 ## License
 

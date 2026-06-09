@@ -242,7 +242,7 @@ def ast_train(
 
         from datasets import Audio, Dataset, DatasetDict, load_dataset
     except ImportError as e:
-        raise DependencyError("AST training requires the ML stack — install bioamla[ml]") from e
+        raise DependencyError("AST training requires the ML stack") from e
 
     # Validate min/max ranges
     if min_snr_db > max_snr_db:

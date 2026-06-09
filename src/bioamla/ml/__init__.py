@@ -5,9 +5,9 @@ bioamla.ml — machine-learning domain.
 Audio Spectrogram Transformer (AST) inference, training, and embeddings, on top
 of the device / base-model foundations.
 
-PyTorch / torchaudio / transformers are optional extras (``bioamla[ml]``); they
-are imported lazily inside functions/methods so this package imports on a slim
-install, and only *using* the ML functionality raises
+PyTorch / torchaudio / transformers ship in the base install but are imported
+lazily inside functions/methods so this package imports fast; if an import ever
+fails, *using* the ML functionality raises
 :class:`~bioamla.exceptions.DependencyError`. Load / inference failures raise
 :class:`~bioamla.exceptions.ModelError`.
 

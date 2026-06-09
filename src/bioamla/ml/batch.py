@@ -10,7 +10,7 @@ Each wrapper discovers audio files under a directory, runs AST predict / embed
 per file, and returns a :class:`bioamla.batch.BatchResult`.
 
 Heavy deps (torch / transformers) are loaded lazily by the underlying ml
-functions; on a slim install they raise
+functions; if an import ever fails they raise
 :class:`~bioamla.exceptions.DependencyError` when actually used.
 """
 

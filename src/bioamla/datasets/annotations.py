@@ -566,9 +566,7 @@ def save_parquet_annotations(annotations: list[Annotation], filepath: str) -> st
     try:
         import pandas as pd
     except ImportError as e:
-        raise DependencyError(
-            "Parquet export requires pandas and pyarrow — install bioamla[parquet]"
-        ) from e
+        raise DependencyError("Parquet export requires pandas and pyarrow") from e
 
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -42,9 +42,7 @@ def compute_measurements(
         import numpy as np
         from scipy import signal as scipy_signal
     except ImportError as e:
-        raise DependencyError(
-            "Acoustic measurements require numpy and scipy — install bioamla[detect]"
-        ) from e
+        raise DependencyError("Acoustic measurements require numpy and scipy") from e
 
     from bioamla.audio import load_audio
 

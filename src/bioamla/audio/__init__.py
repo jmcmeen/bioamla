@@ -2,9 +2,9 @@
 bioamla.audio — the foundational audio domain.
 
 Data container (:class:`AudioData`), file I/O, discovery, analysis, signal
-processing, and playback. Heavy/optional backends are imported lazily inside
-the functions that need them (torchaudio for waveform tensors, sounddevice for
-playback), so this package is importable on a slim install.
+processing, and playback. Heavy backends are imported lazily inside the
+functions that need them (torchaudio for waveform tensors, sounddevice for
+playback), so importing this package stays fast.
 """
 
 from bioamla.audio.analysis import (

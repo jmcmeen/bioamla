@@ -6,9 +6,9 @@ loading, resampling, splitting into segments, and loading from raw bytes.
 These are used by the ML domain (AST training/inference) and the dataset
 augmentation pipeline.
 
-``torch`` / ``torchaudio`` are optional dependencies (the ``[ml]`` extra) and
-are imported lazily inside each function so this module is importable on a slim
-install; calling a function without them installed raises
+``torch`` / ``torchaudio`` ship in the base install but are imported lazily
+inside each function so importing this module stays light; if an import ever
+fails, calling a function raises
 :class:`~bioamla.exceptions.DependencyError`.
 """
 
@@ -32,9 +32,7 @@ def _import_torchaudio() -> Any:
     try:
         import torchaudio
     except ImportError as e:
-        raise DependencyError(
-            "torchaudio waveform helpers require torchaudio — install bioamla[ml]"
-        ) from e
+        raise DependencyError("torchaudio waveform helpers require torchaudio") from e
     return torchaudio
 
 
@@ -43,9 +41,7 @@ def _import_torch() -> Any:
     try:
         import torch
     except ImportError as e:
-        raise DependencyError(
-            "torchaudio waveform helpers require torch — install bioamla[ml]"
-        ) from e
+        raise DependencyError("torchaudio waveform helpers require torch") from e
     return torch
 
 

@@ -233,7 +233,7 @@ class TestDependencyError:
 
         monkeypatch.setattr(builtins, "__import__", fake_import)
         clusterer = AudioClusterer(method="hdbscan")
-        with pytest.raises(DependencyError, match=r"bioamla\[cluster\]"):
+        with pytest.raises(DependencyError, match=r"requires hdbscan"):
             clusterer.fit(blob_embeddings)
 
     def test_missing_umap_raises_dependency_error(
@@ -248,7 +248,7 @@ class TestDependencyError:
             return real_import(name, *args, **kwargs)
 
         monkeypatch.setattr(builtins, "__import__", fake_import)
-        with pytest.raises(DependencyError, match=r"bioamla\[cluster\]"):
+        with pytest.raises(DependencyError, match=r"requires umap-learn"):
             reduce_dimensions(blob_embeddings, method="umap")
 
     def test_dependency_error_is_bioamla_error(self) -> None:

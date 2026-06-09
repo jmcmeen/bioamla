@@ -11,12 +11,12 @@ Supported visualization types:
 - ``mfcc``: Mel-frequency cepstral coefficients
 - ``waveform``: Time-domain waveform plot
 
-Visualization runs on the slim install (librosa + matplotlib, CPU only). When a
-CUDA GPU and torch are available, the STFT can be computed on the GPU for a
-speedup via the optional ``backend`` argument (``"auto"`` uses the GPU when
-present and falls back to librosa otherwise). See :mod:`bioamla.viz._backend`.
+Visualization runs on librosa + matplotlib (CPU) by default. When a CUDA GPU is
+available, the STFT can be computed on the GPU for a speedup via the optional
+``backend`` argument (``"auto"`` uses the GPU when present and falls back to
+librosa otherwise). See :mod:`bioamla.viz._backend`.
 
-Heavy/optional backends are imported lazily:
+Heavy backends are imported lazily:
 - ``matplotlib`` is imported inside the rendering functions (and the ``Agg``
   non-interactive backend is selected there for thread-safety).
 - ``torch`` is imported lazily only when the GPU backend is selected; it is

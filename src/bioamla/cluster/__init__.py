@@ -4,9 +4,8 @@ Cluster audio embeddings (HDBSCAN, k-means, DBSCAN, agglomerative), reduce
 embedding dimensionality (UMAP, t-SNE, PCA), measure cluster quality, and detect
 novel/outlier sounds.
 
-Heavy backends (umap-learn, hdbscan, scikit-learn, torch) are imported lazily;
-a missing one raises :class:`~bioamla.exceptions.DependencyError` pointing at the
-``bioamla[cluster]`` (or ``bioamla[ml]``) extra.
+Heavy backends (umap-learn, hdbscan, scikit-learn, torch) ship in the base
+install but are imported lazily so importing this module stays fast.
 
 Example:
     >>> import numpy as np

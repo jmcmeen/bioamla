@@ -6,9 +6,9 @@ High-level inference for Audio Spectrogram Transformer (AST) models:
 :class:`ASTInference` (single-file and segmented prediction) and
 :func:`run_batch_inference` (directory -> CSV).
 
-PyTorch / transformers / torchaudio are optional extras (``bioamla[ml]``). They
-are imported lazily so this module imports on a slim install; constructing /
-using :class:`ASTInference` without them raises
+PyTorch / transformers / torchaudio ship in the base install but are imported
+lazily so this module imports fast; if an import ever fails, constructing /
+using :class:`ASTInference` raises
 :class:`~bioamla.exceptions.DependencyError`. Load / inference failures raise
 :class:`~bioamla.exceptions.ModelError`; missing input paths raise
 :class:`~bioamla.exceptions.NotFoundError`.
@@ -44,7 +44,7 @@ def _require_torch():
     try:
         import torch
     except ImportError as e:
-        raise DependencyError("AST inference requires torch — install bioamla[ml]") from e
+        raise DependencyError("AST inference requires torch") from e
     return torch
 
 
@@ -53,7 +53,7 @@ def _require_transformers():
     try:
         from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
     except ImportError as e:
-        raise DependencyError("AST inference requires transformers — install bioamla[ml]") from e
+        raise DependencyError("AST inference requires transformers") from e
     return ASTFeatureExtractor, AutoModelForAudioClassification
 
 
@@ -66,7 +66,7 @@ def _torchaudio_helpers():
             split_waveform_tensor,
         )
     except ImportError as e:
-        raise DependencyError("AST inference requires torchaudio — install bioamla[ml]") from e
+        raise DependencyError("AST inference requires torchaudio") from e
     return load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
 
 

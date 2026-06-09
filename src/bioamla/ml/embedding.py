@@ -7,11 +7,11 @@ convenience functions (:func:`extract_embeddings`,
 :func:`extract_embeddings_batch`, :func:`save_embeddings`,
 :func:`load_embeddings`).
 
-PyTorch / transformers / torchaudio are optional extras (``bioamla[ml]``);
-parquet / CSV I/O needs ``pandas`` (and ``pyarrow`` for parquet); dimensionality
-reduction needs the clustering extra. Heavy deps are imported lazily, so this
-module imports on a slim install and only *using* the relevant feature raises
-:class:`~bioamla.exceptions.DependencyError`. numpy is a core dependency.
+PyTorch / transformers / torchaudio, ``pandas``/``pyarrow`` (parquet / CSV I/O),
+and the clustering stack all ship in the base install but are imported lazily,
+so this module imports fast and only *using* the relevant feature would surface
+an import failure as :class:`~bioamla.exceptions.DependencyError`. numpy is
+imported at module level.
 
 Example:
     from bioamla.ml import EmbeddingExtractor, save_embeddings
@@ -196,7 +196,7 @@ class EmbeddingExtractor:
             from bioamla.cluster import IncrementalReducer
         except ImportError as e:
             raise DependencyError(
-                "Dimensionality reduction requires the clustering extra — install bioamla[cluster]"
+                "Dimensionality reduction requires the clustering stack (umap-learn / scikit-learn)"
             ) from e
 
         self._reducer = IncrementalReducer(
@@ -519,9 +519,7 @@ def save_embeddings(
         try:
             import pandas as pd
         except ImportError as err:
-            raise DependencyError(
-                "Parquet output requires pandas and pyarrow — install bioamla[ml]"
-            ) from err
+            raise DependencyError("Parquet output requires pandas and pyarrow") from err
         df = pd.DataFrame(embeddings)
         df.columns = [f"dim_{i}" for i in range(embeddings.shape[1])]
         df["filepath"] = filepaths
@@ -532,7 +530,7 @@ def save_embeddings(
         try:
             import pandas as pd
         except ImportError as err:
-            raise DependencyError("CSV output requires pandas — install bioamla[ml]") from err
+            raise DependencyError("CSV output requires pandas") from err
         df = pd.DataFrame(embeddings)
         df.columns = [f"dim_{i}" for i in range(embeddings.shape[1])]
         df["filepath"] = filepaths
@@ -591,9 +589,7 @@ def load_embeddings(
         try:
             import pandas as pd
         except ImportError as err:
-            raise DependencyError(
-                f"Loading {format} embeddings requires pandas — install bioamla[ml]"
-            ) from err
+            raise DependencyError(f"Loading {format} embeddings requires pandas") from err
         reader = pd.read_parquet if format == "parquet" else pd.read_csv
         df = reader(str(filepath))
         filepaths = df["filepath"].tolist() if "filepath" in df.columns else []
@@ -627,7 +623,7 @@ def get_ast_model_info(model_path: str) -> dict[str, Any]:
     try:
         from transformers import AutoConfig
     except ImportError as e:
-        raise DependencyError("Model info requires transformers — install bioamla[ml]") from e
+        raise DependencyError("Model info requires transformers") from e
 
     try:
         config = AutoConfig.from_pretrained(model_path)

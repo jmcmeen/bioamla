@@ -132,12 +132,12 @@ def extract_embeddings_file(
         import torch
         from transformers import ASTFeatureExtractor, AutoModel
     except ImportError as e:
-        raise DependencyError("AST embeddings require torch — install bioamla[ml]") from e
+        raise DependencyError("AST embeddings require torch") from e
 
     try:
         from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
     except ImportError as e:
-        raise DependencyError("AST embeddings require torchaudio — install bioamla[ml]") from e
+        raise DependencyError("AST embeddings require torchaudio") from e
 
     try:
         waveform, orig_sr = load_waveform_tensor(filepath)
@@ -244,12 +244,12 @@ def evaluate_directory(
     try:
         import torch
     except ImportError as e:
-        raise DependencyError("AST evaluation requires torch — install bioamla[ml]") from e
+        raise DependencyError("AST evaluation requires torch") from e
 
     try:
         from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
     except ImportError as e:
-        raise DependencyError("AST evaluation requires torchaudio — install bioamla[ml]") from e
+        raise DependencyError("AST evaluation requires torchaudio") from e
 
     from bioamla.ml.ast import (
         ast_predict,
@@ -309,7 +309,7 @@ def _load_ground_truth(csv_path: str, file_column: str, label_column: str) -> di
     try:
         import pandas as pd
     except ImportError as e:
-        raise DependencyError("Reading ground truth requires pandas — install bioamla[ml]") from e
+        raise DependencyError("Reading ground truth requires pandas") from e
 
     df = pd.read_csv(csv_path)
 

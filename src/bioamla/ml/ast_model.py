@@ -6,9 +6,9 @@ AST Model Wrapper
 interface for HuggingFace Audio Spectrogram Transformer models, providing
 prediction, embedding extraction, and attention-weight inspection.
 
-PyTorch / transformers / torchaudio are optional extras (``bioamla[ml]``). They
-are imported lazily so this module imports on a slim install; constructing /
-using :class:`ASTModel` without them raises
+PyTorch / transformers / torchaudio ship in the base install but are imported
+lazily so this module imports fast; if an import ever fails, constructing /
+using :class:`ASTModel` raises
 :class:`~bioamla.exceptions.DependencyError`. Load / inference failures raise
 :class:`~bioamla.exceptions.ModelError`.
 """
@@ -37,7 +37,7 @@ def _require_torch():
     try:
         import torch
     except ImportError as e:
-        raise DependencyError("AST requires torch — install bioamla[ml]") from e
+        raise DependencyError("AST requires torch") from e
     return torch
 
 
@@ -46,7 +46,7 @@ def _require_transformers():
     try:
         from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
     except ImportError as e:
-        raise DependencyError("AST requires transformers — install bioamla[ml]") from e
+        raise DependencyError("AST requires transformers") from e
     return ASTFeatureExtractor, AutoModelForAudioClassification
 
 
@@ -59,7 +59,7 @@ def _torchaudio_helpers():
             split_waveform_tensor,
         )
     except ImportError as e:
-        raise DependencyError("AST requires torchaudio — install bioamla[ml]") from e
+        raise DependencyError("AST requires torchaudio") from e
     return load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
 
 

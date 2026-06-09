@@ -18,9 +18,10 @@ designed to be a stable core that other applications can build on.
 - **Exception hierarchy** (`bioamla.exceptions`): functions return plain data and raise from
   `BioamlaError` (e.g. `AudioLoadError`, `InvalidInputError`, `DependencyError`). The CLI
   catches it centrally.
-- **Slim core + optional extras**: base install is lightweight; `pip install "bioamla[ml]"`,
-  `[detect]`, `[cluster]`, `[playback]`, `[all]`, `[docs]` add heavier capabilities. Heavy
-  dependencies load lazily and raise `DependencyError` with the extra to install.
+- **Batteries-included install**: a single `pip install bioamla` brings the full runtime stack
+  (audio/viz/indices/detect, the PyTorch + AST ML stack, clustering, playback, tracking). The
+  only optional group is `[dev]` (test/lint/docs tooling). Heavy imports stay lazy so
+  `import bioamla` and `bioamla --help` remain fast.
 - Batch CLI supports both directory mode and **CSV-metadata mode** (a `file_name` column;
   results merged back into the CSV, paths resolved relative to the CSV).
 - Documentation site (MkDocs + Material + mkdocstrings) and GitHub Actions for CI, PyPI

@@ -3,7 +3,7 @@
 Wraps the ``audiomentations`` pipeline (noise/time-stretch/pitch-shift/gain) and
 provides a batch helper that walks an input directory and writes augmented WAVs.
 All heavy dependencies (audiomentations, torch, torchaudio) are imported lazily;
-on a slim install the augmentation functions raise
+if an import ever fails the augmentation functions raise
 :class:`~bioamla.exceptions.DependencyError`.
 """
 
@@ -83,9 +83,7 @@ def create_augmentation_pipeline(config: AugmentationConfig) -> Any:
             TimeStretch,
         )
     except ImportError as e:
-        raise DependencyError(
-            "Audio augmentation requires audiomentations — install bioamla[augment]"
-        ) from e
+        raise DependencyError("Audio augmentation requires audiomentations") from e
 
     transforms = []
 
@@ -272,9 +270,7 @@ def _load_waveform(path: str) -> tuple[np.ndarray, int]:
     try:
         from bioamla.audio.torchaudio import load_waveform_tensor
     except ImportError as e:
-        raise DependencyError(
-            "Audio augmentation requires torchaudio — install bioamla[augment]"
-        ) from e
+        raise DependencyError("Audio augmentation requires torchaudio") from e
 
     waveform, orig_sr = load_waveform_tensor(path)
     audio = waveform.numpy()
@@ -291,9 +287,7 @@ def _resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
         import torch
         import torchaudio
     except ImportError as e:
-        raise DependencyError(
-            "Resampling requires torch and torchaudio — install bioamla[augment]"
-        ) from e
+        raise DependencyError("Resampling requires torch and torchaudio") from e
 
     waveform_tensor = torch.from_numpy(audio).unsqueeze(0)
     resampler = torchaudio.transforms.Resample(orig_sr, target_sr)

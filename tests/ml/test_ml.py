@@ -291,7 +291,7 @@ class TestExtractorValidation:
 
 class TestAstHelpers:
     def test_load_pretrained_bad_local_path(self) -> None:
-        pytest.importorskip("torch")  # loading a model requires the [ml] extra
+        pytest.importorskip("torch")  # loading a model needs torch
         from bioamla.ml import load_pretrained_ast_model
 
         # Looks local (starts with ./) and does not exist -> transformers fails.

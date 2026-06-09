@@ -7,9 +7,9 @@ Functions for using Audio Spectrogram Transformer models (HuggingFace
 prediction, batched prediction, feature extraction, and segmented / batch
 file inference.
 
-PyTorch / transformers / pandas are optional extras (``bioamla[ml]``). They are
-imported lazily inside each function so this module imports on a slim install;
-calling any function without them raises
+PyTorch / transformers / pandas ship in the base install but are imported lazily
+inside each function so this module imports fast; if an import ever fails,
+calling the affected function raises
 :class:`~bioamla.exceptions.DependencyError`. Model-load / inference failures
 raise :class:`~bioamla.exceptions.ModelError`.
 
@@ -40,7 +40,7 @@ def _require_torch():
     try:
         import torch
     except ImportError as e:
-        raise DependencyError("AST requires torch — install bioamla[ml]") from e
+        raise DependencyError("AST requires torch") from e
     return torch
 
 
@@ -49,7 +49,7 @@ def _require_transformers():
     try:
         from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
     except ImportError as e:
-        raise DependencyError("AST requires transformers — install bioamla[ml]") from e
+        raise DependencyError("AST requires transformers") from e
     return ASTFeatureExtractor, AutoModelForAudioClassification
 
 
@@ -58,7 +58,7 @@ def _require_pandas():
     try:
         import pandas as pd
     except ImportError as e:
-        raise DependencyError("AST inference requires pandas — install bioamla[ml]") from e
+        raise DependencyError("AST inference requires pandas") from e
     return pd
 
 
@@ -71,7 +71,7 @@ def _torchaudio_helpers():
             split_waveform_tensor,
         )
     except ImportError as e:
-        raise DependencyError("AST inference requires torchaudio — install bioamla[ml]") from e
+        raise DependencyError("AST inference requires torchaudio") from e
     return load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
 
 
@@ -499,8 +499,8 @@ def _process_segments_batched(
     device: "torch.device",
 ) -> list[dict]:
     """Process segments in batches for improved GPU utilization."""
-    # Validate arguments before requiring the heavy optional dependency, so bad
-    # input is reported even on a slim (no-torch) install.
+    # Validate arguments before importing torch, so bad input is reported
+    # without paying the heavy-import cost.
     if config.batch_size <= 0:
         raise InvalidInputError(f"batch_size must be positive, got {config.batch_size}")
 

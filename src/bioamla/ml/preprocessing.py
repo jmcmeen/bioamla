@@ -23,9 +23,7 @@ def _require_torch():
     try:
         import torch
     except ImportError as e:
-        raise DependencyError(
-            "spectrogram tensor conversion / resizing requires torch — install bioamla[ml]"
-        ) from e
+        raise DependencyError("spectrogram tensor conversion / resizing requires torch") from e
     return torch
 
 

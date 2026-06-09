@@ -5,8 +5,8 @@ plus label-engineering helpers used to turn annotations into model targets
 (label maps, one-hot/multi-hot encodings, frame/clip labels) and to remap or
 filter labels and persist label-mapping CSVs.
 
-NumPy is imported lazily inside the functions that need it, so a slim install
-can still import this module.
+NumPy is imported lazily inside the functions that need it, so importing this
+module stays light.
 """
 
 from __future__ import annotations
