@@ -32,6 +32,61 @@ def ast() -> None:
     pass
 
 
+# Map metadata.csv split values (and common aliases) onto HF split keys.
+_SPLIT_ALIAS = {
+    "train": "train",
+    "training": "train",
+    "test": "test",
+    "testing": "test",
+    "eval": "test",
+    "evaluation": "test",
+    "val": "validation",
+    "valid": "validation",
+    "validation": "validation",
+    "dev": "validation",
+}
+
+
+def _dataframe_to_ast_dataset(df, label_column, sampling_rate=16000):
+    """Build an HF ``Dataset`` (or ``DatasetDict`` when a usable ``split`` column exists).
+
+    When every row carries a recognized split value, a ``DatasetDict`` is returned
+    so the trainer consumes that fixed split instead of re-splitting at train time
+    (the partition ``--mode column`` artifact). If the ``split`` column is absent
+    or any row's split is empty/unrecognized, a flat ``Dataset`` is returned and
+    the caller re-splits as before — rows are never silently dropped.
+
+    Returns:
+        ``(dataset, used_fixed_split)``.
+    """
+    from datasets import Audio, Dataset, DatasetDict
+
+    cols = ["audio", label_column]
+
+    def _flat():
+        ds = Dataset.from_pandas(df[cols], preserve_index=False)
+        return ds.cast_column("audio", Audio(sampling_rate=sampling_rate))
+
+    if "split" not in df.columns:
+        return _flat(), False
+
+    normalized = df["split"].astype(str).str.strip().str.lower().map(_SPLIT_ALIAS)
+    if normalized.isna().any():
+        return _flat(), False
+
+    splits: dict = {}
+    for split_key, group in df.groupby(normalized):
+        ds = Dataset.from_pandas(group[cols], preserve_index=False)
+        splits[split_key] = ds.cast_column("audio", Audio(sampling_rate=sampling_rate))
+
+    # The trainer evaluates on the "test" split; if a fixed split provides only
+    # validation, use it as the eval set so the split is still respected.
+    if "test" not in splits and "validation" in splits:
+        splits["test"] = splits.pop("validation")
+
+    return DatasetDict(splits), True
+
+
 @ast.command("predict")
 @click.argument("file", type=click.Path(exists=True))
 @click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for inference")
@@ -341,10 +396,14 @@ def ast_train(
             df["audio"] = df[file_col].apply(resolve_path)
             df[category_label_column] = df[label_col]
 
-            # Create HuggingFace dataset from DataFrame
-            dataset = Dataset.from_pandas(df[["audio", category_label_column]])
-            dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
-            click.echo(f"Loaded {len(dataset)} samples from CSV")
+            # Create HuggingFace dataset from DataFrame, honoring a `split` column
+            # (partition --mode column) so a fixed split is consumed as-is.
+            dataset, used_fixed_split = _dataframe_to_ast_dataset(df, category_label_column)
+            if used_fixed_split:
+                counts = ", ".join(f"{k}={len(dataset[k])}" for k in dataset)
+                click.echo(f"Using fixed split from CSV 'split' column: {counts}")
+            else:
+                click.echo(f"Loaded {len(dataset)} samples from CSV")
 
         elif train_path.is_dir():
             # Directory - check for audiofolder structure (subdirs as classes)
