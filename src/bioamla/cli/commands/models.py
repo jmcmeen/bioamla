@@ -276,15 +276,6 @@ def ast_train(
     import evaluate
     import numpy as np
     import torch
-    from audiomentations import (
-        AddGaussianSNR,
-        ClippingDistortion,
-        Compose,
-        Gain,
-        GainTransition,
-        PitchShift,
-        TimeStretch,
-    )
     from transformers import (
         ASTConfig,
         ASTFeatureExtractor,
@@ -293,6 +284,7 @@ def ast_train(
         TrainingArguments,
     )
 
+    from bioamla.datasets.augmentation import AugmentationConfig, create_augmentation_pipeline
     from datasets import Audio, Dataset, DatasetDict, load_dataset
 
     # Validate min/max ranges
@@ -550,28 +542,37 @@ def ast_train(
         )
 
     if augment:
-        audio_augmentations = Compose(
-            [
-                AddGaussianSNR(min_snr_db=min_snr_db, max_snr_db=max_snr_db),
-                Gain(min_gain_db=min_gain_db, max_gain_db=max_gain_db),
-                GainTransition(
-                    min_gain_db=min_gain_db,
-                    max_gain_db=max_gain_db,
-                    min_duration=0.01,
-                    max_duration=0.3,
-                    duration_unit="fraction",
-                ),
-                ClippingDistortion(
-                    min_percentile_threshold=min_percentile_threshold,
-                    max_percentile_threshold=max_percentile_threshold,
-                    p=clipping_probability,
-                ),
-                TimeStretch(min_rate=min_time_stretch, max_rate=max_time_stretch),
-                PitchShift(min_semitones=min_pitch_shift, max_semitones=max_pitch_shift),
-            ],
-            p=augment_probability,
+        # Build the on-the-fly training augmentation via the shared pipeline
+        # builder (the same one behind ``dataset augment``). Per-transform
+        # probabilities default to 0.5 (audiomentations' default), with the whole
+        # Compose gated by ``augment_probability`` and shuffled per sample.
+        aug_config = AugmentationConfig(
+            add_noise=True,
+            noise_min_snr=min_snr_db,
+            noise_max_snr=max_snr_db,
+            noise_probability=0.5,
+            time_stretch=True,
+            time_stretch_min=min_time_stretch,
+            time_stretch_max=max_time_stretch,
+            time_stretch_probability=0.5,
+            pitch_shift=True,
+            pitch_shift_min=min_pitch_shift,
+            pitch_shift_max=max_pitch_shift,
+            pitch_shift_probability=0.5,
+            gain=True,
+            gain_min_db=min_gain_db,
+            gain_max_db=max_gain_db,
+            gain_probability=0.5,
+            gain_transition=True,
+            gain_transition_probability=0.5,
+            clipping_distortion=True,
+            clipping_min_percentile=min_percentile_threshold,
+            clipping_max_percentile=max_percentile_threshold,
+            clipping_probability=clipping_probability,
+            pipeline_probability=augment_probability,
             shuffle=True,
         )
+        audio_augmentations = create_augmentation_pipeline(aug_config)
         print(f"Audio augmentations enabled (p={augment_probability})")
     else:
         audio_augmentations = None

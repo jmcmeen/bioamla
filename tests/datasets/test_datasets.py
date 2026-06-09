@@ -541,3 +541,62 @@ class TestAugmentationConfigImport:
         cfg = AugmentationConfig(add_noise=True)
         assert cfg.add_noise is True
         assert cfg.sample_rate == 16000
+
+    def test_new_config_defaults_preserve_dataset_behavior(self) -> None:
+        from bioamla.datasets import AugmentationConfig
+
+        cfg = AugmentationConfig()
+        # Pipeline-level defaults keep the synthetic-dataset path unchanged.
+        assert cfg.pipeline_probability == 1.0
+        assert cfg.shuffle is False
+        assert cfg.gain_transition is False
+        assert cfg.clipping_distortion is False
+
+
+class TestCreateAugmentationPipeline:
+    def test_returns_none_when_nothing_enabled(self) -> None:
+        pytest.importorskip("audiomentations")
+        from bioamla.datasets import AugmentationConfig, create_augmentation_pipeline
+
+        assert create_augmentation_pipeline(AugmentationConfig()) is None
+
+    def test_dataset_style_pipeline(self) -> None:
+        pytest.importorskip("audiomentations")
+        from bioamla.datasets import AugmentationConfig, create_augmentation_pipeline
+
+        cfg = AugmentationConfig(add_noise=True, pitch_shift=True)
+        pipeline = create_augmentation_pipeline(cfg)
+        assert pipeline is not None
+        assert len(pipeline.transforms) == 2
+        # Default compose-level probability / shuffle preserved.
+        assert pipeline.p == 1.0
+        assert pipeline.shuffle is False
+
+    def test_training_style_superset_pipeline(self) -> None:
+        pytest.importorskip("audiomentations")
+        import numpy as np
+
+        from bioamla.datasets import (
+            AugmentationConfig,
+            augment_audio,
+            create_augmentation_pipeline,
+        )
+
+        cfg = AugmentationConfig(
+            add_noise=True,
+            time_stretch=True,
+            pitch_shift=True,
+            gain=True,
+            gain_transition=True,
+            clipping_distortion=True,
+            pipeline_probability=0.9,
+            shuffle=True,
+        )
+        pipeline = create_augmentation_pipeline(cfg)
+        assert len(pipeline.transforms) == 6
+        assert pipeline.shuffle is True
+        assert pipeline.p == 0.9
+        # The composed pipeline runs on a real waveform.
+        audio = np.zeros(16000, dtype=np.float32) + 0.1
+        out = augment_audio(audio, 16000, pipeline)
+        assert out.shape == audio.shape

@@ -54,6 +54,25 @@ class AugmentationConfig:
     gain_max_db: float = 12.0
     gain_probability: float = 1.0
 
+    # Gain transition (smooth gain ramp; mainly used for on-the-fly training aug)
+    gain_transition: bool = False
+    gain_transition_min_duration: float = 0.01
+    gain_transition_max_duration: float = 0.3
+    gain_transition_probability: float = 0.5
+
+    # Clipping distortion (mainly used for on-the-fly training aug)
+    clipping_distortion: bool = False
+    clipping_min_percentile: int = 0
+    clipping_max_percentile: int = 30
+    clipping_probability: float = 0.5
+
+    # Pipeline-level controls. ``pipeline_probability`` is the chance the whole
+    # Compose is applied to a sample (1.0 = always, the dataset-synthesis
+    # default); ``shuffle`` randomizes transform order each call (used by
+    # on-the-fly training augmentation).
+    pipeline_probability: float = 1.0
+    shuffle: bool = False
+
     # General settings
     sample_rate: int = 16000
     multiply: int = 1  # Number of augmented copies to create per file
@@ -67,14 +86,22 @@ class AugmentationConfig:
 def create_augmentation_pipeline(config: AugmentationConfig) -> Any:
     """Create an ``audiomentations`` Compose pipeline from a config.
 
+    This is the single builder shared by both augmentation use cases: synthetic
+    dataset generation (``dataset augment`` / :func:`batch_augment`, which leaves
+    ``pipeline_probability=1.0`` and ``shuffle=False``) and on-the-fly training
+    augmentation (``models ast train``, which enables ``gain_transition`` /
+    ``clipping_distortion`` and sets a compose-level ``pipeline_probability`` with
+    ``shuffle=True``).
+
     Returns:
         A ``Compose`` pipeline, or None if no augmentations are enabled.
-
     """
     from audiomentations import (
         AddGaussianSNR,
+        ClippingDistortion,
         Compose,
         Gain,
+        GainTransition,
         PitchShift,
         TimeStretch,
     )
@@ -117,10 +144,31 @@ def create_augmentation_pipeline(config: AugmentationConfig) -> Any:
             )
         )
 
+    if config.gain_transition:
+        transforms.append(
+            GainTransition(
+                min_gain_db=config.gain_min_db,
+                max_gain_db=config.gain_max_db,
+                min_duration=config.gain_transition_min_duration,
+                max_duration=config.gain_transition_max_duration,
+                duration_unit="fraction",
+                p=config.gain_transition_probability,
+            )
+        )
+
+    if config.clipping_distortion:
+        transforms.append(
+            ClippingDistortion(
+                min_percentile_threshold=config.clipping_min_percentile,
+                max_percentile_threshold=config.clipping_max_percentile,
+                p=config.clipping_probability,
+            )
+        )
+
     if not transforms:
         return None
 
-    return Compose(transforms)
+    return Compose(transforms, p=config.pipeline_probability, shuffle=config.shuffle)
 
 
 def augment_audio(audio: np.ndarray, sample_rate: int, pipeline: Any) -> np.ndarray:
