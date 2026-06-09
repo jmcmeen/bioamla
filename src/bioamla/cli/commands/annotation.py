@@ -83,8 +83,7 @@ def annotation_template(
     if not quiet:
         click.echo(f"Created {fmt} annotation template: {output_file}")
         click.echo(
-            f"  audio: {audio_path.name}  "
-            f"duration: {info.duration:.2f}s  sr: {info.sample_rate} Hz"
+            f"  audio: {audio_path.name}  duration: {info.duration:.2f}s  sr: {info.sample_rate} Hz"
         )
         click.echo(f"  rows: {len(annotations)}")
         if fmt != "bioamla":
@@ -414,5 +413,119 @@ def annotation_generate_labels(
 
     if not quiet:
         click.echo(f"Generated labels for {num_clips} clips")
+        click.echo(f"Labels: {', '.join(sorted(label_map.keys()))}")
+        click.echo(f"Output: {output_file}")
+
+
+@annotation.command("generate-frame-labels")
+@click.argument("annotation_file")
+@click.argument("output_file")
+@click.option("--frame-size", type=float, required=True, help="Frame size in seconds")
+@click.option(
+    "--hop-length",
+    type=float,
+    default=None,
+    help="Hop length between frames in seconds (default: same as frame size)",
+)
+@click.option(
+    "--audio-duration",
+    type=float,
+    default=None,
+    help="Total audio duration in seconds (inferred from bioamla metadata if omitted)",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["csv", "numpy"]),
+    default="csv",
+    help="Output format for labels",
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def annotation_generate_frame_labels(
+    annotation_file: str,
+    output_file: str,
+    frame_size: float,
+    hop_length: float,
+    audio_duration: float,
+    output_format: str,
+    quiet: bool,
+) -> None:
+    """Generate frame-level multi-hot labels from annotations (for SED-style models)."""
+    import csv as csv_lib
+
+    import numpy as np
+
+    from bioamla.datasets import (
+        create_label_map,
+        generate_frame_labels,
+        get_unique_labels,
+    )
+
+    input_path = Path(annotation_file)
+
+    if not input_path.exists():
+        click.echo(f"Error: Annotation file not found: {annotation_file}")
+        raise SystemExit(1)
+
+    in_format = _detect_format(input_path)
+
+    try:
+        annotations, metadata = _load(input_path, in_format)
+
+        if not annotations:
+            click.echo("Error: No annotations found in file")
+            raise SystemExit(1)
+
+        # Fall back to the duration embedded in a bioamla file when not given.
+        if audio_duration is None:
+            if metadata.get("duration") is not None:
+                audio_duration = float(metadata["duration"])
+            else:
+                raise click.ClickException(
+                    "--audio-duration is required (no duration metadata in this file)"
+                )
+
+        if hop_length is None:
+            hop_length = frame_size
+
+        labels = get_unique_labels(annotations)
+        label_map = create_label_map(labels)
+
+        # Shape: (num_classes, num_frames).
+        frame_labels = generate_frame_labels(
+            annotations, audio_duration, frame_size, hop_length, label_map
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    num_classes, num_frames = frame_labels.shape
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_format == "numpy":
+        np.save(output_file, frame_labels)
+        label_map_file = output_path.with_suffix(".labels.csv")
+        with open(label_map_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv_lib.writer(f)
+            writer.writerow(["label", "index"])
+            for label, idx in sorted(label_map.items(), key=lambda x: x[1]):
+                writer.writerow([label, idx])
+    else:
+        ordered_labels = sorted(label_map.keys(), key=lambda x: label_map[x])
+        header = ["frame_start", "frame_end"] + ordered_labels
+        with open(output_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv_lib.writer(f)
+            writer.writerow(header)
+            for frame_idx in range(num_frames):
+                frame_start = frame_idx * hop_length
+                frame_end = frame_start + frame_size
+                # Transpose (num_classes, num_frames) -> per-frame multi-hot row.
+                row = [f"{frame_start:.3f}", f"{frame_end:.3f}"] + [
+                    int(frame_labels[c, frame_idx]) for c in range(num_classes)
+                ]
+                writer.writerow(row)
+
+    if not quiet:
+        click.echo(f"Generated frame labels: {num_classes} classes x {num_frames} frames")
         click.echo(f"Labels: {', '.join(sorted(label_map.keys()))}")
         click.echo(f"Output: {output_file}")
