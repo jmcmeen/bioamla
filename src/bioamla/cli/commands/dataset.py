@@ -61,6 +61,365 @@ def dataset_merge(
         click.echo(msg)
 
 
+@dataset.command("extract-clips")
+@click.argument("source")
+@click.argument("output_dir")
+@click.option(
+    "--annotations",
+    default=None,
+    help="Annotation file when SOURCE is a single audio file (else a sibling file is used)",
+)
+@click.option(
+    "--layout",
+    type=click.Choice(["both", "audiofolder", "flat"]),
+    default="both",
+    help="Output layout: label subdirs + metadata.csv (both), subdirs only, or flat + metadata.csv",
+)
+@click.option("--padding-ms", type=float, default=0.0, help="Padding before/after each clip (ms)")
+@click.option(
+    "--bandpass/--no-bandpass",
+    default=False,
+    help="Bandpass-filter clips to each annotation's frequency band",
+)
+@click.option("--format", "audio_format", default="wav", help="Output audio format")
+@click.option(
+    "--sample-rate", type=int, default=None, help="Resample clips to this rate (e.g. 16000 for AST)"
+)
+@click.option("--include", "-i", multiple=True, help="Labels to include (repeatable)")
+@click.option("--exclude", "-e", multiple=True, help="Labels to exclude (repeatable)")
+@click.option("--min-duration", type=float, default=None, help="Drop clips shorter than this (s)")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def dataset_extract_clips(
+    source: str,
+    output_dir: str,
+    annotations: str,
+    layout: str,
+    padding_ms: float,
+    bandpass: bool,
+    audio_format: str,
+    sample_rate: int,
+    include: tuple,
+    exclude: tuple,
+    min_duration: float,
+    quiet: bool,
+) -> None:
+    """Extract annotated regions into a labeled clip dataset (training-ready).
+
+    SOURCE is an audio file (with --annotations or a sibling annotation file) or
+    a directory of audio files each paired with a sibling annotation. The output
+    is consumable by `bioamla models ast train` directly (label subdirs and/or a
+    metadata.csv).
+    """
+    from bioamla.datasets import extract_labeled_dataset
+
+    try:
+        result = extract_labeled_dataset(
+            source=source,
+            output_dir=output_dir,
+            annotations=annotations,
+            layout=layout,
+            padding_ms=padding_ms,
+            bandpass=bandpass,
+            format=audio_format,
+            target_sample_rate=sample_rate,
+            include_labels=set(include) if include else None,
+            exclude_labels=set(exclude) if exclude else None,
+            min_duration=min_duration,
+            verbose=not quiet,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        click.echo(
+            f"Extracted {result['clips_written']} clips from "
+            f"{result['files_processed']} file(s) into {result['output_dir']}"
+        )
+        click.echo(f"Labels ({len(result['labels'])}): {', '.join(result['labels'])}")
+        if result["metadata_file"]:
+            click.echo(f"Metadata: {result['metadata_file']}")
+        if result["failed"]:
+            click.echo(f"Failed: {len(result['failed'])} clip(s)")
+
+
+@dataset.command("stats")
+@click.argument("dataset_dir")
+@click.option(
+    "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -> None:
+    """Show summary statistics for a dataset's metadata.csv."""
+    import json as json_lib
+
+    from bioamla.datasets import get_dataset_stats
+
+    try:
+        stats = get_dataset_stats(dataset_dir, metadata_filename=metadata_filename)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if output_json:
+        click.echo(json_lib.dumps(stats, indent=2))
+        return
+
+    click.echo(f"\nDataset Statistics: {dataset_dir}")
+    click.echo("=" * 50)
+    click.echo(f"Total files: {stats['total_files']}")
+    click.echo(f"Classes: {stats['num_categories']}")
+    if stats.get("splits"):
+        split_str = ", ".join(f"{k}={v}" for k, v in sorted(stats["splits"].items()))
+        click.echo(f"Splits: {split_str}")
+    click.echo("\nLabel counts:")
+    for label, count in sorted(stats["categories"].items()):
+        click.echo(f"  {label}: {count}")
+    if stats.get("licenses"):
+        click.echo("\nLicenses:")
+        for lic, count in sorted(stats["licenses"].items()):
+            click.echo(f"  {lic or '(none)'}: {count}")
+
+
+@dataset.command("manifest")
+@click.argument("dataset_dir")
+@click.option(
+    "--name", default="", help="Dataset name recorded in the manifest (defaults to dir name)"
+)
+@click.option(
+    "--kind",
+    type=click.Choice(["labeled", "partitioned"]),
+    default="labeled",
+    help="Dataset kind",
+)
+@click.option(
+    "--output",
+    default=None,
+    help="Output manifest path (default: DATASET_DIR/dataset.json)",
+)
+@click.option(
+    "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
+)
+@click.option("--sample-rate", type=int, default=None, help="Sample rate to record in the manifest")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def dataset_manifest(
+    dataset_dir: str,
+    name: str,
+    kind: str,
+    output: str,
+    metadata_filename: str,
+    sample_rate: int,
+    quiet: bool,
+) -> None:
+    """Build a dataset.json manifest (label vocabulary, counts, splits) from metadata.csv."""
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    from bioamla.datasets import build_manifest_from_metadata, save_dataset_manifest
+
+    dataset_path = Path(dataset_dir)
+    manifest_name = name or dataset_path.name
+    output_path = output or str(dataset_path / "dataset.json")
+
+    try:
+        manifest = build_manifest_from_metadata(
+            dataset_dir,
+            name=manifest_name,
+            kind=kind,
+            created=datetime.now(timezone.utc).isoformat(),
+            metadata_filename=metadata_filename,
+            sample_rate=sample_rate,
+        )
+        save_dataset_manifest(manifest, output_path)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        click.echo(f"Wrote manifest: {output_path}")
+        click.echo(
+            f"  classes: {len(manifest.label2id)}  files: {sum(manifest.class_counts.values())}"
+        )
+        if manifest.splits:
+            split_str = ", ".join(f"{k}={v}" for k, v in sorted(manifest.splits.items()))
+            click.echo(f"  splits: {split_str}")
+
+
+@dataset.command("partition")
+@click.argument("dataset_dir")
+@click.option("--train", "train_frac", type=float, default=0.70, help="Train fraction")
+@click.option("--val", "val_frac", type=float, default=0.15, help="Validation fraction")
+@click.option("--test", "test_frac", type=float, default=0.15, help="Test fraction")
+@click.option("--seed", type=int, default=0, help="Reproducible shuffle seed")
+@click.option("--stratify/--no-stratify", default=True, help="Balance labels across splits")
+@click.option(
+    "--mode",
+    type=click.Choice(["subdirs", "column"]),
+    default="subdirs",
+    help="Reorganize into train/val/test/<label>/ (subdirs) or populate a split column",
+)
+@click.option(
+    "--group-by",
+    default="source_file",
+    help="Keep rows sharing this column's value in one split (prevents clip leakage)",
+)
+@click.option(
+    "--background-label",
+    default=None,
+    help="Partition this label as its own stratum so it appears in every split",
+)
+@click.option(
+    "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def dataset_partition(
+    dataset_dir: str,
+    train_frac: float,
+    val_frac: float,
+    test_frac: float,
+    seed: int,
+    stratify: bool,
+    mode: str,
+    group_by: str,
+    background_label: str,
+    metadata_filename: str,
+    quiet: bool,
+) -> None:
+    """Partition a dataset into train/val/test (stratified, grouped, reproducible)."""
+    from bioamla.datasets import partition_dataset
+
+    try:
+        result = partition_dataset(
+            dataset_dir,
+            splits=(train_frac, val_frac, test_frac),
+            seed=seed,
+            stratify=stratify,
+            mode=mode,
+            group_by=group_by or None,
+            background_label=background_label,
+            metadata_filename=metadata_filename,
+            verbose=not quiet,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        split_str = ", ".join(f"{k}={v}" for k, v in sorted(result["splits"].items()))
+        click.echo(
+            f"Partitioned {result['groups']} group(s) into splits ({result['mode']}): {split_str}"
+        )
+        click.echo(f"Metadata: {result['metadata_file']}")
+
+
+# `split` is an alias for `partition`.
+dataset.add_command(dataset_partition, "split")
+
+
+@dataset.command("build")
+@click.argument("source")
+@click.argument("output_dir")
+@click.option(
+    "--annotations",
+    default=None,
+    help="Annotation file when SOURCE is a single audio file (else a sibling file is used)",
+)
+@click.option("--padding-ms", type=float, default=0.0, help="Padding before/after each clip (ms)")
+@click.option(
+    "--bandpass/--no-bandpass",
+    default=False,
+    help="Bandpass-filter clips to each annotation's frequency band",
+)
+@click.option(
+    "--sample-rate", type=int, default=None, help="Resample clips to this rate (e.g. 16000 for AST)"
+)
+@click.option("--include", "-i", multiple=True, help="Labels to include (repeatable)")
+@click.option("--exclude", "-e", multiple=True, help="Labels to exclude (repeatable)")
+@click.option("--min-duration", type=float, default=None, help="Drop clips shorter than this (s)")
+@click.option("--train", "train_frac", type=float, default=0.70, help="Train fraction")
+@click.option("--val", "val_frac", type=float, default=0.15, help="Validation fraction")
+@click.option("--test", "test_frac", type=float, default=0.15, help="Test fraction")
+@click.option("--seed", type=int, default=0, help="Reproducible shuffle seed")
+@click.option("--no-partition", is_flag=True, help="Extract clips but skip train/val/test split")
+@click.option("--name", default="", help="Dataset name for the manifest (defaults to dir name)")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def dataset_build(
+    source: str,
+    output_dir: str,
+    annotations: str,
+    padding_ms: float,
+    bandpass: bool,
+    sample_rate: int,
+    include: tuple,
+    exclude: tuple,
+    min_duration: float,
+    train_frac: float,
+    val_frac: float,
+    test_frac: float,
+    seed: int,
+    no_partition: bool,
+    name: str,
+    quiet: bool,
+) -> None:
+    """Build a training-ready dataset: extract clips, partition, and write a manifest.
+
+    Chains `extract-clips` (layout=both) -> `partition` (subdirs) -> `manifest`,
+    producing a dataset directory + dataset.json consumable by `models ast train`.
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    from bioamla.datasets import (
+        build_manifest_from_metadata,
+        extract_labeled_dataset,
+        partition_dataset,
+        save_dataset_manifest,
+    )
+
+    output_path = Path(output_dir)
+    try:
+        extract = extract_labeled_dataset(
+            source=source,
+            output_dir=output_dir,
+            annotations=annotations,
+            layout="both",
+            padding_ms=padding_ms,
+            bandpass=bandpass,
+            target_sample_rate=sample_rate,
+            include_labels=set(include) if include else None,
+            exclude_labels=set(exclude) if exclude else None,
+            min_duration=min_duration,
+            verbose=not quiet,
+        )
+
+        kind = "labeled"
+        partition_result = None
+        if not no_partition:
+            partition_result = partition_dataset(
+                output_dir,
+                splits=(train_frac, val_frac, test_frac),
+                seed=seed,
+                mode="subdirs",
+                verbose=not quiet,
+            )
+            kind = "partitioned"
+
+        manifest = build_manifest_from_metadata(
+            output_dir,
+            name=name or output_path.name,
+            kind=kind,
+            created=datetime.now(timezone.utc).isoformat(),
+            sample_rate=sample_rate,
+        )
+        save_dataset_manifest(manifest, str(output_path / "dataset.json"))
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        click.echo(f"Built dataset at {output_dir}")
+        click.echo(f"  clips: {extract['clips_written']}  classes: {len(manifest.label2id)}")
+        if partition_result:
+            split_str = ", ".join(f"{k}={v}" for k, v in sorted(partition_result["splits"].items()))
+            click.echo(f"  splits: {split_str}")
+        click.echo(f"  manifest: {output_path / 'dataset.json'}")
+
+
 @dataset.command("license")
 @click.argument("path")
 @click.option("--template", "-t", default=None, help="Template file to prepend to the license file")

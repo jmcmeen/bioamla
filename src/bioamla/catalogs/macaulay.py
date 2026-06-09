@@ -9,7 +9,6 @@ Failures raise :class:`~bioamla.exceptions.CatalogError`; bad arguments raise
 :class:`~bioamla.exceptions.InvalidInputError`.
 """
 
-import csv
 import logging
 import time
 from pathlib import Path
@@ -274,11 +273,14 @@ def download(
                 time.sleep(delay)
 
         if create_metadata and metadata_rows:
+            from bioamla.datasets._metadata import normalize_catalog_row, write_metadata_csv
+
             metadata_path = output_path / "metadata.csv"
-            with metadata_path.open("w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=metadata_rows[0].keys())
-                writer.writeheader()
-                writer.writerows(metadata_rows)
+            write_metadata_csv(
+                metadata_path,
+                [normalize_catalog_row(r, "macaulay") for r in metadata_rows],
+                merge_existing=False,
+            )
 
         return MacaulayDownloadResult(
             total=stats["total"],

@@ -24,6 +24,11 @@ def _get_converter(source_ext: str, target_format: str):
     return None
 
 
+def _row_category(row: dict) -> str:
+    """Read a row's grouping label, preferring canonical ``label`` over legacy ``category``."""
+    return row.get("label") or row.get("category", "") or ""
+
+
 def find_species_name(category: str, all_categories: set[str]) -> str:
     """Return the most general matching species name for a (sub)species category.
 
@@ -114,7 +119,7 @@ def merge_datasets(
             all_fieldnames.update(existing_fieldnames)
             existing_filenames.update(row.get("file_name", "") for row in existing_rows)
             for row in existing_rows:
-                category = row.get("category", "")
+                category = _row_category(row)
                 if category:
                     all_categories.add(category)
             if verbose:
@@ -139,7 +144,7 @@ def merge_datasets(
             all_fieldnames.update(source_fieldnames)
 
             for row in source_rows:
-                category = row.get("category", "")
+                category = _row_category(row)
                 if category:
                     all_categories.add(category)
 
@@ -155,7 +160,7 @@ def merge_datasets(
                 source_file_path = source_path / source_filename
 
                 if organize_by_category:
-                    category = row.get("category", "")
+                    category = _row_category(row)
                     dir_category = find_species_name(category, all_categories)
                     category_dir = sanitize_filename(dir_category) if dir_category else "unknown"
                     base_filename = Path(source_filename).name

@@ -4,61 +4,11 @@ from pathlib import Path
 
 import click
 
+from bioamla.datasets._io import ANNOTATION_FORMATS as _FORMAT_CHOICES
+from bioamla.datasets._io import detect_annotation_format as _detect_format
+from bioamla.datasets._io import load_annotations as _load
+from bioamla.datasets._io import save_annotations as _save
 from bioamla.exceptions import BioamlaError
-
-# Supported annotation file formats for the --from/--to/--format options.
-_FORMAT_CHOICES = ["raven", "csv", "bioamla"]
-
-
-def _detect_format(path: Path, explicit: str | None = None) -> str:
-    """Resolve an annotation format from an explicit flag or the file extension.
-
-    ``.txt`` -> raven selection table, ``.json`` -> bioamla format, anything
-    else -> flat CSV.
-    """
-    if explicit:
-        return explicit
-    suffix = path.suffix.lower()
-    if suffix == ".txt":
-        return "raven"
-    if suffix == ".json":
-        return "bioamla"
-    return "csv"
-
-
-def _load(path: Path, fmt: str, label_column: str | None = None):
-    """Load annotations in the given format, returning ``(annotations, metadata)``.
-
-    Only the bioamla format carries file-level metadata; the others return an
-    empty metadata dict so callers can treat every format uniformly.
-    """
-    from bioamla.datasets import (
-        load_bioamla_annotations,
-        load_csv_annotations,
-        load_raven_selection_table,
-    )
-
-    if fmt == "raven":
-        return load_raven_selection_table(str(path), label_column=label_column), {}
-    if fmt == "bioamla":
-        return load_bioamla_annotations(str(path))
-    return load_csv_annotations(str(path)), {}
-
-
-def _save(annotations, path: Path, fmt: str, metadata: dict | None = None) -> None:
-    """Save annotations in the given format, preserving metadata for bioamla."""
-    from bioamla.datasets import (
-        save_bioamla_annotations,
-        save_csv_annotations,
-        save_raven_selection_table,
-    )
-
-    if fmt == "raven":
-        save_raven_selection_table(annotations, str(path))
-    elif fmt == "bioamla":
-        save_bioamla_annotations(annotations, str(path), metadata=metadata)
-    else:
-        save_csv_annotations(annotations, str(path))
 
 
 @click.group()

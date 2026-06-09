@@ -25,7 +25,8 @@ def get_dataset_stats(
 
     Returns:
         Dict with ``total_files``, ``categories`` (label->count), ``licenses``
-        (license->count), ``num_categories`` and ``num_licenses``.
+        (license->count), ``splits`` (split->count), ``num_categories`` and
+        ``num_licenses``.
 
     Raises:
         NotFoundError: If the metadata CSV is missing.
@@ -44,17 +45,23 @@ def get_dataset_stats(
 
     categories: Counter = Counter()
     licenses: Counter = Counter()
+    splits: Counter = Counter()
 
     for row in rows:
-        if "category" in row:
-            categories[row["category"]] += 1
-        if "license" in row:
+        # Prefer the canonical ``label`` column, falling back to legacy ``category``.
+        category = row.get("label") or row.get("category")
+        if category:
+            categories[category] += 1
+        if row.get("license"):
             licenses[row["license"]] += 1
+        if row.get("split"):
+            splits[row["split"]] += 1
 
     return {
         "total_files": len(rows),
         "categories": dict(categories),
         "licenses": dict(licenses),
+        "splits": dict(splits),
         "num_categories": len(categories),
         "num_licenses": len(licenses),
     }

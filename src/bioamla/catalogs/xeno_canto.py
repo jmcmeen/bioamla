@@ -382,13 +382,14 @@ def download(
                 time.sleep(delay)
 
         if create_metadata and metadata_rows:
-            import csv
+            from bioamla.datasets._metadata import normalize_catalog_row, write_metadata_csv
 
             metadata_path = output_path / "metadata.csv"
-            with metadata_path.open("w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=metadata_rows[0].keys())
-                writer.writeheader()
-                writer.writerows(metadata_rows)
+            write_metadata_csv(
+                metadata_path,
+                [normalize_catalog_row(r, "xeno_canto") for r in metadata_rows],
+                merge_existing=False,
+            )
 
         return XenoCantoDownloadResult(
             total=stats["total"],

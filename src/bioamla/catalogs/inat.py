@@ -19,6 +19,7 @@ from pyinaturalist import get_observation_species_counts, get_observations
 
 from bioamla.catalogs._metadata import (
     get_existing_observation_ids,
+    normalize_catalog_row,
     read_metadata_csv,
     write_metadata_csv,
 )
@@ -433,7 +434,7 @@ def download(
                 file_name = row.get("file_name", "")
                 if file_name and file_name not in seen_files:
                     seen_files.add(file_name)
-                    all_rows.append(row)
+                    all_rows.append(normalize_catalog_row(row, "inaturalist"))
             write_metadata_csv(metadata_path, all_rows, merge_existing=False)
 
         return INaturalistDownloadResult(

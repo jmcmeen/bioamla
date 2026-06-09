@@ -58,12 +58,21 @@ from bioamla.datasets.augmentation import (
 )
 from bioamla.datasets.batch import batch_convert_annotations
 from bioamla.datasets.clip_extraction import extract_audio_clips
+from bioamla.datasets.labeled_dataset import extract_labeled_dataset
 from bioamla.datasets.licenses import (
     generate_license_for_dataset,
     generate_licenses_for_directory,
 )
+from bioamla.datasets.manifest import (
+    BIOAMLA_DATASET_FORMAT,
+    DatasetManifest,
+    build_manifest_from_metadata,
+    load_dataset_manifest,
+    save_dataset_manifest,
+)
 from bioamla.datasets.measurements import compute_measurements
 from bioamla.datasets.merge import find_species_name, merge_datasets
+from bioamla.datasets.partition import partition_dataset
 from bioamla.datasets.stats import get_dataset_stats
 from bioamla.exceptions import (
     AnnotationError,
@@ -104,11 +113,19 @@ __all__ = [
     "save_label_mapping",
     # Clip extraction & measurements
     "extract_audio_clips",
+    "extract_labeled_dataset",
     "compute_measurements",
     # Dataset operations
     "merge_datasets",
     "find_species_name",
     "get_dataset_stats",
+    "partition_dataset",
+    # Dataset manifest
+    "DatasetManifest",
+    "BIOAMLA_DATASET_FORMAT",
+    "build_manifest_from_metadata",
+    "save_dataset_manifest",
+    "load_dataset_manifest",
     # Augmentation
     "AugmentationConfig",
     "create_augmentation_pipeline",
