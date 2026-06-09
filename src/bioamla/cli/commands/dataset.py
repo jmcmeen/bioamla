@@ -420,6 +420,7 @@ def dataset_build(
             split_str = ", ".join(f"{k}={v}" for k, v in sorted(partition_result["splits"].items()))
             click.echo(f"  splits: {split_str}")
         click.echo(f"  manifest: {output_path / 'dataset.json'}")
+        click.echo(f"Push to the Hub with: bioamla catalogs hf push-dataset {output_dir} <repo-id>")
 
 
 @dataset.command("license")
