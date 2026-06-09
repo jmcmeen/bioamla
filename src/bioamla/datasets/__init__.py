@@ -66,6 +66,7 @@ from bioamla.datasets.licenses import (
 from bioamla.datasets.manifest import (
     BIOAMLA_DATASET_FORMAT,
     DatasetManifest,
+    build_dataset_card,
     build_manifest_from_metadata,
     load_dataset_manifest,
     save_dataset_manifest,
@@ -126,6 +127,7 @@ __all__ = [
     "build_manifest_from_metadata",
     "save_dataset_manifest",
     "load_dataset_manifest",
+    "build_dataset_card",
     # Augmentation
     "AugmentationConfig",
     "create_augmentation_pipeline",

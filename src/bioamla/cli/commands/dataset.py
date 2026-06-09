@@ -422,6 +422,79 @@ def dataset_build(
         click.echo(f"  manifest: {output_path / 'dataset.json'}")
 
 
+@dataset.command("push")
+@click.argument("dataset_dir")
+@click.argument("repo_id")
+@click.option("--private", is_flag=True, help="Create the Hub repo as private")
+@click.option("--commit-message", default=None, help="Custom commit message for the push")
+@click.option("--no-card", is_flag=True, help="Do not generate/refresh the README.md dataset card")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def dataset_push(
+    dataset_dir: str,
+    repo_id: str,
+    private: bool,
+    commit_message: str,
+    no_card: bool,
+    quiet: bool,
+) -> None:
+    """Push a built dataset directory to the HuggingFace Hub (with a dataset card).
+
+    Validates that DATASET_DIR looks like a dataset (metadata.csv, dataset.json, or
+    a train/ split), writes a README.md dataset card from the manifest, then
+    uploads. Requires `huggingface-cli login`.
+    """
+    from pathlib import Path
+
+    from bioamla.catalogs import huggingface as hf
+    from bioamla.datasets import (
+        build_dataset_card,
+        build_manifest_from_metadata,
+        load_dataset_manifest,
+    )
+
+    ds_path = Path(dataset_dir)
+    if not ds_path.is_dir():
+        raise click.ClickException(f"Not a directory: {dataset_dir}")
+
+    has_meta = (ds_path / "metadata.csv").exists()
+    has_manifest = (ds_path / "dataset.json").exists()
+    if not (has_meta or has_manifest or (ds_path / "train").is_dir()):
+        raise click.ClickException(
+            f"{dataset_dir} doesn't look like a dataset "
+            "(no metadata.csv, dataset.json, or train/ split)"
+        )
+
+    # Best-effort dataset card so the Hub page is informative.
+    if not no_card:
+        try:
+            if has_manifest:
+                manifest = load_dataset_manifest(str(ds_path / "dataset.json"))
+            elif has_meta:
+                manifest = build_manifest_from_metadata(dataset_dir)
+            else:
+                manifest = None
+            if manifest is not None:
+                (ds_path / "README.md").write_text(
+                    build_dataset_card(manifest), encoding="utf-8"
+                )
+                if not quiet:
+                    click.echo("Wrote dataset card: README.md")
+        except BioamlaError as e:
+            click.echo(f"Warning: could not generate dataset card ({e})", err=True)
+
+    try:
+        result = hf.push_dataset(
+            dataset_dir, repo_id, private=private, commit_message=commit_message
+        )
+    except BioamlaError as e:
+        click.echo("Make sure you are logged in with 'huggingface-cli login'.", err=True)
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        click.echo(f"Pushed dataset to: {result.url}")
+        click.echo(f"  files: {result.files_uploaded}  size: {result.total_size_bytes} bytes")
+
+
 @dataset.command("license")
 @click.argument("path")
 @click.option("--template", "-t", default=None, help="Template file to prepend to the license file")
