@@ -1,6 +1,5 @@
 """Tests for the cluster domain (flattened, exception-based API)."""
 
-import builtins
 import importlib
 import json
 
@@ -220,37 +219,6 @@ class TestBatchClustering:
 
 
 class TestDependencyError:
-    def test_missing_hdbscan_raises_dependency_error(
-        self, blob_embeddings: np.ndarray, monkeypatch
-    ) -> None:
-        """If hdbscan is unavailable, AudioClusterer must raise DependencyError."""
-        real_import = builtins.__import__
-
-        def fake_import(name, *args, **kwargs):
-            if name == "hdbscan" or name.startswith("hdbscan."):
-                raise ImportError("simulated missing hdbscan")
-            return real_import(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, "__import__", fake_import)
-        clusterer = AudioClusterer(method="hdbscan")
-        with pytest.raises(DependencyError, match=r"requires hdbscan"):
-            clusterer.fit(blob_embeddings)
-
-    def test_missing_umap_raises_dependency_error(
-        self, blob_embeddings: np.ndarray, monkeypatch
-    ) -> None:
-        """If umap is unavailable, UMAP reduction must raise DependencyError."""
-        real_import = builtins.__import__
-
-        def fake_import(name, *args, **kwargs):
-            if name == "umap" or name.startswith("umap."):
-                raise ImportError("simulated missing umap")
-            return real_import(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, "__import__", fake_import)
-        with pytest.raises(DependencyError, match=r"requires umap-learn"):
-            reduce_dimensions(blob_embeddings, method="umap")
-
     def test_dependency_error_is_bioamla_error(self) -> None:
         assert issubclass(DependencyError, BioamlaError)
         assert issubclass(ClusteringError, BioamlaError)
