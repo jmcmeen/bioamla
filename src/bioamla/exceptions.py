@@ -44,6 +44,10 @@ class ModelError(BioamlaError):
     """Model load, inference, or embedding-extraction failure."""
 
 
+class TrainingError(ModelError):
+    """Model training failure: bad dataset/params, or an empty training set."""
+
+
 class CatalogError(BioamlaError):
     """External catalog / API failure (xeno-canto, iNaturalist, eBird, Macaulay, HF)."""
 
@@ -100,6 +104,7 @@ __all__ = [
     "AudioSaveError",
     "DependencyError",
     "ModelError",
+    "TrainingError",
     "CatalogError",
     "ConfigError",
     "ProcessingError",

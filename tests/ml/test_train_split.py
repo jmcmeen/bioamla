@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from bioamla.cli.commands.models import _dataframe_to_ast_dataset
+from bioamla.ml.training import _dataframe_to_ast_dataset
 from datasets import Dataset, DatasetDict
 
 

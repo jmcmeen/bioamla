@@ -92,6 +92,9 @@ from bioamla.ml.inference import (
 # --- Preprocessing / augmentation --------------------------------------------
 from bioamla.ml.preprocessing import AugmentationConfig, BioamlaPreprocessor
 
+# --- Training -----------------------------------------------------------------
+from bioamla.ml.training import train_ast
+
 __all__ = [
     # Device
     "get_device",
@@ -132,6 +135,7 @@ __all__ = [
     "get_model_info",
     "EvaluationResult",
     "TrainResult",
+    "train_ast",
     # Inference
     "ASTInference",
     "ASTPredictionResult",
