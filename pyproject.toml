@@ -49,11 +49,6 @@ ml = [
   "datasets[audio]",
   "audiomentations",
   "evaluate",
-  "opensoundscape>=0.12.0",  # mel-spectrogram preprocessing / SpecAugment for AST
-]
-# OpenSoundscape-backed detectors (e.g. ribbit)
-detect = [
-  "opensoundscape>=0.12.0",
 ]
 # Embedding clustering / dimensionality reduction
 cluster = [
@@ -74,7 +69,6 @@ all = [
   "datasets[audio]",
   "audiomentations",
   "evaluate",
-  "opensoundscape>=0.12.0",
   "umap-learn>=0.5.0",
   "hdbscan>=0.8.0",
   "scikit-learn>=1.0.0",

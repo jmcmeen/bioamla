@@ -1,13 +1,11 @@
 """Tests for the detect domain (flattened, exception-based API)."""
 
-import importlib.util
 import json
 
 import numpy as np
 import pytest
 
 from bioamla.detect import (
-    RIBBIT_PRESETS,
     AcceleratingPatternDetector,
     BandLimitedEnergyDetector,
     CWTPeakDetector,
@@ -15,19 +13,12 @@ from bioamla.detect import (
     DetectionError,
     InvalidDetectionParams,
     PeakDetection,
-    RibbitDetection,
     RibbitDetector,
     batch_detect,
-    create_ribbit_profile,
     detect_all,
     export_detections,
-    get_ribbit_preset,
-    list_ribbit_presets,
 )
 from bioamla.detect.batch import batch_detect_dir
-from bioamla.exceptions import DependencyError
-
-OPENSOUNDSCAPE_AVAILABLE = importlib.util.find_spec("opensoundscape") is not None
 
 
 @pytest.fixture
@@ -242,52 +233,3 @@ class TestBatchDetectDir:
     def test_batch_dir_unknown_method(self, test_audio_dir, tmp_path) -> None:
         with pytest.raises(InvalidDetectionParams):
             batch_detect_dir(test_audio_dir, tmp_path, method="bogus")
-
-
-# =============================================================================
-# OpenSoundscape RIBBIT path
-# =============================================================================
-
-
-class TestRibbitPresets:
-    def test_list_presets(self) -> None:
-        presets = list_ribbit_presets()
-        assert "american_bullfrog" in presets
-        assert "spring_peeper" in presets
-
-    def test_get_preset(self) -> None:
-        params = get_ribbit_preset("spring_peeper")
-        assert "signal_band" in params
-        assert params == RIBBIT_PRESETS["spring_peeper"]
-
-    def test_get_preset_unknown(self) -> None:
-        with pytest.raises(InvalidDetectionParams, match="Unknown preset"):
-            get_ribbit_preset("not_a_preset")
-
-    def test_create_profile_valid(self) -> None:
-        profile = create_ribbit_profile(
-            "custom", signal_band=(500, 2000), pulse_rate_range=(3.0, 15.0)
-        )
-        assert profile["name"] == "custom"
-
-    def test_create_profile_invalid_band(self) -> None:
-        with pytest.raises(InvalidDetectionParams):
-            create_ribbit_profile("bad", signal_band=(2000, 500), pulse_rate_range=(3.0, 15.0))
-
-
-class TestRibbitDetectOpenSoundscape:
-    @pytest.mark.skipif(not OPENSOUNDSCAPE_AVAILABLE, reason="opensoundscape not installed")
-    def test_ribbit_detect_preset_runs(self, test_audio_path_3s) -> None:
-        from bioamla.detect import ribbit_detect_preset
-
-        detections, metadata = ribbit_detect_preset(test_audio_path_3s, "generic_mid_freq")
-        assert isinstance(detections, list)
-        assert all(isinstance(d, RibbitDetection) for d in detections)
-        assert "duration" in metadata
-
-    @pytest.mark.skipif(OPENSOUNDSCAPE_AVAILABLE, reason="opensoundscape is installed")
-    def test_ribbit_detect_missing_dependency(self, test_audio_path_3s) -> None:
-        from bioamla.detect import ribbit_detect
-
-        with pytest.raises(DependencyError, match="opensoundscape"):
-            ribbit_detect(test_audio_path_3s, signal_band=(500, 2000), pulse_rate_range=(3.0, 15.0))

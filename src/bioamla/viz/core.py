@@ -11,11 +11,16 @@ Supported visualization types:
 - ``mfcc``: Mel-frequency cepstral coefficients
 - ``waveform``: Time-domain waveform plot
 
+Visualization runs on the slim install (librosa + matplotlib, CPU only). When a
+CUDA GPU and torch are available, the STFT can be computed on the GPU for a
+speedup via the optional ``backend`` argument (``"auto"`` uses the GPU when
+present and falls back to librosa otherwise). See :mod:`bioamla.viz._backend`.
+
 Heavy/optional backends are imported lazily:
 - ``matplotlib`` is imported inside the rendering functions (and the ``Agg``
   non-interactive backend is selected there for thread-safety).
-- ``torchaudio`` is imported lazily by the audio loader; if it is missing a
-  :class:`~bioamla.exceptions.DependencyError` is raised.
+- ``torch`` is imported lazily only when the GPU backend is selected; it is
+  never required to generate a spectrogram.
 """
 
 from pathlib import Path
@@ -25,6 +30,7 @@ import librosa
 import numpy as np
 
 from bioamla.exceptions import AudioLoadError, NotFoundError, ProcessingError
+from bioamla.viz._backend import Backend, mel_power, select_backend, stft_magnitude
 
 VisualizationType = Literal["stft", "mel", "mfcc", "waveform"]
 WindowType = Literal["hann", "hamming", "blackman", "bartlett", "rectangular", "kaiser"]
@@ -49,21 +55,15 @@ def _load_audio_for_viz(audio_path: str, sample_rate: int) -> np.ndarray:
     """
     Load and resample an audio file to a mono numpy array for plotting.
 
+    Uses the slim-core numpy loader (soundfile/pydub) — no torch required.
+
     Raises:
         AudioLoadError: If the audio cannot be loaded.
-        DependencyError: If torchaudio is unavailable (via the loader).
     """
-    from bioamla.audio.io import load_waveform_tensor
+    from bioamla.audio import load_audio
     from bioamla.audio.processing import resample_audio
 
-    waveform, orig_sr = load_waveform_tensor(str(audio_path))
-
-    # Convert to numpy and mono
-    audio = waveform.numpy()
-    if audio.ndim > 1:
-        audio = audio.mean(axis=0)
-    else:
-        audio = audio.squeeze()
+    audio, orig_sr = load_audio(str(audio_path))  # mono float32 numpy
 
     if orig_sr != sample_rate:
         try:
@@ -92,6 +92,7 @@ def generate_spectrogram(
     dpi: int = 150,
     format: str | None = None,
     show_colorbar: bool = True,
+    backend: str = "auto",
 ) -> str:
     """
     Generate a spectrogram visualization from an audio file.
@@ -114,6 +115,8 @@ def generate_spectrogram(
         dpi: Resolution for output image (dots per inch).
         format: Output format ('png', 'jpg', 'jpeg'); inferred from extension if None.
         show_colorbar: Whether to show axes/title/colorbar (default: True).
+        backend: Spectrogram compute backend — 'auto' (GPU/torch if available,
+            else librosa), 'librosa' (CPU), or 'torch' (force GPU/torch).
 
     Returns:
         Path to the saved output image (as a string).
@@ -122,7 +125,7 @@ def generate_spectrogram(
         NotFoundError: If the audio file does not exist.
         ValueError: If an invalid visualization type or window is specified.
         AudioLoadError: If the audio cannot be loaded.
-        DependencyError: If torchaudio is unavailable.
+        DependencyError: If backend='torch' but torch is not installed.
         ProcessingError: If the image cannot be written.
     """
     audio_path = Path(audio_path)
@@ -136,6 +139,8 @@ def generate_spectrogram(
     valid_windows = ("hann", "hamming", "blackman", "bartlett", "rectangular", "kaiser")
     if window not in valid_windows:
         raise ValueError(f"Invalid window type: {window}. Must be one of {valid_windows}")
+
+    resolved_backend = select_backend(backend)
 
     plt = _get_pyplot()
 
@@ -164,6 +169,7 @@ def generate_spectrogram(
             db_min=db_min,
             db_max=db_max,
             show_legend=show_colorbar,
+            backend=resolved_backend,
         )
     elif viz_type == "mel":
         _plot_mel_spectrogram(
@@ -179,6 +185,7 @@ def generate_spectrogram(
             db_min=db_min,
             db_max=db_max,
             show_legend=show_colorbar,
+            backend=resolved_backend,
         )
     elif viz_type == "mfcc":
         _plot_mfcc(
@@ -192,6 +199,7 @@ def generate_spectrogram(
             cmap=cmap,
             title=title,
             show_legend=show_colorbar,
+            backend=resolved_backend,
         )
     elif viz_type == "waveform":
         _plot_waveform(audio, sample_rate, ax, title=title, show_legend=show_colorbar)
@@ -264,12 +272,13 @@ def _plot_stft_spectrogram(
     db_min: float | None = None,
     db_max: float | None = None,
     show_legend: bool = True,
+    backend: Backend = "librosa",
 ) -> None:
     """Plot an STFT spectrogram."""
     import librosa.display
 
-    stft = librosa.stft(y=audio, n_fft=n_fft, hop_length=hop_length, window=window)
-    stft_db = librosa.amplitude_to_db(np.abs(stft), ref=np.max)
+    mag = stft_magnitude(audio, n_fft, hop_length, window, backend)
+    stft_db = librosa.amplitude_to_db(mag, ref=np.max)
 
     if db_min is not None or db_max is not None:
         vmin = db_min if db_min is not None else stft_db.min()
@@ -310,14 +319,12 @@ def _plot_mel_spectrogram(
     db_min: float | None = None,
     db_max: float | None = None,
     show_legend: bool = True,
+    backend: Backend = "librosa",
 ) -> None:
     """Plot a mel spectrogram."""
     import librosa.display
 
-    stft = librosa.stft(y=audio, n_fft=n_fft, hop_length=hop_length, window=window)
-
-    mel_filter = librosa.filters.mel(sr=sample_rate, n_fft=n_fft, n_mels=n_mels)
-    mel_spec = np.dot(mel_filter, np.abs(stft) ** 2)
+    mel_spec = mel_power(audio, sample_rate, n_fft, hop_length, n_mels, window, backend=backend)
     mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
 
     if db_min is not None or db_max is not None:
@@ -357,12 +364,13 @@ def _plot_mfcc(
     cmap: str,
     title: str,
     show_legend: bool = True,
+    backend: Backend = "librosa",
 ) -> None:
     """Plot MFCCs."""
     import librosa.display
 
-    stft = librosa.stft(y=audio, n_fft=n_fft, hop_length=hop_length, window=window)
-    mel_spec = librosa.feature.melspectrogram(S=np.abs(stft) ** 2, sr=sample_rate)
+    mag = stft_magnitude(audio, n_fft, hop_length, window, backend)
+    mel_spec = librosa.feature.melspectrogram(S=mag**2, sr=sample_rate)
     mfccs = librosa.feature.mfcc(S=librosa.power_to_db(mel_spec), n_mfcc=n_mfcc)
 
     img = librosa.display.specshow(
@@ -408,6 +416,7 @@ def compute_stft(
     n_fft: int = 2048,
     hop_length: int = 512,
     window: WindowType = "hann",
+    backend: str = "auto",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute the Short-Time Fourier Transform of an audio signal.
@@ -418,17 +427,19 @@ def compute_stft(
         n_fft: FFT window size (256-8192 recommended).
         hop_length: Number of samples between successive frames.
         window: Window function name.
+        backend: Compute backend — 'auto' (GPU/torch if available, else librosa),
+            'librosa' (CPU), or 'torch' (force GPU/torch).
 
     Returns:
         Tuple of (frequencies, times, stft_magnitude).
     """
     win_func = _get_window_function(window, n_fft)
-    stft = librosa.stft(y=audio, n_fft=n_fft, hop_length=hop_length, window=win_func)
+    mag = stft_magnitude(audio, n_fft, hop_length, win_func, select_backend(backend))
 
     frequencies = librosa.fft_frequencies(sr=sample_rate, n_fft=n_fft)
-    times = librosa.times_like(stft, sr=sample_rate, hop_length=hop_length)
+    times = librosa.times_like(mag, sr=sample_rate, hop_length=hop_length)
 
-    return frequencies, times, np.abs(stft)
+    return frequencies, times, mag
 
 
 def compute_mel_spectrogram(
@@ -440,6 +451,7 @@ def compute_mel_spectrogram(
     window: WindowType = "hann",
     fmin: float = 0.0,
     fmax: float | None = None,
+    backend: str = "auto",
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute a mel spectrogram from an audio signal.
@@ -453,6 +465,8 @@ def compute_mel_spectrogram(
         window: Window function name.
         fmin: Minimum frequency for the mel filterbank.
         fmax: Maximum frequency for the mel filterbank (default: sample_rate/2).
+        backend: Compute backend — 'auto' (GPU/torch if available, else librosa),
+            'librosa' (CPU), or 'torch' (force GPU/torch).
 
     Returns:
         Tuple of (times, mel_spectrogram).
@@ -461,14 +475,11 @@ def compute_mel_spectrogram(
         fmax = sample_rate / 2
 
     win_func = _get_window_function(window, n_fft)
-    stft = librosa.stft(y=audio, n_fft=n_fft, hop_length=hop_length, window=win_func)
-
-    mel_filter = librosa.filters.mel(
-        sr=sample_rate, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax
+    mel_spec = mel_power(
+        audio, sample_rate, n_fft, hop_length, n_mels, win_func, fmin, fmax, select_backend(backend)
     )
-    mel_spec = np.dot(mel_filter, np.abs(stft) ** 2)
 
-    times = librosa.times_like(stft, sr=sample_rate, hop_length=hop_length)
+    times = librosa.times_like(mel_spec, sr=sample_rate, hop_length=hop_length)
 
     return times, mel_spec
 

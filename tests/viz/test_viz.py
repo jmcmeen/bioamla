@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from bioamla.audio import AudioData
-from bioamla.exceptions import DependencyError, NotFoundError
+from bioamla.exceptions import NotFoundError
 from bioamla.viz import (
     batch_generate_spectrograms,
     compute_mel_spectrogram,
@@ -13,15 +13,6 @@ from bioamla.viz import (
     spectrogram_to_db,
     spectrogram_to_image,
 )
-
-
-def _torchaudio_available() -> bool:
-    try:
-        import torchaudio  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
 
 
 class TestComputeFunctions:
@@ -65,22 +56,22 @@ class TestGenerateSpectrogram:
         with pytest.raises(ValueError):
             generate_spectrogram(test_audio_path, str(tmp_path / "out.png"), viz_type="nope")
 
-    @pytest.mark.skipif(not _torchaudio_available(), reason="torchaudio not installed")
     def test_generate_writes_png(self, test_audio_path: str, tmp_path) -> None:
         out = tmp_path / "spec.png"
         result = generate_spectrogram(test_audio_path, str(out), viz_type="mel", sample_rate=16000)
         assert out.exists()
         assert result == str(out)
 
-    def test_generate_without_torchaudio_raises(self, test_audio_path: str, tmp_path) -> None:
-        if _torchaudio_available():
-            pytest.skip("torchaudio installed; dependency path not exercised")
-        with pytest.raises(DependencyError):
-            generate_spectrogram(test_audio_path, str(tmp_path / "out.png"))
+    def test_generate_librosa_backend_no_torch(self, test_audio_path: str, tmp_path) -> None:
+        # viz is slim-core: spectrogram generation must work without any ML/torch
+        # packages. The librosa backend never touches torch.
+        out = tmp_path / "out.png"
+        result = generate_spectrogram(test_audio_path, str(out), backend="librosa")
+        assert out.exists()
+        assert result == str(out)
 
 
 class TestBatch:
-    @pytest.mark.skipif(not _torchaudio_available(), reason="torchaudio not installed")
     def test_batch_generate(self, test_audio_dir: str, tmp_path) -> None:
         out_dir = tmp_path / "out"
         result = batch_generate_spectrograms(test_audio_dir, str(out_dir), verbose=False)

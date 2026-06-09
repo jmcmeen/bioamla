@@ -1,13 +1,9 @@
 """Advanced acoustic detection algorithms.
 
 Energy, RIBBIT (periodic call), CWT peak-sequence, and accelerating-pattern
-detectors, plus an OpenSoundscape-backed RIBBIT path. Functions and detector
-methods return plain data and raise :class:`bioamla.exceptions.BioamlaError`
-subclasses on failure.
-
-The OpenSoundscape RIBBIT functions import ``opensoundscape`` lazily; on a slim
-install they raise :class:`bioamla.exceptions.DependencyError` pointing the user
-at ``bioamla[detect]``.
+detectors. Detectors run on the slim core (librosa + scipy) — no optional
+extras required. Functions and detector methods return plain data and raise
+:class:`bioamla.exceptions.BioamlaError` subclasses on failure.
 
 Example:
     >>> from bioamla.detect import BandLimitedEnergyDetector
@@ -27,16 +23,6 @@ from bioamla.detect.core import (
     detect_all,
     export_detections,
 )
-from bioamla.detect.opensoundscape import (
-    RIBBIT_PRESETS,
-    RibbitDetection,
-    create_ribbit_profile,
-    get_ribbit_preset,
-    list_ribbit_presets,
-    ribbit_detect,
-    ribbit_detect_preset,
-    ribbit_detect_samples,
-)
 from bioamla.exceptions import (
     AudioLoadError,
     DependencyError,
@@ -48,7 +34,6 @@ __all__ = [
     # Data classes
     "Detection",
     "PeakDetection",
-    "RibbitDetection",
     # Detector classes
     "BandLimitedEnergyDetector",
     "RibbitDetector",
@@ -59,14 +44,6 @@ __all__ = [
     "export_detections",
     "batch_detect",
     "batch_detect_dir",
-    # OpenSoundscape RIBBIT
-    "ribbit_detect",
-    "ribbit_detect_samples",
-    "ribbit_detect_preset",
-    "list_ribbit_presets",
-    "get_ribbit_preset",
-    "create_ribbit_profile",
-    "RIBBIT_PRESETS",
     # Exceptions
     "AudioLoadError",
     "DependencyError",

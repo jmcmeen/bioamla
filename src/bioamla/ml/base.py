@@ -46,7 +46,6 @@ class ModelBackend(Enum):
     """Supported model backends."""
 
     AST = "ast"
-    OPENSOUNDSCAPE = "opensoundscape"
 
 
 @dataclass

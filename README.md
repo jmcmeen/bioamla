@@ -30,16 +30,15 @@ Two conventions matter for consumers:
   rooted at `bioamla.exceptions.BioamlaError` (e.g. `AudioLoadError`, `InvalidInputError`,
   `DependencyError`). Catch the base class to handle everything.
 - **Heavy dependencies are optional.** The base install is lightweight; `import bioamla` pulls
-  no torch/opensoundscape/etc. Those load lazily when you call a feature that needs them and
+  no torch/transformers/etc. Those load lazily when you call a feature that needs them and
   raise `DependencyError` telling you which extra to install.
 
 ## Install
 
 ```bash
-pip install bioamla                 # slim core (audio, indices, detect-energy, catalogs, CLI)
+pip install bioamla                 # slim core (audio, viz, indices, detect, catalogs, CLI)
 
 pip install "bioamla[ml]"           # + AST inference/training/embeddings (torch, transformers)
-pip install "bioamla[detect]"       # + RIBBIT and OpenSoundscape-backed detectors
 pip install "bioamla[cluster]"      # + UMAP / HDBSCAN clustering
 pip install "bioamla[playback]"     # + local audio playback (sounddevice)
 pip install "bioamla[all]"          # everything above

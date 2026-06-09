@@ -1,10 +1,9 @@
-"""Tests for BioamlaPreprocessor adapter."""
+"""Tests for BioamlaPreprocessor."""
 
 import numpy as np
 import pytest
 
 pytest.importorskip("torch")
-pytest.importorskip("opensoundscape")
 import scipy.io.wavfile as wav
 import torch
 

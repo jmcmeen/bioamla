@@ -21,7 +21,7 @@ import numpy as np
 
 from bioamla.common.constants import DefaultConfig
 from bioamla.common.files import get_files_by_extension
-from bioamla.exceptions import DependencyError
+from bioamla.exceptions import AudioLoadError, DependencyError
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     import torch
@@ -86,9 +86,13 @@ def load_waveform_tensor(filepath: str) -> tuple[torch.Tensor, int]:
 
     Raises:
         DependencyError: If ``torchaudio`` is not installed.
+        AudioLoadError: If decoding fails.
     """
     torchaudio = _import_torchaudio()
-    waveform, sample_rate = torchaudio.load(filepath)
+    try:
+        waveform, sample_rate = torchaudio.load(filepath)
+    except Exception as e:
+        raise AudioLoadError(f"Failed to load audio file: {e}") from e
     return (waveform, sample_rate)
 
 

@@ -21,7 +21,7 @@ import numpy as np
 
 from bioamla.audio.data import AudioData
 from bioamla.common.files import prepare_output_path, require_exists
-from bioamla.exceptions import AudioLoadError, AudioSaveError, DependencyError
+from bioamla.exceptions import AudioLoadError, AudioSaveError
 
 
 def load_audio_data(filepath: str | Path, *, sample_rate: int | None = None) -> AudioData:
@@ -262,6 +262,10 @@ def load_waveform_tensor(filepath: str):  # noqa: ANN201 - torch optional
     """
     Load an audio file as a ``torch`` waveform tensor.
 
+    Thin re-export of the canonical torch-IO implementation in
+    :mod:`bioamla.audio.torchaudio`, kept here for the public ``bioamla.audio``
+    surface.
+
     Args:
         filepath: Path to the audio file.
 
@@ -272,18 +276,9 @@ def load_waveform_tensor(filepath: str):  # noqa: ANN201 - torch optional
         DependencyError: If ``torchaudio`` is not installed.
         AudioLoadError: If decoding fails.
     """
-    try:
-        import torchaudio
-    except ImportError as err:
-        raise DependencyError(
-            "loading waveform tensors requires torchaudio — install bioamla[ml]"
-        ) from err
+    from bioamla.audio.torchaudio import load_waveform_tensor as _load_waveform_tensor
 
-    try:
-        waveform, sample_rate = torchaudio.load(filepath)
-    except Exception as e:
-        raise AudioLoadError(f"Failed to load audio file: {e}") from e
-    return waveform, sample_rate
+    return _load_waveform_tensor(filepath)
 
 
 def process_file(

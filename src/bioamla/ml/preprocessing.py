@@ -1,24 +1,21 @@
 """Mel-spectrogram preprocessing and SpecAugment for AST training.
 
-Wraps OpenSoundscape's spectrogram pipeline to generate mel spectrograms from
-audio files or samples, with optional augmentation (time/frequency masking,
-random gain, noise) for training. Heavy dependencies (opensoundscape, torch) are
-imported lazily and raise :class:`~bioamla.exceptions.DependencyError` if the
-``ml`` extra is not installed.
+Generates mel spectrograms from audio files or samples (via librosa, a core
+dependency) with optional augmentation — SpecAugment-style time/frequency
+masking plus audio-domain gain/noise. The only heavy dependency is ``torch``,
+imported lazily and required solely for :meth:`BioamlaPreprocessor.to_tensor`
+and fixed-size resizing; mel generation and augmentation run on the slim core.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+import librosa
 import numpy as np
 
 from bioamla.exceptions import DependencyError
-
-if TYPE_CHECKING:
-    import torch
-    from opensoundscape import Audio as OSSAudio
 
 
 def _require_torch():
@@ -26,22 +23,10 @@ def _require_torch():
     try:
         import torch
     except ImportError as e:
-        raise DependencyError("Spectrogram preprocessing requires torch — install bioamla[ml]") from e
-    return torch
-
-
-def _require_opensoundscape():
-    """Import and return required opensoundscape symbols, or raise DependencyError."""
-    try:
-        from opensoundscape import Audio as OSSAudio
-        from opensoundscape import MelSpectrogram as OSSMelSpectrogram
-        from opensoundscape.preprocess.preprocessors import SpectrogramPreprocessor
-        from opensoundscape.sample import AudioSample
-    except ImportError as e:
         raise DependencyError(
-            "Spectrogram preprocessing requires opensoundscape — install bioamla[ml]"
+            "spectrogram tensor conversion / resizing requires torch — install bioamla[ml]"
         ) from e
-    return OSSAudio, OSSMelSpectrogram, SpectrogramPreprocessor, AudioSample
+    return torch
 
 
 @dataclass
@@ -72,20 +57,18 @@ class AugmentationConfig:
 
 
 class BioamlaPreprocessor:
-    """Preprocessing adapter using OpenSoundscape for mel spectrogram generation.
+    """Mel-spectrogram preprocessing for AST, with optional SpecAugment.
 
-    This class provides a bioamla-compatible interface for generating
-    mel spectrograms from audio files or samples, with optional augmentation
-    for training via the SpectrogramPreprocessor pipeline.
-
-    For file-based processing with augmentation (training), uses SpectrogramPreprocessor.
-    For samples processing (inference), uses MelSpectrogram directly.
+    Generates mel spectrograms from audio files or raw samples using librosa.
+    When augmentation is enabled (training), applies audio-domain gain/noise and
+    spectrogram-domain time/frequency masking. ``process_samples`` never
+    augments (inference path).
 
     Example:
         >>> preprocessor = BioamlaPreprocessor(sample_duration=3.0, sample_rate=16000)
         >>> spectrogram = preprocessor.process_file("audio.wav")
         >>> spectrogram.shape
-        (128, 313)  # (n_mels, time_frames)
+        (128, 94)  # (n_mels, time_frames)
 
         >>> # With augmentation for training
         >>> from bioamla.ml import AugmentationConfig
@@ -130,93 +113,14 @@ class BioamlaPreprocessor:
         self.width = width
 
         self._augmentation_config: AugmentationConfig | None = None
-        self._preprocessor: Any = None
-        self._init_preprocessor()
-
-    def _init_preprocessor(self) -> None:
-        """Initialize the underlying OpenSoundscape preprocessor."""
-        _, _, SpectrogramPreprocessor, _ = _require_opensoundscape()
-        self._preprocessor = SpectrogramPreprocessor(
-            sample_duration=self.sample_duration,
-        )
-
-        # Configure spectrogram parameters
-        self._preprocessor.pipeline.to_spec.set(
-            window_samples=self.n_fft,
-            overlap_fraction=1 - (self.hop_length / self.n_fft),
-        )
-
-        # Disable all augmentations by default
-        self._disable_all_augmentations()
-
-    def _disable_all_augmentations(self) -> None:
-        """Disable all augmentation actions in the pipeline."""
-        pipeline = self._preprocessor.pipeline
-
-        # Audio-domain augmentations
-        if hasattr(pipeline, "audio_time_mask"):
-            pipeline.audio_time_mask.bypass = True
-        if hasattr(pipeline, "audio_random_gain"):
-            pipeline.audio_random_gain.bypass = True
-        if hasattr(pipeline, "audio_add_noise"):
-            pipeline.audio_add_noise.bypass = True
-        if hasattr(pipeline, "random_wrap_audio"):
-            pipeline.random_wrap_audio.bypass = True
-        if hasattr(pipeline, "random_trim_audio"):
-            pipeline.random_trim_audio.bypass = True
-        if hasattr(pipeline, "overlay"):
-            pipeline.overlay.bypass = True
-        if hasattr(pipeline, "add_noise"):
-            pipeline.add_noise.bypass = True
-        if hasattr(pipeline, "random_affine"):
-            pipeline.random_affine.bypass = True
-
-        # Spectrogram-domain augmentations and filters
-        if hasattr(pipeline, "time_mask"):
-            pipeline.time_mask.bypass = True
-        if hasattr(pipeline, "frequency_mask"):
-            pipeline.frequency_mask.bypass = True
-        if hasattr(pipeline, "bandpass"):
-            pipeline.bandpass.bypass = True
 
     def enable_augmentation(self, config: AugmentationConfig) -> None:
-        """Enable augmentation with the given configuration.
-
-        Args:
-            config: Augmentation configuration.
-        """
+        """Enable augmentation with the given configuration."""
         self._augmentation_config = config
-        pipeline = self._preprocessor.pipeline
-
-        # SpecAugment time masking
-        if config.time_mask and hasattr(pipeline, "time_mask"):
-            pipeline.time_mask.bypass = False
-            pipeline.time_mask.set(
-                max_masks=config.time_mask_max_masks,
-                max_width=config.time_mask_max_length,
-            )
-
-        # SpecAugment frequency masking
-        if config.frequency_mask and hasattr(pipeline, "frequency_mask"):
-            pipeline.frequency_mask.bypass = False
-            pipeline.frequency_mask.set(
-                max_masks=config.frequency_mask_max_masks,
-                max_width=config.frequency_mask_max_length,
-            )
-
-        # Random gain
-        if config.random_gain and hasattr(pipeline, "audio_random_gain"):
-            pipeline.audio_random_gain.bypass = False
-            pipeline.audio_random_gain.set(gain_range=config.gain_range_db)
-
-        # Background noise
-        if config.add_noise and hasattr(pipeline, "add_noise"):
-            pipeline.add_noise.bypass = False
 
     def disable_augmentation(self) -> None:
         """Disable all augmentations."""
         self._augmentation_config = None
-        self._disable_all_augmentations()
 
     def process_file(
         self,
@@ -226,43 +130,42 @@ class BioamlaPreprocessor:
     ) -> np.ndarray:
         """Process an audio file to generate a mel spectrogram.
 
-        Uses SpectrogramPreprocessor pipeline for file-based processing,
-        which supports augmentation when enabled.
+        Applies augmentation when enabled (audio-domain on samples, then
+        spectrogram-domain masking on the mel).
 
         Args:
             filepath: Path to audio file.
             start_time: Optional start time in seconds (default: 0).
-            end_time: Optional end time in seconds.
+            end_time: Optional end time in seconds (default: start + sample_duration).
 
         Returns:
             Mel spectrogram as 2D numpy array (frequency x time).
         """
-        torch = _require_torch()
-        _, _, _, AudioSample = _require_opensoundscape()
+        from bioamla.audio import load_audio
 
-        # Create AudioSample for the preprocessor
+        samples, sr = load_audio(filepath)  # mono float32 numpy, no torch
+        if sr != self.sample_rate:
+            samples = librosa.resample(samples, orig_sr=sr, target_sr=self.sample_rate)
+
+        # Slice the requested window before fitting to the target duration.
         start = start_time or 0.0
-        sample = AudioSample(
-            source=filepath,
-            start_time=start,
-            duration=self.sample_duration,
-        )
+        start_idx = int(start * self.sample_rate)
+        if end_time is not None:
+            samples = samples[start_idx : int(end_time * self.sample_rate)]
+        else:
+            samples = samples[start_idx:]
 
-        # Process through OSS preprocessor pipeline
-        result = self._preprocessor.forward(sample)
+        samples = self._ensure_duration(samples)
 
-        # The result is an AudioSample with .data containing the tensor
-        spectrogram = result.data
+        cfg = self._augmentation_config
+        if cfg is not None:
+            samples = self._augment_audio(samples, cfg)
 
-        # Convert to numpy if it's a tensor
-        if isinstance(spectrogram, torch.Tensor):
-            spectrogram = spectrogram.numpy()
+        spectrogram = self._mel_spectrogram(samples)
 
-        # Remove batch/channel dimensions if present
-        while spectrogram.ndim > 2:
-            spectrogram = spectrogram.squeeze(0)
+        if cfg is not None:
+            spectrogram = self._augment_spectrogram(spectrogram, cfg)
 
-        # Resize if needed
         if self.height or self.width:
             spectrogram = self._resize_spectrogram(spectrogram)
 
@@ -275,8 +178,7 @@ class BioamlaPreprocessor:
     ) -> np.ndarray:
         """Process raw audio samples to generate a mel spectrogram.
 
-        Uses MelSpectrogram.from_audio() directly for sample-based processing.
-        Note: Augmentation is not applied when processing samples directly.
+        Augmentation is not applied when processing samples directly.
 
         Args:
             samples: Audio samples as 1D numpy array.
@@ -285,68 +187,82 @@ class BioamlaPreprocessor:
         Returns:
             Mel spectrogram as 2D numpy array (frequency x time).
         """
-        OSSAudio, OSSMelSpectrogram, _, _ = _require_opensoundscape()
-
-        # Create OSS Audio from samples
-        audio = OSSAudio(samples, sample_rate)
-
-        # Resample if needed
+        samples = np.asarray(samples, dtype=np.float32)
         if sample_rate != self.sample_rate:
-            audio = audio.resample(self.sample_rate)
+            samples = librosa.resample(samples, orig_sr=sample_rate, target_sr=self.sample_rate)
 
-        # Ensure correct duration
-        audio = self._ensure_duration(audio)
+        samples = self._ensure_duration(samples)
+        spectrogram = self._mel_spectrogram(samples)
 
-        # Generate mel spectrogram directly
-        mel = OSSMelSpectrogram.from_audio(
-            audio,
-            n_mels=self.n_mels,
-            window_samples=self.n_fft,
-            overlap_fraction=1 - (self.hop_length / self.n_fft),
-        )
-
-        spectrogram = np.array(mel.spectrogram)
-
-        # Resize if needed
         if self.height or self.width:
             spectrogram = self._resize_spectrogram(spectrogram)
 
         return spectrogram
 
-    def _ensure_duration(self, audio: OSSAudio) -> OSSAudio:
-        """Ensure audio is exactly the target duration.
+    def _mel_spectrogram(self, samples: np.ndarray) -> np.ndarray:
+        """Compute a mel power spectrogram via librosa."""
+        return librosa.feature.melspectrogram(
+            y=samples,
+            sr=self.sample_rate,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            n_mels=self.n_mels,
+            fmin=self.f_min,
+            fmax=self.f_max,
+            power=2.0,
+        )
 
-        Args:
-            audio: Input audio.
+    def _ensure_duration(self, samples: np.ndarray) -> np.ndarray:
+        """Trim or zero-pad samples to exactly ``sample_duration`` seconds."""
+        target = int(self.sample_duration * self.sample_rate)
+        n = len(samples)
+        if n > target:
+            return samples[:target]
+        if n < target:
+            return np.pad(samples, (0, target - n), mode="constant")
+        return samples
 
-        Returns:
-            Audio trimmed or padded to target duration.
-        """
-        OSSAudio, _, _, _ = _require_opensoundscape()
-        target_samples = int(self.sample_duration * self.sample_rate)
+    def _augment_audio(self, samples: np.ndarray, cfg: AugmentationConfig) -> np.ndarray:
+        """Apply audio-domain augmentation (random gain, additive noise)."""
+        rng = np.random.default_rng()
+        out = samples.astype(np.float32, copy=True)
 
-        samples = audio.samples
-        current_samples = len(samples)
+        if cfg.random_gain:
+            gain_db = rng.uniform(*cfg.gain_range_db)
+            out = out * float(10.0 ** (gain_db / 20.0))
 
-        if current_samples > target_samples:
-            # Trim to target duration
-            samples = samples[:target_samples]
-        elif current_samples < target_samples:
-            # Pad with zeros
-            padding = target_samples - current_samples
-            samples = np.pad(samples, (0, padding), mode="constant")
+        if cfg.add_noise:
+            rms = float(np.sqrt(np.mean(out**2))) or 1.0
+            out = out + rng.normal(0.0, 0.01 * rms, size=out.shape).astype(np.float32)
 
-        return OSSAudio(samples, self.sample_rate)
+        return out
+
+    def _augment_spectrogram(self, spec: np.ndarray, cfg: AugmentationConfig) -> np.ndarray:
+        """Apply SpecAugment-style time/frequency masking (sets bands to 0)."""
+        rng = np.random.default_rng()
+        out = spec.copy()
+        n_mels, n_frames = out.shape
+
+        if cfg.frequency_mask:
+            for _ in range(rng.integers(1, cfg.frequency_mask_max_masks + 1)):
+                width = int(rng.uniform(0, cfg.frequency_mask_max_length) * n_mels)
+                if width <= 0:
+                    continue
+                f0 = int(rng.integers(0, max(1, n_mels - width)))
+                out[f0 : f0 + width, :] = 0.0
+
+        if cfg.time_mask:
+            for _ in range(rng.integers(1, cfg.time_mask_max_masks + 1)):
+                width = int(rng.uniform(0, cfg.time_mask_max_length) * n_frames)
+                if width <= 0:
+                    continue
+                t0 = int(rng.integers(0, max(1, n_frames - width)))
+                out[:, t0 : t0 + width] = 0.0
+
+        return out
 
     def _resize_spectrogram(self, spectrogram: np.ndarray) -> np.ndarray:
-        """Resize spectrogram to target dimensions.
-
-        Args:
-            spectrogram: Input spectrogram.
-
-        Returns:
-            Resized spectrogram.
-        """
+        """Resize spectrogram to (height, width) via torch bilinear interpolation."""
         target_height = self.height or spectrogram.shape[0]
         target_width = self.width or spectrogram.shape[1]
 
@@ -354,33 +270,28 @@ class BioamlaPreprocessor:
             return spectrogram
 
         torch = _require_torch()
-
-        # Use torch for interpolation
-        spec_tensor = torch.from_numpy(spectrogram).float()
-        spec_tensor = spec_tensor.unsqueeze(0).unsqueeze(0)  # Add batch and channel dims
-
+        spec_tensor = torch.from_numpy(spectrogram).float().unsqueeze(0).unsqueeze(0)
         resized = torch.nn.functional.interpolate(
             spec_tensor,
             size=(target_height, target_width),
             mode="bilinear",
             align_corners=False,
         )
-
         return resized.squeeze().numpy()
 
     def to_tensor(
         self,
         spectrogram: np.ndarray,
         normalize: bool = True,
-    ) -> torch.Tensor:
-        """Convert spectrogram to PyTorch tensor.
+    ):  # noqa: ANN201 - returns torch.Tensor (torch is optional)
+        """Convert spectrogram to a PyTorch tensor.
 
         Args:
             spectrogram: Input spectrogram as numpy array.
             normalize: Normalize to [0, 1] range.
 
         Returns:
-            Spectrogram as PyTorch tensor.
+            Spectrogram as a PyTorch tensor with a leading channel dim.
         """
         torch = _require_torch()
         tensor = torch.from_numpy(spectrogram).float()
@@ -391,7 +302,6 @@ class BioamlaPreprocessor:
             if max_val - min_val > 1e-8:
                 tensor = (tensor - min_val) / (max_val - min_val)
 
-        # Add channel dimension if needed
         if tensor.dim() == 2:
             tensor = tensor.unsqueeze(0)
 
