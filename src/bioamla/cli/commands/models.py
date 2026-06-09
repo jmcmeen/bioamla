@@ -14,6 +14,45 @@ import click
 
 from bioamla.exceptions import BioamlaError
 
+# Map ``ast train`` flag names onto config-file (section, key) locations, using the
+# template schema in ``bioamla.common.config.DEFAULT_CONFIG`` as the guidance shape
+# (e.g. [training].epochs -> --num-train-epochs). Flags set on the command line
+# override these; these override built-in defaults.
+_TRAIN_CONFIG_MAP = {
+    "base_model": ("models", "default_ast_model"),
+    "learning_rate": ("training", "learning_rate"),
+    "num_train_epochs": ("training", "epochs"),
+    "per_device_train_batch_size": ("training", "batch_size"),
+    "eval_strategy": ("training", "eval_strategy"),
+    "save_strategy": ("training", "save_strategy"),
+    "eval_steps": ("training", "eval_steps"),
+    "save_steps": ("training", "save_steps"),
+    "logging_steps": ("training", "logging_steps"),
+}
+
+
+def _apply_train_config(ctx: click.Context, config_path: str | None, values: dict) -> dict:
+    """Overlay TOML config onto flag values, honoring CLI-over-file-over-default.
+
+    For each mapped flag, the config value is used only when the flag was left at
+    its default (not passed on the command line) and the config provides it.
+    """
+    if not config_path:
+        return values
+
+    from click.core import ParameterSource
+
+    from bioamla.common.config import load_toml
+
+    cfg = load_toml(config_path)
+    resolved = dict(values)
+    for name, (section, key) in _TRAIN_CONFIG_MAP.items():
+        from_default = ctx.get_parameter_source(name) == ParameterSource.DEFAULT
+        cfg_value = cfg.get(section, {}).get(key)
+        if from_default and cfg_value is not None:
+            resolved[name] = cfg_value
+    return resolved
+
 
 @click.group()
 def models() -> None:
@@ -57,6 +96,15 @@ def ast_predict(
 
 
 @ast.command("train")
+@click.pass_context
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="TOML config file (e.g. from 'bioamla config init'). Explicit flags override "
+    "its values; its values override defaults. Reads [training] and [models].",
+)
 @click.option("--training-dir", default=".", help="Directory to save training outputs")
 @click.option(
     "--base-model",
@@ -161,6 +209,8 @@ def ast_predict(
 @click.option("--min-pitch-shift", default=-4, type=int, help="Minimum pitch shift (semitones)")
 @click.option("--max-pitch-shift", default=4, type=int, help="Maximum pitch shift (semitones)")
 def ast_train(
+    ctx: click.Context,
+    config_path: str | None,
     training_dir: str,
     base_model: str,
     train_dataset: str,
@@ -224,6 +274,35 @@ def ast_train(
 
     # Surface the library's INFO progress messages on the console.
     configure_cli_logging()
+
+    # Overlay a TOML config (flags win over file, file wins over defaults).
+    try:
+        overrides = _apply_train_config(
+            ctx,
+            config_path,
+            {
+                "base_model": base_model,
+                "learning_rate": learning_rate,
+                "num_train_epochs": num_train_epochs,
+                "per_device_train_batch_size": per_device_train_batch_size,
+                "eval_strategy": eval_strategy,
+                "save_strategy": save_strategy,
+                "eval_steps": eval_steps,
+                "save_steps": save_steps,
+                "logging_steps": logging_steps,
+            },
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    base_model = overrides["base_model"]
+    learning_rate = overrides["learning_rate"]
+    num_train_epochs = overrides["num_train_epochs"]
+    per_device_train_batch_size = overrides["per_device_train_batch_size"]
+    eval_strategy = overrides["eval_strategy"]
+    save_strategy = overrides["save_strategy"]
+    eval_steps = overrides["eval_steps"]
+    save_steps = overrides["save_steps"]
+    logging_steps = overrides["logging_steps"]
 
     # Map augmentation flags onto the shared AugmentationConfig (None disables it).
     # Per-transform probabilities default to 0.5 (audiomentations' default); the

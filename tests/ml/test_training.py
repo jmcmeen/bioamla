@@ -51,6 +51,70 @@ class TestLoadCsvDataset:
             _load_csv_dataset(csv, "category")
 
 
+class TestTrainConfigOverlay:
+    """`--config` precedence: CLI flag > config file > built-in default."""
+
+    def _ctx(self, commandline_params):
+        from click.core import ParameterSource
+
+        class FakeCtx:
+            def get_parameter_source(self, name):
+                if name in commandline_params:
+                    return ParameterSource.COMMANDLINE
+                return ParameterSource.DEFAULT
+
+        return FakeCtx()
+
+    def _write_config(self, tmp_path):
+        cfg = tmp_path / "train.toml"
+        cfg.write_text(
+            "[models]\n"
+            'default_ast_model = "cfg/model"\n\n'
+            "[training]\n"
+            "learning_rate = 1e-4\n"
+            "epochs = 20\n"
+            "batch_size = 32\n"
+        )
+        return str(cfg)
+
+    def test_no_config_path_is_passthrough(self) -> None:
+        from bioamla.cli.commands.models import _apply_train_config
+
+        values = {"learning_rate": 5e-5, "num_train_epochs": 1}
+        assert _apply_train_config(self._ctx(set()), None, dict(values)) == values
+
+    def test_config_fills_defaulted_flags(self, tmp_path) -> None:
+        from bioamla.cli.commands.models import _apply_train_config
+
+        cfg = self._write_config(tmp_path)
+        values = {
+            "base_model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+            "learning_rate": 5e-5,
+            "num_train_epochs": 1,
+            "per_device_train_batch_size": 8,
+            "eval_steps": 1,
+        }
+        out = _apply_train_config(self._ctx(set()), cfg, dict(values))
+        assert out["base_model"] == "cfg/model"
+        assert out["learning_rate"] == 1e-4
+        assert out["num_train_epochs"] == 20  # epochs -> num_train_epochs
+        assert out["per_device_train_batch_size"] == 32  # batch_size -> ...
+        # Not present in config -> keeps the flag/default value.
+        assert out["eval_steps"] == 1
+
+    def test_explicit_flag_overrides_config(self, tmp_path) -> None:
+        from bioamla.cli.commands.models import _apply_train_config
+
+        cfg = self._write_config(tmp_path)
+        # User explicitly passed --num-train-epochs and --learning-rate.
+        ctx = self._ctx({"num_train_epochs", "learning_rate"})
+        values = {"num_train_epochs": 3, "learning_rate": 9e-5, "per_device_train_batch_size": 8}
+        out = _apply_train_config(ctx, cfg, dict(values))
+        assert out["num_train_epochs"] == 3  # flag wins over config's 20
+        assert out["learning_rate"] == 9e-5  # flag wins over config's 1e-4
+        assert out["per_device_train_batch_size"] == 32  # defaulted -> config wins
+
+
 class TestLoadDirectoryDataset:
     def test_subdirs_without_audio_raises(self, tmp_path) -> None:
         pytest.importorskip("datasets")
