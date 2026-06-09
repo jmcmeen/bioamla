@@ -49,6 +49,7 @@ def select_backend(prefer: str = "auto") -> Backend:
         return "librosa"
     if prefer == "torch":
         import torch  # noqa: F401
+
         return "torch"
     # auto
     return "torch" if _torch_gpu_available() else "librosa"

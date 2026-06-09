@@ -67,9 +67,7 @@ def get_version() -> VersionData:
 
 
 def get_device_info() -> DevicesData:
-    """Return available compute devices (CUDA, MPS, CPU).
-
-    """
+    """Return available compute devices (CUDA, MPS, CPU)."""
     import torch
 
     devices: list[DeviceInfo] = []

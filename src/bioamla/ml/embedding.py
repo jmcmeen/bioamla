@@ -183,9 +183,7 @@ class EmbeddingExtractor:
         return self._model
 
     def _get_reducer(self):
-        """Get or create the dimensionality reducer.
-
-        """
+        """Get or create the dimensionality reducer."""
         if self._reducer is not None or self.config.reduce_method is None:
             return self._reducer
 
@@ -506,6 +504,7 @@ def save_embeddings(
 
     elif format == "parquet":
         import pandas as pd
+
         df = pd.DataFrame(embeddings)
         df.columns = [f"dim_{i}" for i in range(embeddings.shape[1])]
         df["filepath"] = filepaths
@@ -514,6 +513,7 @@ def save_embeddings(
 
     elif format == "csv":
         import pandas as pd
+
         df = pd.DataFrame(embeddings)
         df.columns = [f"dim_{i}" for i in range(embeddings.shape[1])]
         df["filepath"] = filepaths
@@ -569,6 +569,7 @@ def load_embeddings(
 
     elif format in ("parquet", "csv"):
         import pandas as pd
+
         reader = pd.read_parquet if format == "parquet" else pd.read_csv
         df = reader(str(filepath))
         filepaths = df["filepath"].tolist() if "filepath" in df.columns else []

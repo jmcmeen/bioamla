@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 def _require_torch():
     """Import and return the torch module."""
     import torch
+
     return torch
 
 

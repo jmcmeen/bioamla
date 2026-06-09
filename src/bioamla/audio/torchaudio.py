@@ -28,12 +28,14 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 def _import_torchaudio() -> Any:
     """Import and return the ``torchaudio`` module."""
     import torchaudio
+
     return torchaudio
 
 
 def _import_torch() -> Any:
     """Import and return the ``torch`` module."""
     import torch
+
     return torch
 
 

@@ -44,6 +44,7 @@ class PlaybackPosition:
 def _import_sounddevice() -> Any:
     """Import and return the sounddevice module (lazy import)."""
     import sounddevice as sd
+
     return sd
 
 

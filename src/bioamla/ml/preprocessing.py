@@ -19,6 +19,7 @@ import numpy as np
 def _require_torch():
     """Import and return the torch module."""
     import torch
+
     return torch
 
 

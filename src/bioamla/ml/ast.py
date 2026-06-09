@@ -36,18 +36,21 @@ if TYPE_CHECKING:
 def _require_torch():
     """Import and return the torch module."""
     import torch
+
     return torch
 
 
 def _require_transformers():
     """Import and return AST transformers symbols."""
     from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
+
     return ASTFeatureExtractor, AutoModelForAudioClassification
 
 
 def _require_pandas():
     """Import and return the pandas module."""
     import pandas as pd
+
     return pd
 
 

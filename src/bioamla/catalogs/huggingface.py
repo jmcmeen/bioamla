@@ -55,6 +55,7 @@ def _is_large_folder(
 def _get_hf_api():
     """Import and instantiate ``HfApi`` (lazy import)."""
     from huggingface_hub import HfApi
+
     return HfApi()
 
 
