@@ -85,6 +85,38 @@ class TestExtractLabeledDataset:
         # All three clips still written (the two with freq bounds are filtered).
         assert result["clips_written"] == 3
 
+    def test_out_of_range_annotations_skipped(self, tmp_path):
+        # Audio is 3s; two annotations sit entirely beyond it and must be skipped,
+        # not written as empty clips.
+        wav = _write_wav(tmp_path / "rec.wav", seconds=3.0)
+        anns = [
+            Annotation(start_time=0.0, end_time=0.5, label="call"),
+            Annotation(start_time=5.0, end_time=6.0, label="call"),
+            Annotation(start_time=10.0, end_time=11.0, label="chorus"),
+        ]
+        save_bioamla_annotations(anns, str(tmp_path / "rec.json"))
+        out = tmp_path / "ds"
+        result = extract_labeled_dataset(str(wav), str(out), annotations=str(tmp_path / "rec.json"))
+        assert result["clips_written"] == 1
+        assert len(result["skipped"]) == 2
+        # "chorus" had only an out-of-range annotation, so it never reaches the label map.
+        assert result["labels"] == ["call"]
+
+    def test_bandpass_too_short_clip_falls_back_unfiltered(self, tmp_path):
+        # A ~3ms annotation is too short for the filter's padding; the clip should
+        # still be written (unfiltered) rather than dropped.
+        wav = _write_wav(tmp_path / "rec.wav", seconds=2.0)
+        anns = [
+            Annotation(start_time=0.0, end_time=0.003, low_freq=300, high_freq=3000, label="call")
+        ]
+        save_bioamla_annotations(anns, str(tmp_path / "rec.json"))
+        out = tmp_path / "ds"
+        result = extract_labeled_dataset(
+            str(wav), str(out), annotations=str(tmp_path / "rec.json"), bandpass=True
+        )
+        assert result["clips_written"] == 1
+        assert result["skipped"] == []
+
     def test_flat_layout_no_subdirs(self, tmp_path):
         wav, ann = _make_pair(tmp_path)
         out = tmp_path / "ds"

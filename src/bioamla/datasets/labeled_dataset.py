@@ -140,10 +140,8 @@ def extract_labeled_dataset(
     subdir_by_label = layout != "flat"
     write_csv = layout != "audiofolder"
 
-    # First pass: load + filter all annotations so the label map spans the whole
-    # dataset (consistent target indices across source files).
+    # First pass: load + filter annotations per file.
     per_file: list[tuple[Path, list[Annotation]]] = []
-    all_labels: list[str] = []
     for audio_file, ann_file in pairs:
         anns = _load_pair_annotations(ann_file)
         anns = filter_labels(anns, include_labels=include_labels, exclude_labels=exclude_labels)
@@ -151,13 +149,11 @@ def extract_labeled_dataset(
             anns = [a for a in anns if a.duration >= min_duration]
         if anns:
             per_file.append((audio_file, anns))
-            all_labels.extend(a.label for a in anns if a.label)
-
-    label_map = create_label_map(all_labels)
 
     clip_rows: list[dict[str, Any]] = []
     clips_written = 0
     failed: list[str] = []
+    skipped: list[str] = []
 
     for audio_file, anns in per_file:
         result = extract_audio_clips(
@@ -172,12 +168,18 @@ def extract_labeled_dataset(
         )
         clips_written += len(result["clips"])
         failed.extend(result["failed_clips"])
+        skipped.extend(result.get("skipped_clips", []))
         for rec in result["clips"]:
-            rec["target"] = label_map.get(rec["label"], "")
             rec["split"] = ""
             clip_rows.append(rec)
         if verbose:
             logger.info(f"{audio_file.name}: {len(result['clips'])} clips")
+
+    # Build the label map from clips actually written, so a label whose only
+    # annotations were out of range never becomes an empty class.
+    label_map = create_label_map([r["label"] for r in clip_rows if r["label"]])
+    for rec in clip_rows:
+        rec["target"] = label_map.get(rec["label"], "")
 
     metadata_file = None
     if write_csv and clip_rows:
@@ -193,4 +195,5 @@ def extract_labeled_dataset(
         "output_dir": str(output_path),
         "metadata_file": metadata_file,
         "failed": failed,
+        "skipped": skipped,
     }

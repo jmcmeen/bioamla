@@ -138,6 +138,8 @@ def dataset_extract_clips(
         click.echo(f"Labels ({len(result['labels'])}): {', '.join(result['labels'])}")
         if result["metadata_file"]:
             click.echo(f"Metadata: {result['metadata_file']}")
+        if result.get("skipped"):
+            click.echo(f"Skipped (out of range): {len(result['skipped'])} clip(s)")
         if result["failed"]:
             click.echo(f"Failed: {len(result['failed'])} clip(s)")
 

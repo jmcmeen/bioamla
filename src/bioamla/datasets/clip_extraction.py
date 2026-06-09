@@ -51,10 +51,11 @@ def extract_audio_clips(
 
     Returns:
         Dict with ``total_clips``, ``extracted_clips`` (list of paths),
-        ``failed_clips`` (list of error strings), ``output_directory``, and
-        ``clips`` — a list of per-clip record dicts (file_name relative to
-        ``output_dir``, label, source_file, start_time, end_time, low_freq,
-        high_freq, confidence, channel, sample_rate, duration).
+        ``failed_clips`` (list of error strings), ``skipped_clips`` (annotations
+        outside the audio), ``output_directory``, and ``clips`` — a list of
+        per-clip record dicts (file_name relative to ``output_dir``, label,
+        source_file, start_time, end_time, low_freq, high_freq, confidence,
+        channel, sample_rate, duration).
 
     Raises:
         NotFoundError: If the source audio file doesn't exist.
@@ -83,20 +84,38 @@ def extract_audio_clips(
 
     extracted_clips: list[str] = []
     failed_clips: list[str] = []
+    skipped_clips: list[str] = []
     clips: list[dict[str, Any]] = []
+    audio_seconds = total_samples / sample_rate if sample_rate else 0.0
 
     for i, ann in enumerate(annotations):
         try:
             start_sample = max(0, int(ann.start_time * sample_rate) - padding_samples)
             end_sample = min(total_samples, int(ann.end_time * sample_rate) + padding_samples)
 
+            # Skip annotations that fall outside the audio (empty after clamping)
+            # rather than writing an empty clip that downstream steps choke on.
+            if end_sample <= start_sample:
+                reason = (
+                    f"annotation [{ann.start_time:.3f}, {ann.end_time:.3f}]s is outside "
+                    f"the audio (0-{audio_seconds:.3f}s)"
+                )
+                logger.warning(f"Skipping clip {i}: {reason}")
+                skipped_clips.append(f"Clip {i}: {reason}")
+                continue
+
             clip = audio_data[start_sample:end_sample]
             clip_sr = sample_rate
 
             if bandpass and ann.low_freq is not None and ann.high_freq is not None:
-                clip = _apply_per_channel(
-                    clip, bandpass_filter, clip_sr, ann.low_freq, ann.high_freq
-                )
+                try:
+                    clip = _apply_per_channel(
+                        clip, bandpass_filter, clip_sr, ann.low_freq, ann.high_freq
+                    )
+                except Exception as e:
+                    # Too-short clips can't satisfy the filter's padding; keep the
+                    # clip unfiltered rather than dropping it.
+                    logger.warning(f"Clip {i}: bandpass failed ({e}); keeping unfiltered clip")
 
             if target_sample_rate is not None and target_sample_rate != clip_sr:
                 clip = _apply_per_channel(clip, resample_audio, clip_sr, target_sample_rate)
@@ -144,6 +163,7 @@ def extract_audio_clips(
         "total_clips": len(annotations),
         "extracted_clips": extracted_clips,
         "failed_clips": failed_clips,
+        "skipped_clips": skipped_clips,
         "output_directory": str(output_path),
         "clips": clips,
     }
