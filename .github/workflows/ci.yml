@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # Run on PRs (into main) and on merges/pushes to main — not on every dev-branch
+  # push. Use the "Run workflow" button (workflow_dispatch) for ad-hoc dev runs.
   push:
-    branches: [main, "dev-*"]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
