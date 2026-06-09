@@ -13,11 +13,14 @@ parameters and otherwise return processed arrays.
 
 from dataclasses import dataclass
 
-import librosa
 import numpy as np
 from scipy import signal as scipy_signal
 
 from bioamla.exceptions import ProcessingError
+
+# ``librosa`` is imported inside the functions that use it (not at module top)
+# so that ``import bioamla`` / CLI startup stays fast — librosa is heavy and this
+# module sits on the eager CLI import chain (invariant: keep startup snappy).
 
 # =============================================================================
 # Filter Functions
