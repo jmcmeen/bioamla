@@ -34,6 +34,7 @@ from bioamla.catalogs._models import (
     NearbyResult,
     ObservationInfo,
     ProjectStats,
+    PullResult,
     PushResult,
     RegionResult,
     SearchMatch,
@@ -83,6 +84,7 @@ __all__ = [
     "XenoCantoDownloadResult",
     # HuggingFace
     "PushResult",
+    "PullResult",
     # Exceptions
     "CatalogError",
     "SpeciesError",

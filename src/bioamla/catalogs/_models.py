@@ -508,3 +508,16 @@ class PushResult(ToDictMixin):
     url: str
     files_uploaded: int
     total_size_bytes: int
+
+
+@dataclass
+class PullResult(ToDictMixin):
+    """Result of pulling a HuggingFace dataset into the local bioamla layout."""
+
+    repo_id: str
+    dest: str
+    url: str
+    files_written: int
+    labels: list[str]
+    splits: dict[str, int]
+    metadata_file: str | None

@@ -332,6 +332,66 @@ def hf_push_dataset(
     click.echo(f"Successfully pushed dataset to: {result.url}")
 
 
+@catalogs_hf.command("pull-dataset")
+@click.argument("repo_id")
+@click.argument("dest")
+@click.option("--split", default=None, help="Single split to pull (default: all splits)")
+@click.option("--config", default=None, help="Dataset config/subset name (e.g. HSN for BirdSet)")
+@click.option("--audio-column", default=None, help="Override the auto-detected audio column")
+@click.option("--label-column", default=None, help="Override the auto-detected label column")
+@click.option(
+    "--sample-rate", type=int, default=16000, help="Resample clips to this rate (0 to keep source)"
+)
+@click.option(
+    "--layout",
+    type=click.Choice(["both", "audiofolder", "flat"]),
+    default="both",
+    help="Output layout: label subdirs + metadata.csv (both), subdirs only, or flat",
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def hf_pull_dataset(
+    repo_id: str,
+    dest: str,
+    split: str,
+    config: str,
+    audio_column: str,
+    label_column: str,
+    sample_rate: int,
+    layout: str,
+    quiet: bool,
+) -> None:
+    """Pull a HuggingFace audio dataset into the local labeled-folder layout.
+
+    Materializes REPO_ID (e.g. ``ashraq/esc-50``) under DEST as label subdirs and
+    a ``metadata.csv``, ready for ``dataset partition`` / ``models ast train``.
+    """
+    from bioamla.catalogs import huggingface as hf
+
+    if not quiet:
+        click.echo(f"Pulling dataset {repo_id} from HuggingFace Hub into {dest}...")
+
+    try:
+        result = hf.pull_dataset(
+            repo_id,
+            dest,
+            split=split,
+            config=config,
+            audio_column=audio_column,
+            label_column=label_column,
+            sample_rate=sample_rate or None,
+            layout=layout,
+            verbose=not quiet,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(
+        f"Wrote {result.files_written} clips across {len(result.labels)} labels to {result.dest}"
+    )
+    if result.metadata_file:
+        click.echo(f"Metadata: {result.metadata_file}")
+
+
 # =============================================================================
 # Xeno-canto subgroup
 # =============================================================================
