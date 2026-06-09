@@ -22,6 +22,7 @@ Public surface:
 
 import csv
 import io
+import multiprocessing
 import sys
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -31,6 +32,20 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from bioamla.exceptions import InvalidInputError, NotFoundError
+
+
+def _worker_mp_context() -> multiprocessing.context.BaseContext:
+    """Return a non-``fork`` multiprocessing context for the worker pool.
+
+    The default ``fork`` start method warns (and risks deadlocks) when the parent
+    process is multi-threaded — common here because audio/ML backends spin up
+    threads. ``forkserver`` (POSIX) forks workers from a clean single-threaded
+    server, avoiding the warning; ``spawn`` is the portable fallback (Windows).
+    """
+    methods = multiprocessing.get_all_start_methods()
+    start = "forkserver" if "forkserver" in methods else "spawn"
+    return multiprocessing.get_context(start)
+
 
 T = TypeVar("T")
 I = TypeVar("I")  # noqa: E741 - item type
@@ -208,7 +223,9 @@ def run_batch(
     total = len(items)
 
     if max_workers > 1:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        with ProcessPoolExecutor(
+            max_workers=max_workers, mp_context=_worker_mp_context()
+        ) as executor:
             futures = {executor.submit(process_fn, item): item for item in items}
             for future in as_completed(futures):
                 item = futures[future]
