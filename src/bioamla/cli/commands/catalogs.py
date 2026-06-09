@@ -296,11 +296,32 @@ def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str) -
     "--private/--public", default=False, help="Make the repository private (default: public)"
 )
 @click.option("--commit-message", default=None, help="Custom commit message for the push")
-def hf_push_dataset(path: str, repo_id: str, private: bool, commit_message: str) -> None:
-    """Push a dataset folder to the HuggingFace Hub."""
+@click.option(
+    "--card/--no-card",
+    default=True,
+    help="Write a README.md dataset card from the manifest/metadata before pushing",
+)
+def hf_push_dataset(
+    path: str, repo_id: str, private: bool, commit_message: str, card: bool
+) -> None:
+    """Push a dataset folder to the HuggingFace Hub.
+
+    When ``--card`` is set (default) and the folder has a ``dataset.json`` manifest
+    or a ``metadata.csv``, a ``README.md`` dataset card is generated first; folders
+    without either are pushed as-is.
+    """
     from bioamla.catalogs import huggingface as hf
+    from bioamla.datasets import write_dataset_card
 
     click.echo(f"Pushing dataset folder {path} to HuggingFace Hub: {repo_id}...")
+
+    if card:
+        try:
+            card_path = write_dataset_card(path)
+            if card_path:
+                click.echo(f"Wrote dataset card: {card_path}")
+        except BioamlaError as e:
+            click.echo(f"Warning: could not generate dataset card ({e})", err=True)
 
     try:
         result = hf.push_dataset(path, repo_id, private=private, commit_message=commit_message)

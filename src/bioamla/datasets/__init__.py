@@ -70,6 +70,7 @@ from bioamla.datasets.manifest import (
     build_manifest_from_metadata,
     load_dataset_manifest,
     save_dataset_manifest,
+    write_dataset_card,
 )
 from bioamla.datasets.measurements import compute_measurements
 from bioamla.datasets.merge import find_species_name, merge_datasets
@@ -128,6 +129,7 @@ __all__ = [
     "save_dataset_manifest",
     "load_dataset_manifest",
     "build_dataset_card",
+    "write_dataset_card",
     # Augmentation
     "AugmentationConfig",
     "create_augmentation_pipeline",

@@ -1,11 +1,16 @@
-"""Tests for the dataset card builder and `dataset push` CLI (no network)."""
+"""Tests for the dataset card builder, write_dataset_card, and `catalogs hf push-dataset`."""
 
 from click.testing import CliRunner
 
 import bioamla.catalogs.huggingface as hf
 from bioamla.catalogs._models import PushResult
-from bioamla.cli.commands.dataset import dataset
-from bioamla.datasets import DatasetManifest, build_dataset_card, create_label_map
+from bioamla.cli.commands.catalogs import catalogs
+from bioamla.datasets import (
+    DatasetManifest,
+    build_dataset_card,
+    create_label_map,
+    write_dataset_card,
+)
 from bioamla.datasets._metadata import write_metadata_csv
 
 
@@ -20,6 +25,15 @@ def _manifest():
         sources=[{"source": "xeno_canto", "files": 12}],
         sample_rate=16000,
     )
+
+
+def _write_dataset(tmp_path):
+    rows = [
+        {"file_name": "call/a.wav", "label": "call", "split": "train"},
+        {"file_name": "chorus/b.wav", "label": "chorus", "split": "test"},
+    ]
+    write_metadata_csv(tmp_path / "metadata.csv", rows, merge_existing=False)
+    return tmp_path
 
 
 class TestBuildDatasetCard:
@@ -39,22 +53,26 @@ class TestBuildDatasetCard:
         assert "Total clips/files:** 0" in card
 
 
-def _write_dataset(tmp_path):
-    rows = [
-        {"file_name": "call/a.wav", "label": "call", "split": "train"},
-        {"file_name": "chorus/b.wav", "label": "chorus", "split": "test"},
-    ]
-    write_metadata_csv(tmp_path / "metadata.csv", rows, merge_existing=False)
-    return tmp_path
+class TestWriteDatasetCard:
+    def test_builds_from_metadata(self, tmp_path):
+        d = _write_dataset(tmp_path)
+        path = write_dataset_card(str(d))
+        assert path == str(d / "README.md")
+        assert "task_categories:" in (d / "README.md").read_text()
+
+    def test_returns_none_when_not_a_dataset(self, tmp_path):
+        # No metadata.csv and no dataset.json -> nothing to build a card from.
+        assert write_dataset_card(str(tmp_path)) is None
+        assert not (tmp_path / "README.md").exists()
 
 
-class TestDatasetPushCli:
+class TestPushDatasetCli:
     def test_writes_card_and_delegates(self, tmp_path, monkeypatch):
         d = _write_dataset(tmp_path)
         calls = {}
 
         def fake_push(path, repo_id, private=False, commit_message=None):
-            calls.update(path=path, repo_id=repo_id, private=private, commit_message=commit_message)
+            calls.update(path=path, repo_id=repo_id, private=private)
             return PushResult(
                 repo_id=repo_id,
                 repo_type="dataset",
@@ -65,7 +83,7 @@ class TestDatasetPushCli:
 
         monkeypatch.setattr(hf, "push_dataset", fake_push)
 
-        res = CliRunner().invoke(dataset, ["push", str(d), "me/frogs", "--private"])
+        res = CliRunner().invoke(catalogs, ["hf", "push-dataset", str(d), "me/frogs", "--private"])
         assert res.exit_code == 0, res.output
         assert (d / "README.md").exists()
         assert "task_categories:" in (d / "README.md").read_text()
@@ -76,27 +94,26 @@ class TestDatasetPushCli:
     def test_no_card_flag_skips_readme(self, tmp_path, monkeypatch):
         d = _write_dataset(tmp_path)
         monkeypatch.setattr(
-            hf,
-            "push_dataset",
-            lambda *a, **k: PushResult("r", "dataset", "u", 1, 1),
+            hf, "push_dataset", lambda *a, **k: PushResult("r", "dataset", "u", 1, 1)
         )
-        res = CliRunner().invoke(dataset, ["push", str(d), "me/frogs", "--no-card"])
+        res = CliRunner().invoke(catalogs, ["hf", "push-dataset", str(d), "me/frogs", "--no-card"])
         assert res.exit_code == 0, res.output
         assert not (d / "README.md").exists()
 
-    def test_rejects_non_dataset_dir(self, tmp_path, monkeypatch):
-        # An empty directory is not a dataset; should error before any push.
-        called = {"n": 0}
+    def test_non_dataset_folder_pushes_without_card(self, tmp_path, monkeypatch):
+        # A folder with no manifest/metadata is still pushable; just no card.
+        (tmp_path / "audio.wav").write_bytes(b"RIFF")
+        pushed = {"n": 0}
 
         def fake_push(*a, **k):
-            called["n"] += 1
+            pushed["n"] += 1
             return PushResult("r", "dataset", "u", 1, 1)
 
         monkeypatch.setattr(hf, "push_dataset", fake_push)
-        res = CliRunner().invoke(dataset, ["push", str(tmp_path), "me/frogs"])
-        assert res.exit_code != 0
-        assert "doesn't look like a dataset" in res.output
-        assert called["n"] == 0
+        res = CliRunner().invoke(catalogs, ["hf", "push-dataset", str(tmp_path), "me/x"])
+        assert res.exit_code == 0, res.output
+        assert pushed["n"] == 1
+        assert not (tmp_path / "README.md").exists()
 
     def test_push_failure_surfaces_login_hint(self, tmp_path, monkeypatch):
         from bioamla.exceptions import CatalogError
@@ -107,6 +124,6 @@ class TestDatasetPushCli:
             raise CatalogError("Push failed: 401")
 
         monkeypatch.setattr(hf, "push_dataset", boom)
-        res = CliRunner().invoke(dataset, ["push", str(d), "me/frogs"])
+        res = CliRunner().invoke(catalogs, ["hf", "push-dataset", str(d), "me/frogs"])
         assert res.exit_code != 0
         assert "huggingface-cli login" in res.output

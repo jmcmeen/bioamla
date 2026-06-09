@@ -174,6 +174,34 @@ def build_dataset_card(manifest: DatasetManifest) -> str:
     return "\n".join(frontmatter + body) + "\n"
 
 
+def write_dataset_card(
+    dataset_dir: str,
+    metadata_filename: str = "metadata.csv",
+    output_filename: str = "README.md",
+) -> str | None:
+    """Write a HuggingFace dataset card (README.md) for a dataset directory.
+
+    Uses an existing ``dataset.json`` manifest if present, otherwise derives one
+    from the metadata CSV. Returns the card path, or ``None`` when the directory
+    has neither a manifest nor a metadata CSV to build from (so the caller can
+    treat a non-dataset folder as a no-op).
+    """
+    ds_path = Path(dataset_dir)
+    manifest_path = ds_path / "dataset.json"
+    metadata_path = ds_path / metadata_filename
+
+    if manifest_path.exists():
+        manifest = load_dataset_manifest(str(manifest_path))
+    elif metadata_path.exists():
+        manifest = build_manifest_from_metadata(dataset_dir, metadata_filename=metadata_filename)
+    else:
+        return None
+
+    card_path = ds_path / output_filename
+    card_path.write_text(build_dataset_card(manifest), encoding="utf-8")
+    return str(card_path)
+
+
 def load_dataset_manifest(filepath: str) -> DatasetManifest:
     """Load a manifest from a JSON file.
 
