@@ -368,6 +368,53 @@ class TestMergeDatasets:
         assert (out / "robin" / "a.wav").exists()
         assert (out / "sparrow" / "b.wav").exists()
 
+    def test_merge_preserves_license_provenance(self, tmp_path) -> None:
+        # License/attribution columns must survive a merge so a combined dataset
+        # stays traceable to its sources.
+        fields = ["file_name", "label", "source", "license", "attribution", "attr_url"]
+        ds1 = _write_dataset(
+            tmp_path,
+            "ds1",
+            [
+                {
+                    "file_name": "call/a.wav",
+                    "label": "call",
+                    "source": "xeno_canto",
+                    "license": "CC-BY-NC",
+                    "attribution": "J. Doe",
+                    "attr_url": "https://xeno-canto.org/1",
+                }
+            ],
+            fields,
+        )
+        ds2 = _write_dataset(
+            tmp_path,
+            "ds2",
+            [
+                {
+                    "file_name": "chorus/b.wav",
+                    "label": "chorus",
+                    "source": "macaulay",
+                    "license": "",
+                    "attribution": "Contributor",
+                    "attr_url": "",
+                }
+            ],
+            fields,
+        )
+        out = tmp_path / "merged"
+        merge_datasets([str(ds1), str(ds2)], str(out), verbose=False)
+
+        with open(out / "metadata.csv", newline="", encoding="utf-8") as f:
+            rows = {r["file_name"]: r for r in csv.DictReader(f)}
+        header = set()
+        with open(out / "metadata.csv", newline="", encoding="utf-8") as f:
+            header = set(next(csv.reader(f)))
+        assert {"source", "license", "attribution", "attr_url"} <= header
+        a = next(r for fn, r in rows.items() if fn.endswith("a.wav"))
+        assert a["source"] == "xeno_canto" and a["license"] == "CC-BY-NC"
+        assert a["attribution"] == "J. Doe"
+
     def test_merge_no_paths_raises(self, tmp_path) -> None:
         with pytest.raises(InvalidInputError):
             merge_datasets([], str(tmp_path / "out"), verbose=False)
