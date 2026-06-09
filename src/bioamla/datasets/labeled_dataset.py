@@ -16,7 +16,7 @@ from typing import Any
 
 from bioamla.audio import get_audio_files
 from bioamla.datasets._io import detect_annotation_format, load_annotations
-from bioamla.datasets._metadata import write_metadata_csv
+from bioamla.datasets._metadata import read_metadata_csv, write_metadata_csv
 from bioamla.datasets.annotation_utils import create_label_map, filter_labels
 from bioamla.datasets.annotations import Annotation
 from bioamla.datasets.clip_extraction import extract_audio_clips
@@ -26,6 +26,20 @@ logger = logging.getLogger(__name__)
 
 # Annotation file extensions we recognize when pairing with audio in a directory.
 _ANNOTATION_SUFFIXES = (".json", ".txt", ".csv")
+
+# Provenance/license columns copied from a source catalog metadata.csv onto each
+# clip so a finished dataset stays traceable to its original recordings.
+PROVENANCE_FIELDS = [
+    "source",
+    "license",
+    "attribution",
+    "scientific_name",
+    "common_name",
+    "attr_id",
+    "attr_lic",
+    "attr_url",
+    "attr_note",
+]
 
 # metadata.csv columns written for each extracted clip.
 CLIP_METADATA_FIELDS = [
@@ -87,6 +101,67 @@ def _load_pair_annotations(ann_file: Path) -> list[Annotation]:
     return anns
 
 
+def _resolve_source_metadata(source: str, source_metadata: str | None) -> Path | None:
+    """Locate the catalog ``metadata.csv`` to join license/attribution from.
+
+    Precedence: an explicit ``source_metadata`` path (must exist), else a
+    ``metadata.csv`` sibling of the source — in the source directory itself, or
+    in the parent directory of a single audio file. Returns ``None`` when nothing
+    is found, making the join a silent no-op.
+    """
+    if source_metadata:
+        path = Path(source_metadata)
+        if not path.exists():
+            raise NotFoundError(f"Source metadata not found: {source_metadata}")
+        return path
+
+    source_path = Path(source)
+    candidate = (
+        source_path / "metadata.csv"
+        if source_path.is_dir()
+        else source_path.parent / "metadata.csv"
+    )
+    return candidate if candidate.exists() else None
+
+
+def _build_provenance_index(
+    metadata_path: Path,
+) -> tuple[dict[str, dict[str, str]], set[str]]:
+    """Index a catalog ``metadata.csv`` by recording basename for the clip join.
+
+    Returns ``(index, present_keys)`` where ``index`` maps a recording's file
+    basename to the subset of :data:`PROVENANCE_FIELDS` it populates, and
+    ``present_keys`` is the union of provenance columns seen across all rows
+    (used to extend the written clip-metadata header). Basenames that collide
+    with *differing* provenance are dropped from the index so an ambiguous clip
+    gets blanks rather than a wrong attribution.
+    """
+    rows, _ = read_metadata_csv(metadata_path)
+    index: dict[str, dict[str, str]] = {}
+    ambiguous: set[str] = set()
+    present_keys: set[str] = set()
+
+    for row in rows:
+        file_name = row.get("file_name", "")
+        if not file_name:
+            continue
+        basename = Path(file_name).name
+        provenance = {k: row[k] for k in PROVENANCE_FIELDS if row.get(k)}
+        if not provenance:
+            continue
+        present_keys.update(provenance.keys())
+
+        if basename in ambiguous:
+            continue
+        if basename in index and index[basename] != provenance:
+            del index[basename]
+            ambiguous.add(basename)
+            continue
+        index[basename] = provenance
+
+    return index, present_keys
+
+
 def extract_labeled_dataset(
     source: str,
     output_dir: str,
@@ -100,6 +175,7 @@ def extract_labeled_dataset(
     exclude_labels: set[str] | None = None,
     min_duration: float | None = None,
     metadata_filename: str = "metadata.csv",
+    source_metadata: str | None = None,
     verbose: bool = True,
 ) -> dict[str, Any]:
     """Extract annotated regions into a labeled clip dataset.
@@ -111,6 +187,9 @@ def extract_labeled_dataset(
         annotations: Explicit annotation file when ``source`` is one audio file.
         layout: ``"both"`` (label subdirs + metadata.csv), ``"audiofolder"``
             (label subdirs only), or ``"flat"`` (one dir + metadata.csv).
+        source_metadata: Catalog ``metadata.csv`` to join license/attribution
+            onto clips (by source-recording basename). Auto-detected as a
+            ``metadata.csv`` sibling of ``source`` when omitted.
         padding_ms: Padding added before/after each clip.
         bandpass: Bandpass-filter clips to each annotation's freq band when set.
         format: Output audio extension.
@@ -123,8 +202,9 @@ def extract_labeled_dataset(
 
     Returns:
         Dict with ``clips_written``, ``files_processed``, ``labels`` (sorted),
-        ``label_map``, ``output_dir``, ``metadata_file`` (or None), and
-        ``failed``.
+        ``label_map``, ``output_dir``, ``metadata_file`` (or None), ``failed``,
+        ``skipped``, and ``provenance`` (join summary: joined/matched/unmatched/
+        source_metadata/columns).
 
     Raises:
         NotFoundError: If the source path doesn't exist.
@@ -181,10 +261,42 @@ def extract_labeled_dataset(
     for rec in clip_rows:
         rec["target"] = label_map.get(rec["label"], "")
 
+    # Join license/attribution from the source catalog metadata so the dataset
+    # stays traceable to its original recordings.
+    fieldnames = set(CLIP_METADATA_FIELDS)
+    provenance = {
+        "joined": False,
+        "matched": 0,
+        "unmatched": 0,
+        "source_metadata": None,
+        "columns": [],
+    }
+    meta_path = _resolve_source_metadata(source, source_metadata)
+    if meta_path is not None and clip_rows:
+        index, present_keys = _build_provenance_index(meta_path)
+        fieldnames |= present_keys
+        matched = 0
+        for rec in clip_rows:
+            prov = index.get(rec["source_file"])
+            if prov:
+                rec.update(prov)
+                matched += 1
+        provenance = {
+            "joined": True,
+            "matched": matched,
+            "unmatched": len(clip_rows) - matched,
+            "source_metadata": str(meta_path),
+            "columns": sorted(present_keys),
+        }
+        if verbose:
+            logger.info(
+                f"Provenance: joined {matched}/{len(clip_rows)} clips from {meta_path.name}"
+            )
+
     metadata_file = None
     if write_csv and clip_rows:
         metadata_path = output_path / metadata_filename
-        write_metadata_csv(metadata_path, clip_rows, set(CLIP_METADATA_FIELDS), merge_existing=False)
+        write_metadata_csv(metadata_path, clip_rows, fieldnames, merge_existing=False)
         metadata_file = str(metadata_path)
 
     return {
@@ -196,4 +308,5 @@ def extract_labeled_dataset(
         "metadata_file": metadata_file,
         "failed": failed,
         "skipped": skipped,
+        "provenance": provenance,
     }

@@ -12,7 +12,8 @@ from bioamla.datasets import (
     extract_labeled_dataset,
     save_bioamla_annotations,
 )
-from bioamla.exceptions import AnnotationError
+from bioamla.datasets._metadata import write_metadata_csv
+from bioamla.exceptions import AnnotationError, NotFoundError
 
 SR = 16000
 
@@ -166,3 +167,110 @@ class TestExtractLabeledDataset:
             extract_labeled_dataset(
                 str(wav), str(tmp_path / "ds"), annotations=str(ann), layout="x"
             )
+
+
+def _read_meta(out):
+    with (out / "metadata.csv").open() as f:
+        return list(csv.DictReader(f))
+
+
+class TestProvenanceJoin:
+    def test_join_from_sibling_metadata(self, tmp_path):
+        # Catalog dir: audio + annotations + a metadata.csv (file_name has a
+        # species subdir, so the join must match on basename).
+        _write_wav(tmp_path / "rec.wav")
+        save_bioamla_annotations(_annotations(), str(tmp_path / "rec.json"))
+        write_metadata_csv(
+            tmp_path / "metadata.csv",
+            [
+                {
+                    "file_name": "Hyla_cinerea/rec.wav",
+                    "source": "xeno_canto",
+                    "license": "CC-BY-NC",
+                    "attribution": "J. Doe",
+                    "attr_url": "https://xeno-canto.org/123",
+                }
+            ],
+            merge_existing=False,
+        )
+        out = tmp_path / "ds"
+        result = extract_labeled_dataset(str(tmp_path), str(out), layout="both")
+
+        assert result["provenance"]["joined"] is True
+        assert result["provenance"]["matched"] == 3
+        assert result["provenance"]["unmatched"] == 0
+        assert result["provenance"]["columns"] == [
+            "attr_url",
+            "attribution",
+            "license",
+            "source",
+        ]
+        rows = _read_meta(out)
+        for row in rows:
+            assert row["source_file"] == "rec.wav"
+            assert row["license"] == "CC-BY-NC"
+            assert row["attribution"] == "J. Doe"
+            assert row["source"] == "xeno_canto"
+
+    def test_explicit_source_metadata_param(self, tmp_path):
+        wav, ann = _make_pair(tmp_path)
+        meta = tmp_path / "elsewhere" / "m.csv"
+        meta.parent.mkdir()
+        write_metadata_csv(
+            meta,
+            [{"file_name": "rec.wav", "license": "CC0", "attribution": "A"}],
+            merge_existing=False,
+        )
+        out = tmp_path / "ds"
+        result = extract_labeled_dataset(
+            str(wav), str(out), annotations=str(ann), source_metadata=str(meta)
+        )
+        assert result["provenance"]["matched"] == 3
+        assert all(r["license"] == "CC0" for r in _read_meta(out))
+
+    def test_missing_source_metadata_raises(self, tmp_path):
+        wav, ann = _make_pair(tmp_path)
+        with pytest.raises(NotFoundError):
+            extract_labeled_dataset(
+                str(wav),
+                str(tmp_path / "ds"),
+                annotations=str(ann),
+                source_metadata=str(tmp_path / "nope.csv"),
+            )
+
+    def test_unmatched_leaves_blank(self, tmp_path):
+        wav, ann = _make_pair(tmp_path)
+        write_metadata_csv(
+            tmp_path / "metadata.csv",
+            [{"file_name": "other.wav", "license": "CC-BY"}],
+            merge_existing=False,
+        )
+        out = tmp_path / "ds"
+        result = extract_labeled_dataset(str(wav), str(out), annotations=str(ann))
+        assert result["provenance"]["matched"] == 0
+        assert result["provenance"]["unmatched"] == 3
+        assert all(r.get("license", "") == "" for r in _read_meta(out))
+
+    def test_basename_collision_is_ambiguous_blank(self, tmp_path):
+        # Two source rows share basename rec.wav with DIFFERING license -> dropped.
+        wav, ann = _make_pair(tmp_path)
+        write_metadata_csv(
+            tmp_path / "metadata.csv",
+            [
+                {"file_name": "a/rec.wav", "license": "CC-BY"},
+                {"file_name": "b/rec.wav", "license": "CC0"},
+            ],
+            merge_existing=False,
+        )
+        out = tmp_path / "ds"
+        result = extract_labeled_dataset(str(wav), str(out), annotations=str(ann))
+        assert result["provenance"]["matched"] == 0
+        assert all(r.get("license", "") == "" for r in _read_meta(out))
+
+    def test_no_source_metadata_is_noop(self, tmp_path):
+        wav, ann = _make_pair(tmp_path)
+        out = tmp_path / "ds"
+        result = extract_labeled_dataset(str(wav), str(out), annotations=str(ann))
+        assert result["provenance"]["joined"] is False
+        header = list(_read_meta(out)[0].keys())
+        assert "license" not in header and "source" not in header
