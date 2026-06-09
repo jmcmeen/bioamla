@@ -69,7 +69,7 @@ check: lint fmt-check test ## Run lint, format check, and tests
 ## --- Documentation (mkdocs) ---
 
 docs: ## Build the documentation site into ./site
-	$(UV) run --extra dev mkdocs build
+	$(UV) run --extra dev mkdocs build --strict
 
 docs-serve: ## Serve docs locally with live reload at http://127.0.0.1:8000
 	$(UV) run --extra dev mkdocs serve

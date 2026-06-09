@@ -820,7 +820,7 @@ def discover_novel_sounds(
 
 
 def extract_embeddings_batch(
-    model, dataloader, device=None, layer_name: str | None = None
+    model: Any, dataloader: Any, device: Any = None, layer_name: str | None = None
 ) -> np.ndarray:
     """
     Extract embeddings from a model for a batch of data.

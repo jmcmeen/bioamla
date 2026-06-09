@@ -258,7 +258,7 @@ def save_audio(
     return str(path)
 
 
-def load_waveform_tensor(filepath: str):  # noqa: ANN201 - torch optional
+def load_waveform_tensor(filepath: str) -> tuple:
     """
     Load an audio file as a ``torch`` waveform tensor.
 

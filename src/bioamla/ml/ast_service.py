@@ -16,13 +16,16 @@ fast startup.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bioamla.exceptions import (
     InvalidInputError,
     ModelError,
     NotFoundError,
 )
+
+if TYPE_CHECKING:
+    from bioamla.ml.inference import ASTPredictionResult
 
 
 @dataclass
@@ -73,7 +76,7 @@ def predict_file(
     filepath: str,
     model_path: str = "bioamla/scp-frogs",
     resample_freq: int = 16000,
-):
+) -> "ASTPredictionResult":
     """
     Run AST prediction on a single audio file (whole-file).
 

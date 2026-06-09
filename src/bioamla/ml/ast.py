@@ -179,7 +179,9 @@ def extract_features(
     return inputs.input_values
 
 
-def ast_predict(input_values, model: "AutoModelForAudioClassification") -> str:
+def ast_predict(
+    input_values: "torch.Tensor", model: "AutoModelForAudioClassification"
+) -> str:
     """
     Run an AST model on preprocessed features and return the predicted label.
 

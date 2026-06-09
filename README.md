@@ -130,4 +130,4 @@ suite runs.
 
 ## License
 
-GNU General Public License v3.0 — see [LICENSE](LICENSE).
+GNU General Public License v3.0 — see [LICENSE](https://github.com/jmcmeen/bioamla/blob/main/LICENSE).

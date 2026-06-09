@@ -152,7 +152,7 @@ class BaseAudioModel(ABC):
         return list(self.id2label.values())
 
     @abstractmethod
-    def load(self, model_path: str, **kwargs) -> "BaseAudioModel":
+    def load(self, model_path: str, **kwargs: Any) -> "BaseAudioModel":
         """
         Load model from path.
 

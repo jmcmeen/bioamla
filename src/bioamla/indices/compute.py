@@ -778,7 +778,7 @@ def compute_all_indices(
 
 def compute_indices_from_file(
     filepath: str | Path,
-    **kwargs,
+    **kwargs: Any,
 ) -> AcousticIndices:
     """
     Compute all acoustic indices from an audio file.
@@ -803,7 +803,7 @@ def compute_indices_from_file(
 def batch_compute_indices(
     filepaths: list[str | Path],
     verbose: bool = True,
-    **kwargs,
+    **kwargs: Any,
 ) -> list[dict[str, Any]]:
     """
     Compute acoustic indices for multiple audio files.
@@ -854,7 +854,7 @@ def temporal_indices(
     sample_rate: int,
     window_duration: float = 60.0,
     hop_duration: float | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> list[dict[str, Any]]:
     """
     Compute acoustic indices over time windows.

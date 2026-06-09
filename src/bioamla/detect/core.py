@@ -388,7 +388,7 @@ class BandLimitedEnergyDetector:
     def detect_from_file(
         self,
         filepath: str | Path,
-        **kwargs,
+        **kwargs: Any,
     ) -> list[Detection]:
         """
         Detect sounds from an audio file.

@@ -10,10 +10,13 @@ and fixed-size resizing; mel generation and augmentation run on the slim core.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import librosa
 import numpy as np
+
+if TYPE_CHECKING:
+    import torch
 
 
 def _require_torch():
@@ -277,7 +280,7 @@ class BioamlaPreprocessor:
         self,
         spectrogram: np.ndarray,
         normalize: bool = True,
-    ):  # noqa: ANN201 - returns torch.Tensor (torch is optional)
+    ) -> torch.Tensor:
         """Convert spectrogram to a PyTorch tensor.
 
         Args:
