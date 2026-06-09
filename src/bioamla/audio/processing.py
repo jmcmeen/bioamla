@@ -150,6 +150,8 @@ def spectral_denoise(
     Returns:
         Denoised audio as numpy array.
     """
+    import librosa
+
     # Compute STFT
     stft = librosa.stft(audio, n_fft=n_fft, hop_length=hop_length)
     magnitude = np.abs(stft)
@@ -213,6 +215,8 @@ def segment_on_silence(
     # Convert to mono if needed
     if audio.ndim > 1:
         audio = audio.mean(axis=0)
+
+    import librosa
 
     # Get intervals of non-silence
     intervals = librosa.effects.split(
@@ -306,6 +310,8 @@ def detect_onsets(
     # Convert to mono if needed
     if audio.ndim > 1:
         audio = audio.mean(axis=0)
+
+    import librosa
 
     # Compute onset strength
     onset_env = librosa.onset.onset_strength(y=audio, sr=sample_rate)
@@ -423,6 +429,8 @@ def resample_audio(
     if orig_sr == target_sr:
         return audio
 
+    import librosa
+
     resampled = librosa.resample(audio, orig_sr=orig_sr, target_sr=target_sr)
 
     return resampled.astype(np.float32)
@@ -494,6 +502,8 @@ def pitch_shift(
     Returns:
         Pitch-shifted audio as numpy array.
     """
+    import librosa
+
     shifted = librosa.effects.pitch_shift(y=audio, sr=sample_rate, n_steps=n_steps)
     return shifted.astype(np.float32)
 
@@ -517,6 +527,8 @@ def time_stretch(
     """
     if rate <= 0:
         raise ProcessingError(f"Time-stretch rate must be positive, got {rate}")
+    import librosa
+
     stretched = librosa.effects.time_stretch(y=audio, rate=rate)
     return stretched.astype(np.float32)
 
@@ -588,6 +600,8 @@ def trim_silence(
         audio_mono = audio.mean(axis=0)
     else:
         audio_mono = audio
+
+    import librosa
 
     # Trim silence
     trimmed, index = librosa.effects.trim(audio_mono, top_db=-threshold_db)
