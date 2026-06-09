@@ -95,6 +95,62 @@ def ast_predict(
     click.echo(f"{prediction.predicted_label} ({prediction.confidence:.4f})")
 
 
+@ast.command("annotate")
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--output", "-o", required=True, help="Output annotation file")
+@click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for inference")
+@click.option("--segment-duration", default=3, type=int, help="Segment duration (seconds)")
+@click.option("--overlap", default=0, type=int, help="Overlap between segments (seconds)")
+@click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["csv", "raven", "bioamla"]),
+    default="csv",
+    help="Annotation output format",
+)
+@click.option("--exclude", multiple=True, help="Predicted label(s) to drop (repeatable)")
+@click.option(
+    "--min-confidence", default=0.0, type=float, help="Drop predictions below this confidence"
+)
+def ast_annotate(
+    file: str,
+    output: str,
+    model_path: str,
+    segment_duration: int,
+    overlap: int,
+    resample_freq: int,
+    fmt: str,
+    exclude: tuple[str, ...],
+    min_confidence: float,
+) -> None:
+    """Run segmented AST inference and write an editable annotation file.
+
+    Seeds the manual annotation/review step: each segment's prediction becomes an
+    annotation you can correct, then feed to ``bioamla dataset extract-clips``.
+
+    Example:
+        bioamla models ast annotate soundscape.wav -o soundscape.csv --exclude background
+    """
+    from pathlib import Path
+
+    from bioamla.datasets import predictions_to_annotations
+    from bioamla.datasets._io import save_annotations
+    from bioamla.ml import load_pretrained_ast_model, segmented_wave_file_inference
+
+    try:
+        model = load_pretrained_ast_model(model_path)
+        df = segmented_wave_file_inference(file, model, resample_freq, segment_duration, overlap)
+        annotations = predictions_to_annotations(
+            df.to_dict("records"), min_confidence=min_confidence, exclude_labels=exclude
+        )
+        save_annotations(annotations, Path(output), fmt)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Wrote {len(annotations)} annotations to {output}")
+
+
 @ast.command("train")
 @click.pass_context
 @click.option(

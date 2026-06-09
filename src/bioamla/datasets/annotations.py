@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import logging
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -709,6 +710,62 @@ def create_annotation(
         confidence=confidence,
         notes=notes,
     )
+
+
+def predictions_to_annotations(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    min_confidence: float = 0.0,
+    exclude_labels: Iterable[str] | None = None,
+) -> list[Annotation]:
+    """Convert segment-level model predictions into Annotations for manual review.
+
+    Bridges model inference output — e.g. the DataFrame from
+    ``segmented_wave_file_inference`` (columns ``filepath/start/stop/prediction``)
+    or a batch-predict CSV — into editable :class:`Annotation` objects that a
+    human can correct and then feed to ``dataset extract-clips``. This closes the
+    predict → review → dataset loop.
+
+    Recognizes both ``start``/``stop`` and ``start_time``/``end_time`` time keys,
+    and ``prediction`` or ``label`` for the class. A source filename
+    (``filepath``/``file_name``/``source_file``) is preserved in
+    ``custom_fields['source_file']`` when present.
+
+    Args:
+        rows: Iterable of prediction rows (mappings); pass a DataFrame via
+            ``df.to_dict("records")``.
+        min_confidence: Drop predictions whose confidence is below this. Rows
+            without a confidence value are always kept.
+        exclude_labels: Labels to drop (e.g. a background/negative class).
+
+    Returns:
+        One :class:`Annotation` per kept prediction row.
+    """
+    excluded = {str(x) for x in (exclude_labels or ())}
+    annotations: list[Annotation] = []
+    for row in rows:
+        label = str(row.get("label", row.get("prediction", "")) or "")
+        if label in excluded:
+            continue
+
+        raw_conf = row.get("confidence")
+        confidence = float(raw_conf) if raw_conf not in (None, "", "nan") else None
+        if confidence is not None and confidence < min_confidence:
+            continue
+
+        start = row.get("start_time", row.get("start"))
+        end = row.get("end_time", row.get("stop", row.get("end")))
+        annotation = Annotation(
+            start_time=float(start) if start is not None else 0.0,
+            end_time=float(end) if end is not None else 0.0,
+            label=label,
+            confidence=confidence,
+        )
+        source = row.get("filepath") or row.get("file_name") or row.get("source_file")
+        if source:
+            annotation.custom_fields["source_file"] = str(source)
+        annotations.append(annotation)
+    return annotations
 
 
 # =============================================================================

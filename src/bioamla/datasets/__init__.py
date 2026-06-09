@@ -43,6 +43,7 @@ from bioamla.datasets.annotations import (
     load_bioamla_annotations,
     load_csv_annotations,
     load_raven_selection_table,
+    predictions_to_annotations,
     save_bioamla_annotations,
     save_csv_annotations,
     save_json_annotations,
@@ -102,6 +103,7 @@ __all__ = [
     "BIOAMLA_ANNOTATION_FORMAT",
     "load_annotations_from_directory",
     "create_annotation",
+    "predictions_to_annotations",
     # Annotation summarization / labels
     "get_unique_labels",
     "summarize_annotations",
