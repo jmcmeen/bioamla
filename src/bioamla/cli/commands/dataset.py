@@ -88,6 +88,12 @@ def dataset_merge(
 @click.option("--include", "-i", multiple=True, help="Labels to include (repeatable)")
 @click.option("--exclude", "-e", multiple=True, help="Labels to exclude (repeatable)")
 @click.option("--min-duration", type=float, default=None, help="Drop clips shorter than this (s)")
+@click.option(
+    "--source-metadata",
+    default=None,
+    help="Catalog metadata.csv to join license/attribution onto clips "
+    "(auto-detected as a metadata.csv sibling of SOURCE when omitted)",
+)
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
 def dataset_extract_clips(
     source: str,
@@ -101,6 +107,7 @@ def dataset_extract_clips(
     include: tuple,
     exclude: tuple,
     min_duration: float,
+    source_metadata: str,
     quiet: bool,
 ) -> None:
     """Extract annotated regions into a labeled clip dataset (training-ready).
@@ -108,7 +115,9 @@ def dataset_extract_clips(
     SOURCE is an audio file (with --annotations or a sibling annotation file) or
     a directory of audio files each paired with a sibling annotation. The output
     is consumable by `bioamla models ast train` directly (label subdirs and/or a
-    metadata.csv).
+    metadata.csv). License/attribution is joined from the source catalog
+    metadata.csv (auto-detected, or via --source-metadata) so clips stay
+    traceable to their original recordings.
     """
     from bioamla.datasets import extract_labeled_dataset
 
@@ -125,6 +134,7 @@ def dataset_extract_clips(
             include_labels=set(include) if include else None,
             exclude_labels=set(exclude) if exclude else None,
             min_duration=min_duration,
+            source_metadata=source_metadata,
             verbose=not quiet,
         )
     except BioamlaError as e:
@@ -138,6 +148,14 @@ def dataset_extract_clips(
         click.echo(f"Labels ({len(result['labels'])}): {', '.join(result['labels'])}")
         if result["metadata_file"]:
             click.echo(f"Metadata: {result['metadata_file']}")
+        prov = result.get("provenance", {})
+        if prov.get("joined"):
+            click.echo(
+                f"Provenance: joined {prov['matched']}/{result['clips_written']} clips "
+                f"({', '.join(prov['columns'])})"
+            )
+            if prov.get("unmatched"):
+                click.echo(f"  {prov['unmatched']} clip(s) had no source-metadata match")
         if result.get("skipped"):
             click.echo(f"Skipped (out of range): {len(result['skipped'])} clip(s)")
         if result["failed"]:
@@ -340,6 +358,17 @@ dataset.add_command(dataset_partition, "split")
 @click.option("--seed", type=int, default=0, help="Reproducible shuffle seed")
 @click.option("--no-partition", is_flag=True, help="Extract clips but skip train/val/test split")
 @click.option("--name", default="", help="Dataset name for the manifest (defaults to dir name)")
+@click.option(
+    "--source-metadata",
+    default=None,
+    help="Catalog metadata.csv to join license/attribution onto clips "
+    "(auto-detected as a metadata.csv sibling of SOURCE when omitted)",
+)
+@click.option(
+    "--attributions/--no-attributions",
+    default=True,
+    help="Write ATTRIBUTIONS.md from joined clip provenance (skipped if none)",
+)
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
 def dataset_build(
     source: str,
@@ -357,12 +386,16 @@ def dataset_build(
     seed: int,
     no_partition: bool,
     name: str,
+    source_metadata: str,
+    attributions: bool,
     quiet: bool,
 ) -> None:
     """Build a training-ready dataset: extract clips, partition, and write a manifest.
 
     Chains `extract-clips` (layout=both) -> `partition` (subdirs) -> `manifest`,
     producing a dataset directory + dataset.json consumable by `models ast train`.
+    License/attribution joined from the source catalog metadata is written to
+    ATTRIBUTIONS.md (unless --no-attributions).
     """
     from datetime import datetime, timezone
     from pathlib import Path
@@ -370,6 +403,7 @@ def dataset_build(
     from bioamla.datasets import (
         build_manifest_from_metadata,
         extract_labeled_dataset,
+        generate_license_for_dataset,
         partition_dataset,
         save_dataset_manifest,
     )
@@ -387,6 +421,7 @@ def dataset_build(
             include_labels=set(include) if include else None,
             exclude_labels=set(exclude) if exclude else None,
             min_duration=min_duration,
+            source_metadata=source_metadata,
             verbose=not quiet,
         )
 
@@ -413,6 +448,15 @@ def dataset_build(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    # Non-fatal: write ATTRIBUTIONS.md when clips carry license/attribution.
+    attributions_path = None
+    if attributions:
+        try:
+            stats = generate_license_for_dataset(output_path, format="md")
+            attributions_path = stats["output_path"]
+        except BioamlaError:
+            attributions_path = None  # no provenance to attribute — skip silently
+
     if not quiet:
         click.echo(f"Built dataset at {output_dir}")
         click.echo(f"  clips: {extract['clips_written']}  classes: {len(manifest.label2id)}")
@@ -420,13 +464,27 @@ def dataset_build(
             split_str = ", ".join(f"{k}={v}" for k, v in sorted(partition_result["splits"].items()))
             click.echo(f"  splits: {split_str}")
         click.echo(f"  manifest: {output_path / 'dataset.json'}")
+        if attributions_path:
+            click.echo(f"  attributions: {attributions_path}")
         click.echo(f"Push to the Hub with: bioamla catalogs hf push-dataset {output_dir} <repo-id>")
 
 
 @dataset.command("license")
 @click.argument("path")
 @click.option("--template", "-t", default=None, help="Template file to prepend to the license file")
-@click.option("--output", "-o", default="LICENSE", help="Output filename for the license file")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output filename (default: LICENSE for text, ATTRIBUTIONS.md for md)",
+)
+@click.option(
+    "--format",
+    "out_format",
+    type=click.Choice(["text", "md"]),
+    default="text",
+    help="Output format: plain-text LICENSE or Markdown ATTRIBUTIONS",
+)
 @click.option("--metadata-filename", default="metadata.csv", help="Name of metadata CSV file")
 @click.option(
     "--batch",
@@ -435,7 +493,13 @@ def dataset_build(
 )
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
 def dataset_license(
-    path: str, template: str, output: str, metadata_filename: str, batch: bool, quiet: bool
+    path: str,
+    template: str,
+    output: str,
+    out_format: str,
+    metadata_filename: str,
+    batch: bool,
+    quiet: bool,
 ) -> None:
     """Generate license/attribution file from dataset metadata."""
     from pathlib import Path
@@ -466,6 +530,7 @@ def dataset_license(
                 template_path=template_path,
                 output_filename=output,
                 metadata_filename=metadata_filename,
+                format=out_format,
             )
         except BioamlaError as e:
             raise click.ClickException(str(e)) from e
@@ -513,6 +578,7 @@ def dataset_license(
                 template_path=template_path,
                 output_filename=output,
                 metadata_filename=metadata_filename,
+                format=out_format,
             )
         except BioamlaError as e:
             raise click.ClickException(str(e)) from e
@@ -522,7 +588,8 @@ def dataset_license(
             click.echo(f"  Attributions: {stats['attributions_count']}")
             click.echo(f"  File size: {stats['file_size']:,} bytes")
         else:
-            click.echo(f"Generated {output} with {stats['attributions_count']} attributions")
+            out_name = Path(stats["output_path"]).name
+            click.echo(f"Generated {out_name} with {stats['attributions_count']} attributions")
 
 
 def _parse_range(value: str) -> tuple[float, float]:

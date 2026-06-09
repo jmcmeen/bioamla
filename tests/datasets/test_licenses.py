@@ -101,3 +101,34 @@ class TestProvenanceTolerantParser:
         assert stats["attributions_count"] == 1
         text = _license_text(ds)
         assert "a.wav" in text and "b.wav" not in text
+
+
+class TestMarkdownFormat:
+    def test_md_groups_by_source_and_license(self, tmp_path):
+        ds = _dataset(
+            tmp_path,
+            [
+                {
+                    "file_name": "x.wav",
+                    "source": "xeno_canto",
+                    "license": "CC-BY",
+                    "attr_url": "u1",
+                },
+                {"file_name": "m.wav", "source": "macaulay", "attribution": "Bob"},
+            ],
+        )
+        stats = generate_license_for_dataset(ds, format="md")
+        assert stats["output_path"].endswith("ATTRIBUTIONS.md")
+        md = (ds / "ATTRIBUTIONS.md").read_text(encoding="utf-8")
+        assert md.startswith("# Attributions")
+        assert "## xeno_canto — CC-BY" in md
+        assert "## macaulay — Unspecified" in md  # no license -> Unspecified group
+        assert "| File | Attribution | License | Source URL |" in md
+        assert "[link](u1)" in md
+        assert "x.wav" in md and "m.wav" in md
+
+    def test_md_custom_output_name(self, tmp_path):
+        ds = _dataset(tmp_path, [{"file_name": "a.wav", "license": "CC0"}])
+        stats = generate_license_for_dataset(ds, output_filename="LICENSE.md", format="md")
+        assert (ds / "LICENSE.md").exists()
+        assert stats["output_path"].endswith("LICENSE.md")
