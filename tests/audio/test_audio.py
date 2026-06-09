@@ -39,6 +39,7 @@ from bioamla.exceptions import (
     AudioLoadError,
     DependencyError,
     NotFoundError,
+    ProcessingError,
 )
 
 
@@ -86,7 +87,7 @@ class TestFilters:
         assert out.shape == sample_audio_data.samples.shape
 
     def test_bandpass_invalid_range_raises(self, sample_audio_data: AudioData) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ProcessingError):
             bandpass_filter(sample_audio_data.samples, sample_audio_data.sample_rate, 2000, 200)
 
 
@@ -121,7 +122,7 @@ class TestTrim:
         assert len(out) == pytest.approx(sample_audio_3s.sample_rate, rel=0.01)
 
     def test_trim_audio_invalid_raises(self, sample_audio_3s: AudioData) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ProcessingError):
             trim_audio(
                 sample_audio_3s.samples,
                 sample_audio_3s.sample_rate,
@@ -153,7 +154,7 @@ class TestEditingTransforms:
         assert len(faster) < len(sample_audio_data.samples) < len(slower)
 
     def test_time_stretch_invalid_rate_raises(self, sample_audio_data: AudioData) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ProcessingError):
             time_stretch(sample_audio_data.samples, rate=0.0)
 
     def test_add_noise_lowers_snr_and_is_seeded(self, sample_audio_data: AudioData) -> None:

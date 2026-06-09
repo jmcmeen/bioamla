@@ -198,7 +198,7 @@ def audio_trim(
         audio, sr = load_audio(input_path)
         trimmed = trim_audio(audio, sr, start_time=start if start != 0.0 else None, end_time=end)
         save_audio(output_path, trimmed, sr)
-    except (BioamlaError, ValueError) as e:
+    except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
     click.echo(f"Trimmed audio saved to: {output_path}")
@@ -303,7 +303,7 @@ def audio_filter(
             desc = f"highpass filter ({highpass} Hz)"
 
         save_audio(output_path, filtered, sr)
-    except (BioamlaError, ValueError) as e:
+    except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
     click.echo(f"Applied {desc} to: {output_path}")
@@ -343,7 +343,7 @@ def audio_pitch_shift(input_path: str, output_path: str, steps: float) -> None:
         audio, sr = load_audio(input_path)
         shifted = pitch_shift(audio, sr, steps)
         save_audio(output_path, shifted, sr)
-    except (BioamlaError, ValueError) as e:
+    except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
     click.echo(f"Pitch-shifted audio ({steps:+g} semitones) saved to: {output_path}")
@@ -363,7 +363,7 @@ def audio_time_stretch(input_path: str, output_path: str, rate: float) -> None:
         audio, sr = load_audio(input_path)
         stretched = time_stretch(audio, rate)
         save_audio(output_path, stretched, sr)
-    except (BioamlaError, ValueError) as e:
+    except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
     click.echo(f"Time-stretched audio (rate {rate:g}) saved to: {output_path}")
@@ -382,7 +382,7 @@ def audio_add_noise(input_path: str, output_path: str, snr_db: float, seed: int)
         audio, sr = load_audio(input_path)
         noisy = add_noise(audio, snr_db, seed=seed)
         save_audio(output_path, noisy, sr)
-    except (BioamlaError, ValueError) as e:
+    except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
     click.echo(f"Noisy audio (SNR {snr_db:g} dB) saved to: {output_path}")
@@ -400,7 +400,7 @@ def audio_gain(input_path: str, output_path: str, gain_db: float) -> None:
         audio, sr = load_audio(input_path)
         gained = apply_gain(audio, gain_db)
         save_audio(output_path, gained, sr)
-    except (BioamlaError, ValueError) as e:
+    except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
     click.echo(f"Gain-adjusted audio ({gain_db:+g} dB) saved to: {output_path}")

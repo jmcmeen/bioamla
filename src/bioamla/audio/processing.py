@@ -7,8 +7,8 @@ denoising, segmentation, onset detection, normalization, resampling, and
 trimming. Functions operate on raw ``numpy`` arrays plus a sample rate.
 
 These are deterministic ``numpy``/``scipy``/``librosa`` routines (all base
-dependencies). They raise :class:`ValueError` on bad parameters and otherwise
-return processed arrays.
+dependencies). They raise :class:`~bioamla.exceptions.ProcessingError` on bad
+parameters and otherwise return processed arrays.
 """
 
 from dataclasses import dataclass
@@ -16,6 +16,8 @@ from dataclasses import dataclass
 import librosa
 import numpy as np
 from scipy import signal as scipy_signal
+
+from bioamla.exceptions import ProcessingError
 
 # =============================================================================
 # Filter Functions
@@ -43,7 +45,7 @@ def bandpass_filter(
         Filtered audio as numpy array.
 
     Raises:
-        ValueError: If the low cutoff is not below the high cutoff.
+        ProcessingError: If the low cutoff is not below the high cutoff.
     """
     nyquist = sample_rate / 2
     low = low_freq / nyquist
@@ -54,7 +56,7 @@ def bandpass_filter(
     high = max(0.001, min(high, 0.999))
 
     if low >= high:
-        raise ValueError(
+        raise ProcessingError(
             f"Low frequency ({low_freq}) must be less than high frequency ({high_freq})"
         )
 
@@ -447,7 +449,7 @@ def trim_audio(
         Trimmed audio as numpy array.
 
     Raises:
-        ValueError: If the resulting trim range is empty.
+        ProcessingError: If the resulting trim range is empty.
     """
     start_sample = 0 if start_time is None else int(start_time * sample_rate)
     end_sample = len(audio) if end_time is None else int(end_time * sample_rate)
@@ -457,7 +459,7 @@ def trim_audio(
     end_sample = min(len(audio), end_sample)
 
     if start_sample >= end_sample:
-        raise ValueError(f"Invalid trim range: start={start_time}s, end={end_time}s")
+        raise ProcessingError(f"Invalid trim range: start={start_time}s, end={end_time}s")
 
     return audio[start_sample:end_sample]
 
@@ -508,10 +510,10 @@ def time_stretch(
         Time-stretched audio as numpy array.
 
     Raises:
-        ValueError: If ``rate`` is not positive.
+        ProcessingError: If ``rate`` is not positive.
     """
     if rate <= 0:
-        raise ValueError(f"Time-stretch rate must be positive, got {rate}")
+        raise ProcessingError(f"Time-stretch rate must be positive, got {rate}")
     stretched = librosa.effects.time_stretch(y=audio, rate=rate)
     return stretched.astype(np.float32)
 
