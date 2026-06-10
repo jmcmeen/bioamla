@@ -108,6 +108,14 @@ def _load_train_dataset(train_dataset: str, split: str, category_label_column: s
         if train_path.is_file() and train_path.suffix.lower() == ".csv":
             return _load_csv_dataset(train_path, category_label_column)
         if train_path.is_dir():
+            # A dataset directory carrying a metadata.csv (from `dataset
+            # extract-clips`/`partition` or `catalogs hf pull-dataset`) is loaded
+            # via that CSV, so a populated `split` column and the reorganized
+            # `train/val/test/<label>/` layout from `partition --mode subdirs` are
+            # both honored. Otherwise fall back to the AudioFolder convention.
+            metadata_csv = train_path / "metadata.csv"
+            if metadata_csv.exists():
+                return _load_csv_dataset(metadata_csv, category_label_column)
             return _load_directory_dataset(train_path, train_dataset, split, category_label_column)
         raise TrainingError(
             f"Local path {train_dataset} exists but is neither a CSV file nor a directory."

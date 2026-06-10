@@ -51,6 +51,42 @@ class TestLoadCsvDataset:
             _load_csv_dataset(csv, "category")
 
 
+class TestLoadPartitionedDirectory:
+    """A dataset dir with a metadata.csv (post-partition) loads via the CSV."""
+
+    def test_directory_with_metadata_honors_split(self, tmp_path) -> None:
+        pytest.importorskip("datasets")
+        import csv
+
+        import numpy as np
+        import soundfile as sf
+
+        from datasets import DatasetDict
+
+        from bioamla.ml.training import _load_train_dataset
+
+        # Mirror `dataset partition --mode subdirs`: data/<split>/<label>/*.wav + metadata.csv.
+        root = tmp_path / "data"
+        rows = []
+        for split in ("train", "test"):
+            for label in ("frog", "bird"):
+                d = root / split / label
+                d.mkdir(parents=True)
+                rel = f"{split}/{label}/clip.wav"
+                sf.write(str(root / rel), np.zeros(16000, dtype="float32"), 16000)
+                rows.append({"file_name": rel, "label": label, "split": split})
+        with open(root / "metadata.csv", "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=["file_name", "label", "split"])
+            w.writeheader()
+            w.writerows(rows)
+
+        dataset, label_col = _load_train_dataset(str(root), "train", "category")
+        assert label_col == "label"
+        assert isinstance(dataset, DatasetDict)
+        assert set(dataset.keys()) >= {"train", "test"}
+        assert len(dataset["train"]) == 2 and len(dataset["test"]) == 2
+
+
 class TestTrainConfigOverlay:
     """`--config` precedence: CLI flag > config file > built-in default."""
 
