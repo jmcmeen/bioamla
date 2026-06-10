@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from bioamla.audio import AudioData
-from bioamla.exceptions import NotFoundError
+from bioamla.exceptions import InvalidInputError, NotFoundError
 from bioamla.viz import (
     batch_generate_spectrograms,
     compute_mel_spectrogram,
@@ -53,7 +53,7 @@ class TestGenerateSpectrogram:
             generate_spectrogram(str(tmp_path / "missing.wav"), str(tmp_path / "out.png"))
 
     def test_invalid_type_raises(self, test_audio_path: str, tmp_path) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidInputError):
             generate_spectrogram(test_audio_path, str(tmp_path / "out.png"), viz_type="nope")
 
     def test_generate_writes_png(self, test_audio_path: str, tmp_path) -> None:

@@ -72,12 +72,12 @@ class BatchConfig:
             return
 
         if self.input_dir is None and self.input_file is None:
-            raise ValueError(
+            raise InvalidInputError(
                 "Either input_dir or input_file must be specified. "
                 "For testing or advanced usage, set _skip_validation=True to bypass this check."
             )
         if self.input_dir is not None and self.input_file is not None:
-            raise ValueError(
+            raise InvalidInputError(
                 "input_dir and input_file are mutually exclusive. "
                 "For testing or advanced usage, set _skip_validation=True to bypass this check."
             )

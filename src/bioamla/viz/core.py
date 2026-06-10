@@ -29,7 +29,7 @@ from typing import Literal
 import librosa
 import numpy as np
 
-from bioamla.exceptions import AudioLoadError, NotFoundError, ProcessingError
+from bioamla.exceptions import AudioLoadError, InvalidInputError, NotFoundError, ProcessingError
 from bioamla.viz._backend import Backend, mel_power, select_backend, stft_magnitude
 
 VisualizationType = Literal["stft", "mel", "mfcc", "waveform"]
@@ -133,11 +133,13 @@ def generate_spectrogram(
 
     valid_types = ("stft", "mel", "mfcc", "waveform")
     if viz_type not in valid_types:
-        raise ValueError(f"Invalid visualization type: {viz_type}. Must be one of {valid_types}")
+        raise InvalidInputError(
+            f"Invalid visualization type: {viz_type}. Must be one of {valid_types}"
+        )
 
     valid_windows = ("hann", "hamming", "blackman", "bartlett", "rectangular", "kaiser")
     if window not in valid_windows:
-        raise ValueError(f"Invalid window type: {window}. Must be one of {valid_windows}")
+        raise InvalidInputError(f"Invalid window type: {window}. Must be one of {valid_windows}")
 
     resolved_backend = select_backend(backend)
 

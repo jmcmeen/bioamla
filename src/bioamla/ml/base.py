@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 
+from bioamla.exceptions import InvalidInputError, ModelError
+
 if TYPE_CHECKING:
     import torch
     from torch.utils.data import DataLoader
@@ -311,13 +313,13 @@ class BaseAudioModel(ABC):
         elif format == "onnx":
             return self._save_onnx(str(path))
         else:
-            raise ValueError(f"Unsupported format: {format}")
+            raise InvalidInputError(f"Unsupported format: {format}")
 
     def _save_pytorch(self, path: str) -> str:
         """Save model in PyTorch format."""
         torch = _require_torch()
         if self.model is None:
-            raise RuntimeError("No model loaded")
+            raise ModelError("No model loaded")
 
         state = {
             "model_state_dict": self.model.state_dict(),
@@ -337,7 +339,7 @@ class BaseAudioModel(ABC):
         """Save model in ONNX format."""
         torch = _require_torch()
         if self.model is None:
-            raise RuntimeError("No model loaded")
+            raise ModelError("No model loaded")
 
         # Create dummy input for tracing
         dummy_input = self._get_dummy_input()
@@ -531,7 +533,7 @@ def register_model(name: str):
 def get_model_class(name: str) -> type:
     """Get a registered model class by name."""
     if name not in _MODEL_REGISTRY:
-        raise ValueError(f"Unknown model: {name}. Available: {list(_MODEL_REGISTRY.keys())}")
+        raise InvalidInputError(f"Unknown model: {name}. Available: {list(_MODEL_REGISTRY.keys())}")
     return _MODEL_REGISTRY[name]
 
 

@@ -38,6 +38,7 @@ from bioamla.audio import (
 from bioamla.exceptions import (
     AudioLoadError,
     DependencyError,
+    InvalidInputError,
     NotFoundError,
     ProcessingError,
 )
@@ -269,7 +270,7 @@ class TestPlayback:
 
     def test_play_without_load_raises(self) -> None:
         player = AudioPlayer()
-        with pytest.raises((RuntimeError, DependencyError)):
+        with pytest.raises((InvalidInputError, DependencyError)):
             player.play()
 
 

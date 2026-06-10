@@ -241,7 +241,7 @@ def train_ast(
     metric_for_best_model: str = "accuracy",
     logging_strategy: str = "steps",
     logging_steps: int = 100,
-    report_to: str | list[str] = "tensorboard",
+    report_to: str | list[str] = "none",
     fp16: bool = False,
     bf16: bool = False,
     gradient_accumulation_steps: int = 1,

@@ -19,6 +19,8 @@ from typing import Any
 
 import numpy as np
 
+from bioamla.exceptions import InvalidInputError
+
 logger = logging.getLogger(__name__)
 
 
@@ -147,7 +149,7 @@ class AudioPlayer:
                     audio = audio.T
                 self._audio = audio.astype(np.float32)
             else:
-                raise ValueError(f"Unexpected audio shape: {audio.shape}")
+                raise InvalidInputError(f"Unexpected audio shape: {audio.shape}")
 
             self._sample_rate = sample_rate
             self._position = 0
@@ -184,7 +186,7 @@ class AudioPlayer:
             RuntimeError: If no audio has been loaded.
         """
         if self._audio is None:
-            raise RuntimeError("No audio loaded. Call load() first.")
+            raise InvalidInputError("No audio loaded. Call load() first.")
 
         sd = _import_sounddevice()
 
@@ -382,7 +384,7 @@ def play_audio(
         _global_player.load_file(audio_or_filepath)
     else:
         if sample_rate is None:
-            raise ValueError("sample_rate is required when playing numpy array")
+            raise InvalidInputError("sample_rate is required when playing numpy array")
         _global_player.load(audio_or_filepath, sample_rate)
 
     _global_player.play(loop=loop)
