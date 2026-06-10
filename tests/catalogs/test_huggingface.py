@@ -148,3 +148,44 @@ class TestPullDataset:
         monkeypatch.setattr(hfds, "load_dataset", lambda *a, **k: ds)
         with pytest.raises(InvalidInputError):
             hf.pull_dataset("user/ds", str(tmp_path / "out"), split="train")
+
+
+class _FakeRepo:
+    def __init__(self, repo_id, repo_type, size):
+        self.repo_id = repo_id
+        self.repo_type = repo_type
+        self.size_on_disk = size
+        self.revisions = []
+
+
+class _FakeCache:
+    def __init__(self, repos):
+        self.repos = repos
+
+
+class TestCache:
+    def _patch(self, monkeypatch):
+        import huggingface_hub
+
+        repos = [
+            _FakeRepo("user/model-a", "model", 100),
+            _FakeRepo("user/ds-a", "dataset", 200),
+            _FakeRepo("user/ds-b", "dataset", 50),
+        ]
+        monkeypatch.setattr(huggingface_hub, "scan_cache_dir", lambda: _FakeCache(repos))
+
+    def test_scan_filters_by_type(self, monkeypatch) -> None:
+        self._patch(monkeypatch)
+        assert {r.repo_id for r in hf.scan_cache(models=False, datasets=True)} == {
+            "user/ds-a",
+            "user/ds-b",
+        }
+        assert {r.repo_id for r in hf.scan_cache(models=True, datasets=False)} == {"user/model-a"}
+
+    def test_purge_counts_and_frees(self, monkeypatch) -> None:
+        self._patch(monkeypatch)
+        # Fake repos have no on-disk paths, so rmtree(ignore_errors) is a safe no-op.
+        result = hf.purge_cache(models=False, datasets=True)
+        assert result.deleted == 2
+        assert result.freed_bytes == 250
+        assert result.failures == []

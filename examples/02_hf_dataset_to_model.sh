@@ -16,6 +16,19 @@ mkdir -p "$OUT"
 DATASET="ashraq/esc50"   # 50-class environmental sound dataset
 HF_USER="your-username"   # <-- set me (only needed for the optional push)
 
+# =====================================================================
+# Option A — GRAB AND GO: train straight off the Hub id, no local steps.
+# `models ast train` loads the dataset directly and does its own train/test
+# split. Best when the dataset on the Hub is already clean and labeled.
+# =====================================================================
+bioamla models ast train --train-dataset "$DATASET" --training-dir "$OUT/train_gng" \
+  --num-train-epochs 15 --per-device-train-batch-size 16 --fp16 --report-to none
+
+# =====================================================================
+# Option B — GRAB, EDIT, GO: materialize locally to inspect / partition /
+# augment before training. Best when you want to curate the data first.
+# =====================================================================
+
 # 1. Pull the dataset and materialize it as label subdirs + metadata.csv
 #    (auto-detects the audio + label columns; resamples to 16 kHz for AST).
 bioamla catalogs hf pull-dataset "$DATASET" "$OUT/data" --split train
@@ -44,5 +57,10 @@ bioamla models ast train --train-dataset "$OUT/data" --training-dir "$OUT/train"
 
 # 5. (Optional) publish the fine-tuned model.
 # bioamla catalogs hf push-model "$OUT/train/best_model" "$HF_USER/esc50-ast"
+
+# 6. The Hub dataset is cached in HF format for fast repeat grabs. Inspect it,
+#    and reclaim the space when you're done (drop --datasets to also clear models).
+bioamla catalogs hf cache --datasets                  # list what's cached
+# bioamla catalogs hf cache --datasets --purge -y     # free the dataset cache
 
 echo "Done. Best model at $OUT/train/best_model"

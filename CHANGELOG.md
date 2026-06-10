@@ -12,6 +12,7 @@ A ground-up rebuild. `bioamla` is now a flat, **domain-oriented** library with a
 designed to be a stable core that other applications can build on.
 
 ### Added
+
 - **Domain packages**: `audio`, `viz`, `indices`, `detect`, `cluster`, `catalogs`,
   `datasets`, `ml`, `system`, plus a shared `batch` engine — each importable directly
   (`from bioamla.indices import compute_all_indices`).
@@ -33,7 +34,13 @@ designed to be a stable core that other applications can build on.
   randomized pre-training augmentation layer.
 - **`ml.train_ast`** — AST fine-tuning is now a parameter-driven library function returning a
   `TrainResult`; the `models ast train` command is a thin wrapper that also accepts a
-  `--config <file.toml>` (explicit flags override the file, which overrides defaults).
+  `--config <file.toml>` (explicit flags override the file, which overrides defaults). It trains
+  off a Hub dataset id directly (grab-and-go), a local metadata CSV, or a dataset directory —
+  and a directory carrying a `metadata.csv` (from `partition`/`pull-dataset`) is loaded via that
+  CSV so a fixed `split` column and the `train/val/test/<label>/` layout are honored.
+- **`catalogs hf cache`** + `catalogs.huggingface.scan_cache` / `purge_cache` — inspect and purge
+  the local HuggingFace cache that repeat pulls/loads populate (replaces `config purge`, keeping
+  HF concerns in the `hf` group).
 - **`models ast annotate`** + `datasets.predictions_to_annotations` — turn segmented inference
   output into an editable annotation file to seed manual review (the predict → review → dataset loop).
 - `cluster cluster` now exposes **HDBSCAN** (the default) and `--min-cluster-size`, matching the
@@ -45,6 +52,7 @@ designed to be a stable core that other applications can build on.
   publish, and docs deployment.
 
 ### Changed
+
 - Replaced the layered architecture (`core/` → `services/` → `models/`/`repository/`) with
   domain packages; removed the `ServiceResult` wrapper and the repository dependency-injection
   layer in favor of plain returns + exceptions and direct `pathlib` I/O.
@@ -53,6 +61,7 @@ designed to be a stable core that other applications can build on.
 - CLI startup is lazy — `import bioamla` no longer eagerly imports heavy domains.
 
 ### Removed
+
 - **TensorFlow** and the BirdNET / custom-CNN / bioacoustics-model-zoo stack (`tensorflow`,
   `tf-keras`, `ai-edge-litert`, `onnx`, `timm`, `bioacoustics-model-zoo`). ML inference is
   AST-only for now.
@@ -61,7 +70,11 @@ designed to be a stable core that other applications can build on.
   `experimental/dev-archive` branch.
 
 ### Fixed
+
 - Infinite recursion in `get_audio_info`.
+- Batch parallel mode (`max_workers > 1`) now uses a thread pool, so closure-based
+  per-item functions work in parallel and the `fork()`-in-multithreaded-process
+  DeprecationWarning is gone.
 - Several batch-CLI paths that previously raised `AttributeError`
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.

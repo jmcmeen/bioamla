@@ -12,6 +12,7 @@ training) a GPU.
 | [`02_hf_dataset_to_model.sh`](02_hf_dataset_to_model.sh) | pull a Hub dataset (`ashraq/esc50`) → partition → train (config-driven) | network, GPU |
 | [`03_soundscape_analysis.sh`](03_soundscape_analysis.sh) | segment → acoustic indices → event detection → AST predict → annotations | a trained/published model |
 | [`04_embedding_clustering.sh`](04_embedding_clustering.sh) | embed → dimensionality reduction → cluster → novelty | a model |
+| [`05_grab_and_go.sh`](05_grab_and_go.sh) | train AST straight off a Hub dataset id (no local steps) | network, GPU |
 
 ## Conventions
 

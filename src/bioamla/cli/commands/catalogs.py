@@ -392,6 +392,65 @@ def hf_pull_dataset(
         click.echo(f"Metadata: {result.metadata_file}")
 
 
+def _format_size(size_bytes: float) -> str:
+    """Format bytes into a human-readable size."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} PB"
+
+
+@catalogs_hf.command("cache")
+@click.option("--models", is_flag=True, help="Target cached models")
+@click.option("--datasets", is_flag=True, help="Target cached datasets")
+@click.option("--all", "target_all", is_flag=True, help="Target both models and datasets")
+@click.option("--purge", "do_purge", is_flag=True, help="Delete the matched cache (default: list)")
+@click.option("--yes", "-y", is_flag=True, help="Skip the confirmation prompt when purging")
+def hf_cache(models: bool, datasets: bool, target_all: bool, do_purge: bool, yes: bool) -> None:
+    """Inspect or purge the local HuggingFace cache (datasets/models).
+
+    Datasets and models pulled/loaded from the Hub are cached so repeat grabs are
+    fast. Lists the cache by default; pass --purge to reclaim the space.
+
+    Examples:
+        bioamla catalogs hf cache                       # list everything cached
+        bioamla catalogs hf cache --datasets --purge -y # free dataset cache
+    """
+    from bioamla.catalogs import huggingface as hf
+
+    # Default to both types unless one is singled out.
+    if target_all or (not models and not datasets):
+        models = datasets = True
+
+    try:
+        repos = hf.scan_cache(models=models, datasets=datasets)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not repos:
+        click.echo("No cached data found.")
+        return
+
+    total = sum(r.size_bytes for r in repos)
+    for r in repos:
+        click.echo(f"  {r.repo_type:>7}: {r.repo_id} ({_format_size(r.size_bytes)})")
+    click.echo(f"Total: {_format_size(total)} across {len(repos)} repo(s)")
+
+    if not do_purge:
+        click.echo("(run with --purge to delete)")
+        return
+
+    if not yes and not click.confirm("Delete this cached data?"):
+        click.echo("Aborted.")
+        return
+
+    result = hf.purge_cache(models=models, datasets=datasets)
+    click.echo(f"Purged {result.deleted} repo(s), freed {_format_size(result.freed_bytes)}.")
+    for failure in result.failures:
+        click.echo(f"  warning: {failure}", err=True)
+
+
 # =============================================================================
 # Xeno-canto subgroup
 # =============================================================================

@@ -12,7 +12,7 @@ embedding clustering, species catalogs, datasets, and AST-based ML inference.
 import directly:
 
 | Import | What it does |
-|--------|--------------|
+| --- | --- |
 | `bioamla.audio` | audio I/O, analysis, signal processing (filter/denoise/normalize/resample/segment), playback |
 | `bioamla.viz` | spectrograms, mel/MFCC, waveform plots |
 | `bioamla.indices` | acoustic indices — ACI, ADI, AEI, BIO, NDSI, spectral/temporal entropy |
@@ -119,9 +119,11 @@ bioamla batch audio convert --input-dir ./wavs --output-dir ./flac --format flac
 # Catalogs, models, datasets, config:
 bioamla catalogs xc search --species "Hyla cinerea"
 bioamla catalogs hf pull-dataset ashraq/esc50 ./esc50      # Hub dataset -> labeled-folder layout
+bioamla catalogs hf cache --datasets                       # inspect/purge the HF cache (--purge)
 bioamla models ast predict frog.wav --model-path bioamla/scp-frogs
 bioamla models ast annotate soundscape.wav -o preds.csv    # predictions -> editable annotations
-bioamla models ast train --train-dataset ./esc50 --config train.toml   # fine-tune AST (flags or config)
+bioamla models ast train --train-dataset ashraq/esc50      # grab-and-go: train off a Hub id directly
+bioamla models ast train --train-dataset ./esc50 --config train.toml   # or from local data + a config
 bioamla config deps                                                    # check system deps
 ```
 

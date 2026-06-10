@@ -23,6 +23,7 @@ Example:
 
 from bioamla.catalogs import ebird, huggingface, inat, macaulay, species, xeno_canto
 from bioamla.catalogs._models import (
+    CachedRepo,
     EBirdChecklist,
     EBirdHotspot,
     EBirdObservation,
@@ -35,6 +36,7 @@ from bioamla.catalogs._models import (
     ObservationInfo,
     ProjectStats,
     PullResult,
+    PurgeResult,
     PushResult,
     RegionResult,
     SearchMatch,
@@ -85,6 +87,8 @@ __all__ = [
     # HuggingFace
     "PushResult",
     "PullResult",
+    "CachedRepo",
+    "PurgeResult",
     # Exceptions
     "CatalogError",
     "SpeciesError",

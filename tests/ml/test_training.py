@@ -61,9 +61,8 @@ class TestLoadPartitionedDirectory:
         import numpy as np
         import soundfile as sf
 
-        from datasets import DatasetDict
-
         from bioamla.ml.training import _load_train_dataset
+        from datasets import DatasetDict
 
         # Mirror `dataset partition --mode subdirs`: data/<split>/<label>/*.wav + metadata.csv.
         root = tmp_path / "data"

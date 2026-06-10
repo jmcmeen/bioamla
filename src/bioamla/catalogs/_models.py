@@ -521,3 +521,21 @@ class PullResult(ToDictMixin):
     labels: list[str]
     splits: dict[str, int]
     metadata_file: str | None
+
+
+@dataclass
+class CachedRepo(ToDictMixin):
+    """A repo present in the local HuggingFace cache."""
+
+    repo_id: str
+    repo_type: str  # "model" or "dataset"
+    size_bytes: int
+
+
+@dataclass
+class PurgeResult(ToDictMixin):
+    """Outcome of purging cached HuggingFace repos."""
+
+    deleted: int
+    freed_bytes: int
+    failures: list[str] = field(default_factory=list)

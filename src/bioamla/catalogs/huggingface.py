@@ -1,8 +1,9 @@
-"""HuggingFace Hub model and dataset publishing + dataset pulling.
+"""HuggingFace Hub model and dataset publishing, dataset pulling, and cache mgmt.
 
-Push local model/dataset folders to the HuggingFace Hub, and pull a Hub audio
+Push local model/dataset folders to the HuggingFace Hub, pull a Hub audio
 dataset down into the local labeled-folder + ``metadata.csv`` layout the rest of
-the pipeline (partition/stats/``ast train``) consumes. ``huggingface_hub`` and
+the pipeline (partition/stats/``ast train``) consumes, and inspect/purge the
+local HF cache that repeat pulls/loads populate. ``huggingface_hub`` and
 ``datasets`` are base dependencies, imported lazily so importing this module
 stays light.
 
@@ -14,7 +15,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from bioamla.catalogs._models import PullResult, PushResult
+from bioamla.catalogs._models import CachedRepo, PullResult, PurgeResult, PushResult
 from bioamla.exceptions import CatalogError, InvalidInputError
 
 logger = logging.getLogger(__name__)
@@ -319,3 +320,66 @@ def pull_dataset(
         splits=split_counts,
         metadata_file=metadata_file,
     )
+
+
+def scan_cache(*, models: bool = True, datasets: bool = True) -> list[CachedRepo]:
+    """List repos in the local HuggingFace cache, optionally filtered by type.
+
+    Datasets/models pulled or loaded from the Hub are cached in HF's own format
+    so repeat grabs are fast; this reports what's taking up space.
+
+    Args:
+        models: Include cached models.
+        datasets: Include cached datasets.
+
+    Returns:
+        Matching :class:`~bioamla.catalogs._models.CachedRepo` entries.
+    """
+    from huggingface_hub import scan_cache_dir
+
+    repos: list[CachedRepo] = []
+    for repo in scan_cache_dir().repos:
+        if (repo.repo_type == "model" and models) or (repo.repo_type == "dataset" and datasets):
+            repos.append(CachedRepo(repo.repo_id, repo.repo_type, repo.size_on_disk))
+    return repos
+
+
+def purge_cache(*, models: bool = True, datasets: bool = True) -> PurgeResult:
+    """Delete repos from the local HuggingFace cache.
+
+    Per-repo deletion failures are collected into ``PurgeResult.failures`` rather
+    than aborting the whole purge.
+
+    Args:
+        models: Purge cached models.
+        datasets: Purge cached datasets.
+
+    Returns:
+        A :class:`~bioamla.catalogs._models.PurgeResult` with the count deleted,
+        bytes freed, and any per-repo failures.
+    """
+    import shutil
+
+    from huggingface_hub import constants, scan_cache_dir
+
+    cache_path = Path(constants.HF_HUB_CACHE)
+    deleted = 0
+    freed = 0
+    failures: list[str] = []
+
+    for repo in scan_cache_dir().repos:
+        keep = (repo.repo_type == "model" and models) or (repo.repo_type == "dataset" and datasets)
+        if not keep:
+            continue
+        try:
+            for revision in repo.revisions:
+                shutil.rmtree(revision.snapshot_path, ignore_errors=True)
+            repo_dir = cache_path / f"{repo.repo_type}s--{repo.repo_id.replace('/', '--')}"
+            if repo_dir.exists():
+                shutil.rmtree(repo_dir, ignore_errors=True)
+            deleted += 1
+            freed += repo.size_on_disk
+        except Exception as e:  # noqa: BLE001 - record per-repo failure, continue purge
+            failures.append(f"{repo.repo_id}: {e}")
+
+    return PurgeResult(deleted=deleted, freed_bytes=freed, failures=failures)
