@@ -145,8 +145,6 @@ End-to-end bioacoustics studies wired from the CLI live in
 [`examples/`](https://github.com/jmcmeen/bioamla/tree/main/examples) — catalog →
 annotate → dataset → train → publish, pulling a Hub dataset to fine-tune,
 soundscape analysis, and embedding clustering. The offline
-[`dev-data/cli_test.sh`](https://github.com/jmcmeen/bioamla/blob/main/dev-data/cli_test.sh)
-smoke-tests the whole CLI surface.
 
 ## Development
 
