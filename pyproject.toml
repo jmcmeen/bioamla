@@ -48,7 +48,7 @@ dependencies = [
   "torch",
   "torchvision",
   "torchaudio",
-  "transformers[torch]",
+  "transformers[torch]>=5.10.2",  # AST checkpoint key-conversion (old MIT ckpt -> new modular AST)
   "datasets[audio]",
   "audiomentations",
   "evaluate",

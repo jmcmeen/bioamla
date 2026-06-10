@@ -505,10 +505,14 @@ def train_ast(
     config.label2id = label2id
     config.id2label = {v: k for k, v in label2id.items()}
 
+    # ``ignore_mismatched_sizes`` lets the classifier head be resized from the base
+    # model's label count to ours (the head is reinitialized; the encoder weights are
+    # loaded via transformers' AST checkpoint key-conversion — needs transformers
+    # >= 5.10.2). No explicit init_weights() call: it's a no-op here and only obscures
+    # that the pretrained encoder is in fact loaded.
     model = ASTForAudioClassification.from_pretrained(
         pretrained_model, config=config, ignore_mismatched_sizes=True
     )
-    model.init_weights()
 
     if finetune_mode == "feature-extraction":
         logger.info("Feature extraction mode: freezing base model, training classifier head only")

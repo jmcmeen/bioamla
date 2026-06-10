@@ -86,6 +86,69 @@ class TestLoadPartitionedDirectory:
         assert len(dataset["train"]) == 2 and len(dataset["test"]) == 2
 
 
+class TestASTCheckpointLoading:
+    """Guard that the pretrained AST encoder actually loads (transformers >= 5.10.2).
+
+    transformers 5.x renamed AST's modules (encoder.layer.N.attention.attention.query
+    -> layers.N.attention.q_proj) and ships a key-conversion for the old Hub
+    checkpoints. If a future bump drops that conversion, fine-tuning would silently
+    train a random encoder — this catches it without downloading the real checkpoint.
+    """
+
+    def test_old_format_checkpoint_loads_clean(self, tmp_path) -> None:
+        torch = pytest.importorskip("torch")
+        pytest.importorskip("transformers")
+        import safetensors.torch as st
+        from transformers import ASTConfig, ASTForAudioClassification
+
+        cfg = ASTConfig(
+            num_hidden_layers=2,
+            hidden_size=32,
+            num_attention_heads=2,
+            intermediate_size=64,
+            num_mel_bins=16,
+            max_length=32,
+            patch_size=16,
+            frequency_stride=16,
+            time_stride=16,
+            num_labels=5,
+        )
+        torch.manual_seed(0)
+        model = ASTForAudioClassification(cfg)
+        new_sd = model.state_dict()
+
+        # Rewrite to the legacy MIT checkpoint key layout.
+        def new_to_old(k: str) -> str:
+            k = k.replace(
+                "audio_spectrogram_transformer.layers.",
+                "audio_spectrogram_transformer.encoder.layer.",
+            )
+            k = k.replace(".attention.q_proj.", ".attention.attention.query.")
+            k = k.replace(".attention.k_proj.", ".attention.attention.key.")
+            k = k.replace(".attention.v_proj.", ".attention.attention.value.")
+            k = k.replace(".attention.o_proj.", ".attention.output.dense.")
+            k = k.replace(".mlp.fc1.", ".intermediate.dense.")
+            k = k.replace(".mlp.fc2.", ".output.dense.")
+            return k
+
+        ckpt = tmp_path / "legacy"
+        ckpt.mkdir()
+        st.save_file(
+            {new_to_old(k): v for k, v in new_sd.items()},
+            str(ckpt / "model.safetensors"),
+            metadata={"format": "pt"},
+        )
+        cfg.save_pretrained(ckpt)
+
+        loaded, info = ASTForAudioClassification.from_pretrained(ckpt, output_loading_info=True)
+        assert len(info["missing_keys"]) == 0
+        assert len(info["unexpected_keys"]) == 0
+        assert torch.allclose(
+            loaded.audio_spectrogram_transformer.layers[0].attention.q_proj.weight,
+            new_sd["audio_spectrogram_transformer.layers.0.attention.q_proj.weight"],
+        )
+
+
 class TestTrainConfigOverlay:
     """`--config` precedence: CLI flag > config file > built-in default."""
 

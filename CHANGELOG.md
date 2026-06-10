@@ -80,6 +80,10 @@ designed to be a stable core that other applications can build on.
   DeprecationWarning is gone.
 - AST training sets `TENSORBOARD_LOGGING_DIR` instead of the deprecated
   `TrainingArguments(logging_dir=...)` kwarg (removed in transformers v5.2).
+- Pinned `transformers>=5.10.2`, which ships the AST checkpoint key-conversion so the
+  pretrained encoder from old Hub checkpoints (e.g. `MIT/ast-finetuned-audioset-...`)
+  actually loads — older versions silently fine-tuned a randomly-initialized encoder.
+  Also dropped a redundant `model.init_weights()` call in training (a verified no-op).
 - Several batch-CLI paths that previously raised `AttributeError`
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
