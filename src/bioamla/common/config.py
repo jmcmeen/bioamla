@@ -84,6 +84,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "batch_size": 16,
         "eval_strategy": "epoch",
         "save_strategy": "epoch",
+        "report_to": "tensorboard",  # "tensorboard", "mlflow", "none", or comma-separated
         "scheduler": {
             "warmup_ratio": 0.1,
             "weight_decay": 0.01,

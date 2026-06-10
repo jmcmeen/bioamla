@@ -241,7 +241,7 @@ def train_ast(
     metric_for_best_model: str = "accuracy",
     logging_strategy: str = "steps",
     logging_steps: int = 100,
-    report_to: str | list[str] = "none",
+    report_to: str | list[str] = "tensorboard",
     fp16: bool = False,
     bf16: bool = False,
     gradient_accumulation_steps: int = 1,
@@ -280,6 +280,8 @@ def train_ast(
     Raises:
         TrainingError: On an unusable dataset/params or an empty training set.
     """
+    import os
+
     import evaluate
     import numpy as np
     import torch
@@ -298,8 +300,12 @@ def train_ast(
         _validate_augmentation(augmentation)
 
     output_dir = training_dir + "/runs"
-    logging_dir = training_dir + "/logs"
     best_model_path = training_dir + "/best_model"
+
+    # TensorBoard log location. transformers deprecated the ``logging_dir``
+    # TrainingArguments kwarg (removed in v5.2) in favor of this env var, which
+    # its TensorBoardCallback reads at init — set it instead of passing the kwarg.
+    os.environ["TENSORBOARD_LOGGING_DIR"] = training_dir + "/logs"
 
     if mlflow_tracking_uri or mlflow_experiment_name:
         try:
@@ -519,7 +525,6 @@ def train_ast(
 
     training_args = TrainingArguments(
         output_dir=output_dir,
-        logging_dir=logging_dir,
         report_to=report_to,
         learning_rate=learning_rate,
         push_to_hub=push_to_hub,

@@ -28,6 +28,7 @@ _TRAIN_CONFIG_MAP = {
     "eval_steps": ("training", "eval_steps"),
     "save_steps": ("training", "save_steps"),
     "logging_steps": ("training", "logging_steps"),
+    "report_to": ("training", "report_to"),
 }
 
 
@@ -179,9 +180,9 @@ def ast_annotate(
 @click.option("--category-label-column", default="category", help="Column name for category labels")
 @click.option(
     "--report-to",
-    default="none",
-    help="Where to report metrics: none (default), tensorboard, mlflow, ... "
-    "(comma-separated). tensorboard/mlflow must be installed.",
+    default="tensorboard",
+    help="Where to report metrics: tensorboard (default, bundled), mlflow, none, ... "
+    "(comma-separated).",
 )
 @click.option("--learning-rate", default=5.0e-5, type=float, help="Learning rate for training")
 @click.option(
@@ -351,6 +352,7 @@ def ast_train(
                 "eval_steps": eval_steps,
                 "save_steps": save_steps,
                 "logging_steps": logging_steps,
+                "report_to": report_to,
             },
         )
     except BioamlaError as e:
@@ -364,6 +366,7 @@ def ast_train(
     eval_steps = overrides["eval_steps"]
     save_steps = overrides["save_steps"]
     logging_steps = overrides["logging_steps"]
+    report_to = overrides["report_to"]
 
     # Map augmentation flags onto the shared AugmentationConfig (None disables it).
     # Per-transform probabilities default to 0.5 (audiomentations' default); the
