@@ -86,6 +86,15 @@ class TestAudioClusterer:
         assert len(labels) == 60
         assert clusterer.n_clusters_ == 2
 
+    def test_hdbscan_clustering(self, blob_embeddings: np.ndarray) -> None:
+        pytest.importorskip("hdbscan")
+        config = ClusteringConfig(method="hdbscan", min_cluster_size=5)
+        clusterer = AudioClusterer(config=config)
+        labels = clusterer.fit_predict(blob_embeddings)
+        assert len(labels) == 60
+        # Two well-separated blobs -> two clusters discovered without a preset count.
+        assert clusterer.n_clusters_ == 2
+
     def test_unknown_method_raises(self, blob_embeddings: np.ndarray) -> None:
         clusterer = AudioClusterer(method="bogus")
         with pytest.raises(InvalidInputError, match="Unknown clustering method"):

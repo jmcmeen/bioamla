@@ -57,9 +57,9 @@ def cluster_reduce(
 @click.option(
     "--method",
     "-m",
-    type=click.Choice(["kmeans", "dbscan", "agglomerative"]),
-    default="kmeans",
-    help="Clustering method",
+    type=click.Choice(["hdbscan", "kmeans", "dbscan", "agglomerative"]),
+    default="hdbscan",
+    help="Clustering method (hdbscan finds clusters without a preset count)",
 )
 @click.option(
     "--n-clusters",
@@ -68,6 +68,7 @@ def cluster_reduce(
     default=10,
     help="Number of clusters (for k-means/agglomerative)",
 )
+@click.option("--min-cluster-size", type=int, default=5, help="Minimum cluster size (HDBSCAN)")
 @click.option("--eps", type=float, default=0.5, help="DBSCAN epsilon")
 @click.option("--min-samples", type=int, default=5, help="Minimum samples per cluster")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress output")
@@ -76,6 +77,7 @@ def cluster_cluster(
     output: str,
     method: str,
     n_clusters: int,
+    min_cluster_size: int,
     eps: float,
     min_samples: int,
     quiet: bool,
@@ -94,6 +96,7 @@ def cluster_cluster(
         config = ClusteringConfig(
             method=method,
             n_clusters=n_clusters,
+            min_cluster_size=min_cluster_size,
             min_samples=min_samples,
             eps=eps,
         )
