@@ -41,6 +41,9 @@ designed to be a stable core that other applications can build on.
 - **`catalogs hf cache`** + `catalogs.huggingface.scan_cache` / `purge_cache` — inspect and purge
   the local HuggingFace cache that repeat pulls/loads populate (replaces `config purge`, keeping
   HF concerns in the `hf` group).
+- **Experiment tracking**: `tensorboard` is bundled and is the default `--report-to` for
+  `models ast train`; `mlflow` is also available, and `--report-to`/`[training].report_to`
+  accept `none`, `tensorboard`, `mlflow`, or a comma-separated combination.
 - **`models ast annotate`** + `datasets.predictions_to_annotations` — turn segmented inference
   output into an editable annotation file to seed manual review (the predict → review → dataset loop).
 - `cluster cluster` now exposes **HDBSCAN** (the default) and `--min-cluster-size`, matching the
@@ -75,6 +78,8 @@ designed to be a stable core that other applications can build on.
 - Batch parallel mode (`max_workers > 1`) now uses a thread pool, so closure-based
   per-item functions work in parallel and the `fork()`-in-multithreaded-process
   DeprecationWarning is gone.
+- AST training sets `TENSORBOARD_LOGGING_DIR` instead of the deprecated
+  `TrainingArguments(logging_dir=...)` kwarg (removed in transformers v5.2).
 - Several batch-CLI paths that previously raised `AttributeError`
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.

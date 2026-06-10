@@ -129,12 +129,14 @@ class TestTrainConfigOverlay:
             "num_train_epochs": 1,
             "per_device_train_batch_size": 8,
             "eval_steps": 1,
+            "report_to": "tensorboard",
         }
         out = _apply_train_config(self._ctx(set()), cfg, dict(values))
         assert out["base_model"] == "cfg/model"
         assert out["learning_rate"] == 1e-4
         assert out["num_train_epochs"] == 20  # epochs -> num_train_epochs
         assert out["per_device_train_batch_size"] == 32  # batch_size -> ...
+        assert out["report_to"] == "mlflow"  # config overrides the tensorboard default
         # Not present in config -> keeps the flag/default value.
         assert out["eval_steps"] == 1
 
