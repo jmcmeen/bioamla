@@ -13,7 +13,7 @@ set -euo pipefail
 OUT=./out/02_hf_dataset_to_model
 mkdir -p "$OUT"
 
-DATASET="ashraq/esc-50"   # 50-class environmental sound dataset
+DATASET="ashraq/esc50"   # 50-class environmental sound dataset
 HF_USER="your-username"   # <-- set me (only needed for the optional push)
 
 # 1. Pull the dataset and materialize it as label subdirs + metadata.csv
