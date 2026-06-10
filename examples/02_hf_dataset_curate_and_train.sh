@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 #
-# Workflow 2: HuggingFace dataset → train (config-driven)
-# -------------------------------------------------------
-# The fastest path to a model: pull an existing labeled audio dataset from the
-# Hub, materialize it into bioamla's labeled-folder layout, and fine-tune AST
-# using a TOML config file (so the run is reproducible and easy to tweak).
+# Workflow 2: HuggingFace dataset → curate → train (grab, edit, go)
+# -----------------------------------------------------------------
+# Pull a labeled audio dataset from the Hub, materialize it into bioamla's
+# labeled-folder layout so you can inspect / partition / augment it, then
+# fine-tune AST using a TOML config (reproducible and easy to tweak).
+#
+# For the no-curation path (train straight off a Hub id), see 05_grab_and_go.sh.
 #
 # Needs: network (dataset + base-model download) and a GPU for training.
 
@@ -15,19 +17,6 @@ mkdir -p "$OUT"
 
 DATASET="ashraq/esc50"   # 50-class environmental sound dataset
 HF_USER="your-username"   # <-- set me (only needed for the optional push)
-
-# =====================================================================
-# Option A — GRAB AND GO: train straight off the Hub id, no local steps.
-# `models ast train` loads the dataset directly and does its own train/test
-# split. Best when the dataset on the Hub is already clean and labeled.
-# =====================================================================
-bioamla models ast train --train-dataset "$DATASET" --training-dir "$OUT/train_gng" \
-  --num-train-epochs 15 --per-device-train-batch-size 16 --fp16 --report-to none
-
-# =====================================================================
-# Option B — GRAB, EDIT, GO: materialize locally to inspect / partition /
-# augment before training. Best when you want to curate the data first.
-# =====================================================================
 
 # 1. Pull the dataset and materialize it as label subdirs + metadata.csv
 #    (auto-detects the audio + label columns; resamples to 16 kHz for AST).

@@ -16,9 +16,10 @@ mkdir -p "$OUT"
 
 DATASET="ashraq/esc50"   # any labeled HF audio dataset (audio + label columns)
 
-# Train directly off the Hub id.
+# Train directly off the Hub id. Metrics go to TensorBoard by default
+# (under $OUT/train/logs); add --report-to mlflow or none to change that.
 bioamla models ast train --train-dataset "$DATASET" --training-dir "$OUT/train" \
-  --num-train-epochs 10 --per-device-train-batch-size 16 --fp16 --report-to none
+  --num-train-epochs 10 --per-device-train-batch-size 16 --fp16
 
 # The dataset is cached in HF format for fast repeat runs; reclaim it when done.
 bioamla catalogs hf cache --datasets                  # list cached datasets
