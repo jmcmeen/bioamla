@@ -24,6 +24,23 @@ designed to be a stable core that other applications can build on.
   `import bioamla` and `bioamla --help` remain fast.
 - Batch CLI supports both directory mode and **CSV-metadata mode** (a `file_name` column;
   results merged back into the CSV, paths resolved relative to the CSV).
+- **HuggingFace dataset pull** — `catalogs.huggingface.pull_dataset` /
+  `bioamla catalogs hf pull-dataset` fetch a Hub audio dataset (e.g. `ashraq/esc50`) and
+  materialize it into the labeled-folder + `metadata.csv` layout that `dataset` / `models ast
+  train` consume directly.
+- **Audio editing transforms** in `bioamla.audio` (and `bioamla audio` CLI): `pitch_shift`,
+  `time_stretch`, `add_noise`, `apply_gain` — deterministic single-file ops, distinct from the
+  randomized pre-training augmentation layer.
+- **`ml.train_ast`** — AST fine-tuning is now a parameter-driven library function returning a
+  `TrainResult`; the `models ast train` command is a thin wrapper that also accepts a
+  `--config <file.toml>` (explicit flags override the file, which overrides defaults).
+- **`models ast annotate`** + `datasets.predictions_to_annotations` — turn segmented inference
+  output into an editable annotation file to seed manual review (the predict → review → dataset loop).
+- `cluster cluster` now exposes **HDBSCAN** (the default) and `--min-cluster-size`, matching the
+  core / `batch cluster` capabilities.
+- Example end-to-end workflows under `examples/`, and a full offline+gated `dev-data/cli_test.sh`.
+- Contributor docs: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, and GitHub
+  issue/PR templates.
 - Documentation site (MkDocs + Material + mkdocstrings) and GitHub Actions for CI, PyPI
   publish, and docs deployment.
 

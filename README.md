@@ -19,7 +19,7 @@ import directly:
 | `bioamla.detect` | event detection — energy, RIBBIT, peaks, accelerating-pattern |
 | `bioamla.cluster` | embedding dimensionality reduction, clustering, novelty detection |
 | `bioamla.catalogs` | external catalogs — Xeno-canto, iNaturalist, eBird, Macaulay, HuggingFace |
-| `bioamla.datasets` | dataset merge / augment / licensing, annotation conversion |
+| `bioamla.datasets` | dataset merge / augment / licensing, annotation conversion, labeled-clip extraction |
 | `bioamla.ml` | Audio Spectrogram Transformer (AST) inference, training, embeddings |
 | `bioamla.batch` | generic batch engine (directory + CSV-metadata modes) |
 | `bioamla.system` | configuration, dependency checks, environment info |
@@ -106,16 +106,45 @@ bioamla indices compute recording.wav           # ACI/ADI/AEI/BIO/NDSI + entropy
 bioamla detect energy recording.wav             # energy-based detections
 bioamla audio visualize recording.wav -o spec.png
 
+# Audio editing transforms (deterministic, single-file):
+bioamla audio pitch-shift in.wav out.wav --steps 2
+bioamla audio time-stretch in.wav out.wav --rate 1.2
+bioamla audio add-noise in.wav out.wav --snr-db 15
+
 # Batch — over a directory or a CSV metadata file (with a `file_name` column):
 bioamla batch indices calculate --input-dir ./recordings --output-dir ./out
 bioamla batch indices calculate --input-file meta.csv --output-dir ./out   # merges results into the CSV
 bioamla batch audio convert --input-dir ./wavs --output-dir ./flac --format flac
 
 # Catalogs, models, datasets, config:
-bioamla catalogs xeno-canto search --species "Hyla cinerea"
+bioamla catalogs xc search --species "Hyla cinerea"
+bioamla catalogs hf pull-dataset ashraq/esc50 ./esc50      # Hub dataset -> labeled-folder layout
 bioamla models ast predict frog.wav --model-path bioamla/scp-frogs
+bioamla models ast annotate soundscape.wav -o preds.csv    # predictions -> editable annotations
+bioamla models ast train --train-dataset ./esc50 --config train.toml   # fine-tune AST (flags or config)
 bioamla config deps                                                    # check system deps
 ```
+
+### Two kinds of augmentation
+
+bioamla keeps a deliberate boundary between **audio editing** and the
+**pre-training augmentation layer**:
+
+- **Editing ops** (`bioamla.audio` — `pitch_shift`, `time_stretch`, `add_noise`,
+  `apply_gain`, plus filter/denoise/normalize/resample/trim) are deterministic
+  single-file transforms you apply with explicit parameters.
+- **The augmentation layer** (`bioamla.datasets.create_augmentation_pipeline`) is
+  the randomized, range+probability pipeline used both for synthetic dataset
+  generation (`dataset augment`) and on-the-fly during `models ast train`.
+
+## Example workflows
+
+End-to-end bioacoustics studies wired from the CLI live in
+[`examples/`](https://github.com/jmcmeen/bioamla/tree/main/examples) — catalog →
+annotate → dataset → train → publish, pulling a Hub dataset to fine-tune,
+soundscape analysis, and embedding clustering. The offline
+[`dev-data/cli_test.sh`](https://github.com/jmcmeen/bioamla/blob/main/dev-data/cli_test.sh)
+smoke-tests the whole CLI surface.
 
 ## Development
 
@@ -127,6 +156,15 @@ make check          # lint + format-check + test
 
 `make install` brings in the full runtime stack plus contributor tooling, so the whole test
 suite runs.
+
+## Contributing
+
+Contributions are welcome — see
+[CONTRIBUTING.md](https://github.com/jmcmeen/bioamla/blob/main/CONTRIBUTING.md) for setup and
+conventions, and the
+[Code of Conduct](https://github.com/jmcmeen/bioamla/blob/main/CODE_OF_CONDUCT.md). Security
+issues should be reported privately per our
+[Security Policy](https://github.com/jmcmeen/bioamla/blob/main/SECURITY.md).
 
 ## License
 
