@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from bioamla.exceptions import ConfigError
+from bioamla.exceptions import ConfigError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,7 @@ def load_toml(filepath: str | Path) -> dict[str, Any]:
         Dictionary with configuration values
 
     Raises:
-        FileNotFoundError: If file doesn't exist
+        NotFoundError: If file doesn't exist
         ConfigError: If TOML parsing fails or tomli not installed
     """
     if tomllib is None:
@@ -299,7 +299,7 @@ def load_toml(filepath: str | Path) -> dict[str, Any]:
 
     path = Path(filepath)
     if not path.exists():
-        raise FileNotFoundError(f"Configuration file not found: {filepath}")
+        raise NotFoundError(f"Configuration file not found: {filepath}")
 
     try:
         with open(path, "rb") as f:
