@@ -249,6 +249,9 @@ def train_ast(
 ) -> TrainResult:
     """Fine-tune an AST model on a custom dataset.
 
+    The remaining keyword arguments mirror ``transformers.TrainingArguments``
+    (learning rate, batch size, eval/save strategy, fp16/bf16, etc.).
+
     Args:
         train_dataset: A HuggingFace dataset id (``"bioamla/scp-frogs"`` or
             ``"samuelstevens/BirdSet:HSN"``), a local metadata CSV (with file and
@@ -261,7 +264,6 @@ def train_ast(
         augmentation: On-the-fly training augmentation; ``None`` disables it.
         augment_multiplier: Repeat the training split N times (with augmentation)
             to enlarge it; ``1`` means no duplication.
-        (remaining args mirror ``transformers.TrainingArguments``.)
 
     Returns:
         A :class:`~bioamla.ml.ast_service.TrainResult` with the best-model path,
