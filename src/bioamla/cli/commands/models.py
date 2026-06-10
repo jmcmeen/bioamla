@@ -177,7 +177,12 @@ def ast_annotate(
 @click.option("--split", default="train", help="Dataset split to use (for HuggingFace datasets)")
 @click.option("--category-id-column", default="target", help="Column name for category IDs")
 @click.option("--category-label-column", default="category", help="Column name for category labels")
-@click.option("--report-to", default="tensorboard", help="Where to report metrics")
+@click.option(
+    "--report-to",
+    default="none",
+    help="Where to report metrics: none (default), tensorboard, mlflow, ... "
+    "(comma-separated). tensorboard/mlflow must be installed.",
+)
 @click.option("--learning-rate", default=5.0e-5, type=float, help="Learning rate for training")
 @click.option(
     "--push-to-hub/--no-push-to-hub", default=False, help="Whether to push model to HuggingFace Hub"
