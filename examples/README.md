@@ -7,9 +7,9 @@ templates to adapt, not fixtures. Unlike [`dev-data/cli_test.sh`](../dev-data/cl
 training) a GPU.
 
 | Script | Flow | Needs |
-|---|---|---|
+| --- | --- | --- |
 | [`01_catalog_to_model.sh`](01_catalog_to_model.sh) | catalog download → annotate → dataset → train → publish | `XC_API_KEY`/`EBIRD_API_KEY`, HF login, GPU |
-| [`02_hf_dataset_to_model.sh`](02_hf_dataset_to_model.sh) | pull a Hub dataset (`ashraq/esc-50`) → partition → train (config-driven) | network, GPU |
+| [`02_hf_dataset_to_model.sh`](02_hf_dataset_to_model.sh) | pull a Hub dataset (`ashraq/esc50`) → partition → train (config-driven) | network, GPU |
 | [`03_soundscape_analysis.sh`](03_soundscape_analysis.sh) | segment → acoustic indices → event detection → AST predict → annotations | a trained/published model |
 | [`04_embedding_clustering.sh`](04_embedding_clustering.sh) | embed → dimensionality reduction → cluster → novelty | a model |
 

@@ -12,8 +12,20 @@ description = "Bioacoustics & Machine Learning Applications"
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
-    "Programming Language :: Python :: 3",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Environment :: Console",
 ]
 
 dependencies = [
@@ -65,6 +77,10 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/bioamla"
+Documentation = "https://jmcmeen.github.io/bioamla"
+Source = "https://github.com/jmcmeen/bioamla"
+Changelog = "https://github.com/jmcmeen/bioamla/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/jmcmeen/bioamla/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bioamla"]
