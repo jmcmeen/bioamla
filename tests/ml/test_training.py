@@ -109,6 +109,7 @@ class TestTrainConfigOverlay:
             "learning_rate = 1e-4\n"
             "epochs = 20\n"
             "batch_size = 32\n"
+            'report_to = "mlflow"\n'
         )
         return str(cfg)
 
