@@ -48,6 +48,18 @@ class TestRunBatchParallel:
         assert result.failed == 2
         assert len(result.errors) == 2
 
+    def test_parallel_supports_closures(self):
+        # The domain batch wrappers pass closures as process_fn. Threads run them
+        # in parallel fine; a process pool could not pickle them.
+        offset = 10
+
+        def add_offset(x: int) -> int:
+            return x + offset
+
+        result = run_batch([1, 2, 3], add_offset, max_workers=3)
+        assert result.successful == 3
+        assert sorted(int(v) for v in result.output_files) == [11, 12, 13]
+
 
 class TestDiscoverFiles:
     def test_discovers_audio_files(self, test_audio_dir):

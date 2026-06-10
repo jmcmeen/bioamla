@@ -7,7 +7,7 @@ Module-level batch machinery ported from the old ``BatchServiceBase`` and
 :mod:`pathlib`, and raising on error.
 
 Public surface:
-- :func:`run_batch` — sequential or ProcessPool-parallel item processing.
+- :func:`run_batch` — sequential or thread-parallel item processing.
   Per-item results are collected from ``future.result()`` return values so
   parallel mode does not lose data.
 - :func:`run_csv_batch` — drive a per-row processor over a loaded CSV context
@@ -22,30 +22,15 @@ Public surface:
 
 import csv
 import io
-import multiprocessing
 import sys
 from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, TypeVar
 
 from bioamla.exceptions import InvalidInputError, NotFoundError
-
-
-def _worker_mp_context() -> multiprocessing.context.BaseContext:
-    """Return a non-``fork`` multiprocessing context for the worker pool.
-
-    The default ``fork`` start method warns (and risks deadlocks) when the parent
-    process is multi-threaded — common here because audio/ML backends spin up
-    threads. ``forkserver`` (POSIX) forks workers from a clean single-threaded
-    server, avoiding the warning; ``spawn`` is the portable fallback (Windows).
-    """
-    methods = multiprocessing.get_all_start_methods()
-    start = "forkserver" if "forkserver" in methods else "spawn"
-    return multiprocessing.get_context(start)
-
 
 T = TypeVar("T")
 I = TypeVar("I")  # noqa: E741 - item type
@@ -188,16 +173,18 @@ def run_batch(
     """
     Run ``process_fn`` over ``items`` sequentially or in parallel.
 
-    In parallel mode (``max_workers > 1``) a :class:`ProcessPoolExecutor` is
-    used and per-item return values are collected via ``future.result()`` so no
-    data is lost. Successful return values are appended to
-    ``BatchResult.output_files`` as strings when they are not None.
+    In parallel mode (``max_workers > 1``) a :class:`ThreadPoolExecutor` is used
+    and per-item return values are collected via ``future.result()`` so no data
+    is lost. Successful return values are appended to ``BatchResult.output_files``
+    as strings when they are not None. Threads (not processes) are used so that
+    closure ``process_fn``s work and there is no fork/pickling overhead — the
+    per-item audio/ML work runs in GIL-releasing native code (soundfile, librosa,
+    numpy, torch), so it parallelizes well.
 
     Args:
         items: Items to process.
-        process_fn: Callable applied to each item. Must be picklable for
-            parallel execution.
-        max_workers: Number of worker processes; 1 runs sequentially.
+        process_fn: Callable applied to each item.
+        max_workers: Number of worker threads; 1 runs sequentially.
         continue_on_error: If True, collect errors and keep going; if False,
             re-raise the first exception encountered.
         on_progress: Optional callback ``(completed, total)`` invoked after each
@@ -223,9 +210,7 @@ def run_batch(
     total = len(items)
 
     if max_workers > 1:
-        with ProcessPoolExecutor(
-            max_workers=max_workers, mp_context=_worker_mp_context()
-        ) as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(process_fn, item): item for item in items}
             for future in as_completed(futures):
                 item = futures[future]
@@ -238,8 +223,6 @@ def run_batch(
                 completed += 1
                 if on_progress:
                     on_progress(completed, total)
-        sys.stdout.flush()
-        sys.stderr.flush()
     else:
         for item in items:
             try:
