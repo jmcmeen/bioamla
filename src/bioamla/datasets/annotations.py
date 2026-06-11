@@ -720,11 +720,11 @@ def predictions_to_annotations(
 ) -> list[Annotation]:
     """Convert segment-level model predictions into Annotations for manual review.
 
-    Bridges model inference output — e.g. the DataFrame from
-    ``segmented_wave_file_inference`` (columns ``filepath/start/stop/prediction``)
-    or a batch-predict CSV — into editable :class:`Annotation` objects that a
-    human can correct and then feed to ``dataset extract-clips``. This closes the
-    predict → review → dataset loop.
+    Bridges model inference output — e.g. a segmented-prediction CSV from
+    ``models ast predict --segment-duration`` (columns
+    ``filepath/start/stop/prediction`` or ``.../start_time/end_time/...``) — into
+    editable :class:`Annotation` objects that a human can correct and then feed to
+    ``dataset extract-clips``. This closes the predict → review → dataset loop.
 
     Recognizes both ``start``/``stop`` and ``start_time``/``end_time`` time keys,
     and ``prediction`` or ``label`` for the class. A source filename

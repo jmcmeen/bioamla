@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Workflow 2: HuggingFace dataset → curate → train (grab, edit, go)
+# Workflow 3: HuggingFace dataset → curate → train (grab, edit, go)
 # -----------------------------------------------------------------
 # Pull a labeled audio dataset from the Hub, materialize it into bioamla's
 # labeled-folder layout so you can inspect / partition / augment it, then

@@ -9,10 +9,11 @@ training) a GPU.
 | Script | Flow | Needs |
 | --- | --- | --- |
 | [`01_catalog_to_model.sh`](01_catalog_to_model.sh) | catalog download → annotate → dataset → train → publish | `XC_API_KEY`/`EBIRD_API_KEY`, HF login, GPU |
-| [`02_hf_dataset_curate_and_train.sh`](02_hf_dataset_curate_and_train.sh) | pull a Hub dataset (`ashraq/esc50`) → inspect → partition → train (config-driven) | network, GPU |
-| [`03_soundscape_analysis.sh`](03_soundscape_analysis.sh) | segment → acoustic indices → event detection → AST predict → annotations | a trained/published model |
-| [`04_embedding_clustering.sh`](04_embedding_clustering.sh) | embed → dimensionality reduction → cluster → novelty | a model |
-| [`05_grab_and_go.sh`](05_grab_and_go.sh) | train AST straight off a Hub dataset id (no local steps) | network, GPU |
+| [`02_hf_dataset_train_ast.sh`](02_hf_dataset_train_ast.sh) | grab and go: train AST straight off a Hub dataset id (no local steps) | network, GPU |
+| [`03_hf_dataset_curate_and_train.sh`](03_hf_dataset_curate_and_train.sh) | pull a Hub dataset (`ashraq/esc50`) → materialize → inspect → partition → train (config-driven) | network, GPU |
+| [`04_soundscape_analysis.sh`](04_soundscape_analysis.sh) | acoustic indices → event detection → segment → AST predict → annotations | a trained/published model |
+| [`05_embedding_clustering.sh`](05_embedding_clustering.sh) | embed → dimensionality reduction → cluster → novelty | a model |
+| [`06_inat_clip_inference.sh`](06_inat_clip_inference.sh) | iNaturalist clip download → AST inference with `bioamla/ast-esc50` | network |
 
 ## Conventions
 

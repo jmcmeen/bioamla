@@ -26,9 +26,7 @@ from bioamla.ml.ast import (
     extract_features,
     get_cached_feature_extractor,
     load_pretrained_ast_model,
-    segmented_wave_file_inference,
     wav_ast_inference,
-    wave_file_batch_inference,
 )
 from bioamla.ml.ast_model import ASTModel
 
@@ -55,7 +53,7 @@ from bioamla.ml.base import (
 )
 
 # --- Batch wrappers ----------------------------------------------------------
-from bioamla.ml.batch import batch_embed_files, batch_predict_files
+from bioamla.ml.batch import batch_embed_files, batch_predict_files, batch_predict_segments
 from bioamla.ml.device import (
     DeviceContext,
     get_current_device_index,
@@ -85,8 +83,6 @@ from bioamla.ml.embedding import (
 from bioamla.ml.inference import (
     ASTInference,
     ASTPredictionResult,
-    BatchInferenceConfig,
-    run_batch_inference,
 )
 
 # --- Preprocessing / augmentation --------------------------------------------
@@ -125,8 +121,6 @@ __all__ = [
     "extract_features",
     "get_cached_feature_extractor",
     "load_pretrained_ast_model",
-    "segmented_wave_file_inference",
-    "wave_file_batch_inference",
     "wav_ast_inference",
     # AST service-level
     "predict_file",
@@ -139,8 +133,6 @@ __all__ = [
     # Inference
     "ASTInference",
     "ASTPredictionResult",
-    "BatchInferenceConfig",
-    "run_batch_inference",
     # Embeddings
     "EmbeddingConfig",
     "EmbeddingResult",
@@ -153,6 +145,7 @@ __all__ = [
     "get_ast_model_info",
     # Batch
     "batch_predict_files",
+    "batch_predict_segments",
     "batch_embed_files",
     # Preprocessing / augmentation
     "AugmentationConfig",

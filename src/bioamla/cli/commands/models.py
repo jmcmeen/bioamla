@@ -75,81 +75,82 @@ def ast() -> None:
 @ast.command("predict")
 @click.argument("file", type=click.Path(exists=True))
 @click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for inference")
+@click.option(
+    "--segment-duration",
+    default=0,
+    type=int,
+    help="Split into N-second segments and classify each (0 = classify the whole file)",
+)
+@click.option("--overlap", default=0, type=int, help="Overlap between segments (seconds)")
+@click.option(
+    "--min-confidence", default=0.0, type=float, help="Drop predictions below this confidence"
+)
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Write predictions to this CSV (filepath,start,stop,prediction,confidence). "
+    "Default: print to stdout.",
+)
 @click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
 def ast_predict(
     file: str,
     model_path: str,
-    resample_freq: int,
-) -> None:
-    """Perform AST prediction on a single audio file.
-
-    Example:
-        bioamla models ast predict audio.wav --model-path my_model
-    """
-    from bioamla.ml import predict_file
-
-    try:
-        prediction = predict_file(filepath=file, model_path=model_path, resample_freq=resample_freq)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    click.echo(f"{prediction.predicted_label} ({prediction.confidence:.4f})")
-
-
-@ast.command("annotate")
-@click.argument("file", type=click.Path(exists=True))
-@click.option("--output", "-o", required=True, help="Output annotation file")
-@click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for inference")
-@click.option("--segment-duration", default=3, type=int, help="Segment duration (seconds)")
-@click.option("--overlap", default=0, type=int, help="Overlap between segments (seconds)")
-@click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
-@click.option(
-    "--format",
-    "fmt",
-    type=click.Choice(["csv", "raven", "bioamla"]),
-    default="csv",
-    help="Annotation output format",
-)
-@click.option("--exclude", multiple=True, help="Predicted label(s) to drop (repeatable)")
-@click.option(
-    "--min-confidence", default=0.0, type=float, help="Drop predictions below this confidence"
-)
-def ast_annotate(
-    file: str,
-    output: str,
-    model_path: str,
     segment_duration: int,
     overlap: int,
-    resample_freq: int,
-    fmt: str,
-    exclude: tuple[str, ...],
     min_confidence: float,
+    output: str | None,
+    resample_freq: int,
 ) -> None:
-    """Run segmented AST inference and write an editable annotation file.
+    """Run AST prediction on a single audio file — whole file or in segments.
 
-    Seeds the manual annotation/review step: each segment's prediction becomes an
-    annotation you can correct, then feed to ``bioamla dataset extract-clips``.
+    With ``--segment-duration`` the file is split into fixed-length (optionally
+    overlapping) segments and each is classified, yielding one prediction per
+    segment; otherwise the whole file gets a single prediction.
 
-    Example:
-        bioamla models ast annotate soundscape.wav -o soundscape.csv --exclude background
+    Examples:
+        bioamla models ast predict audio.wav --model-path my_model
+        bioamla models ast predict rec.wav --segment-duration 3 --overlap 1 -o rec.csv
     """
+    import csv
     from pathlib import Path
 
-    from bioamla.datasets import predictions_to_annotations
-    from bioamla.datasets._io import save_annotations
-    from bioamla.ml import load_pretrained_ast_model, segmented_wave_file_inference
+    from bioamla.ml import ASTInference
 
     try:
-        model = load_pretrained_ast_model(model_path)
-        df = segmented_wave_file_inference(file, model, resample_freq, segment_duration, overlap)
-        annotations = predictions_to_annotations(
-            df.to_dict("records"), min_confidence=min_confidence, exclude_labels=exclude
-        )
-        save_annotations(annotations, Path(output), fmt)
+        inference = ASTInference(model_path=model_path, sample_rate=resample_freq)
+        if segment_duration > 0:
+            results = inference.predict_segments(
+                file, clip_length=segment_duration, overlap=overlap
+            )
+        else:
+            results = [inference.predict(file)]
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
-    click.echo(f"Wrote {len(annotations)} annotations to {output}")
+    results = [r for r in results if r.confidence >= min_confidence]
+
+    if output:
+        out_path = Path(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with out_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["filepath", "start", "stop", "prediction", "confidence"])
+            for r in results:
+                writer.writerow(
+                    [r.filepath, r.start_time, r.end_time, r.predicted_label, f"{r.confidence:.6f}"]
+                )
+        click.echo(f"Wrote {len(results)} prediction(s) to {output}")
+        return
+
+    if segment_duration > 0:
+        for r in results:
+            click.echo(
+                f"{r.start_time:.2f}-{r.end_time:.2f}s  {r.predicted_label} ({r.confidence:.4f})"
+            )
+    else:
+        for r in results:
+            click.echo(f"{r.predicted_label} ({r.confidence:.4f})")
 
 
 @ast.command("train")

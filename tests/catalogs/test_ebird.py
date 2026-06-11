@@ -2,7 +2,12 @@
 
 import pytest
 
-from bioamla.catalogs._models import NearbyResult
+from bioamla.catalogs._models import (
+    EBirdChecklist,
+    EBirdHotspot,
+    NearbyResult,
+    RegionResult,
+)
 from bioamla.catalogs.ebird import EBirdService, match_detections_to_ebird
 from bioamla.exceptions import CatalogError, InvalidInputError
 
@@ -86,3 +91,136 @@ class TestMatchDetections:
         )
         assert out[0]["ebird_validated"] is True
         assert out[0]["ebird_species_code"] == "amerob"
+
+
+class _FakeSessionResponse:
+    def __init__(self, data, raise_exc=None):
+        self._data = data
+        self._raise_exc = raise_exc
+
+    def raise_for_status(self):
+        if self._raise_exc is not None:
+            raise self._raise_exc
+
+    def json(self):
+        return self._data
+
+
+class _FakeSession:
+    """Stand-in for requests.Session capturing headers and returning canned JSON."""
+
+    def __init__(self, data, raise_exc=None):
+        self.headers: dict[str, str] = {}
+        self._data = data
+        self._raise_exc = raise_exc
+        self.last_url = None
+        self.last_params = None
+
+    def get(self, url, params=None):
+        self.last_url = url
+        self.last_params = params
+        return _FakeSessionResponse(self._data, self._raise_exc)
+
+
+def _service_with_session(monkeypatch, data, raise_exc=None):
+    service = EBirdService(api_key="k")
+    session = _FakeSession(data, raise_exc)
+    monkeypatch.setattr(service, "_get_session", lambda: session)
+    return service, session
+
+
+class TestRequestWiring:
+    def test_session_sets_token_header(self) -> None:
+        service = EBirdService(api_key="secret")
+        session = service._get_session()
+        assert session.headers["X-eBirdApiToken"] == "secret"
+        # Subsequent call reuses the same session.
+        assert service._get_session() is session
+
+    def test_request_raises_on_http_error(self, monkeypatch) -> None:
+        service, _ = _service_with_session(monkeypatch, {}, raise_exc=RuntimeError("500"))
+        with pytest.raises(CatalogError):
+            service.get_species_list("US-CA")
+
+
+class TestRecentObservations:
+    def test_parses_results(self, monkeypatch) -> None:
+        data = [
+            {"speciesCode": "amerob", "comName": "American Robin"},
+            {"speciesCode": "barswa", "comName": "Barn Swallow"},
+        ]
+        service, _ = _service_with_session(monkeypatch, data)
+        result = service.get_recent_observations("US-CA")
+        assert isinstance(result, RegionResult)
+        assert result.total_count == 2
+
+    def test_species_filtered_endpoint(self, monkeypatch) -> None:
+        service, session = _service_with_session(monkeypatch, [])
+        service.get_recent_observations("US-CA", species_code="amerob")
+        assert session.last_url.endswith("data/obs/US-CA/recent/amerob")
+
+
+class TestSpeciesList:
+    def test_returns_codes(self, monkeypatch) -> None:
+        service, _ = _service_with_session(monkeypatch, ["amerob", "barswa"])
+        assert service.get_species_list("US-CA") == ["amerob", "barswa"]
+
+
+class TestTaxonomy:
+    def test_with_species_filter(self, monkeypatch) -> None:
+        service, session = _service_with_session(monkeypatch, [{"sciName": "Turdus migratorius"}])
+        out = service.get_taxonomy(species_codes=["amerob", "barswa"])
+        assert out[0]["sciName"] == "Turdus migratorius"
+        assert session.last_params["species"] == "amerob,barswa"
+
+    def test_failure_maps_error(self, monkeypatch) -> None:
+        service, _ = _service_with_session(monkeypatch, {}, raise_exc=RuntimeError("x"))
+        with pytest.raises(CatalogError):
+            service.get_taxonomy()
+
+
+class TestHotspots:
+    def test_parses_hotspots(self, monkeypatch) -> None:
+        data = [{"locId": "L1", "locName": "Park", "lat": 1.0, "lng": 2.0}]
+        service, _ = _service_with_session(monkeypatch, data)
+        hotspots = service.get_hotspots("US-CA")
+        assert isinstance(hotspots[0], EBirdHotspot)
+        assert hotspots[0].loc_id == "L1"
+
+    def test_failure_maps_error(self, monkeypatch) -> None:
+        service, _ = _service_with_session(monkeypatch, {}, raise_exc=RuntimeError("x"))
+        with pytest.raises(CatalogError):
+            service.get_hotspots("US-CA")
+
+
+class TestChecklist:
+    def test_parses_checklist(self, monkeypatch) -> None:
+        data = {
+            "subId": "S123",
+            "locId": "L1",
+            "loc": {"name": "Park", "lat": 1.0, "lng": 2.0},
+            "obsDt": "2024-05-01 08:00",
+            "obsTime": "08:00",
+            "durationHrs": 1.5,
+            "effortDistanceKm": 2.0,
+            "numObservers": 3,
+            "obs": [
+                {
+                    "speciesCode": "amerob",
+                    "species": {"comName": "American Robin", "sciName": "Turdus migratorius"},
+                    "howManyStr": "2",
+                }
+            ],
+        }
+        service, _ = _service_with_session(monkeypatch, data)
+        checklist = service.get_checklist("S123")
+        assert isinstance(checklist, EBirdChecklist)
+        assert checklist.submission_id == "S123"
+        assert checklist.duration_minutes == 90
+        assert checklist.species_count == 1
+        assert checklist.observations[0].species_code == "amerob"
+
+    def test_failure_maps_error(self, monkeypatch) -> None:
+        service, _ = _service_with_session(monkeypatch, {}, raise_exc=RuntimeError("x"))
+        with pytest.raises(CatalogError):
+            service.get_checklist("S123")

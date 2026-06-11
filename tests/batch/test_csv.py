@@ -211,3 +211,59 @@ class TestIndicesCsvCli:
         res = runner.invoke(batch, ["indices", "calculate", "--input-file", str(bad), "--quiet"])
         assert res.exit_code == 1
         assert "file_name" in res.output
+
+
+class TestPredictSegmentsCsvExpansion:
+    """``batch models predict --input-file --segment-duration`` row expansion.
+
+    Exercises the CLI helper directly with a fake per-file predictor so no model
+    download / torch is needed — the point under test is the CSV row expansion.
+    """
+
+    def test_expands_one_row_per_segment(self, test_audio_dir, tmp_path):
+        from bioamla.batch import BatchConfig
+        from bioamla.cli.commands.batch import _run_csv_predict_segments
+
+        csv_path = _make_meta_csv(Path(test_audio_dir), ["audio_0.wav", "audio_1.wav"])
+        out_dir = tmp_path / "out"
+        config = BatchConfig(input_file=str(csv_path), output_dir=str(out_dir), quiet=True)
+
+        def fake_predict(path):
+            return [
+                {"start_time": 0.0, "end_time": 3.0, "prediction": "frog", "confidence": 0.9},
+                {"start_time": 3.0, "end_time": 6.0, "prediction": "bird", "confidence": 0.8},
+            ]
+
+        _run_csv_predict_segments(config, fake_predict)
+
+        out_csv = out_dir / "meta.csv"
+        rows = list(csv.DictReader(out_csv.read_text(encoding="utf-8").splitlines()))
+        # 2 files x 2 segments each.
+        assert len(rows) == 4
+        # Original metadata column preserved on every expanded row.
+        assert rows[0]["site"] == "site_0" and rows[2]["site"] == "site_1"
+        # Per-segment prediction columns merged in.
+        assert rows[0]["segment_id"] == "0" and rows[1]["segment_id"] == "1"
+        assert rows[0]["prediction"] == "frog" and rows[1]["prediction"] == "bird"
+        assert rows[0]["start_time"] == "0.0" and rows[1]["end_time"] == "6.0"
+        assert "confidence" in rows[0]
+        # Source file_name is kept (segments are sub-spans, not new files).
+        assert rows[0]["file_name"] == "audio_0.wav"
+
+    def test_min_confidence_filter_drops_segments(self, test_audio_dir, tmp_path):
+        from bioamla.batch import BatchConfig
+        from bioamla.cli.commands.batch import _run_csv_predict_segments
+
+        csv_path = _make_meta_csv(Path(test_audio_dir), ["audio_0.wav"])
+        out_dir = tmp_path / "out"
+        config = BatchConfig(input_file=str(csv_path), output_dir=str(out_dir), quiet=True)
+
+        # Caller does the filtering; here we simulate one surviving segment.
+        def fake_predict(path):
+            return [{"start_time": 0.0, "end_time": 3.0, "prediction": "frog", "confidence": 0.95}]
+
+        _run_csv_predict_segments(config, fake_predict)
+
+        rows = list(csv.DictReader((out_dir / "meta.csv").read_text(encoding="utf-8").splitlines()))
+        assert len(rows) == 1
+        assert rows[0]["prediction"] == "frog"

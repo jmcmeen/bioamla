@@ -1,34 +1,31 @@
 """
-Audio Spectrogram Transformer (AST) — load, predict, segmented inference.
+Audio Spectrogram Transformer (AST) — load, predict, feature extraction.
 ========================================================================
 
-Functions for using Audio Spectrogram Transformer models (HuggingFace
-``transformers``) for audio classification: model loading, single-clip
-prediction, batched prediction, feature extraction, and segmented / batch
-file inference.
+Low-level building blocks for using Audio Spectrogram Transformer models
+(HuggingFace ``transformers``) for audio classification: model loading,
+single-clip and batched prediction, feature extraction, and whole-file
+prediction. Segmented / multi-file inference lives in
+:class:`bioamla.ml.inference.ASTInference` and the ``bioamla.ml.batch`` wrappers.
 
-PyTorch / transformers / pandas ship in the base install but are imported lazily
-inside each function so this module imports fast. Model-load / inference
-failures raise :class:`~bioamla.exceptions.ModelError`.
+PyTorch / transformers ship in the base install but are imported lazily inside
+each function so this module imports fast. Model-load / inference failures raise
+:class:`~bioamla.exceptions.ModelError`.
 
 Performance features:
-- Cached feature extractor (avoids recreation per segment)
-- Batched inference (process multiple segments in one forward pass)
-- Half-precision (FP16/BF16) inference support
+- Cached feature extractor (avoids recreation per call)
+- Half-precision (FP16) model loading
 - ``torch.compile()`` for optimized model execution
-- Parallel file loading with a thread pool
 """
 
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from bioamla.exceptions import InvalidInputError, ModelError
+from bioamla.exceptions import ModelError
 
 if TYPE_CHECKING:
-    import pandas as pd
     import torch
     from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
@@ -45,13 +42,6 @@ def _require_transformers():
     from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
     return ASTFeatureExtractor, AutoModelForAudioClassification
-
-
-def _require_pandas():
-    """Import and return the pandas module."""
-    import pandas as pd
-
-    return pd
 
 
 def _torchaudio_helpers():
@@ -261,261 +251,3 @@ def wav_ast_inference(wave_path: str, model_path: str, sample_rate: int) -> str:
     input_values = extract_features(waveform, sample_rate, feature_extractor, device)
     model = load_pretrained_ast_model(model_path)
     return ast_predict(input_values, model)
-
-
-def segmented_wave_file_inference(
-    filepath: str,
-    model: "AutoModelForAudioClassification",
-    freq: int,
-    segment_duration: int,
-    segment_overlap: int,
-    config: InferenceConfig | None = None,
-    feature_extractor: Optional["ASTFeatureExtractor"] = None,
-    device: Optional["torch.device"] = None,
-) -> "pd.DataFrame":
-    """
-    Run AST inference on a single file by splitting it into segments.
-
-    Loads the file, splits it into (optionally overlapping) segments, and runs
-    AST inference on each segment.
-
-    Args:
-        filepath: Path to the audio file.
-        model: Pre-trained AST model.
-        freq: Target sampling frequency for preprocessing.
-        segment_duration: Duration of each segment in seconds.
-        segment_overlap: Overlap between consecutive segments in seconds.
-        config: Optional performance configuration.
-        feature_extractor: Optional cached feature extractor.
-        device: Optional inference device.
-
-    Returns:
-        A DataFrame with columns ``['filepath', 'start', 'stop', 'prediction']``.
-
-    Raises:
-        ModelError: If loading or inference fails.
-    """
-    pd = _require_pandas()
-    load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor = _torchaudio_helpers()
-
-    if config is None:
-        config = InferenceConfig()
-
-    if feature_extractor is None:
-        feature_extractor = get_cached_feature_extractor()
-
-    if device is None:
-        device = next(model.parameters()).device
-
-    try:
-        waveform, orig_freq = load_waveform_tensor(filepath)
-    except Exception as e:
-        raise ModelError(f"Failed to load audio {filepath}: {e}") from e
-
-    waveform = resample_waveform_tensor(waveform, orig_freq, freq)
-    segments = split_waveform_tensor(waveform, freq, segment_duration, segment_overlap)
-
-    if config.batch_size > 1:
-        rows = _process_segments_batched(
-            filepath, segments, model, freq, config, feature_extractor, device
-        )
-    else:
-        rows = _process_segments_sequential(
-            filepath, segments, model, freq, feature_extractor, device
-        )
-
-    return pd.DataFrame(rows, columns=["filepath", "start", "stop", "prediction"])
-
-
-def wave_file_batch_inference(
-    wave_files: list,
-    model: "AutoModelForAudioClassification",
-    freq: int,
-    segment_duration: int,
-    segment_overlap: int,
-    output_csv: str,
-    config: InferenceConfig | None = None,
-    feature_extractor: Optional["ASTFeatureExtractor"] = None,
-) -> None:
-    """
-    Run segmented AST inference over multiple files, appending results to a CSV.
-
-    Each file is processed in segments; per-segment results are appended to
-    ``output_csv`` (columns: ``filepath, start, stop, prediction``). No header
-    is written, matching the historical behavior — callers that need a header
-    should write one first.
-
-    Args:
-        wave_files: Paths to the audio files to process.
-        model: Pre-trained AST model.
-        freq: Target sampling frequency for preprocessing.
-        segment_duration: Duration of each segment in seconds.
-        segment_overlap: Overlap between consecutive segments in seconds.
-        output_csv: Output CSV path (results are appended).
-        config: Optional performance configuration.
-        feature_extractor: Optional cached feature extractor.
-
-    Raises:
-        ModelError: If loading or inference fails.
-    """
-    if config is None:
-        config = InferenceConfig()
-
-    if feature_extractor is None:
-        feature_extractor = get_cached_feature_extractor()
-    device = next(model.parameters()).device
-
-    if config.num_workers > 1:
-        _batch_inference_parallel(
-            wave_files,
-            model,
-            freq,
-            segment_duration,
-            segment_overlap,
-            output_csv,
-            config,
-            feature_extractor,
-            device,
-        )
-    else:
-        _batch_inference_sequential(
-            wave_files,
-            model,
-            freq,
-            segment_duration,
-            segment_overlap,
-            output_csv,
-            config,
-            feature_extractor,
-            device,
-        )
-
-
-def _batch_inference_sequential(
-    wave_files: list,
-    model: "AutoModelForAudioClassification",
-    freq: int,
-    segment_duration: int,
-    segment_overlap: int,
-    output_csv: str,
-    config: InferenceConfig,
-    feature_extractor: "ASTFeatureExtractor",
-    device: "torch.device",
-) -> None:
-    """Sequential batch inference processing."""
-    for filepath in wave_files:
-        df = segmented_wave_file_inference(
-            filepath,
-            model,
-            freq,
-            segment_duration,
-            segment_overlap,
-            config=config,
-            feature_extractor=feature_extractor,
-            device=device,
-        )
-        df.to_csv(output_csv, mode="a", header=False, index=False)
-
-
-def _batch_inference_parallel(
-    wave_files: list,
-    model: "AutoModelForAudioClassification",
-    freq: int,
-    segment_duration: int,
-    segment_overlap: int,
-    output_csv: str,
-    config: InferenceConfig,
-    feature_extractor: "ASTFeatureExtractor",
-    device: "torch.device",
-) -> None:
-    """Parallel batch inference with a thread pool for file loading."""
-    pd = _require_pandas()
-    load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor = _torchaudio_helpers()
-
-    def load_and_preprocess(filepath: str):
-        """Load and preprocess a single file."""
-        waveform, orig_freq = load_waveform_tensor(filepath)
-        waveform = resample_waveform_tensor(waveform, orig_freq, freq)
-        segments = split_waveform_tensor(waveform, freq, segment_duration, segment_overlap)
-        return filepath, segments
-
-    with ThreadPoolExecutor(max_workers=config.num_workers) as executor:
-        for filepath, segments in executor.map(load_and_preprocess, wave_files):
-            if not segments:
-                continue
-
-            rows = _process_segments_batched(
-                filepath, segments, model, freq, config, feature_extractor, device
-            )
-
-            df = pd.DataFrame(rows, columns=["filepath", "start", "stop", "prediction"])
-            df.to_csv(output_csv, mode="a", header=False, index=False)
-
-
-def _process_segments_sequential(
-    filepath: str,
-    segments: list[tuple["torch.Tensor", int, int]],
-    model: "AutoModelForAudioClassification",
-    freq: int,
-    feature_extractor: "ASTFeatureExtractor",
-    device: "torch.device",
-) -> list[dict]:
-    """Process segments one at a time."""
-    rows = []
-    for waveform, start, stop in segments:
-        input_values = extract_features(waveform, freq, feature_extractor, device)
-        prediction = ast_predict(input_values, model)
-        rows.append({"filepath": filepath, "start": start, "stop": stop, "prediction": prediction})
-    return rows
-
-
-def _process_segments_batched(
-    filepath: str,
-    segments: list[tuple["torch.Tensor", int, int]],
-    model: "AutoModelForAudioClassification",
-    freq: int,
-    config: InferenceConfig,
-    feature_extractor: "ASTFeatureExtractor",
-    device: "torch.device",
-) -> list[dict]:
-    """Process segments in batches for improved GPU utilization."""
-    # Validate arguments before importing torch, so bad input is reported
-    # without paying the heavy-import cost.
-    if config.batch_size <= 0:
-        raise InvalidInputError(f"batch_size must be positive, got {config.batch_size}")
-
-    torch = _require_torch()
-
-    rows = []
-
-    for batch_start in range(0, len(segments), config.batch_size):
-        batch_segments = segments[batch_start : batch_start + config.batch_size]
-
-        batch_inputs = []
-        batch_metadata = []
-
-        for waveform, start, stop in batch_segments:
-            waveform_np = waveform.squeeze().numpy()
-            inputs = feature_extractor(
-                waveform_np, sampling_rate=freq, padding="max_length", return_tensors="pt"
-            )
-            batch_inputs.append(inputs.input_values)
-            batch_metadata.append((start, stop))
-
-        stacked_inputs = torch.cat(batch_inputs, dim=0).to(device)
-
-        if config.use_fp16 and device.type == "cuda":
-            stacked_inputs = stacked_inputs.half()
-
-        with torch.inference_mode():
-            outputs = model(stacked_inputs)
-
-        predicted_indices = outputs.logits.argmax(dim=-1).cpu().tolist()
-
-        for idx, (start, stop) in enumerate(batch_metadata):
-            prediction = model.config.id2label[predicted_indices[idx]]
-            rows.append(
-                {"filepath": filepath, "start": start, "stop": stop, "prediction": prediction}
-            )
-
-    return rows
