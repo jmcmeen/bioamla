@@ -167,18 +167,6 @@ def test_dataset_partition(runner: CliRunner, tmp_path) -> None:
     assert "Partitioned" in result.output
 
 
-def test_dataset_split_alias(runner: CliRunner, tmp_path) -> None:
-    result_dict = {
-        "groups": 1,
-        "mode": "subdirs",
-        "splits": {"train": 1},
-        "metadata_file": "m",
-    }
-    with patch("bioamla.datasets.partition_dataset", return_value=result_dict):
-        result = runner.invoke(cli, ["dataset", "split", str(tmp_path)])
-    assert result.exit_code == 0
-
-
 def test_dataset_partition_error(runner: CliRunner, tmp_path) -> None:
     with patch("bioamla.datasets.partition_dataset", side_effect=DatasetError("x")):
         result = runner.invoke(cli, ["dataset", "partition", str(tmp_path)])

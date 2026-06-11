@@ -328,10 +328,6 @@ def dataset_partition(
         click.echo(f"Metadata: {result['metadata_file']}")
 
 
-# `split` is an alias for `partition`.
-dataset.add_command(dataset_partition, "split")
-
-
 @dataset.command("build")
 @click.argument("source")
 @click.argument("output_dir")
