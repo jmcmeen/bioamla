@@ -28,8 +28,9 @@ bioamla catalogs xc download --species "$SPECIES_B" --quality A --max-recordings
   --output-dir "$OUT/raw/treefrog"
 
 # 2. Seed annotations automatically, then correct them by hand. If you already
-#    have a rough model, `models ast annotate` turns its predictions into an
-#    editable annotation file; otherwise start from an empty template per file.
+#    have a rough model, `models ast predict --segment-duration N -o preds.csv`
+#    gives you a per-segment prediction CSV to review; otherwise start from an
+#    empty template per file.
 for f in "$OUT"/raw/bullfrog/*.wav; do
   bioamla annotation template "$f" "${f%.wav}.json" --label bullfrog
 done

@@ -37,7 +37,6 @@ class TestPublicApi:
             "InferenceConfig",
             "ast_predict",
             "load_pretrained_ast_model",
-            "segmented_wave_file_inference",
             # service-level
             "predict_file",
             "evaluate_directory",
@@ -48,8 +47,6 @@ class TestPublicApi:
             # inference
             "ASTInference",
             "ASTPredictionResult",
-            "BatchInferenceConfig",
-            "run_batch_inference",
             # embeddings
             "EmbeddingConfig",
             "EmbeddingResult",
@@ -59,6 +56,7 @@ class TestPublicApi:
             "load_embeddings",
             # batch
             "batch_predict_files",
+            "batch_predict_segments",
             "batch_embed_files",
         ):
             assert hasattr(ml, name), f"missing public export: {name}"
@@ -88,13 +86,6 @@ class TestConfigPlumbing:
         extractor2 = EmbeddingExtractor(config=cfg)
         assert extractor2.config.model_path == "other/model"
         assert extractor2.config.normalize is False
-
-    def test_batch_inference_config(self) -> None:
-        from bioamla.ml import BatchInferenceConfig
-
-        cfg = BatchInferenceConfig(model_path="m", input_dir="in", output_csv="out.csv")
-        assert cfg.clip_length == 10
-        assert cfg.sample_rate == 16000
 
     def test_evaluation_result_to_dict(self) -> None:
         from bioamla.ml import EvaluationResult
@@ -230,37 +221,17 @@ class TestErrorPaths:
                 ground_truth_csv="/no/such/gt.csv",
             )
 
-    def test_run_batch_inference_missing_dir(self, tmp_path) -> None:
-        from bioamla.ml import BatchInferenceConfig, run_batch_inference
-
-        cfg = BatchInferenceConfig(
-            model_path="bioamla/scp-frogs",
-            input_dir="/no/such/dir",
-            output_csv=str(tmp_path / "out.csv"),
-            verbose=False,
-        )
-        with pytest.raises(NotFoundError, match="Input directory not found"):
-            run_batch_inference(cfg)
-
-    def test_run_batch_inference_empty_dir(self, tmp_path) -> None:
-        from bioamla.ml import BatchInferenceConfig, run_batch_inference
-
-        empty = tmp_path / "empty"
-        empty.mkdir()
-        cfg = BatchInferenceConfig(
-            model_path="bioamla/scp-frogs",
-            input_dir=str(empty),
-            output_csv=str(tmp_path / "out.csv"),
-            verbose=False,
-        )
-        with pytest.raises(NotFoundError, match="No audio files"):
-            run_batch_inference(cfg)
-
     def test_batch_predict_files_missing_dir(self) -> None:
         from bioamla.ml import batch_predict_files
 
         with pytest.raises(NotFoundError, match="Input directory not found"):
             batch_predict_files("/no/such/dir")
+
+    def test_batch_predict_segments_missing_dir(self) -> None:
+        from bioamla.ml import batch_predict_segments
+
+        with pytest.raises(NotFoundError, match="Input directory not found"):
+            batch_predict_segments("/no/such/dir", segment_duration=3)
 
     def test_batch_embed_files_missing_dir(self, tmp_path) -> None:
         from bioamla.ml import batch_embed_files
@@ -297,18 +268,3 @@ class TestAstHelpers:
         # Looks local (starts with ./) and does not exist -> transformers fails.
         with pytest.raises(ModelError, match="Failed to load AST model"):
             load_pretrained_ast_model("./definitely-not-a-real-model-dir-xyz")
-
-    def test_batched_inference_rejects_nonpositive_batch_size(self) -> None:
-        from bioamla.ml.ast import InferenceConfig, _process_segments_batched
-
-        cfg = InferenceConfig(batch_size=0)
-        with pytest.raises(InvalidInputError, match="batch_size must be positive"):
-            _process_segments_batched(
-                "x.wav",
-                [],
-                model=None,
-                freq=16000,
-                config=cfg,
-                feature_extractor=None,
-                device=None,
-            )

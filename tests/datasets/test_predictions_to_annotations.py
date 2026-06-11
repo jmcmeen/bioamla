@@ -5,7 +5,7 @@ from bioamla.datasets import predictions_to_annotations
 
 class TestPredictionsToAnnotations:
     def test_segmented_inference_rows(self) -> None:
-        # Shape produced by segmented_wave_file_inference.
+        # Legacy segment-prediction shape (filepath/start/stop/prediction).
         rows = [
             {"filepath": "a.wav", "start": 0.0, "stop": 3.0, "prediction": "frog"},
             {"filepath": "a.wav", "start": 3.0, "stop": 6.0, "prediction": "bird"},

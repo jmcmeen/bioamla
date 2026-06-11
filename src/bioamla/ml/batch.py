@@ -102,6 +102,90 @@ def batch_predict_files(
     return result
 
 
+def batch_predict_segments(
+    input_dir: str,
+    model_path: str = "bioamla/scp-frogs",
+    *,
+    segment_duration: int,
+    overlap: int = 0,
+    min_confidence: float = 0.0,
+    resample_freq: int = 16000,
+    recursive: bool = True,
+    max_workers: int = 1,
+    continue_on_error: bool = True,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> BatchResult:
+    """
+    Run segmented AST prediction over every audio file in a directory.
+
+    Each file is split into fixed-length (optionally overlapping) segments and
+    classified per segment. The model is loaded once and reused across files
+    (sequential mode). Per-segment rows (``filepath, start_time, end_time,
+    predicted_label, confidence``) are collected into
+    ``result.metadata["segments"]`` so callers can write a flat
+    ``predictions.csv``; ``result.output_files`` holds per-file summaries.
+
+    Args:
+        input_dir: Directory containing input audio files.
+        model_path: Path to model or HuggingFace identifier.
+        segment_duration: Duration of each segment in seconds.
+        overlap: Overlap between consecutive segments in seconds.
+        min_confidence: Drop segments whose prediction is below this probability.
+        resample_freq: Target sample rate.
+        recursive: Search subdirectories.
+        max_workers: Worker count (kept at 1 in practice — the model is shared).
+        continue_on_error: Collect per-file errors and keep going if True.
+        on_progress: Optional ``(completed, total)`` progress callback.
+
+    Returns:
+        A :class:`bioamla.batch.BatchResult` summarizing the run.
+
+    Raises:
+        NotFoundError: If the input directory does not exist.
+        ModelError: On model-load or inference failure.
+    """
+    in_dir = Path(input_dir)
+    if not in_dir.exists():
+        raise NotFoundError(f"Input directory not found: {in_dir}")
+
+    from bioamla.ml.inference import ASTInference
+
+    files = discover_files(in_dir, recursive=recursive, file_filter=_audio_filter)
+    inference = ASTInference(model_path=model_path, sample_rate=resample_freq)
+
+    segments: list = []
+
+    def _process_one(audio_path: Path) -> str:
+        results = inference.predict_segments(
+            str(audio_path), clip_length=segment_duration, overlap=overlap
+        )
+        kept = 0
+        for r in results:
+            if r.confidence < min_confidence:
+                continue
+            segments.append(
+                {
+                    "filepath": str(audio_path),
+                    "start_time": r.start_time,
+                    "end_time": r.end_time,
+                    "predicted_label": r.predicted_label,
+                    "confidence": r.confidence,
+                }
+            )
+            kept += 1
+        return f"{audio_path}: {kept} segment(s)"
+
+    result = run_batch(
+        files,
+        _process_one,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+    )
+    result.metadata = {"segments": segments}
+    return result
+
+
 def batch_embed_files(
     input_dir: str,
     output_dir: str,
@@ -170,5 +254,6 @@ def batch_embed_files(
 
 __all__ = [
     "batch_predict_files",
+    "batch_predict_segments",
     "batch_embed_files",
 ]

@@ -121,7 +121,7 @@ bioamla catalogs xc search --species "Hyla cinerea"
 bioamla catalogs hf pull-dataset ashraq/esc50 ./esc50      # Hub dataset -> labeled-folder layout
 bioamla catalogs hf cache --datasets                       # inspect/purge the HF cache (--purge)
 bioamla models ast predict frog.wav --model-path bioamla/scp-frogs
-bioamla models ast annotate soundscape.wav -o preds.csv    # predictions -> editable annotations
+bioamla models ast predict soundscape.wav --segment-duration 3 -o preds.csv   # classify each 3s segment
 bioamla models ast train --train-dataset ashraq/esc50      # grab-and-go: train off a Hub id directly
 bioamla models ast train --train-dataset ./esc50 --config train.toml   # or from local data + a config
 bioamla config deps                                                    # check system deps

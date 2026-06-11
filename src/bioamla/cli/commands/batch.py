@@ -253,6 +253,75 @@ def _run_csv_segment(
     return result
 
 
+def _run_csv_predict_segments(
+    config: BatchConfig,
+    predict_row: Callable[[Path], list[dict]],
+) -> object:
+    """CSV mode for segmented prediction: expand one input row into many.
+
+    ``predict_row(input_path)`` returns one dict per segment (keys
+    ``start_time``/``end_time``/``prediction``/``confidence``). Each parent row is
+    replaced by one row per segment — keeping the source ``file_name`` and adding
+    ``segment_id``/``start_time``/``end_time``/``prediction``/``confidence`` — then
+    the expanded CSV is written. Unlike :func:`_run_csv_segment`, no segment files
+    are written; rows describe sub-spans of the original file.
+    """
+    from bioamla.batch import MetadataRow
+
+    context = _csv_context(config)
+    segment_mapping: dict = {}
+
+    def _process(row) -> str:
+        segments = predict_row(row.file_path)
+        if segments:
+            segment_mapping[row.file_path] = segments
+        return str(row.file_path)
+
+    result = run_csv_batch(
+        context,
+        _process,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        quiet=config.quiet,
+    )
+
+    new_rows = []
+    for row in context.rows:
+        segments = segment_mapping.get(row.file_path)
+        if not segments:
+            new_rows.append(row)
+            continue
+        for seg_id, seg in enumerate(segments):
+            fields = row.metadata_fields.copy()
+            fields.update(
+                {
+                    "segment_id": seg_id,
+                    "start_time": seg["start_time"],
+                    "end_time": seg["end_time"],
+                    "prediction": seg["prediction"],
+                    "confidence": seg["confidence"],
+                }
+            )
+            new_rows.append(
+                MetadataRow(
+                    file_name=row.file_name,
+                    file_path=row.file_path,
+                    metadata_fields=fields,
+                    output_path=row.output_path,
+                )
+            )
+    context.rows = new_rows
+
+    for fld in ("segment_id", "start_time", "end_time", "prediction", "confidence"):
+        if fld not in context.fieldnames:
+            context.fieldnames.append(fld)
+
+    out_csv = write_csv(context)
+    if not config.quiet:
+        click.echo(f"Updated metadata CSV written to: {out_csv}")
+    return result
+
+
 # =============================================================================
 # Module-level audio processors (picklable for parallel execution)
 # =============================================================================
@@ -1102,21 +1171,100 @@ def models() -> None:
 )
 @click.option("--top-k", default=5, type=int, help="Number of top predictions to return")
 @click.option("--min-confidence", default=0.0, type=float, help="Minimum confidence threshold")
+@click.option(
+    "--segment-duration",
+    default=0,
+    type=int,
+    help="Split each file into N-second segments and classify each (0 = whole file)",
+)
+@click.option("--overlap", default=0, type=int, help="Overlap between segments (seconds)")
 @click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def models_predict(
-    input_dir, input_file, output_dir, model, top_k, min_confidence, max_workers, recursive, quiet
+    input_dir,
+    input_file,
+    output_dir,
+    model,
+    top_k,
+    min_confidence,
+    segment_duration,
+    overlap,
+    max_workers,
+    recursive,
+    quiet,
 ) -> None:
-    """Batch run AST model predictions on audio files."""
+    """Batch run AST model predictions on audio files (whole file or in segments).
+
+    With ``--segment-duration`` each file is split into fixed-length (optionally
+    overlapping) segments and classified per segment: directory mode writes a flat
+    ``predictions.csv`` (one row per segment) to ``--output-dir``; CSV-metadata mode
+    expands each input row into one row per segment.
+    """
+    import csv as _csv
     import json
 
-    from bioamla.ml import batch_predict_files
+    from bioamla.ml import batch_predict_files, batch_predict_segments
 
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
         if not quiet:
             click.echo(f"Running AST predictions with model {model}...")
+
+        if segment_duration > 0:
+            if config.input_file:
+                from bioamla.ml.inference import ASTInference
+
+                inference = ASTInference(model_path=model)
+
+                def _predict_segments(path: Path) -> list[dict]:
+                    results = inference.predict_segments(
+                        str(path), clip_length=segment_duration, overlap=overlap
+                    )
+                    return [
+                        {
+                            "start_time": r.start_time,
+                            "end_time": r.end_time,
+                            "prediction": r.predicted_label,
+                            "confidence": r.confidence,
+                        }
+                        for r in results
+                        if r.confidence >= min_confidence
+                    ]
+
+                result = _run_csv_predict_segments(config, _predict_segments)
+                _report(result, output_dir, quiet)
+                return
+
+            in_dir = _require_input_dir(config)
+            result = batch_predict_segments(
+                in_dir,
+                model_path=model,
+                segment_duration=segment_duration,
+                overlap=overlap,
+                min_confidence=min_confidence,
+                recursive=recursive,
+                max_workers=max_workers,
+            )
+            segments = result.metadata.get("segments", [])
+            if output_dir and segments:
+                out_path = Path(output_dir) / "predictions.csv"
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                with out_path.open("w", newline="", encoding="utf-8") as f:
+                    writer = _csv.DictWriter(
+                        f,
+                        fieldnames=[
+                            "filepath",
+                            "start_time",
+                            "end_time",
+                            "predicted_label",
+                            "confidence",
+                        ],
+                    )
+                    writer.writeheader()
+                    writer.writerows(segments)
+            _report(result, output_dir, quiet, saved_hint="predictions.csv")
+            return
 
         if config.input_file:
             from bioamla.ml.inference import ASTInference

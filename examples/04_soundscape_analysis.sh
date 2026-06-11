@@ -11,11 +11,11 @@
 
 set -euo pipefail
 
-OUT=./out/03_soundscape_analysis
-mkdir -p "$OUT"/{segments,indices,detections}
+OUT=./out/04_soundscape_analysis
+mkdir -p "$OUT"/{indices,detections,predictions}
 
-RECORDING=./out/03_soundscape_analysis/soundscape.wav   # <-- point at your file
-MODEL="your-username/frog-ast"                          # <-- trained model id/path
+RECORDING="$OUT/soundscape.wav"   # <-- point at your file
+MODEL="your-username/frog-ast"    # <-- trained model id/path
 
 if [[ ! -f "$RECORDING" ]]; then
   echo "Set RECORDING to a real audio file (e.g. a dawn-chorus recording)." >&2
@@ -30,18 +30,18 @@ bioamla indices temporal "$RECORDING" --segment-duration 60 -o "$OUT/indices/tim
 bioamla detect energy "$RECORDING" -o "$OUT/detections/energy.csv" --low-freq 500 --high-freq 10000
 bioamla detect ribbit "$RECORDING" -o "$OUT/detections/ribbit.csv"
 
-# 3. Split into fixed clips and classify each with the model (batch, directory
-#    mode → one prediction row per file merged into a CSV).
-bioamla audio segment "$RECORDING" "$OUT/segments/" -d 3.0 -o 0.5
-bioamla batch models predict --input-dir "$OUT/segments" --output-dir "$OUT/predictions" \
-  --model "$MODEL" --min-confidence 0.5
+# 3. Classify the recording in fixed-length segments — one step, no pre-chopping.
+#    `--segment-duration` splits the file internally and writes one prediction row
+#    per segment (filepath,start,stop,prediction,confidence).
+bioamla models ast predict "$RECORDING" -o "$OUT/predicted.csv" \
+  --model-path "$MODEL" --segment-duration 3 --overlap 1 --min-confidence 0.6
 
-# 4. Turn segment-level predictions into an editable annotation file. Drop a
-#    background class if your model has one, and keep only confident calls.
-bioamla models ast annotate "$RECORDING" -o "$OUT/predicted.csv" \
-  --model-path "$MODEL" --segment-duration 3 --min-confidence 0.6
+# (To classify many recordings at once, the same flags work on the batch command:
+#  bioamla batch models predict --input-dir ./recordings --output-dir "$OUT/predictions" \
+#    --model "$MODEL" --segment-duration 3 --overlap 1 --min-confidence 0.6)
 
-# >>> MANUAL: review $OUT/predicted.csv, correct mislabeled/spurious rows, then
-# >>> feed it back into `dataset extract-clips --annotations` to grow your
-# >>> training set (active learning loop) — see workflow 01.
+# >>> MANUAL: review $OUT/predicted.csv, keep/correct the confident calls, then
+# >>> feed them back into your training set (active-learning loop) — see workflow 01.
+# >>> A future release will fold this predict → review → dataset bridge into an
+# >>> "auto-annotate" command so the manual step can be automated.
 echo "Done. Review $OUT/predicted.csv and the indices/detections under $OUT/."
