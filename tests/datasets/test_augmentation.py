@@ -15,6 +15,7 @@ from bioamla.datasets.augmentation import (
     augment_audio,
     batch_augment,
     create_augmentation_pipeline,
+    describe_augmentation_pipeline,
 )
 from bioamla.exceptions import AugmentationError, NotFoundError
 
@@ -45,6 +46,31 @@ class TestCreatePipeline:
         pipeline = create_augmentation_pipeline(config)
         assert pipeline is not None
         assert len(pipeline.transforms) == 6
+
+
+class TestDescribePipeline:
+    def test_none_pipeline_returns_empty(self) -> None:
+        assert describe_augmentation_pipeline(None) == []
+
+    def test_one_line_per_transform_with_params(self) -> None:
+        config = AugmentationConfig(
+            add_noise=True,
+            noise_min_snr=5.0,
+            noise_max_snr=25.0,
+            noise_probability=0.7,
+            gain=True,
+        )
+        pipeline = create_augmentation_pipeline(config)
+        lines = describe_augmentation_pipeline(pipeline)
+        assert len(lines) == len(pipeline.transforms) == 2
+        # Each line names its transform, its probability, and its tunable params.
+        noise_line = next(line for line in lines if line.startswith("AddGaussianSNR"))
+        assert "p=0.7" in noise_line
+        assert "min_snr_db=5.0" in noise_line
+        assert "max_snr_db=25.0" in noise_line
+        # Bookkeeping attributes are not surfaced.
+        assert "are_parameters_frozen" not in noise_line
+        assert "parameters" not in noise_line
 
 
 class TestAugmentAudio:

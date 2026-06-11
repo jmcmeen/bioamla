@@ -56,6 +56,7 @@ from bioamla.datasets.augmentation import (
     augment_audio,
     batch_augment,
     create_augmentation_pipeline,
+    describe_augmentation_pipeline,
 )
 from bioamla.datasets.batch import batch_convert_annotations
 from bioamla.datasets.clip_extraction import extract_audio_clips
@@ -135,6 +136,7 @@ __all__ = [
     # Augmentation
     "AugmentationConfig",
     "create_augmentation_pipeline",
+    "describe_augmentation_pipeline",
     "augment_audio",
     "batch_augment",
     # License generation

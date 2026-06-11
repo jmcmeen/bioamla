@@ -293,7 +293,10 @@ def train_ast(
         TrainingArguments,
     )
 
-    from bioamla.datasets.augmentation import create_augmentation_pipeline
+    from bioamla.datasets.augmentation import (
+        create_augmentation_pipeline,
+        describe_augmentation_pipeline,
+    )
     from datasets import Audio, Dataset, DatasetDict
 
     if augmentation is not None:
@@ -409,7 +412,17 @@ def train_ast(
 
     if augment:
         audio_augmentations = create_augmentation_pipeline(augmentation)
-        logger.info("Audio augmentations enabled")
+        descriptions = describe_augmentation_pipeline(audio_augmentations)
+        logger.info(
+            "Audio augmentations enabled: %d transform(s) "
+            "(pipeline p=%s, shuffle=%s, multiplier=%dx)",
+            len(descriptions),
+            augmentation.pipeline_probability,
+            augmentation.shuffle,
+            augment_multiplier,
+        )
+        for description in descriptions:
+            logger.info("  - %s", description)
     else:
         audio_augmentations = None
         logger.info("Audio augmentations disabled")

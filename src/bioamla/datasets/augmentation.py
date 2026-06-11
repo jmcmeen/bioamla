@@ -171,6 +171,41 @@ def create_augmentation_pipeline(config: AugmentationConfig) -> Any:
     return Compose(transforms, p=config.pipeline_probability, shuffle=config.shuffle)
 
 
+# Transform attributes that are bookkeeping rather than tunable parameters; they
+# add noise to a human-readable summary, so leave them out.
+_DESCRIBE_SKIP_ATTRS = frozenset({"p", "parameters", "are_parameters_frozen"})
+
+
+def describe_augmentation_pipeline(pipeline: Any) -> list[str]:
+    """Summarize each transform in an ``audiomentations`` Compose pipeline.
+
+    Introspects the *built* pipeline (rather than re-deriving from the config) so
+    the description always reflects exactly what is applied — same source of truth
+    as training. Each line is ``Name(p=...): k=v, ...`` for one transform.
+
+    Args:
+        pipeline: A ``Compose`` pipeline from :func:`create_augmentation_pipeline`,
+            or ``None``.
+
+    Returns:
+        One description string per transform; empty list if ``pipeline`` is None.
+    """
+    if pipeline is None:
+        return []
+
+    lines: list[str] = []
+    for transform in pipeline.transforms:
+        params = {
+            key: value
+            for key, value in vars(transform).items()
+            if key not in _DESCRIBE_SKIP_ATTRS and not key.startswith("_") and value is not None
+        }
+        param_str = ", ".join(f"{key}={value}" for key, value in params.items())
+        prob = getattr(transform, "p", None)
+        lines.append(f"{type(transform).__name__}(p={prob}): {param_str}")
+    return lines
+
+
 def augment_audio(audio: np.ndarray, sample_rate: int, pipeline: Any) -> np.ndarray:
     """Apply an augmentation pipeline to a 1-D float audio array.
 
