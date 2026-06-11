@@ -168,4 +168,4 @@ issues should be reported privately per our
 
 ## License
 
-GNU General Public License v3.0 — see [LICENSE](https://github.com/jmcmeen/bioamla/blob/main/LICENSE).
+MIT License — see [LICENSE](https://github.com/jmcmeen/bioamla/blob/main/LICENSE).

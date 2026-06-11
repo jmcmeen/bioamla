@@ -11,6 +11,9 @@ All notable changes to this project are documented here. The format is based on
 A ground-up rebuild. `bioamla` is now a flat, **domain-oriented** library with a thin CLI,
 designed to be a stable core that other applications can build on.
 
+**License:** relicensed from **GPLv3** (0.0.x–0.1.x) to the **MIT License** starting with this
+release. The project is sole-authored, so the relicense applies to all current and future code.
+
 ### Added
 
 - **Domain packages**: `audio`, `viz`, `indices`, `detect`, `cluster`, `catalogs`,
