@@ -1373,7 +1373,13 @@ def models_embed(input_dir, input_file, output_dir, model, max_workers, recursiv
 # =============================================================================
 
 
-@batch.command("cluster")
+@batch.group()
+def cluster() -> None:
+    """Batch clustering operations."""
+    pass
+
+
+@cluster.command("embeddings")
 @batch_input_options
 @batch_output_options
 @click.option(

@@ -84,7 +84,7 @@ def test_batch_subcommand_help(runner, group, cmd):
 
 
 def test_batch_cluster_help(runner):
-    result = runner.invoke(cli, ["batch", "cluster", "--help"])
+    result = runner.invoke(cli, ["batch", "cluster", "embeddings", "--help"])
     assert result.exit_code == 0
 
 
@@ -677,6 +677,7 @@ def test_cluster_dir(runner, test_audio_dir, tmp_path, mocker):
         [
             "batch",
             "cluster",
+            "embeddings",
             "--input-dir",
             test_audio_dir,
             "--output-dir",
@@ -692,7 +693,7 @@ def test_cluster_dir(runner, test_audio_dir, tmp_path, mocker):
 
 
 def test_cluster_requires_output(runner, test_audio_dir):
-    result = runner.invoke(cli, ["batch", "cluster", "--input-dir", test_audio_dir])
+    result = runner.invoke(cli, ["batch", "cluster", "embeddings", "--input-dir", test_audio_dir])
     assert result.exit_code != 0
 
 
@@ -700,7 +701,8 @@ def test_cluster_error(runner, test_audio_dir, tmp_path, mocker):
     mocker.patch("bioamla.cluster.cluster_batch_files", side_effect=ProcessingError("cfail"))
     out = tmp_path / "out"
     result = runner.invoke(
-        cli, ["batch", "cluster", "--input-dir", test_audio_dir, "--output-dir", str(out)]
+        cli,
+        ["batch", "cluster", "embeddings", "--input-dir", test_audio_dir, "--output-dir", str(out)],
     )
     assert result.exit_code != 0
 
@@ -710,6 +712,14 @@ def test_cluster_csv(runner, csv_with_audio, tmp_path, mocker):
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
-        ["batch", "cluster", "--input-file", csv_with_audio, "--output-dir", str(out)],
+        [
+            "batch",
+            "cluster",
+            "embeddings",
+            "--input-file",
+            csv_with_audio,
+            "--output-dir",
+            str(out),
+        ],
     )
     assert result.exit_code == 0
