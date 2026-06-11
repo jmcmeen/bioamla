@@ -113,9 +113,6 @@ make check        # lint + format-check + test  (the gate before "done")
   optionally `HF_TOKEN`.
 - **`catalogs` commands hit external APIs** (Xeno-canto, eBird, iNaturalist) and
   need keys (`XC_API_KEY`, `EBIRD_API_KEY`) — also out of scope for the smoke test.
-- **`audio play` needs a real audio device** (PortAudio/sounddevice). It blocks
-  for the file's duration (Ctrl-C to stop), and raises on a headless box with no
-  output device — keep it out of automated checks.
 - **Errors surface as `Error: ...` on exit 1**, not tracebacks — every failure
   is a `BioamlaError` caught centrally in `cli/cli.py:main`. A traceback escaping
   to the terminal is itself a bug.
