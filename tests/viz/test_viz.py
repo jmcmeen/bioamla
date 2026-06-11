@@ -1,0 +1,85 @@
+"""Tests for the viz domain (flattened, exception-based API)."""
+
+import numpy as np
+import pytest
+
+from bioamla.audio import AudioData
+from bioamla.exceptions import InvalidInputError, NotFoundError
+from bioamla.viz import (
+    batch_generate_spectrograms,
+    compute_mel_spectrogram,
+    compute_stft,
+    generate_spectrogram,
+    spectrogram_to_db,
+    spectrogram_to_image,
+)
+
+
+class TestComputeFunctions:
+    def test_compute_stft(self, sample_audio_data: AudioData) -> None:
+        freqs, times, mag = compute_stft(sample_audio_data.samples, sample_audio_data.sample_rate)
+        assert mag.ndim == 2
+        assert len(freqs) == mag.shape[0]
+        assert len(times) == mag.shape[1]
+
+    def test_compute_mel_spectrogram(self, sample_audio_data: AudioData) -> None:
+        times, mel = compute_mel_spectrogram(
+            sample_audio_data.samples, sample_audio_data.sample_rate, n_mels=64
+        )
+        assert mel.shape[0] == 64
+        assert len(times) == mel.shape[1]
+
+    def test_spectrogram_to_db(self, sample_audio_data: AudioData) -> None:
+        _, _, mag = compute_stft(sample_audio_data.samples, sample_audio_data.sample_rate)
+        db = spectrogram_to_db(mag**2)
+        assert db.shape == mag.shape
+        assert np.all(db <= 0.0 + 1e-6)
+
+
+class TestSpectrogramToImage:
+    def test_writes_image(self, sample_audio_data: AudioData, tmp_path) -> None:
+        _, mel = compute_mel_spectrogram(
+            sample_audio_data.samples, sample_audio_data.sample_rate, n_mels=64
+        )
+        out = tmp_path / "spec.png"
+        result = spectrogram_to_image(spectrogram_to_db(mel), str(out))
+        assert out.exists()
+        assert result == str(out)
+
+
+class TestGenerateSpectrogram:
+    def test_missing_file_raises(self, tmp_path) -> None:
+        with pytest.raises(NotFoundError):
+            generate_spectrogram(str(tmp_path / "missing.wav"), str(tmp_path / "out.png"))
+
+    def test_invalid_type_raises(self, test_audio_path: str, tmp_path) -> None:
+        with pytest.raises(InvalidInputError):
+            generate_spectrogram(test_audio_path, str(tmp_path / "out.png"), viz_type="nope")
+
+    def test_generate_writes_png(self, test_audio_path: str, tmp_path) -> None:
+        out = tmp_path / "spec.png"
+        result = generate_spectrogram(test_audio_path, str(out), viz_type="mel", sample_rate=16000)
+        assert out.exists()
+        assert result == str(out)
+
+    def test_generate_librosa_backend_no_torch(self, test_audio_path: str, tmp_path) -> None:
+        # viz is slim-core: spectrogram generation must work without any ML/torch
+        # packages. The librosa backend never touches torch.
+        out = tmp_path / "out.png"
+        result = generate_spectrogram(test_audio_path, str(out), backend="librosa")
+        assert out.exists()
+        assert result == str(out)
+
+
+class TestBatch:
+    def test_batch_generate(self, test_audio_dir: str, tmp_path) -> None:
+        out_dir = tmp_path / "out"
+        result = batch_generate_spectrograms(test_audio_dir, str(out_dir), verbose=False)
+        assert result["files_processed"] == 3
+        assert result["files_failed"] == 0
+
+    def test_batch_missing_dir_raises(self, tmp_path) -> None:
+        with pytest.raises(NotFoundError):
+            batch_generate_spectrograms(
+                str(tmp_path / "nope"), str(tmp_path / "out"), verbose=False
+            )

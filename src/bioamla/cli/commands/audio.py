@@ -1,6 +1,10 @@
 """Audio file operations (info, convert, segment, visualize)."""
 
+from pathlib import Path
+
 import click
+
+from bioamla.exceptions import BioamlaError
 
 
 @click.group()
@@ -13,10 +17,12 @@ def audio() -> None:
 @click.argument("path")
 def audio_info(path: str) -> None:
     """Display audio file information."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.audio import load_audio_data
 
-    result = services.audio_file.open(path)
-    audio_data = handle_result(result)
+    try:
+        audio_data = load_audio_data(path)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"File: {path}")
     click.echo(f"Duration: {audio_data.duration:.2f}s")
@@ -27,13 +33,20 @@ def audio_info(path: str) -> None:
 
 @audio.command("list")
 @click.argument("path")
-@click.option("--recursive/--no-recursive", "-r", default=True, help="Search subdirectories (default: recursive)")
+@click.option(
+    "--recursive/--no-recursive",
+    "-r",
+    default=True,
+    help="Search subdirectories (default: recursive)",
+)
 def audio_list(path: str, recursive: bool) -> None:
     """List audio files in a directory."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.audio import list_audio_files
 
-    result = services.audio_transform.list_files(path, recursive=recursive)
-    audio_files = handle_result(result)
+    try:
+        audio_files = list_audio_files(path, recursive=recursive)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if not audio_files:
         click.echo("No audio files found")
@@ -57,35 +70,42 @@ def audio_list(path: str, recursive: bool) -> None:
     type=click.Choice(["wav", "mp3", "flac", "ogg"]),
     help="Output format",
 )
-def audio_convert(input_path: str, output_path: str, sample_rate: int, channels: int, bit_depth: int, format: str) -> None:
+def audio_convert(
+    input_path: str,
+    output_path: str,
+    sample_rate: int,
+    channels: int,
+    bit_depth: int,
+    format: str,
+) -> None:
     """Convert audio file format or properties."""
-    from bioamla.cli.service_helpers import check_result, handle_result, services
+    import numpy as np
 
-    # Load the audio file
-    audio_data = handle_result(services.audio_file.open(input_path))
+    from bioamla.audio import load_audio_data, save_audio_data_as
 
-    # Handle channel conversion if requested
-    if channels is not None and channels != audio_data.channels:
-        import numpy as np
+    try:
+        audio_data = load_audio_data(input_path)
 
-        if channels == 1 and audio_data.channels == 2:
-            # Stereo to mono: average channels
-            if audio_data.samples.ndim == 2:
-                audio_data.samples = audio_data.samples.mean(axis=1)
-            audio_data.channels = 1
-        elif channels == 2 and audio_data.channels == 1:
-            # Mono to stereo: duplicate channel
-            audio_data.samples = np.column_stack([audio_data.samples, audio_data.samples])
-            audio_data.channels = 2
+        # Handle channel conversion if requested
+        if channels is not None and channels != audio_data.channels:
+            if channels == 1 and audio_data.channels == 2:
+                # Stereo to mono: average channels
+                if audio_data.samples.ndim == 2:
+                    audio_data.samples = audio_data.samples.mean(axis=1)
+                audio_data.channels = 1
+            elif channels == 2 and audio_data.channels == 1:
+                # Mono to stereo: duplicate channel
+                audio_data.samples = np.column_stack([audio_data.samples, audio_data.samples])
+                audio_data.channels = 2
 
-    # Save with optional resampling and format conversion
-    result = services.audio_file.save_as(
-        audio_data=audio_data,
-        output_path=output_path,
-        target_sample_rate=sample_rate,
-        format=format,
-    )
-    check_result(result)
+        save_audio_data_as(
+            audio_data,
+            output_path,
+            target_sample_rate=sample_rate,
+            format=format,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"Converted: {output_path}")
 
@@ -113,21 +133,46 @@ def audio_convert(input_path: str, output_path: str, sample_rate: int, channels:
 @click.option(
     "--prefix", "-p", default=None, help="Prefix for output filenames (default: input filename)"
 )
-def audio_segment(input_path: str, output_dir: str, duration: float, overlap: float, format: str, prefix: str) -> None:
+def audio_segment(
+    input_path: str,
+    output_dir: str,
+    duration: float,
+    overlap: float,
+    format: str,
+    prefix: str,
+) -> None:
     """Segment audio file into fixed-duration clips."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.audio import load_audio, save_audio
+    from bioamla.exceptions import InvalidInputError
 
-    result = services.audio_transform.segment_file(
-        input_path=input_path,
-        output_dir=output_dir,
-        duration=duration,
-        overlap=overlap,
-        format=format,
-        prefix=prefix,
-    )
-    batch_result = handle_result(result)
+    try:
+        audio, sr = load_audio(input_path)
 
-    click.echo(f"Created {batch_result.processed} segments in {output_dir}")
+        segment_samples = int(duration * sr)
+        overlap_samples = int(overlap * sr)
+        step_samples = segment_samples - overlap_samples
+
+        if step_samples <= 0:
+            raise InvalidInputError("Overlap must be less than duration")
+
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        if prefix is None:
+            prefix = Path(input_path).stem
+
+        segments_created = 0
+        position = 0
+        while position + segment_samples <= len(audio):
+            segment = audio[position : position + segment_samples]
+            segment_file = out_dir / f"{prefix}_{segments_created:04d}.{format}"
+            save_audio(str(segment_file), segment, sr)
+            segments_created += 1
+            position += step_samples
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Created {segments_created} segments in {output_dir}")
 
 
 @audio.command("trim")
@@ -136,24 +181,25 @@ def audio_segment(input_path: str, output_dir: str, duration: float, overlap: fl
 @click.option("--start", "-s", default=0.0, type=float, help="Start time in seconds")
 @click.option("--end", "-e", default=None, type=float, help="End time in seconds")
 @click.option("--duration", "-d", default=None, type=float, help="Duration in seconds")
-def audio_trim(input_path: str, output_path: str, start: float, end: float, duration: float) -> None:
+def audio_trim(
+    input_path: str, output_path: str, start: float, end: float, duration: float
+) -> None:
     """Trim audio file to specified time range."""
-    from bioamla.cli.service_helpers import check_result, exit_with_error, services
+    from bioamla.audio import load_audio, save_audio, trim_audio
 
     if end is not None and duration is not None:
-        exit_with_error("Cannot specify both --end and --duration")
+        raise click.ClickException("Cannot specify both --end and --duration")
 
     # Calculate end time from duration if specified
     if duration is not None:
         end = start + duration
 
-    result = services.audio_transform.trim_file(
-        input_path=input_path,
-        output_path=output_path,
-        start=start if start != 0.0 else None,
-        end=end,
-    )
-    check_result(result)
+    try:
+        audio, sr = load_audio(input_path)
+        trimmed = trim_audio(audio, sr, start_time=start if start != 0.0 else None, end_time=end)
+        save_audio(output_path, trimmed, sr)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"Trimmed audio saved to: {output_path}")
 
@@ -165,15 +211,25 @@ def audio_trim(input_path: str, output_path: str, start: float, end: float, dura
 @click.option("--method", "-m", type=click.Choice(["peak", "rms"]), default="peak", help="Method")
 def audio_normalize(input_path: str, output_path: str, target_db: float, method: str) -> None:
     """Normalize audio amplitude."""
-    from bioamla.cli.service_helpers import check_result, services
-
-    result = services.audio_transform.normalize_file(
-        input_path=input_path,
-        output_path=output_path,
-        target_db=target_db,
-        peak=(method == "peak"),
+    from bioamla.audio import (
+        load_audio,
+        normalize_loudness,
+        peak_normalize,
+        save_audio,
     )
-    check_result(result)
+
+    try:
+        audio, sr = load_audio(input_path)
+
+        if method == "peak":
+            target_linear = 10 ** (target_db / 20)
+            normalized = peak_normalize(audio, target_peak=min(target_linear, 0.99))
+        else:
+            normalized = normalize_loudness(audio, sr, target_db=target_db)
+
+        save_audio(output_path, normalized, sr)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"Normalized audio saved to: {output_path}")
 
@@ -184,14 +240,14 @@ def audio_normalize(input_path: str, output_path: str, target_db: float, method:
 @click.option("--sample-rate", "-r", required=True, type=int, help="Target sample rate in Hz")
 def audio_resample(input_path: str, output_path: str, sample_rate: int) -> None:
     """Resample audio to a different sample rate."""
-    from bioamla.cli.service_helpers import check_result, services
+    from bioamla.audio import load_audio, resample_audio, save_audio
 
-    result = services.audio_transform.resample_file(
-        input_path=input_path,
-        output_path=output_path,
-        target_rate=sample_rate,
-    )
-    check_result(result)
+    try:
+        audio, sr = load_audio(input_path)
+        resampled = resample_audio(audio, sr, sample_rate)
+        save_audio(output_path, resampled, sample_rate)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"Resampled audio saved to: {output_path}")
 
@@ -204,62 +260,158 @@ def audio_resample(input_path: str, output_path: str, sample_rate: int) -> None:
 @click.option("--bandpass-low", default=None, type=float, help="Bandpass low frequency in Hz")
 @click.option("--bandpass-high", default=None, type=float, help="Bandpass high frequency in Hz")
 @click.option("--order", default=5, type=int, help="Filter order (default: 5)")
-def audio_filter(input_path: str, output_path: str, lowpass: float, highpass: float, bandpass_low: float, bandpass_high: float, order: int) -> None:
+def audio_filter(
+    input_path: str,
+    output_path: str,
+    lowpass: float,
+    highpass: float,
+    bandpass_low: float,
+    bandpass_high: float,
+    order: int,
+) -> None:
     """Apply frequency filter to audio file."""
-    from bioamla.cli.service_helpers import check_result, services
+    from bioamla.audio import (
+        bandpass_filter,
+        highpass_filter,
+        load_audio,
+        lowpass_filter,
+        save_audio,
+    )
 
     # Validate filter options
     if not any([lowpass, highpass, bandpass_low]):
-        click.echo("Error: Must specify --lowpass, --highpass, or --bandpass-low/--bandpass-high")
-        return
+        raise click.ClickException(
+            "Must specify --lowpass, --highpass, or --bandpass-low/--bandpass-high"
+        )
 
     if (bandpass_low is not None) != (bandpass_high is not None):
-        click.echo("Error: Both --bandpass-low and --bandpass-high must be specified together")
-        return
+        raise click.ClickException(
+            "Both --bandpass-low and --bandpass-high must be specified together"
+        )
 
-    bandpass = (bandpass_low, bandpass_high) if bandpass_low is not None else None
+    try:
+        audio, sr = load_audio(input_path)
 
-    result = services.audio_transform.filter_file(
-        input_path=input_path,
-        output_path=output_path,
-        lowpass=lowpass,
-        highpass=highpass,
-        bandpass=bandpass,
-        order=order,
-    )
-    check_result(result)
+        if bandpass_low is not None:
+            filtered = bandpass_filter(audio, sr, bandpass_low, bandpass_high, order)
+            desc = f"bandpass filter ({bandpass_low}-{bandpass_high} Hz)"
+        elif lowpass:
+            filtered = lowpass_filter(audio, sr, lowpass, order)
+            desc = f"lowpass filter ({lowpass} Hz)"
+        else:
+            filtered = highpass_filter(audio, sr, highpass, order)
+            desc = f"highpass filter ({highpass} Hz)"
 
-    if bandpass:
-        click.echo(f"Applied bandpass filter ({bandpass[0]}-{bandpass[1]} Hz) to: {output_path}")
-    elif lowpass:
-        click.echo(f"Applied lowpass filter ({lowpass} Hz) to: {output_path}")
-    else:
-        click.echo(f"Applied highpass filter ({highpass} Hz) to: {output_path}")
+        save_audio(output_path, filtered, sr)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Applied {desc} to: {output_path}")
 
 
 @audio.command("denoise")
 @click.argument("input_path")
 @click.argument("output_path")
-@click.option("--strength", default=1.0, type=float, help="Noise reduction strength (0-2, default: 1.0)")
+@click.option(
+    "--strength", default=1.0, type=float, help="Noise reduction strength (0-2, default: 1.0)"
+)
 def audio_denoise(input_path: str, output_path: str, strength: float) -> None:
     """Apply spectral noise reduction to audio file."""
-    from bioamla.cli.service_helpers import check_result, services
+    from bioamla.audio import load_audio, save_audio, spectral_denoise
 
-    result = services.audio_transform.denoise_file(
-        input_path=input_path,
-        output_path=output_path,
-        strength=strength,
-    )
-    check_result(result)
+    try:
+        audio, sr = load_audio(input_path)
+        denoised = spectral_denoise(audio, sr, noise_reduce_factor=strength)
+        save_audio(output_path, denoised, sr)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"Denoised audio saved to: {output_path}")
+
+
+@audio.command("pitch-shift")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option(
+    "--steps", "-n", required=True, type=float, help="Semitones to shift (positive raises pitch)"
+)
+def audio_pitch_shift(input_path: str, output_path: str, steps: float) -> None:
+    """Shift pitch up/down without changing duration."""
+    from bioamla.audio import load_audio, pitch_shift, save_audio
+
+    try:
+        audio, sr = load_audio(input_path)
+        shifted = pitch_shift(audio, sr, steps)
+        save_audio(output_path, shifted, sr)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Pitch-shifted audio ({steps:+g} semitones) saved to: {output_path}")
+
+
+@audio.command("time-stretch")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option(
+    "--rate", "-r", required=True, type=float, help="Stretch factor (>1 faster, <1 slower)"
+)
+def audio_time_stretch(input_path: str, output_path: str, rate: float) -> None:
+    """Time-stretch audio without changing pitch."""
+    from bioamla.audio import load_audio, save_audio, time_stretch
+
+    try:
+        audio, sr = load_audio(input_path)
+        stretched = time_stretch(audio, rate)
+        save_audio(output_path, stretched, sr)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Time-stretched audio (rate {rate:g}) saved to: {output_path}")
+
+
+@audio.command("add-noise")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option("--snr-db", required=True, type=float, help="Target SNR in dB (lower = more noise)")
+@click.option("--seed", default=None, type=int, help="RNG seed for reproducible noise")
+def audio_add_noise(input_path: str, output_path: str, snr_db: float, seed: int) -> None:
+    """Add Gaussian white noise at a target SNR."""
+    from bioamla.audio import add_noise, load_audio, save_audio
+
+    try:
+        audio, sr = load_audio(input_path)
+        noisy = add_noise(audio, snr_db, seed=seed)
+        save_audio(output_path, noisy, sr)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Noisy audio (SNR {snr_db:g} dB) saved to: {output_path}")
+
+
+@audio.command("gain")
+@click.argument("input_path")
+@click.argument("output_path")
+@click.option("--gain-db", required=True, type=float, help="Gain in dB (positive amplifies)")
+def audio_gain(input_path: str, output_path: str, gain_db: float) -> None:
+    """Apply a fixed gain (dB) to audio."""
+    from bioamla.audio import apply_gain, load_audio, save_audio
+
+    try:
+        audio, sr = load_audio(input_path)
+        gained = apply_gain(audio, gain_db)
+        save_audio(output_path, gained, sr)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Gain-adjusted audio ({gain_db:+g} dB) saved to: {output_path}")
 
 
 @audio.command("visualize")
 @click.argument("path")
 @click.option("--output", "-o", default=None, help="Output image file path")
 @click.option(
-    "--type", "-t",
+    "--type",
+    "-t",
     "viz_type",
     default="mel",
     type=click.Choice(["mel", "stft", "mfcc", "waveform"]),
@@ -271,26 +423,42 @@ def audio_denoise(input_path: str, output_path: str, strength: float) -> None:
 @click.option("--n-mfcc", default=20, type=int, help="Number of MFCCs")
 @click.option("--cmap", default="viridis", help="Colormap name")
 @click.option("--dpi", default=100, type=int, help="Output DPI")
-@click.option("--legend/--no-legend", default=True, help="Show axes, title, and colorbar (default: True)")
-def audio_visualize(path: str, output: str, viz_type: str, n_fft: int, hop_length: int, n_mels: int, n_mfcc: int, cmap: str, dpi: int, legend: bool) -> None:
+@click.option(
+    "--legend/--no-legend",
+    default=True,
+    help="Show axes, title, and colorbar (default: True)",
+)
+def audio_visualize(
+    path: str,
+    output: str,
+    viz_type: str,
+    n_fft: int,
+    hop_length: int,
+    n_mels: int,
+    n_mfcc: int,
+    cmap: str,
+    dpi: int,
+    legend: bool,
+) -> None:
     """Generate audio visualization (spectrogram, waveform, MFCC) for a single file."""
-    from pathlib import Path
-
-    from bioamla.cli.service_helpers import check_result, services
+    from bioamla.viz import generate_spectrogram
 
     output_path = output or f"{Path(path).stem}_{viz_type}.png"
-    result = services.audio_transform.visualize_file(
-        input_path=path,
-        output_path=output_path,
-        viz_type=viz_type,
-        n_fft=n_fft,
-        hop_length=hop_length,
-        n_mels=n_mels,
-        n_mfcc=n_mfcc,
-        cmap=cmap,
-        dpi=dpi,
-        show_legend=legend,
-    )
-    check_result(result)
+
+    try:
+        generate_spectrogram(
+            audio_path=path,
+            output_path=output_path,
+            viz_type=viz_type,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            n_mels=n_mels,
+            n_mfcc=n_mfcc,
+            cmap=cmap,
+            dpi=dpi,
+            show_colorbar=legend,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"Visualization saved to: {output_path}")

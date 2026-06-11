@@ -2,6 +2,8 @@
 
 import click
 
+from bioamla.exceptions import BioamlaError
+
 
 @click.group()
 def dataset() -> None:
@@ -37,30 +39,452 @@ def dataset_merge(
     quiet: bool,
 ) -> None:
     """Merge multiple audio datasets into a single dataset."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.datasets import merge_datasets
 
-    result = services.dataset.merge(
-        dataset_paths=list(dataset_paths),
-        output_dir=output_dir,
-        metadata_filename=metadata_filename,
-        skip_existing=not overwrite,
-        organize_by_category=not no_organize,
-        target_format=target_format,
-        verbose=not quiet,
-    )
-    stats = handle_result(result)
+    try:
+        stats = merge_datasets(
+            dataset_paths=list(dataset_paths),
+            output_dir=output_dir,
+            metadata_filename=metadata_filename,
+            skip_existing=not overwrite,
+            organize_by_category=not no_organize,
+            target_format=target_format,
+            verbose=not quiet,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if quiet:
-        msg = f"Merged {stats.datasets_merged} datasets: {stats.total_files} total files"
+        msg = f"Merged {stats['datasets_merged']} datasets: {stats['total_files']} total files"
         if target_format:
-            msg += f", {stats.files_converted} converted"
+            msg += f", {stats['files_converted']} converted"
         click.echo(msg)
+
+
+@dataset.command("extract-clips")
+@click.argument("source")
+@click.argument("output_dir")
+@click.option(
+    "--annotations",
+    default=None,
+    help="Annotation file when SOURCE is a single audio file (else a sibling file is used)",
+)
+@click.option(
+    "--layout",
+    type=click.Choice(["both", "audiofolder", "flat"]),
+    default="both",
+    help="Output layout: label subdirs + metadata.csv (both), subdirs only, or flat + metadata.csv",
+)
+@click.option("--padding-ms", type=float, default=0.0, help="Padding before/after each clip (ms)")
+@click.option(
+    "--bandpass/--no-bandpass",
+    default=False,
+    help="Bandpass-filter clips to each annotation's frequency band",
+)
+@click.option("--format", "audio_format", default="wav", help="Output audio format")
+@click.option(
+    "--sample-rate", type=int, default=None, help="Resample clips to this rate (e.g. 16000 for AST)"
+)
+@click.option("--include", "-i", multiple=True, help="Labels to include (repeatable)")
+@click.option("--exclude", "-e", multiple=True, help="Labels to exclude (repeatable)")
+@click.option("--min-duration", type=float, default=None, help="Drop clips shorter than this (s)")
+@click.option(
+    "--source-metadata",
+    default=None,
+    help="Catalog metadata.csv to join license/attribution onto clips "
+    "(auto-detected as a metadata.csv sibling of SOURCE when omitted)",
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def dataset_extract_clips(
+    source: str,
+    output_dir: str,
+    annotations: str,
+    layout: str,
+    padding_ms: float,
+    bandpass: bool,
+    audio_format: str,
+    sample_rate: int,
+    include: tuple,
+    exclude: tuple,
+    min_duration: float,
+    source_metadata: str,
+    quiet: bool,
+) -> None:
+    """Extract annotated regions into a labeled clip dataset (training-ready).
+
+    SOURCE is an audio file (with --annotations or a sibling annotation file) or
+    a directory of audio files each paired with a sibling annotation. The output
+    is consumable by `bioamla models ast train` directly (label subdirs and/or a
+    metadata.csv). License/attribution is joined from the source catalog
+    metadata.csv (auto-detected, or via --source-metadata) so clips stay
+    traceable to their original recordings.
+    """
+    from bioamla.datasets import extract_labeled_dataset
+
+    try:
+        result = extract_labeled_dataset(
+            source=source,
+            output_dir=output_dir,
+            annotations=annotations,
+            layout=layout,
+            padding_ms=padding_ms,
+            bandpass=bandpass,
+            format=audio_format,
+            target_sample_rate=sample_rate,
+            include_labels=set(include) if include else None,
+            exclude_labels=set(exclude) if exclude else None,
+            min_duration=min_duration,
+            source_metadata=source_metadata,
+            verbose=not quiet,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        click.echo(
+            f"Extracted {result['clips_written']} clips from "
+            f"{result['files_processed']} file(s) into {result['output_dir']}"
+        )
+        click.echo(f"Labels ({len(result['labels'])}): {', '.join(result['labels'])}")
+        if result["metadata_file"]:
+            click.echo(f"Metadata: {result['metadata_file']}")
+        prov = result.get("provenance", {})
+        if prov.get("joined"):
+            click.echo(
+                f"Provenance: joined {prov['matched']}/{result['clips_written']} clips "
+                f"({', '.join(prov['columns'])})"
+            )
+            if prov.get("unmatched"):
+                click.echo(f"  {prov['unmatched']} clip(s) had no source-metadata match")
+        if result.get("skipped"):
+            click.echo(f"Skipped (out of range): {len(result['skipped'])} clip(s)")
+        if result["failed"]:
+            click.echo(f"Failed: {len(result['failed'])} clip(s)")
+
+
+@dataset.command("stats")
+@click.argument("dataset_dir")
+@click.option(
+    "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -> None:
+    """Show summary statistics for a dataset's metadata.csv."""
+    import json as json_lib
+
+    from bioamla.datasets import get_dataset_stats
+
+    try:
+        stats = get_dataset_stats(dataset_dir, metadata_filename=metadata_filename)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if output_json:
+        click.echo(json_lib.dumps(stats, indent=2))
+        return
+
+    click.echo(f"\nDataset Statistics: {dataset_dir}")
+    click.echo("=" * 50)
+    click.echo(f"Total files: {stats['total_files']}")
+    click.echo(f"Classes: {stats['num_categories']}")
+    if stats.get("splits"):
+        split_str = ", ".join(f"{k}={v}" for k, v in sorted(stats["splits"].items()))
+        click.echo(f"Splits: {split_str}")
+    click.echo("\nLabel counts:")
+    for label, count in sorted(stats["categories"].items()):
+        click.echo(f"  {label}: {count}")
+    if stats.get("licenses"):
+        click.echo("\nLicenses:")
+        for lic, count in sorted(stats["licenses"].items()):
+            click.echo(f"  {lic or '(none)'}: {count}")
+
+
+@dataset.command("manifest")
+@click.argument("dataset_dir")
+@click.option(
+    "--name", default="", help="Dataset name recorded in the manifest (defaults to dir name)"
+)
+@click.option(
+    "--kind",
+    type=click.Choice(["labeled", "partitioned"]),
+    default="labeled",
+    help="Dataset kind",
+)
+@click.option(
+    "--output",
+    default=None,
+    help="Output manifest path (default: DATASET_DIR/dataset.json)",
+)
+@click.option(
+    "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
+)
+@click.option("--sample-rate", type=int, default=None, help="Sample rate to record in the manifest")
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def dataset_manifest(
+    dataset_dir: str,
+    name: str,
+    kind: str,
+    output: str,
+    metadata_filename: str,
+    sample_rate: int,
+    quiet: bool,
+) -> None:
+    """Build a dataset.json manifest (label vocabulary, counts, splits) from metadata.csv."""
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    from bioamla.datasets import build_manifest_from_metadata, save_dataset_manifest
+
+    dataset_path = Path(dataset_dir)
+    manifest_name = name or dataset_path.name
+    output_path = output or str(dataset_path / "dataset.json")
+
+    try:
+        manifest = build_manifest_from_metadata(
+            dataset_dir,
+            name=manifest_name,
+            kind=kind,
+            created=datetime.now(timezone.utc).isoformat(),
+            metadata_filename=metadata_filename,
+            sample_rate=sample_rate,
+        )
+        save_dataset_manifest(manifest, output_path)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        click.echo(f"Wrote manifest: {output_path}")
+        click.echo(
+            f"  classes: {len(manifest.label2id)}  files: {sum(manifest.class_counts.values())}"
+        )
+        if manifest.splits:
+            split_str = ", ".join(f"{k}={v}" for k, v in sorted(manifest.splits.items()))
+            click.echo(f"  splits: {split_str}")
+
+
+@dataset.command("partition")
+@click.argument("dataset_dir")
+@click.option("--train", "train_frac", type=float, default=0.70, help="Train fraction")
+@click.option("--val", "val_frac", type=float, default=0.15, help="Validation fraction")
+@click.option("--test", "test_frac", type=float, default=0.15, help="Test fraction")
+@click.option("--seed", type=int, default=0, help="Reproducible shuffle seed")
+@click.option("--stratify/--no-stratify", default=True, help="Balance labels across splits")
+@click.option(
+    "--mode",
+    type=click.Choice(["subdirs", "column"]),
+    default="subdirs",
+    help="Reorganize into train/val/test/<label>/ (subdirs) or populate a split column",
+)
+@click.option(
+    "--group-by",
+    default="source_file",
+    help="Keep rows sharing this column's value in one split (prevents clip leakage)",
+)
+@click.option(
+    "--background-label",
+    default=None,
+    help="Partition this label as its own stratum so it appears in every split",
+)
+@click.option(
+    "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def dataset_partition(
+    dataset_dir: str,
+    train_frac: float,
+    val_frac: float,
+    test_frac: float,
+    seed: int,
+    stratify: bool,
+    mode: str,
+    group_by: str,
+    background_label: str,
+    metadata_filename: str,
+    quiet: bool,
+) -> None:
+    """Partition a dataset into train/val/test (stratified, grouped, reproducible)."""
+    from bioamla.datasets import partition_dataset
+
+    try:
+        result = partition_dataset(
+            dataset_dir,
+            splits=(train_frac, val_frac, test_frac),
+            seed=seed,
+            stratify=stratify,
+            mode=mode,
+            group_by=group_by or None,
+            background_label=background_label,
+            metadata_filename=metadata_filename,
+            verbose=not quiet,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        split_str = ", ".join(f"{k}={v}" for k, v in sorted(result["splits"].items()))
+        click.echo(
+            f"Partitioned {result['groups']} group(s) into splits ({result['mode']}): {split_str}"
+        )
+        click.echo(f"Metadata: {result['metadata_file']}")
+
+
+# `split` is an alias for `partition`.
+dataset.add_command(dataset_partition, "split")
+
+
+@dataset.command("build")
+@click.argument("source")
+@click.argument("output_dir")
+@click.option(
+    "--annotations",
+    default=None,
+    help="Annotation file when SOURCE is a single audio file (else a sibling file is used)",
+)
+@click.option("--padding-ms", type=float, default=0.0, help="Padding before/after each clip (ms)")
+@click.option(
+    "--bandpass/--no-bandpass",
+    default=False,
+    help="Bandpass-filter clips to each annotation's frequency band",
+)
+@click.option(
+    "--sample-rate", type=int, default=None, help="Resample clips to this rate (e.g. 16000 for AST)"
+)
+@click.option("--include", "-i", multiple=True, help="Labels to include (repeatable)")
+@click.option("--exclude", "-e", multiple=True, help="Labels to exclude (repeatable)")
+@click.option("--min-duration", type=float, default=None, help="Drop clips shorter than this (s)")
+@click.option("--train", "train_frac", type=float, default=0.70, help="Train fraction")
+@click.option("--val", "val_frac", type=float, default=0.15, help="Validation fraction")
+@click.option("--test", "test_frac", type=float, default=0.15, help="Test fraction")
+@click.option("--seed", type=int, default=0, help="Reproducible shuffle seed")
+@click.option("--no-partition", is_flag=True, help="Extract clips but skip train/val/test split")
+@click.option("--name", default="", help="Dataset name for the manifest (defaults to dir name)")
+@click.option(
+    "--source-metadata",
+    default=None,
+    help="Catalog metadata.csv to join license/attribution onto clips "
+    "(auto-detected as a metadata.csv sibling of SOURCE when omitted)",
+)
+@click.option(
+    "--attributions/--no-attributions",
+    default=True,
+    help="Write ATTRIBUTIONS.md from joined clip provenance (skipped if none)",
+)
+@click.option("--quiet", is_flag=True, help="Suppress progress output")
+def dataset_build(
+    source: str,
+    output_dir: str,
+    annotations: str,
+    padding_ms: float,
+    bandpass: bool,
+    sample_rate: int,
+    include: tuple,
+    exclude: tuple,
+    min_duration: float,
+    train_frac: float,
+    val_frac: float,
+    test_frac: float,
+    seed: int,
+    no_partition: bool,
+    name: str,
+    source_metadata: str,
+    attributions: bool,
+    quiet: bool,
+) -> None:
+    """Build a training-ready dataset: extract clips, partition, and write a manifest.
+
+    Chains `extract-clips` (layout=both) -> `partition` (subdirs) -> `manifest`,
+    producing a dataset directory + dataset.json consumable by `models ast train`.
+    License/attribution joined from the source catalog metadata is written to
+    ATTRIBUTIONS.md (unless --no-attributions).
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    from bioamla.datasets import (
+        build_manifest_from_metadata,
+        extract_labeled_dataset,
+        generate_license_for_dataset,
+        partition_dataset,
+        save_dataset_manifest,
+    )
+
+    output_path = Path(output_dir)
+    try:
+        extract = extract_labeled_dataset(
+            source=source,
+            output_dir=output_dir,
+            annotations=annotations,
+            layout="both",
+            padding_ms=padding_ms,
+            bandpass=bandpass,
+            target_sample_rate=sample_rate,
+            include_labels=set(include) if include else None,
+            exclude_labels=set(exclude) if exclude else None,
+            min_duration=min_duration,
+            source_metadata=source_metadata,
+            verbose=not quiet,
+        )
+
+        kind = "labeled"
+        partition_result = None
+        if not no_partition:
+            partition_result = partition_dataset(
+                output_dir,
+                splits=(train_frac, val_frac, test_frac),
+                seed=seed,
+                mode="subdirs",
+                verbose=not quiet,
+            )
+            kind = "partitioned"
+
+        manifest = build_manifest_from_metadata(
+            output_dir,
+            name=name or output_path.name,
+            kind=kind,
+            created=datetime.now(timezone.utc).isoformat(),
+            sample_rate=sample_rate,
+        )
+        save_dataset_manifest(manifest, str(output_path / "dataset.json"))
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    # Non-fatal: write ATTRIBUTIONS.md when clips carry license/attribution.
+    attributions_path = None
+    if attributions:
+        try:
+            stats = generate_license_for_dataset(output_path, format="md")
+            attributions_path = stats["output_path"]
+        except BioamlaError:
+            attributions_path = None  # no provenance to attribute — skip silently
+
+    if not quiet:
+        click.echo(f"Built dataset at {output_dir}")
+        click.echo(f"  clips: {extract['clips_written']}  classes: {len(manifest.label2id)}")
+        if partition_result:
+            split_str = ", ".join(f"{k}={v}" for k, v in sorted(partition_result["splits"].items()))
+            click.echo(f"  splits: {split_str}")
+        click.echo(f"  manifest: {output_path / 'dataset.json'}")
+        if attributions_path:
+            click.echo(f"  attributions: {attributions_path}")
+        click.echo(f"Push to the Hub with: bioamla catalogs hf push-dataset {output_dir} <repo-id>")
 
 
 @dataset.command("license")
 @click.argument("path")
 @click.option("--template", "-t", default=None, help="Template file to prepend to the license file")
-@click.option("--output", "-o", default="LICENSE", help="Output filename for the license file")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output filename (default: LICENSE for text, ATTRIBUTIONS.md for md)",
+)
+@click.option(
+    "--format",
+    "out_format",
+    type=click.Choice(["text", "md"]),
+    default="text",
+    help="Output format: plain-text LICENSE or Markdown ATTRIBUTIONS",
+)
 @click.option("--metadata-filename", default="metadata.csv", help="Name of metadata CSV file")
 @click.option(
     "--batch",
@@ -69,15 +493,24 @@ def dataset_merge(
 )
 @click.option("--quiet", is_flag=True, help="Suppress progress output")
 def dataset_license(
-    path: str, template: str, output: str, metadata_filename: str, batch: bool, quiet: bool
+    path: str,
+    template: str,
+    output: str,
+    out_format: str,
+    metadata_filename: str,
+    batch: bool,
+    quiet: bool,
 ) -> None:
     """Generate license/attribution file from dataset metadata."""
-    from pathlib import Path as PathLib
+    from pathlib import Path
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.datasets import (
+        generate_license_for_dataset,
+        generate_licenses_for_directory,
+    )
 
-    path_obj = PathLib(path)
-    template_path = PathLib(template) if template else None
+    path_obj = Path(path)
+    template_path = Path(template) if template else None
 
     if template_path and not template_path.exists():
         click.echo(f"Error: Template file '{template}' not found.")
@@ -91,24 +524,27 @@ def dataset_license(
         if not quiet:
             click.echo(f"Scanning directory for datasets: {path}")
 
-        result = services.dataset.generate_licenses_batch(
-            directory=str(path_obj),
-            template_path=str(template_path) if template_path else None,
-            output_filename=output,
-            metadata_filename=metadata_filename,
-        )
-        stats = handle_result(result)
+        try:
+            stats = generate_licenses_for_directory(
+                audio_dir=path_obj,
+                template_path=template_path,
+                output_filename=output,
+                metadata_filename=metadata_filename,
+                format=out_format,
+            )
+        except BioamlaError as e:
+            raise click.ClickException(str(e)) from e
 
-        if stats.datasets_found == 0:
+        if stats["datasets_found"] == 0:
             click.echo("No datasets found (no directories with metadata.csv)")
             raise SystemExit(1)
 
         if not quiet:
-            click.echo(f"\nProcessed {stats.datasets_found} dataset(s):")
-            click.echo(f"  Successful: {stats.datasets_processed}")
-            click.echo(f"  Failed: {stats.datasets_failed}")
+            click.echo(f"\nProcessed {stats['datasets_found']} dataset(s):")
+            click.echo(f"  Successful: {stats['datasets_processed']}")
+            click.echo(f"  Failed: {stats['datasets_failed']}")
 
-            for item in stats.results:
+            for item in stats["results"]:
                 if item["status"] == "success":
                     click.echo(
                         f"  - {item['dataset_name']}: {item['attributions_count']} attributions"
@@ -118,9 +554,9 @@ def dataset_license(
                         f"  - {item['dataset_name']}: FAILED - {item.get('error', 'Unknown error')}"
                     )
         else:
-            click.echo(f"Generated {stats.datasets_processed} license files")
+            click.echo(f"Generated {stats['datasets_processed']} license files")
 
-        if stats.datasets_failed > 0:
+        if stats["datasets_failed"] > 0:
             raise SystemExit(1)
 
     else:
@@ -136,20 +572,24 @@ def dataset_license(
         if not quiet:
             click.echo(f"Generating license file for: {path}")
 
-        result = services.dataset.generate_license(
-            dataset_path=str(path_obj),
-            template_path=str(template_path) if template_path else None,
-            output_filename=output,
-            metadata_filename=metadata_filename,
-        )
-        stats = handle_result(result)
+        try:
+            stats = generate_license_for_dataset(
+                dataset_path=path_obj,
+                template_path=template_path,
+                output_filename=output,
+                metadata_filename=metadata_filename,
+                format=out_format,
+            )
+        except BioamlaError as e:
+            raise click.ClickException(str(e)) from e
 
         if not quiet:
-            click.echo(f"License file generated: {stats.output_path}")
-            click.echo(f"  Attributions: {stats.attributions_count}")
-            click.echo(f"  File size: {stats.file_size:,} bytes")
+            click.echo(f"License file generated: {stats['output_path']}")
+            click.echo(f"  Attributions: {stats['attributions_count']}")
+            click.echo(f"  File size: {stats['file_size']:,} bytes")
         else:
-            click.echo(f"Generated {output} with {stats.attributions_count} attributions")
+            out_name = Path(stats["output_path"]).name
+            click.echo(f"Generated {out_name} with {stats['attributions_count']} attributions")
 
 
 def _parse_range(value: str) -> tuple[float, float]:
@@ -193,9 +633,8 @@ def dataset_augment(
     quiet: bool,
 ) -> None:
     """Augment audio files to expand training datasets."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.datasets import AugmentationConfig, batch_augment
 
-    # Parse augmentation parameters
     noise_enabled = add_noise is not None
     noise_min_snr, noise_max_snr = _parse_range(add_noise) if add_noise else (3.0, 30.0)
 
@@ -213,9 +652,9 @@ def dataset_augment(
         click.echo("Use --help for available options")
         raise SystemExit(1)
 
-    result = services.dataset.augment(
-        input_dir=input_dir,
-        output_dir=output,
+    config = AugmentationConfig(
+        sample_rate=sample_rate,
+        multiply=multiply,
         add_noise=noise_enabled,
         noise_min_snr=noise_min_snr,
         noise_max_snr=noise_max_snr,
@@ -228,17 +667,23 @@ def dataset_augment(
         gain=gain_enabled,
         gain_min_db=gain_min,
         gain_max_db=gain_max,
-        multiply=multiply,
-        sample_rate=sample_rate,
-        recursive=recursive,
-        verbose=not quiet,
     )
-    stats = handle_result(result)
+
+    try:
+        stats = batch_augment(
+            input_dir=input_dir,
+            output_dir=output,
+            config=config,
+            recursive=recursive,
+            verbose=not quiet,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if quiet:
         click.echo(
-            f"Created {stats.files_created} augmented files from "
-            f"{stats.files_processed} source files in {stats.output_dir}"
+            f"Created {stats['files_created']} augmented files from "
+            f"{stats['files_processed']} source files in {stats['output_dir']}"
         )
 
 
@@ -250,20 +695,23 @@ def dataset_download(url: str, output_dir: str) -> None:
     import os
     from urllib.parse import urlparse
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.common.files import download_file
 
     if output_dir == ".":
         output_dir = os.getcwd()
 
     parsed_url = urlparse(url)
-    filename = os.path.basename(parsed_url.path)
-    if not filename:
-        filename = "downloaded_file"
-
+    filename = os.path.basename(parsed_url.path) or "downloaded_file"
     output_path = os.path.join(output_dir, filename)
 
-    result = services.dataset.download(url, output_path)
-    handle_result(result)
+    try:
+        download_file(url, output_path)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    except OSError as e:
+        raise click.ClickException(f"Download failed: {e}") from e
+
+    click.echo(f"Downloaded to {output_path}")
 
 
 @dataset.command("unzip")
@@ -273,13 +721,19 @@ def dataset_unzip(file_path: str, output_path: str) -> None:
     """Extract a ZIP archive to the specified output directory."""
     import os
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.common.files import extract_zip_file
 
     if output_path == ".":
         output_path = os.getcwd()
 
-    result = services.dataset.extract_zip(file_path, output_path)
-    handle_result(result)
+    try:
+        extract_zip_file(file_path, output_path)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    except OSError as e:
+        raise click.ClickException(f"Extraction failed: {e}") from e
+
+    click.echo(f"Extracted to {output_path}")
 
 
 @dataset.command("zip")
@@ -287,9 +741,18 @@ def dataset_unzip(file_path: str, output_path: str) -> None:
 @click.argument("output_file")
 def dataset_zip(source_path: str, output_file: str) -> None:
     """Create a ZIP archive from a file or directory."""
-    from bioamla.cli.service_helpers import handle_result, services
+    from pathlib import Path
 
-    result = services.dataset.create_zip(source_path, output_file)
-    handle_result(result)
+    from bioamla.common.files import create_zip_file, zip_directory
+
+    try:
+        if Path(source_path).is_dir():
+            zip_directory(source_path, output_file)
+        else:
+            create_zip_file([source_path], output_file)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    except OSError as e:
+        raise click.ClickException(f"ZIP creation failed: {e}") from e
 
     click.echo(f"Created {output_file}")

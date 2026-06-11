@@ -1,4 +1,4 @@
-"""ML model operations - AST and CNN models.
+"""ML model operations - AST models.
 
 Command structure:
     bioamla models {architecture} {command}
@@ -8,18 +8,56 @@ Examples:
     bioamla models ast train --train-dataset bioamla/scp-frogs
     bioamla models ast train --train-dataset ./metadata.csv
     bioamla models ast train --train-dataset ./audio_by_class/
-    bioamla models cnn predict audio.wav --model-path model.pt
-    bioamla models cnn train --train-csv data.csv --output-dir ./model
 """
 
-from typing import Dict
-
 import click
+
+from bioamla.exceptions import BioamlaError
+
+# Map ``ast train`` flag names onto config-file (section, key) locations, using the
+# template schema in ``bioamla.common.config.DEFAULT_CONFIG`` as the guidance shape
+# (e.g. [training].epochs -> --num-train-epochs). Flags set on the command line
+# override these; these override built-in defaults.
+_TRAIN_CONFIG_MAP = {
+    "base_model": ("models", "default_ast_model"),
+    "learning_rate": ("training", "learning_rate"),
+    "num_train_epochs": ("training", "epochs"),
+    "per_device_train_batch_size": ("training", "batch_size"),
+    "eval_strategy": ("training", "eval_strategy"),
+    "save_strategy": ("training", "save_strategy"),
+    "eval_steps": ("training", "eval_steps"),
+    "save_steps": ("training", "save_steps"),
+    "logging_steps": ("training", "logging_steps"),
+    "report_to": ("training", "report_to"),
+}
+
+
+def _apply_train_config(ctx: click.Context, config_path: str | None, values: dict) -> dict:
+    """Overlay TOML config onto flag values, honoring CLI-over-file-over-default.
+
+    For each mapped flag, the config value is used only when the flag was left at
+    its default (not passed on the command line) and the config provides it.
+    """
+    if not config_path:
+        return values
+
+    from click.core import ParameterSource
+
+    from bioamla.common.config import load_toml
+
+    cfg = load_toml(config_path)
+    resolved = dict(values)
+    for name, (section, key) in _TRAIN_CONFIG_MAP.items():
+        from_default = ctx.get_parameter_source(name) == ParameterSource.DEFAULT
+        cfg_value = cfg.get(section, {}).get(key)
+        if from_default and cfg_value is not None:
+            resolved[name] = cfg_value
+    return resolved
 
 
 @click.group()
 def models() -> None:
-    """ML model operations - AST and CNN models."""
+    """ML model operations - AST models."""
     pass
 
 
@@ -48,16 +86,82 @@ def ast_predict(
     Example:
         bioamla models ast predict audio.wav --model-path my_model
     """
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.ml import predict_file
 
-    result = services.inference.predict(filepath=file, model_path=model_path)
-    predictions = handle_result(result)
+    try:
+        prediction = predict_file(filepath=file, model_path=model_path, resample_freq=resample_freq)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
-    for pred in predictions:
-        click.echo(f"{pred.predicted_label} ({pred.confidence:.4f})")
+    click.echo(f"{prediction.predicted_label} ({prediction.confidence:.4f})")
+
+
+@ast.command("annotate")
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--output", "-o", required=True, help="Output annotation file")
+@click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for inference")
+@click.option("--segment-duration", default=3, type=int, help="Segment duration (seconds)")
+@click.option("--overlap", default=0, type=int, help="Overlap between segments (seconds)")
+@click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["csv", "raven", "bioamla"]),
+    default="csv",
+    help="Annotation output format",
+)
+@click.option("--exclude", multiple=True, help="Predicted label(s) to drop (repeatable)")
+@click.option(
+    "--min-confidence", default=0.0, type=float, help="Drop predictions below this confidence"
+)
+def ast_annotate(
+    file: str,
+    output: str,
+    model_path: str,
+    segment_duration: int,
+    overlap: int,
+    resample_freq: int,
+    fmt: str,
+    exclude: tuple[str, ...],
+    min_confidence: float,
+) -> None:
+    """Run segmented AST inference and write an editable annotation file.
+
+    Seeds the manual annotation/review step: each segment's prediction becomes an
+    annotation you can correct, then feed to ``bioamla dataset extract-clips``.
+
+    Example:
+        bioamla models ast annotate soundscape.wav -o soundscape.csv --exclude background
+    """
+    from pathlib import Path
+
+    from bioamla.datasets import predictions_to_annotations
+    from bioamla.datasets._io import save_annotations
+    from bioamla.ml import load_pretrained_ast_model, segmented_wave_file_inference
+
+    try:
+        model = load_pretrained_ast_model(model_path)
+        df = segmented_wave_file_inference(file, model, resample_freq, segment_duration, overlap)
+        annotations = predictions_to_annotations(
+            df.to_dict("records"), min_confidence=min_confidence, exclude_labels=exclude
+        )
+        save_annotations(annotations, Path(output), fmt)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Wrote {len(annotations)} annotations to {output}")
 
 
 @ast.command("train")
+@click.pass_context
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="TOML config file (e.g. from 'bioamla config init'). Explicit flags override "
+    "its values; its values override defaults. Reads [training] and [models].",
+)
 @click.option("--training-dir", default=".", help="Directory to save training outputs")
 @click.option(
     "--base-model",
@@ -68,13 +172,18 @@ def ast_predict(
     "--train-dataset",
     required=True,
     help="Training data source: HuggingFace dataset (e.g. 'bioamla/scp-frogs'), "
-         "local metadata CSV (with 'file' and 'label' columns), "
-         "or directory with class subdirectories (e.g. ./data/bird/, ./data/frog/)",
+    "local metadata CSV (with 'file' and 'label' columns), "
+    "or directory with class subdirectories (e.g. ./data/bird/, ./data/frog/)",
 )
 @click.option("--split", default="train", help="Dataset split to use (for HuggingFace datasets)")
 @click.option("--category-id-column", default="target", help="Column name for category IDs")
 @click.option("--category-label-column", default="category", help="Column name for category labels")
-@click.option("--report-to", default="tensorboard", help="Where to report metrics")
+@click.option(
+    "--report-to",
+    default="tensorboard",
+    help="Where to report metrics: tensorboard (default, bundled), mlflow, none, ... "
+    "(comma-separated).",
+)
 @click.option("--learning-rate", default=5.0e-5, type=float, help="Learning rate for training")
 @click.option(
     "--push-to-hub/--no-push-to-hub", default=False, help="Whether to push model to HuggingFace Hub"
@@ -154,12 +263,16 @@ def ast_predict(
     help="Probability of clipping distortion (0-1)",
 )
 @click.option("--min-percentile-threshold", default=0, type=int, help="Min percentile for clipping")
-@click.option("--max-percentile-threshold", default=30, type=int, help="Max percentile for clipping")
+@click.option(
+    "--max-percentile-threshold", default=30, type=int, help="Max percentile for clipping"
+)
 @click.option("--min-time-stretch", default=0.8, type=float, help="Minimum time stretch rate")
 @click.option("--max-time-stretch", default=1.2, type=float, help="Maximum time stretch rate")
 @click.option("--min-pitch-shift", default=-4, type=int, help="Minimum pitch shift (semitones)")
 @click.option("--max-pitch-shift", default=4, type=int, help="Maximum pitch shift (semitones)")
 def ast_train(
+    ctx: click.Context,
+    config_path: str | None,
     training_dir: str,
     base_model: str,
     train_dataset: str,
@@ -217,509 +330,118 @@ def ast_train(
         bioamla models ast train --train-dataset ./metadata.csv
         bioamla models ast train --train-dataset ./audio_by_class/
     """
-    import evaluate
-    import numpy as np
-    import torch
-    from audiomentations import (
-        AddGaussianSNR,
-        ClippingDistortion,
-        Compose,
-        Gain,
-        GainTransition,
-        PitchShift,
-        TimeStretch,
-    )
-    from datasets import Audio, Dataset, DatasetDict, load_dataset
-    from transformers import (
-        ASTConfig,
-        ASTFeatureExtractor,
-        ASTForAudioClassification,
-        Trainer,
-        TrainingArguments,
-    )
+    from bioamla.cli.logging_setup import configure_cli_logging
+    from bioamla.datasets.augmentation import AugmentationConfig
+    from bioamla.ml import train_ast
 
-    from bioamla.cli.service_helpers import services
+    # Surface the library's INFO progress messages on the console.
+    configure_cli_logging()
 
-    # Validate min/max ranges
-    if min_snr_db > max_snr_db:
-        raise click.BadParameter(f"--min-snr-db ({min_snr_db}) must be <= --max-snr-db ({max_snr_db})")
-    if min_gain_db > max_gain_db:
-        raise click.BadParameter(f"--min-gain-db ({min_gain_db}) must be <= --max-gain-db ({max_gain_db})")
-    if min_percentile_threshold > max_percentile_threshold:
-        raise click.BadParameter(
-            f"--min-percentile-threshold ({min_percentile_threshold}) must be <= --max-percentile-threshold ({max_percentile_threshold})"
+    # Overlay a TOML config (flags win over file, file wins over defaults).
+    try:
+        overrides = _apply_train_config(
+            ctx,
+            config_path,
+            {
+                "base_model": base_model,
+                "learning_rate": learning_rate,
+                "num_train_epochs": num_train_epochs,
+                "per_device_train_batch_size": per_device_train_batch_size,
+                "eval_strategy": eval_strategy,
+                "save_strategy": save_strategy,
+                "eval_steps": eval_steps,
+                "save_steps": save_steps,
+                "logging_steps": logging_steps,
+                "report_to": report_to,
+            },
         )
-    if min_time_stretch > max_time_stretch:
-        raise click.BadParameter(
-            f"--min-time-stretch ({min_time_stretch}) must be <= --max-time-stretch ({max_time_stretch})"
-        )
-    if min_pitch_shift > max_pitch_shift:
-        raise click.BadParameter(
-            f"--min-pitch-shift ({min_pitch_shift}) must be <= --max-pitch-shift ({max_pitch_shift})"
-        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    base_model = overrides["base_model"]
+    learning_rate = overrides["learning_rate"]
+    num_train_epochs = overrides["num_train_epochs"]
+    per_device_train_batch_size = overrides["per_device_train_batch_size"]
+    eval_strategy = overrides["eval_strategy"]
+    save_strategy = overrides["save_strategy"]
+    eval_steps = overrides["eval_steps"]
+    save_steps = overrides["save_steps"]
+    logging_steps = overrides["logging_steps"]
+    report_to = overrides["report_to"]
 
-    output_dir = training_dir + "/runs"
-    logging_dir = training_dir + "/logs"
-    best_model_path = training_dir + "/best_model"
-
-    if mlflow_tracking_uri or mlflow_experiment_name:
-        try:
-            import mlflow
-
-            if mlflow_tracking_uri:
-                mlflow.set_tracking_uri(mlflow_tracking_uri)
-                print(f"MLflow tracking URI: {mlflow_tracking_uri}")
-            if mlflow_experiment_name:
-                mlflow.set_experiment(mlflow_experiment_name)
-                print(f"MLflow experiment: {mlflow_experiment_name}")
-            if "mlflow" not in report_to:
-                report_to = f"{report_to},mlflow" if report_to else "mlflow"
-            print(f"MLflow integration enabled, reporting to: {report_to}")
-        except ImportError:
-            print(
-                "Warning: MLflow not installed. Install with 'pip install mlflow' to enable MLflow tracking."
-            )
-
-    if report_to and "," in report_to:
-        report_to = [r.strip() for r in report_to.split(",")]
-
-    # Determine dataset source type and load accordingly
-    from pathlib import Path
-    train_path = Path(train_dataset)
-
-    if train_path.exists():
-        # Local file or directory
-        if train_path.is_file() and train_path.suffix.lower() == ".csv":
-            # Metadata CSV file
-            click.echo(f"Loading from metadata CSV: {train_dataset}")
-            import pandas as pd
-
-            # Read CSV and determine structure
-            df = pd.read_csv(train_path)
-
-            # Look for common column names for file path
-            file_col = None
-            for col in ["file", "filepath", "path", "audio", "filename", "file_path", "file_name"]:
-                if col in df.columns:
-                    file_col = col
-                    break
-            if file_col is None:
-                raise click.BadParameter(
-                    f"CSV must have a file column (tried: file, filepath, path, audio, filename, file_path). "
-                    f"Found columns: {list(df.columns)}"
-                )
-
-            # Look for label column
-            label_col = None
-            for col in ["label", "category", "class", "species", category_label_column]:
-                if col in df.columns:
-                    label_col = col
-                    break
-            if label_col is None:
-                raise click.BadParameter(
-                    f"CSV must have a label column (tried: label, category, class, species, {category_label_column}). "
-                    f"Found columns: {list(df.columns)}"
-                )
-
-            # Update category_label_column to the found column
-            category_label_column = label_col
-
-            # Resolve file paths relative to CSV location
-            csv_dir = train_path.parent
-            def resolve_path(p):
-                p = Path(p)
-                if not p.is_absolute():
-                    p = csv_dir / p
-                return str(p)
-
-            df["audio"] = df[file_col].apply(resolve_path)
-            df[category_label_column] = df[label_col]
-
-            # Create HuggingFace dataset from DataFrame
-            dataset = Dataset.from_pandas(df[["audio", category_label_column]])
-            dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
-            click.echo(f"Loaded {len(dataset)} samples from CSV")
-
-        elif train_path.is_dir():
-            # Directory - check for audiofolder structure (subdirs as classes)
-            subdirs = [d for d in train_path.iterdir() if d.is_dir()]
-            audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
-
-            if subdirs:
-                # Check if subdirs contain audio files (audiofolder format)
-                has_audio_in_subdirs = any(
-                    any(f.suffix.lower() in audio_extensions for f in subdir.iterdir() if f.is_file())
-                    for subdir in subdirs
-                )
-                if has_audio_in_subdirs:
-                    click.echo(f"Loading from audiofolder directory: {train_dataset}")
-                    click.echo(f"Found class directories: {[d.name for d in subdirs]}")
-                    dataset = load_dataset("audiofolder", data_dir=train_dataset, split=split)
-                    # audiofolder uses 'label' column
-                    category_label_column = "label"
-                else:
-                    raise click.BadParameter(
-                        f"Directory {train_dataset} has subdirectories but they don't contain audio files. "
-                        f"Expected structure: {train_dataset}/class_name/*.wav"
-                    )
-            else:
-                # Flat directory - look for a metadata CSV inside
-                csv_files = list(train_path.glob("*.csv"))
-                if csv_files:
-                    click.echo(f"Found metadata CSV in directory: {csv_files[0]}")
-                    # Recursively call with the CSV path
-                    train_dataset = str(csv_files[0])
-                    train_path = Path(train_dataset)
-                    # Re-process as CSV (this is a bit hacky but avoids code duplication)
-                    raise click.BadParameter(
-                        f"Directory contains CSV files. Please specify the CSV directly: --train-dataset {csv_files[0]}"
-                    )
-                else:
-                    raise click.BadParameter(
-                        f"Directory {train_dataset} must either have class subdirectories (e.g., bird/, frog/) "
-                        f"or contain a metadata CSV file."
-                    )
-        else:
-            raise click.BadParameter(
-                f"Local path {train_dataset} exists but is neither a CSV file nor a directory."
-            )
-    elif ":" in train_dataset:
-        # HuggingFace dataset with config (e.g., 'samuelstevens/BirdSet:HSN')
-        dataset_name, config_name = train_dataset.rsplit(":", 1)
-        click.echo(f"Loading from HuggingFace Hub: {dataset_name} (config: {config_name})")
-        dataset = load_dataset(dataset_name, config_name, split=split)
-    elif "BirdSet" in train_dataset:
-        click.echo(
-            "Note: BirdSet detected. Use format 'samuelstevens/BirdSet:HSN' to specify subset."
-        )
-        click.echo("Available subsets: HSN, NBP, NES, PER")
-        dataset = load_dataset(train_dataset, "HSN", split=split)
-    else:
-        # Assume HuggingFace dataset name
-        click.echo(f"Loading from HuggingFace Hub: {train_dataset}")
-        dataset = load_dataset(train_dataset, split=split)
-
-    if isinstance(dataset, Dataset):
-        class_names = sorted(set(dataset[category_label_column]))
-    elif isinstance(dataset, DatasetDict):
-        first_split_name = list(dataset.keys())[0]
-        first_split = dataset[first_split_name]
-        class_names = sorted(set(first_split[category_label_column]))
-    else:
-        raise TypeError("Dataset must be a Dataset or DatasetDict instance")
-
-    label_to_id = {name: idx for idx, name in enumerate(class_names)}
-    num_labels = len(class_names)
-
-    def convert_labels(example):
-        example["labels"] = label_to_id[example[category_label_column]]
-        return example
-
-    dataset = dataset.map(
-        convert_labels,
-        remove_columns=[category_label_column],
-        writer_batch_size=100,
-        num_proc=1,
-    )
-
-    dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
-
-    pretrained_model = base_model
-    feature_extractor = ASTFeatureExtractor.from_pretrained(pretrained_model)
-    model_input_name = feature_extractor.model_input_names[0]
-    SAMPLING_RATE = feature_extractor.sampling_rate
-
-    def preprocess_audio(batch):
-        wavs = [audio["array"] for audio in batch["input_values"]]
-        inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
-        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
-
-    label2id = {name: idx for idx, name in enumerate(class_names)}
-
-    test_size = 0.2
-    if isinstance(dataset, Dataset):
-        try:
-            dataset = dataset.train_test_split(
-                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels"
-            )
-        except ValueError as e:
-            print(f"Warning: Stratified split failed ({e}). Using regular split.")
-            dataset = dataset.train_test_split(test_size=test_size, shuffle=True, seed=0)
-    elif isinstance(dataset, DatasetDict) and "test" not in dataset:
-        train_data = dataset["train"]
-        try:
-            dataset = train_data.train_test_split(
-                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels"
-            )
-        except ValueError as e:
-            print(f"Warning: Stratified split failed ({e}). Using regular split.")
-            dataset = train_data.train_test_split(test_size=test_size, shuffle=True, seed=0)
-
-    # Multiply training dataset if augment_multiplier > 1
-    if augment and augment_multiplier > 1 and isinstance(dataset, DatasetDict) and "train" in dataset:
-        from datasets import concatenate_datasets
-
-        original_train = dataset["train"]
-        original_size = len(original_train)
-        print(f"Multiplying training dataset by {augment_multiplier}x (original: {original_size} samples)")
-
-        # Create copies of the training set
-        train_copies = [original_train]
-        for i in range(augment_multiplier - 1):
-            train_copies.append(original_train)
-
-        dataset["train"] = concatenate_datasets(train_copies)
-        print(f"New training dataset size: {len(dataset['train'])} samples ({augment_multiplier}x augmentation)")
-
-    if augment:
-        audio_augmentations = Compose(
-            [
-                AddGaussianSNR(min_snr_db=min_snr_db, max_snr_db=max_snr_db),
-                Gain(min_gain_db=min_gain_db, max_gain_db=max_gain_db),
-                GainTransition(
-                    min_gain_db=min_gain_db,
-                    max_gain_db=max_gain_db,
-                    min_duration=0.01,
-                    max_duration=0.3,
-                    duration_unit="fraction",
-                ),
-                ClippingDistortion(
-                    min_percentile_threshold=min_percentile_threshold,
-                    max_percentile_threshold=max_percentile_threshold,
-                    p=clipping_probability,
-                ),
-                TimeStretch(min_rate=min_time_stretch, max_rate=max_time_stretch),
-                PitchShift(min_semitones=min_pitch_shift, max_semitones=max_pitch_shift),
-            ],
-            p=augment_probability,
+    # Map augmentation flags onto the shared AugmentationConfig (None disables it).
+    # Per-transform probabilities default to 0.5 (audiomentations' default); the
+    # whole Compose is gated by --augment-probability and shuffled per sample.
+    aug_config = (
+        AugmentationConfig(
+            add_noise=True,
+            noise_min_snr=min_snr_db,
+            noise_max_snr=max_snr_db,
+            noise_probability=0.5,
+            time_stretch=True,
+            time_stretch_min=min_time_stretch,
+            time_stretch_max=max_time_stretch,
+            time_stretch_probability=0.5,
+            pitch_shift=True,
+            pitch_shift_min=min_pitch_shift,
+            pitch_shift_max=max_pitch_shift,
+            pitch_shift_probability=0.5,
+            gain=True,
+            gain_min_db=min_gain_db,
+            gain_max_db=max_gain_db,
+            gain_probability=0.5,
+            gain_transition=True,
+            gain_transition_probability=0.5,
+            clipping_distortion=True,
+            clipping_min_percentile=min_percentile_threshold,
+            clipping_max_percentile=max_percentile_threshold,
+            clipping_probability=clipping_probability,
+            pipeline_probability=augment_probability,
             shuffle=True,
         )
-        print(f"Audio augmentations enabled (p={augment_probability})")
-    else:
-        audio_augmentations = None
-        print("Audio augmentations disabled")
-
-    def preprocess_audio_with_transforms(batch):
-        if audio_augmentations is not None:
-            wavs = [
-                audio_augmentations(audio["array"], sample_rate=SAMPLING_RATE)
-                for audio in batch["input_values"]
-            ]
-        else:
-            wavs = [audio["array"] for audio in batch["input_values"]]
-        inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
-        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
-
-    dataset = dataset.cast_column("audio", Audio(sampling_rate=feature_extractor.sampling_rate))
-    dataset = dataset.rename_column("audio", "input_values")
-
-    def is_valid_audio(example):
-        try:
-            _ = example["input_values"]["array"]
-            return True
-        except (RuntimeError, Exception):
-            return False
-
-    print("Filtering out corrupted audio files...")
-    original_sizes = {}
-    filter_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
-    if isinstance(dataset, DatasetDict):
-        for split_name in dataset.keys():
-            original_sizes[split_name] = len(dataset[split_name])
-        dataset = dataset.filter(is_valid_audio, num_proc=filter_num_proc)
-        for split_name in dataset.keys():
-            filtered_count = original_sizes[split_name] - len(dataset[split_name])
-            if filtered_count > 0:
-                print(f"  Removed {filtered_count} corrupted files from {split_name} split")
-    else:
-        original_size = len(dataset)
-        dataset = dataset.filter(is_valid_audio, num_proc=filter_num_proc)
-        filtered_count = original_size - len(dataset)
-        if filtered_count > 0:
-            print(f"  Removed {filtered_count} corrupted files")
-
-    feature_extractor.do_normalize = False
-
-    if isinstance(dataset, DatasetDict) and "train" in dataset:
-        train_dataset_for_norm = dataset["train"]
-        if len(train_dataset_for_norm) == 0:
-            raise ValueError("No valid audio samples found in training dataset after filtering")
-
-        def compute_stats(batch):
-            wavs = [audio["array"] for audio in batch["input_values"]]
-            inputs = feature_extractor(wavs, sampling_rate=SAMPLING_RATE, return_tensors="pt")
-            values = inputs.get(model_input_name)
-            means = [float(torch.mean(values[i])) for i in range(values.shape[0])]
-            stds = [float(torch.std(values[i])) for i in range(values.shape[0])]
-            return {"_mean": means, "_std": stds}
-
-        print("Calculating dataset normalization statistics...")
-        norm_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
-        stats_dataset = train_dataset_for_norm.map(
-            compute_stats,
-            batched=True,
-            batch_size=32,
-            num_proc=norm_num_proc,
-            remove_columns=train_dataset_for_norm.column_names,
-        )
-        all_means = stats_dataset["_mean"]
-        all_stds = stats_dataset["_std"]
-
-        if not all_means:
-            raise ValueError("No valid audio samples found in training dataset")
-
-        feature_extractor.mean = float(np.mean(all_means))
-        feature_extractor.std = float(np.mean(all_stds))
-    else:
-        raise ValueError("Expected DatasetDict with 'train' split")
-
-    feature_extractor.do_normalize = True
-
-    print("Calculated mean and std:", feature_extractor.mean, feature_extractor.std)
-
-    if isinstance(dataset, DatasetDict):
-        if "train" in dataset:
-            dataset["train"].set_transform(
-                preprocess_audio_with_transforms, output_all_columns=False
-            )
-        if "test" in dataset:
-            dataset["test"].set_transform(preprocess_audio, output_all_columns=False)
-    else:
-        raise ValueError("Expected DatasetDict for transform application")
-
-    config = ASTConfig.from_pretrained(pretrained_model)
-    config.num_labels = num_labels
-    config.label2id = label2id
-    config.id2label = {v: k for k, v in label2id.items()}
-
-    model = ASTForAudioClassification.from_pretrained(
-        pretrained_model, config=config, ignore_mismatched_sizes=True
-    )
-    model.init_weights()
-
-    if finetune_mode == "feature-extraction":
-        print("Feature extraction mode: freezing base model, only training classifier head")
-        for param in model.audio_spectrogram_transformer.parameters():
-            param.requires_grad = False
-        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        total_params = sum(p.numel() for p in model.parameters())
-        print(
-            f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100 * trainable_params / total_params:.2f}%)"
-        )
-    else:
-        print("Full finetune mode: training all model layers")
-
-    training_args = TrainingArguments(
-        output_dir=output_dir,
-        logging_dir=logging_dir,
-        report_to=report_to,
-        learning_rate=learning_rate,
-        push_to_hub=push_to_hub,
-        num_train_epochs=num_train_epochs,
-        per_device_train_batch_size=per_device_train_batch_size,
-        eval_strategy=eval_strategy,
-        save_strategy=save_strategy,
-        eval_steps=eval_steps,
-        save_steps=save_steps,
-        load_best_model_at_end=load_best_model_at_end,
-        metric_for_best_model=metric_for_best_model,
-        logging_strategy=logging_strategy,
-        logging_steps=logging_steps,
-        fp16=fp16,
-        bf16=bf16,
-        gradient_accumulation_steps=gradient_accumulation_steps,
-        dataloader_num_workers=dataloader_num_workers,
-        dataloader_persistent_workers=False,  # Prevent hang on exit
-        torch_compile=torch_compile,
-        run_name=mlflow_run_name,
+        if augment
+        else None
     )
 
-    accuracy = evaluate.load("accuracy")
-    recall = evaluate.load("recall")
-    precision = evaluate.load("precision")
-    f1 = evaluate.load("f1")
-
-    AVERAGE = "macro" if config.num_labels > 2 else "binary"
-
-    def compute_metrics(eval_pred) -> Dict[str, float]:
-        logits = eval_pred.predictions
-        predictions = np.argmax(logits, axis=1)
-
-        accuracy_result = accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
-        metrics: Dict[str, float] = accuracy_result if accuracy_result is not None else {}
-
-        precision_result = precision.compute(
-            predictions=predictions, references=eval_pred.label_ids, average=AVERAGE
-        )
-        if precision_result is not None:
-            metrics.update(precision_result)
-
-        recall_result = recall.compute(
-            predictions=predictions, references=eval_pred.label_ids, average=AVERAGE
-        )
-        if recall_result is not None:
-            metrics.update(recall_result)
-
-        f1_result = f1.compute(
-            predictions=predictions, references=eval_pred.label_ids, average=AVERAGE
-        )
-        if f1_result is not None:
-            metrics.update(f1_result)
-
-        return metrics
-
-    if isinstance(dataset, DatasetDict):
-        train_data = dataset.get("train")
-        eval_data = dataset.get("test")
-    else:
-        raise ValueError("Expected DatasetDict for trainer setup")
-
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_data,
-        eval_dataset=eval_data,
-        compute_metrics=compute_metrics,
-    )
-
-    trainer.train()
-
-    services.file.ensure_directory(best_model_path)
-    trainer.save_model(best_model_path)
-
-    # Cleanup to prevent hanging from dataloader workers
-    # Free the accelerator which holds references to dataloaders
-    if hasattr(trainer, "accelerator") and trainer.accelerator is not None:
-        trainer.accelerator.free_memory()
-
-    # Explicitly delete dataloaders to terminate worker processes
-    if hasattr(trainer, "_train_dataloader"):
-        del trainer._train_dataloader
-    if hasattr(trainer, "_eval_dataloader"):
-        del trainer._eval_dataloader
-
-    del trainer
-    del model
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-    # End MLflow run if active
     try:
-        import mlflow
+        result = train_ast(
+            train_dataset=train_dataset,
+            training_dir=training_dir,
+            base_model=base_model,
+            split=split,
+            category_label_column=category_label_column,
+            learning_rate=learning_rate,
+            num_train_epochs=num_train_epochs,
+            per_device_train_batch_size=per_device_train_batch_size,
+            eval_strategy=eval_strategy,
+            save_strategy=save_strategy,
+            eval_steps=eval_steps,
+            save_steps=save_steps,
+            load_best_model_at_end=load_best_model_at_end,
+            metric_for_best_model=metric_for_best_model,
+            logging_strategy=logging_strategy,
+            logging_steps=logging_steps,
+            report_to=report_to,
+            fp16=fp16,
+            bf16=bf16,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            dataloader_num_workers=dataloader_num_workers,
+            torch_compile=torch_compile,
+            finetune_mode=finetune_mode,
+            push_to_hub=push_to_hub,
+            mlflow_tracking_uri=mlflow_tracking_uri,
+            mlflow_experiment_name=mlflow_experiment_name,
+            mlflow_run_name=mlflow_run_name,
+            augmentation=aug_config,
+            augment_multiplier=augment_multiplier,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
-        if mlflow.active_run():
-            mlflow.end_run()
-    except ImportError:
-        pass
-
-    import gc
-    gc.collect()
-
-    # Force cleanup of any remaining multiprocessing resources
-    import multiprocessing
-    for child in multiprocessing.active_children():
-        child.terminate()
-        child.join(timeout=1)
+    click.echo(f"Training complete. Best model saved to: {result.model_path}")
+    if result.final_accuracy is not None:
+        click.echo(f"Final eval accuracy: {result.final_accuracy:.4f}")
+    if result.final_loss is not None:
+        click.echo(f"Final eval loss: {result.final_loss:.4f}")
 
 
 @ast.command("evaluate")
@@ -762,31 +484,23 @@ def ast_evaluate(
     Example:
         bioamla models ast evaluate ./audio_dir --model-path my_model -g labels.csv
     """
+    import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.ml import evaluate_directory
 
-    path_obj = PathLib(path)
-    if not path_obj.exists():
-        click.echo(f"Error: Path not found: {path}")
-        raise SystemExit(1)
-
-    gt_path = PathLib(ground_truth)
-    if not gt_path.exists():
-        click.echo(f"Error: Ground truth file not found: {ground_truth}")
-        raise SystemExit(1)
-
-    result = services.ast.evaluate(
-        audio_dir=path,
-        model_path=model_path,
-        ground_truth_csv=ground_truth,
-        file_column=file_column,
-        label_column=label_column,
-        resample_freq=resample_freq,
-        batch_size=batch_size,
-        fp16=fp16,
-    )
-    eval_result = handle_result(result)
+    try:
+        eval_result = evaluate_directory(
+            audio_dir=path,
+            model_path=model_path,
+            ground_truth_csv=ground_truth,
+            file_column=file_column,
+            label_column=label_column,
+            resample_freq=resample_freq,
+            use_fp16=fp16,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if not quiet:
         click.echo("\nEvaluation Results:")
@@ -798,10 +512,12 @@ def ast_evaluate(
     click.echo(f"Total Samples: {eval_result.total_samples}")
 
     if output:
+        out_path = PathLib(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         if output_format == "json":
-            services.file.write_json(output, eval_result.to_dict())
+            out_path.write_text(json_lib.dumps(eval_result.to_dict(), indent=2), encoding="utf-8")
         else:
-            services.file.write_text(output, str(eval_result.to_dict()))
+            out_path.write_text(str(eval_result.to_dict()), encoding="utf-8")
         click.echo(f"Results saved to: {output}")
 
 
@@ -811,27 +527,33 @@ def ast_evaluate(
 @click.option("--output", "-o", required=True, help="Output file (.npy)")
 @click.option("--layer", default=None, help="Layer to extract embeddings from")
 @click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
-def ast_embed(
-    file: str, model_path: str, output: str, layer: str, sample_rate: int
-) -> None:
+def ast_embed(file: str, model_path: str, output: str, layer: str, sample_rate: int) -> None:
     """Extract embeddings from audio using AST model.
 
     Example:
         bioamla models ast embed audio.wav --model-path my_model -o embeddings.npy
     """
-    from bioamla.cli.service_helpers import handle_result, services
+    from pathlib import Path
+
+    import numpy as np
+
+    from bioamla.ml import extract_embeddings_file
 
     click.echo(f"Loading AST model from {model_path}...")
 
-    result = services.ast.extract_embeddings(
-        filepath=file,
-        model_path=model_path,
-        layer=layer,
-        sample_rate=sample_rate,
-    )
-    embeddings = handle_result(result)
+    try:
+        result = extract_embeddings_file(
+            filepath=file,
+            model_path=model_path,
+            layer=layer,
+            sample_rate=sample_rate,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
-    services.file.write_npy(output, embeddings)
+    embeddings = result["embeddings"]
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    np.save(output, embeddings)
     click.echo(f"Embeddings saved to {output} (shape: {embeddings.shape})")
 
 
@@ -843,232 +565,18 @@ def ast_info(model_path: str) -> None:
     Example:
         bioamla models ast info bioamla/scp-frogs
     """
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.ml import get_model_info
 
-    result = services.ast.get_model_info(model_path)
-    info = handle_result(result)
+    try:
+        info = get_model_info(model_path)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"Model: {info['path']}")
-    click.echo(f"Backend: {info['backend']}")
+    click.echo(f"Type: {info['model_type']}")
     click.echo(f"Classes: {info['num_classes']}")
     if info.get("classes"):
-        labels = ", ".join(info["classes"])
+        labels = ", ".join(str(c) for c in info["classes"])
         if info.get("has_more_classes"):
             labels += f"... (+{info['num_classes'] - 10} more)"
         click.echo(f"Labels: {labels}")
-
-
-# =============================================================================
-# CNN Subgroup (OpenSoundscape CNN via adapter)
-# =============================================================================
-
-
-@models.group()
-def cnn() -> None:
-    """CNN model operations (OpenSoundscape backend)."""
-    pass
-
-
-@cnn.command("predict")
-@click.argument("file", type=click.Path(exists=True))
-@click.option("--model-path", "-m", required=True, help="Path to trained CNN model (.pt)")
-@click.option("--min-confidence", default=0.0, type=float, help="Minimum confidence threshold")
-@click.option("--top-k", default=1, type=int, help="Number of top predictions per segment")
-@click.option("--batch-size", default=1, type=int, help="Batch size for inference")
-@click.option("--num-workers", default=0, type=int, help="Number of data loader workers")
-def cnn_predict(
-    file: str,
-    model_path: str,
-    min_confidence: float,
-    top_k: int,
-    batch_size: int,
-    num_workers: int,
-) -> None:
-    """Run CNN prediction on a single audio file.
-
-    Example:
-        bioamla models cnn predict audio.wav --model-path model.pt
-    """
-    from bioamla.cli.service_helpers import handle_result, services
-
-    result = services.cnn.predict(
-        filepath=file,
-        model_path=model_path,
-        min_confidence=min_confidence,
-        top_k=top_k,
-        batch_size=batch_size,
-        num_workers=num_workers,
-    )
-    predictions = handle_result(result)
-
-    if not predictions:
-        click.echo("No predictions above threshold.")
-        return
-
-    for pred in predictions:
-        click.echo(
-            f"[{pred.start_time:.1f}s - {pred.end_time:.1f}s] "
-            f"{pred.label} ({pred.confidence:.4f})"
-        )
-
-
-@cnn.command("train")
-@click.option("--train-csv", required=True, help="Training CSV (file column + class columns with 0/1)")
-@click.option("--output-dir", "-o", required=True, help="Output directory for model")
-@click.option("--validation-csv", default=None, help="Validation CSV (same format)")
-@click.option("--classes", "-c", required=True, multiple=True, help="Class names (repeat for each class)")
-@click.option(
-    "--architecture",
-    "-a",
-    default="resnet18",
-    type=click.Choice([
-        "resnet18", "resnet34", "resnet50", "resnet101", "resnet152",
-        "efficientnet_b0", "efficientnet_b1", "efficientnet_b2",
-        "densenet121", "densenet161",
-    ]),
-    help="Model architecture",
-)
-@click.option("--epochs", default=10, type=int, help="Number of training epochs")
-@click.option("--batch-size", default=32, type=int, help="Batch size for training")
-@click.option("--learning-rate", default=None, type=float, help="Learning rate (uses default if not specified)")
-@click.option("--sample-duration", default=3.0, type=float, help="Audio clip duration in seconds")
-@click.option("--sample-rate", default=16000, type=int, help="Target sample rate")
-@click.option("--freeze-backbone/--no-freeze-backbone", default=False, help="Freeze backbone for transfer learning")
-@click.option("--num-workers", default=0, type=int, help="Number of data loader workers")
-def cnn_train(
-    train_csv: str,
-    output_dir: str,
-    validation_csv: str,
-    classes: tuple,
-    architecture: str,
-    epochs: int,
-    batch_size: int,
-    learning_rate: float,
-    sample_duration: float,
-    sample_rate: int,
-    freeze_backbone: bool,
-    num_workers: int,
-) -> None:
-    """Train a CNN model on audio data.
-
-    The training CSV should have file paths as the first column (used as index)
-    and class columns with 0/1 values indicating presence/absence.
-
-    Example:
-        bioamla models cnn train --train-csv train.csv --output-dir ./model \\
-            --classes bird --classes frog --architecture resnet18 --epochs 20
-    """
-    from bioamla.cli.service_helpers import handle_result, services
-
-    class_list = list(classes)
-
-    click.echo(f"Creating {architecture} model with {len(class_list)} classes...")
-
-    # First create the model
-    create_result = services.cnn.create_model(
-        classes=class_list,
-        architecture=architecture,
-        sample_duration=sample_duration,
-        sample_rate=sample_rate,
-    )
-    handle_result(create_result)
-
-    click.echo(f"Training for {epochs} epochs...")
-
-    # Then train
-    result = services.cnn.train(
-        train_csv=train_csv,
-        output_dir=output_dir,
-        validation_csv=validation_csv,
-        epochs=epochs,
-        batch_size=batch_size,
-        learning_rate=learning_rate,
-        freeze_backbone=freeze_backbone,
-        num_workers=num_workers,
-    )
-    train_result = handle_result(result)
-
-    click.echo("\nTraining complete!")
-    click.echo(f"Model saved to: {train_result.model_path}")
-    click.echo(f"Architecture: {train_result.architecture}")
-    click.echo(f"Classes: {train_result.num_classes}")
-
-
-@cnn.command("info")
-@click.argument("model_path", type=click.Path(exists=True))
-def cnn_info(model_path: str) -> None:
-    """Display information about a CNN model.
-
-    Example:
-        bioamla models cnn info model.pt
-    """
-    from bioamla.cli.service_helpers import handle_result, services
-
-    result = services.cnn.get_model_info(model_path)
-    info = handle_result(result)
-
-    click.echo(f"Model: {info['path']}")
-    click.echo(f"Architecture: {info['architecture']}")
-    click.echo(f"Classes: {info['num_classes']}")
-    click.echo(f"Sample Duration: {info['sample_duration']}s")
-
-    if info.get("classes"):
-        labels = ", ".join(info["classes"])
-        if info.get("has_more_classes"):
-            labels += f"... (+{info['num_classes'] - 10} more)"
-        click.echo(f"Labels: {labels}")
-
-
-@cnn.command("architectures")
-def cnn_architectures() -> None:
-    """List available CNN architectures.
-
-    Example:
-        bioamla models cnn architectures
-    """
-    from bioamla.cli.service_helpers import handle_result, services
-
-    result = services.cnn.list_architectures()
-    architectures = handle_result(result)
-
-    click.echo("Available CNN architectures:")
-    click.echo("-" * 30)
-    for arch in architectures:
-        click.echo(f"  {arch}")
-
-
-@cnn.command("embed")
-@click.argument("file", type=click.Path(exists=True))
-@click.option("--model-path", "-m", required=True, help="Path to trained CNN model (.pt)")
-@click.option("--output", "-o", required=True, help="Output file (.npy)")
-@click.option("--layer", default=None, help="Layer to extract embeddings from")
-@click.option("--batch-size", default=1, type=int, help="Batch size for inference")
-@click.option("--num-workers", default=0, type=int, help="Number of data loader workers")
-def cnn_embed(
-    file: str,
-    model_path: str,
-    output: str,
-    layer: str,
-    batch_size: int,
-    num_workers: int,
-) -> None:
-    """Extract embeddings from audio using a CNN model.
-
-    Example:
-        bioamla models cnn embed audio.wav --model-path model.pt --output embeddings.npy
-    """
-    from bioamla.cli.service_helpers import handle_result, services
-
-    click.echo(f"Loading CNN model from {model_path}...")
-
-    result = services.cnn.extract_embeddings(
-        filepath=file,
-        model_path=model_path,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        target_layer=layer,
-    )
-    embeddings = handle_result(result)
-
-    services.file.write_npy(output, embeddings)
-    click.echo(f"Embeddings saved to {output} (shape: {embeddings.shape})")

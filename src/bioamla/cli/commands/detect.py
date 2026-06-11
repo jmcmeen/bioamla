@@ -2,6 +2,8 @@
 
 import click
 
+from bioamla.exceptions import BioamlaError
+
 
 @click.group()
 def detect() -> None:
@@ -35,23 +37,26 @@ def detect_energy(
     """Detect sounds using band-limited energy detection (single file)."""
     import json as json_lib
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.detect import BandLimitedEnergyDetector, export_detections
 
-    result = services.detection.detect_energy(
-        file,
-        low_freq=low_freq,
-        high_freq=high_freq,
-        threshold_db=threshold,
-        min_duration=min_duration,
-    )
-    detection_result = handle_result(result)
-    detections = detection_result.detections
+    try:
+        detector = BandLimitedEnergyDetector(
+            low_freq=low_freq,
+            high_freq=high_freq,
+            threshold_db=threshold,
+            min_duration=min_duration,
+        )
+        detections = detector.detect_from_file(file)
 
-    if output:
-        fmt = "json" if output.endswith(".json") else "csv"
-        services.detection.export_detections(detections, output, format=fmt)
-        click.echo(f"Saved {len(detections)} detections to {output}")
-    elif output_format == "json":
+        if output:
+            fmt = "json" if output.endswith(".json") else "csv"
+            export_detections(detections, output, format=fmt)
+            click.echo(f"Saved {len(detections)} detections to {output}")
+            return
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
     elif output_format == "csv":
         import csv
@@ -69,8 +74,7 @@ def detect_energy(
         click.echo(f"Found {len(detections)} detections:\n")
         for i, d in enumerate(detections, 1):
             click.echo(
-                f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                f"(confidence: {d.confidence:.2f})"
+                f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s (confidence: {d.confidence:.2f})"
             )
         click.echo(f"\nTotal: {len(detections)} detections")
 
@@ -113,25 +117,28 @@ def detect_ribbit(
     """Detect periodic calls using RIBBIT algorithm (single file)."""
     import json as json_lib
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.detect import RibbitDetector, export_detections
 
-    result = services.detection.detect_ribbit(
-        file,
-        pulse_rate_hz=pulse_rate,
-        pulse_rate_tolerance=tolerance,
-        low_freq=low_freq,
-        high_freq=high_freq,
-        window_duration=window,
-        min_score=min_score,
-    )
-    detection_result = handle_result(result)
-    detections = detection_result.detections
+    try:
+        detector = RibbitDetector(
+            pulse_rate_hz=pulse_rate,
+            pulse_rate_tolerance=tolerance,
+            low_freq=low_freq,
+            high_freq=high_freq,
+            window_duration=window,
+            min_score=min_score,
+        )
+        detections = detector.detect_from_file(file)
 
-    if output:
-        fmt = "json" if output.endswith(".json") else "csv"
-        services.detection.export_detections(detections, output, format=fmt)
-        click.echo(f"Saved {len(detections)} detections to {output}")
-    elif output_format == "json":
+        if output:
+            fmt = "json" if output.endswith(".json") else "csv"
+            export_detections(detections, output, format=fmt)
+            click.echo(f"Saved {len(detections)} detections to {output}")
+            return
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
     elif output_format == "csv":
         import csv
@@ -150,7 +157,8 @@ def detect_ribbit(
         for i, d in enumerate(detections, 1):
             click.echo(
                 f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
-                f"(score: {d.confidence:.2f}, pulse_rate: {d.metadata.get('pulse_rate_hz', 'N/A')}Hz)"
+                f"(score: {d.confidence:.2f}, "
+                f"pulse_rate: {d.metadata.get('pulse_rate_hz', 'N/A')}Hz)"
             )
         click.echo(f"\nTotal: {len(detections)} detections")
 
@@ -181,63 +189,62 @@ def detect_peaks(
     """Detect peaks using Continuous Wavelet Transform (CWT) (single file)."""
     import json as json_lib
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.detect import CWTPeakDetector
 
-    result = services.detection.detect_peaks(
-        file,
-        snr_threshold=snr,
-        min_peak_distance=min_distance,
-        low_freq=low_freq,
-        high_freq=high_freq,
-    )
-    detection_result = handle_result(result)
-    detections = detection_result.detections
+    try:
+        detector = CWTPeakDetector(
+            snr_threshold=snr,
+            min_peak_distance=min_distance,
+            low_freq=low_freq,
+            high_freq=high_freq,
+        )
+        peaks = detector.detect_from_file(file)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    fieldnames = ["start_time", "end_time", "confidence", "amplitude", "width"]
+
+    def _row(p):
+        return {
+            "start_time": p.time,
+            "end_time": p.time + p.width,
+            "confidence": p.prominence,
+            "amplitude": p.amplitude,
+            "width": p.width,
+        }
 
     if output:
-        fieldnames = ["start_time", "end_time", "confidence", "amplitude", "width"]
-        rows = []
-        for d in detections:
-            row = {
-                "start_time": d.start_time,
-                "end_time": d.end_time,
-                "confidence": d.confidence,
-                "amplitude": d.metadata.get("amplitude", ""),
-                "width": d.metadata.get("width", ""),
-            }
-            rows.append(row)
-        services.file.write_csv_dicts(output, rows, fieldnames=fieldnames)
-        click.echo(f"Saved {len(detections)} peaks to {output}")
+        import csv
+        from pathlib import Path
+
+        out_path = Path(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for p in peaks:
+                writer.writerow(_row(p))
+        click.echo(f"Saved {len(peaks)} peaks to {output}")
     elif output_format == "json":
-        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        click.echo(json_lib.dumps([p.to_dict() for p in peaks], indent=2))
     elif output_format == "csv":
         import csv
         import sys
 
-        if detections:
-            fieldnames = ["start_time", "end_time", "confidence", "amplitude", "width"]
+        if peaks:
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
             writer.writeheader()
-            for d in detections:
-                row = {
-                    "start_time": d.start_time,
-                    "end_time": d.end_time,
-                    "confidence": d.confidence,
-                    "amplitude": d.metadata.get("amplitude", ""),
-                    "width": d.metadata.get("width", ""),
-                }
-                writer.writerow(row)
+            for p in peaks:
+                writer.writerow(_row(p))
         else:
             click.echo("No peaks found.")
     else:
-        click.echo(f"Found {len(detections)} peaks:\n")
-        for i, d in enumerate(detections[:20], 1):
-            click.echo(
-                f"{i}. {d.start_time:.3f}s (amplitude: {d.metadata.get('amplitude', 0):.2f}, "
-                f"width: {d.metadata.get('width', 0):.3f}s)"
-            )
-        if len(detections) > 20:
-            click.echo(f"... and {len(detections) - 20} more peaks")
-        click.echo(f"\nTotal: {len(detections)} peaks")
+        click.echo(f"Found {len(peaks)} peaks:\n")
+        for i, p in enumerate(peaks[:20], 1):
+            click.echo(f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, width: {p.width:.3f}s)")
+        if len(peaks) > 20:
+            click.echo(f"... and {len(peaks) - 20} more peaks")
+        click.echo(f"\nTotal: {len(peaks)} peaks")
 
 
 @detect.command("accelerating")
@@ -278,25 +285,28 @@ def detect_accelerating(
     """Detect accelerating or decelerating call patterns (single file)."""
     import json as json_lib
 
-    from bioamla.cli.service_helpers import handle_result, services
+    from bioamla.detect import AcceleratingPatternDetector, export_detections
 
-    result = services.detection.detect_accelerating(
-        file,
-        min_pulses=min_pulses,
-        acceleration_threshold=acceleration,
-        deceleration_threshold=deceleration,
-        low_freq=low_freq,
-        high_freq=high_freq,
-        window_duration=window,
-    )
-    detection_result = handle_result(result)
-    detections = detection_result.detections
+    try:
+        detector = AcceleratingPatternDetector(
+            min_pulses=min_pulses,
+            acceleration_threshold=acceleration,
+            deceleration_threshold=deceleration,
+            low_freq=low_freq,
+            high_freq=high_freq,
+            window_duration=window,
+        )
+        detections = detector.detect_from_file(file)
 
-    if output:
-        fmt = "json" if output.endswith(".json") else "csv"
-        services.detection.export_detections(detections, output, format=fmt)
-        click.echo(f"Saved {len(detections)} detections to {output}")
-    elif output_format == "json":
+        if output:
+            fmt = "json" if output.endswith(".json") else "csv"
+            export_detections(detections, output, format=fmt)
+            click.echo(f"Saved {len(detections)} detections to {output}")
+            return
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
     elif output_format == "csv":
         import csv

@@ -1,7 +1,3 @@
-# custom ignores
-
-
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -201,3 +197,8 @@ cython_debug/
 /frog_acoustic_study
 mlflow.db
 /.benchmarks
+/.claude
+/dev-data
+
+# rsync-to-gpu helper (local dev only)
+/sync-to-gpu.sh
