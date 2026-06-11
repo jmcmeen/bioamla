@@ -115,19 +115,95 @@ def test_ast_train(runner: CliRunner, tmp_path) -> None:
     assert result.exit_code == 0, result.output
     assert "Training complete" in result.output
     m.assert_called_once()
+    # Augmentation is off by default — no layers requested means no pipeline.
+    assert m.call_args.kwargs["augmentation"] is None
 
 
-def test_ast_train_no_augment(runner: CliRunner, tmp_path) -> None:
+def test_ast_train_layer_opt_in(runner: CliRunner, tmp_path) -> None:
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
     with (
         patch("bioamla.ml.train_ast", return_value=result_obj) as m,
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
-            cli, ["models", "ast", "train", "--train-dataset", "me/ds", "--no-augment"]
+            cli,
+            ["models", "ast", "train", "--train-dataset", "me/ds", "--pitch-shift"],
         )
     assert result.exit_code == 0, result.output
-    # augmentation should be None when --no-augment
+    aug = m.call_args.kwargs["augmentation"]
+    # Only the requested layer is enabled; the rest stay off.
+    assert aug is not None
+    assert aug.pitch_shift is True
+    assert aug.add_noise is False
+    assert aug.gain is False
+    assert aug.clipping_distortion is False
+
+
+def test_ast_train_multiplier_without_layers_warns(runner: CliRunner, tmp_path) -> None:
+    result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(
+            cli,
+            ["models", "ast", "train", "--train-dataset", "me/ds", "--augment-multiplier", "3"],
+        )
+    assert result.exit_code == 0, result.output
+    assert "ignored" in result.output  # multiplier is a no-op with no augmentation
+    # And it is reset so the training run doesn't duplicate identical rows.
+    assert m.call_args.kwargs["augment_multiplier"] == 1
+    assert m.call_args.kwargs["augmentation"] is None
+
+
+def test_ast_train_augmentation_from_toml(runner: CliRunner, tmp_path) -> None:
+    cfg = tmp_path / "bioamla.toml"
+    cfg.write_text(
+        "[augmentation]\nadd_noise = true\nmin_snr_db = 5.0\nmax_snr_db = 25.0\nmultiplier = 3\n"
+    )
+    result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(
+            cli,
+            ["models", "ast", "train", "--train-dataset", "me/ds", "--config", str(cfg)],
+        )
+    assert result.exit_code == 0, result.output
+    aug = m.call_args.kwargs["augmentation"]
+    # TOML opts the layer in and sets its range; multiplier flows through too.
+    assert aug is not None
+    assert aug.add_noise is True
+    assert aug.noise_min_snr == 5.0
+    assert aug.noise_max_snr == 25.0
+    assert m.call_args.kwargs["augment_multiplier"] == 3
+
+
+def test_ast_train_flag_overrides_toml(runner: CliRunner, tmp_path) -> None:
+    cfg = tmp_path / "bioamla.toml"
+    cfg.write_text("[augmentation]\nadd_noise = true\n")
+    result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(
+            cli,
+            [
+                "models",
+                "ast",
+                "train",
+                "--train-dataset",
+                "me/ds",
+                "--config",
+                str(cfg),
+                "--no-add-noise",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    # Explicit --no-add-noise on the CLI wins over the TOML's add_noise = true,
+    # and with no other layer enabled the pipeline is skipped entirely.
     assert m.call_args.kwargs["augmentation"] is None
 
 

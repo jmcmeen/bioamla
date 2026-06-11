@@ -23,7 +23,7 @@ class TestValidateAugmentation:
         from bioamla.datasets.augmentation import AugmentationConfig
         from bioamla.ml.training import _validate_augmentation
 
-        cfg = AugmentationConfig(noise_min_snr=30.0, noise_max_snr=10.0)
+        cfg = AugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
         with pytest.raises(TrainingError):
             _validate_augmentation(cfg)
 
@@ -32,6 +32,13 @@ class TestValidateAugmentation:
         from bioamla.ml.training import _validate_augmentation
 
         _validate_augmentation(AugmentationConfig())  # defaults are valid
+
+    def test_inverted_range_ignored_when_layer_disabled(self) -> None:
+        from bioamla.datasets.augmentation import AugmentationConfig
+        from bioamla.ml.training import _validate_augmentation
+
+        # add_noise is off, so its inverted SNR range is not a misconfiguration.
+        _validate_augmentation(AugmentationConfig(noise_min_snr=30.0, noise_max_snr=10.0))
 
 
 class TestLoadCsvDataset:
@@ -436,7 +443,7 @@ class TestTrainAst:
         from bioamla.datasets.augmentation import AugmentationConfig
         from bioamla.ml.training import train_ast
 
-        bad = AugmentationConfig(noise_min_snr=30.0, noise_max_snr=10.0)
+        bad = AugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
         with pytest.raises(TrainingError):
             train_ast(train_dataset="owner/ds", augmentation=bad)
 

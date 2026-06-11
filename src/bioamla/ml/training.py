@@ -81,16 +81,25 @@ def _dataframe_to_ast_dataset(df, label_column, sampling_rate=SAMPLING_RATE):
 
 
 def _validate_augmentation(aug: AugmentationConfig) -> None:
-    """Raise :class:`TrainingError` on inverted min/max augmentation ranges."""
+    """Raise :class:`TrainingError` on inverted min/max ranges for *enabled* layers.
+
+    Ranges for disabled transforms are ignored — a layer that isn't added can't
+    misconfigure training.
+    """
     checks = [
-        ("noise SNR", aug.noise_min_snr, aug.noise_max_snr),
-        ("gain dB", aug.gain_min_db, aug.gain_max_db),
-        ("clipping percentile", aug.clipping_min_percentile, aug.clipping_max_percentile),
-        ("time-stretch rate", aug.time_stretch_min, aug.time_stretch_max),
-        ("pitch-shift semitones", aug.pitch_shift_min, aug.pitch_shift_max),
+        (aug.add_noise, "noise SNR", aug.noise_min_snr, aug.noise_max_snr),
+        (aug.gain or aug.gain_transition, "gain dB", aug.gain_min_db, aug.gain_max_db),
+        (
+            aug.clipping_distortion,
+            "clipping percentile",
+            aug.clipping_min_percentile,
+            aug.clipping_max_percentile,
+        ),
+        (aug.time_stretch, "time-stretch rate", aug.time_stretch_min, aug.time_stretch_max),
+        (aug.pitch_shift, "pitch-shift semitones", aug.pitch_shift_min, aug.pitch_shift_max),
     ]
-    for name, lo, hi in checks:
-        if lo > hi:
+    for enabled, name, lo, hi in checks:
+        if enabled and lo > hi:
             raise TrainingError(f"Augmentation {name} min ({lo}) must be <= max ({hi})")
 
 
