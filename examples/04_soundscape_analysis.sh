@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Workflow 3: soundscape analysis
+# Workflow 4: soundscape analysis
 # -------------------------------
 # Characterize a long field recording: chop it into clips, compute acoustic
 # indices, detect events, classify with a trained AST model, and turn the

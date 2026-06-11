@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Workflow 4: embeddings → clustering → novelty
+# Workflow 5: embeddings → clustering → novelty
 # ---------------------------------------------
 # Unsupervised exploration of a sound collection: extract AST embeddings for a
 # folder of clips, reduce dimensionality, cluster, and flag novel/outlier sounds

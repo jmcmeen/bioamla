@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Workflow 5: grab and go
+# Workflow 2: grab and go
 # -----------------------
 # The shortest path from a Hub dataset to a fine-tuned AST model — no pull, no
 # partition, no local files. `models ast train` loads the dataset straight off
