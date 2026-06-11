@@ -57,6 +57,37 @@ def audio_list(path: str, recursive: bool) -> None:
         click.echo(f"  {f}")
 
 
+@audio.command("play")
+@click.argument("path")
+@click.option("--loop", "-l", is_flag=True, help="Loop continuously until interrupted")
+def audio_play(path: str, loop: bool) -> None:
+    """Play an audio file through the default output device.
+
+    Blocks until playback finishes; press Ctrl-C to stop.
+    """
+    import time
+
+    from bioamla.audio import play_audio
+
+    try:
+        player = play_audio(path, loop=loop, block=False)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(
+        f"Playing {path} ({player.duration:.2f}s){' [loop]' if loop else ''} — Ctrl-C to stop"
+    )
+    try:
+        while player.is_playing:
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        player.stop()
+        click.echo("\nStopped.")
+        return
+
+    click.echo("Done.")
+
+
 @audio.command("convert")
 @click.argument("input_path")
 @click.argument("output_path")
