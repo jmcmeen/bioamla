@@ -42,15 +42,20 @@ _TRAIN_CONFIG_MAP = {
     "augment_probability": ("augmentation", "probability"),
     "min_snr_db": ("augmentation", "min_snr_db"),
     "max_snr_db": ("augmentation", "max_snr_db"),
+    "noise_probability": ("augmentation", "noise_probability"),
     "min_gain_db": ("augmentation", "min_gain_db"),
     "max_gain_db": ("augmentation", "max_gain_db"),
+    "gain_probability": ("augmentation", "gain_probability"),
+    "gain_transition_probability": ("augmentation", "gain_transition_probability"),
     "clipping_probability": ("augmentation", "clipping_probability"),
     "min_percentile_threshold": ("augmentation", "min_percentile_threshold"),
     "max_percentile_threshold": ("augmentation", "max_percentile_threshold"),
     "min_time_stretch": ("augmentation", "min_time_stretch"),
     "max_time_stretch": ("augmentation", "max_time_stretch"),
+    "time_stretch_probability": ("augmentation", "time_stretch_probability"),
     "min_pitch_shift": ("augmentation", "min_pitch_shift"),
     "max_pitch_shift": ("augmentation", "max_pitch_shift"),
+    "pitch_shift_probability": ("augmentation", "pitch_shift_probability"),
 }
 
 
@@ -300,17 +305,35 @@ def ast_predict(
     "--augment-probability",
     default=0.8,
     type=click.FloatRange(0.0, 1.0),
-    help="Probability of applying augmentation (0-1)",
+    help="Probability the whole augmentation pipeline is applied to a sample (0-1)",
 )
 @click.option("--min-snr-db", default=10.0, type=float, help="Minimum SNR for Gaussian noise (dB)")
 @click.option("--max-snr-db", default=20.0, type=float, help="Maximum SNR for Gaussian noise (dB)")
+@click.option(
+    "--noise-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Per-sample probability of the noise layer (0-1)",
+)
 @click.option("--min-gain-db", default=-6.0, type=float, help="Minimum gain adjustment (dB)")
 @click.option("--max-gain-db", default=6.0, type=float, help="Maximum gain adjustment (dB)")
+@click.option(
+    "--gain-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Per-sample probability of the gain layer (0-1)",
+)
+@click.option(
+    "--gain-transition-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Per-sample probability of the gain-transition layer (0-1)",
+)
 @click.option(
     "--clipping-probability",
     default=0.5,
     type=click.FloatRange(0.0, 1.0),
-    help="Probability of clipping distortion (0-1)",
+    help="Per-sample probability of the clipping-distortion layer (0-1)",
 )
 @click.option("--min-percentile-threshold", default=0, type=int, help="Min percentile for clipping")
 @click.option(
@@ -318,8 +341,20 @@ def ast_predict(
 )
 @click.option("--min-time-stretch", default=0.8, type=float, help="Minimum time stretch rate")
 @click.option("--max-time-stretch", default=1.2, type=float, help="Maximum time stretch rate")
+@click.option(
+    "--time-stretch-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Per-sample probability of the time-stretch layer (0-1)",
+)
 @click.option("--min-pitch-shift", default=-4, type=int, help="Minimum pitch shift (semitones)")
 @click.option("--max-pitch-shift", default=4, type=int, help="Maximum pitch shift (semitones)")
+@click.option(
+    "--pitch-shift-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Per-sample probability of the pitch-shift layer (0-1)",
+)
 def ast_train(
     ctx: click.Context,
     config_path: str | None,
@@ -361,15 +396,20 @@ def ast_train(
     augment_probability: float,
     min_snr_db: float,
     max_snr_db: float,
+    noise_probability: float,
     min_gain_db: float,
     max_gain_db: float,
+    gain_probability: float,
+    gain_transition_probability: float,
     clipping_probability: float,
     min_percentile_threshold: int,
     max_percentile_threshold: int,
     min_time_stretch: float,
     max_time_stretch: float,
+    time_stretch_probability: float,
     min_pitch_shift: int,
     max_pitch_shift: int,
+    pitch_shift_probability: float,
 ) -> None:
     """Fine-tune an AST model on a custom dataset.
 
@@ -418,15 +458,20 @@ def ast_train(
                 "augment_probability": augment_probability,
                 "min_snr_db": min_snr_db,
                 "max_snr_db": max_snr_db,
+                "noise_probability": noise_probability,
                 "min_gain_db": min_gain_db,
                 "max_gain_db": max_gain_db,
+                "gain_probability": gain_probability,
+                "gain_transition_probability": gain_transition_probability,
                 "clipping_probability": clipping_probability,
                 "min_percentile_threshold": min_percentile_threshold,
                 "max_percentile_threshold": max_percentile_threshold,
                 "min_time_stretch": min_time_stretch,
                 "max_time_stretch": max_time_stretch,
+                "time_stretch_probability": time_stretch_probability,
                 "min_pitch_shift": min_pitch_shift,
                 "max_pitch_shift": max_pitch_shift,
+                "pitch_shift_probability": pitch_shift_probability,
             },
         )
     except BioamlaError as e:
@@ -444,8 +489,8 @@ def ast_train(
 
     # Each augmentation layer is opt-in (off by default); enable only the ones the
     # user turned on via flag or [augmentation] TOML. If none are enabled, pass
-    # None so training skips the pipeline entirely. Per-transform probabilities are
-    # 0.5 (audiomentations' default); the whole Compose is gated by
+    # None so training skips the pipeline entirely. Each enabled layer has its own
+    # per-sample probability; the whole Compose is additionally gated by
     # --augment-probability and shuffled per sample. Settings come from `overrides`
     # so the TOML can drive them (CLI flag still wins).
     layers = (
@@ -462,21 +507,21 @@ def ast_train(
             add_noise=overrides["add_noise"],
             noise_min_snr=overrides["min_snr_db"],
             noise_max_snr=overrides["max_snr_db"],
-            noise_probability=0.5,
+            noise_probability=overrides["noise_probability"],
             time_stretch=overrides["time_stretch"],
             time_stretch_min=overrides["min_time_stretch"],
             time_stretch_max=overrides["max_time_stretch"],
-            time_stretch_probability=0.5,
+            time_stretch_probability=overrides["time_stretch_probability"],
             pitch_shift=overrides["pitch_shift"],
             pitch_shift_min=overrides["min_pitch_shift"],
             pitch_shift_max=overrides["max_pitch_shift"],
-            pitch_shift_probability=0.5,
+            pitch_shift_probability=overrides["pitch_shift_probability"],
             gain=overrides["gain"],
             gain_min_db=overrides["min_gain_db"],
             gain_max_db=overrides["max_gain_db"],
-            gain_probability=0.5,
+            gain_probability=overrides["gain_probability"],
             gain_transition=overrides["gain_transition"],
-            gain_transition_probability=0.5,
+            gain_transition_probability=overrides["gain_transition_probability"],
             clipping_distortion=overrides["clipping_distortion"],
             clipping_min_percentile=overrides["min_percentile_threshold"],
             clipping_max_percentile=overrides["max_percentile_threshold"],

@@ -139,6 +139,31 @@ def test_ast_train_layer_opt_in(runner: CliRunner, tmp_path) -> None:
     assert aug.clipping_distortion is False
 
 
+def test_ast_train_per_layer_probability(runner: CliRunner, tmp_path) -> None:
+    result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(
+            cli,
+            [
+                "models",
+                "ast",
+                "train",
+                "--train-dataset",
+                "me/ds",
+                "--add-noise",
+                "--noise-probability",
+                "0.3",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    aug = m.call_args.kwargs["augmentation"]
+    # The per-layer probability flows onto the config (default would be 0.5).
+    assert aug.noise_probability == 0.3
+
+
 def test_ast_train_multiplier_without_layers_warns(runner: CliRunner, tmp_path) -> None:
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
     with (
