@@ -146,7 +146,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011"]  # allow assert statements in tests
+"tests/*" = ["B011", "E402"]  # allow assert statements; allow imports after pytest.importorskip
 
 [tool.ruff.lint.isort]
 known-first-party = ["bioamla"]

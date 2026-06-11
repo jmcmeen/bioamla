@@ -189,3 +189,155 @@ class TestCache:
         assert result.deleted == 2
         assert result.freed_bytes == 250
         assert result.failures == []
+
+
+class TestFolderHelperLimits:
+    def test_get_folder_size_short_circuits(self, tmp_path) -> None:
+        (tmp_path / "a.txt").write_text("x" * 100)
+        (tmp_path / "b.txt").write_text("y" * 100)
+        # limit below total -> returns as soon as exceeded
+        assert hf._get_folder_size(str(tmp_path), limit=50) > 50
+
+    def test_count_files_short_circuits(self, tmp_path) -> None:
+        for i in range(5):
+            (tmp_path / f"f{i}.txt").write_text("x")
+        assert hf._count_files(str(tmp_path), limit=2) == 3
+
+    def test_is_large_folder_by_file_count(self, tmp_path) -> None:
+        for i in range(3):
+            (tmp_path / f"f{i}.txt").write_text("x")
+        assert hf._is_large_folder(str(tmp_path), file_count_threshold=2) is True
+
+
+class TestGetHfApi:
+    def test_returns_hf_api_instance(self) -> None:
+        pytest.importorskip("huggingface_hub")
+        from huggingface_hub import HfApi
+
+        assert isinstance(hf._get_hf_api(), HfApi)
+
+
+class TestColumnDetection:
+    def test_audio_column_override_missing_raises(self) -> None:
+        pytest.importorskip("datasets")
+        with pytest.raises(InvalidInputError):
+            hf._detect_audio_column({"label": object()}, "nope")
+
+    def test_audio_column_override_present(self) -> None:
+        pytest.importorskip("datasets")
+        from datasets import Audio
+
+        features = {"sound": Audio(), "label": object()}
+        assert hf._detect_audio_column(features, "sound") == "sound"
+
+    def test_label_column_override_missing_raises(self) -> None:
+        pytest.importorskip("datasets")
+        with pytest.raises(InvalidInputError):
+            hf._detect_label_column({"a": object()}, "nope")
+
+    def test_label_column_override_present(self) -> None:
+        pytest.importorskip("datasets")
+        assert hf._detect_label_column({"mylabel": object()}, "mylabel") == "mylabel"
+
+
+class TestExtractAudio:
+    def test_dict_form(self) -> None:
+        import numpy as np
+
+        cell = {"array": np.zeros(4), "sampling_rate": 16000, "path": "a.wav"}
+        array, sr, path = hf._extract_audio(cell)
+        assert sr == 16000
+        assert path == "a.wav"
+
+    def test_torchcodec_form(self) -> None:
+        import numpy as np
+
+        class _Samples:
+            data = type("T", (), {"numpy": lambda self: np.ones((2, 8))})()
+            sample_rate = 22050
+
+        class _Decoder:
+            def get_all_samples(self):
+                return _Samples()
+
+        array, sr, path = hf._extract_audio(_Decoder())
+        assert sr == 22050
+        assert path is None
+        assert array.ndim == 1  # stereo averaged to mono
+
+    def test_unrecognized_raises(self) -> None:
+        with pytest.raises(InvalidInputError):
+            hf._extract_audio(12345)
+
+
+class TestPullDatasetFailures:
+    def test_load_failure_raises_catalog_error(self, tmp_path, monkeypatch) -> None:
+        pytest.importorskip("datasets")
+        import datasets as hfds
+
+        def boom(*a, **k):
+            raise RuntimeError("404")
+
+        monkeypatch.setattr(hfds, "load_dataset", boom)
+        with pytest.raises(CatalogError):
+            hf.pull_dataset("user/ds", str(tmp_path), split="train")
+
+    def test_materialize_failure_raises_catalog_error(self, tmp_path, monkeypatch) -> None:
+        pytest.importorskip("datasets")
+        import numpy as np
+
+        import datasets as hfds
+        from datasets import Audio, Dataset, Features, Value
+
+        ds = Dataset.from_dict(
+            {
+                "audio": [
+                    {
+                        "array": np.zeros(16000, dtype=np.float32),
+                        "sampling_rate": 16000,
+                        "path": "a.wav",
+                    }
+                ],
+                "label": ["dog"],
+            },
+            features=Features({"audio": Audio(sampling_rate=16000), "label": Value("string")}),
+        )
+        monkeypatch.setattr(hfds, "load_dataset", lambda *a, **k: ds)
+
+        def boom(*a, **k):
+            raise RuntimeError("save failed")
+
+        # save_audio is imported inside pull_dataset from bioamla.audio.
+        monkeypatch.setattr("bioamla.audio.save_audio", boom)
+        with pytest.raises(CatalogError):
+            hf.pull_dataset("user/ds", str(tmp_path / "out"), split="train")
+
+
+class _FakeRevision:
+    def __init__(self, path):
+        self.snapshot_path = path
+
+
+class _FakeRepoWithRevisions:
+    def __init__(self, repo_id, repo_type, size, revisions=None):
+        self.repo_id = repo_id
+        self.repo_type = repo_type
+        self.size_on_disk = size
+        self.revisions = revisions or []
+
+
+class TestPurgeFailure:
+    def test_per_repo_failure_recorded(self, monkeypatch) -> None:
+        import huggingface_hub
+
+        repo = _FakeRepoWithRevisions("user/ds", "dataset", 100, revisions=[_FakeRevision("/x")])
+        monkeypatch.setattr(huggingface_hub, "scan_cache_dir", lambda: _FakeCache([repo]))
+
+        # Make revision iteration raise to hit the failure branch.
+        def boom(path, ignore_errors=False):
+            raise RuntimeError("rmtree boom")
+
+        monkeypatch.setattr("shutil.rmtree", boom)
+        result = hf.purge_cache(models=False, datasets=True)
+        assert result.deleted == 0
+        assert result.failures

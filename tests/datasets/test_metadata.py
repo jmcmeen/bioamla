@@ -1,8 +1,16 @@
 """Tests for the canonical metadata-CSV schema, normalization, and I/O."""
 
+from __future__ import annotations
+
+import csv
+
+import pytest
+
 from bioamla.datasets._metadata import (
     ATTRIBUTION_FIELDS,
     CORE_FIELDS,
+    REQUIRED_FIELDS,
+    get_existing_observation_ids,
     normalize_catalog_row,
     read_metadata_csv,
     write_metadata_csv,
@@ -80,3 +88,105 @@ class TestWriteOrdering:
         assert read_rows[0]["file_name"] == "a.wav"
         assert read_rows[0]["source"] == "macaulay"
         assert read_rows[0]["label"] == "X y"
+
+
+class TestReadMetadataCsv:
+    def test_missing_file_returns_empty(self, tmp_path) -> None:
+        rows, fieldnames = read_metadata_csv(tmp_path / "nope.csv")
+        assert rows == []
+        assert fieldnames == set()
+
+    def test_read_error_logged_returns_empty(self, tmp_path, monkeypatch) -> None:
+        path = tmp_path / "m.csv"
+        path.write_text("file_name,label\na.wav,x\n")
+
+        def _boom(*a, **k):
+            raise OSError("disk gone")
+
+        monkeypatch.setattr("pathlib.Path.open", _boom)
+        rows, fieldnames = read_metadata_csv(path)
+        assert rows == []
+        assert fieldnames == set()
+
+
+class TestWriteMetadataCsv:
+    def test_empty_rows_merge_existing_returns_zero(self, tmp_path) -> None:
+        path = tmp_path / "m.csv"
+        assert write_metadata_csv(path, [], merge_existing=True) == 0
+        assert not path.exists()  # nothing written
+
+    def test_empty_rows_no_merge_writes_header(self, tmp_path) -> None:
+        path = tmp_path / "m.csv"
+        assert write_metadata_csv(path, [], merge_existing=False) == 0
+        header = path.read_text().splitlines()[0].split(",")
+        assert header == REQUIRED_FIELDS
+
+    def test_fieldnames_inferred_when_none(self, tmp_path) -> None:
+        path = tmp_path / "m.csv"
+        rows = [{"file_name": "a.wav", "label": "x"}]
+        n = write_metadata_csv(path, rows, fieldnames=None, merge_existing=False)
+        assert n == 1
+        read_rows, _ = read_metadata_csv(path)
+        assert read_rows[0]["file_name"] == "a.wav"
+
+    def test_merge_dedup_by_file_name(self, tmp_path) -> None:
+        path = tmp_path / "m.csv"
+        write_metadata_csv(
+            path,
+            [{"file_name": "a.wav", "label": "x"}],
+            {"file_name", "label"},
+            merge_existing=False,
+        )
+        # Merge: one duplicate (a.wav) + one new (b.wav).
+        n = write_metadata_csv(
+            path,
+            [
+                {"file_name": "a.wav", "label": "x"},
+                {"file_name": "b.wav", "label": "y"},
+            ],
+            {"file_name", "label"},
+            merge_existing=True,
+        )
+        assert n == 2  # a.wav deduped, b.wav added
+        rows, _ = read_metadata_csv(path)
+        names = sorted(r["file_name"] for r in rows)
+        assert names == ["a.wav", "b.wav"]
+
+    def test_optional_field_mismatch_warns_and_drops(self, tmp_path) -> None:
+        path = tmp_path / "m.csv"
+        # Existing rows carry an optional iNat field.
+        write_metadata_csv(
+            path,
+            [{"file_name": "a.wav", "label": "x", "observation_id": "111"}],
+            {"file_name", "label", "observation_id"},
+            merge_existing=False,
+        )
+        # New rows lack the optional field -> mismatch -> warning + column drop.
+        with pytest.warns(UserWarning, match="Optional metadata mismatch"):
+            write_metadata_csv(
+                path,
+                [{"file_name": "b.wav", "label": "y"}],
+                {"file_name", "label"},
+                merge_existing=True,
+            )
+        _, fieldnames = read_metadata_csv(path)
+        assert "observation_id" not in fieldnames
+
+
+class TestGetExistingObservationIds:
+    def test_missing_file_returns_empty(self, tmp_path) -> None:
+        assert get_existing_observation_ids(tmp_path / "nope.csv") == set()
+
+    def test_parses_inat_filenames(self, tmp_path) -> None:
+        path = tmp_path / "m.csv"
+        with path.open("w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["file_name"])
+            writer.writeheader()
+            writer.writerow({"file_name": "inat_123_sound_456.wav"})
+            writer.writerow({"file_name": "inat_789_sound_1011.mp3"})
+            writer.writerow({"file_name": "random.wav"})  # ignored
+            writer.writerow({"file_name": "inat_bad_sound_xx.wav"})  # parse error, skipped
+        ids = get_existing_observation_ids(path)
+        assert (123, 456) in ids
+        assert (789, 1011) in ids
+        assert len(ids) == 2

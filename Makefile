@@ -47,7 +47,12 @@ test-fast: ## Run tests, skipping slow/integration markers
 	$(UV) run pytest -m "not slow and not integration"
 
 cov: ## Run tests with coverage report
-	$(UV) run pytest --cov=$(PKG) --cov-report=term-missing
+	# Use coverage's sys.monitoring core (COVERAGE_CORE=sysmon) instead of the C
+	# tracer: under Python 3.13 the C tracer crashes on numpy's C extensions
+	# ("cannot load module more than once per process"). Run via `coverage run`
+	# with the pytest-cov plugin disabled (-p no:cov) to avoid the same path.
+	COVERAGE_CORE=sysmon $(UV) run coverage run -m pytest -p no:cov
+	$(UV) run coverage report -m
 
 bench: ## Run benchmark tests only
 	$(UV) run pytest --benchmark-only

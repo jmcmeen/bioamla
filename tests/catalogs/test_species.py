@@ -129,3 +129,149 @@ class TestFindSpeciesName:
 
     def test_empty_returns_empty(self) -> None:
         assert species.find_species_name("", set()) == ""
+
+
+@pytest.fixture(autouse=True)
+def _reset_cache():
+    species.clear_taxonomy_cache()
+    yield
+    species.clear_taxonomy_cache()
+
+
+_TAXONOMY = [
+    {
+        "sciName": "Turdus migratorius",
+        "comName": "American Robin",
+        "speciesCode": "amerob",
+        "familyComName": "Thrushes",
+        "order": "Passeriformes",
+        "category": "species",
+    },
+    {
+        "sciName": "Strix varia",
+        "comName": "Barred Owl",
+        "speciesCode": "brdowl",
+        "familyComName": "Owls",
+        "order": "Strigiformes",
+        "category": "species",
+    },
+]
+
+
+def _patch_ebird(monkeypatch, taxa=_TAXONOMY):
+    def fake_get(url, params=None):
+        return taxa
+
+    monkeypatch.setattr(species._client, "get", fake_get)
+
+
+class TestLoadEbirdTaxonomy:
+    def test_loads_and_is_idempotent(self, monkeypatch) -> None:
+        calls = {"n": 0}
+
+        def fake_get(url, params=None):
+            calls["n"] += 1
+            return _TAXONOMY
+
+        monkeypatch.setattr(species._client, "get", fake_get)
+        species._load_ebird_taxonomy()
+        species._load_ebird_taxonomy()
+        # Only loaded once despite two calls.
+        assert calls["n"] == 1
+        assert species._taxonomy_loaded is True
+
+    def test_load_failure_swallowed(self, monkeypatch) -> None:
+        def boom(url, params=None):
+            raise RuntimeError("net")
+
+        monkeypatch.setattr(species._client, "get", boom)
+        # Should not raise; load is best-effort.
+        species._load_ebird_taxonomy()
+        assert species._taxonomy_loaded is False
+
+    def test_lookup_after_load(self, monkeypatch) -> None:
+        _patch_ebird(monkeypatch)
+        info = species.lookup("Strix varia")
+        assert info.scientific_name == "Strix varia"
+        assert info.species_code == "brdowl"
+
+
+class TestInatFallback:
+    def test_lookup_falls_back_to_inat(self, monkeypatch) -> None:
+        _patch_ebird(monkeypatch, taxa=[])
+
+        def fake_inat(name):
+            return SpeciesInfo(scientific_name="Inat species", source="inat")
+
+        monkeypatch.setattr(species, "_search_inat_taxon", fake_inat)
+        info = species.lookup("Unknown thing")
+        assert info.source == "inat"
+
+    def test_search_inat_taxon_parses_species(self, monkeypatch) -> None:
+        response = {
+            "results": [
+                {"rank": "genus", "name": "Turdus"},
+                {
+                    "rank": "species",
+                    "name": "Turdus migratorius",
+                    "preferred_common_name": "American Robin",
+                    "id": 12727,
+                },
+            ]
+        }
+        monkeypatch.setattr(species._client, "get", lambda url, params=None: response)
+        info = species._search_inat_taxon("American Robin")
+        assert info is not None
+        assert info.scientific_name == "Turdus migratorius"
+
+    def test_search_inat_taxon_failure_returns_none(self, monkeypatch) -> None:
+        def boom(url, params=None):
+            raise RuntimeError("net")
+
+        monkeypatch.setattr(species._client, "get", boom)
+        assert species._search_inat_taxon("x") is None
+
+    def test_scientific_to_common_inat_fallback(self, monkeypatch) -> None:
+        _patch_ebird(monkeypatch, taxa=[])
+        monkeypatch.setattr(
+            species,
+            "_search_inat_taxon",
+            lambda name: SpeciesInfo(scientific_name=name, common_name="Common X"),
+        )
+        assert species.scientific_to_common("Mystery sp") == "Common X"
+
+    def test_common_to_scientific_inat_fallback(self, monkeypatch) -> None:
+        _patch_ebird(monkeypatch, taxa=[])
+        monkeypatch.setattr(
+            species,
+            "_search_inat_taxon",
+            lambda name: SpeciesInfo(scientific_name="Sci result"),
+        )
+        assert species.common_to_scientific("Mystery") == "Sci result"
+
+    def test_common_to_scientific_no_fallback_raises(self, monkeypatch) -> None:
+        _patch_ebird(monkeypatch, taxa=[])
+        with pytest.raises(SpeciesError):
+            species.common_to_scientific("Mystery", fallback_inat=False)
+
+
+class TestExportJsonError:
+    def test_export_unwritable_raises(self, monkeypatch, tmp_path) -> None:
+        _patch_ebird(monkeypatch)
+        species._load_ebird_taxonomy()
+
+        def boom(*a, **k):
+            raise OSError("disk full")
+
+        monkeypatch.setattr("json.dump", boom)
+        with pytest.raises(SpeciesError):
+            species.export_taxonomy(tmp_path / "out.json", format="json")
+
+    def test_export_json_with_filter(self, monkeypatch, tmp_path) -> None:
+        import json
+
+        _patch_ebird(monkeypatch)
+        out = tmp_path / "owls.json"
+        species.export_taxonomy(out, format="json", taxa_filter="Strigiformes")
+        data = json.loads(out.read_text())
+        assert all("Strix" in r["scientific_name"] for r in data)
