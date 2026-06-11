@@ -164,7 +164,7 @@ class TestAudioCallback:
         assert player._position == 100
         assert np.allclose(out[:, 0], mono_audio[:100])
 
-    def test_callback_not_playing_fills_zero(self, mono_audio) -> None:
+    def test_callback_not_playing_fills_zero(self, mock_sd, mono_audio) -> None:
         player = AudioPlayer()
         player.load(mono_audio, 16000)  # state STOPPED
         out = self._outdata(50)
@@ -213,7 +213,7 @@ class TestAudioCallback:
         player._audio_callback(out, 100, None, None)
         assert player._position == 100
 
-    def test_callback_position_change_invoked(self, mono_audio) -> None:
+    def test_callback_position_change_invoked(self, mock_sd, mono_audio) -> None:
         calls = []
         player = AudioPlayer()
         player.load(mono_audio, 16000, on_position_change=calls.append)
@@ -221,7 +221,7 @@ class TestAudioCallback:
         player._audio_callback(self._outdata(100), 100, None, None)
         assert len(calls) == 1
 
-    def test_callback_position_change_error_swallowed(self, mono_audio) -> None:
+    def test_callback_position_change_error_swallowed(self, mock_sd, mono_audio) -> None:
         def boom(_pos):
             raise RuntimeError("cb fail")
 
@@ -231,7 +231,7 @@ class TestAudioCallback:
         # Should not raise despite callback error
         player._audio_callback(self._outdata(100), 100, None, None)
 
-    def test_callback_with_status_logs(self, mono_audio) -> None:
+    def test_callback_with_status_logs(self, mock_sd, mono_audio) -> None:
         player = AudioPlayer()
         player.load(mono_audio, 16000)
         player._state = PlaybackState.PLAYING

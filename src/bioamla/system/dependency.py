@@ -164,7 +164,10 @@ def check_portaudio() -> DependencyInfo:
             installed = True
             if sounddevice.query_hostapis():
                 version = "available"
-        except (ImportError, OSError):
+        except Exception:
+            # ImportError (not installed), OSError (missing lib), or
+            # PortAudioError (installed but no audio server, e.g. headless CI).
+            # A dependency probe must report gracefully, never raise.
             pass
 
     return DependencyInfo(
