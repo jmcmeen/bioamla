@@ -56,9 +56,7 @@ class TestMergeDatasets:
 
     def test_missing_source_raises(self, tmp_path) -> None:
         with pytest.raises(NotFoundError, match="does not exist"):
-            merge_datasets(
-                [str(tmp_path / "nope")], str(tmp_path / "out"), verbose=False
-            )
+            merge_datasets([str(tmp_path / "nope")], str(tmp_path / "out"), verbose=False)
 
     def test_basic_merge_organized_by_category(self, tmp_path) -> None:
         ds = tmp_path / "ds1"
@@ -70,9 +68,7 @@ class TestMergeDatasets:
             ],
         )
         out = tmp_path / "out"
-        stats = merge_datasets(
-            [str(ds)], str(out), organize_by_category=True, verbose=True
-        )
+        stats = merge_datasets([str(ds)], str(out), organize_by_category=True, verbose=True)
         assert stats["datasets_merged"] == 1
         assert stats["files_copied"] == 2
         assert (out / "robin" / "a.wav").exists()  # sanitize_filename lowercases
@@ -81,9 +77,7 @@ class TestMergeDatasets:
         ds = tmp_path / "ds1"
         _make_dataset(ds, [{"file_name": "a.wav", "label": "Robin"}])
         out = tmp_path / "out"
-        stats = merge_datasets(
-            [str(ds)], str(out), organize_by_category=False, verbose=False
-        )
+        stats = merge_datasets([str(ds)], str(out), organize_by_category=False, verbose=False)
         assert (out / "a.wav").exists()
         assert stats["files_copied"] == 1
 
@@ -135,9 +129,7 @@ class TestMergeDatasets:
             merge_existing=False,
         )
         out = tmp_path / "out"
-        stats = merge_datasets(
-            [str(ds)], str(out), organize_by_category=False, verbose=True
-        )
+        stats = merge_datasets([str(ds)], str(out), organize_by_category=False, verbose=True)
         # Nothing copied because the source file is missing.
         assert stats["files_copied"] == 0
 

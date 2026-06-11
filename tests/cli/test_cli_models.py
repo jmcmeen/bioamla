@@ -69,9 +69,7 @@ def test_ast_predict_output_csv(runner: CliRunner, test_audio_path, tmp_path) ->
     inst = MagicMock()
     inst.predict.return_value = _pred()
     with patch("bioamla.ml.ASTInference", return_value=inst):
-        result = runner.invoke(
-            cli, ["models", "ast", "predict", test_audio_path, "-o", str(out)]
-        )
+        result = runner.invoke(cli, ["models", "ast", "predict", test_audio_path, "-o", str(out)])
     assert result.exit_code == 0, result.output
     assert out.exists()
     assert "prediction" in out.read_text()
@@ -106,8 +104,9 @@ def test_ast_train(runner: CliRunner, tmp_path) -> None:
     result_obj = SimpleNamespace(
         model_path=str(tmp_path / "model"), final_accuracy=0.92, final_loss=0.3
     )
-    with patch("bioamla.ml.train_ast", return_value=result_obj) as m, patch(
-        "bioamla.cli.logging_setup.configure_cli_logging"
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
             cli,
@@ -120,8 +119,9 @@ def test_ast_train(runner: CliRunner, tmp_path) -> None:
 
 def test_ast_train_no_augment(runner: CliRunner, tmp_path) -> None:
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
-    with patch("bioamla.ml.train_ast", return_value=result_obj) as m, patch(
-        "bioamla.cli.logging_setup.configure_cli_logging"
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
             cli, ["models", "ast", "train", "--train-dataset", "me/ds", "--no-augment"]
@@ -137,8 +137,9 @@ def test_ast_train_with_config(runner: CliRunner, tmp_path) -> None:
         "[training]\nepochs = 7\nlearning_rate = 0.001\n[models]\ndefault_ast_model = 'foo/bar'\n"
     )
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
-    with patch("bioamla.ml.train_ast", return_value=result_obj) as m, patch(
-        "bioamla.cli.logging_setup.configure_cli_logging"
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
             cli,
@@ -151,8 +152,9 @@ def test_ast_train_with_config(runner: CliRunner, tmp_path) -> None:
 
 
 def test_ast_train_error(runner: CliRunner) -> None:
-    with patch("bioamla.ml.train_ast", side_effect=TrainingError("empty dataset")), patch(
-        "bioamla.cli.logging_setup.configure_cli_logging"
+    with (
+        patch("bioamla.ml.train_ast", side_effect=TrainingError("empty dataset")),
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(cli, ["models", "ast", "train", "--train-dataset", "me/ds"])
     assert result.exit_code != 0
@@ -173,9 +175,7 @@ def test_ast_evaluate(runner: CliRunner, test_audio_dir, tmp_path) -> None:
         to_dict=lambda: {"accuracy": 0.9},
     )
     with patch("bioamla.ml.evaluate_directory", return_value=eval_result):
-        result = runner.invoke(
-            cli, ["models", "ast", "evaluate", test_audio_dir, "-g", str(gt)]
-        )
+        result = runner.invoke(cli, ["models", "ast", "evaluate", test_audio_dir, "-g", str(gt)])
     assert result.exit_code == 0, result.output
     assert "Accuracy: 0.9000" in result.output
 
@@ -185,14 +185,28 @@ def test_ast_evaluate_output_json(runner: CliRunner, test_audio_dir, tmp_path) -
     gt.write_text("file_name,label\na.wav,frog\n")
     out = tmp_path / "res.json"
     eval_result = SimpleNamespace(
-        accuracy=0.9, precision=0.8, recall=0.8, f1_score=0.8, total_samples=5,
+        accuracy=0.9,
+        precision=0.8,
+        recall=0.8,
+        f1_score=0.8,
+        total_samples=5,
         to_dict=lambda: {"accuracy": 0.9},
     )
     with patch("bioamla.ml.evaluate_directory", return_value=eval_result):
         result = runner.invoke(
             cli,
-            ["models", "ast", "evaluate", test_audio_dir, "-g", str(gt),
-             "-o", str(out), "--format", "json"],
+            [
+                "models",
+                "ast",
+                "evaluate",
+                test_audio_dir,
+                "-g",
+                str(gt),
+                "-o",
+                str(out),
+                "--format",
+                "json",
+            ],
         )
     assert result.exit_code == 0
     assert out.exists()
@@ -203,9 +217,7 @@ def test_ast_evaluate_error(runner: CliRunner, test_audio_dir, tmp_path) -> None
     gt = tmp_path / "gt.csv"
     gt.write_text("file_name,label\na.wav,frog\n")
     with patch("bioamla.ml.evaluate_directory", side_effect=ModelError("bad model")):
-        result = runner.invoke(
-            cli, ["models", "ast", "evaluate", test_audio_dir, "-g", str(gt)]
-        )
+        result = runner.invoke(cli, ["models", "ast", "evaluate", test_audio_dir, "-g", str(gt)])
     assert result.exit_code != 0
 
 

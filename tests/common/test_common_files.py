@@ -164,9 +164,7 @@ class TestDownloadFile:
             return dest, None
 
         monkeypatch.setattr("bioamla.common.files.urlretrieve", fake_urlretrieve)
-        out = download_file(
-            "http://x/file.wav", tmp_path / "sub" / "out.wav", show_progress=True
-        )
+        out = download_file("http://x/file.wav", tmp_path / "sub" / "out.wav", show_progress=True)
         assert out.read_text() == "data"
         assert captured["url"] == "http://x/file.wav"
 

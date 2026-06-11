@@ -123,9 +123,7 @@ class _FakeConfig:
 
 
 def test_config_show_with_source(runner: CliRunner) -> None:
-    with patch(
-        "bioamla.system.config.get_config", return_value=_FakeConfig("/path/bioamla.toml")
-    ):
+    with patch("bioamla.system.config.get_config", return_value=_FakeConfig("/path/bioamla.toml")):
         result = runner.invoke(cli, ["config", "show"])
     assert result.exit_code == 0
     assert "Source" in result.output
@@ -185,11 +183,12 @@ def test_config_path(runner: CliRunner, tmp_path) -> None:
     active = tmp_path / "bioamla.toml"
     active.write_text("")
     other = tmp_path / "other.toml"
-    with patch(
-        "bioamla.system.config.find_config_file", return_value=str(active)
-    ), patch(
-        "bioamla.system.config.get_config_locations",
-        return_value=[str(active), str(other)],
+    with (
+        patch("bioamla.system.config.find_config_file", return_value=str(active)),
+        patch(
+            "bioamla.system.config.get_config_locations",
+            return_value=[str(active), str(other)],
+        ),
     ):
         result = runner.invoke(cli, ["config", "path"])
     assert result.exit_code == 0
@@ -198,9 +197,7 @@ def test_config_path(runner: CliRunner, tmp_path) -> None:
 
 
 def test_config_path_error(runner: CliRunner) -> None:
-    with patch(
-        "bioamla.system.config.find_config_file", side_effect=ConfigError("oops")
-    ):
+    with patch("bioamla.system.config.find_config_file", side_effect=ConfigError("oops")):
         result = runner.invoke(cli, ["config", "path"])
     assert result.exit_code != 0
 
@@ -243,10 +240,13 @@ def test_config_deps_missing_list(runner: CliRunner) -> None:
 
 
 def test_config_deps_install(runner: CliRunner) -> None:
-    with patch(
-        "bioamla.system.dependency.check_all",
-        side_effect=[_report(False), _report(True)],
-    ), patch("bioamla.system.dependency.install", return_value="Installed!"):
+    with (
+        patch(
+            "bioamla.system.dependency.check_all",
+            side_effect=[_report(False), _report(True)],
+        ),
+        patch("bioamla.system.dependency.install", return_value="Installed!"),
+    ):
         result = runner.invoke(cli, ["config", "deps", "--install", "-y"])
     assert result.exit_code == 0
     assert "Installing" in result.output
@@ -260,10 +260,9 @@ def test_config_deps_install_abort(runner: CliRunner) -> None:
 
 
 def test_config_deps_install_fails(runner: CliRunner) -> None:
-    with patch(
-        "bioamla.system.dependency.check_all", return_value=_report(False)
-    ), patch(
-        "bioamla.system.dependency.install", side_effect=ConfigError("no sudo")
+    with (
+        patch("bioamla.system.dependency.check_all", return_value=_report(False)),
+        patch("bioamla.system.dependency.install", side_effect=ConfigError("no sudo")),
     ):
         result = runner.invoke(cli, ["config", "deps", "--install", "-y"])
     assert result.exit_code == 1

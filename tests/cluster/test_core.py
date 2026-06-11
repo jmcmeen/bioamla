@@ -373,9 +373,7 @@ class TestExportCoverage:
         f1 = src / "b.wav"
         f1.write_bytes(b"RIFF")
         labels = np.array([0, 1])
-        out = export_clusters(
-            labels, [str(f0), str(f1)], str(tmp_path / "out"), copy_files=True
-        )
+        out = export_clusters(labels, [str(f0), str(f1)], str(tmp_path / "out"), copy_files=True)
         assert (tmp_path / "out" / "cluster_0" / "a.wav").exists()
         assert (tmp_path / "out" / "cluster_1" / "b.wav").exists()
         assert out == str(tmp_path / "out")

@@ -143,9 +143,7 @@ def test_hf_push_model(runner: CliRunner, tmp_path) -> None:
         "bioamla.catalogs.huggingface.push_model",
         return_value=SimpleNamespace(url="http://hub/model"),
     ):
-        result = runner.invoke(
-            cli, ["catalogs", "hf", "push-model", str(tmp_path), "me/model"]
-        )
+        result = runner.invoke(cli, ["catalogs", "hf", "push-model", str(tmp_path), "me/model"])
     assert result.exit_code == 0
     assert "Successfully pushed" in result.output
 
@@ -155,9 +153,7 @@ def test_hf_push_model_error(runner: CliRunner, tmp_path) -> None:
         "bioamla.catalogs.huggingface.push_model",
         side_effect=CatalogError("not logged in"),
     ):
-        result = runner.invoke(
-            cli, ["catalogs", "hf", "push-model", str(tmp_path), "me/model"]
-        )
+        result = runner.invoke(cli, ["catalogs", "hf", "push-model", str(tmp_path), "me/model"])
     assert result.exit_code != 0
     assert "huggingface-cli login" in result.output
 
@@ -175,15 +171,14 @@ def test_hf_push_dataset_no_card(runner: CliRunner, tmp_path) -> None:
 
 
 def test_hf_push_dataset_with_card(runner: CliRunner, tmp_path) -> None:
-    with patch(
-        "bioamla.catalogs.huggingface.push_dataset",
-        return_value=SimpleNamespace(url="http://hub/ds"),
-    ), patch(
-        "bioamla.datasets.write_dataset_card", return_value=str(tmp_path / "README.md")
+    with (
+        patch(
+            "bioamla.catalogs.huggingface.push_dataset",
+            return_value=SimpleNamespace(url="http://hub/ds"),
+        ),
+        patch("bioamla.datasets.write_dataset_card", return_value=str(tmp_path / "README.md")),
     ):
-        result = runner.invoke(
-            cli, ["catalogs", "hf", "push-dataset", str(tmp_path), "me/ds"]
-        )
+        result = runner.invoke(cli, ["catalogs", "hf", "push-dataset", str(tmp_path), "me/ds"])
     assert result.exit_code == 0
     assert "dataset card" in result.output
 
@@ -196,9 +191,7 @@ def test_hf_pull_dataset(runner: CliRunner, tmp_path) -> None:
         metadata_file=str(tmp_path / "metadata.csv"),
     )
     with patch("bioamla.catalogs.huggingface.pull_dataset", return_value=pulled):
-        result = runner.invoke(
-            cli, ["catalogs", "hf", "pull-dataset", "me/ds", str(tmp_path)]
-        )
+        result = runner.invoke(cli, ["catalogs", "hf", "pull-dataset", "me/ds", str(tmp_path)])
     assert result.exit_code == 0
     assert "Wrote 10 clips" in result.output
 
@@ -208,9 +201,7 @@ def test_hf_pull_dataset_error(runner: CliRunner, tmp_path) -> None:
         "bioamla.catalogs.huggingface.pull_dataset",
         side_effect=CatalogError("not found"),
     ):
-        result = runner.invoke(
-            cli, ["catalogs", "hf", "pull-dataset", "me/ds", str(tmp_path)]
-        )
+        result = runner.invoke(cli, ["catalogs", "hf", "pull-dataset", "me/ds", str(tmp_path)])
     assert result.exit_code != 0
 
 
@@ -233,9 +224,10 @@ def test_hf_cache_list(runner: CliRunner) -> None:
 def test_hf_cache_purge(runner: CliRunner) -> None:
     repos = [SimpleNamespace(repo_type="model", repo_id="me/m", size_bytes=1024)]
     purge = SimpleNamespace(deleted=1, freed_bytes=1024, failures=[])
-    with patch(
-        "bioamla.catalogs.huggingface.scan_cache", return_value=repos
-    ), patch("bioamla.catalogs.huggingface.purge_cache", return_value=purge):
+    with (
+        patch("bioamla.catalogs.huggingface.scan_cache", return_value=repos),
+        patch("bioamla.catalogs.huggingface.purge_cache", return_value=purge),
+    ):
         result = runner.invoke(cli, ["catalogs", "hf", "cache", "--purge", "-y"])
     assert result.exit_code == 0
     assert "Purged 1" in result.output
@@ -280,9 +272,7 @@ def test_xc_search_table(runner: CliRunner) -> None:
 def test_xc_search_json(runner: CliRunner) -> None:
     res = SimpleNamespace(recordings=[_xc_rec()])
     with patch("bioamla.catalogs.xeno_canto.search", return_value=res):
-        result = runner.invoke(
-            cli, ["catalogs", "xc", "search", "-s", "robin", "--format", "json"]
-        )
+        result = runner.invoke(cli, ["catalogs", "xc", "search", "-s", "robin", "--format", "json"])
     assert result.exit_code == 0
     assert "Turdus migratorius" in result.output
 
@@ -290,9 +280,7 @@ def test_xc_search_json(runner: CliRunner) -> None:
 def test_xc_search_csv(runner: CliRunner) -> None:
     res = SimpleNamespace(recordings=[_xc_rec()])
     with patch("bioamla.catalogs.xeno_canto.search", return_value=res):
-        result = runner.invoke(
-            cli, ["catalogs", "xc", "search", "-s", "robin", "--format", "csv"]
-        )
+        result = runner.invoke(cli, ["catalogs", "xc", "search", "-s", "robin", "--format", "csv"])
     assert result.exit_code == 0
     assert "scientific_name" in result.output
 
@@ -470,8 +458,18 @@ def test_ebird_validate(runner: CliRunner) -> None:
     with patch.dict("sys.modules", {"bioamla.catalogs.ebird": mock_mod}):
         result = runner.invoke(
             cli,
-            ["catalogs", "ebird", "validate", "amerob", "--lat", "40", "--lng", "-73",
-             "--api-key", "KEY"],
+            [
+                "catalogs",
+                "ebird",
+                "validate",
+                "amerob",
+                "--lat",
+                "40",
+                "--lng",
+                "-73",
+                "--api-key",
+                "KEY",
+            ],
         )
     assert result.exit_code == 0
     assert "expected at this location" in result.output
@@ -489,8 +487,18 @@ def test_ebird_validate_invalid(runner: CliRunner) -> None:
     with patch.dict("sys.modules", {"bioamla.catalogs.ebird": mock_mod}):
         result = runner.invoke(
             cli,
-            ["catalogs", "ebird", "validate", "amerob", "--lat", "40", "--lng", "-73",
-             "--api-key", "KEY"],
+            [
+                "catalogs",
+                "ebird",
+                "validate",
+                "amerob",
+                "--lat",
+                "40",
+                "--lng",
+                "-73",
+                "--api-key",
+                "KEY",
+            ],
         )
     assert result.exit_code == 0
     assert "not recently observed" in result.output
@@ -502,8 +510,18 @@ def test_ebird_validate_error(runner: CliRunner) -> None:
     with patch.dict("sys.modules", {"bioamla.catalogs.ebird": mock_mod}):
         result = runner.invoke(
             cli,
-            ["catalogs", "ebird", "validate", "amerob", "--lat", "40", "--lng", "-73",
-             "--api-key", "KEY"],
+            [
+                "catalogs",
+                "ebird",
+                "validate",
+                "amerob",
+                "--lat",
+                "40",
+                "--lng",
+                "-73",
+                "--api-key",
+                "KEY",
+            ],
         )
     assert result.exit_code != 0
 
@@ -531,8 +549,19 @@ def test_ebird_nearby(runner: CliRunner, tmp_path) -> None:
     with patch.dict("sys.modules", {"bioamla.catalogs.ebird": mock_mod}):
         result = runner.invoke(
             cli,
-            ["catalogs", "ebird", "nearby", "--lat", "40", "--lng", "-73",
-             "--api-key", "KEY", "-o", str(out)],
+            [
+                "catalogs",
+                "ebird",
+                "nearby",
+                "--lat",
+                "40",
+                "--lng",
+                "-73",
+                "--api-key",
+                "KEY",
+                "-o",
+                str(out),
+            ],
         )
     assert result.exit_code == 0
     assert "American Robin" in result.output

@@ -63,9 +63,7 @@ def test_load_config_returns_config():
 
 
 def test_load_config_wraps_errors(monkeypatch):
-    monkeypatch.setattr(
-        syscfg, "_load_config", lambda p: (_ for _ in ()).throw(RuntimeError("x"))
-    )
+    monkeypatch.setattr(syscfg, "_load_config", lambda p: (_ for _ in ()).throw(RuntimeError("x")))
     with pytest.raises(ConfigError, match="Failed to load config"):
         syscfg.load_config()
 

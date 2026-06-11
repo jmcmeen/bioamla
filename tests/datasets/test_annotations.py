@@ -142,8 +142,7 @@ class TestRavenBranches:
     def test_label_autodetect_species_column(self, tmp_path) -> None:
         path = tmp_path / "sel.txt"
         path.write_text(
-            "Selection\tBegin Time (s)\tEnd Time (s)\tSpecies\n"
-            "1\t0.0\t1.0\tRobin\n",
+            "Selection\tBegin Time (s)\tEnd Time (s)\tSpecies\n1\t0.0\t1.0\tRobin\n",
         )
         anns = load_raven_selection_table(str(path))
         assert anns[0].label == "Robin"
@@ -198,9 +197,7 @@ class TestLoadFromDirectory:
     def test_loads_csv_files(self, tmp_path) -> None:
         save_csv_annotations(_anns(), str(tmp_path / "f1.csv"))
         save_csv_annotations(_anns(), str(tmp_path / "f2.csv"))
-        results = load_annotations_from_directory(
-            str(tmp_path), file_pattern="*.csv", format="csv"
-        )
+        results = load_annotations_from_directory(str(tmp_path), file_pattern="*.csv", format="csv")
         assert set(results.keys()) == {"f1.csv", "f2.csv"}
         assert len(results["f1.csv"]) == 2
 

@@ -242,9 +242,7 @@ class TestAPIClientDownload:
         rl = RateLimiter(requests_per_second=1000.0)
         client = APIClient(rate_limiter=rl)
         client.session = MagicMock()
-        client.session.get.return_value = make_response(
-            content_chunks=[b"x"], headers={}
-        )
+        client.session.get.return_value = make_response(content_chunks=[b"x"], headers={})
         out = client.download("http://x/f", tmp_path / "f")
         assert out.read_bytes() == b"x"
 
