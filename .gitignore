@@ -197,8 +197,12 @@ cython_debug/
 /frog_acoustic_study
 mlflow.db
 /.benchmarks
-/.claude
 /dev-data
+
+# Claude Code: track shared config (skills, commands, settings.json),
+# ignore personal/local overrides
+.claude/settings.local.json
+.claude/*.local.json
 
 # rsync-to-gpu helper (local dev only)
 /sync-to-gpu.sh

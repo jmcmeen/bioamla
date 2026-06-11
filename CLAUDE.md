@@ -141,7 +141,9 @@ When working here, reach for these (invoke with `/<name>`):
   "simplify over add" direction. Good after getting something working.
 - **`/verify`** / **`/run`** — actually run the CLI/library to confirm a change works, not
   just that tests pass. The CLI is the primary user surface — exercise it (`bioamla <group>
-  <cmd> --help`, then a real invocation).
+  <cmd> --help`, then a real invocation). For an end-to-end check, the project ships a
+  **`run-bioamla`** skill (`.claude/skills/run-bioamla/`) whose `smoke.sh` drives config /
+  audio / indices / detect / visualize against a synthesized WAV.
 - **`/security-review`** — for changes touching `catalogs`/`http`/credential handling or file
   writes.
 - **`/init`** — only to regenerate this doc wholesale; prefer editing in place.
