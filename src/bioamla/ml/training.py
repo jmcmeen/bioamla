@@ -351,7 +351,8 @@ def train_ast(
         convert_labels,
         remove_columns=[category_label_column],
         writer_batch_size=100,
-        num_proc=1,
+        # None = run in-process; num_proc=1 still spawns a one-worker Pool (fork).
+        num_proc=None,
     )
 
     dataset = dataset.cast_column("audio", Audio(sampling_rate=SAMPLING_RATE))
@@ -436,7 +437,7 @@ def train_ast(
 
     logger.info("Filtering out corrupted audio files...")
     original_sizes = {}
-    filter_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
+    filter_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else None
     if isinstance(dataset, DatasetDict):
         for split_name in dataset.keys():
             original_sizes[split_name] = len(dataset[split_name])
@@ -468,7 +469,7 @@ def train_ast(
             return {"_mean": means, "_std": stds}
 
         logger.info("Calculating dataset normalization statistics...")
-        norm_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
+        norm_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else None
         stats_dataset = train_dataset_for_norm.map(
             compute_stats,
             batched=True,

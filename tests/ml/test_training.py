@@ -485,6 +485,9 @@ class TestTrainAst:
                 train_dataset="owner/ds",
                 training_dir=str(tmp_path),
                 num_train_epochs=2,
+                # Keep filter/map single-process: avoids forking a multi-threaded
+                # test process (Python 3.13 DeprecationWarning) and runs faster.
+                dataloader_num_workers=1,
             )
 
         assert result.epochs == 2
