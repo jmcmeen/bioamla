@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/bioamla.svg)](https://pypi.org/project/bioamla/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jmcmeen/bioamla/blob/main/LICENSE)
 [![CI](https://github.com/jmcmeen/bioamla/actions/workflows/ci.yml/badge.svg)](https://github.com/jmcmeen/bioamla/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-mkdocs--material-blue.svg)](https://jmcmeen.github.io/bioamla)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -29,7 +29,7 @@ import directly:
 | `bioamla.datasets` | dataset merge / augment / licensing, annotation conversion, labeled-clip extraction |
 | `bioamla.ml` | Audio Spectrogram Transformer (AST) inference, training, embeddings |
 | `bioamla.batch` | generic batch engine (directory + CSV-metadata modes) |
-| `bioamla.system` | configuration, dependency checks, environment info |
+| `bioamla.system` | system dependency checks, version & environment info |
 
 Two conventions matter for consumers:
 
@@ -70,7 +70,7 @@ use). A real exported variable always takes precedence over the file.
 # .env
 EBIRD_API_KEY=your_key_here
 XC_API_KEY=your_key_here
-# HF_TOKEN=your_token_here
+HF_TOKEN=your_token_here
 ```
 
 Keys are only required for the catalog/HuggingFace features that use them; the rest of the
@@ -108,7 +108,7 @@ print(pred.predicted_label, pred.confidence)
 ```bash
 bioamla --help                                  # all command groups
 bioamla audio info recording.wav                # metadata
-bioamla audio filter in.wav -o out.wav --bandpass-low 500 --bandpass-high 8000
+bioamla audio filter in.wav out.wav --bandpass-low 500 --bandpass-high 8000
 bioamla indices compute recording.wav           # ACI/ADI/AEI/BIO/NDSI + entropy
 bioamla detect energy recording.wav             # energy-based detections
 bioamla audio visualize recording.wav -o spec.png
@@ -123,7 +123,7 @@ bioamla batch index --input-dir ./recordings --output-dir ./out
 bioamla batch index --input-file meta.csv --output-dir ./out   # merges results into the CSV
 bioamla batch audio convert --input-dir ./wavs --output-dir ./flac --format flac
 
-# Catalogs, models, datasets, config:
+# Catalogs, models, datasets, system:
 bioamla catalogs xc search --species "Hyla cinerea"
 bioamla catalogs hf pull-dataset ashraq/esc50 ./esc50      # Hub dataset -> labeled-folder layout
 bioamla catalogs hf cache --datasets                       # inspect/purge the HF cache (--purge)
@@ -133,6 +133,10 @@ bioamla models ast train --train-dataset ashraq/esc50      # grab-and-go: train 
 bioamla models ast train --train-dataset ./esc50 --config train.toml   # or from local data + a config
 bioamla system deps                                                    # check system deps
 ```
+
+Every command is self-documenting (`bioamla <group> <command> --help`), and the full
+command tree is in the [CLI reference](https://jmcmeen.github.io/bioamla/cli/). The
+[API reference](https://jmcmeen.github.io/bioamla/) documents the library.
 
 ### Two kinds of augmentation
 
@@ -148,10 +152,11 @@ bioamla keeps a deliberate boundary between **audio editing** and the
 
 ## Example workflows
 
-End-to-end bioacoustics studies wired from the CLI live in
-[`examples/`](https://github.com/jmcmeen/bioamla/tree/main/examples) — catalog →
-annotate → dataset → train → publish, pulling a Hub dataset to fine-tune,
-soundscape analysis, and embedding clustering. The offline
+Runnable end-to-end studies wired from the CLI live in
+[`examples/`](https://github.com/jmcmeen/bioamla/tree/main/examples) — each is a
+self-contained shell script (see the [examples README](https://github.com/jmcmeen/bioamla/tree/main/examples#readme)):
+catalog → annotate → dataset → train → publish, fine-tuning from a Hub dataset,
+soundscape analysis, embedding clustering, and iNaturalist clip inference.
 
 ## Development
 
@@ -172,6 +177,25 @@ conventions, and the
 [Code of Conduct](https://github.com/jmcmeen/bioamla/blob/main/CODE_OF_CONDUCT.md). Security
 issues should be reported privately per our
 [Security Policy](https://github.com/jmcmeen/bioamla/blob/main/SECURITY.md).
+
+## Citation
+
+If you use `bioamla` in your research, please cite it. Machine-readable metadata lives in
+[`CITATION.cff`](https://github.com/jmcmeen/bioamla/blob/main/CITATION.cff) — GitHub's **"Cite this repository"** button generates APA and
+BibTeX from it.
+
+Each release is archived on [Zenodo](https://zenodo.org/) with a DOI. Prefer citing the DOI
+for the specific version you used; otherwise cite the repository:
+
+```bibtex
+@software{mcmeen_bioamla,
+  author  = {McMeen, John},
+  title   = {bioamla: Bioacoustics \& Machine Learning Applications},
+  year    = {2026},
+  license = {MIT},
+  url     = {https://github.com/jmcmeen/bioamla}
+}
+```
 
 ## License
 
