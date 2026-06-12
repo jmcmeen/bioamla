@@ -12,11 +12,8 @@ from bioamla.common import http as http_mod
 from bioamla.common.http import (
     APICache,
     APIClient,
-    ConfigAwareMixin,
     RateLimiter,
     clear_cache,
-    config_aware,
-    config_aware_class,
     get_cache_dir,
     rate_limited,
 )
@@ -259,89 +256,6 @@ class TestContextManagerAndClose:
         client.session = MagicMock()
         client.close()
         client.session.close.assert_called_once()
-
-
-class TestConfigAwareDecorators:
-    def test_config_aware_fills_default(self, monkeypatch):
-        from bioamla.common.config import Config, set_config
-
-        set_config(Config(audio={"sample_rate": 8000}))
-
-        @config_aware("audio")
-        def fn(sample_rate: int | None = None):
-            return sample_rate
-
-        try:
-            assert fn() == 8000  # filled from config
-            assert fn(sample_rate=22050) == 22050  # explicit wins
-        finally:
-            from bioamla.common.config import reset_config
-
-            reset_config()
-
-    def test_config_aware_custom_mapping(self):
-        from bioamla.common.config import Config, reset_config, set_config
-
-        set_config(Config(inference={"top_k": 3}))
-
-        @config_aware("inference", mapping={"num_results": "top_k"})
-        def predict(num_results: int | None = None):
-            return num_results
-
-        try:
-            assert predict() == 3
-        finally:
-            reset_config()
-
-    def test_config_aware_missing_key_keeps_none(self):
-        from bioamla.common.config import Config, reset_config, set_config
-
-        set_config(Config(audio={}))
-
-        @config_aware("audio")
-        def fn(sample_rate: int | None = None):
-            return sample_rate
-
-        try:
-            assert fn() is None
-        finally:
-            reset_config()
-
-    def test_config_aware_class(self):
-        from bioamla.common.config import Config, reset_config, set_config
-
-        set_config(Config(audio={"sample_rate": 16000}))
-
-        @config_aware_class("audio")
-        class Proc:
-            def run(self, sample_rate: int | None = None):
-                return sample_rate
-
-        try:
-            assert Proc().run() == 16000
-        finally:
-            reset_config()
-
-    def test_config_aware_mixin(self):
-        from bioamla.common.config import Config, reset_config, set_config
-
-        set_config(Config(audio={"sample_rate": 44100, "mono": True}))
-
-        class Proc(ConfigAwareMixin):
-            _config_section = "audio"
-
-            def run(self, sample_rate=None):
-                return self._get_config_default("sample_rate", sample_rate)
-
-        try:
-            p = Proc()
-            assert p.run() == 44100
-            assert p.run(8000) == 8000
-            defaults = p._get_config_defaults(sample_rate=None, mono=False)
-            assert defaults["sample_rate"] == 44100
-            assert defaults["mono"] is False
-        finally:
-            reset_config()
 
 
 class TestRateLimitedDecorator:

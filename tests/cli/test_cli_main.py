@@ -25,7 +25,7 @@ def test_cli_version():
 
 def test_cli_registers_command_groups():
     result = CliRunner().invoke(cli, ["--help"])
-    for name in ("audio", "config", "indices", "detect", "cluster", "dataset"):
+    for name in ("audio", "system", "util", "indices", "detect", "cluster", "dataset"):
         assert name in result.output
 
 

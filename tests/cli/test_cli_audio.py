@@ -5,7 +5,7 @@ inside the command bodies, so we patch the symbols there. Heavy audio/ML work is
 mocked; tests exercise arg-parsing, branching and output formatting only.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, PropertyMock
 
 import numpy as np
 import pytest
@@ -71,6 +71,7 @@ def test_audio_group_help(runner):
         "add-noise",
         "gain",
         "visualize",
+        "play",
     ],
 )
 def test_audio_subcommand_help(runner, cmd):
@@ -124,6 +125,56 @@ def test_list_error(runner, mocker):
     mocker.patch("bioamla.audio.list_audio_files", side_effect=NotFoundError("nope"))
     result = runner.invoke(cli, ["audio", "list", "somedir"])
     assert result.exit_code != 0
+
+
+# --------------------------------------------------------------------------- #
+# play
+# --------------------------------------------------------------------------- #
+
+
+def _fake_player():
+    """A player mock that reports one is_playing poll then finishes."""
+    player = MagicMock()
+    player.duration = 1.4
+    type(player).is_playing = PropertyMock(side_effect=[True, False])
+    return player
+
+
+def test_play(runner, mocker):
+    player = _fake_player()
+    play = mocker.patch("bioamla.audio.play_audio", return_value=player)
+    result = runner.invoke(cli, ["audio", "play", "file.wav"])
+    assert result.exit_code == 0
+    assert "Playing file.wav (1.40s)" in result.output
+    assert "Done." in result.output
+    play.assert_called_once_with("file.wav", loop=False, block=False)
+
+
+def test_play_loop_flag(runner, mocker):
+    player = _fake_player()
+    play = mocker.patch("bioamla.audio.play_audio", return_value=player)
+    result = runner.invoke(cli, ["audio", "play", "file.wav", "--loop"])
+    assert result.exit_code == 0
+    assert "[loop]" in result.output
+    assert play.call_args.kwargs["loop"] is True
+
+
+def test_play_interrupt(runner, mocker):
+    player = MagicMock()
+    player.duration = 1.4
+    type(player).is_playing = PropertyMock(side_effect=KeyboardInterrupt)
+    mocker.patch("bioamla.audio.play_audio", return_value=player)
+    result = runner.invoke(cli, ["audio", "play", "file.wav"])
+    assert result.exit_code == 0
+    assert "Stopped." in result.output
+    player.stop.assert_called_once()
+
+
+def test_play_error(runner, mocker):
+    mocker.patch("bioamla.audio.play_audio", side_effect=AudioLoadError("bad"))
+    result = runner.invoke(cli, ["audio", "play", "missing.wav"])
+    assert result.exit_code != 0
+    assert "bad" in result.output
 
 
 # --------------------------------------------------------------------------- #

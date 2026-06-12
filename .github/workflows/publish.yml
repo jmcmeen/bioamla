@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history + tags for hatch-vcs versioning
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
@@ -41,7 +43,9 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
-    environment: pypi
+    environment:
+      name: pypi
+      url: https://pypi.org/p/bioamla
     permissions:
       id-token: write # required for trusted publishing
     steps:

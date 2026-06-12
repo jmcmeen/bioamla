@@ -37,7 +37,7 @@ def labels_file(tmp_path):
 def test_cluster_group_help(runner: CliRunner) -> None:
     result = runner.invoke(cli, ["cluster", "--help"])
     assert result.exit_code == 0
-    for sub in ["reduce", "cluster", "analyze", "novelty"]:
+    for sub in ["reduce", "fit", "analyze", "novelty"]:
         assert sub in result.output
 
 
@@ -86,7 +86,7 @@ def test_cluster_cluster(runner: CliRunner, embeddings_file, tmp_path) -> None:
         patch("bioamla.cluster.ClusteringConfig", MagicMock()),
     ):
         result = runner.invoke(
-            cli, ["cluster", "cluster", str(embeddings_file), "-o", str(out), "-m", "hdbscan"]
+            cli, ["cluster", "fit", str(embeddings_file), "-o", str(out), "-m", "hdbscan"]
         )
     assert result.exit_code == 0, result.output
     assert "Found 2 clusters" in result.output
@@ -99,7 +99,7 @@ def test_cluster_cluster_error(runner: CliRunner, embeddings_file, tmp_path) -> 
         patch("bioamla.cluster.ClusteringConfig", MagicMock()),
         patch("bioamla.cluster.AudioClusterer", side_effect=ClusteringError("fail")),
     ):
-        result = runner.invoke(cli, ["cluster", "cluster", str(embeddings_file), "-o", str(out)])
+        result = runner.invoke(cli, ["cluster", "fit", str(embeddings_file), "-o", str(out)])
     assert result.exit_code != 0
 
 

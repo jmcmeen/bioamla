@@ -29,7 +29,7 @@ def annotation() -> None:
 )
 @click.option("--label", default="", help="Label for the placeholder full-file row")
 @click.option("--empty", is_flag=True, help="Write metadata only, with no placeholder row")
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def annotation_template(
     audio_file: str,
     output_file: str,
@@ -108,7 +108,7 @@ def annotation_template(
     help="Output format (auto-detected from extension if not specified)",
 )
 @click.option("--label-column", default=None, help="Column name for labels in input file")
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def annotation_convert(
     input_file: str,
     output_file: str,
@@ -202,7 +202,7 @@ def annotation_summary(path: str, file_format: str, output_json: str) -> None:
     default=True,
     help="Keep or drop annotations with unmapped labels",
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def annotation_remap(
     input_file: str, output_file: str, mapping: str, keep_unmapped: bool, quiet: bool
 ) -> None:
@@ -240,7 +240,7 @@ def annotation_remap(
 @click.option("--exclude", "-e", multiple=True, help="Labels to exclude (can specify multiple)")
 @click.option("--min-duration", type=float, default=None, help="Minimum duration in seconds")
 @click.option("--max-duration", type=float, default=None, help="Maximum duration in seconds")
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def annotation_filter(
     input_file: str,
     output_file: str,
@@ -316,7 +316,7 @@ def annotation_filter(
     default="csv",
     help="Output format for labels",
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def annotation_generate_labels(
     annotation_file: str,
     output_file: str,
@@ -440,7 +440,7 @@ def annotation_generate_labels(
     default="csv",
     help="Output format for labels",
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def annotation_generate_frame_labels(
     annotation_file: str,
     output_file: str,

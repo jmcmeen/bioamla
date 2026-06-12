@@ -89,6 +89,7 @@ from bioamla.ml.inference import (
 from bioamla.ml.preprocessing import AugmentationConfig, BioamlaPreprocessor
 
 # --- Training -----------------------------------------------------------------
+from bioamla.ml.train_config import write_train_config
 from bioamla.ml.training import train_ast
 
 __all__ = [
@@ -130,6 +131,7 @@ __all__ = [
     "EvaluationResult",
     "TrainResult",
     "train_ast",
+    "write_train_config",
     # Inference
     "ASTInference",
     "ASTPredictionResult",

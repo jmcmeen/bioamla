@@ -14,10 +14,10 @@ import click
 
 from bioamla.exceptions import BioamlaError
 
-# Map ``ast train`` flag names onto config-file (section, key) locations, using the
-# template schema in ``bioamla.common.config.DEFAULT_CONFIG`` as the guidance shape
-# (e.g. [training].epochs -> --num-train-epochs). Flags set on the command line
-# override these; these override built-in defaults.
+# Map ``ast train`` flag names onto config-file (section, key) locations
+# (e.g. [training].epochs -> --num-train-epochs). The ``ast init-config`` template
+# (bioamla.ml.train_config) documents this same schema. Flags set on the command
+# line override these; these override built-in defaults.
 _TRAIN_CONFIG_MAP = {
     "base_model": ("models", "default_ast_model"),
     "learning_rate": ("training", "learning_rate"),
@@ -29,6 +29,33 @@ _TRAIN_CONFIG_MAP = {
     "save_steps": ("training", "save_steps"),
     "logging_steps": ("training", "logging_steps"),
     "report_to": ("training", "report_to"),
+    # Augmentation lives in its own [augmentation] section. Every transform is
+    # off by default; a key here (or its CLI flag) opts that layer in. Ranges and
+    # probabilities apply only to the transforms that are enabled.
+    "add_noise": ("augmentation", "add_noise"),
+    "time_stretch": ("augmentation", "time_stretch"),
+    "pitch_shift": ("augmentation", "pitch_shift"),
+    "gain": ("augmentation", "gain"),
+    "gain_transition": ("augmentation", "gain_transition"),
+    "clipping_distortion": ("augmentation", "clipping_distortion"),
+    "augment_multiplier": ("augmentation", "multiplier"),
+    "augment_probability": ("augmentation", "probability"),
+    "min_snr_db": ("augmentation", "min_snr_db"),
+    "max_snr_db": ("augmentation", "max_snr_db"),
+    "noise_probability": ("augmentation", "noise_probability"),
+    "min_gain_db": ("augmentation", "min_gain_db"),
+    "max_gain_db": ("augmentation", "max_gain_db"),
+    "gain_probability": ("augmentation", "gain_probability"),
+    "gain_transition_probability": ("augmentation", "gain_transition_probability"),
+    "clipping_probability": ("augmentation", "clipping_probability"),
+    "min_percentile_threshold": ("augmentation", "min_percentile_threshold"),
+    "max_percentile_threshold": ("augmentation", "max_percentile_threshold"),
+    "min_time_stretch": ("augmentation", "min_time_stretch"),
+    "max_time_stretch": ("augmentation", "max_time_stretch"),
+    "time_stretch_probability": ("augmentation", "time_stretch_probability"),
+    "min_pitch_shift": ("augmentation", "min_pitch_shift"),
+    "max_pitch_shift": ("augmentation", "max_pitch_shift"),
+    "pitch_shift_probability": ("augmentation", "pitch_shift_probability"),
 }
 
 
@@ -72,11 +99,38 @@ def ast() -> None:
     pass
 
 
+@ast.command("init-config")
+@click.option("--output", "-o", default="ast_training.toml", help="Output file path")
+@click.option("--force", "-f", is_flag=True, help="Overwrite an existing file")
+def ast_init_config(output: str, force: bool) -> None:
+    """Write a documented AST training-config file for use with ``train --config``.
+
+    The file holds the [models], [training], and [augmentation] settings that
+    ``ast train`` reads; edit it, then pass it via ``--config``. Command-line
+    flags still override any value in the file.
+    """
+    from bioamla.exceptions import InvalidInputError
+    from bioamla.ml import write_train_config
+
+    try:
+        path = write_train_config(output, force=force)
+    except InvalidInputError as e:
+        click.echo(str(e), err=True)
+        if "already exists" in str(e):
+            click.echo("Use --force to overwrite.")
+        raise SystemExit(1) from e
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Created training config: {path}")
+
+
 @ast.command("predict")
 @click.argument("file", type=click.Path(exists=True))
 @click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for inference")
 @click.option(
-    "--segment-duration",
+    "--segment-seconds",
+    "segment_duration",
     default=0,
     type=int,
     help="Split into N-second segments and classify each (0 = classify the whole file)",
@@ -104,13 +158,13 @@ def ast_predict(
 ) -> None:
     """Run AST prediction on a single audio file — whole file or in segments.
 
-    With ``--segment-duration`` the file is split into fixed-length (optionally
+    With ``--segment-seconds`` the file is split into fixed-length (optionally
     overlapping) segments and each is classified, yielding one prediction per
     segment; otherwise the whole file gets a single prediction.
 
     Examples:
         bioamla models ast predict audio.wav --model-path my_model
-        bioamla models ast predict rec.wav --segment-duration 3 --overlap 1 -o rec.csv
+        bioamla models ast predict rec.wav --segment-seconds 3 --overlap 1 -o rec.csv
     """
     import csv
     from pathlib import Path
@@ -177,8 +231,15 @@ def ast_predict(
     "or directory with class subdirectories (e.g. ./data/bird/, ./data/frog/)",
 )
 @click.option("--split", default="train", help="Dataset split to use (for HuggingFace datasets)")
-@click.option("--category-id-column", default="target", help="Column name for category IDs")
-@click.option("--category-label-column", default="category", help="Column name for category labels")
+@click.option(
+    "--id-column",
+    "category_id_column",
+    default="target",
+    help="Column name for category/target IDs",
+)
+@click.option(
+    "--label-column", "category_label_column", default="category", help="Column name for labels"
+)
 @click.option(
     "--report-to",
     default="tensorboard",
@@ -239,7 +300,34 @@ def ast_predict(
 @click.option("--mlflow-experiment-name", default=None, help="MLflow experiment name")
 @click.option("--mlflow-run-name", default=None, help="MLflow run name")
 @click.option(
-    "--augment/--no-augment", default=True, help="Enable audio augmentations during training"
+    "--add-noise/--no-add-noise",
+    default=False,
+    help="Augmentation layer: add Gaussian noise (off by default)",
+)
+@click.option(
+    "--time-stretch/--no-time-stretch",
+    default=False,
+    help="Augmentation layer: time-stretch (off by default)",
+)
+@click.option(
+    "--pitch-shift/--no-pitch-shift",
+    default=False,
+    help="Augmentation layer: pitch-shift (off by default)",
+)
+@click.option(
+    "--gain/--no-gain",
+    default=False,
+    help="Augmentation layer: random gain (off by default)",
+)
+@click.option(
+    "--gain-transition/--no-gain-transition",
+    default=False,
+    help="Augmentation layer: smooth gain ramp (off by default)",
+)
+@click.option(
+    "--clipping-distortion/--no-clipping-distortion",
+    default=False,
+    help="Augmentation layer: clipping distortion (off by default)",
 )
 @click.option(
     "--augment-multiplier",
@@ -251,17 +339,35 @@ def ast_predict(
     "--augment-probability",
     default=0.8,
     type=click.FloatRange(0.0, 1.0),
-    help="Probability of applying augmentation (0-1)",
+    help="Probability the whole augmentation pipeline is applied to a sample (0-1)",
 )
 @click.option("--min-snr-db", default=10.0, type=float, help="Minimum SNR for Gaussian noise (dB)")
 @click.option("--max-snr-db", default=20.0, type=float, help="Maximum SNR for Gaussian noise (dB)")
+@click.option(
+    "--noise-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Per-sample probability of the noise layer (0-1)",
+)
 @click.option("--min-gain-db", default=-6.0, type=float, help="Minimum gain adjustment (dB)")
 @click.option("--max-gain-db", default=6.0, type=float, help="Maximum gain adjustment (dB)")
+@click.option(
+    "--gain-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Per-sample probability of the gain layer (0-1)",
+)
+@click.option(
+    "--gain-transition-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Per-sample probability of the gain-transition layer (0-1)",
+)
 @click.option(
     "--clipping-probability",
     default=0.5,
     type=click.FloatRange(0.0, 1.0),
-    help="Probability of clipping distortion (0-1)",
+    help="Per-sample probability of the clipping-distortion layer (0-1)",
 )
 @click.option("--min-percentile-threshold", default=0, type=int, help="Min percentile for clipping")
 @click.option(
@@ -269,8 +375,20 @@ def ast_predict(
 )
 @click.option("--min-time-stretch", default=0.8, type=float, help="Minimum time stretch rate")
 @click.option("--max-time-stretch", default=1.2, type=float, help="Maximum time stretch rate")
+@click.option(
+    "--time-stretch-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Per-sample probability of the time-stretch layer (0-1)",
+)
 @click.option("--min-pitch-shift", default=-4, type=int, help="Minimum pitch shift (semitones)")
 @click.option("--max-pitch-shift", default=4, type=int, help="Maximum pitch shift (semitones)")
+@click.option(
+    "--pitch-shift-probability",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    help="Per-sample probability of the pitch-shift layer (0-1)",
+)
 def ast_train(
     ctx: click.Context,
     config_path: str | None,
@@ -302,20 +420,30 @@ def ast_train(
     mlflow_tracking_uri: str,
     mlflow_experiment_name: str,
     mlflow_run_name: str,
-    augment: bool,
+    add_noise: bool,
+    time_stretch: bool,
+    pitch_shift: bool,
+    gain: bool,
+    gain_transition: bool,
+    clipping_distortion: bool,
     augment_multiplier: int,
     augment_probability: float,
     min_snr_db: float,
     max_snr_db: float,
+    noise_probability: float,
     min_gain_db: float,
     max_gain_db: float,
+    gain_probability: float,
+    gain_transition_probability: float,
     clipping_probability: float,
     min_percentile_threshold: int,
     max_percentile_threshold: int,
     min_time_stretch: float,
     max_time_stretch: float,
+    time_stretch_probability: float,
     min_pitch_shift: int,
     max_pitch_shift: int,
+    pitch_shift_probability: float,
 ) -> None:
     """Fine-tune an AST model on a custom dataset.
 
@@ -354,6 +482,30 @@ def ast_train(
                 "save_steps": save_steps,
                 "logging_steps": logging_steps,
                 "report_to": report_to,
+                "add_noise": add_noise,
+                "time_stretch": time_stretch,
+                "pitch_shift": pitch_shift,
+                "gain": gain,
+                "gain_transition": gain_transition,
+                "clipping_distortion": clipping_distortion,
+                "augment_multiplier": augment_multiplier,
+                "augment_probability": augment_probability,
+                "min_snr_db": min_snr_db,
+                "max_snr_db": max_snr_db,
+                "noise_probability": noise_probability,
+                "min_gain_db": min_gain_db,
+                "max_gain_db": max_gain_db,
+                "gain_probability": gain_probability,
+                "gain_transition_probability": gain_transition_probability,
+                "clipping_probability": clipping_probability,
+                "min_percentile_threshold": min_percentile_threshold,
+                "max_percentile_threshold": max_percentile_threshold,
+                "min_time_stretch": min_time_stretch,
+                "max_time_stretch": max_time_stretch,
+                "time_stretch_probability": time_stretch_probability,
+                "min_pitch_shift": min_pitch_shift,
+                "max_pitch_shift": max_pitch_shift,
+                "pitch_shift_probability": pitch_shift_probability,
             },
         )
     except BioamlaError as e:
@@ -369,39 +521,61 @@ def ast_train(
     logging_steps = overrides["logging_steps"]
     report_to = overrides["report_to"]
 
-    # Map augmentation flags onto the shared AugmentationConfig (None disables it).
-    # Per-transform probabilities default to 0.5 (audiomentations' default); the
-    # whole Compose is gated by --augment-probability and shuffled per sample.
+    # Each augmentation layer is opt-in (off by default); enable only the ones the
+    # user turned on via flag or [augmentation] TOML. If none are enabled, pass
+    # None so training skips the pipeline entirely. Each enabled layer has its own
+    # per-sample probability; the whole Compose is additionally gated by
+    # --augment-probability and shuffled per sample. Settings come from `overrides`
+    # so the TOML can drive them (CLI flag still wins).
+    layers = (
+        "add_noise",
+        "time_stretch",
+        "pitch_shift",
+        "gain",
+        "gain_transition",
+        "clipping_distortion",
+    )
+    augment_multiplier = overrides["augment_multiplier"]
     aug_config = (
         AugmentationConfig(
-            add_noise=True,
-            noise_min_snr=min_snr_db,
-            noise_max_snr=max_snr_db,
-            noise_probability=0.5,
-            time_stretch=True,
-            time_stretch_min=min_time_stretch,
-            time_stretch_max=max_time_stretch,
-            time_stretch_probability=0.5,
-            pitch_shift=True,
-            pitch_shift_min=min_pitch_shift,
-            pitch_shift_max=max_pitch_shift,
-            pitch_shift_probability=0.5,
-            gain=True,
-            gain_min_db=min_gain_db,
-            gain_max_db=max_gain_db,
-            gain_probability=0.5,
-            gain_transition=True,
-            gain_transition_probability=0.5,
-            clipping_distortion=True,
-            clipping_min_percentile=min_percentile_threshold,
-            clipping_max_percentile=max_percentile_threshold,
-            clipping_probability=clipping_probability,
-            pipeline_probability=augment_probability,
+            add_noise=overrides["add_noise"],
+            noise_min_snr=overrides["min_snr_db"],
+            noise_max_snr=overrides["max_snr_db"],
+            noise_probability=overrides["noise_probability"],
+            time_stretch=overrides["time_stretch"],
+            time_stretch_min=overrides["min_time_stretch"],
+            time_stretch_max=overrides["max_time_stretch"],
+            time_stretch_probability=overrides["time_stretch_probability"],
+            pitch_shift=overrides["pitch_shift"],
+            pitch_shift_min=overrides["min_pitch_shift"],
+            pitch_shift_max=overrides["max_pitch_shift"],
+            pitch_shift_probability=overrides["pitch_shift_probability"],
+            gain=overrides["gain"],
+            gain_min_db=overrides["min_gain_db"],
+            gain_max_db=overrides["max_gain_db"],
+            gain_probability=overrides["gain_probability"],
+            gain_transition=overrides["gain_transition"],
+            gain_transition_probability=overrides["gain_transition_probability"],
+            clipping_distortion=overrides["clipping_distortion"],
+            clipping_min_percentile=overrides["min_percentile_threshold"],
+            clipping_max_percentile=overrides["max_percentile_threshold"],
+            clipping_probability=overrides["clipping_probability"],
+            pipeline_probability=overrides["augment_probability"],
             shuffle=True,
         )
-        if augment
+        if any(overrides[layer] for layer in layers)
         else None
     )
+
+    # A multiplier only does useful work alongside augmentation — without it, the
+    # train split is just duplicated verbatim. Warn rather than silently no-op.
+    if aug_config is None and augment_multiplier > 1:
+        click.echo(
+            f"Warning: --augment-multiplier {augment_multiplier} ignored — no "
+            "augmentation layers enabled (the copies would be identical).",
+            err=True,
+        )
+        augment_multiplier = 1
 
     try:
         result = train_ast(
@@ -466,7 +640,7 @@ def ast_train(
 @click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
 @click.option("--batch-size", default=8, type=int, help="Batch size for inference")
 @click.option("--fp16/--no-fp16", default=False, help="Use half-precision inference")
-@click.option("--quiet", is_flag=True, help="Only output metrics, suppress progress")
+@click.option("--quiet", "-q", is_flag=True, help="Only output metrics, suppress progress")
 def ast_evaluate(
     path: str,
     model_path: str,
@@ -482,8 +656,13 @@ def ast_evaluate(
 ) -> None:
     """Evaluate an AST model on a directory of audio files.
 
-    Example:
+    \b
+    Examples:
+        # Accuracy/precision/recall against a ground-truth CSV
         bioamla models ast evaluate ./audio_dir --model-path my_model -g labels.csv
+        # Write a JSON report
+        bioamla models ast evaluate ./audio_dir -g labels.csv \\
+            --format json -o eval.json
     """
     import json as json_lib
     from pathlib import Path as PathLib

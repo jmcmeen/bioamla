@@ -1,9 +1,64 @@
 """Shared fixtures for domain tests."""
 
+import functools
+import shutil
+
 import numpy as np
 import pytest
 
 from bioamla.audio import AudioData
+
+
+@functools.cache
+def _torchcodec_loadable() -> bool:
+    """Return True if torchcodec's libtorchcodec/libav backend can load.
+
+    ``torchaudio.load`` (which ``load_waveform_tensor`` and HuggingFace dataset
+    decoding delegate to) decodes through torchcodec, which dlopens the FFmpeg
+    ``libav*`` shared libraries. Importing ``torchcodec`` triggers that load, so
+    a failed import means audio decoding is unavailable on this machine.
+    """
+    try:
+        import torchcodec  # noqa: F401  (import triggers the libtorchcodec/libav load)
+    except Exception:
+        return False
+    return True
+
+
+@functools.cache
+def _ffmpeg_cli_available() -> bool:
+    """Return True if the ``ffmpeg`` CLI is on PATH (pydub uses it to encode)."""
+    return shutil.which("ffmpeg") is not None
+
+
+@pytest.fixture
+def requires_torchcodec() -> None:
+    """Skip unless the torchcodec/FFmpeg audio *decode* backend is available.
+
+    Apply with ``@pytest.mark.usefixtures("requires_torchcodec")`` to tests that
+    decode a real audio file (``load_waveform_tensor``, HuggingFace dataset
+    materialization, AST inference/training). See the README "System
+    dependencies" section for the FFmpeg requirement.
+    """
+    if not _torchcodec_loadable():
+        pytest.skip(
+            "requires the torchcodec/FFmpeg decode backend (libav 4-8); "
+            "see README → System dependencies"
+        )
+
+
+@pytest.fixture
+def requires_ffmpeg_cli() -> None:
+    """Skip unless the ``ffmpeg`` CLI is available for non-WAV *encoding*.
+
+    pydub shells out to ``ffmpeg`` to encode FLAC/MP3/OGG/M4A (WAV is written
+    natively, so WAV-only tests don't need this). Apply with
+    ``@pytest.mark.usefixtures("requires_ffmpeg_cli")``.
+    """
+    if not _ffmpeg_cli_available():
+        pytest.skip(
+            "requires the ffmpeg CLI for non-WAV encoding; see README → System dependencies"
+        )
 
 
 @pytest.fixture

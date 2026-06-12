@@ -22,11 +22,33 @@ def indices() -> None:
     help="Output format",
 )
 @click.option("--n-fft", default=512, type=int, help="FFT window size")
-@click.option("--aci-min-freq", default=0.0, type=float, help="ACI minimum frequency (Hz)")
-@click.option("--aci-max-freq", default=None, type=float, help="ACI maximum frequency (Hz)")
-@click.option("--bio-min-freq", default=2000.0, type=float, help="BIO minimum frequency (Hz)")
-@click.option("--bio-max-freq", default=8000.0, type=float, help="BIO maximum frequency (Hz)")
-@click.option("--db-threshold", default=-50.0, type=float, help="dB threshold for ADI/AEI")
+@click.option(
+    "--aci-low-freq", "aci_min_freq", default=0.0, type=float, help="ACI low-frequency bound (Hz)"
+)
+@click.option(
+    "--aci-high-freq",
+    "aci_max_freq",
+    default=None,
+    type=float,
+    help="ACI high-frequency bound (Hz)",
+)
+@click.option(
+    "--bio-low-freq",
+    "bio_min_freq",
+    default=2000.0,
+    type=float,
+    help="BIO low-frequency bound (Hz)",
+)
+@click.option(
+    "--bio-high-freq",
+    "bio_max_freq",
+    default=8000.0,
+    type=float,
+    help="BIO high-frequency bound (Hz)",
+)
+@click.option(
+    "--threshold-db", "db_threshold", default=-50.0, type=float, help="dB threshold for ADI/AEI"
+)
 def indices_compute(
     file: str,
     output: str,
@@ -97,7 +119,13 @@ def indices_compute(
 
 @indices.command("temporal")
 @click.argument("file", type=click.Path(exists=True))
-@click.option("--segment-duration", default=60.0, type=float, help="Segment duration in seconds")
+@click.option(
+    "--window-seconds",
+    "segment_duration",
+    default=60.0,
+    type=float,
+    help="Analysis window in seconds",
+)
 @click.option("--output", "-o", type=click.Path(), help="Output JSON file for results")
 @click.option("--n-fft", default=512, type=int, help="FFT window size")
 def indices_temporal(file: str, segment_duration: float, output: str, n_fft: int) -> None:
@@ -156,8 +184,8 @@ def indices_temporal(file: str, segment_duration: float, output: str, n_fft: int
 
 @indices.command("aci")
 @click.argument("file", type=click.Path(exists=True))
-@click.option("--min-freq", default=0.0, type=float, help="Minimum frequency (Hz)")
-@click.option("--max-freq", default=None, type=float, help="Maximum frequency (Hz)")
+@click.option("--low-freq", "min_freq", default=0.0, type=float, help="Low-frequency bound (Hz)")
+@click.option("--high-freq", "max_freq", default=None, type=float, help="High-frequency bound (Hz)")
 @click.option("--n-fft", default=512, type=int, help="FFT window size")
 def indices_aci(file: str, min_freq: float, max_freq: float, n_fft: int) -> None:
     """Compute Acoustic Complexity Index (ACI) only."""
@@ -181,7 +209,7 @@ def indices_aci(file: str, min_freq: float, max_freq: float, n_fft: int) -> None
 
 @indices.command("adi")
 @click.argument("file", type=click.Path(exists=True))
-@click.option("--db-threshold", default=-50.0, type=float, help="dB threshold")
+@click.option("--threshold-db", "db_threshold", default=-50.0, type=float, help="dB threshold")
 @click.option("--n-fft", default=512, type=int, help="FFT window size")
 def indices_adi(file: str, db_threshold: float, n_fft: int) -> None:
     """Compute Acoustic Diversity Index (ADI) only."""
@@ -200,7 +228,7 @@ def indices_adi(file: str, db_threshold: float, n_fft: int) -> None:
 
 @indices.command("aei")
 @click.argument("file", type=click.Path(exists=True))
-@click.option("--db-threshold", default=-50.0, type=float, help="dB threshold")
+@click.option("--threshold-db", "db_threshold", default=-50.0, type=float, help="dB threshold")
 @click.option("--n-fft", default=512, type=int, help="FFT window size")
 def indices_aei(file: str, db_threshold: float, n_fft: int) -> None:
     """Compute Acoustic Evenness Index (AEI) only."""
@@ -219,8 +247,10 @@ def indices_aei(file: str, db_threshold: float, n_fft: int) -> None:
 
 @indices.command("bio")
 @click.argument("file", type=click.Path(exists=True))
-@click.option("--min-freq", default=2000.0, type=float, help="Minimum frequency (Hz)")
-@click.option("--max-freq", default=8000.0, type=float, help="Maximum frequency (Hz)")
+@click.option("--low-freq", "min_freq", default=2000.0, type=float, help="Low-frequency bound (Hz)")
+@click.option(
+    "--high-freq", "max_freq", default=8000.0, type=float, help="High-frequency bound (Hz)"
+)
 @click.option("--n-fft", default=512, type=int, help="FFT window size")
 def indices_bio(file: str, min_freq: float, max_freq: float, n_fft: int) -> None:
     """Compute Bioacoustic Index (BIO) only."""

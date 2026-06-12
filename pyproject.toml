@@ -1,21 +1,22 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "bioamla"
-version = "0.2.0"
+dynamic = ["version"]
 authors = [
   { name="John McMeen", email="johnmcmeen@gmail.com" },
 ]
 description = "Bioacoustics & Machine Learning Applications"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -74,6 +75,7 @@ dev = [
   "mkdocs>=1.6",
   "mkdocs-material>=9.5",
   "mkdocstrings[python]>=0.26",
+  "mkdocs-click>=0.8",
 ]
 
 [project.urls]
@@ -82,6 +84,9 @@ Documentation = "https://jmcmeen.github.io/bioamla"
 Source = "https://github.com/jmcmeen/bioamla"
 Changelog = "https://github.com/jmcmeen/bioamla/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/jmcmeen/bioamla/issues"
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bioamla"]
@@ -92,7 +97,6 @@ packages = ["src/bioamla"]
 [tool.hatch.build]
 include = [
   "src/bioamla/**/*.py",
-  "src/bioamla/_internal/examples/*.sh",
 ]
 
 [tool.pytest.ini_options]

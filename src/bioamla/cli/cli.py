@@ -14,11 +14,12 @@ from .commands import (
     batch,
     catalogs,
     cluster,
-    config,
     dataset,
     detect,
     indices,
     models,
+    system,
+    util,
 )
 
 
@@ -32,17 +33,18 @@ def cli() -> None:
     pass
 
 
-# Register command groups
+# Register command groups (alphabetical — Click lists them in registration order)
 cli.add_command(annotation)
 cli.add_command(audio)
 cli.add_command(batch)
+cli.add_command(catalogs)
 cli.add_command(cluster)
-cli.add_command(config)
 cli.add_command(dataset)
 cli.add_command(detect)
 cli.add_command(indices)
 cli.add_command(models)
-cli.add_command(catalogs)
+cli.add_command(system)
+cli.add_command(util)
 
 
 def main() -> None:

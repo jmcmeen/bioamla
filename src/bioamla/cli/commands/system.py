@@ -1,4 +1,4 @@
-"""Configuration management commands."""
+"""System information commands (version, devices, dependencies)."""
 
 import click
 
@@ -6,13 +6,13 @@ from bioamla.exceptions import BioamlaError
 
 
 @click.group()
-def config() -> None:
-    """Configuration and system information commands."""
+def system() -> None:
+    """System information commands (version, devices, dependencies)."""
     pass
 
 
-@config.command("version")
-def config_version() -> None:
+@system.command("version")
+def system_version() -> None:
     """Show bioamla version and environment information."""
     from bioamla.cli.progress import console
     from bioamla.system import util
@@ -35,8 +35,8 @@ def config_version() -> None:
     console.print()
 
 
-@config.command("devices")
-def config_devices() -> None:
+@system.command("devices")
+def system_devices() -> None:
     """Show available compute devices (GPU, MPS, CPU)."""
     from bioamla.cli.progress import console
     from bioamla.system import util
@@ -76,101 +76,10 @@ def config_devices() -> None:
     console.print()
 
 
-@config.command("show")
-def config_show() -> None:
-    """Show current configuration."""
-    from bioamla.cli.progress import console
-    from bioamla.system import config as system_config
-
-    try:
-        config_obj = system_config.get_config()
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    console.print("\n[bold]Current Configuration[/bold]")
-    if config_obj._source:
-        console.print(f"[dim]Source: {config_obj._source}[/dim]\n")
-    else:
-        console.print("[dim]Source: defaults (no config file found)[/dim]\n")
-
-    sections = [
-        "project",
-        "audio",
-        "visualize",
-        "models",
-        "inference",
-        "training",
-        "analysis",
-        "batch",
-        "output",
-        "progress",
-        "logging",
-    ]
-    for section_name in sections:
-        section = getattr(config_obj, section_name, {})
-        if section:
-            console.print(f"[bold blue]\\[{section_name}][/bold blue]")
-            for key, value in section.items():
-                console.print(f"  {key} = {value}")
-            console.print()
-
-
-@config.command("init")
-@click.option("--output", "-o", default="bioamla.toml", help="Output file path")
-@click.option("--force", "-f", is_flag=True, help="Overwrite existing file")
-def config_init(output: str, force: bool) -> None:
-    """Create a default configuration file."""
-    from bioamla.cli.progress import print_success
-    from bioamla.exceptions import InvalidInputError
-    from bioamla.system import config as system_config
-
-    try:
-        system_config.create_default_config(output, force=force)
-    except InvalidInputError as e:
-        click.echo(str(e), err=True)
-        if "already exists" in str(e):
-            click.echo("Use --force to overwrite.")
-        raise SystemExit(1) from e
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    print_success(f"Created configuration file: {output}")
-
-
-@config.command("path")
-def config_path() -> None:
-    """Show configuration file search paths."""
-    from pathlib import Path
-
-    from bioamla.cli.progress import console
-    from bioamla.system import config as system_config
-
-    console.print("\n[bold]Configuration File Search Paths[/bold]\n")
-    console.print("Files are searched in order (first found wins):\n")
-
-    try:
-        active_path = system_config.find_config_file()
-        active_config = Path(active_path) if active_path else None
-        locations = [Path(loc) for loc in system_config.get_config_locations()]
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    for i, location in enumerate(locations, 1):
-        exists = location.exists()
-        status = (
-            "[green]✓ ACTIVE[/green]"
-            if location == active_config
-            else ("[dim]exists[/dim]" if exists else "[dim]not found[/dim]")
-        )
-        console.print(f"  {i}. {location} {status}")
-
-    console.print()
-
-
-@config.command("deps")
+@system.command("deps")
 @click.option("--install", "do_install", is_flag=True, help="Install missing system dependencies")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
-def config_deps(do_install: bool, yes: bool) -> None:
+def system_deps(do_install: bool, yes: bool) -> None:
     """Check or install system dependencies (FFmpeg, libsndfile, PortAudio).
 
     These system libraries are required for full bioamla functionality:

@@ -62,6 +62,7 @@ class TestExtractEmbeddingsFile:
         with pytest.raises(NotFoundError, match="not found"):
             extract_embeddings_file("/no/such.wav", model_path="hub/model")
 
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_happy_path(self, test_audio_path) -> None:
         torch = pytest.importorskip("torch")
         fake_model = MagicMock()
@@ -85,6 +86,7 @@ class TestExtractEmbeddingsFile:
         assert out["shape"] == (1, 8)
         assert "float" in out["dtype"]
 
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_model_load_failure(self, test_audio_path) -> None:
         torch = pytest.importorskip("torch")
         fe = MagicMock()

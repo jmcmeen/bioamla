@@ -2,10 +2,13 @@
 
 from pathlib import Path
 
+import pytest
+
 from bioamla.audio.convert import convert_audio_file
 
 
 class TestConvertAudioFile:
+    @pytest.mark.usefixtures("requires_ffmpeg_cli")
     def test_converts_format(self, test_audio_path, tmp_path):
         out = tmp_path / "out.flac"
         result = convert_audio_file(test_audio_path, out, target_format="flac")
@@ -26,6 +29,7 @@ class TestConvertAudioFile:
         convert_audio_file(test_audio_path, out, target_format="wav", target_channels=2)
         assert get_audio_info(str(out)).channels == 2
 
+    @pytest.mark.usefixtures("requires_ffmpeg_cli")
     def test_delete_original(self, test_audio_path, tmp_path):
         # Copy fixture into tmp so deletion is safe.
         src = tmp_path / "src.wav"
@@ -37,6 +41,7 @@ class TestConvertAudioFile:
 
 
 class TestConvertCli:
+    @pytest.mark.usefixtures("requires_ffmpeg_cli")
     def test_directory_mode_produces_target_format(self, test_audio_dir, tmp_path):
         from click.testing import CliRunner
 
@@ -62,6 +67,7 @@ class TestConvertCli:
         flac_files = list(out_dir.glob("*.flac"))
         assert len(flac_files) == 3
 
+    @pytest.mark.usefixtures("requires_ffmpeg_cli")
     def test_csv_mode_updates_paths(self, test_audio_dir, tmp_path):
         import csv
 

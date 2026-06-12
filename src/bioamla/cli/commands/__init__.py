@@ -5,11 +5,12 @@ from .audio import audio
 from .batch import batch
 from .catalogs import catalogs
 from .cluster import cluster
-from .config import config
 from .dataset import dataset
 from .detect import detect
 from .indices import indices
 from .models import models
+from .system import system
+from .util import util
 
 __all__ = [
     "annotation",
@@ -17,9 +18,10 @@ __all__ = [
     "batch",
     "catalogs",
     "cluster",
-    "config",
     "dataset",
     "detect",
     "indices",
     "models",
+    "system",
+    "util",
 ]

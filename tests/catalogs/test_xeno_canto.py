@@ -63,10 +63,6 @@ class TestApiKeyResolution:
     def test_none_when_unset(self, monkeypatch) -> None:
         xc.set_xc_api_key(None)
         monkeypatch.delenv("XC_API_KEY", raising=False)
-        monkeypatch.setattr(
-            "bioamla.common.config.get_config",
-            lambda: type("C", (), {"get": lambda self, s, k, d=None: None})(),
-        )
         assert xc.get_xc_api_key() is None
 
 
@@ -140,27 +136,6 @@ def _rec(rid="1", sci="Turdus migratorius", url="http://x/a.mp3"):
         download_url=url,
         license="cc-by",
     )
-
-
-class TestApiKeyConfigFallback:
-    def test_config_file_key_used(self, monkeypatch) -> None:
-        monkeypatch.delenv("XC_API_KEY", raising=False)
-
-        class Cfg:
-            def get(self, section, key, default=None):
-                return "config-key"
-
-        monkeypatch.setattr("bioamla.common.config.get_config", lambda: Cfg())
-        assert xc.get_xc_api_key() == "config-key"
-
-    def test_config_exception_returns_none(self, monkeypatch) -> None:
-        monkeypatch.delenv("XC_API_KEY", raising=False)
-
-        def boom():
-            raise RuntimeError("no config")
-
-        monkeypatch.setattr("bioamla.common.config.get_config", boom)
-        assert xc.get_xc_api_key() is None
 
 
 class TestQueryBuildingBranches:

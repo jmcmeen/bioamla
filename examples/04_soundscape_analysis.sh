@@ -24,21 +24,21 @@ fi
 
 # 1. Acoustic indices over time (soundscape ecology summary metrics).
 bioamla indices compute "$RECORDING" -o "$OUT/indices/summary.json"
-bioamla indices temporal "$RECORDING" --segment-duration 60 -o "$OUT/indices/timeline.csv"
+bioamla indices temporal "$RECORDING" --window-seconds 60 -o "$OUT/indices/timeline.csv"
 
 # 2. Event detection — find the energetic/structured regions worth looking at.
 bioamla detect energy "$RECORDING" -o "$OUT/detections/energy.csv" --low-freq 500 --high-freq 10000
 bioamla detect ribbit "$RECORDING" -o "$OUT/detections/ribbit.csv"
 
 # 3. Classify the recording in fixed-length segments — one step, no pre-chopping.
-#    `--segment-duration` splits the file internally and writes one prediction row
+#    `--segment-seconds` splits the file internally and writes one prediction row
 #    per segment (filepath,start,stop,prediction,confidence).
 bioamla models ast predict "$RECORDING" -o "$OUT/predicted.csv" \
-  --model-path "$MODEL" --segment-duration 3 --overlap 1 --min-confidence 0.6
+  --model-path "$MODEL" --segment-seconds 3 --overlap 1 --min-confidence 0.6
 
 # (To classify many recordings at once, the same flags work on the batch command:
 #  bioamla batch models predict --input-dir ./recordings --output-dir "$OUT/predictions" \
-#    --model "$MODEL" --segment-duration 3 --overlap 1 --min-confidence 0.6)
+#    --model "$MODEL" --segment-seconds 3 --overlap 1 --min-confidence 0.6)
 
 # >>> MANUAL: review $OUT/predicted.csv, keep/correct the confident calls, then
 # >>> feed them back into your training set (active-learning loop) — see workflow 01.

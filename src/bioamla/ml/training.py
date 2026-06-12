@@ -81,16 +81,25 @@ def _dataframe_to_ast_dataset(df, label_column, sampling_rate=SAMPLING_RATE):
 
 
 def _validate_augmentation(aug: AugmentationConfig) -> None:
-    """Raise :class:`TrainingError` on inverted min/max augmentation ranges."""
+    """Raise :class:`TrainingError` on inverted min/max ranges for *enabled* layers.
+
+    Ranges for disabled transforms are ignored — a layer that isn't added can't
+    misconfigure training.
+    """
     checks = [
-        ("noise SNR", aug.noise_min_snr, aug.noise_max_snr),
-        ("gain dB", aug.gain_min_db, aug.gain_max_db),
-        ("clipping percentile", aug.clipping_min_percentile, aug.clipping_max_percentile),
-        ("time-stretch rate", aug.time_stretch_min, aug.time_stretch_max),
-        ("pitch-shift semitones", aug.pitch_shift_min, aug.pitch_shift_max),
+        (aug.add_noise, "noise SNR", aug.noise_min_snr, aug.noise_max_snr),
+        (aug.gain or aug.gain_transition, "gain dB", aug.gain_min_db, aug.gain_max_db),
+        (
+            aug.clipping_distortion,
+            "clipping percentile",
+            aug.clipping_min_percentile,
+            aug.clipping_max_percentile,
+        ),
+        (aug.time_stretch, "time-stretch rate", aug.time_stretch_min, aug.time_stretch_max),
+        (aug.pitch_shift, "pitch-shift semitones", aug.pitch_shift_min, aug.pitch_shift_max),
     ]
-    for name, lo, hi in checks:
-        if lo > hi:
+    for enabled, name, lo, hi in checks:
+        if enabled and lo > hi:
             raise TrainingError(f"Augmentation {name} min ({lo}) must be <= max ({hi})")
 
 
@@ -293,7 +302,10 @@ def train_ast(
         TrainingArguments,
     )
 
-    from bioamla.datasets.augmentation import create_augmentation_pipeline
+    from bioamla.datasets.augmentation import (
+        create_augmentation_pipeline,
+        describe_augmentation_pipeline,
+    )
     from datasets import Audio, Dataset, DatasetDict
 
     if augmentation is not None:
@@ -351,7 +363,8 @@ def train_ast(
         convert_labels,
         remove_columns=[category_label_column],
         writer_batch_size=100,
-        num_proc=1,
+        # None = run in-process; num_proc=1 still spawns a one-worker Pool (fork).
+        num_proc=None,
     )
 
     dataset = dataset.cast_column("audio", Audio(sampling_rate=SAMPLING_RATE))
@@ -408,7 +421,17 @@ def train_ast(
 
     if augment:
         audio_augmentations = create_augmentation_pipeline(augmentation)
-        logger.info("Audio augmentations enabled")
+        descriptions = describe_augmentation_pipeline(audio_augmentations)
+        logger.info(
+            "Audio augmentations enabled: %d transform(s) "
+            "(pipeline p=%s, shuffle=%s, multiplier=%dx)",
+            len(descriptions),
+            augmentation.pipeline_probability,
+            augmentation.shuffle,
+            augment_multiplier,
+        )
+        for description in descriptions:
+            logger.info("  - %s", description)
     else:
         audio_augmentations = None
         logger.info("Audio augmentations disabled")
@@ -436,7 +459,7 @@ def train_ast(
 
     logger.info("Filtering out corrupted audio files...")
     original_sizes = {}
-    filter_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
+    filter_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else None
     if isinstance(dataset, DatasetDict):
         for split_name in dataset.keys():
             original_sizes[split_name] = len(dataset[split_name])
@@ -468,7 +491,7 @@ def train_ast(
             return {"_mean": means, "_std": stds}
 
         logger.info("Calculating dataset normalization statistics...")
-        norm_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else 1
+        norm_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else None
         stats_dataset = train_dataset_for_norm.map(
             compute_stats,
             batched=True,

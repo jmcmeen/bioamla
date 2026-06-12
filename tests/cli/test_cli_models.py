@@ -58,7 +58,7 @@ def test_ast_predict_segments(runner: CliRunner, test_audio_path) -> None:
     inst.predict_segments.return_value = [_pred(start=0, end=3), _pred(start=3, end=6)]
     with patch("bioamla.ml.ASTInference", return_value=inst):
         result = runner.invoke(
-            cli, ["models", "ast", "predict", test_audio_path, "--segment-duration", "3"]
+            cli, ["models", "ast", "predict", test_audio_path, "--segment-seconds", "3"]
         )
     assert result.exit_code == 0, result.output
     assert "0.00-3.00s" in result.output
@@ -97,6 +97,35 @@ def test_ast_predict_missing_file(runner: CliRunner) -> None:
     assert result.exit_code != 0
 
 
+# --- init-config ---------------------------------------------------------
+
+
+def test_ast_init_config_creates_file(runner: CliRunner, tmp_path) -> None:
+    out = tmp_path / "ast_training.toml"
+    result = runner.invoke(cli, ["models", "ast", "init-config", "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    assert "Created training config" in result.output
+    assert "[augmentation]" in out.read_text()
+
+
+def test_ast_init_config_exists_without_force(runner: CliRunner, tmp_path) -> None:
+    out = tmp_path / "ast_training.toml"
+    out.write_text("keep me")
+    result = runner.invoke(cli, ["models", "ast", "init-config", "-o", str(out)])
+    assert result.exit_code == 1
+    assert "--force" in result.output
+    assert out.read_text() == "keep me"  # not overwritten
+
+
+def test_ast_init_config_force_overwrites(runner: CliRunner, tmp_path) -> None:
+    out = tmp_path / "ast_training.toml"
+    out.write_text("old")
+    result = runner.invoke(cli, ["models", "ast", "init-config", "-o", str(out), "--force"])
+    assert result.exit_code == 0, result.output
+    assert "[training]" in out.read_text()
+
+
 # --- train ---------------------------------------------------------------
 
 
@@ -115,19 +144,120 @@ def test_ast_train(runner: CliRunner, tmp_path) -> None:
     assert result.exit_code == 0, result.output
     assert "Training complete" in result.output
     m.assert_called_once()
+    # Augmentation is off by default — no layers requested means no pipeline.
+    assert m.call_args.kwargs["augmentation"] is None
 
 
-def test_ast_train_no_augment(runner: CliRunner, tmp_path) -> None:
+def test_ast_train_layer_opt_in(runner: CliRunner, tmp_path) -> None:
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
     with (
         patch("bioamla.ml.train_ast", return_value=result_obj) as m,
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
-            cli, ["models", "ast", "train", "--train-dataset", "me/ds", "--no-augment"]
+            cli,
+            ["models", "ast", "train", "--train-dataset", "me/ds", "--pitch-shift"],
         )
     assert result.exit_code == 0, result.output
-    # augmentation should be None when --no-augment
+    aug = m.call_args.kwargs["augmentation"]
+    # Only the requested layer is enabled; the rest stay off.
+    assert aug is not None
+    assert aug.pitch_shift is True
+    assert aug.add_noise is False
+    assert aug.gain is False
+    assert aug.clipping_distortion is False
+
+
+def test_ast_train_per_layer_probability(runner: CliRunner, tmp_path) -> None:
+    result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(
+            cli,
+            [
+                "models",
+                "ast",
+                "train",
+                "--train-dataset",
+                "me/ds",
+                "--add-noise",
+                "--noise-probability",
+                "0.3",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    aug = m.call_args.kwargs["augmentation"]
+    # The per-layer probability flows onto the config (default would be 0.5).
+    assert aug.noise_probability == 0.3
+
+
+def test_ast_train_multiplier_without_layers_warns(runner: CliRunner, tmp_path) -> None:
+    result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(
+            cli,
+            ["models", "ast", "train", "--train-dataset", "me/ds", "--augment-multiplier", "3"],
+        )
+    assert result.exit_code == 0, result.output
+    assert "ignored" in result.output  # multiplier is a no-op with no augmentation
+    # And it is reset so the training run doesn't duplicate identical rows.
+    assert m.call_args.kwargs["augment_multiplier"] == 1
+    assert m.call_args.kwargs["augmentation"] is None
+
+
+def test_ast_train_augmentation_from_toml(runner: CliRunner, tmp_path) -> None:
+    cfg = tmp_path / "bioamla.toml"
+    cfg.write_text(
+        "[augmentation]\nadd_noise = true\nmin_snr_db = 5.0\nmax_snr_db = 25.0\nmultiplier = 3\n"
+    )
+    result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(
+            cli,
+            ["models", "ast", "train", "--train-dataset", "me/ds", "--config", str(cfg)],
+        )
+    assert result.exit_code == 0, result.output
+    aug = m.call_args.kwargs["augmentation"]
+    # TOML opts the layer in and sets its range; multiplier flows through too.
+    assert aug is not None
+    assert aug.add_noise is True
+    assert aug.noise_min_snr == 5.0
+    assert aug.noise_max_snr == 25.0
+    assert m.call_args.kwargs["augment_multiplier"] == 3
+
+
+def test_ast_train_flag_overrides_toml(runner: CliRunner, tmp_path) -> None:
+    cfg = tmp_path / "bioamla.toml"
+    cfg.write_text("[augmentation]\nadd_noise = true\n")
+    result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
+    with (
+        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(
+            cli,
+            [
+                "models",
+                "ast",
+                "train",
+                "--train-dataset",
+                "me/ds",
+                "--config",
+                str(cfg),
+                "--no-add-noise",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    # Explicit --no-add-noise on the CLI wins over the TOML's add_noise = true,
+    # and with no other layer enabled the pipeline is skipped entirely.
     assert m.call_args.kwargs["augmentation"] is None
 
 

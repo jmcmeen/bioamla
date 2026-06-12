@@ -15,7 +15,9 @@ def detect() -> None:
 @click.argument("file", type=click.Path(exists=True))
 @click.option("--low-freq", "-l", default=500.0, type=float, help="Low frequency bound (Hz)")
 @click.option("--high-freq", "-h", default=5000.0, type=float, help="High frequency bound (Hz)")
-@click.option("--threshold", "-t", default=-20.0, type=float, help="Detection threshold (dB)")
+@click.option(
+    "--threshold-db", "-t", "threshold", default=-20.0, type=float, help="Detection threshold (dB)"
+)
 @click.option("--min-duration", default=0.05, type=float, help="Minimum detection duration (s)")
 @click.option("--output", "-o", type=click.Path(), help="Output file for detections")
 @click.option(
@@ -93,7 +95,9 @@ def detect_energy(
 )
 @click.option("--low-freq", "-l", default=500.0, type=float, help="Low frequency bound (Hz)")
 @click.option("--high-freq", "-h", default=5000.0, type=float, help="High frequency bound (Hz)")
-@click.option("--window", "-w", default=2.0, type=float, help="Analysis window duration (s)")
+@click.option(
+    "--window-seconds", "-w", "window", default=2.0, type=float, help="Analysis window in seconds"
+)
 @click.option("--min-score", default=0.3, type=float, help="Minimum detection score")
 @click.option("--output", "-o", type=click.Path(), help="Output file for detections")
 @click.option(
@@ -165,7 +169,9 @@ def detect_ribbit(
 
 @detect.command("peaks")
 @click.argument("file", type=click.Path(exists=True))
-@click.option("--snr", default=2.0, type=float, help="Signal-to-noise ratio threshold")
+@click.option(
+    "--snr-threshold", "snr", default=2.0, type=float, help="Signal-to-noise ratio threshold"
+)
 @click.option("--min-distance", default=0.01, type=float, help="Minimum peak distance (s)")
 @click.option("--low-freq", "-l", default=None, type=float, help="Low frequency bound (Hz)")
 @click.option("--high-freq", "-h", default=None, type=float, help="High frequency bound (Hz)")
@@ -262,7 +268,9 @@ def detect_peaks(
 )
 @click.option("--low-freq", "-l", default=500.0, type=float, help="Low frequency bound (Hz)")
 @click.option("--high-freq", "-h", default=5000.0, type=float, help="High frequency bound (Hz)")
-@click.option("--window", "-w", default=3.0, type=float, help="Analysis window duration (s)")
+@click.option(
+    "--window-seconds", "-w", "window", default=3.0, type=float, help="Analysis window in seconds"
+)
 @click.option("--output", "-o", type=click.Path(), help="Output file for detections")
 @click.option(
     "--format",

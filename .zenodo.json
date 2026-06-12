@@ -1,0 +1,18 @@
+{
+  "title": "bioamla: Bioacoustics & Machine Learning Applications",
+  "description": "A Python library and CLI for bioacoustics and machine-learning applications: audio I/O and signal processing, acoustic indices, event detection, spectrogram visualization, embedding clustering, species catalogs, dataset tooling, and AST-based ML inference.",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "MIT",
+  "creators": [
+    { "name": "McMeen, John" }
+  ],
+  "keywords": [
+    "bioacoustics",
+    "soundscape-ecology",
+    "acoustic-indices",
+    "audio",
+    "machine-learning",
+    "audio-spectrogram-transformer"
+  ]
+}

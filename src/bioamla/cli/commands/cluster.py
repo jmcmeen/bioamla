@@ -51,7 +51,7 @@ def cluster_reduce(
         click.echo(f"Saved reduced embeddings to: {output}")
 
 
-@cluster.command("cluster")
+@cluster.command("fit")
 @click.argument("embeddings_file")
 @click.option("--output", "-o", required=True, help="Output file for cluster labels")
 @click.option(
@@ -72,7 +72,7 @@ def cluster_reduce(
 @click.option("--eps", type=float, default=0.5, help="DBSCAN epsilon")
 @click.option("--min-samples", type=int, default=5, help="Minimum samples per cluster")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress output")
-def cluster_cluster(
+def cluster_fit(
     embeddings_file: str,
     output: str,
     method: str,

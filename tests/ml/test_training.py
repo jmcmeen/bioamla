@@ -23,7 +23,7 @@ class TestValidateAugmentation:
         from bioamla.datasets.augmentation import AugmentationConfig
         from bioamla.ml.training import _validate_augmentation
 
-        cfg = AugmentationConfig(noise_min_snr=30.0, noise_max_snr=10.0)
+        cfg = AugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
         with pytest.raises(TrainingError):
             _validate_augmentation(cfg)
 
@@ -32,6 +32,13 @@ class TestValidateAugmentation:
         from bioamla.ml.training import _validate_augmentation
 
         _validate_augmentation(AugmentationConfig())  # defaults are valid
+
+    def test_inverted_range_ignored_when_layer_disabled(self) -> None:
+        from bioamla.datasets.augmentation import AugmentationConfig
+        from bioamla.ml.training import _validate_augmentation
+
+        # add_noise is off, so its inverted SNR range is not a misconfiguration.
+        _validate_augmentation(AugmentationConfig(noise_min_snr=30.0, noise_max_snr=10.0))
 
 
 class TestLoadCsvDataset:
@@ -436,10 +443,11 @@ class TestTrainAst:
         from bioamla.datasets.augmentation import AugmentationConfig
         from bioamla.ml.training import train_ast
 
-        bad = AugmentationConfig(noise_min_snr=30.0, noise_max_snr=10.0)
+        bad = AugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
         with pytest.raises(TrainingError):
             train_ast(train_dataset="owner/ds", augmentation=bad)
 
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_full_loop_mocked(self, tmp_path) -> None:
         from bioamla.ml.training import train_ast
 
@@ -485,6 +493,9 @@ class TestTrainAst:
                 train_dataset="owner/ds",
                 training_dir=str(tmp_path),
                 num_train_epochs=2,
+                # Keep filter/map single-process: avoids forking a multi-threaded
+                # test process (Python 3.13 DeprecationWarning) and runs faster.
+                dataloader_num_workers=1,
             )
 
         assert result.epochs == 2
