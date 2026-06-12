@@ -1,5 +1,12 @@
 # bioamla
 
+[![PyPI version](https://img.shields.io/pypi/v/bioamla.svg)](https://pypi.org/project/bioamla/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/jmcmeen/bioamla/actions/workflows/ci.yml/badge.svg)](https://github.com/jmcmeen/bioamla/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-mkdocs--material-blue.svg)](https://jmcmeen.github.io/bioamla)
+[![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
 A Python library and CLI for **bioacoustics and machine-learning applications** — audio
 I/O and signal processing, acoustic indices, event detection, spectrogram visualization,
 embedding clustering, species catalogs, datasets, and AST-based ML inference.
