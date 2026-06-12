@@ -118,6 +118,7 @@ class TestBatchAugment:
         assert stats["files_processed"] == 0
         assert stats["files_created"] == 0
 
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_single_copy(self, tmp_path) -> None:
         in_dir = tmp_path / "in"
         in_dir.mkdir()
@@ -134,6 +135,7 @@ class TestBatchAugment:
         assert stats["files_created"] == 1
         assert (out_dir / "a_aug.wav").exists()
 
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_multiple_copies_with_resample(self, tmp_path) -> None:
         in_dir = tmp_path / "in"
         in_dir.mkdir()

@@ -275,6 +275,7 @@ class TestPlayback:
 
 
 class TestLoadWaveformTensor:
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_load_waveform_tensor(self, test_audio_path: str) -> None:
         try:
             import torchaudio  # noqa: F401

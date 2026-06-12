@@ -93,6 +93,7 @@ class TestPullDataset:
         with pytest.raises(InvalidInputError):
             hf.pull_dataset("user/ds", str(tmp_path), layout="bogus")
 
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_materializes_audiofolder_and_metadata(self, tmp_path, monkeypatch) -> None:
         pytest.importorskip("datasets")
         import csv
@@ -116,6 +117,7 @@ class TestPullDataset:
         # target is the sorted-label index
         assert {r["target"] for r in meta_rows} == {"0", "1"}
 
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_classlabel_decoded_to_names(self, tmp_path, monkeypatch) -> None:
         pytest.importorskip("datasets")
         import datasets as hfds
@@ -126,6 +128,7 @@ class TestPullDataset:
         result = hf.pull_dataset("user/ds", str(tmp_path / "out"), split="train")
         assert sorted(result.labels) == ["cat", "dog"]
 
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_no_label_column_raises(self, tmp_path, monkeypatch) -> None:
         pytest.importorskip("datasets")
         import numpy as np
@@ -282,6 +285,7 @@ class TestPullDatasetFailures:
         with pytest.raises(CatalogError):
             hf.pull_dataset("user/ds", str(tmp_path), split="train")
 
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_materialize_failure_raises_catalog_error(self, tmp_path, monkeypatch) -> None:
         pytest.importorskip("datasets")
         import numpy as np

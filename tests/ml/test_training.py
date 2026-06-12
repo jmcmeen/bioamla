@@ -447,6 +447,7 @@ class TestTrainAst:
         with pytest.raises(TrainingError):
             train_ast(train_dataset="owner/ds", augmentation=bad)
 
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_full_loop_mocked(self, tmp_path) -> None:
         from bioamla.ml.training import train_ast
 

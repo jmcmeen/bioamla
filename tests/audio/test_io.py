@@ -128,6 +128,7 @@ class TestArrayLevelIO:
                 save_audio(str(tmp_path / "x.wav"), np.zeros(10, dtype=np.float32), 16000)
 
 
+@pytest.mark.usefixtures("requires_torchcodec")
 class TestLoadWaveformTensor:
     def test_delegates(self, test_audio_path: str) -> None:
         pytest.importorskip("torch")

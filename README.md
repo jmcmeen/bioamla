@@ -43,14 +43,37 @@ Two conventions matter for consumers:
 
 ## Install
 
+Requires Python ≥ 3.10. Install into a **virtual environment** so bioamla's dependency stack
+(PyTorch, librosa, transformers, …) stays isolated from other projects and your system Python:
+
 ```bash
+python -m venv .venv && source .venv/bin/activate    # or: uv venv / conda create -n bioamla
 pip install bioamla                 # the full library + CLI
 
 pip install "bioamla[dev]"          # + contributor tooling (pytest, ruff, mkdocs)
 ```
 
-Requires Python ≥ 3.10. Audio I/O uses `ffmpeg`/`ffprobe` — install them via your OS package
-manager (`bioamla system deps` checks what's available).
+### System dependencies
+
+Beyond the Python packages, bioamla needs a working **FFmpeg** install on the host:
+
+- **FFmpeg shared libraries (`libav*`), major version 4–8** — used by `torchcodec` (the backend
+  behind `torchaudio.load`) to *decode* audio for waveform loading, AST inference/training, and
+  HuggingFace dataset materialization.
+- **The `ffmpeg`/`ffprobe` CLI** — used by `pydub` to *encode* non-WAV formats (FLAC/MP3/OGG/M4A)
+  and to read metadata. (Plain WAV I/O works without FFmpeg.)
+
+Both come from a single FFmpeg install:
+
+```bash
+sudo apt-get install -y ffmpeg            # Debian/Ubuntu
+sudo dnf install -y ffmpeg-free           # Fedora/RHEL
+brew install ffmpeg                        # macOS
+conda install -c conda-forge 'ffmpeg<9'    # conda env (no root); pin to a supported major version
+```
+
+Run `bioamla system deps` to check what's available. Without FFmpeg, audio decode/encode features
+raise a clear error (and the affected tests skip rather than fail).
 
 ## Configuration (API keys)
 
