@@ -53,7 +53,7 @@ def csv_with_audio(tmp_path, test_audio_path):
 def test_batch_group_help(runner):
     result = runner.invoke(cli, ["batch", "--help"])
     assert result.exit_code == 0
-    for grp in ("audio", "detect", "indices", "models", "cluster"):
+    for grp in ("audio", "detect", "index", "models", "cluster"):
         assert grp in result.output
 
 
@@ -73,7 +73,6 @@ def test_batch_group_help(runner):
         ("detect", "ribbit"),
         ("detect", "peaks"),
         ("detect", "accelerating"),
-        ("indices", "calculate"),
         ("models", "predict"),
         ("models", "embed"),
     ],
@@ -83,8 +82,13 @@ def test_batch_subcommand_help(runner, group, cmd):
     assert result.exit_code == 0
 
 
+def test_batch_index_help(runner):
+    result = runner.invoke(cli, ["batch", "index", "--help"])
+    assert result.exit_code == 0
+
+
 def test_batch_cluster_help(runner):
-    result = runner.invoke(cli, ["batch", "cluster", "embeddings", "--help"])
+    result = runner.invoke(cli, ["batch", "cluster", "--help"])
     assert result.exit_code == 0
 
 
@@ -504,7 +508,7 @@ def test_indices_calculate_dir(runner, test_audio_dir, tmp_path, mocker):
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
-        ["batch", "indices", "calculate", "--input-dir", test_audio_dir, "--output-dir", str(out)],
+        ["batch", "index", "--input-dir", test_audio_dir, "--output-dir", str(out)],
     )
     assert result.exit_code == 0
     assert (out / "indices.csv").exists()
@@ -515,7 +519,7 @@ def test_indices_calculate_csv(runner, csv_with_audio, mocker):
     fake = MagicMock()
     fake.to_dict.return_value = {"aci": 1.0, "adi": 0.5, "filepath": "x", "filename": "x"}
     mocker.patch("bioamla.indices.compute_indices_from_file", return_value=fake)
-    result = runner.invoke(cli, ["batch", "indices", "calculate", "--input-file", csv_with_audio])
+    result = runner.invoke(cli, ["batch", "index", "--input-file", csv_with_audio])
     assert result.exit_code == 0
     rows = list(csv.DictReader(open(csv_with_audio)))
     assert "aci" in rows[0]
@@ -526,7 +530,7 @@ def test_indices_calculate_error(runner, test_audio_dir, mocker):
         "bioamla.audio.discovery.list_audio_files",
         side_effect=ProcessingError("x"),
     )
-    result = runner.invoke(cli, ["batch", "indices", "calculate", "--input-dir", test_audio_dir])
+    result = runner.invoke(cli, ["batch", "index", "--input-dir", test_audio_dir])
     assert result.exit_code != 0
 
 
@@ -592,7 +596,7 @@ def test_models_predict_segments_dir(runner, test_audio_dir, tmp_path, mocker):
             str(out),
             "-m",
             "some/model",
-            "--segment-duration",
+            "--segment-seconds",
             "3",
         ],
     )
@@ -677,7 +681,6 @@ def test_cluster_dir(runner, test_audio_dir, tmp_path, mocker):
         [
             "batch",
             "cluster",
-            "embeddings",
             "--input-dir",
             test_audio_dir,
             "--output-dir",
@@ -693,7 +696,7 @@ def test_cluster_dir(runner, test_audio_dir, tmp_path, mocker):
 
 
 def test_cluster_requires_output(runner, test_audio_dir):
-    result = runner.invoke(cli, ["batch", "cluster", "embeddings", "--input-dir", test_audio_dir])
+    result = runner.invoke(cli, ["batch", "cluster", "--input-dir", test_audio_dir])
     assert result.exit_code != 0
 
 
@@ -702,7 +705,7 @@ def test_cluster_error(runner, test_audio_dir, tmp_path, mocker):
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
-        ["batch", "cluster", "embeddings", "--input-dir", test_audio_dir, "--output-dir", str(out)],
+        ["batch", "cluster", "--input-dir", test_audio_dir, "--output-dir", str(out)],
     )
     assert result.exit_code != 0
 
@@ -715,7 +718,6 @@ def test_cluster_csv(runner, csv_with_audio, tmp_path, mocker):
         [
             "batch",
             "cluster",
-            "embeddings",
             "--input-file",
             csv_with_audio,
             "--output-dir",

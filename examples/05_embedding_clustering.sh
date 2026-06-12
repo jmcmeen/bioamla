@@ -32,7 +32,7 @@ bioamla cluster reduce "$EMB" -o "$OUT/reduced.npy" --method umap --n-components
 # 3. Cluster the full-dimensional embeddings. HDBSCAN (the default) finds the
 #    cluster count on its own and marks outliers as noise — ideal when you don't
 #    know how many classes there are. Use --method kmeans --n-clusters N if you do.
-bioamla cluster cluster "$EMB" -o "$OUT/clusters.npy" --method hdbscan --min-cluster-size 5
+bioamla cluster fit "$EMB" -o "$OUT/clusters.npy" --method hdbscan --min-cluster-size 5
 
 # 4. Flag novel/outlier sounds — candidates for new classes or rare events.
 bioamla cluster novelty "$EMB" -o "$OUT/novelty.npy" --method isolation_forest --threshold 0.9

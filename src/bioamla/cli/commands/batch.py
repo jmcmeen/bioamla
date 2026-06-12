@@ -35,6 +35,7 @@ from bioamla.batch import (
     write_csv,
 )
 from bioamla.cli.batch_options import batch_input_options, batch_output_options
+from bioamla.cli.options import max_workers_option, quiet_option, recursive_option
 from bioamla.exceptions import BioamlaError, InvalidInputError
 
 # =============================================================================
@@ -432,9 +433,9 @@ def audio() -> None:
 @audio.command("info")
 @batch_input_options
 @batch_output_options
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def audio_info(input_dir, input_file, output_dir, max_workers, recursive, quiet) -> None:
     """Extract audio file metadata (duration, sample rate, channels, format, etc.)."""
     import csv
@@ -508,9 +509,9 @@ def audio_info(input_dir, input_file, output_dir, max_workers, recursive, quiet)
     default=False,
     help="Delete original files after successful conversion",
 )
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def audio_convert(
     input_dir,
     input_file,
@@ -575,9 +576,9 @@ def audio_convert(
 @batch_input_options
 @batch_output_options
 @click.option("--sample-rate", "-r", required=True, type=int, help="Target sample rate in Hz")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def audio_resample(
     input_dir, input_file, output_dir, sample_rate, max_workers, recursive, quiet
 ) -> None:
@@ -597,9 +598,9 @@ def audio_resample(
 @batch_output_options
 @click.option("--target-db", "-d", default=-20.0, type=float, help="Target loudness in dB")
 @click.option("--peak", is_flag=True, help="Use peak normalization instead of RMS")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def audio_normalize(
     input_dir, input_file, output_dir, target_db, peak, max_workers, recursive, quiet
 ) -> None:
@@ -636,9 +637,9 @@ def audio_normalize(
     type=float,
     help="Silence threshold in dB (with --trim-silence)",
 )
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def audio_trim(
     input_dir,
     input_file,
@@ -674,9 +675,9 @@ def audio_trim(
 @click.option("--bandpass-low", default=None, type=float, help="Bandpass low frequency in Hz")
 @click.option("--bandpass-high", default=None, type=float, help="Bandpass high frequency in Hz")
 @click.option("--order", default=5, type=int, help="Filter order (default: 5)")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def audio_filter(
     input_dir,
     input_file,
@@ -724,9 +725,9 @@ def audio_filter(
 @batch_input_options
 @batch_output_options
 @click.option("--strength", default=1.0, type=float, help="Noise reduction strength (0-2)")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def audio_denoise(
     input_dir, input_file, output_dir, strength, max_workers, recursive, quiet
 ) -> None:
@@ -745,13 +746,20 @@ def audio_denoise(
 @audio.command("segment")
 @batch_input_options
 @batch_output_options
-@click.option("--duration", "-d", required=True, type=float, help="Segment duration in seconds")
+@click.option(
+    "--duration-seconds",
+    "-d",
+    "duration",
+    required=True,
+    type=float,
+    help="Segment duration in seconds",
+)
 @click.option(
     "--overlap", "-o", default=0.0, type=float, help="Overlap between segments in seconds"
 )
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def audio_segment(
     input_dir, input_file, output_dir, duration, overlap, max_workers, recursive, quiet
 ) -> None:
@@ -813,9 +821,9 @@ def audio_segment(
     help="Visualization type",
 )
 @click.option("--legend/--no-legend", default=True, help="Show axes, title, and colorbar")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def audio_visualize(
     input_dir, input_file, output_dir, plot_type, legend, max_workers, recursive, quiet
 ) -> None:
@@ -894,9 +902,9 @@ def _run_detect(config: BatchConfig, method: str, output_dir, quiet, recursive, 
 @click.option("--high-freq", default=5000.0, type=float, help="High frequency bound (Hz)")
 @click.option("--threshold-db", default=-20.0, type=float, help="Detection threshold (dB)")
 @click.option("--min-duration", default=0.05, type=float, help="Minimum detection duration (s)")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def detect_energy(
     input_dir,
     input_file,
@@ -936,11 +944,17 @@ def detect_energy(
 @click.option("--pulse-tolerance", default=0.2, type=float, help="Pulse rate tolerance")
 @click.option("--low-freq", default=500.0, type=float, help="Low frequency bound (Hz)")
 @click.option("--high-freq", default=5000.0, type=float, help="High frequency bound (Hz)")
-@click.option("--window-duration", default=2.0, type=float, help="Analysis window duration (s)")
+@click.option(
+    "--window-seconds",
+    "window_duration",
+    default=2.0,
+    type=float,
+    help="Analysis window in seconds",
+)
 @click.option("--min-score", default=0.3, type=float, help="Minimum detection score")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def detect_ribbit(
     input_dir,
     input_file,
@@ -984,9 +998,9 @@ def detect_ribbit(
 @click.option("--min-peak-distance", default=0.01, type=float, help="Minimum peak distance (s)")
 @click.option("--low-freq", default=None, type=float, help="Low frequency bound (Hz)")
 @click.option("--high-freq", default=None, type=float, help="High frequency bound (Hz)")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def detect_peaks(
     input_dir,
     input_file,
@@ -1027,10 +1041,16 @@ def detect_peaks(
 @click.option("--decel-threshold", default=None, type=float, help="Deceleration threshold")
 @click.option("--low-freq", default=500.0, type=float, help="Low frequency bound (Hz)")
 @click.option("--high-freq", default=5000.0, type=float, help="High frequency bound (Hz)")
-@click.option("--window-duration", default=3.0, type=float, help="Analysis window duration (s)")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@click.option(
+    "--window-seconds",
+    "window_duration",
+    default=3.0,
+    type=float,
+    help="Analysis window in seconds",
+)
+@max_workers_option
+@recursive_option
+@quiet_option
 def detect_accelerating(
     input_dir,
     input_file,
@@ -1072,13 +1092,7 @@ def detect_accelerating(
 # =============================================================================
 
 
-@batch.group()
-def indices() -> None:
-    """Batch acoustic indices operations."""
-    pass
-
-
-@indices.command("calculate")
+@batch.command("index")
 @batch_input_options
 @batch_output_options
 @click.option(
@@ -1086,12 +1100,10 @@ def indices() -> None:
     default="aci,adi,aei,bio,ndsi,h_spectral,h_temporal",
     help="Comma-separated indices",
 )
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
-def indices_calculate(
-    input_dir, input_file, output_dir, indices, max_workers, recursive, quiet
-) -> None:
+@max_workers_option
+@recursive_option
+@quiet_option
+def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursive, quiet) -> None:
     """Batch calculate acoustic indices for audio files."""
     import csv
 
@@ -1172,15 +1184,16 @@ def models() -> None:
 @click.option("--top-k", default=5, type=int, help="Number of top predictions to return")
 @click.option("--min-confidence", default=0.0, type=float, help="Minimum confidence threshold")
 @click.option(
-    "--segment-duration",
+    "--segment-seconds",
+    "segment_duration",
     default=0,
     type=int,
     help="Split each file into N-second segments and classify each (0 = whole file)",
 )
 @click.option("--overlap", default=0, type=int, help="Overlap between segments (seconds)")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def models_predict(
     input_dir,
     input_file,
@@ -1324,9 +1337,9 @@ def models_predict(
     required=True,
     help="Model path (HuggingFace ID or local path)",
 )
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def models_embed(input_dir, input_file, output_dir, model, max_workers, recursive, quiet) -> None:
     """Batch extract embeddings from audio files."""
     from bioamla.ml import batch_embed_files
@@ -1373,13 +1386,7 @@ def models_embed(input_dir, input_file, output_dir, model, max_workers, recursiv
 # =============================================================================
 
 
-@batch.group()
-def cluster() -> None:
-    """Batch clustering operations."""
-    pass
-
-
-@cluster.command("embeddings")
+@batch.command("cluster")
 @batch_input_options
 @batch_output_options
 @click.option(
@@ -1393,9 +1400,9 @@ def cluster() -> None:
 )
 @click.option("--min-cluster-size", default=5, type=int, help="Minimum cluster size (HDBSCAN)")
 @click.option("--min-samples", default=3, type=int, help="Minimum samples per cluster")
-@click.option("--max-workers", "-w", default=1, type=int, help="Number of parallel workers")
-@click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+@max_workers_option
+@recursive_option
+@quiet_option
 def cluster_batch(
     input_dir,
     input_file,

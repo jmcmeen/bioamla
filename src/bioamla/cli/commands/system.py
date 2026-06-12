@@ -1,4 +1,4 @@
-"""Configuration management commands."""
+"""System information commands (version, devices, dependencies)."""
 
 import click
 
@@ -6,13 +6,13 @@ from bioamla.exceptions import BioamlaError
 
 
 @click.group()
-def config() -> None:
-    """Configuration and system information commands."""
+def system() -> None:
+    """System information commands (version, devices, dependencies)."""
     pass
 
 
-@config.command("version")
-def config_version() -> None:
+@system.command("version")
+def system_version() -> None:
     """Show bioamla version and environment information."""
     from bioamla.cli.progress import console
     from bioamla.system import util
@@ -35,8 +35,8 @@ def config_version() -> None:
     console.print()
 
 
-@config.command("devices")
-def config_devices() -> None:
+@system.command("devices")
+def system_devices() -> None:
     """Show available compute devices (GPU, MPS, CPU)."""
     from bioamla.cli.progress import console
     from bioamla.system import util
@@ -76,10 +76,10 @@ def config_devices() -> None:
     console.print()
 
 
-@config.command("deps")
+@system.command("deps")
 @click.option("--install", "do_install", is_flag=True, help="Install missing system dependencies")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
-def config_deps(do_install: bool, yes: bool) -> None:
+def system_deps(do_install: bool, yes: bool) -> None:
     """Check or install system dependencies (FFmpeg, libsndfile, PortAudio).
 
     These system libraries are required for full bioamla functionality:

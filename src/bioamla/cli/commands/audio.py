@@ -145,7 +145,12 @@ def audio_convert(
 @click.argument("input_path")
 @click.argument("output_dir")
 @click.option(
-    "--duration", "-d", default=3.0, type=float, help="Segment duration in seconds (default: 3.0)"
+    "--duration-seconds",
+    "-d",
+    "duration",
+    default=3.0,
+    type=float,
+    help="Segment duration in seconds (default: 3.0)",
 )
 @click.option(
     "--overlap",
@@ -211,7 +216,9 @@ def audio_segment(
 @click.argument("output_path")
 @click.option("--start", "-s", default=0.0, type=float, help="Start time in seconds")
 @click.option("--end", "-e", default=None, type=float, help="End time in seconds")
-@click.option("--duration", "-d", default=None, type=float, help="Duration in seconds")
+@click.option(
+    "--duration-seconds", "-d", "duration", default=None, type=float, help="Duration in seconds"
+)
 def audio_trim(
     input_path: str, output_path: str, start: float, end: float, duration: float
 ) -> None:
@@ -471,7 +478,17 @@ def audio_visualize(
     dpi: int,
     legend: bool,
 ) -> None:
-    """Generate audio visualization (spectrogram, waveform, MFCC) for a single file."""
+    """Generate audio visualization (spectrogram, waveform, MFCC) for a single file.
+
+    \b
+    Examples:
+        # Mel spectrogram (default), auto-named <stem>_mel.png
+        bioamla audio visualize rec.wav
+        # Linear STFT spectrogram to a chosen path
+        bioamla audio visualize rec.wav --type stft -o spec.png
+        # Waveform plot
+        bioamla audio visualize rec.wav --type waveform -o wave.png
+    """
     from bioamla.viz import generate_spectrogram
 
     output_path = output or f"{Path(path).stem}_{viz_type}.png"

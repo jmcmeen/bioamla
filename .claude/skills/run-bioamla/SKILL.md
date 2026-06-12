@@ -24,7 +24,7 @@ indices / detect / visualize, asserting exit codes and that artifacts exist.
   ```bash
   sudo apt-get install -y ffmpeg libsndfile1 libportaudio2
   ```
-  Verify with `uv run bioamla config deps` (checks FFmpeg / libsndfile / PortAudio).
+  Verify with `uv run bioamla system deps` (checks FFmpeg / libsndfile / PortAudio).
 
 ## Build / install
 

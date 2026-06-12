@@ -26,6 +26,7 @@ theme:
 
 nav:
   - Home: index.md
+  - CLI Reference: cli.md
   - API Reference:
       - audio: api/audio.md
       - viz: api/viz.md
@@ -60,3 +61,4 @@ markdown_extensions:
   - pymdownx.snippets:
       base_path: ["."]
       check_paths: true
+  - mkdocs-click

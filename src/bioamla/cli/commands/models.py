@@ -129,7 +129,8 @@ def ast_init_config(output: str, force: bool) -> None:
 @click.argument("file", type=click.Path(exists=True))
 @click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for inference")
 @click.option(
-    "--segment-duration",
+    "--segment-seconds",
+    "segment_duration",
     default=0,
     type=int,
     help="Split into N-second segments and classify each (0 = classify the whole file)",
@@ -157,13 +158,13 @@ def ast_predict(
 ) -> None:
     """Run AST prediction on a single audio file — whole file or in segments.
 
-    With ``--segment-duration`` the file is split into fixed-length (optionally
+    With ``--segment-seconds`` the file is split into fixed-length (optionally
     overlapping) segments and each is classified, yielding one prediction per
     segment; otherwise the whole file gets a single prediction.
 
     Examples:
         bioamla models ast predict audio.wav --model-path my_model
-        bioamla models ast predict rec.wav --segment-duration 3 --overlap 1 -o rec.csv
+        bioamla models ast predict rec.wav --segment-seconds 3 --overlap 1 -o rec.csv
     """
     import csv
     from pathlib import Path
@@ -230,8 +231,15 @@ def ast_predict(
     "or directory with class subdirectories (e.g. ./data/bird/, ./data/frog/)",
 )
 @click.option("--split", default="train", help="Dataset split to use (for HuggingFace datasets)")
-@click.option("--category-id-column", default="target", help="Column name for category IDs")
-@click.option("--category-label-column", default="category", help="Column name for category labels")
+@click.option(
+    "--id-column",
+    "category_id_column",
+    default="target",
+    help="Column name for category/target IDs",
+)
+@click.option(
+    "--label-column", "category_label_column", default="category", help="Column name for labels"
+)
 @click.option(
     "--report-to",
     default="tensorboard",
@@ -632,7 +640,7 @@ def ast_train(
 @click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
 @click.option("--batch-size", default=8, type=int, help="Batch size for inference")
 @click.option("--fp16/--no-fp16", default=False, help="Use half-precision inference")
-@click.option("--quiet", is_flag=True, help="Only output metrics, suppress progress")
+@click.option("--quiet", "-q", is_flag=True, help="Only output metrics, suppress progress")
 def ast_evaluate(
     path: str,
     model_path: str,
@@ -648,8 +656,13 @@ def ast_evaluate(
 ) -> None:
     """Evaluate an AST model on a directory of audio files.
 
-    Example:
+    \b
+    Examples:
+        # Accuracy/precision/recall against a ground-truth CSV
         bioamla models ast evaluate ./audio_dir --model-path my_model -g labels.csv
+        # Write a JSON report
+        bioamla models ast evaluate ./audio_dir -g labels.csv \\
+            --format json -o eval.json
     """
     import json as json_lib
     from pathlib import Path as PathLib

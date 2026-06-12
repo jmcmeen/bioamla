@@ -43,7 +43,7 @@ pip install "bioamla[dev]"          # + contributor tooling (pytest, ruff, mkdoc
 ```
 
 Requires Python ≥ 3.10. Audio I/O uses `ffmpeg`/`ffprobe` — install them via your OS package
-manager (`bioamla config deps` checks what's available).
+manager (`bioamla system deps` checks what's available).
 
 ## Configuration (API keys)
 
@@ -112,8 +112,8 @@ bioamla audio time-stretch in.wav out.wav --rate 1.2
 bioamla audio add-noise in.wav out.wav --snr-db 15
 
 # Batch — over a directory or a CSV metadata file (with a `file_name` column):
-bioamla batch indices calculate --input-dir ./recordings --output-dir ./out
-bioamla batch indices calculate --input-file meta.csv --output-dir ./out   # merges results into the CSV
+bioamla batch index --input-dir ./recordings --output-dir ./out
+bioamla batch index --input-file meta.csv --output-dir ./out   # merges results into the CSV
 bioamla batch audio convert --input-dir ./wavs --output-dir ./flac --format flac
 
 # Catalogs, models, datasets, config:
@@ -121,10 +121,10 @@ bioamla catalogs xc search --species "Hyla cinerea"
 bioamla catalogs hf pull-dataset ashraq/esc50 ./esc50      # Hub dataset -> labeled-folder layout
 bioamla catalogs hf cache --datasets                       # inspect/purge the HF cache (--purge)
 bioamla models ast predict frog.wav --model-path bioamla/scp-frogs
-bioamla models ast predict soundscape.wav --segment-duration 3 -o preds.csv   # classify each 3s segment
+bioamla models ast predict soundscape.wav --segment-seconds 3 -o preds.csv   # classify each 3s segment
 bioamla models ast train --train-dataset ashraq/esc50      # grab-and-go: train off a Hub id directly
 bioamla models ast train --train-dataset ./esc50 --config train.toml   # or from local data + a config
-bioamla config deps                                                    # check system deps
+bioamla system deps                                                    # check system deps
 ```
 
 ### Two kinds of augmentation

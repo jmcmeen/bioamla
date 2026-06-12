@@ -105,7 +105,7 @@ def test_compute_output_file(runner, test_audio_path, tmp_path, mock_audio, mock
 
 def test_compute_with_aci_max_freq(runner, test_audio_path, mock_audio, mocker):
     m = mocker.patch("bioamla.indices.compute_all_indices", return_value=_indices())
-    result = runner.invoke(cli, ["indices", "compute", test_audio_path, "--aci-max-freq", "8000"])
+    result = runner.invoke(cli, ["indices", "compute", test_audio_path, "--aci-high-freq", "8000"])
     assert result.exit_code == 0
     assert m.call_args.kwargs["aci_max_freq"] == 8000.0
 

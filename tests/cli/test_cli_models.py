@@ -58,7 +58,7 @@ def test_ast_predict_segments(runner: CliRunner, test_audio_path) -> None:
     inst.predict_segments.return_value = [_pred(start=0, end=3), _pred(start=3, end=6)]
     with patch("bioamla.ml.ASTInference", return_value=inst):
         result = runner.invoke(
-            cli, ["models", "ast", "predict", test_audio_path, "--segment-duration", "3"]
+            cli, ["models", "ast", "predict", test_audio_path, "--segment-seconds", "3"]
         )
     assert result.exit_code == 0, result.output
     assert "0.00-3.00s" in result.output

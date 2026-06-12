@@ -28,7 +28,7 @@ def dataset() -> None:
     default=None,
     help="Convert all audio files to this format (wav, mp3, flac, etc.)",
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def dataset_merge(
     output_dir: str,
     dataset_paths: tuple,
@@ -94,7 +94,7 @@ def dataset_merge(
     help="Catalog metadata.csv to join license/attribution onto clips "
     "(auto-detected as a metadata.csv sibling of SOURCE when omitted)",
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def dataset_extract_clips(
     source: str,
     output_dir: str,
@@ -186,7 +186,7 @@ def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -
     click.echo(f"\nDataset Statistics: {dataset_dir}")
     click.echo("=" * 50)
     click.echo(f"Total files: {stats['total_files']}")
-    click.echo(f"Classes: {stats['num_categories']}")
+    click.echo(f"Labels: {stats['num_categories']}")
     if stats.get("splits"):
         split_str = ", ".join(f"{k}={v}" for k, v in sorted(stats["splits"].items()))
         click.echo(f"Splits: {split_str}")
@@ -212,6 +212,7 @@ def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -
 )
 @click.option(
     "--output",
+    "-o",
     default=None,
     help="Output manifest path (default: DATASET_DIR/dataset.json)",
 )
@@ -219,7 +220,7 @@ def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -
     "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
 )
 @click.option("--sample-rate", type=int, default=None, help="Sample rate to record in the manifest")
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def dataset_manifest(
     dataset_dir: str,
     name: str,
@@ -288,7 +289,7 @@ def dataset_manifest(
 @click.option(
     "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def dataset_partition(
     dataset_dir: str,
     train_frac: float,
@@ -302,7 +303,15 @@ def dataset_partition(
     metadata_filename: str,
     quiet: bool,
 ) -> None:
-    """Partition a dataset into train/val/test (stratified, grouped, reproducible)."""
+    """Partition a dataset into train/val/test (stratified, grouped, reproducible).
+
+    \b
+    Examples:
+        # Default 80/10/10 split, writing a `split` column into metadata.csv
+        bioamla dataset partition ./dataset
+        # Reorganize into train/val/test/<label>/ subdirs, grouped by recording
+        bioamla dataset partition ./dataset --mode subdirs --group-by source_file
+    """
     from bioamla.datasets import partition_dataset
 
     try:
@@ -365,7 +374,7 @@ def dataset_partition(
     default=True,
     help="Write ATTRIBUTIONS.md from joined clip provenance (skipped if none)",
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def dataset_build(
     source: str,
     output_dir: str,
@@ -392,6 +401,14 @@ def dataset_build(
     producing a dataset directory + dataset.json consumable by `models ast train`.
     License/attribution joined from the source catalog metadata is written to
     ATTRIBUTIONS.md (unless --no-attributions).
+
+    \b
+    Examples:
+        # Annotated recordings dir -> train-ready dataset
+        bioamla dataset build ./recordings ./dataset --sample-rate 16000
+        # Keep two labels and set an 80/10/10 train/val/test split
+        bioamla dataset build ./recordings ./dataset \\
+            --include frog --include bird --train 0.8 --val 0.1 --test 0.1
     """
     from datetime import datetime, timezone
     from pathlib import Path
@@ -487,7 +504,7 @@ def dataset_build(
     is_flag=True,
     help="Process all datasets in directory (each subdirectory with metadata.csv)",
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def dataset_license(
     path: str,
     template: str,
@@ -615,7 +632,7 @@ def _parse_range(value: str) -> tuple[float, float]:
 )
 @click.option("--sample-rate", default=16000, type=int, help="Target sample rate for output")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories")
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def dataset_augment(
     input_dir: str,
     output: str,
@@ -628,7 +645,20 @@ def dataset_augment(
     recursive: bool,
     quiet: bool,
 ) -> None:
-    """Augment audio files to expand training datasets."""
+    """Augment audio files to expand training datasets.
+
+    Each enabled transform takes a range; ranges are sampled per output copy.
+    This writes new augmented files (offline) — distinct from `models ast train`'s
+    on-the-fly augmentation.
+
+    \b
+    Examples:
+        # Two noisy + pitch-shifted copies per file
+        bioamla dataset augment ./clips -o ./aug \\
+            --add-noise 3-30 --pitch-shift -2,2 --multiply 2
+        # Time-stretch only
+        bioamla dataset augment ./clips -o ./aug --time-stretch 0.9-1.1
+    """
     from bioamla.datasets import AugmentationConfig, batch_augment
 
     noise_enabled = add_noise is not None
@@ -681,74 +711,3 @@ def dataset_augment(
             f"Created {stats['files_created']} augmented files from "
             f"{stats['files_processed']} source files in {stats['output_dir']}"
         )
-
-
-@dataset.command("download")
-@click.argument("url", required=True)
-@click.argument("output_dir", required=False, default=".")
-def dataset_download(url: str, output_dir: str) -> None:
-    """Download a file from the specified URL to the target directory."""
-    import os
-    from urllib.parse import urlparse
-
-    from bioamla.common.files import download_file
-
-    if output_dir == ".":
-        output_dir = os.getcwd()
-
-    parsed_url = urlparse(url)
-    filename = os.path.basename(parsed_url.path) or "downloaded_file"
-    output_path = os.path.join(output_dir, filename)
-
-    try:
-        download_file(url, output_path)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    except OSError as e:
-        raise click.ClickException(f"Download failed: {e}") from e
-
-    click.echo(f"Downloaded to {output_path}")
-
-
-@dataset.command("unzip")
-@click.argument("file_path")
-@click.argument("output_path", required=False, default=".")
-def dataset_unzip(file_path: str, output_path: str) -> None:
-    """Extract a ZIP archive to the specified output directory."""
-    import os
-
-    from bioamla.common.files import extract_zip_file
-
-    if output_path == ".":
-        output_path = os.getcwd()
-
-    try:
-        extract_zip_file(file_path, output_path)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    except OSError as e:
-        raise click.ClickException(f"Extraction failed: {e}") from e
-
-    click.echo(f"Extracted to {output_path}")
-
-
-@dataset.command("zip")
-@click.argument("source_path")
-@click.argument("output_file")
-def dataset_zip(source_path: str, output_file: str) -> None:
-    """Create a ZIP archive from a file or directory."""
-    from pathlib import Path
-
-    from bioamla.common.files import create_zip_file, zip_directory
-
-    try:
-        if Path(source_path).is_dir():
-            zip_directory(source_path, output_file)
-        else:
-            create_zip_file([source_path], output_file)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    except OSError as e:
-        raise click.ClickException(f"ZIP creation failed: {e}") from e
-
-    click.echo(f"Created {output_file}")

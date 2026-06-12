@@ -42,7 +42,7 @@ def catalogs_inat() -> None:
 @click.option("--has-sounds", is_flag=True, help="Only show observations with sounds")
 @click.option("--limit", type=int, default=20, help="Maximum number of results")
 @click.option("--output", "-o", default=None, help="Output file path for CSV (optional)")
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def inat_search(
     species: str,
     taxon_id: int,
@@ -139,7 +139,7 @@ def inat_search(
 @catalogs_inat.command("stats")
 @click.argument("project_id")
 @click.option("--output", "-o", default=None, help="Output file path for JSON (optional)")
-@click.option("--quiet", is_flag=True, help="Suppress progress output, print only JSON")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output, print only JSON")
 def inat_stats(project_id: str, output: str, quiet: bool) -> None:
     """Get statistics for an iNaturalist project."""
     import json
@@ -348,7 +348,7 @@ def hf_push_dataset(
     default="both",
     help="Output layout: label subdirs + metadata.csv (both), subdirs only, or flat",
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def hf_pull_dataset(
     repo_id: str,
     dest: str,
@@ -485,7 +485,16 @@ def xc_search(
     max_results: int,
     output_format: str,
 ) -> None:
-    """Search Xeno-canto for bird recordings."""
+    """Search Xeno-canto for bird recordings.
+
+    \b
+    Examples:
+        # Songs of a species in the US, top 20
+        bioamla catalogs xc search --species "Turdus migratorius" \\
+            --country "United States" --type song --max-results 20
+        # By genus, JSON output for scripting
+        bioamla catalogs xc search --genus Turdus --quality A --format json
+    """
     import json as json_lib
 
     from bioamla.catalogs import xeno_canto as xc

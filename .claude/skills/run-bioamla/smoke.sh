@@ -36,13 +36,13 @@ PY
 [ -s "$WAV" ] || die "WAV not written"
 ok "WAV created"
 
-step "config version (env + version info)"
-b config version >/dev/null || die "config version"
-ok "config version"
+step "system version (env + version info)"
+b system version >/dev/null || die "system version"
+ok "system version"
 
-step "config deps (system dependency check)"
-b config deps >/dev/null || die "config deps"
-ok "config deps"
+step "system deps (system dependency check)"
+b system deps >/dev/null || die "system deps"
+ok "system deps"
 
 step "audio info"
 b audio info "$WAV" >/dev/null || die "audio info"
