@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
-## [0.2.0]
+## [0.2.0] - 2026-06-12
 
 A ground-up rebuild. `bioamla` is now a flat, **domain-oriented** library with a thin CLI,
 designed to be a stable core that other applications can build on.
