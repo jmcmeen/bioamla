@@ -4,8 +4,8 @@ Xeno-canto (https://xeno-canto.org) is the world's largest collection of bird
 sounds. API v3 requires an API key, resolved (in priority order) from:
 
 1. :func:`set_xc_api_key` (runtime override)
-2. the ``XC_API_KEY`` environment variable
-3. the bioamla config file (``[api] xc_api_key``)
+2. the ``XC_API_KEY`` environment variable (a ``.env`` in CWD/parent is
+   auto-loaded on import, so a key there is picked up here)
 
 Failures raise :class:`~bioamla.exceptions.CatalogError`; a missing API key or
 empty query raises :class:`~bioamla.exceptions.InvalidInputError`.
@@ -55,28 +55,14 @@ def set_xc_api_key(key: str) -> None:
 
 
 def get_xc_api_key() -> str | None:
-    """Resolve the Xeno-canto API key from runtime, env var, then config.
+    """Resolve the Xeno-canto API key from the runtime override, then ``XC_API_KEY``.
 
     Returns None if no key is configured anywhere.
     """
     if _api_key:
         return _api_key
 
-    env_key = os.environ.get("XC_API_KEY")
-    if env_key:
-        return env_key
-
-    try:
-        from bioamla.common.config import get_config
-
-        config = get_config()
-        config_key = config.get("api", "xc_api_key")
-        if config_key:
-            return config_key
-    except Exception:
-        pass
-
-    return None
+    return os.environ.get("XC_API_KEY") or None
 
 
 def _tag(name: str, value: object) -> str:

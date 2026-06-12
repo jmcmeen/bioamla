@@ -14,10 +14,10 @@ import click
 
 from bioamla.exceptions import BioamlaError
 
-# Map ``ast train`` flag names onto config-file (section, key) locations, using the
-# template schema in ``bioamla.common.config.DEFAULT_CONFIG`` as the guidance shape
-# (e.g. [training].epochs -> --num-train-epochs). Flags set on the command line
-# override these; these override built-in defaults.
+# Map ``ast train`` flag names onto config-file (section, key) locations
+# (e.g. [training].epochs -> --num-train-epochs). The ``ast init-config`` template
+# (bioamla.ml.train_config) documents this same schema. Flags set on the command
+# line override these; these override built-in defaults.
 _TRAIN_CONFIG_MAP = {
     "base_model": ("models", "default_ast_model"),
     "learning_rate": ("training", "learning_rate"),
@@ -97,6 +97,32 @@ def models() -> None:
 def ast() -> None:
     """Audio Spectrogram Transformer (AST) model operations."""
     pass
+
+
+@ast.command("init-config")
+@click.option("--output", "-o", default="ast_training.toml", help="Output file path")
+@click.option("--force", "-f", is_flag=True, help="Overwrite an existing file")
+def ast_init_config(output: str, force: bool) -> None:
+    """Write a documented AST training-config file for use with ``train --config``.
+
+    The file holds the [models], [training], and [augmentation] settings that
+    ``ast train`` reads; edit it, then pass it via ``--config``. Command-line
+    flags still override any value in the file.
+    """
+    from bioamla.exceptions import InvalidInputError
+    from bioamla.ml import write_train_config
+
+    try:
+        path = write_train_config(output, force=force)
+    except InvalidInputError as e:
+        click.echo(str(e), err=True)
+        if "already exists" in str(e):
+            click.echo("Use --force to overwrite.")
+        raise SystemExit(1) from e
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    click.echo(f"Created training config: {path}")
 
 
 @ast.command("predict")

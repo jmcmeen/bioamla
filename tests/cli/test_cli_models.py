@@ -97,6 +97,35 @@ def test_ast_predict_missing_file(runner: CliRunner) -> None:
     assert result.exit_code != 0
 
 
+# --- init-config ---------------------------------------------------------
+
+
+def test_ast_init_config_creates_file(runner: CliRunner, tmp_path) -> None:
+    out = tmp_path / "ast_training.toml"
+    result = runner.invoke(cli, ["models", "ast", "init-config", "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    assert "Created training config" in result.output
+    assert "[augmentation]" in out.read_text()
+
+
+def test_ast_init_config_exists_without_force(runner: CliRunner, tmp_path) -> None:
+    out = tmp_path / "ast_training.toml"
+    out.write_text("keep me")
+    result = runner.invoke(cli, ["models", "ast", "init-config", "-o", str(out)])
+    assert result.exit_code == 1
+    assert "--force" in result.output
+    assert out.read_text() == "keep me"  # not overwritten
+
+
+def test_ast_init_config_force_overwrites(runner: CliRunner, tmp_path) -> None:
+    out = tmp_path / "ast_training.toml"
+    out.write_text("old")
+    result = runner.invoke(cli, ["models", "ast", "init-config", "-o", str(out), "--force"])
+    assert result.exit_code == 0, result.output
+    assert "[training]" in out.read_text()
+
+
 # --- train ---------------------------------------------------------------
 
 

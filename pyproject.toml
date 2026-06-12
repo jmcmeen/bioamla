@@ -93,7 +93,6 @@ packages = ["src/bioamla"]
 [tool.hatch.build]
 include = [
   "src/bioamla/**/*.py",
-  "src/bioamla/_internal/examples/*.sh",
 ]
 
 [tool.pytest.ini_options]

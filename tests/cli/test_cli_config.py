@@ -8,7 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 from bioamla.cli.cli import cli
-from bioamla.exceptions import ConfigError, InvalidInputError
+from bioamla.exceptions import ConfigError
 from bioamla.system.dependency import DependencyInfo, DependencyReport
 from bioamla.system.util import DeviceInfo, DevicesData, VersionData
 
@@ -100,105 +100,6 @@ def test_config_devices_cpu(runner: CliRunner) -> None:
 def test_config_devices_error(runner: CliRunner) -> None:
     with patch("bioamla.system.util.get_device_info", side_effect=ConfigError("nope")):
         result = runner.invoke(cli, ["config", "devices"])
-    assert result.exit_code != 0
-
-
-# --- show ----------------------------------------------------------------
-
-
-class _FakeConfig:
-    def __init__(self, source: str | None) -> None:
-        self._source = source
-        self.project = {"name": "demo"}
-        self.audio = {"sample_rate": 16000}
-        self.visualize = {}
-        self.models = {}
-        self.inference = {}
-        self.training = {}
-        self.analysis = {}
-        self.batch = {}
-        self.output = {}
-        self.progress = {}
-        self.logging = {}
-
-
-def test_config_show_with_source(runner: CliRunner) -> None:
-    with patch("bioamla.system.config.get_config", return_value=_FakeConfig("/path/bioamla.toml")):
-        result = runner.invoke(cli, ["config", "show"])
-    assert result.exit_code == 0
-    assert "Source" in result.output
-    assert "sample_rate" in result.output
-
-
-def test_config_show_defaults(runner: CliRunner) -> None:
-    with patch("bioamla.system.config.get_config", return_value=_FakeConfig(None)):
-        result = runner.invoke(cli, ["config", "show"])
-    assert result.exit_code == 0
-    assert "defaults" in result.output
-
-
-def test_config_show_error(runner: CliRunner) -> None:
-    with patch("bioamla.system.config.get_config", side_effect=ConfigError("bad toml")):
-        result = runner.invoke(cli, ["config", "show"])
-    assert result.exit_code != 0
-
-
-# --- init ----------------------------------------------------------------
-
-
-def test_config_init_success(runner: CliRunner, tmp_path) -> None:
-    out = tmp_path / "bioamla.toml"
-    with patch("bioamla.system.config.create_default_config") as mock_create:
-        result = runner.invoke(cli, ["config", "init", "-o", str(out)])
-    assert result.exit_code == 0
-    mock_create.assert_called_once()
-    assert "Created" in result.output
-
-
-def test_config_init_exists_without_force(runner: CliRunner, tmp_path) -> None:
-    out = tmp_path / "bioamla.toml"
-    with patch(
-        "bioamla.system.config.create_default_config",
-        side_effect=InvalidInputError(f"File '{out}' already exists"),
-    ):
-        result = runner.invoke(cli, ["config", "init", "-o", str(out)])
-    assert result.exit_code == 1
-    assert "--force" in result.output
-
-
-def test_config_init_other_error(runner: CliRunner, tmp_path) -> None:
-    out = tmp_path / "bioamla.toml"
-    with patch(
-        "bioamla.system.config.create_default_config",
-        side_effect=ConfigError("disk full"),
-    ):
-        result = runner.invoke(cli, ["config", "init", "-o", str(out)])
-    assert result.exit_code != 0
-
-
-# --- path ----------------------------------------------------------------
-
-
-def test_config_path(runner: CliRunner, tmp_path) -> None:
-    active = tmp_path / "bioamla.toml"
-    active.write_text("")
-    other = tmp_path / "other.toml"
-    with (
-        patch("bioamla.system.config.find_config_file", return_value=str(active)),
-        patch(
-            "bioamla.system.config.get_config_locations",
-            return_value=[str(active), str(other)],
-        ),
-    ):
-        result = runner.invoke(cli, ["config", "path"])
-    assert result.exit_code == 0
-    assert "ACTIVE" in result.output
-    assert "not found" in result.output
-
-
-def test_config_path_error(runner: CliRunner) -> None:
-    with patch("bioamla.system.config.find_config_file", side_effect=ConfigError("oops")):
-        result = runner.invoke(cli, ["config", "path"])
     assert result.exit_code != 0
 
 
