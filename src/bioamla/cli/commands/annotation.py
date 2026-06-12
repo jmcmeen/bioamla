@@ -1,6 +1,14 @@
 """Annotation management commands for audio datasets."""
 
+from pathlib import Path
+
 import click
+
+from bioamla.datasets._io import ANNOTATION_FORMATS as _FORMAT_CHOICES
+from bioamla.datasets._io import detect_annotation_format as _detect_format
+from bioamla.datasets._io import load_annotations as _load
+from bioamla.datasets._io import save_annotations as _save
+from bioamla.exceptions import BioamlaError
 
 
 @click.group()
@@ -9,36 +17,107 @@ def annotation() -> None:
     pass
 
 
+@annotation.command("template")
+@click.argument("audio_file")
+@click.argument("output_file")
+@click.option(
+    "--format",
+    "out_format",
+    type=click.Choice(_FORMAT_CHOICES),
+    default=None,
+    help="Output format (auto-detected from extension if not specified)",
+)
+@click.option("--label", default="", help="Label for the placeholder full-file row")
+@click.option("--empty", is_flag=True, help="Write metadata only, with no placeholder row")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def annotation_template(
+    audio_file: str,
+    output_file: str,
+    out_format: str,
+    label: str,
+    empty: bool,
+    quiet: bool,
+) -> None:
+    """Generate a starter annotation file from an audio file.
+
+    Reads the recording's duration and sample rate and writes a skeleton
+    annotation file pre-filled with that metadata plus (unless --empty) a single
+    placeholder row spanning the whole file, ready to edit. The bioamla (.json)
+    format stores the audio metadata in the file; raven/csv hold the rows only.
+    """
+    from datetime import datetime, timezone
+
+    from bioamla.audio import get_audio_info
+    from bioamla.datasets import Annotation
+
+    audio_path = Path(audio_file)
+    if not audio_path.exists():
+        click.echo(f"Error: Audio file not found: {audio_file}")
+        raise SystemExit(1)
+
+    output_path = Path(output_file)
+    fmt = _detect_format(output_path, out_format)
+
+    try:
+        info = get_audio_info(audio_file)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    annotations = []
+    if not empty:
+        annotations.append(Annotation(start_time=0.0, end_time=info.duration, label=label))
+
+    metadata = {
+        "audio_file": audio_path.name,
+        "sample_rate": info.sample_rate,
+        "duration": round(info.duration, 6),
+        "channels": info.channels,
+        "created": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        _save(annotations, output_path, fmt, metadata=metadata)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        click.echo(f"Created {fmt} annotation template: {output_file}")
+        click.echo(
+            f"  audio: {audio_path.name}  duration: {info.duration:.2f}s  sr: {info.sample_rate} Hz"
+        )
+        click.echo(f"  rows: {len(annotations)}")
+        if fmt != "bioamla":
+            click.echo("  note: audio metadata is only persisted in the bioamla (.json) format")
+
+
 @annotation.command("convert")
 @click.argument("input_file")
 @click.argument("output_file")
 @click.option(
     "--from",
     "from_format",
-    type=click.Choice(["raven", "csv"]),
+    type=click.Choice(_FORMAT_CHOICES),
     default=None,
     help="Input format (auto-detected from extension if not specified)",
 )
 @click.option(
     "--to",
     "to_format",
-    type=click.Choice(["raven", "csv"]),
+    type=click.Choice(_FORMAT_CHOICES),
     default=None,
     help="Output format (auto-detected from extension if not specified)",
 )
 @click.option("--label-column", default=None, help="Column name for labels in input file")
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
-def annotation_convert(input_file : str, output_file : str, from_format : str, to_format : str, label_column : str, quiet : bool) -> None:
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def annotation_convert(
+    input_file: str,
+    output_file: str,
+    from_format: str,
+    to_format: str,
+    label_column: str,
+    quiet: bool,
+) -> None:
     """Convert annotation files between formats."""
-    from pathlib import Path
-
-    from bioamla.services.annotation import (
-        load_csv_annotations,
-        load_raven_selection_table,
-        save_csv_annotations,
-        save_raven_selection_table,
-    )
-
     input_path = Path(input_file)
     output_path = Path(output_file)
 
@@ -46,27 +125,14 @@ def annotation_convert(input_file : str, output_file : str, from_format : str, t
         click.echo(f"Error: Input file not found: {input_file}")
         raise SystemExit(1)
 
-    if from_format is None:
-        if input_path.suffix.lower() == ".txt":
-            from_format = "raven"
-        else:
-            from_format = "csv"
+    from_format = _detect_format(input_path, from_format)
+    to_format = _detect_format(output_path, to_format)
 
-    if to_format is None:
-        if output_path.suffix.lower() == ".txt":
-            to_format = "raven"
-        else:
-            to_format = "csv"
-
-    if from_format == "raven":
-        annotations = load_raven_selection_table(input_file, label_column=label_column)
-    else:
-        annotations = load_csv_annotations(input_file)
-
-    if to_format == "raven":
-        save_raven_selection_table(annotations, output_file)
-    else:
-        save_csv_annotations(annotations, output_file)
+    try:
+        annotations, metadata = _load(input_path, from_format, label_column=label_column)
+        _save(annotations, output_path, to_format, metadata=metadata)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if not quiet:
         click.echo(f"Converted {len(annotations)} annotations from {from_format} to {to_format}")
@@ -78,21 +144,16 @@ def annotation_convert(input_file : str, output_file : str, from_format : str, t
 @click.option(
     "--format",
     "file_format",
-    type=click.Choice(["raven", "csv"]),
+    type=click.Choice(_FORMAT_CHOICES),
     default=None,
     help="Annotation format (auto-detected from extension if not specified)",
 )
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
-def annotation_summary(path : str, file_format : str, output_json : str) -> None:
+def annotation_summary(path: str, file_format: str, output_json: str) -> None:
     """Display summary statistics for an annotation file."""
     import json
-    from pathlib import Path
 
-    from bioamla.services.annotation import (
-        load_csv_annotations,
-        load_raven_selection_table,
-        summarize_annotations,
-    )
+    from bioamla.datasets import summarize_annotations
 
     input_path = Path(path)
 
@@ -100,16 +161,12 @@ def annotation_summary(path : str, file_format : str, output_json : str) -> None
         click.echo(f"Error: File not found: {path}")
         raise SystemExit(1)
 
-    if file_format is None:
-        if input_path.suffix.lower() == ".txt":
-            file_format = "raven"
-        else:
-            file_format = "csv"
+    file_format = _detect_format(input_path, file_format)
 
-    if file_format == "raven":
-        annotations = load_raven_selection_table(path)
-    else:
-        annotations = load_csv_annotations(path)
+    try:
+        annotations, metadata = _load(input_path, file_format)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     summary = summarize_annotations(annotations)
 
@@ -118,6 +175,10 @@ def annotation_summary(path : str, file_format : str, output_json : str) -> None
     else:
         click.echo(f"\nAnnotation Summary: {path}")
         click.echo("=" * 50)
+        if metadata.get("audio_file"):
+            click.echo(f"Audio file: {metadata['audio_file']}")
+        if metadata.get("duration") is not None:
+            click.echo(f"Audio duration: {float(metadata['duration']):.2f}s")
         click.echo(f"Total annotations: {summary['total_annotations']}")
         click.echo(f"Unique labels: {summary['unique_labels']}")
         click.echo("\nDuration statistics:")
@@ -141,21 +202,12 @@ def annotation_summary(path : str, file_format : str, output_json : str) -> None
     default=True,
     help="Keep or drop annotations with unmapped labels",
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
-def annotation_remap(input_file : str, output_file : str, mapping : str, keep_unmapped: bool, quiet : bool) -> None:
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def annotation_remap(
+    input_file: str, output_file: str, mapping: str, keep_unmapped: bool, quiet: bool
+) -> None:
     """Remap annotation labels using a mapping file."""
-    from pathlib import Path
-
-    from bioamla.core.annotations import (
-        load_label_mapping,
-        remap_labels,
-    )
-    from bioamla.services.annotation import (
-        load_csv_annotations,
-        load_raven_selection_table,
-        save_csv_annotations,
-        save_raven_selection_table,
-    )
+    from bioamla.datasets import load_label_mapping, remap_labels
 
     input_path = Path(input_file)
     output_path = Path(output_file)
@@ -164,23 +216,17 @@ def annotation_remap(input_file : str, output_file : str, mapping : str, keep_un
         click.echo(f"Error: Input file not found: {input_file}")
         raise SystemExit(1)
 
-    label_mapping = load_label_mapping(mapping)
+    in_format = _detect_format(input_path)
+    out_format = _detect_format(output_path) if output_path.suffix else in_format
 
-    if input_path.suffix.lower() == ".txt":
-        annotations = load_raven_selection_table(input_file)
-        is_raven = True
-    else:
-        annotations = load_csv_annotations(input_file)
-        is_raven = False
-
-    original_count = len(annotations)
-
-    remapped = remap_labels(annotations, label_mapping, keep_unmapped=keep_unmapped)
-
-    if output_path.suffix.lower() == ".txt" or is_raven:
-        save_raven_selection_table(remapped, output_file)
-    else:
-        save_csv_annotations(remapped, output_file)
+    try:
+        label_mapping = load_label_mapping(mapping)
+        annotations, metadata = _load(input_path, in_format)
+        original_count = len(annotations)
+        remapped = remap_labels(annotations, label_mapping, keep_unmapped=keep_unmapped)
+        _save(remapped, output_path, out_format, metadata=metadata)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if not quiet:
         click.echo(f"Remapped {original_count} annotations -> {len(remapped)} annotations")
@@ -194,18 +240,18 @@ def annotation_remap(input_file : str, output_file : str, mapping : str, keep_un
 @click.option("--exclude", "-e", multiple=True, help="Labels to exclude (can specify multiple)")
 @click.option("--min-duration", type=float, default=None, help="Minimum duration in seconds")
 @click.option("--max-duration", type=float, default=None, help="Maximum duration in seconds")
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
-def annotation_filter(input_file: str, output_file: str, include: tuple, exclude: tuple, min_duration: float, max_duration: float, quiet: bool) -> None:
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def annotation_filter(
+    input_file: str,
+    output_file: str,
+    include: tuple,
+    exclude: tuple,
+    min_duration: float,
+    max_duration: float,
+    quiet: bool,
+) -> None:
     """Filter annotations by label or duration."""
-    from pathlib import Path
-
-    from bioamla.core.annotations import filter_labels
-    from bioamla.services.annotation import (
-        load_csv_annotations,
-        load_raven_selection_table,
-        save_csv_annotations,
-        save_raven_selection_table,
-    )
+    from bioamla.datasets import filter_labels
 
     input_path = Path(input_file)
     output_path = Path(output_file)
@@ -214,28 +260,27 @@ def annotation_filter(input_file: str, output_file: str, include: tuple, exclude
         click.echo(f"Error: Input file not found: {input_file}")
         raise SystemExit(1)
 
-    if input_path.suffix.lower() == ".txt":
-        annotations = load_raven_selection_table(input_file)
-        is_raven = True
-    else:
-        annotations = load_csv_annotations(input_file)
-        is_raven = False
+    in_format = _detect_format(input_path)
+    out_format = _detect_format(output_path) if output_path.suffix else in_format
 
-    original_count = len(annotations)
+    try:
+        annotations, metadata = _load(input_path, in_format)
+        original_count = len(annotations)
 
-    include_set = set(include) if include else None
-    exclude_set = set(exclude) if exclude else None
-    filtered = filter_labels(annotations, include_labels=include_set, exclude_labels=exclude_set)
+        include_set = set(include) if include else None
+        exclude_set = set(exclude) if exclude else None
+        filtered = filter_labels(
+            annotations, include_labels=include_set, exclude_labels=exclude_set
+        )
 
-    if min_duration is not None:
-        filtered = [a for a in filtered if a.duration >= min_duration]
-    if max_duration is not None:
-        filtered = [a for a in filtered if a.duration <= max_duration]
+        if min_duration is not None:
+            filtered = [a for a in filtered if a.duration >= min_duration]
+        if max_duration is not None:
+            filtered = [a for a in filtered if a.duration <= max_duration]
 
-    if output_path.suffix.lower() == ".txt" or is_raven:
-        save_raven_selection_table(filtered, output_file)
-    else:
-        save_csv_annotations(filtered, output_file)
+        _save(filtered, output_path, out_format, metadata=metadata)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
 
     if not quiet:
         click.echo(f"Filtered {original_count} annotations -> {len(filtered)} annotations")
@@ -245,7 +290,12 @@ def annotation_filter(input_file: str, output_file: str, include: tuple, exclude
 @annotation.command("generate-labels")
 @click.argument("annotation_file")
 @click.argument("output_file")
-@click.option("--audio-duration", type=float, required=True, help="Total audio duration in seconds")
+@click.option(
+    "--audio-duration",
+    type=float,
+    default=None,
+    help="Total audio duration in seconds (inferred from bioamla metadata if omitted)",
+)
 @click.option("--clip-duration", type=float, required=True, help="Duration of each clip in seconds")
 @click.option(
     "--hop-length",
@@ -266,7 +316,7 @@ def annotation_filter(input_file: str, output_file: str, include: tuple, exclude
     default="csv",
     help="Output format for labels",
 )
-@click.option("--quiet", is_flag=True, help="Suppress progress output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def annotation_generate_labels(
     annotation_file: str,
     output_file: str,
@@ -279,19 +329,14 @@ def annotation_generate_labels(
     quiet: bool,
 ) -> None:
     """Generate clip-level labels from annotations."""
-    from pathlib import Path
+    import csv as csv_lib
 
     import numpy as np
 
-    from bioamla.cli.service_helpers import services
-    from bioamla.core.annotations import (
+    from bioamla.datasets import (
         create_label_map,
         generate_clip_labels,
-    )
-    from bioamla.services.annotation import (
         get_unique_labels,
-        load_csv_annotations,
-        load_raven_selection_table,
     )
 
     input_path = Path(annotation_file)
@@ -300,63 +345,187 @@ def annotation_generate_labels(
         click.echo(f"Error: Annotation file not found: {annotation_file}")
         raise SystemExit(1)
 
-    if input_path.suffix.lower() == ".txt":
-        annotations = load_raven_selection_table(annotation_file)
-    else:
-        annotations = load_csv_annotations(annotation_file)
+    in_format = _detect_format(input_path)
 
-    if not annotations:
-        click.echo("Error: No annotations found in file")
-        raise SystemExit(1)
+    try:
+        annotations, metadata = _load(input_path, in_format)
 
-    labels = get_unique_labels(annotations)
-    label_map = create_label_map(labels)
+        if not annotations:
+            click.echo("Error: No annotations found in file")
+            raise SystemExit(1)
 
-    if hop_length is None:
-        hop_length = clip_duration
+        # Fall back to the duration embedded in a bioamla file when not given.
+        if audio_duration is None:
+            if metadata.get("duration") is not None:
+                audio_duration = float(metadata["duration"])
+            else:
+                raise click.ClickException(
+                    "--audio-duration is required (no duration metadata in this file)"
+                )
 
-    num_clips = int((audio_duration - clip_duration) / hop_length) + 1
-    all_labels = []
+        labels = get_unique_labels(annotations)
+        label_map = create_label_map(labels)
 
-    for i in range(num_clips):
-        clip_start = i * hop_length
-        clip_end = clip_start + clip_duration
+        if hop_length is None:
+            hop_length = clip_duration
 
-        clip_labels = generate_clip_labels(
-            annotations,
-            clip_start,
-            clip_end,
-            label_map,
-            min_overlap=min_overlap,
-            multi_label=multi_label,
-        )
-        all_labels.append(clip_labels)
+        num_clips = int((audio_duration - clip_duration) / hop_length) + 1
+        all_labels = []
 
-    labels_array = np.array(all_labels)
-
-    output_path = Path(output_file)
-    services.file.ensure_directory(output_path.parent)
-
-    if output_format == "numpy":
-        services.file.write_npy(output_file, labels_array)
-        label_map_file = output_path.with_suffix(".labels.csv")
-        rows = [["label", "index"]]
-        for label, idx in sorted(label_map.items(), key=lambda x: x[1]):
-            rows.append([label, idx])
-        services.file.write_csv(label_map_file, rows[1:], headers=rows[0])
-    else:
-        header = ["clip_start", "clip_end"] + sorted(
-            label_map.keys(), key=lambda x: label_map[x]
-        )
-        rows = []
-        for i, clip_labels in enumerate(labels_array):
+        for i in range(num_clips):
             clip_start = i * hop_length
             clip_end = clip_start + clip_duration
-            row = [f"{clip_start:.3f}", f"{clip_end:.3f}"] + [int(v) for v in clip_labels]
-            rows.append(row)
-        services.file.write_csv(output_file, rows, headers=header)
+            clip_labels = generate_clip_labels(
+                annotations,
+                clip_start,
+                clip_end,
+                label_map,
+                min_overlap=min_overlap,
+                multi_label=multi_label,
+            )
+            all_labels.append(clip_labels)
+
+        labels_array = np.array(all_labels)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_format == "numpy":
+        np.save(output_file, labels_array)
+        label_map_file = output_path.with_suffix(".labels.csv")
+        with open(label_map_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv_lib.writer(f)
+            writer.writerow(["label", "index"])
+            for label, idx in sorted(label_map.items(), key=lambda x: x[1]):
+                writer.writerow([label, idx])
+    else:
+        header = ["clip_start", "clip_end"] + sorted(label_map.keys(), key=lambda x: label_map[x])
+        with open(output_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv_lib.writer(f)
+            writer.writerow(header)
+            for i, clip_labels in enumerate(labels_array):
+                clip_start = i * hop_length
+                clip_end = clip_start + clip_duration
+                row = [f"{clip_start:.3f}", f"{clip_end:.3f}"] + [int(v) for v in clip_labels]
+                writer.writerow(row)
 
     if not quiet:
         click.echo(f"Generated labels for {num_clips} clips")
+        click.echo(f"Labels: {', '.join(sorted(label_map.keys()))}")
+        click.echo(f"Output: {output_file}")
+
+
+@annotation.command("generate-frame-labels")
+@click.argument("annotation_file")
+@click.argument("output_file")
+@click.option("--frame-size", type=float, required=True, help="Frame size in seconds")
+@click.option(
+    "--hop-length",
+    type=float,
+    default=None,
+    help="Hop length between frames in seconds (default: same as frame size)",
+)
+@click.option(
+    "--audio-duration",
+    type=float,
+    default=None,
+    help="Total audio duration in seconds (inferred from bioamla metadata if omitted)",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["csv", "numpy"]),
+    default="csv",
+    help="Output format for labels",
+)
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def annotation_generate_frame_labels(
+    annotation_file: str,
+    output_file: str,
+    frame_size: float,
+    hop_length: float,
+    audio_duration: float,
+    output_format: str,
+    quiet: bool,
+) -> None:
+    """Generate frame-level multi-hot labels from annotations (for SED-style models)."""
+    import csv as csv_lib
+
+    import numpy as np
+
+    from bioamla.datasets import (
+        create_label_map,
+        generate_frame_labels,
+        get_unique_labels,
+    )
+
+    input_path = Path(annotation_file)
+
+    if not input_path.exists():
+        click.echo(f"Error: Annotation file not found: {annotation_file}")
+        raise SystemExit(1)
+
+    in_format = _detect_format(input_path)
+
+    try:
+        annotations, metadata = _load(input_path, in_format)
+
+        if not annotations:
+            click.echo("Error: No annotations found in file")
+            raise SystemExit(1)
+
+        # Fall back to the duration embedded in a bioamla file when not given.
+        if audio_duration is None:
+            if metadata.get("duration") is not None:
+                audio_duration = float(metadata["duration"])
+            else:
+                raise click.ClickException(
+                    "--audio-duration is required (no duration metadata in this file)"
+                )
+
+        if hop_length is None:
+            hop_length = frame_size
+
+        labels = get_unique_labels(annotations)
+        label_map = create_label_map(labels)
+
+        # Shape: (num_classes, num_frames).
+        frame_labels = generate_frame_labels(
+            annotations, audio_duration, frame_size, hop_length, label_map
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    num_classes, num_frames = frame_labels.shape
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_format == "numpy":
+        np.save(output_file, frame_labels)
+        label_map_file = output_path.with_suffix(".labels.csv")
+        with open(label_map_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv_lib.writer(f)
+            writer.writerow(["label", "index"])
+            for label, idx in sorted(label_map.items(), key=lambda x: x[1]):
+                writer.writerow([label, idx])
+    else:
+        ordered_labels = sorted(label_map.keys(), key=lambda x: label_map[x])
+        header = ["frame_start", "frame_end"] + ordered_labels
+        with open(output_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv_lib.writer(f)
+            writer.writerow(header)
+            for frame_idx in range(num_frames):
+                frame_start = frame_idx * hop_length
+                frame_end = frame_start + frame_size
+                # Transpose (num_classes, num_frames) -> per-frame multi-hot row.
+                row = [f"{frame_start:.3f}", f"{frame_end:.3f}"] + [
+                    int(frame_labels[c, frame_idx]) for c in range(num_classes)
+                ]
+                writer.writerow(row)
+
+    if not quiet:
+        click.echo(f"Generated frame labels: {num_classes} classes x {num_frames} frames")
         click.echo(f"Labels: {', '.join(sorted(label_map.keys()))}")
         click.echo(f"Output: {output_file}")

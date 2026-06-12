@@ -1,0 +1,64 @@
+site_name: bioamla
+site_description: A Python library and CLI for bioacoustics and machine-learning applications.
+repo_url: https://github.com/jmcmeen/bioamla
+repo_name: jmcmeen/bioamla
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+nav:
+  - Home: index.md
+  - CLI Reference: cli.md
+  - API Reference:
+      - audio: api/audio.md
+      - viz: api/viz.md
+      - indices: api/indices.md
+      - detect: api/detect.md
+      - cluster: api/cluster.md
+      - catalogs: api/catalogs.md
+      - datasets: api/datasets.md
+      - ml: api/ml.md
+      - batch: api/batch.md
+      - exceptions: api/exceptions.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_source: false
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+  - mkdocs-click
