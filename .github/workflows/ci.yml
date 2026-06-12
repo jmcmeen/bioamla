@@ -27,6 +27,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history + tags for hatch-vcs versioning
 
       - name: Install ffmpeg (audio I/O backend)
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
@@ -54,6 +56,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history + tags for hatch-vcs versioning
 
       - name: Install ffmpeg (audio I/O backend)
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
