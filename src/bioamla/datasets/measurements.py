@@ -73,12 +73,18 @@ ALL_METRICS = [
 # Pre-built membership sets, so the per-region ``_measure_*`` helpers test
 # ``requested & <group>`` without re-allocating a set on every call.
 _ALL_METRICS = frozenset(ALL_METRICS)
+_AMPLITUDE_METRICS = frozenset(AMPLITUDE_METRICS)
 _POWER_METRICS = frozenset(POWER_METRICS)
 _ENTROPY_METRICS = frozenset(ENTROPY_METRICS)
 _CONTOUR_METRICS = frozenset(CONTOUR_METRICS)
 # Frequency metrics derived from the (band-masked) Welch PSD.
 _PSD_METRICS = frozenset(FREQUENCY_METRICS) - {"bandwidth"}
+# Linear amplitude metrics; the dB ones are derived separately via get_amplitude_stats.
+_RMS_METRICS = frozenset({"rms", "crest_factor"})  # need the RMS value
 _AMPLITUDE_DB_METRICS = frozenset({"rms_db", "peak_db", "crest_factor_db", "dynamic_range"})
+# Metrics that consume the squared signal (instantaneous power); it is computed
+# once in compute_measurements and shared by the amplitude and power helpers.
+_SQUARED_METRICS = _RMS_METRICS | _POWER_METRICS
 
 
 def compute_measurements(
@@ -141,12 +147,16 @@ def compute_measurements(
     clip = audio_data[start_sample:end_sample, channel_idx]
     n = len(clip)
 
+    # Squared samples (instantaneous power) back both the amplitude RMS and the
+    # power metrics; compute once and share rather than re-squaring per helper.
+    squared = clip**2 if (n and requested & _SQUARED_METRICS) else None
+
     measurements: dict[str, float] = {}
 
     try:
         _measure_time(measurements, requested, annotation, clip, n, sample_rate)
-        _measure_amplitude(measurements, requested, clip, n)
-        _measure_power(measurements, requested, clip, n)
+        _measure_amplitude(measurements, requested, clip, squared, n)
+        _measure_power(measurements, requested, squared, n)
         _measure_frequency(measurements, requested, annotation, clip, n, sample_rate)
         _measure_entropy(measurements, requested, clip, n, sample_rate)
         _measure_contour(measurements, requested, annotation, clip, n, sample_rate)
@@ -205,20 +215,24 @@ def _measure_time(
         out["peak_time"] = float(int(np.argmax(np.abs(clip))) / sample_rate)
 
 
-def _measure_amplitude(out: dict[str, float], req: set[str], clip: np.ndarray, n: int) -> None:
-    if n == 0:
+def _measure_amplitude(
+    out: dict[str, float], req: set[str], clip: np.ndarray, squared: np.ndarray | None, n: int
+) -> None:
+    if n == 0 or not (req & _AMPLITUDE_METRICS):
         return
-    if "rms" in req:
-        out["rms"] = float(np.sqrt(np.mean(clip**2)))
+    # Peak feeds ``peak``/``crest_factor`` and the digital-silence guard below.
+    peak = float(np.max(np.abs(clip)))
     if "peak" in req:
-        out["peak"] = float(np.max(np.abs(clip)))
-    if "crest_factor" in req:
-        rms = np.sqrt(np.mean(clip**2))
-        peak = np.max(np.abs(clip))
-        out["crest_factor"] = float(peak / rms) if rms > 0 else 0.0
+        out["peak"] = peak
+    if req & _RMS_METRICS:  # ``squared`` is computed whenever these are requested
+        rms = float(np.sqrt(np.mean(squared)))
+        if "rms" in req:
+            out["rms"] = rms
+        if "crest_factor" in req:
+            out["crest_factor"] = float(peak / rms) if rms > 0 else 0.0
     # dB metrics are undefined for digital silence (dBFS -> -inf, dynamic_range
     # -> NaN), so omit them rather than emit non-finite values.
-    if req & _AMPLITUDE_DB_METRICS and np.max(np.abs(clip)) > 0:
+    if req & _AMPLITUDE_DB_METRICS and peak > 0:
         from bioamla.audio import get_amplitude_stats
 
         # NB: AmplitudeStats.crest_factor is the dB form (peak_db − rms_db); the
@@ -234,10 +248,11 @@ def _measure_amplitude(out: dict[str, float], req: set[str], clip: np.ndarray, n
             out["dynamic_range"] = stats.dynamic_range
 
 
-def _measure_power(out: dict[str, float], req: set[str], clip: np.ndarray, n: int) -> None:
+def _measure_power(
+    out: dict[str, float], req: set[str], squared: np.ndarray | None, n: int
+) -> None:
     if n == 0 or not (req & _POWER_METRICS):
         return
-    squared = clip**2
     if "avg_power" in req:
         out["avg_power"] = float(np.mean(squared))
     if "max_power" in req:
@@ -342,11 +357,10 @@ def _measure_contour(
         out["pfc_start"] = float(peak_freqs[0])
     if "pfc_end" in req:
         out["pfc_end"] = float(peak_freqs[-1])
-    if "pfc_slope" in req:
-        if len(peak_freqs) >= 2 and (times[-1] - times[0]) > 0:
-            out["pfc_slope"] = float(np.polyfit(times, peak_freqs, 1)[0])
-        else:
-            out["pfc_slope"] = 0.0
+    # Slope needs ≥2 frames spanning a non-zero time range; otherwise it's
+    # undefined, so omit it rather than emit a misleading 0.0 sentinel.
+    if "pfc_slope" in req and len(peak_freqs) >= 2 and (times[-1] - times[0]) > 0:
+        out["pfc_slope"] = float(np.polyfit(times, peak_freqs, 1)[0])
 
 
 def _percentile_freq(freqs: np.ndarray, cumsum: np.ndarray, fraction: float) -> float:
@@ -368,7 +382,8 @@ def _peak_freq_contour(
     """Per-frame peak-frequency track of the clip (band-limited when bounds set).
 
     Returns ``(frame_times, peak_freqs)`` over frames with non-zero energy, or
-    ``None`` if the clip is too short to frame or has no signal.
+    ``None`` if the clip is too short to frame, the band selects no STFT bins, or
+    there is no signal.
     """
     n = len(clip)
     if n < 32:
@@ -384,9 +399,11 @@ def _peak_freq_contour(
 
     if low_freq is not None and high_freq is not None:
         mask = (freqs >= low_freq) & (freqs <= high_freq)
-        if np.any(mask):
-            freqs = freqs[mask]
-            mag = mag[mask, :]
+        if not np.any(mask):
+            # Band falls entirely outside the STFT range -> strictly uncomputable.
+            return None
+        freqs = freqs[mask]
+        mag = mag[mask, :]
 
     # Drop silent frames so the contour reflects the signal, not the noise floor.
     keep = mag.max(axis=0) > 0

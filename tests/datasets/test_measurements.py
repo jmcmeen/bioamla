@@ -236,3 +236,33 @@ class TestExpandedMetrics:
         m = compute_measurements(ann, chirp_audio_path, metrics=["pfc_mean", "rms"])
         assert "pfc_mean" not in m
         assert "rms" in m  # other metrics still computed
+
+    def test_freq_and_contour_omitted_when_band_out_of_range(self, chirp_audio_path: str) -> None:
+        # A band entirely above Nyquist selects no PSD/STFT bins -> the PSD- and
+        # contour-derived metrics are omitted (not NaN, no crash).
+        ann = _ann(low_freq=9000.0, high_freq=12000.0)  # Nyquist is 8 kHz
+        metrics = ["centroid", "peak_frequency", "freq_q1", "pfc_mean", "rms"]
+        m = compute_measurements(ann, chirp_audio_path, metrics=metrics)
+        for key in ("centroid", "peak_frequency", "freq_q1", "pfc_mean"):
+            assert key not in m
+        assert "rms" in m  # band-independent metrics still computed
+
+    def test_zero_length_region_omits_non_duration_metrics(self, chirp_audio_path: str) -> None:
+        # start_time == end_time -> empty clip; exercises the n == 0 guards across
+        # every metric group. Only duration (annotation-derived) is reported.
+        ann = _ann(start_time=0.2, end_time=0.2)
+        metrics = [
+            "duration",  # time (annotation-derived)
+            "zero_crossing_rate",  # time (clip-derived)
+            "rms",  # amplitude
+            "rms_db",  # amplitude (dB)
+            "avg_power",  # power
+            "centroid",  # frequency
+            "spectral_entropy",  # entropy
+            "pfc_mean",  # contour
+        ]
+        m = compute_measurements(ann, chirp_audio_path, metrics=metrics)
+        assert m["duration"] == 0.0
+        for key in metrics:
+            if key != "duration":
+                assert key not in m
