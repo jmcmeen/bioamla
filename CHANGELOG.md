@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-24
+
 ### Added
 
 - **Expanded acoustic measurements** — `datasets.compute_measurements` now spans the time,
