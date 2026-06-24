@@ -36,10 +36,11 @@ Two conventions matter for consumers:
 - **Errors are exceptions.** Functions return plain data and raise from a single hierarchy
   rooted at `bioamla.exceptions.BioamlaError` (e.g. `AudioLoadError`, `InvalidInputError`,
   `DependencyError`). Catch the base class to handle everything.
-- **Batteries included.** A single `pip install bioamla` installs the full runtime stack —
-  audio/signal/indices/detect/viz, the PyTorch + AST ML stack, clustering, and playback. Heavy
-  imports are still **lazy**, so `import bioamla` and `bioamla --help` stay fast and don't load
-  torch until you actually call a feature that needs it.
+- **Batteries included.** A single `pip install bioamla` installs the full analysis/ML runtime
+  stack — audio/signal/indices/detect/viz, the PyTorch + AST ML stack, clustering, and playback.
+  Heavy imports are still **lazy**, so `import bioamla` and `bioamla --help` stay fast and don't
+  load torch until you actually call a feature that needs it. The command-line interface lives in
+  a thin `[cli]` extra (`pip install bioamla[cli]`) — the library never imports it.
 
 ## Install
 
@@ -48,10 +49,14 @@ Requires Python ≥ 3.10. Install into a **virtual environment** so bioamla's de
 
 ```bash
 python -m venv .venv && source .venv/bin/activate    # or: uv venv / conda create -n bioamla
-pip install bioamla                 # the full library + CLI
+pip install bioamla                 # the full analysis/ML library
 
-pip install "bioamla[dev]"          # + contributor tooling (pytest, ruff, mkdocs)
+pip install "bioamla[cli]"          # + the `bioamla` command-line interface
+pip install "bioamla[dev]"          # + contributor tooling (pytest, ruff, mkdocs; includes [cli])
 ```
+
+The `bioamla` console command needs the `[cli]` extra; on a library-only install it prints an
+install hint pointing you to `pip install bioamla[cli]`.
 
 ### System dependencies
 

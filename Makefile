@@ -23,7 +23,7 @@ help: ## Show this help
 install: ## Create venv and install the project with dev tooling
 	$(UV) sync --extra dev
 
-dev: ## Install the full stack + dev tooling (runtime deps are all in base)
+dev: ## Install the full stack + dev tooling (dev includes the [cli] extra)
 	$(UV) sync --extra dev
 
 sync: ## Sync the environment to the lockfile (incl. dev tooling)
