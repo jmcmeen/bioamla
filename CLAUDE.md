@@ -31,10 +31,15 @@ clustering, species catalogs, dataset tooling, and AST-based ML inference.
    `bioamla/__init__.py`); heavy third-party deps (torch, librosa, umap, hdbscan,
    sounddevice, transformers) are **imported inside the functions that use them**, never at
    module top level of an eagerly-imported module. Keep `bioamla --help` snappy.
-4. **Batteries included, but lazy.** A single `pip install bioamla` installs the full runtime
-   stack (it's all in `[project.dependencies]` — there are no runtime extras; only `[dev]`).
-   `DependencyError` is therefore reserved for genuine environment breakage (missing system
-   lib like ffmpeg, broken install), not for "optional package not installed."
+4. **Batteries included, but lazy.** A single `pip install bioamla` installs the full
+   analysis/ML runtime stack (numpy, scipy, librosa, torch, transformers, … — all in
+   `[project.dependencies]`). `DependencyError` is therefore reserved for genuine environment
+   breakage (missing system lib like ffmpeg, broken install), not for "optional package not
+   installed." The **only** runtime extra is `[cli]` (`click`, `rich`): the *library* never
+   imports them, just the `bioamla` console command, so the CLI is installed with
+   `pip install bioamla[cli]`. The console script entry point is the dependency-light shim
+   `bioamla/_cli_entry.py`, which prints an install hint (instead of a raw `ModuleNotFoundError`)
+   when run without the extra. `[dev]` pulls in `[cli]` so the test suite can exercise the CLI.
 5. **The public surface of a domain is its `__init__.py`.** Re-export the intended API there
    with an explicit `__all__`. Internal-only modules are prefixed `_` (e.g. `_models.py`,
    `_io.py`, `_metadata.py`).

@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-24
+
+### Added
+
+- **Expanded acoustic measurements** — `datasets.compute_measurements` now spans the time,
+  amplitude, power, frequency, and entropy domains plus a summarized peak-frequency contour
+  (~24 new metrics: `zero_crossing_rate`, `peak_time`, `rms_db`/`peak_db`/`crest_factor_db`/
+  `dynamic_range`, `avg_power`/`max_power`/`energy`, `peak_frequency`, frequency
+  quartiles/percentiles (`freq_q1`/`freq_q3`/`freq_5`/`freq_95`) and `bandwidth_90`/
+  `bandwidth_iqr`, `spectral_entropy`/`temporal_entropy`, and `pfc_*` contour summaries). New
+  frequency metrics honour each annotation's `low_freq`/`high_freq` band, matching the existing
+  `centroid`/`rolloff`. Pass `metrics="all"` for the full set; `ALL_METRICS` and the unchanged
+  `DEFAULT_METRICS` are exported from `bioamla.datasets`. Uncomputable metrics are omitted, not
+  emitted as `NaN`.
+
+### Changed
+
+- **CLI dependencies are now an optional `[cli]` extra.** `click` and `rich` moved out of the
+  base install into `pip install bioamla[cli]`; the library itself never imports them. The
+  `bioamla` console command now prints an install hint instead of a raw `ModuleNotFoundError`
+  when the extra is absent. `[dev]` includes `[cli]`, so contributor installs are unchanged.
+
 ## [0.2.0] - 2026-06-12
 
 A ground-up rebuild. `bioamla` is now a flat, **domain-oriented** library with a thin CLI,

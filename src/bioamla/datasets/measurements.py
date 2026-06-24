@@ -1,44 +1,134 @@
-"""Compute acoustic measurements for an annotated audio region."""
+"""Compute acoustic measurements for an annotated audio region.
+
+Measurements span five domains — **time**, **amplitude**, **power**,
+**frequency**, and **entropy** — plus a summarized **peak-frequency contour**.
+Each metric is a single scalar so the result is a flat ``dict[str, float]`` that
+merges cleanly into a measurements CSV/Parquet table (one column per metric).
+
+Frequency-domain metrics are computed from a single Welch PSD that is restricted
+to the annotation's ``low_freq``/``high_freq`` box when both bounds are set
+(matching ``centroid``/``rolloff`` behaviour); the per-frame peak-frequency
+contour honours the same band. Amplitude (dB) and entropy metrics reuse the
+domain primitives in :mod:`bioamla.audio` and :mod:`bioamla.indices`.
+
+Metrics that cannot be computed for a given region (e.g. a frequency metric when
+the PSD is empty, or the contour for a clip too short to frame) are **omitted**
+from the result rather than emitted as ``NaN``.
+"""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
+import numpy as np
+
 from bioamla.datasets.annotations import Annotation
 from bioamla.exceptions import AnnotationError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
+# Backward-compatible default set — kept byte-identical: existing callers and
+# tests rely on exactly these five metrics being returned when ``metrics`` is None.
 DEFAULT_METRICS = ["duration", "bandwidth", "rms", "peak", "centroid"]
+
+# Full metric vocabulary, grouped by domain. ``metrics="all"`` expands to ALL_METRICS.
+TIME_METRICS = ["duration", "zero_crossing_rate", "peak_time"]
+AMPLITUDE_METRICS = [
+    "rms",
+    "peak",
+    "crest_factor",
+    "rms_db",
+    "peak_db",
+    "crest_factor_db",
+    "dynamic_range",
+]
+POWER_METRICS = ["avg_power", "max_power", "energy"]
+FREQUENCY_METRICS = [
+    "bandwidth",
+    "centroid",
+    "bandwidth_spectral",
+    "rolloff",
+    "peak_frequency",
+    "freq_q1",
+    "freq_q3",
+    "freq_5",
+    "freq_95",
+    "bandwidth_90",
+    "bandwidth_iqr",
+]
+ENTROPY_METRICS = ["spectral_entropy", "temporal_entropy"]
+CONTOUR_METRICS = ["pfc_min", "pfc_max", "pfc_mean", "pfc_start", "pfc_end", "pfc_slope"]
+
+# Every supported metric, in a stable, domain-grouped order.
+ALL_METRICS = [
+    *TIME_METRICS,
+    *AMPLITUDE_METRICS,
+    *POWER_METRICS,
+    *FREQUENCY_METRICS,
+    *ENTROPY_METRICS,
+    *CONTOUR_METRICS,
+]
+
+# Pre-built membership sets, so the per-region ``_measure_*`` helpers test
+# ``requested & <group>`` without re-allocating a set on every call.
+_ALL_METRICS = frozenset(ALL_METRICS)
+_AMPLITUDE_METRICS = frozenset(AMPLITUDE_METRICS)
+_POWER_METRICS = frozenset(POWER_METRICS)
+_ENTROPY_METRICS = frozenset(ENTROPY_METRICS)
+_CONTOUR_METRICS = frozenset(CONTOUR_METRICS)
+# Frequency metrics derived from the (band-masked) Welch PSD.
+_PSD_METRICS = frozenset(FREQUENCY_METRICS) - {"bandwidth"}
+# Linear amplitude metrics; the dB ones are derived separately via get_amplitude_stats.
+_RMS_METRICS = frozenset({"rms", "crest_factor"})  # need the RMS value
+_AMPLITUDE_DB_METRICS = frozenset({"rms_db", "peak_db", "crest_factor_db", "dynamic_range"})
+# Metrics that consume the squared signal (instantaneous power); it is computed
+# once in compute_measurements and shared by the amplitude and power helpers.
+_SQUARED_METRICS = _RMS_METRICS | _POWER_METRICS
 
 
 def compute_measurements(
     annotation: Annotation,
     audio_path: str,
-    metrics: list[str] | None = None,
+    metrics: list[str] | str | None = None,
 ) -> dict[str, float]:
     """Compute acoustic measurements for one annotation region.
 
     Args:
         annotation: The annotation to measure.
         audio_path: Path to the source audio file.
-        metrics: Metrics to compute. If None, uses :data:`DEFAULT_METRICS`.
-            Supported: duration, bandwidth, rms, peak, crest_factor, centroid,
-            bandwidth_spectral, rolloff.
+        metrics: Metrics to compute. ``None`` uses :data:`DEFAULT_METRICS`; the
+            string ``"all"`` expands to :data:`ALL_METRICS`; otherwise pass a list
+            of metric names. Supported names, grouped by domain:
+
+            * **time**: ``duration``, ``zero_crossing_rate`` (crossings per
+              sample, 0–1), ``peak_time`` (s from region start)
+            * **amplitude**: ``rms``, ``peak`` (linear), ``crest_factor``
+              (linear peak/rms), ``rms_db``, ``peak_db`` (dBFS),
+              ``crest_factor_db`` (dB), ``dynamic_range`` (dB)
+            * **power**: ``avg_power``, ``max_power``, ``energy`` (Σ x²)
+            * **frequency** (band-limited Welch PSD): ``bandwidth`` (annotation
+              box width), ``centroid``, ``bandwidth_spectral``, ``rolloff``
+              (85%), ``peak_frequency``, ``freq_q1``/``freq_q3`` (25/75%),
+              ``freq_5``/``freq_95`` (5/95%), ``bandwidth_90`` (95−5%),
+              ``bandwidth_iqr`` (75−25%)
+            * **entropy**: ``spectral_entropy``, ``temporal_entropy``
+            * **peak-frequency contour**: ``pfc_min``, ``pfc_max``, ``pfc_mean``,
+              ``pfc_start``, ``pfc_end``, ``pfc_slope`` (Hz/s)
 
     Returns:
-        Dict mapping metric name to value.
+        Dict mapping metric name to value. Metrics that cannot be computed for
+        the region are omitted.
 
     Raises:
         NotFoundError: If the audio file doesn't exist.
-        AnnotationError: If the audio cannot be loaded or measured.
+        AnnotationError: If ``metrics`` is malformed, or the audio cannot be
+            loaded or measured.
     """
     if not Path(audio_path).exists():
         raise NotFoundError(f"Audio file not found: {audio_path}")
 
-    import numpy as np
-    from scipy import signal as scipy_signal
+    requested = _resolve_metrics(metrics)
 
     from bioamla.audio import load_audio
 
@@ -55,54 +145,272 @@ def compute_measurements(
 
     channel_idx = min(annotation.channel - 1, audio_data.shape[1] - 1)
     clip = audio_data[start_sample:end_sample, channel_idx]
+    n = len(clip)
 
-    if metrics is None:
-        metrics = list(DEFAULT_METRICS)
+    # Squared samples (instantaneous power) back both the amplitude RMS and the
+    # power metrics; compute once and share rather than re-squaring per helper.
+    squared = clip**2 if (n and requested & _SQUARED_METRICS) else None
 
     measurements: dict[str, float] = {}
 
     try:
-        if "duration" in metrics:
-            measurements["duration"] = annotation.duration
-
-        if "bandwidth" in metrics and annotation.bandwidth is not None:
-            measurements["bandwidth"] = annotation.bandwidth
-
-        if "rms" in metrics:
-            measurements["rms"] = float(np.sqrt(np.mean(clip**2)))
-
-        if "peak" in metrics:
-            measurements["peak"] = float(np.max(np.abs(clip)))
-
-        if "crest_factor" in metrics:
-            rms = np.sqrt(np.mean(clip**2))
-            peak = np.max(np.abs(clip))
-            measurements["crest_factor"] = float(peak / rms) if rms > 0 else 0.0
-
-        if any(m in metrics for m in ["centroid", "bandwidth_spectral", "rolloff"]):
-            n_fft = min(2048, len(clip))
-            freqs, psd = scipy_signal.welch(clip, sample_rate, nperseg=n_fft)
-
-            if annotation.low_freq is not None and annotation.high_freq is not None:
-                mask = (freqs >= annotation.low_freq) & (freqs <= annotation.high_freq)
-                freqs = freqs[mask]
-                psd = psd[mask]
-
-            if len(psd) > 0 and np.sum(psd) > 0:
-                if "centroid" in metrics:
-                    measurements["centroid"] = float(np.sum(freqs * psd) / np.sum(psd))
-
-                if "bandwidth_spectral" in metrics:
-                    centroid = np.sum(freqs * psd) / np.sum(psd)
-                    measurements["bandwidth_spectral"] = float(
-                        np.sqrt(np.sum((freqs - centroid) ** 2 * psd) / np.sum(psd))
-                    )
-
-                if "rolloff" in metrics:
-                    cumsum = np.cumsum(psd)
-                    rolloff_idx = np.searchsorted(cumsum, 0.85 * cumsum[-1])
-                    measurements["rolloff"] = float(freqs[min(rolloff_idx, len(freqs) - 1)])
+        _measure_time(measurements, requested, annotation, clip, n, sample_rate)
+        _measure_amplitude(measurements, requested, clip, squared, n)
+        _measure_power(measurements, requested, squared, n)
+        _measure_frequency(measurements, requested, annotation, clip, n, sample_rate)
+        _measure_entropy(measurements, requested, clip, n, sample_rate)
+        _measure_contour(measurements, requested, annotation, clip, n, sample_rate)
     except Exception as e:
         raise AnnotationError(f"Failed to compute measurements: {e}") from e
 
     return measurements
+
+
+def _resolve_metrics(metrics: list[str] | str | None) -> set[str]:
+    """Normalize and validate the ``metrics`` argument into a set of metric names.
+
+    Raises:
+        AnnotationError: If ``metrics`` is a string other than ``"all"``, or a list
+            containing names that aren't in :data:`ALL_METRICS` (so typos fail fast
+            rather than being silently dropped).
+    """
+    if metrics is None:
+        return set(DEFAULT_METRICS)
+    if isinstance(metrics, str):
+        if metrics == "all":
+            return set(ALL_METRICS)
+        raise AnnotationError(
+            f"metrics must be a list of names or the string 'all', got {metrics!r}"
+        )
+
+    resolved = set(metrics)
+    unknown = resolved - _ALL_METRICS
+    if unknown:
+        raise AnnotationError(
+            f"Unknown metric name(s): {sorted(unknown)}. "
+            f"Choose from {ALL_METRICS} or pass metrics='all'."
+        )
+    return resolved
+
+
+def _measure_time(
+    out: dict[str, float],
+    req: set[str],
+    annotation: Annotation,
+    clip: np.ndarray,
+    n: int,
+    sample_rate: int,
+) -> None:
+    if "duration" in req:
+        out["duration"] = annotation.duration
+    if n == 0:
+        return
+    if "zero_crossing_rate" in req:
+        if n > 1:
+            crossings = int(np.count_nonzero(np.diff(np.signbit(clip))))
+            out["zero_crossing_rate"] = float(crossings / (n - 1))
+        else:
+            out["zero_crossing_rate"] = 0.0
+    if "peak_time" in req:
+        out["peak_time"] = float(int(np.argmax(np.abs(clip))) / sample_rate)
+
+
+def _measure_amplitude(
+    out: dict[str, float], req: set[str], clip: np.ndarray, squared: np.ndarray | None, n: int
+) -> None:
+    if n == 0 or not (req & _AMPLITUDE_METRICS):
+        return
+    # Peak feeds ``peak``/``crest_factor`` and the digital-silence guard below.
+    peak = float(np.max(np.abs(clip)))
+    if "peak" in req:
+        out["peak"] = peak
+    if req & _RMS_METRICS:  # ``squared`` is computed whenever these are requested
+        rms = float(np.sqrt(np.mean(squared)))
+        if "rms" in req:
+            out["rms"] = rms
+        if "crest_factor" in req:
+            out["crest_factor"] = float(peak / rms) if rms > 0 else 0.0
+    # dB metrics are undefined for digital silence (dBFS -> -inf, dynamic_range
+    # -> NaN), so omit them rather than emit non-finite values.
+    if req & _AMPLITUDE_DB_METRICS and peak > 0:
+        from bioamla.audio import get_amplitude_stats
+
+        # NB: AmplitudeStats.crest_factor is the dB form (peak_db − rms_db); the
+        # linear ``crest_factor`` above is a distinct metric, kept for compat.
+        stats = get_amplitude_stats(clip)
+        if "rms_db" in req:
+            out["rms_db"] = stats.rms_db
+        if "peak_db" in req:
+            out["peak_db"] = stats.peak_db
+        if "crest_factor_db" in req:
+            out["crest_factor_db"] = stats.crest_factor
+        if "dynamic_range" in req:
+            out["dynamic_range"] = stats.dynamic_range
+
+
+def _measure_power(
+    out: dict[str, float], req: set[str], squared: np.ndarray | None, n: int
+) -> None:
+    if n == 0 or not (req & _POWER_METRICS):
+        return
+    if "avg_power" in req:
+        out["avg_power"] = float(np.mean(squared))
+    if "max_power" in req:
+        out["max_power"] = float(np.max(squared))
+    if "energy" in req:
+        out["energy"] = float(np.sum(squared))
+
+
+def _measure_frequency(
+    out: dict[str, float],
+    req: set[str],
+    annotation: Annotation,
+    clip: np.ndarray,
+    n: int,
+    sample_rate: int,
+) -> None:
+    if "bandwidth" in req and annotation.bandwidth is not None:
+        out["bandwidth"] = annotation.bandwidth
+
+    if n == 0 or not (req & _PSD_METRICS):
+        return
+
+    from scipy import signal as scipy_signal
+
+    n_fft = min(2048, n)
+    freqs, psd = scipy_signal.welch(clip, sample_rate, nperseg=n_fft)
+
+    if annotation.low_freq is not None and annotation.high_freq is not None:
+        mask = (freqs >= annotation.low_freq) & (freqs <= annotation.high_freq)
+        freqs = freqs[mask]
+        psd = psd[mask]
+
+    if len(psd) == 0 or np.sum(psd) <= 0:
+        return
+
+    total = float(np.sum(psd))
+    cumsum = np.cumsum(psd)
+
+    if "peak_frequency" in req:
+        out["peak_frequency"] = float(freqs[int(np.argmax(psd))])
+    if "centroid" in req:
+        out["centroid"] = float(np.sum(freqs * psd) / total)
+    if "bandwidth_spectral" in req:
+        centroid = np.sum(freqs * psd) / total
+        out["bandwidth_spectral"] = float(np.sqrt(np.sum((freqs - centroid) ** 2 * psd) / total))
+    if "rolloff" in req:
+        out["rolloff"] = _percentile_freq(freqs, cumsum, 0.85)
+    if "freq_q1" in req:
+        out["freq_q1"] = _percentile_freq(freqs, cumsum, 0.25)
+    if "freq_q3" in req:
+        out["freq_q3"] = _percentile_freq(freqs, cumsum, 0.75)
+    if "freq_5" in req:
+        out["freq_5"] = _percentile_freq(freqs, cumsum, 0.05)
+    if "freq_95" in req:
+        out["freq_95"] = _percentile_freq(freqs, cumsum, 0.95)
+    if "bandwidth_90" in req:
+        out["bandwidth_90"] = _percentile_freq(freqs, cumsum, 0.95) - _percentile_freq(
+            freqs, cumsum, 0.05
+        )
+    if "bandwidth_iqr" in req:
+        out["bandwidth_iqr"] = _percentile_freq(freqs, cumsum, 0.75) - _percentile_freq(
+            freqs, cumsum, 0.25
+        )
+
+
+def _measure_entropy(
+    out: dict[str, float], req: set[str], clip: np.ndarray, n: int, sample_rate: int
+) -> None:
+    if n == 0 or not (req & _ENTROPY_METRICS):
+        return
+    from bioamla.indices import spectral_entropy, temporal_entropy
+
+    if "spectral_entropy" in req:
+        out["spectral_entropy"] = spectral_entropy(clip, sample_rate)
+    if "temporal_entropy" in req:
+        out["temporal_entropy"] = temporal_entropy(clip, sample_rate)
+
+
+def _measure_contour(
+    out: dict[str, float],
+    req: set[str],
+    annotation: Annotation,
+    clip: np.ndarray,
+    n: int,
+    sample_rate: int,
+) -> None:
+    if n == 0 or not (req & _CONTOUR_METRICS):
+        return
+
+    contour = _peak_freq_contour(clip, sample_rate, annotation.low_freq, annotation.high_freq)
+    if contour is None:
+        return
+    times, peak_freqs = contour
+
+    if "pfc_min" in req:
+        out["pfc_min"] = float(np.min(peak_freqs))
+    if "pfc_max" in req:
+        out["pfc_max"] = float(np.max(peak_freqs))
+    if "pfc_mean" in req:
+        out["pfc_mean"] = float(np.mean(peak_freqs))
+    if "pfc_start" in req:
+        out["pfc_start"] = float(peak_freqs[0])
+    if "pfc_end" in req:
+        out["pfc_end"] = float(peak_freqs[-1])
+    # Slope needs ≥2 frames spanning a non-zero time range; otherwise it's
+    # undefined, so omit it rather than emit a misleading 0.0 sentinel.
+    if "pfc_slope" in req and len(peak_freqs) >= 2 and (times[-1] - times[0]) > 0:
+        out["pfc_slope"] = float(np.polyfit(times, peak_freqs, 1)[0])
+
+
+def _percentile_freq(freqs: np.ndarray, cumsum: np.ndarray, fraction: float) -> float:
+    """Frequency below which ``fraction`` of the cumulative PSD energy lies.
+
+    Keyed off ``cumsum[-1]`` (the sequential running total) so ``rolloff`` stays
+    bit-identical to its pre-expansion definition.
+    """
+    idx = int(np.searchsorted(cumsum, fraction * cumsum[-1]))
+    return float(freqs[min(idx, len(freqs) - 1)])
+
+
+def _peak_freq_contour(
+    clip: np.ndarray,
+    sample_rate: int,
+    low_freq: float | None,
+    high_freq: float | None,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Per-frame peak-frequency track of the clip (band-limited when bounds set).
+
+    Returns ``(frame_times, peak_freqs)`` over frames with non-zero energy, or
+    ``None`` if the clip is too short to frame, the band selects no STFT bins, or
+    there is no signal.
+    """
+    n = len(clip)
+    if n < 32:
+        return None
+
+    from scipy import signal as scipy_signal
+
+    nperseg = min(256, n)
+    freqs, times, zxx = scipy_signal.stft(
+        clip, fs=sample_rate, nperseg=nperseg, noverlap=nperseg // 2
+    )
+    mag = np.abs(zxx)
+
+    if low_freq is not None and high_freq is not None:
+        mask = (freqs >= low_freq) & (freqs <= high_freq)
+        if not np.any(mask):
+            # Band falls entirely outside the STFT range -> strictly uncomputable.
+            return None
+        freqs = freqs[mask]
+        mag = mag[mask, :]
+
+    # Drop silent frames so the contour reflects the signal, not the noise floor.
+    keep = mag.max(axis=0) > 0
+    if not np.any(keep):
+        return None
+
+    mag = mag[:, keep]
+    frame_times = times[keep]
+    peak_freqs = freqs[np.argmax(mag, axis=0)]
+    return frame_times, peak_freqs
