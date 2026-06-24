@@ -74,7 +74,11 @@ from bioamla.datasets.manifest import (
     save_dataset_manifest,
     write_dataset_card,
 )
-from bioamla.datasets.measurements import compute_measurements
+from bioamla.datasets.measurements import (
+    ALL_METRICS,
+    DEFAULT_METRICS,
+    compute_measurements,
+)
 from bioamla.datasets.merge import find_species_name, merge_datasets
 from bioamla.datasets.partition import partition_dataset
 from bioamla.datasets.stats import get_dataset_stats
@@ -120,6 +124,8 @@ __all__ = [
     "extract_audio_clips",
     "extract_labeled_dataset",
     "compute_measurements",
+    "DEFAULT_METRICS",
+    "ALL_METRICS",
     # Dataset operations
     "merge_datasets",
     "find_species_name",
