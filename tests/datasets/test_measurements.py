@@ -128,6 +128,11 @@ class TestExpandedMetrics:
         with pytest.raises(AnnotationError, match="metrics must be a list"):
             compute_measurements(_ann(), chirp_audio_path, metrics="rms")  # not a list, not "all"
 
+    def test_unknown_metric_name_raises(self, chirp_audio_path: str) -> None:
+        # Typos fail fast instead of being silently dropped.
+        with pytest.raises(AnnotationError, match="Unknown metric name"):
+            compute_measurements(_ann(), chirp_audio_path, metrics=["rms", "centorid"])
+
     def test_time_domain(self, chirp_audio_path: str) -> None:
         m = compute_measurements(
             _ann(), chirp_audio_path, metrics=["zero_crossing_rate", "peak_time"]

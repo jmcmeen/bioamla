@@ -70,6 +70,12 @@ ALL_METRICS = [
     *CONTOUR_METRICS,
 ]
 
+# Pre-built membership sets, so the per-region ``_measure_*`` helpers test
+# ``requested & <group>`` without re-allocating a set on every call.
+_ALL_METRICS = frozenset(ALL_METRICS)
+_POWER_METRICS = frozenset(POWER_METRICS)
+_ENTROPY_METRICS = frozenset(ENTROPY_METRICS)
+_CONTOUR_METRICS = frozenset(CONTOUR_METRICS)
 # Frequency metrics derived from the (band-masked) Welch PSD.
 _PSD_METRICS = frozenset(FREQUENCY_METRICS) - {"bandwidth"}
 _AMPLITUDE_DB_METRICS = frozenset({"rms_db", "peak_db", "crest_factor_db", "dynamic_range"})
@@ -151,7 +157,13 @@ def compute_measurements(
 
 
 def _resolve_metrics(metrics: list[str] | str | None) -> set[str]:
-    """Normalize the ``metrics`` argument into a set of metric names."""
+    """Normalize and validate the ``metrics`` argument into a set of metric names.
+
+    Raises:
+        AnnotationError: If ``metrics`` is a string other than ``"all"``, or a list
+            containing names that aren't in :data:`ALL_METRICS` (so typos fail fast
+            rather than being silently dropped).
+    """
     if metrics is None:
         return set(DEFAULT_METRICS)
     if isinstance(metrics, str):
@@ -160,7 +172,15 @@ def _resolve_metrics(metrics: list[str] | str | None) -> set[str]:
         raise AnnotationError(
             f"metrics must be a list of names or the string 'all', got {metrics!r}"
         )
-    return set(metrics)
+
+    resolved = set(metrics)
+    unknown = resolved - _ALL_METRICS
+    if unknown:
+        raise AnnotationError(
+            f"Unknown metric name(s): {sorted(unknown)}. "
+            f"Choose from {ALL_METRICS} or pass metrics='all'."
+        )
+    return resolved
 
 
 def _measure_time(
@@ -215,7 +235,7 @@ def _measure_amplitude(out: dict[str, float], req: set[str], clip: np.ndarray, n
 
 
 def _measure_power(out: dict[str, float], req: set[str], clip: np.ndarray, n: int) -> None:
-    if n == 0 or not (req & set(POWER_METRICS)):
+    if n == 0 or not (req & _POWER_METRICS):
         return
     squared = clip**2
     if "avg_power" in req:
@@ -286,7 +306,7 @@ def _measure_frequency(
 def _measure_entropy(
     out: dict[str, float], req: set[str], clip: np.ndarray, n: int, sample_rate: int
 ) -> None:
-    if n == 0 or not (req & set(ENTROPY_METRICS)):
+    if n == 0 or not (req & _ENTROPY_METRICS):
         return
     from bioamla.indices import spectral_entropy, temporal_entropy
 
@@ -304,7 +324,7 @@ def _measure_contour(
     n: int,
     sample_rate: int,
 ) -> None:
-    if n == 0 or not (req & set(CONTOUR_METRICS)):
+    if n == 0 or not (req & _CONTOUR_METRICS):
         return
 
     contour = _peak_freq_contour(clip, sample_rate, annotation.low_freq, annotation.high_freq)
