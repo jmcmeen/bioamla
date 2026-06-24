@@ -30,8 +30,6 @@ classifiers = [
 ]
 
 dependencies = [
-  "click",
-  "rich",
   "tomli>=2.0; python_version < '3.11'",
   "python-dotenv>=1.0",
   "numpy",
@@ -62,10 +60,18 @@ dependencies = [
 ]
 
 [project.scripts]
-bioamla = "bioamla.cli.cli:main"
+bioamla = "bioamla._cli_entry:main"
 
 [project.optional-dependencies]
+# The command-line interface. The library itself (`import bioamla`) does not need
+# these — only the `bioamla` console command does. Install with
+# `pip install bioamla[cli]` to get the CLI.
+cli = [
+  "click",
+  "rich",
+]
 dev = [
+  "bioamla[cli]",  # the test suite exercises the CLI, so dev pulls in the cli extra
   "pytest>=7.0",
   "pytest-cov",
   "pytest-mock",
