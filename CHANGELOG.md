@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-28
+
+- **CLI update**: Updated --version cli to show a ascii-art banner
+
 ## [0.2.1] - 2026-06-24
 
 ### Added
