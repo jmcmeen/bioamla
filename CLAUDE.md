@@ -152,3 +152,14 @@ When working here, reach for these (invoke with `/<name>`):
 - **`/security-review`** — for changes touching `catalogs`/`http`/credential handling or file
   writes.
 - **`/init`** — only to regenerate this doc wholesale; prefer editing in place.
+- **`/deep-research`** — multi-source, adversarially verified research report. Reach for this
+  before adding a new detection algorithm, acoustic index, or ML model — compare literature,
+  evaluate alternatives (e.g. BirdNET vs PANNs vs AST), or explore catalog API capabilities.
+- **`/review`** — review a GitHub PR. Distinct from `/code-review` (which reviews the working
+  diff); use this at the dev-* → main merge boundary.
+- **`/claude-api`** — Claude API / Anthropic SDK reference. Auto-triggers on LLM-shaped tasks
+  in the `ml` or `catalogs` packages; also useful when designing embedding-based or
+  LLM-augmented features.
+- **`/fewer-permission-prompts`** (periodic) — scans transcripts to find un-allowlisted tool
+  calls and adds them to `.claude/settings.local.json`. Run after significant changes to the
+  test suite or CI workflow to keep prompt fatigue low.
