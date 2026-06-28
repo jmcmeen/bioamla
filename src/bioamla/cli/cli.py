@@ -22,9 +22,34 @@ from .commands import (
     util,
 )
 
+_BANNER = r"""
+██████╗ ██╗ ██████╗  █████╗ ███╗   ███╗██╗      █████╗
+██╔══██╗██║██╔═══██╗██╔══██╗████╗ ████║██║     ██╔══██╗
+██████╔╝██║██║   ██║███████║██╔████╔██║██║     ███████║
+██╔══██╗██║██║   ██║██╔══██║██║╚██╔╝██║██║     ██╔══██║
+██████╔╝██║╚██████╔╝██║  ██║██║ ╚═╝ ██║███████╗██║  ██║
+╚═════╝ ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝
+"""
+
+
+def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> None:
+    """Print the BIOAMLA banner and version, then exit."""
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo(_BANNER)
+    click.echo(f"  bioamla {__version__}")
+    ctx.exit()
+
 
 @click.group()
-@click.version_option(version=__version__, prog_name="bioamla")
+@click.option(
+    "--version",
+    is_flag=True,
+    is_eager=True,
+    expose_value=False,
+    callback=_print_version,
+    help="Show the version and exit.",
+)
 def cli() -> None:
     """BioAMLA - Bioacoustic & Machine Learning Applications
 
