@@ -29,15 +29,14 @@ def cluster_reduce(
     """Reduce dimensionality of embeddings."""
     import numpy as np
 
+    from bioamla.cli.console import echo, print_success
     from bioamla.cluster import reduce_dimensions
 
     try:
         embeddings = np.load(embeddings_file)
 
         if not quiet:
-            click.echo(
-                f"Reducing {embeddings.shape[1]}D embeddings to {n_components}D using {method}..."
-            )
+            echo(f"Reducing {embeddings.shape[1]}D embeddings to {n_components}D using {method}...")
 
         reduced = reduce_dimensions(embeddings, method=method, n_components=n_components)
         from pathlib import Path
@@ -48,7 +47,7 @@ def cluster_reduce(
         raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(f"Saved reduced embeddings to: {output}")
+        print_success(f"Saved reduced embeddings to: {output}")
 
 
 @cluster.command("fit")
@@ -85,13 +84,14 @@ def cluster_fit(
     """Cluster embeddings."""
     import numpy as np
 
+    from bioamla.cli.console import echo, print_header, print_success
     from bioamla.cluster import AudioClusterer, ClusteringConfig
 
     try:
         embeddings = np.load(embeddings_file)
 
         if not quiet:
-            click.echo(f"Clustering {len(embeddings)} samples using {method}...")
+            echo(f"Clustering {len(embeddings)} samples using {method}...")
 
         config = ClusteringConfig(
             method=method,
@@ -111,8 +111,8 @@ def cluster_fit(
         raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(f"Found {clusterer.n_clusters_} clusters")
-        click.echo(f"Saved cluster labels to: {output}")
+        print_header(f"Found {clusterer.n_clusters_} clusters")
+        print_success(f"Saved cluster labels to: {output}")
 
 
 @cluster.command("analyze")
@@ -128,6 +128,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
 
     import numpy as np
 
+    from bioamla.cli.console import print_header, print_kv, print_success
     from bioamla.cluster import analyze_clusters_summary
 
     try:
@@ -140,12 +141,12 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
     noise_pct = analysis.n_noise / analysis.n_samples * 100 if analysis.n_samples > 0 else 0
 
     if not quiet:
-        click.echo("Cluster Analysis:")
-        click.echo(f"  Clusters: {analysis.n_clusters}")
-        click.echo(f"  Samples: {analysis.n_samples}")
-        click.echo(f"  Noise: {analysis.n_noise} ({noise_pct:.1f}%)")
-        click.echo(f"  Silhouette Score: {analysis.silhouette_score:.4f}")
-        click.echo(f"  Calinski-Harabasz Score: {analysis.calinski_harabasz_score:.2f}")
+        print_header("Cluster Analysis:")
+        print_kv("  Clusters", f"{analysis.n_clusters}")
+        print_kv("  Samples", f"{analysis.n_samples}")
+        print_kv("  Noise", f"{analysis.n_noise} ({noise_pct:.1f}%)")
+        print_kv("  Silhouette Score", f"{analysis.silhouette_score:.4f}")
+        print_kv("  Calinski-Harabasz Score", f"{analysis.calinski_harabasz_score:.2f}")
 
     if output:
 
@@ -174,7 +175,7 @@ def cluster_analyze(embeddings_file: str, labels_file: str, output: str, quiet: 
         Path(output).parent.mkdir(parents=True, exist_ok=True)
         Path(output).write_text(json.dumps(analysis_dict, indent=2), encoding="utf-8")
         if not quiet:
-            click.echo(f"Saved analysis to: {output}")
+            print_success(f"Saved analysis to: {output}")
 
 
 @cluster.command("novelty")
@@ -196,6 +197,7 @@ def cluster_novelty(
     """Detect novel sounds in embeddings."""
     import numpy as np
 
+    from bioamla.cli.console import echo, print_header, print_success
     from bioamla.cluster import detect_novelty
 
     try:
@@ -203,7 +205,7 @@ def cluster_novelty(
         known_labels = np.load(labels) if labels else None
 
         if not quiet:
-            click.echo(f"Detecting novel sounds using {method}...")
+            echo(f"Detecting novel sounds using {method}...")
 
         summary, is_novel, novelty_scores = detect_novelty(
             embeddings,
@@ -221,5 +223,5 @@ def cluster_novelty(
         raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(f"Found {summary.n_novel} novel samples ({summary.novel_percentage:.1f}%)")
-        click.echo(f"Saved novelty results to: {output}")
+        print_header(f"Found {summary.n_novel} novel samples ({summary.novel_percentage:.1f}%)")
+        print_success(f"Saved novelty results to: {output}")

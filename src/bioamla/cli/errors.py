@@ -2,12 +2,12 @@
 
 import sys
 
-import click
-
 from bioamla.exceptions import BioamlaError
 
 
 def handle_cli_error(exc: BioamlaError) -> None:
     """Print a friendly error message and exit with status 1."""
-    click.echo(f"Error: {exc}", err=True)
+    from bioamla.cli.console import print_error
+
+    print_error(str(exc))
     sys.exit(1)

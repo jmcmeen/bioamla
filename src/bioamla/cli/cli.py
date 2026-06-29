@@ -32,12 +32,48 @@ _BANNER = r"""
 """
 
 
+# Vertical gradient colour stops for the banner (nature → water → sky).
+_BANNER_GRADIENT = [(0, 230, 160), (0, 200, 255), (110, 100, 255)]
+
+
+def _gradient_banner(banner: str, stops: list[tuple[int, int, int]]) -> "object":
+    """Build a Rich ``Text`` for ``banner`` with a top-to-bottom colour gradient.
+
+    Each line is tinted with an RGB colour interpolated across ``stops``. Rich
+    strips the styling automatically on a non-TTY, so piped output stays plain.
+    """
+    from rich.text import Text
+
+    def interp(t: float) -> tuple[int, int, int]:
+        if len(stops) == 1:
+            return stops[0]
+        seg = t * (len(stops) - 1)
+        i = min(int(seg), len(stops) - 2)
+        f = seg - i
+        a, b = stops[i], stops[i + 1]
+        return tuple(round(a[k] + (b[k] - a[k]) * f) for k in range(3))  # type: ignore[return-value]
+
+    lines = banner.strip("\n").split("\n")
+    last = len(lines) - 1
+    text = Text()
+    for i, line in enumerate(lines):
+        r, g, b = interp(i / last if last else 0)
+        text.append(line, style=f"bold #{r:02x}{g:02x}{b:02x}")
+        if i < last:
+            text.append("\n")
+    return text
+
+
 def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> None:
     """Print the BIOAMLA banner and version, then exit."""
     if not value or ctx.resilient_parsing:
         return
-    click.echo(_BANNER)
-    click.echo(f"  bioamla {__version__}")
+    from bioamla.cli.console import console
+
+    console.print()
+    console.print(_gradient_banner(_BANNER, _BANNER_GRADIENT), highlight=False)
+    console.print(f"\n  Bioacoustic & Machine Learning Applications", highlight=False)
+    console.print(f"  bioamla [bold]{__version__}[/bold]", highlight=False)
     ctx.exit()
 
 

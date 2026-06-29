@@ -48,11 +48,12 @@ def annotation_template(
     from datetime import datetime, timezone
 
     from bioamla.audio import get_audio_info
+    from bioamla.cli.console import echo, print_error, print_kv, print_success
     from bioamla.datasets import Annotation
 
     audio_path = Path(audio_file)
     if not audio_path.exists():
-        click.echo(f"Error: Audio file not found: {audio_file}")
+        print_error(f"Audio file not found: {audio_file}")
         raise SystemExit(1)
 
     output_path = Path(output_file)
@@ -81,13 +82,13 @@ def annotation_template(
         raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(f"Created {fmt} annotation template: {output_file}")
-        click.echo(
+        print_success(f"Created {fmt} annotation template: {output_file}")
+        echo(
             f"  audio: {audio_path.name}  duration: {info.duration:.2f}s  sr: {info.sample_rate} Hz"
         )
-        click.echo(f"  rows: {len(annotations)}")
+        print_kv("  rows", len(annotations))
         if fmt != "bioamla":
-            click.echo("  note: audio metadata is only persisted in the bioamla (.json) format")
+            echo("  note: audio metadata is only persisted in the bioamla (.json) format")
 
 
 @annotation.command("convert")
@@ -118,11 +119,13 @@ def annotation_convert(
     quiet: bool,
 ) -> None:
     """Convert annotation files between formats."""
+    from bioamla.cli.console import print_error, print_success
+
     input_path = Path(input_file)
     output_path = Path(output_file)
 
     if not input_path.exists():
-        click.echo(f"Error: Input file not found: {input_file}")
+        print_error(f"Input file not found: {input_file}")
         raise SystemExit(1)
 
     from_format = _detect_format(input_path, from_format)
@@ -135,8 +138,8 @@ def annotation_convert(
         raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(f"Converted {len(annotations)} annotations from {from_format} to {to_format}")
-        click.echo(f"Output: {output_file}")
+        print_success(f"Converted {len(annotations)} annotations from {from_format} to {to_format}")
+        print_success(f"Output: {output_file}")
 
 
 @annotation.command("summary")
@@ -153,12 +156,13 @@ def annotation_summary(path: str, file_format: str, output_json: str) -> None:
     """Display summary statistics for an annotation file."""
     import json
 
+    from bioamla.cli.console import echo, print_error, print_header, print_kv
     from bioamla.datasets import summarize_annotations
 
     input_path = Path(path)
 
     if not input_path.exists():
-        click.echo(f"Error: File not found: {path}")
+        print_error(f"File not found: {path}")
         raise SystemExit(1)
 
     file_format = _detect_format(input_path, file_format)
@@ -173,22 +177,22 @@ def annotation_summary(path: str, file_format: str, output_json: str) -> None:
     if output_json:
         click.echo(json.dumps(summary, indent=2))
     else:
-        click.echo(f"\nAnnotation Summary: {path}")
-        click.echo("=" * 50)
+        print_header(f"\nAnnotation Summary: {path}")
+        echo("=" * 50)
         if metadata.get("audio_file"):
-            click.echo(f"Audio file: {metadata['audio_file']}")
+            print_kv("Audio file", metadata["audio_file"])
         if metadata.get("duration") is not None:
-            click.echo(f"Audio duration: {float(metadata['duration']):.2f}s")
-        click.echo(f"Total annotations: {summary['total_annotations']}")
-        click.echo(f"Unique labels: {summary['unique_labels']}")
-        click.echo("\nDuration statistics:")
-        click.echo(f"  Total: {summary['total_duration']:.2f}s")
-        click.echo(f"  Min: {summary['min_duration']:.2f}s")
-        click.echo(f"  Max: {summary['max_duration']:.2f}s")
-        click.echo(f"  Mean: {summary['mean_duration']:.2f}s")
-        click.echo("\nLabel counts:")
+            print_kv("Audio duration", f"{float(metadata['duration']):.2f}s")
+        print_kv("Total annotations", summary["total_annotations"])
+        print_kv("Unique labels", summary["unique_labels"])
+        print_header("\nDuration statistics:")
+        print_kv("  Total", f"{summary['total_duration']:.2f}s")
+        print_kv("  Min", f"{summary['min_duration']:.2f}s")
+        print_kv("  Max", f"{summary['max_duration']:.2f}s")
+        print_kv("  Mean", f"{summary['mean_duration']:.2f}s")
+        print_header("\nLabel counts:")
         for label, count in sorted(summary["labels"].items()):
-            click.echo(f"  {label}: {count}")
+            print_kv(f"  {label}", count)
 
 
 @annotation.command("remap")
@@ -207,13 +211,14 @@ def annotation_remap(
     input_file: str, output_file: str, mapping: str, keep_unmapped: bool, quiet: bool
 ) -> None:
     """Remap annotation labels using a mapping file."""
+    from bioamla.cli.console import print_error, print_success
     from bioamla.datasets import load_label_mapping, remap_labels
 
     input_path = Path(input_file)
     output_path = Path(output_file)
 
     if not input_path.exists():
-        click.echo(f"Error: Input file not found: {input_file}")
+        print_error(f"Input file not found: {input_file}")
         raise SystemExit(1)
 
     in_format = _detect_format(input_path)
@@ -229,8 +234,8 @@ def annotation_remap(
         raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(f"Remapped {original_count} annotations -> {len(remapped)} annotations")
-        click.echo(f"Output: {output_file}")
+        print_success(f"Remapped {original_count} annotations -> {len(remapped)} annotations")
+        print_success(f"Output: {output_file}")
 
 
 @annotation.command("filter")
@@ -251,13 +256,14 @@ def annotation_filter(
     quiet: bool,
 ) -> None:
     """Filter annotations by label or duration."""
+    from bioamla.cli.console import print_error, print_success
     from bioamla.datasets import filter_labels
 
     input_path = Path(input_file)
     output_path = Path(output_file)
 
     if not input_path.exists():
-        click.echo(f"Error: Input file not found: {input_file}")
+        print_error(f"Input file not found: {input_file}")
         raise SystemExit(1)
 
     in_format = _detect_format(input_path)
@@ -283,8 +289,8 @@ def annotation_filter(
         raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(f"Filtered {original_count} annotations -> {len(filtered)} annotations")
-        click.echo(f"Output: {output_file}")
+        print_success(f"Filtered {original_count} annotations -> {len(filtered)} annotations")
+        print_success(f"Output: {output_file}")
 
 
 @annotation.command("generate-labels")
@@ -333,6 +339,7 @@ def annotation_generate_labels(
 
     import numpy as np
 
+    from bioamla.cli.console import print_error, print_kv, print_success
     from bioamla.datasets import (
         create_label_map,
         generate_clip_labels,
@@ -342,7 +349,7 @@ def annotation_generate_labels(
     input_path = Path(annotation_file)
 
     if not input_path.exists():
-        click.echo(f"Error: Annotation file not found: {annotation_file}")
+        print_error(f"Annotation file not found: {annotation_file}")
         raise SystemExit(1)
 
     in_format = _detect_format(input_path)
@@ -351,7 +358,7 @@ def annotation_generate_labels(
         annotations, metadata = _load(input_path, in_format)
 
         if not annotations:
-            click.echo("Error: No annotations found in file")
+            print_error("No annotations found in file")
             raise SystemExit(1)
 
         # Fall back to the duration embedded in a bioamla file when not given.
@@ -412,9 +419,9 @@ def annotation_generate_labels(
                 writer.writerow(row)
 
     if not quiet:
-        click.echo(f"Generated labels for {num_clips} clips")
-        click.echo(f"Labels: {', '.join(sorted(label_map.keys()))}")
-        click.echo(f"Output: {output_file}")
+        print_success(f"Generated labels for {num_clips} clips")
+        print_kv("Labels", ", ".join(sorted(label_map.keys())))
+        print_success(f"Output: {output_file}")
 
 
 @annotation.command("generate-frame-labels")
@@ -455,6 +462,7 @@ def annotation_generate_frame_labels(
 
     import numpy as np
 
+    from bioamla.cli.console import print_error, print_kv, print_success
     from bioamla.datasets import (
         create_label_map,
         generate_frame_labels,
@@ -464,7 +472,7 @@ def annotation_generate_frame_labels(
     input_path = Path(annotation_file)
 
     if not input_path.exists():
-        click.echo(f"Error: Annotation file not found: {annotation_file}")
+        print_error(f"Annotation file not found: {annotation_file}")
         raise SystemExit(1)
 
     in_format = _detect_format(input_path)
@@ -473,7 +481,7 @@ def annotation_generate_frame_labels(
         annotations, metadata = _load(input_path, in_format)
 
         if not annotations:
-            click.echo("Error: No annotations found in file")
+            print_error("No annotations found in file")
             raise SystemExit(1)
 
         # Fall back to the duration embedded in a bioamla file when not given.
@@ -526,6 +534,6 @@ def annotation_generate_frame_labels(
                 writer.writerow(row)
 
     if not quiet:
-        click.echo(f"Generated frame labels: {num_classes} classes x {num_frames} frames")
-        click.echo(f"Labels: {', '.join(sorted(label_map.keys()))}")
-        click.echo(f"Output: {output_file}")
+        print_success(f"Generated frame labels: {num_classes} classes x {num_frames} frames")
+        print_kv("Labels", ", ".join(sorted(label_map.keys())))
+        print_success(f"Output: {output_file}")

@@ -4,8 +4,8 @@ Batch Spectrogram Generation
 
 Batch wrapper around :func:`bioamla.viz.core.generate_spectrogram`, folded from
 ``core/visualize.py``. The original CLI->core inversion (importing ``ProgressBar``
-and ``print_success``/``print_error`` from ``cli.progress``) has been removed:
-progress is reported via an optional callback / simple prints, and file
+and ``print_success``/``print_error`` from the CLI console module) has been
+removed: progress is reported via an optional callback / simple prints, and file
 discovery uses pathlib instead of the file repository.
 """
 

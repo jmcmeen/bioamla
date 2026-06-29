@@ -24,6 +24,7 @@ def util_download(url: str, output_dir: str) -> None:
     import os
     from urllib.parse import urlparse
 
+    from bioamla.cli.console import print_success
     from bioamla.common.files import download_file
 
     if output_dir == ".":
@@ -40,7 +41,7 @@ def util_download(url: str, output_dir: str) -> None:
     except OSError as e:
         raise click.ClickException(f"Download failed: {e}") from e
 
-    click.echo(f"Downloaded to {output_path}")
+    print_success(f"Downloaded to {output_path}")
 
 
 @util.command("unzip")
@@ -50,6 +51,7 @@ def util_unzip(file_path: str, output_path: str) -> None:
     """Extract a ZIP archive to the specified output directory."""
     import os
 
+    from bioamla.cli.console import print_success
     from bioamla.common.files import extract_zip_file
 
     if output_path == ".":
@@ -62,7 +64,7 @@ def util_unzip(file_path: str, output_path: str) -> None:
     except OSError as e:
         raise click.ClickException(f"Extraction failed: {e}") from e
 
-    click.echo(f"Extracted to {output_path}")
+    print_success(f"Extracted to {output_path}")
 
 
 @util.command("zip")
@@ -72,6 +74,7 @@ def util_zip(source_path: str, output_file: str) -> None:
     """Create a ZIP archive from a file or directory."""
     from pathlib import Path
 
+    from bioamla.cli.console import print_success
     from bioamla.common.files import create_zip_file, zip_directory
 
     try:
@@ -84,4 +87,4 @@ def util_zip(source_path: str, output_file: str) -> None:
     except OSError as e:
         raise click.ClickException(f"ZIP creation failed: {e}") from e
 
-    click.echo(f"Created {output_file}")
+    print_success(f"Created {output_file}")

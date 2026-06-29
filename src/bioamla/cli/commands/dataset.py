@@ -39,6 +39,7 @@ def dataset_merge(
     quiet: bool,
 ) -> None:
     """Merge multiple audio datasets into a single dataset."""
+    from bioamla.cli.console import print_success
     from bioamla.datasets import merge_datasets
 
     try:
@@ -58,7 +59,7 @@ def dataset_merge(
         msg = f"Merged {stats['datasets_merged']} datasets: {stats['total_files']} total files"
         if target_format:
             msg += f", {stats['files_converted']} converted"
-        click.echo(msg)
+        print_success(msg)
 
 
 @dataset.command("extract-clips")
@@ -119,6 +120,7 @@ def dataset_extract_clips(
     metadata.csv (auto-detected, or via --source-metadata) so clips stay
     traceable to their original recordings.
     """
+    from bioamla.cli.console import echo, print_kv, print_success
     from bioamla.datasets import extract_labeled_dataset
 
     try:
@@ -141,25 +143,25 @@ def dataset_extract_clips(
         raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(
+        print_success(
             f"Extracted {result['clips_written']} clips from "
             f"{result['files_processed']} file(s) into {result['output_dir']}"
         )
-        click.echo(f"Labels ({len(result['labels'])}): {', '.join(result['labels'])}")
+        print_kv(f"Labels ({len(result['labels'])})", ", ".join(result["labels"]))
         if result["metadata_file"]:
-            click.echo(f"Metadata: {result['metadata_file']}")
+            print_kv("Metadata", result["metadata_file"])
         prov = result.get("provenance", {})
         if prov.get("joined"):
-            click.echo(
+            echo(
                 f"Provenance: joined {prov['matched']}/{result['clips_written']} clips "
                 f"({', '.join(prov['columns'])})"
             )
             if prov.get("unmatched"):
-                click.echo(f"  {prov['unmatched']} clip(s) had no source-metadata match")
+                echo(f"  {prov['unmatched']} clip(s) had no source-metadata match")
         if result.get("skipped"):
-            click.echo(f"Skipped (out of range): {len(result['skipped'])} clip(s)")
+            echo(f"Skipped (out of range): {len(result['skipped'])} clip(s)")
         if result["failed"]:
-            click.echo(f"Failed: {len(result['failed'])} clip(s)")
+            echo(f"Failed: {len(result['failed'])} clip(s)")
 
 
 @dataset.command("stats")
@@ -172,6 +174,7 @@ def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -
     """Show summary statistics for a dataset's metadata.csv."""
     import json as json_lib
 
+    from bioamla.cli.console import echo, print_header, print_kv
     from bioamla.datasets import get_dataset_stats
 
     try:
@@ -183,20 +186,20 @@ def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -
         click.echo(json_lib.dumps(stats, indent=2))
         return
 
-    click.echo(f"\nDataset Statistics: {dataset_dir}")
-    click.echo("=" * 50)
-    click.echo(f"Total files: {stats['total_files']}")
-    click.echo(f"Labels: {stats['num_categories']}")
+    print_header(f"\nDataset Statistics: {dataset_dir}")
+    echo("=" * 50)
+    print_kv("Total files", stats["total_files"])
+    print_kv("Labels", stats["num_categories"])
     if stats.get("splits"):
         split_str = ", ".join(f"{k}={v}" for k, v in sorted(stats["splits"].items()))
-        click.echo(f"Splits: {split_str}")
-    click.echo("\nLabel counts:")
+        print_kv("Splits", split_str)
+    print_header("\nLabel counts:")
     for label, count in sorted(stats["categories"].items()):
-        click.echo(f"  {label}: {count}")
+        echo(f"  {label}: {count}")
     if stats.get("licenses"):
-        click.echo("\nLicenses:")
+        print_header("\nLicenses:")
         for lic, count in sorted(stats["licenses"].items()):
-            click.echo(f"  {lic or '(none)'}: {count}")
+            echo(f"  {lic or '(none)'}: {count}")
 
 
 @dataset.command("manifest")
@@ -234,6 +237,7 @@ def dataset_manifest(
     from datetime import datetime, timezone
     from pathlib import Path
 
+    from bioamla.cli.console import echo, print_success
     from bioamla.datasets import build_manifest_from_metadata, save_dataset_manifest
 
     dataset_path = Path(dataset_dir)
@@ -254,13 +258,11 @@ def dataset_manifest(
         raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo(f"Wrote manifest: {output_path}")
-        click.echo(
-            f"  classes: {len(manifest.label2id)}  files: {sum(manifest.class_counts.values())}"
-        )
+        print_success(f"Wrote manifest: {output_path}")
+        echo(f"  classes: {len(manifest.label2id)}  files: {sum(manifest.class_counts.values())}")
         if manifest.splits:
             split_str = ", ".join(f"{k}={v}" for k, v in sorted(manifest.splits.items()))
-            click.echo(f"  splits: {split_str}")
+            echo(f"  splits: {split_str}")
 
 
 @dataset.command("partition")
@@ -312,6 +314,7 @@ def dataset_partition(
         # Reorganize into train/val/test/<label>/ subdirs, grouped by recording
         bioamla dataset partition ./dataset --mode subdirs --group-by source_file
     """
+    from bioamla.cli.console import print_kv, print_success
     from bioamla.datasets import partition_dataset
 
     try:
@@ -331,10 +334,10 @@ def dataset_partition(
 
     if not quiet:
         split_str = ", ".join(f"{k}={v}" for k, v in sorted(result["splits"].items()))
-        click.echo(
+        print_success(
             f"Partitioned {result['groups']} group(s) into splits ({result['mode']}): {split_str}"
         )
-        click.echo(f"Metadata: {result['metadata_file']}")
+        print_kv("Metadata", result["metadata_file"])
 
 
 @dataset.command("build")
@@ -413,6 +416,7 @@ def dataset_build(
     from datetime import datetime, timezone
     from pathlib import Path
 
+    from bioamla.cli.console import echo, print_success
     from bioamla.datasets import (
         build_manifest_from_metadata,
         extract_labeled_dataset,
@@ -471,15 +475,15 @@ def dataset_build(
             attributions_path = None  # no provenance to attribute — skip silently
 
     if not quiet:
-        click.echo(f"Built dataset at {output_dir}")
-        click.echo(f"  clips: {extract['clips_written']}  classes: {len(manifest.label2id)}")
+        print_success(f"Built dataset at {output_dir}")
+        echo(f"  clips: {extract['clips_written']}  classes: {len(manifest.label2id)}")
         if partition_result:
             split_str = ", ".join(f"{k}={v}" for k, v in sorted(partition_result["splits"].items()))
-            click.echo(f"  splits: {split_str}")
-        click.echo(f"  manifest: {output_path / 'dataset.json'}")
+            echo(f"  splits: {split_str}")
+        echo(f"  manifest: {output_path / 'dataset.json'}")
         if attributions_path:
-            click.echo(f"  attributions: {attributions_path}")
-        click.echo(f"Push to the Hub with: bioamla catalogs hf push-dataset {output_dir} <repo-id>")
+            echo(f"  attributions: {attributions_path}")
+        echo(f"Push to the Hub with: bioamla catalogs hf push-dataset {output_dir} <repo-id>")
 
 
 @dataset.command("license")
@@ -517,6 +521,7 @@ def dataset_license(
     """Generate license/attribution file from dataset metadata."""
     from pathlib import Path
 
+    from bioamla.cli.console import echo, print_error, print_header, print_success
     from bioamla.datasets import (
         generate_license_for_dataset,
         generate_licenses_for_directory,
@@ -526,16 +531,16 @@ def dataset_license(
     template_path = Path(template) if template else None
 
     if template_path and not template_path.exists():
-        click.echo(f"Error: Template file '{template}' not found.")
+        print_error(f"Template file '{template}' not found.")
         raise SystemExit(1)
 
     if batch:
         if not path_obj.is_dir():
-            click.echo(f"Error: Path '{path}' is not a directory.")
+            print_error(f"Path '{path}' is not a directory.")
             raise SystemExit(1)
 
         if not quiet:
-            click.echo(f"Scanning directory for datasets: {path}")
+            echo(f"Scanning directory for datasets: {path}")
 
         try:
             stats = generate_licenses_for_directory(
@@ -549,41 +554,39 @@ def dataset_license(
             raise click.ClickException(str(e)) from e
 
         if stats["datasets_found"] == 0:
-            click.echo("No datasets found (no directories with metadata.csv)")
+            print_error("No datasets found (no directories with metadata.csv)")
             raise SystemExit(1)
 
         if not quiet:
-            click.echo(f"\nProcessed {stats['datasets_found']} dataset(s):")
-            click.echo(f"  Successful: {stats['datasets_processed']}")
-            click.echo(f"  Failed: {stats['datasets_failed']}")
+            print_header(f"\nProcessed {stats['datasets_found']} dataset(s):")
+            echo(f"  Successful: {stats['datasets_processed']}")
+            echo(f"  Failed: {stats['datasets_failed']}")
 
             for item in stats["results"]:
                 if item["status"] == "success":
-                    click.echo(
-                        f"  - {item['dataset_name']}: {item['attributions_count']} attributions"
-                    )
+                    echo(f"  - {item['dataset_name']}: {item['attributions_count']} attributions")
                 else:
-                    click.echo(
+                    echo(
                         f"  - {item['dataset_name']}: FAILED - {item.get('error', 'Unknown error')}"
                     )
         else:
-            click.echo(f"Generated {stats['datasets_processed']} license files")
+            print_success(f"Generated {stats['datasets_processed']} license files")
 
         if stats["datasets_failed"] > 0:
             raise SystemExit(1)
 
     else:
         if not path_obj.is_dir():
-            click.echo(f"Error: Path '{path}' is not a directory.")
+            print_error(f"Path '{path}' is not a directory.")
             raise SystemExit(1)
 
         csv_path = path_obj / metadata_filename
         if not csv_path.exists():
-            click.echo(f"Error: Metadata file '{csv_path}' not found.")
+            print_error(f"Metadata file '{csv_path}' not found.")
             raise SystemExit(1)
 
         if not quiet:
-            click.echo(f"Generating license file for: {path}")
+            echo(f"Generating license file for: {path}")
 
         try:
             stats = generate_license_for_dataset(
@@ -597,12 +600,12 @@ def dataset_license(
             raise click.ClickException(str(e)) from e
 
         if not quiet:
-            click.echo(f"License file generated: {stats['output_path']}")
-            click.echo(f"  Attributions: {stats['attributions_count']}")
-            click.echo(f"  File size: {stats['file_size']:,} bytes")
+            print_success(f"License file generated: {stats['output_path']}")
+            echo(f"  Attributions: {stats['attributions_count']}")
+            echo(f"  File size: {stats['file_size']:,} bytes")
         else:
             out_name = Path(stats["output_path"]).name
-            click.echo(f"Generated {out_name} with {stats['attributions_count']} attributions")
+            print_success(f"Generated {out_name} with {stats['attributions_count']} attributions")
 
 
 def _parse_range(value: str) -> tuple[float, float]:
@@ -659,6 +662,7 @@ def dataset_augment(
         # Time-stretch only
         bioamla dataset augment ./clips -o ./aug --time-stretch 0.9-1.1
     """
+    from bioamla.cli.console import echo, print_error, print_success
     from bioamla.datasets import AugmentationConfig, batch_augment
 
     noise_enabled = add_noise is not None
@@ -674,8 +678,8 @@ def dataset_augment(
     gain_min, gain_max = _parse_range(gain) if gain else (-12.0, 12.0)
 
     if not any([noise_enabled, stretch_enabled, pitch_enabled, gain_enabled]):
-        click.echo("Error: At least one augmentation option must be specified")
-        click.echo("Use --help for available options")
+        print_error("At least one augmentation option must be specified")
+        echo("Use --help for available options")
         raise SystemExit(1)
 
     config = AugmentationConfig(
@@ -707,7 +711,7 @@ def dataset_augment(
         raise click.ClickException(str(e)) from e
 
     if quiet:
-        click.echo(
+        print_success(
             f"Created {stats['files_created']} augmented files from "
             f"{stats['files_processed']} source files in {stats['output_dir']}"
         )

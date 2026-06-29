@@ -1,6 +1,25 @@
-"""
-This module provides Rich-based progress bars and console output utilities
-for batch operations in bioamla CLI.
+"""Rich-based console output for the bioamla CLI.
+
+This is the single output path for the command layer: progress bars, status
+spinners, tables/panels, and the line/value helpers below. Routing everything
+through the shared :data:`console` keeps colour consistent **and** safe — Rich
+auto-detects non-TTY output and ``NO_COLOR`` and strips styling, so piped or
+redirected output stays plain text.
+
+Two rules keep that guarantee intact:
+
+* **Never wrap data lines.** Rich word-wraps at the (defaulted) console width
+  when output is captured/redirected, which would split long paths and break
+  substring matching. The line helpers here pass ``soft_wrap=True`` so a path
+  or message is emitted verbatim on one line.
+* **Machine-readable output bypasses Rich.** JSON / CSV dumps meant for piping
+  are written with plain ``click.echo`` in the command bodies, not through this
+  module — Rich highlighting/markup must never touch structured output.
+
+Semantic palette (apply via the helpers, don't hardcode colour elsewhere):
+success = green ✓, error = bold-red ``Error:`` (matches Click), warning = yellow !,
+info = blue ℹ, file path = cyan, header = bold, label/value = bold value,
+dim = secondary. Errors and warnings go to stderr; everything else to stdout.
 """
 
 import sys
@@ -9,6 +28,7 @@ from contextlib import contextmanager
 from typing import Any, TypeVar
 
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
@@ -23,8 +43,17 @@ from rich.progress import (
 )
 from rich.table import Table
 
-# Global console instance
+# Global console instances. ``console`` is stdout (normal output); ``err_console``
+# is stderr — diagnostics (errors/warnings) go there by convention so they never
+# pollute piped stdout (e.g. a JSON dump on stdout stays clean).
 console = Console()
+err_console = Console(stderr=True)
+
+# Semantic palette — the one place colour names live.
+PATH_STYLE = "cyan"
+HEADER_STYLE = "bold"
+VALUE_STYLE = "bold"
+DIM_STYLE = "dim"
 
 # Type variable for generic iterables
 T = TypeVar("T")
@@ -204,24 +233,67 @@ def status(message: str) -> Iterator[None]:
         yield
 
 
+def echo(message: object = "", *, style: str | None = None) -> None:
+    """Print a single line of plain text, never word-wrapped.
+
+    Drop-in replacement for ``click.echo`` in command bodies. The message is
+    rendered as literal text (no Rich markup interpretation, so values
+    containing ``[...]`` are safe) and emitted on one line so long paths and
+    piped output are never split. Pass ``style`` to colour the whole line.
+    """
+    console.print(str(message), style=style, soft_wrap=True, markup=False, highlight=False)
+
+
 def print_success(message: str) -> None:
-    """Print a success message in green."""
-    console.print(f"[green]✓[/green] {message}")
+    """Print a success message with a green check."""
+    console.print(f"[green]✓[/green] {escape(message)}", soft_wrap=True, highlight=False)
 
 
 def print_error(message: str) -> None:
-    """Print an error message in red."""
-    console.print(f"[red]✗[/red] {message}")
+    """Print an error message with a bold-red ``Error:`` prefix (to stderr).
+
+    Matches Click's own error formatting so every error the CLI emits — Click's
+    built-in usage/abort errors, the central :class:`BioamlaError` handler, and
+    these manual validation messages — reads with one consistent prefix.
+    """
+    err_console.print(
+        f"[bold red]Error:[/bold red] {escape(message)}", soft_wrap=True, highlight=False
+    )
 
 
 def print_warning(message: str) -> None:
-    """Print a warning message in yellow."""
-    console.print(f"[yellow]![/yellow] {message}")
+    """Print a warning message with a yellow bang (to stderr)."""
+    err_console.print(f"[yellow]![/yellow] {escape(message)}", soft_wrap=True, highlight=False)
 
 
 def print_info(message: str) -> None:
-    """Print an info message in blue."""
-    console.print(f"[blue]ℹ[/blue] {message}")
+    """Print an info message with a blue marker."""
+    console.print(f"[blue]ℹ[/blue] {escape(message)}", soft_wrap=True, highlight=False)
+
+
+def print_header(text: str) -> None:
+    """Print a bold section header."""
+    console.print(
+        f"[{HEADER_STYLE}]{escape(text)}[/{HEADER_STYLE}]", soft_wrap=True, highlight=False
+    )
+
+
+def print_path(label: str, path: object) -> None:
+    """Print a ``label`` followed by a cyan, never-wrapped file path."""
+    console.print(
+        f"{escape(label)} [{PATH_STYLE}]{escape(str(path))}[/{PATH_STYLE}]",
+        soft_wrap=True,
+        highlight=False,
+    )
+
+
+def print_kv(label: str, value: object, *, value_style: str = VALUE_STYLE) -> None:
+    """Print a ``label: value`` pair with the value emphasised."""
+    console.print(
+        f"{escape(label)}: [{value_style}]{escape(str(value))}[/{value_style}]",
+        soft_wrap=True,
+        highlight=False,
+    )
 
 
 def print_table(
@@ -386,7 +458,7 @@ class BatchProcessor:
                     self.error_count += 1
                     self.errors.append((item, str(e)))
                     if self.verbose:
-                        print_error(f"Error processing {item}: {e}")
+                        print_error(f"Failed to process {item}: {e}")
                     if self.stop_on_error:
                         break
 
