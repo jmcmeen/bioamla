@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-06-29
+
+### Changed
+
+- **Colorful CLI output.** Every command group now renders through a shared Rich-based
+  semantic palette (green ✓ for completed actions, bold headers/values, cyan paths, dim for
+  empty results) instead of plain monochrome text. `cli/progress.py` was renamed to
+  `cli/console.py` to reflect that it owns general output, not just progress bars, and its
+  helpers (`echo`, `print_success`, `print_header`, `print_path`, `print_kv`, …) are hardened
+  to never wrap data lines and to escape interpolated text.
+- **Pipe-safe by design.** Output styling is auto-stripped on non-TTY/`NO_COLOR`, and
+  machine-readable JSON/CSV dumps bypass Rich entirely, so redirected/piped output stays plain.
+  Errors and warnings now go to **stderr** (previously some went to stdout), keeping a piped
+  stdout stream clean.
+- **Unified error formatting.** The central `BioamlaError` handler and per-command validation
+  messages now share one bold-red `Error:` prefix, matching Click's own error style.
+- **Gradient `--version` banner.** The ASCII logo is rendered with a vertical green → cyan →
+  indigo colour gradient (smooth on truecolor terminals, gracefully downsampled elsewhere).
+
 ## [0.2.2] - 2026-06-28
 
 - **CLI update**: Updated --version cli to show a ascii-art banner

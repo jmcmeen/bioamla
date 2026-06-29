@@ -39,6 +39,7 @@ def detect_energy(
     """Detect sounds using band-limited energy detection (single file)."""
     import json as json_lib
 
+    from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
     from bioamla.detect import BandLimitedEnergyDetector, export_detections
 
     try:
@@ -53,7 +54,7 @@ def detect_energy(
         if output:
             fmt = "json" if output.endswith(".json") else "csv"
             export_detections(detections, output, format=fmt)
-            click.echo(f"Saved {len(detections)} detections to {output}")
+            print_success(f"Saved {len(detections)} detections to {output}")
             return
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
@@ -71,14 +72,12 @@ def detect_energy(
             for d in detections:
                 writer.writerow(d.to_dict())
         else:
-            click.echo("No detections found.")
+            echo("No detections found.", style=DIM_STYLE)
     else:
-        click.echo(f"Found {len(detections)} detections:\n")
+        print_header(f"Found {len(detections)} detections:\n")
         for i, d in enumerate(detections, 1):
-            click.echo(
-                f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s (confidence: {d.confidence:.2f})"
-            )
-        click.echo(f"\nTotal: {len(detections)} detections")
+            echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s (confidence: {d.confidence:.2f})")
+        echo(f"\nTotal: {len(detections)} detections")
 
 
 @detect.command("ribbit")
@@ -121,6 +120,7 @@ def detect_ribbit(
     """Detect periodic calls using RIBBIT algorithm (single file)."""
     import json as json_lib
 
+    from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
     from bioamla.detect import RibbitDetector, export_detections
 
     try:
@@ -137,7 +137,7 @@ def detect_ribbit(
         if output:
             fmt = "json" if output.endswith(".json") else "csv"
             export_detections(detections, output, format=fmt)
-            click.echo(f"Saved {len(detections)} detections to {output}")
+            print_success(f"Saved {len(detections)} detections to {output}")
             return
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
@@ -155,16 +155,16 @@ def detect_ribbit(
             for d in detections:
                 writer.writerow(d.to_dict())
         else:
-            click.echo("No detections found.")
+            echo("No detections found.", style=DIM_STYLE)
     else:
-        click.echo(f"Found {len(detections)} periodic call detections:\n")
+        print_header(f"Found {len(detections)} periodic call detections:\n")
         for i, d in enumerate(detections, 1):
-            click.echo(
+            echo(
                 f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s "
                 f"(score: {d.confidence:.2f}, "
                 f"pulse_rate: {d.metadata.get('pulse_rate_hz', 'N/A')}Hz)"
             )
-        click.echo(f"\nTotal: {len(detections)} detections")
+        echo(f"\nTotal: {len(detections)} detections")
 
 
 @detect.command("peaks")
@@ -195,6 +195,7 @@ def detect_peaks(
     """Detect peaks using Continuous Wavelet Transform (CWT) (single file)."""
     import json as json_lib
 
+    from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
     from bioamla.detect import CWTPeakDetector
 
     try:
@@ -230,7 +231,7 @@ def detect_peaks(
             writer.writeheader()
             for p in peaks:
                 writer.writerow(_row(p))
-        click.echo(f"Saved {len(peaks)} peaks to {output}")
+        print_success(f"Saved {len(peaks)} peaks to {output}")
     elif output_format == "json":
         click.echo(json_lib.dumps([p.to_dict() for p in peaks], indent=2))
     elif output_format == "csv":
@@ -243,14 +244,14 @@ def detect_peaks(
             for p in peaks:
                 writer.writerow(_row(p))
         else:
-            click.echo("No peaks found.")
+            echo("No peaks found.", style=DIM_STYLE)
     else:
-        click.echo(f"Found {len(peaks)} peaks:\n")
+        print_header(f"Found {len(peaks)} peaks:\n")
         for i, p in enumerate(peaks[:20], 1):
-            click.echo(f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, width: {p.width:.3f}s)")
+            echo(f"{i}. {p.time:.3f}s (amplitude: {p.amplitude:.2f}, width: {p.width:.3f}s)")
         if len(peaks) > 20:
-            click.echo(f"... and {len(peaks) - 20} more peaks")
-        click.echo(f"\nTotal: {len(peaks)} peaks")
+            echo(f"... and {len(peaks) - 20} more peaks", style=DIM_STYLE)
+        echo(f"\nTotal: {len(peaks)} peaks")
 
 
 @detect.command("accelerating")
@@ -293,6 +294,7 @@ def detect_accelerating(
     """Detect accelerating or decelerating call patterns (single file)."""
     import json as json_lib
 
+    from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
     from bioamla.detect import AcceleratingPatternDetector, export_detections
 
     try:
@@ -309,7 +311,7 @@ def detect_accelerating(
         if output:
             fmt = "json" if output.endswith(".json") else "csv"
             export_detections(detections, output, format=fmt)
-            click.echo(f"Saved {len(detections)} detections to {output}")
+            print_success(f"Saved {len(detections)} detections to {output}")
             return
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
@@ -327,15 +329,15 @@ def detect_accelerating(
             for d in detections:
                 writer.writerow(d.to_dict())
         else:
-            click.echo("No detections found.")
+            echo("No detections found.", style=DIM_STYLE)
     else:
-        click.echo(f"Found {len(detections)} pattern detections:\n")
+        print_header(f"Found {len(detections)} pattern detections:\n")
         for i, d in enumerate(detections, 1):
             pattern = d.metadata.get("pattern_type", "unknown")
             ratio = d.metadata.get("acceleration_ratio", 1.0)
             init_rate = d.metadata.get("initial_rate", 0)
             final_rate = d.metadata.get("final_rate", 0)
-            click.echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s")
-            click.echo(f"   Pattern: {pattern}, ratio: {ratio:.2f}x")
-            click.echo(f"   Rate: {init_rate:.1f} -> {final_rate:.1f} Hz")
-        click.echo(f"\nTotal: {len(detections)} detections")
+            echo(f"{i}. {d.start_time:.3f}s - {d.end_time:.3f}s")
+            echo(f"   Pattern: {pattern}, ratio: {ratio:.2f}x")
+            echo(f"   Rate: {init_rate:.1f} -> {final_rate:.1f} Hz")
+        echo(f"\nTotal: {len(detections)} detections")

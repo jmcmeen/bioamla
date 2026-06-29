@@ -109,6 +109,7 @@ def ast_init_config(output: str, force: bool) -> None:
     ``ast train`` reads; edit it, then pass it via ``--config``. Command-line
     flags still override any value in the file.
     """
+    from bioamla.cli.console import print_success
     from bioamla.exceptions import InvalidInputError
     from bioamla.ml import write_train_config
 
@@ -122,7 +123,7 @@ def ast_init_config(output: str, force: bool) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
-    click.echo(f"Created training config: {path}")
+    print_success(f"Created training config: {path}")
 
 
 @ast.command("predict")
@@ -169,6 +170,7 @@ def ast_predict(
     import csv
     from pathlib import Path
 
+    from bioamla.cli.console import echo, print_success
     from bioamla.ml import ASTInference
 
     try:
@@ -194,17 +196,15 @@ def ast_predict(
                 writer.writerow(
                     [r.filepath, r.start_time, r.end_time, r.predicted_label, f"{r.confidence:.6f}"]
                 )
-        click.echo(f"Wrote {len(results)} prediction(s) to {output}")
+        print_success(f"Wrote {len(results)} prediction(s) to {output}")
         return
 
     if segment_duration > 0:
         for r in results:
-            click.echo(
-                f"{r.start_time:.2f}-{r.end_time:.2f}s  {r.predicted_label} ({r.confidence:.4f})"
-            )
+            echo(f"{r.start_time:.2f}-{r.end_time:.2f}s  {r.predicted_label} ({r.confidence:.4f})")
     else:
         for r in results:
-            click.echo(f"{r.predicted_label} ({r.confidence:.4f})")
+            echo(f"{r.predicted_label} ({r.confidence:.4f})")
 
 
 @ast.command("train")
@@ -459,6 +459,7 @@ def ast_train(
         bioamla models ast train --train-dataset ./metadata.csv
         bioamla models ast train --train-dataset ./audio_by_class/
     """
+    from bioamla.cli.console import print_kv, print_success
     from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.datasets.augmentation import AugmentationConfig
     from bioamla.ml import train_ast
@@ -612,11 +613,11 @@ def ast_train(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
-    click.echo(f"Training complete. Best model saved to: {result.model_path}")
+    print_success(f"Training complete. Best model saved to: {result.model_path}")
     if result.final_accuracy is not None:
-        click.echo(f"Final eval accuracy: {result.final_accuracy:.4f}")
+        print_kv("Final eval accuracy", f"{result.final_accuracy:.4f}")
     if result.final_loss is not None:
-        click.echo(f"Final eval loss: {result.final_loss:.4f}")
+        print_kv("Final eval loss", f"{result.final_loss:.4f}")
 
 
 @ast.command("evaluate")
@@ -667,6 +668,7 @@ def ast_evaluate(
     import json as json_lib
     from pathlib import Path as PathLib
 
+    from bioamla.cli.console import echo, print_header, print_kv, print_success
     from bioamla.ml import evaluate_directory
 
     try:
@@ -683,13 +685,13 @@ def ast_evaluate(
         raise click.ClickException(str(e)) from e
 
     if not quiet:
-        click.echo("\nEvaluation Results:")
-        click.echo("-" * 40)
-    click.echo(f"Accuracy: {eval_result.accuracy:.4f}")
-    click.echo(f"Precision: {eval_result.precision:.4f}")
-    click.echo(f"Recall: {eval_result.recall:.4f}")
-    click.echo(f"F1 Score: {eval_result.f1_score:.4f}")
-    click.echo(f"Total Samples: {eval_result.total_samples}")
+        print_header("\nEvaluation Results:")
+        echo("-" * 40)
+    print_kv("Accuracy", f"{eval_result.accuracy:.4f}")
+    print_kv("Precision", f"{eval_result.precision:.4f}")
+    print_kv("Recall", f"{eval_result.recall:.4f}")
+    print_kv("F1 Score", f"{eval_result.f1_score:.4f}")
+    print_kv("Total Samples", eval_result.total_samples)
 
     if output:
         out_path = PathLib(output)
@@ -698,7 +700,7 @@ def ast_evaluate(
             out_path.write_text(json_lib.dumps(eval_result.to_dict(), indent=2), encoding="utf-8")
         else:
             out_path.write_text(str(eval_result.to_dict()), encoding="utf-8")
-        click.echo(f"Results saved to: {output}")
+        print_success(f"Results saved to: {output}")
 
 
 @ast.command("embed")
@@ -717,9 +719,10 @@ def ast_embed(file: str, model_path: str, output: str, layer: str, sample_rate: 
 
     import numpy as np
 
+    from bioamla.cli.console import print_info, print_success
     from bioamla.ml import extract_embeddings_file
 
-    click.echo(f"Loading AST model from {model_path}...")
+    print_info(f"Loading AST model from {model_path}...")
 
     try:
         result = extract_embeddings_file(
@@ -734,7 +737,7 @@ def ast_embed(file: str, model_path: str, output: str, layer: str, sample_rate: 
     embeddings = result["embeddings"]
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     np.save(output, embeddings)
-    click.echo(f"Embeddings saved to {output} (shape: {embeddings.shape})")
+    print_success(f"Embeddings saved to {output} (shape: {embeddings.shape})")
 
 
 @ast.command("info")
@@ -745,6 +748,7 @@ def ast_info(model_path: str) -> None:
     Example:
         bioamla models ast info bioamla/scp-frogs
     """
+    from bioamla.cli.console import print_kv
     from bioamla.ml import get_model_info
 
     try:
@@ -752,11 +756,11 @@ def ast_info(model_path: str) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
-    click.echo(f"Model: {info['path']}")
-    click.echo(f"Type: {info['model_type']}")
-    click.echo(f"Classes: {info['num_classes']}")
+    print_kv("Model", info["path"])
+    print_kv("Type", info["model_type"])
+    print_kv("Classes", info["num_classes"])
     if info.get("classes"):
         labels = ", ".join(str(c) for c in info["classes"])
         if info.get("has_more_classes"):
             labels += f"... (+{info['num_classes'] - 10} more)"
-        click.echo(f"Labels: {labels}")
+        print_kv("Labels", labels)

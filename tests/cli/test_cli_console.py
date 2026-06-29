@@ -1,9 +1,9 @@
-"""Tests for bioamla.cli.progress (Rich-based helpers)."""
+"""Tests for bioamla.cli.console (Rich-based helpers)."""
 
 from __future__ import annotations
 
-import bioamla.cli.progress as progress
-from bioamla.cli.progress import (
+import bioamla.cli.console as console_mod
+from bioamla.cli.console import (
     BatchProcessor,
     ProgressBar,
     confirm,
@@ -97,17 +97,17 @@ def test_print_summary_floats_and_ints(capsys):
 
 
 def test_confirm_yes(monkeypatch):
-    monkeypatch.setattr(progress.console, "input", lambda prompt: "yes")
+    monkeypatch.setattr(console_mod.console, "input", lambda prompt: "yes")
     assert confirm("ok?") is True
 
 
 def test_confirm_no(monkeypatch):
-    monkeypatch.setattr(progress.console, "input", lambda prompt: "n")
+    monkeypatch.setattr(console_mod.console, "input", lambda prompt: "n")
     assert confirm("ok?", default=True) is False
 
 
 def test_confirm_default_on_empty(monkeypatch):
-    monkeypatch.setattr(progress.console, "input", lambda prompt: "")
+    monkeypatch.setattr(console_mod.console, "input", lambda prompt: "")
     assert confirm("ok?", default=True) is True
     assert confirm("ok?", default=False) is False
 
@@ -160,5 +160,5 @@ def test_batch_processor_verbose_with_error(capsys):
 
     bp = BatchProcessor([1], verbose=True)
     bp.run(proc)
-    out = capsys.readouterr().out
-    assert "failed" in out
+    # The failure summary is a warning, so it goes to stderr (not stdout).
+    assert "failed" in capsys.readouterr().err

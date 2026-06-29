@@ -14,7 +14,7 @@ def system() -> None:
 @system.command("version")
 def system_version() -> None:
     """Show bioamla version and environment information."""
-    from bioamla.cli.progress import console
+    from bioamla.cli.console import console
     from bioamla.system import util
 
     try:
@@ -38,7 +38,7 @@ def system_version() -> None:
 @system.command("devices")
 def system_devices() -> None:
     """Show available compute devices (GPU, MPS, CPU)."""
-    from bioamla.cli.progress import console
+    from bioamla.cli.console import console
     from bioamla.system import util
 
     try:
@@ -95,7 +95,7 @@ def system_deps(do_install: bool, yes: bool) -> None:
         bioamla config deps --install    # Install missing dependencies
         bioamla config deps --install -y # Install without confirmation
     """
-    from bioamla.cli.progress import console
+    from bioamla.cli.console import console
     from bioamla.system import dependency
 
     try:
