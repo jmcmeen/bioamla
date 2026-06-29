@@ -72,7 +72,7 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
 
     console.print()
     console.print(_gradient_banner(_BANNER, _BANNER_GRADIENT), highlight=False)
-    console.print(f"\n  Bioacoustic & Machine Learning Applications", highlight=False)
+    console.print("\n  Bioacoustic & Machine Learning Applications", highlight=False)
     console.print(f"  bioamla [bold]{__version__}[/bold]", highlight=False)
     ctx.exit()
 
