@@ -64,24 +64,43 @@ def get_wavefile_sample_rate(wavefile_path: str) -> int:
     return sample_rate
 
 
+def _load_waveform_with_soundfile(filepath: str) -> tuple[torch.Tensor, int]:
+    """Decode ``filepath`` with libsndfile into a ``(channels, samples)`` float32 tensor."""
+    import soundfile as sf
+
+    torch = _import_torch()
+    data, sample_rate = sf.read(filepath, dtype="float32", always_2d=True)
+    return torch.from_numpy(np.ascontiguousarray(data.T)), int(sample_rate)
+
+
 def load_waveform_tensor(filepath: str) -> tuple[torch.Tensor, int]:
     """
     Load an audio file as a waveform tensor.
+
+    Decodes with ``torchaudio`` (FFmpeg, via torchcodec). If that fails -- most
+    often because the FFmpeg shared libraries are missing or are a major version
+    torchcodec does not support -- it falls back to libsndfile, which reads WAV,
+    FLAC, and OGG without FFmpeg. Formats only FFmpeg can decode (MP3 on older
+    libsndfile, M4A, ...) still need a working FFmpeg.
 
     Args:
         filepath: Path to the audio file.
 
     Returns:
-        Tuple of (waveform tensor, sample rate).
+        Tuple of (waveform tensor shaped ``(channels, samples)``, sample rate).
 
     Raises:
-        AudioLoadError: If decoding fails.
+        AudioLoadError: If neither decoder can read the file.
     """
     torchaudio = _import_torchaudio()
     try:
         waveform, sample_rate = torchaudio.load(filepath)
     except Exception as e:
-        raise AudioLoadError(f"Failed to load audio file: {e}") from e
+        try:
+            return _load_waveform_with_soundfile(filepath)
+        except Exception:
+            # Report the primary decoder's error: it names the real cause.
+            raise AudioLoadError(f"Failed to load audio file: {e}") from e
     return (waveform, sample_rate)
 
 

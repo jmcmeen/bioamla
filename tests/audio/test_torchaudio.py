@@ -80,6 +80,36 @@ class TestMockedTorchaudio:
             with pytest.raises(AudioLoadError):
                 load_waveform_tensor("/x.wav")
 
+    def test_load_waveform_tensor_falls_back_to_soundfile(self, tmp_path) -> None:
+        # torchaudio's FFmpeg backend unavailable (e.g. unsupported FFmpeg major
+        # version): a WAV must still decode, with the same (channels, samples) shape.
+        import numpy as np
+        import soundfile as sf
+
+        path = tmp_path / "stereo.wav"
+        stereo = np.stack(
+            [np.full(800, 0.25, dtype=np.float32), np.full(800, -0.5, dtype=np.float32)], axis=1
+        )
+        sf.write(path, stereo, 8000, subtype="FLOAT")
+
+        fake_ta = MagicMock()
+        fake_ta.load.side_effect = RuntimeError("Could not load libtorchcodec")
+        with patch("bioamla.audio.torchaudio._import_torchaudio", return_value=fake_ta):
+            out, sr = load_waveform_tensor(str(path))
+
+        assert sr == 8000
+        assert out.shape == (2, 800)
+        assert out.dtype == torch.float32
+        assert out[0, 0].item() == pytest.approx(0.25)
+        assert out[1, 0].item() == pytest.approx(-0.5)
+
+    def test_load_waveform_tensor_reports_the_primary_error(self) -> None:
+        fake_ta = MagicMock()
+        fake_ta.load.side_effect = RuntimeError("Could not load libtorchcodec")
+        with patch("bioamla.audio.torchaudio._import_torchaudio", return_value=fake_ta):
+            with pytest.raises(AudioLoadError, match="libtorchcodec"):
+                load_waveform_tensor("/does/not/exist.wav")
+
     def test_resample_waveform_tensor(self) -> None:
         wave = torch.zeros((1, 16000))
         out = resample_waveform_tensor(wave, 16000, 8000)

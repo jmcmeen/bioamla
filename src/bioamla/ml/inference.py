@@ -116,9 +116,18 @@ class ASTInference:
             self.model = AutoModelForAudioClassification.from_pretrained(
                 model_path, device_map="auto"
             )
-            self.feature_extractor = ASTFeatureExtractor.from_pretrained(model_path)
         except Exception as e:
             raise ModelError(f"Failed to load AST model from {model_path}: {e}") from e
+        # device_map="auto" may place the weights somewhere other than self.device
+        # (e.g. Apple's MPS, which get_device() does not select); inputs are sent to
+        # self.device, so the model must be there too.
+        self.model.to(self.device)
+
+        # Load feature extractor (fall back to default if config is absent).
+        try:
+            self.feature_extractor = ASTFeatureExtractor.from_pretrained(model_path)
+        except OSError:
+            self.feature_extractor = ASTFeatureExtractor()
 
         self.id2label = self.model.config.id2label
         self.label2id = self.model.config.label2id

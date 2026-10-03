@@ -110,6 +110,9 @@ class ASTModel(BaseAudioModel):
             self.model = AutoModelForAudioClassification.from_pretrained(model_path, **load_kwargs)
         except Exception as e:
             raise ModelError(f"Failed to load AST model from {model_path}: {e}") from e
+        # device_map="auto" may place the weights somewhere other than self.device
+        # (e.g. Apple's MPS); inputs are sent to self.device, so the model must be too.
+        self.model.to(self.device)
 
         if use_compile and hasattr(torch, "compile"):
             self.model = torch.compile(self.model)

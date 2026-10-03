@@ -64,6 +64,43 @@ class TestInit:
             with pytest.raises(ModelError, match="Failed to load AST model"):
                 ASTInference(model_path="fake/model")
 
+    def test_init_falls_back_to_default_feature_extractor(self) -> None:
+        # A checkpoint without preprocessor_config.json (e.g. bioamla/scp-frogs)
+        # must still load, using the default AST feature extractor.
+        with (
+            patch(
+                "transformers.AutoModelForAudioClassification.from_pretrained",
+                return_value=_fake_model(),
+            ),
+            patch(
+                "transformers.ASTFeatureExtractor.from_pretrained",
+                side_effect=OSError("no preprocessor_config.json"),
+            ),
+            patch("bioamla.ml.device.get_device", return_value=torch.device("cpu")),
+        ):
+            inf = ASTInference(model_path="fake/model", sample_rate=16000)
+        from transformers import ASTFeatureExtractor
+
+        assert isinstance(inf.feature_extractor, ASTFeatureExtractor)
+
+    def test_init_moves_model_to_the_inference_device(self) -> None:
+        # device_map="auto" can put weights on a device other than the one inputs
+        # are sent to (MPS on Apple Silicon); the engine must reconcile the two.
+        model = _fake_model()
+        with (
+            patch(
+                "transformers.AutoModelForAudioClassification.from_pretrained",
+                return_value=model,
+            ),
+            patch(
+                "transformers.ASTFeatureExtractor.from_pretrained",
+                return_value=_fake_feature_extractor(),
+            ),
+            patch("bioamla.ml.device.get_device", return_value=torch.device("cpu")),
+        ):
+            inf = ASTInference(model_path="fake/model", sample_rate=16000)
+        model.to.assert_called_once_with(inf.device)
+
     def test_init_string_device(self) -> None:
         with (
             patch(

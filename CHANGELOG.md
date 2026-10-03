@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **`ASTInference` loads checkpoints that ship no `preprocessor_config.json`.** It now falls
+  back to the default AST feature extractor, as `ASTModel` and `extract_embeddings_file`
+  already did. Previously `predict_file`, `batch_predict_files`/`batch_predict_segments`, and
+  the `ASTInference` engine itself raised `ModelError` for such models, including the default
+  `bioamla/scp-frogs`.
+- **AST inference works on Apple Silicon.** `ASTInference` and `ASTModel` loaded weights with
+  `device_map="auto"` (which selects MPS) but sent inputs to the CPU device, so every prediction
+  failed with a device mismatch. The model is now moved to the device inference runs on.
+- **Model paths decode WAV/FLAC/OGG without a torchcodec-compatible FFmpeg.**
+  `load_waveform_tensor` now falls back to libsndfile when `torchaudio`'s FFmpeg backend
+  cannot load (FFmpeg missing, or a major version outside the 4–8 that torchcodec supports),
+  so AST prediction, embedding, and training keep working on those formats. Formats only
+  FFmpeg can decode still require it.
+
 ## [0.2.3] - 2026-06-29
 
 ### Changed
