@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-10
+
 ### Fixed
 
 - **`ASTInference` loads checkpoints that ship no `preprocessor_config.json`.** It now falls
@@ -171,5 +173,6 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/jmcmeen/bioamla/compare/v0.2.3...v0.2.4
 [0.2.0]: https://github.com/jmcmeen/bioamla/releases/tag/v0.2.0
