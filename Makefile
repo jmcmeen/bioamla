@@ -83,4 +83,4 @@ docs-serve: ## Serve docs locally with live reload at http://127.0.0.1:8000
 
 clean: ## Remove caches and test/coverage/docs build artifacts
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov site
-	find . -type d -name __pycache__ -prune -exec rm -rf {} +
+	find . -name .venv -prune -o -type d -name __pycache__ -prune -exec rm -rf {} +
