@@ -715,3 +715,100 @@ def dataset_augment(
             f"Created {stats['files_created']} augmented files from "
             f"{stats['files_processed']} source files in {stats['output_dir']}"
         )
+
+
+@dataset.command("remix")
+@click.argument("output_dir")
+@click.option(
+    "--recipe", "-r", default=None, help="TOML recipe ([remix] table plus [[add]]/[[replace]])"
+)
+@click.option("--source", "-s", default=None, help="Source dataset dir (overrides the recipe)")
+@click.option("--keep", "-k", multiple=True, help="Keep only these labels (repeatable)")
+@click.option("--drop", "-d", multiple=True, help="Drop these labels (repeatable)")
+@click.option("--name", default=None, help="Dataset name for reporting (defaults to dir name)")
+@click.option(
+    "--label-column", default=None, help="Column holding the label (auto: label/category)"
+)
+@click.option(
+    "-t", "--template", default=None, help="Header file to prepend to the generated LICENSE"
+)
+@click.option("--metadata-filename", default="metadata.csv", help="Name of the metadata CSV")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
+def dataset_remix(
+    output_dir: str,
+    recipe: str | None,
+    source: str | None,
+    keep: tuple,
+    drop: tuple,
+    name: str | None,
+    label_column: str | None,
+    template: str | None,
+    metadata_filename: str,
+    quiet: bool,
+) -> None:
+    """Build a derived dataset: keep/drop classes, add classes, replace examples.
+
+    Reads a TOML recipe and/or command-line selections and writes a new dataset
+    directory organized by label, with metadata.csv and a generated LICENSE.
+    Flags override the matching recipe fields; --keep or --drop replaces the
+    recipe's own selection.
+
+    Examples:
+
+        bioamla dataset remix build/esc-50-animals --recipe remixes/esc-50-animals.toml
+
+        bioamla dataset remix build/no-planes --source datasets/esc-50 --drop airplane
+    """
+    from dataclasses import replace
+
+    from bioamla.cli.console import print_success
+    from bioamla.datasets import RemixRecipe, remix_dataset
+
+    if keep and drop:
+        raise click.UsageError("Use --keep or --drop, not both")
+    if not recipe and not source:
+        raise click.UsageError("Give --recipe and/or --source")
+
+    overrides: dict = {}
+    if source:
+        overrides["source"] = source
+    if keep:
+        overrides.update(keep=list(keep), drop=None)
+    if drop:
+        overrides.update(drop=list(drop), keep=None)
+    if name:
+        overrides["name"] = name
+    if label_column:
+        overrides["label_column"] = label_column
+
+    try:
+        if recipe:
+            spec = replace(RemixRecipe.from_toml(recipe), **overrides)
+        else:
+            spec = RemixRecipe(**overrides)
+        stats = remix_dataset(
+            spec,
+            output_dir,
+            metadata_filename=metadata_filename,
+            license_template=template,
+            verbose=not quiet,
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    if not quiet:
+        click.echo(f"Remix: {stats['name']}")
+        click.echo(f"  Labels ({stats['kept']}): {', '.join(stats['labels'])}")
+        click.echo(f"  Files copied: {stats['files_copied']}")
+        if stats["files_missing"]:
+            click.echo(f"  Source files missing: {stats['files_missing']}")
+        if stats["files_duplicate"]:
+            click.echo(f"  Duplicate file names skipped: {stats['files_duplicate']}")
+        click.echo(
+            f"  Source rows dropped: {stats['dropped']}, labels added: {stats['added']}, "
+            f"replaced: {stats['replaced']}"
+        )
+        click.echo(f"  Metadata: {stats['metadata_file']}")
+        if stats["license_file"]:
+            click.echo(f"  License: {stats['license_file']}")
+    print_success(f"Wrote {stats['total_files']} files to {stats['output_dir']}")

@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Dataset remixes.** `bioamla.datasets.remix_dataset` builds a derived dataset from a
+  labeled source directory: keep or drop classes, add a class from another clip directory,
+  or replace a class's examples. The output is organized by label with its own
+  `metadata.csv` and a `LICENSE` generated from the attribution columns, so provenance
+  follows the clips. `RemixRecipe.from_toml` loads a small TOML description (`[remix]` with
+  `keep`/`drop`, plus `[[add]]` and `[[replace]]` tables), and `bioamla dataset remix` is the
+  CLI front end, taking a recipe, `--keep`/`--drop` flags, or both.
+
 ## [0.2.8] - 2026-10-17
 
 ### Added

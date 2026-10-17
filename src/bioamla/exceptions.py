@@ -92,6 +92,12 @@ class LicenseGenerationError(DatasetError):
     """Generating a license/attribution file from dataset metadata failed."""
 
 
+class RemixError(DatasetError):
+    """Raised when building a remixed dataset fails."""
+
+    pass
+
+
 class AnnotationError(BioamlaError):
     """An annotation operation (import/export/extraction/measurement) failed."""
 
