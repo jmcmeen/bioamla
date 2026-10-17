@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-10-17
+
 ### Added
 
 - **riffy reads WAV headers.** `riffy` is now a dependency. `get_audio_info`,
@@ -212,7 +214,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.2.9...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.2.10...HEAD
+[0.2.10]: https://github.com/jmcmeen/bioamla/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/jmcmeen/bioamla/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/jmcmeen/bioamla/compare/v0.2.7...v0.2.8
 [0.2.4]: https://github.com/jmcmeen/bioamla/compare/v0.2.3...v0.2.4
