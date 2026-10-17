@@ -128,9 +128,9 @@ def test_dataset_stats_error(runner: CliRunner, tmp_path) -> None:
 
 
 def test_dataset_manifest(runner: CliRunner, tmp_path) -> None:
-    from types import SimpleNamespace
+    from bioamla.datasets import DatasetManifest
 
-    manifest = SimpleNamespace(
+    manifest = DatasetManifest(
         label2id={"a": 0, "b": 1}, class_counts={"a": 5, "b": 3}, splits={"train": 8}
     )
     with (
@@ -140,6 +140,28 @@ def test_dataset_manifest(runner: CliRunner, tmp_path) -> None:
         result = runner.invoke(cli, ["dataset", "manifest", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "Wrote manifest" in result.output
+    assert "recorded:" not in result.output
+
+
+def test_dataset_manifest_prints_recording_summary(runner: CliRunner, tmp_path) -> None:
+    from bioamla.datasets import DatasetManifest
+
+    manifest = DatasetManifest(
+        label2id={"a": 0},
+        class_counts={"a": 2},
+        recorded_from="2023-05-01T22:00:00-04:00",
+        recorded_to="2023-06-15T05:00:00-04:00",
+        devices=[{"device_model": "Song Meter Micro", "device_id": "SMU00001", "files": 2}],
+        sites=[{"latitude": 36.52, "longitude": -82.21, "files": 2}],
+    )
+    with (
+        patch("bioamla.datasets.build_manifest_from_metadata", return_value=manifest),
+        patch("bioamla.datasets.save_dataset_manifest"),
+    ):
+        result = runner.invoke(cli, ["dataset", "manifest", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "recorded: 2023-05-01T22:00:00-04:00 to 2023-06-15T05:00:00-04:00" in result.output
+    assert "recorders: 1  sites: 1" in result.output
 
 
 def test_dataset_manifest_error(runner: CliRunner, tmp_path) -> None:

@@ -18,6 +18,8 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+from bioamla.audio.metadata import RECORDING_METADATA_FIELDS
+
 logger = logging.getLogger(__name__)
 
 # Canonical columns every metadata.csv should lead with. Present-only: a column
@@ -74,7 +76,11 @@ REQUIRED_FIELDS = [
 ]
 
 # Precedence used when ordering columns in a written file.
-_FIELD_ORDER = CORE_FIELDS + ATTRIBUTION_FIELDS + OPTIONAL_INAT_FIELDS
+# Recorder columns (bioamla.audio.RECORDING_METADATA_FIELDS) come after the
+# catalog columns, in their own documented order rather than alphabetical.
+RECORDING_FIELDS = list(RECORDING_METADATA_FIELDS)
+
+_FIELD_ORDER = CORE_FIELDS + ATTRIBUTION_FIELDS + OPTIONAL_INAT_FIELDS + RECORDING_FIELDS
 
 # Per-source remaps from a catalog's idiosyncratic column onto a canonical one.
 # Applied only when the canonical column isn't already set, so no value is lost.

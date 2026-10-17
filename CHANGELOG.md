@@ -29,6 +29,16 @@ All notable changes to this project are documented here. The format is based on
   pre-flight step with no FFmpeg, torch or GPU. `bioamla batch audio metadata` writes
   `recorder_metadata.csv` with the flat recorder fields per WAV, or merges them into a
   manifest with `--input-file`.
+- **Recorder metadata in datasets.** `bioamla.datasets.add_recording_metadata` fills the
+  recorder columns of a dataset's `metadata.csv` from its WAV files in place. When those
+  columns are present, `build_manifest_from_metadata` (and `bioamla dataset manifest`)
+  records `recorded_from`/`recorded_to`, the distinct `devices`, and the distinct `sites`
+  with coordinates rounded to 0.01 deg; the dataset card gains a "Recording" section.
+  Recorder columns are written after the catalog columns in `metadata.csv`. Gain is also
+  read from Wildlife Acoustics' `WA|Song Meter|Audio settings` GUANO field, and when no
+  standard carries a timestamp it falls back to a `PREFIX_YYYYMMDD_HHMMSS` file name
+  (`sources` then includes `filename`). riffy's parse warnings for off-spec chunks are
+  logged at debug level instead of printed per file.
 
 ### Changed
 

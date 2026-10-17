@@ -72,6 +72,7 @@ from bioamla.datasets.manifest import (
     build_manifest_from_metadata,
     load_dataset_manifest,
     save_dataset_manifest,
+    summarize_recordings,
     write_dataset_card,
 )
 from bioamla.datasets.measurements import (
@@ -81,6 +82,7 @@ from bioamla.datasets.measurements import (
 )
 from bioamla.datasets.merge import find_species_name, merge_datasets
 from bioamla.datasets.partition import partition_dataset
+from bioamla.datasets.recording import add_recording_metadata
 from bioamla.datasets.remix import RemixRecipe, RemixSource, remix_dataset
 from bioamla.datasets.stats import get_dataset_stats
 from bioamla.exceptions import (
@@ -143,6 +145,9 @@ __all__ = [
     "build_manifest_from_metadata",
     "save_dataset_manifest",
     "load_dataset_manifest",
+    "summarize_recordings",
+    # Recorder metadata
+    "add_recording_metadata",
     "build_dataset_card",
     "write_dataset_card",
     # Augmentation

@@ -198,3 +198,70 @@ class TestDumpRecordingMetadata:
         path.write_bytes(b"ID3")
         with pytest.raises(InvalidInputError):
             dump_recording_metadata(str(path))
+
+
+class TestSongMeterExtras:
+    def test_gain_from_wa_audio_settings(self) -> None:
+        g = GuanoMetadata(version="1.0")
+        g.set("WA", "Song Meter|Audio settings", '[{"rate":44100,"gain":12}]')
+        meta = RecordingMetadata.from_riffy(RiffyRecordingMetadata(guano=g))
+        assert meta.gain == "12"
+
+    def test_gain_bad_json_ignored(self) -> None:
+        g = GuanoMetadata(version="1.0")
+        g.set("WA", "Song Meter|Audio settings", "not json")
+        meta = RecordingMetadata.from_riffy(RiffyRecordingMetadata(guano=g))
+        assert meta.gain is None
+
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [
+            ("FROGNN-1_20230306_182817.wav", datetime(2023, 3, 6, 18, 28, 17)),
+            ("20211112_193000.WAV", datetime(2021, 11, 12, 19, 30, 0)),
+            ("FROG-1_20240722_143502_000.wav", datetime(2024, 7, 22, 14, 35, 2)),
+            ("1-15689-A-4.wav", None),
+            ("SITE_20231399_250000.wav", None),  # impossible date
+        ],
+    )
+    def test_timestamp_from_filename(self, name: str, expected) -> None:
+        from bioamla.audio import timestamp_from_filename
+
+        assert timestamp_from_filename(name) == expected
+
+    def test_filename_fallback_only_when_no_timestamp(self, tmp_path) -> None:
+        src = tmp_path / "src.wav"
+        _write_pcm_wav(src)
+        parser = WAVParser(src)
+        g = GuanoMetadata(version="1.0")
+        g.loc_position = (10.31796, -84.07411)  # position only, like a partial recording
+        g.write_to_parser(parser)
+        out = tmp_path / "FROG-1_20240722_143502.wav"
+        parser.write_wav(out)
+
+        meta = get_recording_metadata(str(out))
+        assert meta.recorded_at == datetime(2024, 7, 22, 14, 35, 2)
+        assert meta.sources == ("guano", "filename")
+        assert meta.latitude == pytest.approx(10.31796)
+
+    def test_filename_not_used_when_guano_has_timestamp(self, guano_wav: str, tmp_path) -> None:
+        import shutil
+
+        renamed = tmp_path / "X_20000101_000000.wav"
+        shutil.copy(guano_wav, renamed)
+        meta = get_recording_metadata(str(renamed))
+        assert meta.recorded_at.year == 2024
+        assert "filename" not in meta.sources
+
+    def test_riffy_warnings_are_not_emitted(self, tmp_path) -> None:
+        import warnings
+
+        src = tmp_path / "src.wav"
+        _write_pcm_wav(src)
+        parser = WAVParser(src)
+        parser.set_chunk("guan", b"GUANO|Version: 1.0\nMake: \xff\xfeWeird\n")  # not UTF-8
+        out = tmp_path / "odd.wav"
+        parser.write_wav(out)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            meta = get_recording_metadata(str(out))
+        assert "guano" in meta.sources
