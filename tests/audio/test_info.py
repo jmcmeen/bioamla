@@ -36,10 +36,64 @@ class TestGetAudioInfo:
         with pytest.raises(NotFoundError):
             get_audio_info(str(tmp_path / "missing.wav"))
 
-    def test_decode_failure_raises(self, test_audio_path: str) -> None:
+    def test_wav_uses_riffy_not_pydub(self, test_audio_path: str) -> None:
+        with patch("bioamla.audio._pydub.get_audio_info", side_effect=RuntimeError("boom")):
+            info = get_audio_info(test_audio_path)
+        assert info.bit_depth == 16
+        assert info.subtype == "PCM_16"
+        assert info.samples == 16000
+
+    def test_non_pcm_wav_falls_back_to_pydub(self, tmp_path) -> None:
+        import scipy.io.wavfile as wavfile
+
+        path = tmp_path / "float.wav"
+        wavfile.write(str(path), 16000, np.zeros(1600, dtype=np.float32))
+        fake = {
+            "duration": 0.1,
+            "sample_rate": 16000,
+            "channels": 1,
+            "samples": 1600,
+            "format": "WAV",
+            "codec": "pcm_f32le",
+            "bit_depth": 32,
+            "subtype": "PCM_F32LE",
+        }
+        with patch("bioamla.audio._pydub.get_audio_info", return_value=fake) as pydub_info:
+            info = get_audio_info(str(path))
+        pydub_info.assert_called_once_with(str(path))
+        assert info.subtype == "PCM_F32LE"
+
+    def test_other_formats_use_pydub(self, tmp_path) -> None:
+        path = tmp_path / "clip.flac"
+        path.write_bytes(b"fLaC")
+        fake = {
+            "duration": 2.0,
+            "sample_rate": 44100,
+            "channels": 2,
+            "samples": 88200,
+            "format": "FLAC",
+            "codec": "flac",
+            "bit_depth": 16,
+            "subtype": "FLAC",
+        }
+        with patch("bioamla.audio._pydub.get_audio_info", return_value=fake):
+            info = get_audio_info(str(path))
+        assert info.format == "FLAC"
+        assert info.channels == 2
+
+    def test_decode_failure_raises(self, tmp_path) -> None:
+        path = tmp_path / "clip.flac"
+        path.write_bytes(b"fLaC")
         with patch("bioamla.audio._pydub.get_audio_info", side_effect=RuntimeError("boom")):
             with pytest.raises(AudioLoadError):
-                get_audio_info(test_audio_path)
+                get_audio_info(str(path))
+
+    def test_wav_both_backends_fail_raises(self, tmp_path) -> None:
+        path = tmp_path / "junk.wav"
+        path.write_bytes(b"not a wav")
+        with patch("bioamla.audio._pydub.get_audio_info", side_effect=RuntimeError("boom")):
+            with pytest.raises(AudioLoadError):
+                get_audio_info(str(path))
 
 
 class TestConvenienceGetters:

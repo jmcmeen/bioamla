@@ -16,20 +16,25 @@ def audio() -> None:
 @audio.command("info")
 @click.argument("path")
 def audio_info(path: str) -> None:
-    """Display audio file information."""
-    from bioamla.audio import load_audio_data
+    """Display audio file information (header only; the file is not decoded)."""
+    from bioamla.audio import get_audio_info
     from bioamla.cli.console import print_kv
 
     try:
-        audio_data = load_audio_data(path)
+        info = get_audio_info(path)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
     print_kv("File", path)
-    print_kv("Duration", f"{audio_data.duration:.2f}s")
-    print_kv("Sample rate", f"{audio_data.sample_rate} Hz")
-    print_kv("Channels", audio_data.channels)
-    print_kv("Samples", audio_data.num_samples)
+    print_kv("Format", info.format)
+    print_kv("Duration", f"{info.duration:.2f}s")
+    print_kv("Sample rate", f"{info.sample_rate} Hz")
+    print_kv("Channels", info.channels)
+    print_kv("Samples", info.samples)
+    if info.bit_depth is not None:
+        print_kv("Bit depth", info.bit_depth)
+    if info.subtype:
+        print_kv("Subtype", info.subtype)
 
 
 @audio.command("list")

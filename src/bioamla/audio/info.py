@@ -3,8 +3,8 @@ Audio File Information & Analysis
 ================================
 
 File-level metadata and complete-analysis helpers folded from ``core/audio.py``.
-These functions take a file path, read the file (lazily via the pydub backend),
-and return small dataclasses. They raise :class:`NotFoundError` when the path
+These functions take a file path, read its header (riffy for WAV, the pydub /
+ffprobe backend for everything else), and return small dataclasses. They raise :class:`NotFoundError` when the path
 does not exist and :class:`AudioLoadError` when decoding fails.
 """
 
@@ -104,6 +104,38 @@ class AudioAnalysis:
 # =============================================================================
 
 
+def read_audio_info_dict(filepath: str) -> dict[str, Any]:
+    """
+    Read header metadata for an audio file as a plain dictionary.
+
+    WAV files are read with riffy (pure Python, no FFmpeg). Anything riffy cannot
+    handle, such as a non-PCM WAV, and every other format goes through the pydub /
+    ffprobe backend. Keys: ``duration``, ``sample_rate``, ``channels``, ``samples``,
+    ``format``, ``codec``, ``bit_depth``, ``subtype``.
+
+    Raises:
+        NotFoundError: If the file does not exist.
+        AudioLoadError: If metadata cannot be extracted.
+    """
+    from bioamla.audio._pydub import get_audio_info as _pydub_get_audio_info
+    from bioamla.audio._riffy import get_wav_info, is_wav_path
+
+    path = Path(filepath)
+    if not path.exists():
+        raise NotFoundError(f"Audio file not found: {filepath}")
+
+    if is_wav_path(path):
+        try:
+            return get_wav_info(path)
+        except AudioLoadError as e:
+            logger.debug(f"riffy could not read {filepath} ({e}); falling back to pydub")
+
+    try:
+        return _pydub_get_audio_info(str(path))
+    except Exception as e:
+        raise AudioLoadError(f"Failed to read audio info: {e}") from e
+
+
 def get_audio_info(filepath: str) -> AudioInfo:
     """
     Get basic information about an audio file.
@@ -120,17 +152,7 @@ def get_audio_info(filepath: str) -> AudioInfo:
         NotFoundError: If the file does not exist.
         AudioLoadError: If metadata cannot be extracted.
     """
-    from bioamla.audio._pydub import get_audio_info as _pydub_get_audio_info
-
-    path = Path(filepath)
-    if not path.exists():
-        raise NotFoundError(f"Audio file not found: {filepath}")
-
-    try:
-        info_dict = _pydub_get_audio_info(str(filepath))
-    except Exception as e:
-        raise AudioLoadError(f"Failed to read audio info: {e}") from e
-
+    info_dict = read_audio_info_dict(filepath)
     return AudioInfo(
         duration=info_dict["duration"],
         sample_rate=info_dict["sample_rate"],
