@@ -109,9 +109,123 @@ def test_info(runner, mocker):
     load.assert_not_called()
 
 
+def _fake_info():
+    from bioamla.audio import AudioInfo
+
+    return AudioInfo(
+        duration=1.0,
+        sample_rate=16000,
+        channels=1,
+        samples=16000,
+        bit_depth=16,
+        format="WAV",
+        subtype="PCM_16",
+    )
+
+
+def test_info_metadata_flag(runner, mocker):
+    from datetime import datetime, timezone
+
+    from bioamla.audio import RecordingMetadata
+
+    mocker.patch("bioamla.audio.get_audio_info", return_value=_fake_info())
+    mocker.patch(
+        "bioamla.audio.get_recording_metadata",
+        return_value=RecordingMetadata(
+            recorded_at=datetime(2021, 11, 12, 19, 30, tzinfo=timezone.utc),
+            device_model="AudioMoth",
+            device_id="248D9B045EC9EE79",
+            gain="medium",
+            temperature_c=14.0,
+            battery_voltage=4.1,
+            sources=("info", "audiomoth"),
+        ),
+    )
+    result = runner.invoke(cli, ["audio", "info", "file.wav", "--metadata"])
+    assert result.exit_code == 0, result.output
+    assert "Recorder metadata" in result.output
+    assert "Recorded at: 2021-11-12T19:30:00+00:00" in result.output
+    assert "Device ID: 248D9B045EC9EE79" in result.output
+    assert "Temperature: 14.0 °C" in result.output
+    assert "Battery: 4.1 V" in result.output
+    assert "Sources: info+audiomoth" in result.output
+    assert "Latitude" not in result.output
+
+
+def test_info_metadata_flag_empty(runner, mocker):
+    from bioamla.audio import RecordingMetadata
+
+    mocker.patch("bioamla.audio.get_audio_info", return_value=_fake_info())
+    mocker.patch("bioamla.audio.get_recording_metadata", return_value=RecordingMetadata())
+    result = runner.invoke(cli, ["audio", "info", "file.wav", "--metadata"])
+    assert result.exit_code == 0
+    assert "Recorder metadata" not in result.output
+
+
+def test_info_metadata_flag_non_wav(runner, mocker):
+    from bioamla.exceptions import InvalidInputError
+
+    mocker.patch("bioamla.audio.get_audio_info", return_value=_fake_info())
+    mocker.patch("bioamla.audio.get_recording_metadata", side_effect=InvalidInputError("no"))
+    result = runner.invoke(cli, ["audio", "info", "file.flac", "--metadata"])
+    assert result.exit_code == 0
+    assert "Duration: 1.00s" in result.output
+
+
 def test_info_error(runner, mocker):
     mocker.patch("bioamla.audio.get_audio_info", side_effect=AudioLoadError("bad"))
     result = runner.invoke(cli, ["audio", "info", "file.wav"])
+    assert result.exit_code != 0
+    assert "bad" in result.output
+
+
+# --------------------------------------------------------------------------- #
+# metadata
+# --------------------------------------------------------------------------- #
+
+
+def test_metadata(runner, mocker):
+    from bioamla.audio import RecordingMetadata
+
+    mocker.patch(
+        "bioamla.audio.get_recording_metadata",
+        return_value=RecordingMetadata(
+            latitude=36.52, longitude=-82.21, device_make="Wildlife Acoustics", sources=("guano",)
+        ),
+    )
+    result = runner.invoke(cli, ["audio", "metadata", "file.wav"])
+    assert result.exit_code == 0, result.output
+    assert "Latitude: 36.52" in result.output
+    assert "Longitude: -82.21" in result.output
+    assert "Device make: Wildlife Acoustics" in result.output
+    assert "Sources: guano" in result.output
+
+
+def test_metadata_empty(runner, mocker):
+    from bioamla.audio import RecordingMetadata
+
+    mocker.patch("bioamla.audio.get_recording_metadata", return_value=RecordingMetadata())
+    result = runner.invoke(cli, ["audio", "metadata", "file.wav"])
+    assert result.exit_code == 0
+    assert "No recorder metadata" in result.output
+
+
+def test_metadata_json(runner, mocker):
+    import json
+
+    dump = mocker.patch(
+        "bioamla.audio.dump_recording_metadata",
+        return_value={"file": "file.wav", "sources": ["guano"], "guano": {"Make": "X"}},
+    )
+    result = runner.invoke(cli, ["audio", "metadata", "file.wav", "--json"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["guano"] == {"Make": "X"}
+    dump.assert_called_once_with("file.wav")
+
+
+def test_metadata_error(runner, mocker):
+    mocker.patch("bioamla.audio.get_recording_metadata", side_effect=AudioLoadError("bad"))
+    result = runner.invoke(cli, ["audio", "metadata", "file.wav"])
     assert result.exit_code != 0
     assert "bad" in result.output
 

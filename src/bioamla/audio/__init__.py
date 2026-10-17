@@ -59,6 +59,12 @@ from bioamla.audio.io import (
     save_audio_data,
     save_audio_data_as,
 )
+from bioamla.audio.metadata import (
+    RECORDING_METADATA_FIELDS,
+    RecordingMetadata,
+    dump_recording_metadata,
+    get_recording_metadata,
+)
 from bioamla.audio.playback import (
     AudioPlayer,
     PlaybackPosition,
@@ -123,6 +129,11 @@ __all__ = [
     "analyze_audio",
     "analyze_audio_batch",
     "summarize_analysis",
+    # Recorder metadata (file-level)
+    "RECORDING_METADATA_FIELDS",
+    "RecordingMetadata",
+    "get_recording_metadata",
+    "dump_recording_metadata",
     # Analysis (array-level)
     "AmplitudeStats",
     "FrequencyStats",

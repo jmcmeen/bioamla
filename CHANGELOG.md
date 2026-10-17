@@ -13,6 +13,13 @@ All notable changes to this project are documented here. The format is based on
   metadata needs no FFmpeg, libsndfile or torch and always reports bit depth. Other
   formats, and WAVs riffy cannot parse (non-PCM), still go through the pydub / ffprobe
   backend. `bioamla.audio.info.read_audio_info_dict` is the shared routing function.
+- **Recorder metadata.** `bioamla.audio.get_recording_metadata` reads the deployment
+  details field recorders embed in WAV files (GUANO, AudioMoth, Wildlife Acoustics WAMD,
+  `bext`, RIFF INFO) and flattens them into one `RecordingMetadata`: `recorded_at`,
+  `latitude`/`longitude`, `device_make`/`device_model`/`device_id`, `gain`,
+  `temperature_c`, `battery_voltage` and the `sources` found. `dump_recording_metadata`
+  returns every decoded field per standard. `bioamla audio metadata FILE [--json]` prints
+  either view, and `bioamla audio info --metadata` appends the flat view when present.
 
 ### Changed
 
