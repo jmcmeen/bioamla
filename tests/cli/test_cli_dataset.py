@@ -8,7 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 from bioamla.cli.cli import cli
-from bioamla.exceptions import DatasetError, MergeError
+from bioamla.exceptions import DatasetError, InvalidInputError, MergeError
 
 
 @pytest.fixture
@@ -360,3 +360,100 @@ def test_dataset_augment_error(runner: CliRunner, tmp_path) -> None:
             ],
         )
     assert result.exit_code != 0
+
+
+# --- remix ---------------------------------------------------------------
+
+
+def _remix_stats(tmp_path) -> dict:
+    return {
+        "name": "animals",
+        "output_dir": str(tmp_path / "out"),
+        "metadata_file": str(tmp_path / "out" / "metadata.csv"),
+        "label_column": "category",
+        "labels": ["cat", "dog"],
+        "total_files": 4,
+        "files_copied": 4,
+        "files_missing": 0,
+        "files_duplicate": 0,
+        "kept": 2,
+        "dropped": 2,
+        "added": 0,
+        "replaced": 0,
+        "license_file": str(tmp_path / "out" / "LICENSE"),
+    }
+
+
+def test_dataset_remix_flags(runner: CliRunner, tmp_path) -> None:
+    with patch("bioamla.datasets.remix_dataset", return_value=_remix_stats(tmp_path)) as m:
+        result = runner.invoke(
+            cli,
+            [
+                "dataset",
+                "remix",
+                str(tmp_path / "out"),
+                "--source",
+                str(tmp_path / "src"),
+                "--keep",
+                "dog",
+                "--keep",
+                "cat",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    recipe = m.call_args.args[0]
+    assert recipe.keep == ["dog", "cat"] and recipe.drop is None
+    assert "Labels (2): cat, dog" in result.output
+    assert "Wrote 4 files" in result.output
+
+
+def test_dataset_remix_recipe_with_overrides(runner: CliRunner, tmp_path) -> None:
+    recipe_path = tmp_path / "r.toml"
+    recipe_path.write_text('[remix]\nsource = "orig"\nkeep = ["dog"]\n')
+    with patch("bioamla.datasets.remix_dataset", return_value=_remix_stats(tmp_path)) as m:
+        result = runner.invoke(
+            cli,
+            [
+                "dataset",
+                "remix",
+                str(tmp_path / "out"),
+                "--recipe",
+                str(recipe_path),
+                "--drop",
+                "airplane",
+                "--quiet",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    recipe = m.call_args.args[0]
+    assert recipe.source == str(tmp_path / "orig")
+    assert recipe.drop == ["airplane"] and recipe.keep is None
+    assert "Labels" not in result.output
+
+
+def test_dataset_remix_keep_and_drop_rejected(runner: CliRunner, tmp_path) -> None:
+    recipe_path = tmp_path / "r.toml"
+    recipe_path.write_text('[remix]\nsource = "orig"\n')
+    for args in (["--recipe", str(recipe_path)], ["--source", str(tmp_path)]):
+        with patch("bioamla.datasets.remix_dataset") as m:
+            result = runner.invoke(
+                cli, ["dataset", "remix", str(tmp_path / "out"), *args, "-k", "dog", "-d", "cat"]
+            )
+        assert result.exit_code != 0
+        assert "not both" in result.output
+        m.assert_not_called()
+
+
+def test_dataset_remix_needs_recipe_or_source(runner: CliRunner, tmp_path) -> None:
+    result = runner.invoke(cli, ["dataset", "remix", str(tmp_path / "out")])
+    assert result.exit_code != 0
+    assert "--recipe" in result.output
+
+
+def test_dataset_remix_error(runner: CliRunner, tmp_path) -> None:
+    with patch("bioamla.datasets.remix_dataset", side_effect=InvalidInputError("bad label")):
+        result = runner.invoke(
+            cli, ["dataset", "remix", str(tmp_path / "out"), "--source", str(tmp_path)]
+        )
+    assert result.exit_code != 0
+    assert "bad label" in result.output

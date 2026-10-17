@@ -12,8 +12,8 @@ Annotations
     labels, remapping, filtering), clip extraction, and acoustic measurements.
 
 Datasets
-    Merging multiple audio datasets, audio augmentation, license/attribution
-    generation, and metadata statistics.
+    Merging multiple audio datasets, remixing (keep/drop/add/replace classes),
+    audio augmentation, license/attribution generation, and metadata statistics.
 
 Example:
     >>> from bioamla.datasets import load_csv_annotations, save_raven_selection_table
@@ -81,6 +81,7 @@ from bioamla.datasets.measurements import (
 )
 from bioamla.datasets.merge import find_species_name, merge_datasets
 from bioamla.datasets.partition import partition_dataset
+from bioamla.datasets.remix import RemixRecipe, RemixSource, remix_dataset
 from bioamla.datasets.stats import get_dataset_stats
 from bioamla.exceptions import (
     AnnotationError,
@@ -88,6 +89,7 @@ from bioamla.exceptions import (
     DatasetError,
     LicenseGenerationError,
     MergeError,
+    RemixError,
 )
 
 __all__ = [
@@ -131,6 +133,10 @@ __all__ = [
     "find_species_name",
     "get_dataset_stats",
     "partition_dataset",
+    # Remix
+    "RemixRecipe",
+    "RemixSource",
+    "remix_dataset",
     # Dataset manifest
     "DatasetManifest",
     "BIOAMLA_DATASET_FORMAT",
@@ -155,5 +161,6 @@ __all__ = [
     "MergeError",
     "AugmentationError",
     "LicenseGenerationError",
+    "RemixError",
     "AnnotationError",
 ]
