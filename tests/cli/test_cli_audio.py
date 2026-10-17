@@ -85,15 +85,32 @@ def test_audio_subcommand_help(runner, cmd):
 
 
 def test_info(runner, mocker):
-    mocker.patch("bioamla.audio.load_audio_data", return_value=_fake_audio_data())
+    from bioamla.audio import AudioInfo
+
+    info = AudioInfo(
+        duration=1.0,
+        sample_rate=16000,
+        channels=1,
+        samples=16000,
+        bit_depth=16,
+        format="WAV",
+        subtype="PCM_16",
+    )
+    get_info = mocker.patch("bioamla.audio.get_audio_info", return_value=info)
+    load = mocker.patch("bioamla.audio.load_audio_data")
     result = runner.invoke(cli, ["audio", "info", "file.wav"])
     assert result.exit_code == 0
+    assert "Format: WAV" in result.output
     assert "Duration: 1.00s" in result.output
     assert "Sample rate: 16000 Hz" in result.output
+    assert "Bit depth: 16" in result.output
+    assert "Subtype: PCM_16" in result.output
+    get_info.assert_called_once_with("file.wav")
+    load.assert_not_called()
 
 
 def test_info_error(runner, mocker):
-    mocker.patch("bioamla.audio.load_audio_data", side_effect=AudioLoadError("bad"))
+    mocker.patch("bioamla.audio.get_audio_info", side_effect=AudioLoadError("bad"))
     result = runner.invoke(cli, ["audio", "info", "file.wav"])
     assert result.exit_code != 0
     assert "bad" in result.output

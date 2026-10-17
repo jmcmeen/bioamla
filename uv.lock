@@ -410,6 +410,7 @@ dependencies = [
     { name = "pyinaturalist" },
     { name = "python-dotenv" },
     { name = "requests" },
+    { name = "riffy" },
     { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scikit-learn", version = "1.9.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -476,6 +477,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.28.0" },
     { name = "rich", marker = "extra == 'cli'" },
     { name = "rich", marker = "extra == 'dev'" },
+    { name = "riffy", specifier = ">=0.3.3" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.17,<0.18" },
     { name = "scikit-learn", specifier = ">=1.0.0" },
     { name = "scipy" },
@@ -4524,6 +4526,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
+]
+
+[[package]]
+name = "riffy"
+version = "0.3.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/33/59/2d1f8e4c2b51db53fc87a6012507c0fbd016b52f346a865f7448ddaf6236/riffy-0.3.3.tar.gz", hash = "sha256:c1523d247431c67acdd6baeb736750cd62d849f81dc0e9b6b2569711ad8a4959", size = 50962, upload-time = "2026-10-17T06:07:27.817Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cd/52/5ddebdcf4fc0c08e99d5f77744223d188840913c3ff2c2e7ab0ac9aca977/riffy-0.3.3-py3-none-any.whl", hash = "sha256:36f1ec2c7d4a981b3b65224692b8b3c0f6f136e5251c919fc297b5cbd8c46609", size = 52928, upload-time = "2026-10-17T06:07:26.356Z" },
 ]
 
 [[package]]

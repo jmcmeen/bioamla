@@ -62,9 +62,9 @@ def get_wav_metadata(filepath: str) -> dict[str, Any]:
         format, subtype, bit_depth).
 
     """
-    from bioamla.audio._pydub import get_audio_info
+    from bioamla.audio.info import read_audio_info_dict
 
-    info = get_audio_info(filepath)
+    info = read_audio_info_dict(filepath)
     return {
         "sample_rate": info["sample_rate"],
         "channels": info["channels"],

@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **riffy reads WAV headers.** `riffy` is now a dependency. `get_audio_info`,
+  `get_wav_metadata` and `bioamla audio info` read PCM WAV headers with it, so WAV
+  metadata needs no FFmpeg, libsndfile or torch and always reports bit depth. Other
+  formats, and WAVs riffy cannot parse (non-PCM), still go through the pydub / ffprobe
+  backend. `bioamla.audio.info.read_audio_info_dict` is the shared routing function.
+
+### Changed
+
+- **`bioamla audio info` no longer decodes the file.** It read the whole clip into memory
+  to print four numbers; it now reads the header and also prints format, bit depth and
+  subtype.
+
 ## [0.2.9] - 2026-10-17
 
 ### Added
