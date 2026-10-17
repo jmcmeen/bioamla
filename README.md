@@ -21,7 +21,7 @@ import directly:
 | Import | What it does |
 | --- | --- |
 | `bioamla.audio` | audio I/O, analysis, signal processing (filter/denoise/normalize/resample/segment), playback |
-| `bioamla.viz` | spectrograms, mel/MFCC, waveform plots |
+| `bioamla.viz` | spectrograms, mel/MFCC, waveform plots, scrolling spectrogram videos |
 | `bioamla.indices` | acoustic indices — ACI, ADI, AEI, BIO, NDSI, spectral/temporal entropy |
 | `bioamla.detect` | event detection — energy, RIBBIT, peaks, accelerating-pattern |
 | `bioamla.cluster` | embedding dimensionality reduction, clustering, novelty detection |
@@ -140,6 +140,7 @@ bioamla audio filter in.wav out.wav --bandpass-low 500 --bandpass-high 8000
 bioamla indices compute recording.wav           # ACI/ADI/AEI/BIO/NDSI + entropy
 bioamla detect energy recording.wav             # energy-based detections
 bioamla audio visualize recording.wav -o spec.png
+bioamla audio video recording.wav -o recording.mp4   # scrolling spectrogram, needs ffmpeg
 
 # Audio editing transforms (deterministic, single-file):
 bioamla audio pitch-shift in.wav out.wav --steps 2
@@ -184,7 +185,8 @@ Runnable end-to-end studies wired from the CLI live in
 [`examples/`](https://github.com/jmcmeen/bioamla/tree/main/examples) — each is a
 self-contained shell script (see the [examples README](https://github.com/jmcmeen/bioamla/tree/main/examples#readme)):
 catalog → annotate → dataset → train → publish, fine-tuning from a Hub dataset,
-soundscape analysis, embedding clustering, and iNaturalist clip inference.
+soundscape analysis, embedding clustering, iNaturalist clip inference, and spectrogram
+videos in every style and frame shape.
 
 ## Development
 

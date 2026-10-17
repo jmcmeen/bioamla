@@ -54,7 +54,7 @@ Flat domain packages under `src/bioamla/`:
 | Package | Responsibility |
 |---|---|
 | `audio` | audio I/O, discovery, analysis, signal processing (filter/denoise/normalize/resample/segment), playback. `AudioData` is the core DTO. |
-| `viz` | spectrograms, mel/MFCC, waveform plots |
+| `viz` | spectrograms, mel/MFCC, waveform plots, scrolling spectrogram videos (`video.py`, encodes through the `ffmpeg` CLI) |
 | `indices` | acoustic indices — ACI, ADI, AEI, BIO, NDSI, spectral/temporal entropy |
 | `detect` | event detection — energy, RIBBIT, peaks, accelerating-pattern |
 | `cluster` | embedding dim-reduction (umap), clustering (hdbscan), novelty detection |

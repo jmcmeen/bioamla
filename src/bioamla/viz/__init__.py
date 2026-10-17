@@ -6,8 +6,9 @@ Spectrogram and waveform rendering built on matplotlib and librosa. matplotlib
 so importing this package stays fast.
 
 Example:
-    >>> from bioamla.viz import generate_spectrogram
+    >>> from bioamla.viz import generate_spectrogram, generate_spectrogram_video
     >>> generate_spectrogram("recording.wav", "out.png", viz_type="mel")
+    >>> generate_spectrogram_video("recording.wav", "out.mp4")
 """
 
 from bioamla.viz.batch import batch_generate_spectrograms
@@ -20,9 +21,12 @@ from bioamla.viz.core import (
     spectrogram_to_db,
     spectrogram_to_image,
 )
+from bioamla.viz.video import SpectrogramVideoResult, generate_spectrogram_video
 
 __all__ = [
     "generate_spectrogram",
+    "generate_spectrogram_video",
+    "SpectrogramVideoResult",
     "compute_stft",
     "compute_mel_spectrogram",
     "spectrogram_to_db",

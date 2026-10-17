@@ -4,7 +4,7 @@ End-to-end bioacoustics workflows wired together from the `bioamla` CLI. Each
 script is heavily commented and meant to be **read first, then run** — they are
 templates to adapt, not fixtures. Unlike [`dev-data/cli_test.sh`](../dev-data/cli_test.sh)
 (an offline smoke test), these touch the network, the HuggingFace Hub, and (for
-training) a GPU.
+training) a GPU. Workflow 7 is the exception: it needs only a recording and ffmpeg.
 
 | Script | Flow | Needs |
 | --- | --- | --- |
@@ -14,9 +14,13 @@ training) a GPU.
 | [`04_soundscape_analysis.sh`](04_soundscape_analysis.sh) | acoustic indices → event detection → segment → AST predict → annotations | a trained/published model |
 | [`05_embedding_clustering.sh`](05_embedding_clustering.sh) | embed → dimensionality reduction → cluster → novelty | a model |
 | [`06_inat_clip_inference.sh`](06_inat_clip_inference.sh) | iNaturalist clip download → AST inference with `bioamla/ast-esc50` | network |
+| [`07_spectrogram_video.sh`](07_spectrogram_video.sh) / [`.py`](07_spectrogram_video.py) | render a recording as spectrogram and waveform videos in every style and frame shape (CLI, and the same from Python) | `ffmpeg` on PATH |
 
 ## Conventions
 
+- Shell scripts (`.sh`) show the **CLI**; Python scripts (`.py`) show the same
+  workflow through the **library API** (progress callbacks, results as data,
+  loops over many files). A workflow has one or both, under the same number.
 - Each script uses `set -euo pipefail` and writes outputs under `./out/<workflow>/`.
 - Steps a human must do by hand (reviewing/correcting annotations) are marked
   **`# >>> MANUAL`** — the script pauses or expects you to edit a file before
