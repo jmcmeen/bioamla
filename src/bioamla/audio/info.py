@@ -164,6 +164,34 @@ def get_audio_info(filepath: str) -> AudioInfo:
     )
 
 
+def validate_wav(filepath: str) -> AudioInfo:
+    """
+    Check that ``filepath`` is a well-formed PCM WAV file.
+
+    Parses the RIFF structure and format chunk with riffy (no decoding, no FFmpeg)
+    and returns the header as :class:`AudioInfo` when the file is sound. Meant as a
+    pre-flight step before heavier processing.
+
+    Raises:
+        NotFoundError: If the file does not exist.
+        InvalidInputError: If the path is not a WAV file.
+        AudioLoadError: If the RIFF structure is damaged, the format chunk is
+            malformed, or the audio is not PCM.
+    """
+    from bioamla.audio._riffy import get_wav_info
+
+    info_dict = get_wav_info(filepath)
+    return AudioInfo(
+        duration=info_dict["duration"],
+        sample_rate=info_dict["sample_rate"],
+        channels=info_dict["channels"],
+        samples=info_dict["samples"],
+        bit_depth=info_dict.get("bit_depth"),
+        format=info_dict["format"],
+        subtype=info_dict.get("subtype"),
+    )
+
+
 def get_duration(filepath: str) -> float:
     """Get the duration of an audio file in seconds."""
     return get_audio_info(filepath).duration

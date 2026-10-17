@@ -47,6 +47,7 @@ from bioamla.audio.info import (
     get_duration,
     get_sample_rate,
     summarize_analysis,
+    validate_wav,
 )
 from bioamla.audio.io import (
     batch_process,
@@ -129,6 +130,7 @@ __all__ = [
     "analyze_audio",
     "analyze_audio_batch",
     "summarize_analysis",
+    "validate_wav",
     # Recorder metadata (file-level)
     "RECORDING_METADATA_FIELDS",
     "RecordingMetadata",

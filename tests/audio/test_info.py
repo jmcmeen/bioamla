@@ -158,3 +158,46 @@ class TestSummarizeAnalysis:
         results[0].amplitude.peak_db = -np.inf
         summary = summarize_analysis(results)
         assert summary["avg_rms_db"] == -np.inf
+
+
+class TestValidateWav:
+    def test_valid_pcm(self, test_audio_path: str) -> None:
+        from bioamla.audio import validate_wav
+
+        info = validate_wav(test_audio_path)
+        assert isinstance(info, AudioInfo)
+        assert info.subtype == "PCM_16"
+        assert info.samples == 16000
+
+    def test_garbage_raises(self, tmp_path) -> None:
+        from bioamla.audio import validate_wav
+
+        path = tmp_path / "junk.wav"
+        path.write_bytes(b"RIFF....WAVEjunk")
+        with pytest.raises(AudioLoadError):
+            validate_wav(str(path))
+
+    def test_float_wav_raises(self, tmp_path) -> None:
+        import scipy.io.wavfile as wavfile
+
+        from bioamla.audio import validate_wav
+
+        path = tmp_path / "float.wav"
+        wavfile.write(str(path), 16000, np.zeros(160, dtype=np.float32))
+        with pytest.raises(AudioLoadError):
+            validate_wav(str(path))
+
+    def test_non_wav_raises(self, tmp_path) -> None:
+        from bioamla.audio import validate_wav
+        from bioamla.exceptions import InvalidInputError
+
+        path = tmp_path / "clip.flac"
+        path.write_bytes(b"fLaC")
+        with pytest.raises(InvalidInputError):
+            validate_wav(str(path))
+
+    def test_missing_raises(self, tmp_path) -> None:
+        from bioamla.audio import validate_wav
+
+        with pytest.raises(NotFoundError):
+            validate_wav(str(tmp_path / "nope.wav"))
