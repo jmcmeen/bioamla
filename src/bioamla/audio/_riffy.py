@@ -14,7 +14,10 @@ hierarchy here and nowhere else.
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import warnings
+from collections.abc import Iterator
 from pathlib import Path
 
 from bioamla.exceptions import AudioLoadError, InvalidInputError, NotFoundError
@@ -22,6 +25,20 @@ from bioamla.exceptions import AudioLoadError, InvalidInputError, NotFoundError
 logger = logging.getLogger(__name__)
 
 WAV_SUFFIXES = frozenset({".wav", ".wave"})
+
+
+@contextlib.contextmanager
+def _riffy_warnings_to_log(filepath: str | Path) -> Iterator[None]:
+    """Turn riffy's parse warnings (odd encodings, padded chunks) into debug logs.
+
+    Field recorders write slightly off-spec chunks all the time; the parse still
+    succeeds, and a warning on stderr for every file would drown batch output.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        yield
+    for w in caught:
+        logger.debug(f"riffy: {filepath}: {w.message}")
 
 
 def is_wav_path(filepath: str | Path) -> bool:
@@ -51,8 +68,9 @@ def get_wav_info(filepath: str | Path) -> dict:
         raise InvalidInputError(f"Not a WAV file: {filepath}")
 
     try:
-        parser = WAVParser(path)
-        info = parser.get_info()
+        with _riffy_warnings_to_log(path):
+            parser = WAVParser(path)
+            info = parser.get_info()
     except RiffyError as e:
         raise AudioLoadError(f"Cannot read WAV header: {filepath}: {e}") from e
 
@@ -102,7 +120,8 @@ def read_recorder_metadata(filepath: str | Path):  # -> riffy.RecordingMetadata
 
     path = _check_wav(filepath)
     try:
-        return read_metadata(path)
+        with _riffy_warnings_to_log(path):
+            return read_metadata(path)
     except RiffyError as e:
         raise AudioLoadError(f"Cannot read recorder metadata: {filepath}: {e}") from e
 
@@ -117,7 +136,8 @@ def dump_recorder_metadata(filepath: str | Path) -> dict:
 
     path = _check_wav(filepath)
     try:
-        return dump_metadata(path)
+        with _riffy_warnings_to_log(path):
+            return dump_metadata(path)
     except RiffyError as e:
         raise AudioLoadError(f"Cannot read recorder metadata: {filepath}: {e}") from e
 

@@ -65,6 +65,7 @@ from bioamla.audio.metadata import (
     RecordingMetadata,
     dump_recording_metadata,
     get_recording_metadata,
+    timestamp_from_filename,
 )
 from bioamla.audio.playback import (
     AudioPlayer,
@@ -136,6 +137,7 @@ __all__ = [
     "RecordingMetadata",
     "get_recording_metadata",
     "dump_recording_metadata",
+    "timestamp_from_filename",
     # Analysis (array-level)
     "AmplitudeStats",
     "FrequencyStats",

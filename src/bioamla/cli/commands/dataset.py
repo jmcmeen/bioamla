@@ -263,6 +263,10 @@ def dataset_manifest(
         if manifest.splits:
             split_str = ", ".join(f"{k}={v}" for k, v in sorted(manifest.splits.items()))
             echo(f"  splits: {split_str}")
+        if manifest.recorded_from:
+            echo(f"  recorded: {manifest.recorded_from} to {manifest.recorded_to}")
+        if manifest.devices or manifest.sites:
+            echo(f"  recorders: {len(manifest.devices)}  sites: {len(manifest.sites)}")
 
 
 @dataset.command("partition")

@@ -16,8 +16,11 @@ a missing file, :class:`InvalidInputError` for a non-WAV path, and
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -123,7 +126,10 @@ class RecordingMetadata:
                 moth.device_id if moth else None,
                 wamd.serial if wamd else None,
             ),
-            gain=moth.gain if moth else None,
+            gain=_first(
+                _guano_gain(guano) if guano else None,
+                moth.gain if moth else None,
+            ),
             temperature_c=_first(
                 guano.temperature_ext if guano else None,
                 guano.temperature_int if guano else None,
@@ -132,6 +138,41 @@ class RecordingMetadata:
             battery_voltage=moth.battery_voltage if moth else None,
             sources=tuple(meta.sources),
         )
+
+
+def _guano_gain(guano: Any) -> str | None:
+    """Gain from Wildlife Acoustics' ``WA|Song Meter|Audio settings`` JSON field."""
+    raw = guano.get("WA", "Song Meter|Audio settings")
+    if not raw:
+        return None
+    try:
+        settings = json.loads(raw)
+    except ValueError:
+        return None
+    if isinstance(settings, list):
+        settings = settings[0] if settings else None
+    if isinstance(settings, dict) and settings.get("gain") is not None:
+        return str(settings["gain"])
+    return None
+
+
+#: Wildlife Acoustics / AudioMoth style file names: ``PREFIX_YYYYMMDD_HHMMSS.wav``.
+_FILENAME_TIMESTAMP_RE = re.compile(r"(?:^|_)(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})(?=\.|_|$)")
+
+
+def timestamp_from_filename(filepath: str | Path) -> datetime | None:
+    """Naive datetime from a ``PREFIX_YYYYMMDD_HHMMSS`` file name, or ``None``.
+
+    Song Meter and AudioMoth units name files this way in local time. Used only as
+    a fallback when no embedded standard carries a timestamp.
+    """
+    m = _FILENAME_TIMESTAMP_RE.search(Path(filepath).stem)
+    if not m:
+        return None
+    try:
+        return datetime(*(int(g) for g in m.groups()))
+    except ValueError:
+        return None
 
 
 def _first(*values: Any) -> Any:
@@ -173,6 +214,10 @@ def get_recording_metadata(filepath: str) -> RecordingMetadata:
     Args:
         filepath: Path to a WAV file.
 
+    When no embedded standard carries a timestamp but the file is named
+    ``PREFIX_YYYYMMDD_HHMMSS.wav`` (Song Meter, AudioMoth), ``recorded_at`` is taken
+    from the name as a naive datetime and ``"filename"`` is added to ``sources``.
+
     Returns:
         :class:`RecordingMetadata`. Check :attr:`RecordingMetadata.is_empty` to
         tell "no metadata in file" from "fields the recorder did not write".
@@ -184,7 +229,13 @@ def get_recording_metadata(filepath: str) -> RecordingMetadata:
     """
     from bioamla.audio._riffy import read_recorder_metadata
 
-    return RecordingMetadata.from_riffy(read_recorder_metadata(filepath))
+    meta = RecordingMetadata.from_riffy(read_recorder_metadata(filepath))
+    if meta.recorded_at is None:
+        from_name = timestamp_from_filename(filepath)
+        if from_name is not None:
+            meta.recorded_at = from_name
+            meta.sources = (*meta.sources, "filename")
+    return meta
 
 
 def dump_recording_metadata(filepath: str) -> dict[str, Any]:
@@ -211,4 +262,5 @@ __all__ = [
     "RecordingMetadata",
     "dump_recording_metadata",
     "get_recording_metadata",
+    "timestamp_from_filename",
 ]
