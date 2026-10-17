@@ -132,7 +132,6 @@ make fmt          # auto-format + ruff --fix
 make docs         # mkdocs build --strict
 ```
 
-**Commits/branches:** Development happens on `dev-*` branches (default branch is `main`).
 **The user handles commits** — make your changes in the working tree and stop there; don't
 commit or offer to unless explicitly asked.
 
@@ -156,7 +155,7 @@ When working here, reach for these (invoke with `/<name>`):
   before adding a new detection algorithm, acoustic index, or ML model — compare literature,
   evaluate alternatives (e.g. BirdNET vs PANNs vs AST), or explore catalog API capabilities.
 - **`/review`** — review a GitHub PR. Distinct from `/code-review` (which reviews the working
-  diff); use this at the dev-* → main merge boundary.
+  diff); use this on a PR before it merges to `main`.
 - **`/claude-api`** — Claude API / Anthropic SDK reference. Auto-triggers on LLM-shaped tasks
   in the `ml` or `catalogs` packages; also useful when designing embedding-based or
   LLM-augmented features.
