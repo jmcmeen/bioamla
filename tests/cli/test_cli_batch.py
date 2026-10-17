@@ -295,6 +295,9 @@ def test_audio_metadata_csv(runner, tmp_path):
     assert rows[0]["label"] == "frog"
     assert rows[1]["device_model"] == ""
     assert rows[1]["label"] == "bird"
+    header = next(csv.reader(open(csv_path)))
+    assert header[:5] == ["file_name", "label", "recorded_at", "latitude", "longitude"]
+    assert header[-1] == "metadata_sources"
 
 
 def test_audio_metadata_error(runner, test_audio_dir, mocker):
