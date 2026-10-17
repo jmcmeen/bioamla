@@ -20,7 +20,7 @@ import directly:
 
 | Import | What it does |
 | --- | --- |
-| `bioamla.audio` | audio I/O, analysis, signal processing (filter/denoise/normalize/resample/segment), playback |
+| `bioamla.audio` | audio I/O, analysis, signal processing (filter/denoise/normalize/resample/segment), playback, recorder metadata (GUANO, AudioMoth, Wildlife Acoustics, `bext`) |
 | `bioamla.viz` | spectrograms, mel/MFCC, waveform plots, scrolling spectrogram videos |
 | `bioamla.indices` | acoustic indices — ACI, ADI, AEI, BIO, NDSI, spectral/temporal entropy |
 | `bioamla.detect` | event detection — energy, RIBBIT, peaks, accelerating-pattern |
@@ -66,7 +66,8 @@ Beyond the Python packages, bioamla needs a working **FFmpeg** install on the ho
   behind `torchaudio.load`) to *decode* audio for waveform loading, AST inference/training, and
   HuggingFace dataset materialization.
 - **The `ffmpeg`/`ffprobe` CLI** — used by `pydub` to *encode* non-WAV formats (FLAC/MP3/OGG/M4A)
-  and to read metadata. (Plain WAV I/O works without FFmpeg.)
+  and to read their metadata. Plain WAV I/O works without FFmpeg: WAV headers and recorder
+  metadata are read with [riffy](https://github.com/jmcmeen/riffy), a pure-Python RIFF parser.
 
 Both come from a single FFmpeg install:
 
@@ -131,11 +132,20 @@ pred = predict_file("frog.wav", model_path="bioamla/scp-frogs")
 print(pred.predicted_label, pred.confidence)
 ```
 
+Recorder metadata (what a field recorder wrote into the WAV: when, where, which unit):
+
+```python
+from bioamla.audio import get_recording_metadata
+meta = get_recording_metadata("FROGNN-1_20230306_182817.wav")
+print(meta.recorded_at, meta.latitude, meta.longitude, meta.device_model, meta.sources)
+```
+
 ## CLI quickstart
 
 ```bash
 bioamla --help                                  # all command groups
-bioamla audio info recording.wav                # metadata
+bioamla audio info recording.wav                # header: duration, rate, channels, bit depth
+bioamla audio metadata recording.wav            # recorder metadata (GUANO, AudioMoth, WAMD, bext)
 bioamla audio filter in.wav out.wav --bandpass-low 500 --bandpass-high 8000
 bioamla indices compute recording.wav           # ACI/ADI/AEI/BIO/NDSI + entropy
 bioamla detect energy recording.wav             # energy-based detections
@@ -151,6 +161,8 @@ bioamla audio add-noise in.wav out.wav --snr-db 15
 bioamla batch index --input-dir ./recordings --output-dir ./out
 bioamla batch index --input-file meta.csv --output-dir ./out   # merges results into the CSV
 bioamla batch audio convert --input-dir ./wavs --output-dir ./flac --format flac
+bioamla batch audio validate --input-dir ./wavs --recursive          # pre-flight: PCM WAV headers, exit 1 on damage
+bioamla batch audio metadata --input-dir ./wavs --output-dir ./out   # recorder_metadata.csv per deployment
 
 # Catalogs, models, datasets, system:
 bioamla catalogs xc search --species "Hyla cinerea"
@@ -185,8 +197,9 @@ Runnable end-to-end studies wired from the CLI live in
 [`examples/`](https://github.com/jmcmeen/bioamla/tree/main/examples) — each is a
 self-contained shell script (see the [examples README](https://github.com/jmcmeen/bioamla/tree/main/examples#readme)):
 catalog → annotate → dataset → train → publish, fine-tuning from a Hub dataset,
-soundscape analysis, embedding clustering, iNaturalist clip inference, and spectrogram
-videos in every style and frame shape.
+soundscape analysis, embedding clustering, iNaturalist clip inference, spectrogram
+videos in every style and frame shape, and describing a raw recorder deployment from
+its WAV metadata.
 
 ## Development
 

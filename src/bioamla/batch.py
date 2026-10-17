@@ -553,7 +553,11 @@ def write_csv(context: CSVBatchContext) -> Path:
             if key not in all_fieldnames:
                 new_fields.add(key)
 
-    all_fieldnames.extend(sorted(new_fields))
+    # Recorder columns keep their documented order; anything else is sorted.
+    from bioamla.audio.metadata import RECORDING_METADATA_FIELDS
+
+    recorder = [f for f in RECORDING_METADATA_FIELDS if f in new_fields]
+    all_fieldnames.extend(recorder + sorted(new_fields - set(recorder)))
 
     rows_data = []
     for row in context.rows:

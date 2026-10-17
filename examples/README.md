@@ -4,7 +4,8 @@ End-to-end bioacoustics workflows wired together from the `bioamla` CLI. Each
 script is heavily commented and meant to be **read first, then run** — they are
 templates to adapt, not fixtures. Unlike [`dev-data/cli_test.sh`](../dev-data/cli_test.sh)
 (an offline smoke test), these touch the network, the HuggingFace Hub, and (for
-training) a GPU. Workflow 7 is the exception: it needs only a recording and ffmpeg.
+training) a GPU. Workflows 7 and 8 are the exceptions: 7 needs only a recording and
+ffmpeg, 8 only a folder of recorder WAVs.
 
 | Script | Flow | Needs |
 | --- | --- | --- |
@@ -15,6 +16,7 @@ training) a GPU. Workflow 7 is the exception: it needs only a recording and ffmp
 | [`05_embedding_clustering.sh`](05_embedding_clustering.sh) | embed → dimensionality reduction → cluster → novelty | a model |
 | [`06_inat_clip_inference.sh`](06_inat_clip_inference.sh) | iNaturalist clip download → AST inference with `bioamla/ast-esc50` | network |
 | [`07_spectrogram_video.sh`](07_spectrogram_video.sh) / [`.py`](07_spectrogram_video.py) | render a recording as spectrogram and waveform videos in every style and frame shape (CLI, and the same from Python) | `ffmpeg` on PATH |
+| [`08_raw_deployment_metadata.sh`](08_raw_deployment_metadata.sh) | validate raw recorder WAVs → extract GUANO/AudioMoth/WAMD metadata → dataset manifest with recording span, recorders and sites | local WAVs only |
 
 ## Conventions
 

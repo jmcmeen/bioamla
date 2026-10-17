@@ -27,6 +27,7 @@ theme:
 nav:
   - Home: index.md
   - CLI Reference: cli.md
+  - Recorder metadata: recorder-metadata.md
   - API Reference:
       - audio: api/audio.md
       - viz: api/viz.md
