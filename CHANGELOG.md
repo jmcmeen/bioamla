@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Spectrogram and waveform videos.** `bioamla.viz.generate_spectrogram_video` renders an
+  audio file as a video in sync with its audio: a mel or STFT spectrogram, or the waveform
+  alone, either scrolling past a fixed playhead or held still page by page while the playhead
+  sweeps across (the page can be the whole recording). Optional waveform strip, frequency
+  ticks, time readout, and `start`/`end` to render just a stretch of a long file. Frames are
+  composed in numpy and piped to the `ffmpeg` CLI, so there is no video library dependency;
+  the audio is muxed in. `bioamla audio video` is the CLI front end. Folded in from the
+  audio-spectre and spectrogram-video-creator prototypes.
+
 ## [0.2.4] - 2026-10-10
 
 ### Fixed

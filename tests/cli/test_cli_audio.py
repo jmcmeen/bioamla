@@ -440,3 +440,119 @@ def test_visualize_error(runner, mocker):
     mocker.patch("bioamla.viz.generate_spectrogram", side_effect=ProcessingError("v"))
     result = runner.invoke(cli, ["audio", "visualize", "in.wav"])
     assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# video
+# ---------------------------------------------------------------------------
+
+
+def _video_result(**overrides):
+    from bioamla.viz import SpectrogramVideoResult
+
+    kwargs = {
+        "output_path": "song.mp4",
+        "duration": 2.0,
+        "start": 0.0,
+        "end": 2.0,
+        "fps": 30,
+        "frames": 60,
+        "width": 1280,
+        "height": 720,
+        "has_audio": True,
+    }
+    kwargs.update(overrides)
+    return SpectrogramVideoResult(**kwargs)
+
+
+def test_video_default_output(runner, mocker):
+    gen = mocker.patch("bioamla.viz.generate_spectrogram_video", return_value=_video_result())
+    result = runner.invoke(cli, ["audio", "video", "/some/song.wav", "-q"])
+    assert result.exit_code == 0, result.output
+    assert "Video saved to" in result.output
+    kwargs = gen.call_args.kwargs
+    assert kwargs["output_path"] == "song.mp4"
+    assert (kwargs["width"], kwargs["height"]) == (1280, 720)
+    assert kwargs["viz_type"] == "mel" and kwargs["include_audio"] is True
+    assert kwargs["motion"] == "scroll" and kwargs["window_seconds"] == 4.0
+
+
+def test_video_page_mode_whole_recording(runner, mocker):
+    gen = mocker.patch("bioamla.viz.generate_spectrogram_video", return_value=_video_result())
+    result = runner.invoke(
+        cli, ["audio", "video", "in.wav", "-t", "waveform", "-m", "page", "-w", "0"]
+    )
+    assert result.exit_code == 0, result.output
+    kwargs = gen.call_args.kwargs
+    assert kwargs["viz_type"] == "waveform"
+    assert kwargs["motion"] == "page" and kwargs["window_seconds"] is None
+
+
+def test_video_start_end(runner, mocker):
+    gen = mocker.patch("bioamla.viz.generate_spectrogram_video", return_value=_video_result())
+    result = runner.invoke(cli, ["audio", "video", "in.wav", "-s", "90", "-e", "120"])
+    assert result.exit_code == 0, result.output
+    assert gen.call_args.kwargs["start"] == 90.0 and gen.call_args.kwargs["end"] == 120.0
+
+
+def test_video_options(runner, mocker):
+    gen = mocker.patch("bioamla.viz.generate_spectrogram_video", return_value=_video_result())
+    result = runner.invoke(
+        cli,
+        [
+            "audio",
+            "video",
+            "in.wav",
+            "-o",
+            "out.mp4",
+            "-t",
+            "stft",
+            "--size",
+            "640x360",
+            "--fps",
+            "24",
+            "-w",
+            "8",
+            "--no-waveform",
+            "--no-axes",
+            "--no-audio",
+            "--playhead",
+            "1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    kwargs = gen.call_args.kwargs
+    assert kwargs["output_path"] == "out.mp4"
+    assert kwargs["viz_type"] == "stft"
+    assert (kwargs["width"], kwargs["height"]) == (640, 360)
+    assert kwargs["fps"] == 24 and kwargs["window_seconds"] == 8.0
+    assert kwargs["waveform"] is False and kwargs["show_axes"] is False
+    assert kwargs["include_audio"] is False and kwargs["playhead"] == 1.0
+
+
+def test_video_progress_callback_drives_bar(runner, mocker):
+    def fake(**kwargs):
+        for i in range(1, 4):
+            kwargs["on_progress"](i, 3)
+        return _video_result(frames=3)
+
+    mocker.patch("bioamla.viz.generate_spectrogram_video", side_effect=fake)
+    result = runner.invoke(cli, ["audio", "video", "in.wav"])
+    assert result.exit_code == 0, result.output
+    assert "3 frames" in result.output
+
+
+def test_video_bad_size(runner, mocker):
+    mocker.patch("bioamla.viz.generate_spectrogram_video")
+    result = runner.invoke(cli, ["audio", "video", "in.wav", "--size", "big"])
+    assert result.exit_code != 0
+    assert "WIDTHxHEIGHT" in result.output
+
+
+def test_video_error(runner, mocker):
+    from bioamla.exceptions import DependencyError
+
+    mocker.patch("bioamla.viz.generate_spectrogram_video", side_effect=DependencyError("no ffmpeg"))
+    result = runner.invoke(cli, ["audio", "video", "in.wav"])
+    assert result.exit_code != 0
+    assert "no ffmpeg" in result.output

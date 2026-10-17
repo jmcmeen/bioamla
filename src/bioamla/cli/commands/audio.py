@@ -523,3 +523,138 @@ def audio_visualize(
         raise click.ClickException(str(e)) from e
 
     print_success(f"Visualization saved to: {output_path}")
+
+
+@audio.command("video")
+@click.argument("path")
+@click.option("--output", "-o", default=None, help="Output video path (default: <stem>.mp4)")
+@click.option(
+    "--type",
+    "-t",
+    "viz_type",
+    default="mel",
+    type=click.Choice(["mel", "stft", "waveform"]),
+    help="Spectrogram type, or a waveform-only video",
+)
+@click.option(
+    "--motion",
+    "-m",
+    default="scroll",
+    type=click.Choice(["scroll", "page"]),
+    help="scroll: picture moves past a fixed playhead; page: playhead moves across a held picture",
+)
+@click.option("--start", "-s", default=0.0, type=float, help="Start at this many seconds")
+@click.option("--end", "-e", default=None, type=float, help="Stop at this many seconds")
+@click.option("--fps", default=30, type=int, help="Frames per second")
+@click.option(
+    "--window",
+    "-w",
+    default=4.0,
+    type=float,
+    help="Seconds of audio across the frame; 0 = whole recording (page mode)",
+)
+@click.option("--size", default="1280x720", help="Frame size as WIDTHxHEIGHT")
+@click.option("--cmap", default="magma", help="Colormap name")
+@click.option("--n-fft", default=2048, type=int, help="FFT window size")
+@click.option("--hop-length", default=512, type=int, help="Hop length")
+@click.option("--n-mels", default=128, type=int, help="Number of mel bands")
+@click.option("--fmax", default=None, type=float, help="Highest frequency shown (default: Nyquist)")
+@click.option("--db-range", default=80.0, type=float, help="Dynamic range in dB")
+@click.option(
+    "--playhead", default=0.5, type=float, help="Playhead position across the frame, 0 to 1"
+)
+@click.option("--waveform/--no-waveform", default=True, help="Scrolling waveform strip")
+@click.option("--axes/--no-axes", default=True, help="Frequency ticks and time readout")
+@click.option("--audio/--no-audio", "include_audio", default=True, help="Mux the audio track")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress the progress bar")
+def audio_video(
+    path: str,
+    output: str | None,
+    viz_type: str,
+    motion: str,
+    start: float,
+    end: float | None,
+    fps: int,
+    window: float,
+    size: str,
+    cmap: str,
+    n_fft: int,
+    hop_length: int,
+    n_mels: int,
+    fmax: float | None,
+    db_range: float,
+    playhead: float,
+    waveform: bool,
+    axes: bool,
+    include_audio: bool,
+    quiet: bool,
+) -> None:
+    """Render a spectrogram or waveform video of a single file, in sync with its audio.
+
+    Needs the ffmpeg command on PATH.
+
+    \b
+    Examples:
+        # Scrolling mel spectrogram with waveform strip, auto-named <stem>.mp4
+        bioamla audio video wren.wav
+        # Linear STFT, 8 seconds across the frame, 1080p, no waveform
+        bioamla audio video wren.wav -t stft -w 8 --size 1920x1080 --no-waveform
+        # Playhead at the right edge, so only what has played is shown
+        bioamla audio video wren.wav --playhead 1
+        # Whole recording held still, playhead sweeping across it
+        bioamla audio video wren.wav -m page -w 0
+        # Waveform-only video, 10-second pages
+        bioamla audio video wren.wav -t waveform -m page -w 10
+        # Just 1:30 to 2:00 of a long recording
+        bioamla audio video night.wav -s 90 -e 120
+    """
+    from bioamla.cli.console import ProgressBar, print_success
+    from bioamla.viz import generate_spectrogram_video
+
+    try:
+        width, height = (int(v) for v in size.lower().split("x"))
+    except ValueError:
+        raise click.BadParameter(
+            "expected WIDTHxHEIGHT, e.g. 1280x720", param_hint="--size"
+        ) from None
+    output_path = output or f"{Path(path).stem}.mp4"
+
+    bar = ProgressBar(description="Rendering frames", disable=quiet)
+
+    def on_progress(done: int, total: int) -> None:
+        if bar.total is None:
+            bar.set_total(total)
+        bar.advance()
+
+    try:
+        with bar:
+            result = generate_spectrogram_video(
+                audio_path=path,
+                output_path=output_path,
+                viz_type=viz_type,
+                motion=motion,
+                start=start,
+                end=end,
+                n_fft=n_fft,
+                hop_length=hop_length,
+                n_mels=n_mels,
+                fmax=fmax,
+                db_range=db_range,
+                cmap=cmap,
+                width=width,
+                height=height,
+                fps=fps,
+                window_seconds=window or None,
+                playhead=playhead,
+                waveform=waveform,
+                show_axes=axes,
+                include_audio=include_audio,
+                on_progress=on_progress,
+            )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    print_success(
+        f"Video saved to: {result.output_path} "
+        f"({result.frames} frames, {result.width}x{result.height}, {result.duration:.1f}s)"
+    )
