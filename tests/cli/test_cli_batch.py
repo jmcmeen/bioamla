@@ -61,6 +61,8 @@ def test_batch_group_help(runner):
     ("group", "cmd"),
     [
         ("audio", "info"),
+        ("audio", "validate"),
+        ("audio", "metadata"),
         ("audio", "convert"),
         ("audio", "resample"),
         ("audio", "normalize"),
@@ -157,6 +159,150 @@ def test_audio_info_error(runner, test_audio_dir, mocker):
         side_effect=ProcessingError("listfail"),
     )
     result = runner.invoke(cli, ["batch", "audio", "info", "--input-dir", test_audio_dir])
+    assert result.exit_code != 0
+
+
+# --------------------------------------------------------------------------- #
+# audio validate / metadata (real riffy, no mocks)
+# --------------------------------------------------------------------------- #
+
+
+def _audiomoth_wav(path: Path) -> None:
+    """Write a PCM WAV carrying an AudioMoth INFO comment."""
+    import wave
+
+    from riffy import InfoMetadata, WAVParser
+
+    src = path.with_name("src_" + path.name)
+    with wave.open(str(src), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(b"\x00" * 800)
+    parser = WAVParser(src)
+    info = InfoMetadata()
+    info.set("IART", "AudioMoth 248D9B045EC9EE79")
+    info.set(
+        "ICMT",
+        "Recorded at 19:30:00 12/11/2021 (UTC) by AudioMoth 248D9B045EC9EE79 "
+        "at medium gain while battery was 4.1V and temperature was 14.0C.",
+    )
+    info.write_to_parser(parser)
+    parser.write_wav(path)
+    src.unlink()
+
+
+def test_audio_validate_dir_all_valid(runner, test_audio_dir, tmp_path):
+    out = tmp_path / "out"
+    result = runner.invoke(
+        cli,
+        ["batch", "audio", "validate", "--input-dir", test_audio_dir, "--output-dir", str(out)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "3 successful, 0 failed" in result.output
+    rows = list(csv.DictReader(open(out / "validation_report.csv")))
+    assert [r["valid"] for r in rows] == ["true", "true", "true"]
+    assert list(rows[0]) == ["file_name", "valid", "error"]
+
+
+def test_audio_validate_dir_invalid_and_skipped(runner, test_audio_dir, tmp_path):
+    (Path(test_audio_dir) / "broken.wav").write_bytes(b"RIFF\x00\x00\x00\x00WAVEnope")
+    (Path(test_audio_dir) / "clip.flac").write_bytes(b"fLaC")
+    out = tmp_path / "out"
+    result = runner.invoke(
+        cli,
+        ["batch", "audio", "validate", "--input-dir", test_audio_dir, "--output-dir", str(out)],
+    )
+    assert result.exit_code == 1, result.output
+    assert "1 failed" in result.output
+    assert "broken.wav" in result.output
+    by_name = {
+        Path(r["file_name"]).name: r for r in csv.DictReader(open(out / "validation_report.csv"))
+    }
+    assert by_name["broken.wav"]["valid"] == "false"
+    assert by_name["broken.wav"]["error"]
+    assert by_name["clip.flac"]["valid"] == "skipped"
+    assert by_name["audio_0.wav"]["valid"] == "true"
+    assert by_name["audio_0.wav"]["error"] == ""
+
+
+def test_audio_validate_dir_no_output(runner, test_audio_dir):
+    result = runner.invoke(cli, ["batch", "audio", "validate", "--input-dir", test_audio_dir])
+    assert result.exit_code == 0, result.output
+    assert "Results saved" not in result.output
+
+
+def test_audio_validate_csv(runner, csv_with_audio):
+    result = runner.invoke(cli, ["batch", "audio", "validate", "--input-file", csv_with_audio])
+    assert result.exit_code == 0, result.output
+    rows = list(csv.DictReader(open(csv_with_audio)))
+    assert rows[0]["valid"] == "true"
+    assert rows[0]["label"] == "frog"
+
+
+def test_audio_validate_csv_invalid_exits_1(runner, tmp_path):
+    bad = tmp_path / "bad.wav"
+    bad.write_bytes(b"not riff")
+    csv_path = tmp_path / "meta.csv"
+    with csv_path.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["file_name"])
+        w.writeheader()
+        w.writerow({"file_name": str(bad)})
+    result = runner.invoke(cli, ["batch", "audio", "validate", "--input-file", str(csv_path)])
+    assert result.exit_code == 1, result.output
+    rows = list(csv.DictReader(open(csv_path)))
+    assert rows[0]["valid"] == "false"
+
+
+def test_audio_metadata_dir(runner, test_audio_dir, tmp_path):
+    _audiomoth_wav(Path(test_audio_dir) / "moth.wav")
+    (Path(test_audio_dir) / "clip.flac").write_bytes(b"fLaC")
+    out = tmp_path / "out"
+    result = runner.invoke(
+        cli,
+        ["batch", "audio", "metadata", "--input-dir", test_audio_dir, "--output-dir", str(out)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "4 successful" in result.output
+    rows = {
+        Path(r["file_name"]).name: r for r in csv.DictReader(open(out / "recorder_metadata.csv"))
+    }
+    assert "clip.flac" not in rows
+    assert rows["moth.wav"]["recorded_at"] == "2021-11-12T19:30:00+00:00"
+    assert rows["moth.wav"]["device_id"] == "248D9B045EC9EE79"
+    assert rows["moth.wav"]["metadata_sources"] == "info+audiomoth"
+    assert rows["audio_0.wav"]["recorded_at"] == ""
+    assert rows["audio_0.wav"]["metadata_sources"] == ""
+    header = next(csv.reader(open(out / "recorder_metadata.csv")))
+    assert header[:4] == ["file_name", "recorded_at", "latitude", "longitude"]
+
+
+def test_audio_metadata_csv(runner, tmp_path):
+    moth = tmp_path / "moth.wav"
+    _audiomoth_wav(moth)
+    other = tmp_path / "clip.flac"
+    other.write_bytes(b"fLaC")
+    csv_path = tmp_path / "meta.csv"
+    with csv_path.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["file_name", "label"])
+        w.writeheader()
+        w.writerow({"file_name": str(moth), "label": "frog"})
+        w.writerow({"file_name": str(other), "label": "bird"})
+    result = runner.invoke(cli, ["batch", "audio", "metadata", "--input-file", str(csv_path)])
+    assert result.exit_code == 0, result.output
+    rows = list(csv.DictReader(open(csv_path)))
+    assert rows[0]["device_model"] == "AudioMoth"
+    assert rows[0]["label"] == "frog"
+    assert rows[1]["device_model"] == ""
+    assert rows[1]["label"] == "bird"
+
+
+def test_audio_metadata_error(runner, test_audio_dir, mocker):
+    mocker.patch(
+        "bioamla.audio.discovery.list_audio_files",
+        side_effect=ProcessingError("listfail"),
+    )
+    result = runner.invoke(cli, ["batch", "audio", "metadata", "--input-dir", test_audio_dir])
     assert result.exit_code != 0
 
 

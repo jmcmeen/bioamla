@@ -502,6 +502,158 @@ def audio_info(input_dir, input_file, output_dir, max_workers, recursive, quiet)
         _stty_sane()
 
 
+def _write_rows_csv(output_dir: str, name: str, rows: list[dict], fieldnames: list[str]) -> None:
+    """Write ``rows`` to ``output_dir/name`` with a fixed column order."""
+    import csv
+
+    out_path = Path(output_dir) / name
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+@audio.command("validate")
+@batch_input_options
+@batch_output_options
+@max_workers_option
+@recursive_option
+@quiet_option
+def audio_validate(input_dir, input_file, output_dir, max_workers, recursive, quiet) -> None:
+    """Check that WAV files are well-formed PCM (header only; no FFmpeg, no decoding).
+
+    Writes validation_report.csv (file_name, valid, error) when --output-dir is given.
+    Non-WAV files are reported as skipped. Exits 1 if any file is invalid, so this
+    works as a pre-flight step in scripts.
+    """
+    from bioamla.audio._riffy import is_wav_path
+    from bioamla.audio.discovery import list_audio_files
+    from bioamla.audio.info import validate_wav
+    from bioamla.batch import run_batch
+    from bioamla.cli.console import print_header
+    from bioamla.exceptions import AudioLoadError
+
+    def _check(path: Path) -> dict:
+        if not is_wav_path(path):
+            return {"valid": "skipped", "error": "not a WAV file"}
+        try:
+            validate_wav(str(path))
+        except AudioLoadError as e:
+            return {"valid": "false", "error": str(e)}
+        return {"valid": "true", "error": ""}
+
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            print_header("Validating WAV files...")
+
+        if config.input_file:
+            invalid: list[str] = []
+
+            def _check_row(path: Path) -> dict:
+                row = _check(path)
+                if row["valid"] == "false":
+                    invalid.append(str(path))
+                return row
+
+            result = _run_csv_merge(config, _check_row)
+            _report(result, None, quiet)
+            if invalid:
+                raise click.exceptions.Exit(1)
+            return
+
+        files = list_audio_files(_require_input_dir(config), recursive=recursive)
+        rows: list = []
+
+        def _validate(path: Path) -> str:
+            row = {"file_name": str(path)}
+            row.update(_check(path))
+            rows.append(row)
+            if row["valid"] == "false":
+                raise AudioLoadError(f"{path}: {row['error']}")
+            return str(path)
+
+        result = run_batch(files, _validate, max_workers=config.max_workers, continue_on_error=True)
+        rows.sort(key=lambda r: r["file_name"])
+        result.skipped = sum(1 for r in rows if r["valid"] == "skipped")
+
+        if output_dir:
+            _write_rows_csv(
+                output_dir, "validation_report.csv", rows, ["file_name", "valid", "error"]
+            )
+        _report(result, output_dir, quiet, saved_hint="validation_report.csv")
+        if result.failed:
+            raise click.exceptions.Exit(1)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    finally:
+        _stty_sane()
+
+
+@audio.command("metadata")
+@batch_input_options
+@batch_output_options
+@max_workers_option
+@recursive_option
+@quiet_option
+def audio_metadata(input_dir, input_file, output_dir, max_workers, recursive, quiet) -> None:
+    """Extract recorder metadata (GUANO, AudioMoth, WAMD, bext) from WAV files.
+
+    Writes recorder_metadata.csv with recorded_at, latitude, longitude, device and
+    sensor columns when --output-dir is given; with --input-file the columns are
+    merged into the manifest. Only WAV files carry this metadata; others are skipped.
+    """
+    from bioamla.audio._riffy import is_wav_path
+    from bioamla.audio.discovery import list_audio_files
+    from bioamla.audio.metadata import RECORDING_METADATA_FIELDS, get_recording_metadata
+    from bioamla.batch import run_batch
+    from bioamla.cli.console import print_header
+
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        if not quiet:
+            print_header("Extracting recorder metadata...")
+
+        if config.input_file:
+
+            def _row_meta(path: Path) -> dict:
+                if not is_wav_path(path):
+                    return {}
+                return get_recording_metadata(str(path)).to_dict()
+
+            result = _run_csv_merge(config, _row_meta)
+            _report(result, None, quiet)
+            return
+
+        all_files = list_audio_files(_require_input_dir(config), recursive=recursive)
+        files = [f for f in all_files if is_wav_path(f)]
+        rows: list = []
+
+        def _meta(path: Path) -> str:
+            row = {"file_name": str(path)}
+            row.update(get_recording_metadata(str(path)).to_dict())
+            rows.append(row)
+            return str(path)
+
+        result = run_batch(files, _meta, max_workers=config.max_workers, continue_on_error=True)
+        result.skipped = len(all_files) - len(files)
+        rows.sort(key=lambda r: r["file_name"])
+
+        if output_dir and rows:
+            _write_rows_csv(
+                output_dir,
+                "recorder_metadata.csv",
+                rows,
+                ["file_name", *RECORDING_METADATA_FIELDS],
+            )
+        _report(result, output_dir, quiet, saved_hint="recorder_metadata.csv")
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    finally:
+        _stty_sane()
+
+
 @audio.command("convert")
 @batch_input_options
 @batch_output_options

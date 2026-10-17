@@ -22,6 +22,13 @@ All notable changes to this project are documented here. The format is based on
   `temperature_c`, `battery_voltage` and the `sources` found. `dump_recording_metadata`
   returns every decoded field per standard. `bioamla audio metadata FILE [--json]` prints
   either view, and `bioamla audio info --metadata` appends the flat view when present.
+- **WAV pre-flight and metadata in batch.** `bioamla.audio.validate_wav` checks that a file
+  is well-formed PCM WAV from the header alone. `bioamla batch audio validate` runs it over
+  a directory or manifest, writes `validation_report.csv` (`file_name`, `valid`, `error`),
+  marks non-WAV files as skipped and exits 1 if anything is invalid, so it works as a
+  pre-flight step with no FFmpeg, torch or GPU. `bioamla batch audio metadata` writes
+  `recorder_metadata.csv` with the flat recorder fields per WAV, or merges them into a
+  manifest with `--input-file`.
 
 ### Changed
 
