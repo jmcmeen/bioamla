@@ -13,9 +13,43 @@ def audio() -> None:
     pass
 
 
+_RECORDING_LABELS = {
+    "recorded_at": "Recorded at",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "device_make": "Device make",
+    "device_model": "Device model",
+    "device_id": "Device ID",
+    "gain": "Gain",
+    "temperature_c": "Temperature",
+    "battery_voltage": "Battery",
+    "metadata_sources": "Sources",
+}
+
+
+def _print_recording_metadata(meta_dict: dict) -> None:
+    from bioamla.cli.console import print_kv
+
+    for key, label in _RECORDING_LABELS.items():
+        value = meta_dict.get(key)
+        if value is None or value == "":
+            continue
+        if key == "temperature_c":
+            value = f"{value} °C"
+        elif key == "battery_voltage":
+            value = f"{value} V"
+        print_kv(label, value)
+
+
 @audio.command("info")
 @click.argument("path")
-def audio_info(path: str) -> None:
+@click.option(
+    "--metadata",
+    "show_metadata",
+    is_flag=True,
+    help="Also show recorder metadata (GUANO, AudioMoth, WAMD, bext) if the WAV has any.",
+)
+def audio_info(path: str, show_metadata: bool) -> None:
     """Display audio file information (header only; the file is not decoded)."""
     from bioamla.audio import get_audio_info
     from bioamla.cli.console import print_kv
@@ -35,6 +69,56 @@ def audio_info(path: str) -> None:
         print_kv("Bit depth", info.bit_depth)
     if info.subtype:
         print_kv("Subtype", info.subtype)
+
+    if show_metadata:
+        from bioamla.audio import get_recording_metadata
+        from bioamla.cli.console import print_header
+        from bioamla.exceptions import InvalidInputError
+
+        try:
+            meta = get_recording_metadata(path)
+        except InvalidInputError:
+            return  # not a WAV; nothing to show
+        except BioamlaError as e:
+            raise click.ClickException(str(e)) from e
+        if not meta.is_empty:
+            print_header("\nRecorder metadata")
+            _print_recording_metadata(meta.to_dict())
+
+
+@audio.command("metadata")
+@click.argument("path")
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    help="Dump every field of every standard as JSON instead of the flat summary.",
+)
+def audio_metadata(path: str, output_json: bool) -> None:
+    """Show recorder metadata embedded in a WAV file.
+
+    Prints the flattened view (when, where, which device) that bioamla datasets use.
+    With --json, prints everything riffy decoded, per standard. For chunk-level
+    inspection and editing use the `riffy` command directly.
+    """
+    import json as json_lib
+
+    from bioamla.audio import dump_recording_metadata, get_recording_metadata
+    from bioamla.cli.console import print_kv, print_warning
+
+    try:
+        if output_json:
+            click.echo(json_lib.dumps(dump_recording_metadata(path), indent=2))
+            return
+        meta = get_recording_metadata(path)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    print_kv("File", path)
+    if meta.is_empty:
+        print_warning("No recorder metadata found (no GUANO, INFO, bext, AudioMoth or WAMD).")
+        return
+    _print_recording_metadata(meta.to_dict())
 
 
 @audio.command("list")

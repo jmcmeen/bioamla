@@ -77,4 +77,55 @@ def get_wav_info(filepath: str | Path) -> dict:
     }
 
 
-__all__ = ["WAV_SUFFIXES", "get_wav_info", "is_wav_path"]
+def _check_wav(filepath: str | Path) -> Path:
+    path = Path(filepath)
+    if not path.exists():
+        raise NotFoundError(f"Audio file not found: {filepath}")
+    if not is_wav_path(path):
+        raise InvalidInputError(f"Not a WAV file: {filepath}")
+    return path
+
+
+def read_recorder_metadata(filepath: str | Path):  # -> riffy.RecordingMetadata
+    """Parse the recorder-metadata standards embedded in a WAV file.
+
+    Returns riffy's :class:`~riffy.RecordingMetadata`, whose ``guano``, ``info``,
+    ``bext``, ``audiomoth`` and ``wamd`` attributes are each a typed view or ``None``.
+
+    Raises:
+        NotFoundError: If the file does not exist.
+        InvalidInputError: If the path does not have a WAV suffix.
+        AudioLoadError: If riffy cannot parse the file.
+    """
+    from riffy import read_metadata
+    from riffy.exceptions import RiffyError
+
+    path = _check_wav(filepath)
+    try:
+        return read_metadata(path)
+    except RiffyError as e:
+        raise AudioLoadError(f"Cannot read recorder metadata: {filepath}: {e}") from e
+
+
+def dump_recorder_metadata(filepath: str | Path) -> dict:
+    """Recorder metadata as a JSON-serializable dict, one entry per standard.
+
+    Thin wrapper over :func:`riffy.dump_metadata` with bioamla's error mapping.
+    """
+    from riffy import dump_metadata
+    from riffy.exceptions import RiffyError
+
+    path = _check_wav(filepath)
+    try:
+        return dump_metadata(path)
+    except RiffyError as e:
+        raise AudioLoadError(f"Cannot read recorder metadata: {filepath}: {e}") from e
+
+
+__all__ = [
+    "WAV_SUFFIXES",
+    "dump_recorder_metadata",
+    "get_wav_info",
+    "is_wav_path",
+    "read_recorder_metadata",
+]
