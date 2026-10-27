@@ -25,7 +25,7 @@ You'll also need **ffmpeg** on your system for audio I/O
 - Make your change with a test that covers it.
 - Run `make fmt` to auto-format, then `make check` — it must pass.
 - Open a PR against `main`. CI runs lint, format-check, and the test matrix
-  (Python 3.10–3.13) on pull requests.
+  (Python 3.10–3.14) on pull requests.
 
 ```bash
 make test         # pytest
