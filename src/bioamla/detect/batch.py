@@ -26,7 +26,7 @@ from bioamla.detect.core import (
 from bioamla.exceptions import InvalidDetectionParams
 from bioamla.protocols import OnProgress
 
-__all__ = ["batch_detect_dir"]
+__all__ = ["batch_detect_dir", "batch_detect_files"]
 
 _AUDIO_EXTS = {ext.lower() for ext in SUPPORTED_AUDIO_EXTENSIONS}
 
@@ -107,34 +107,59 @@ def batch_detect_dir(
     Raises:
         InvalidDetectionParams: If ``method`` is unknown.
     """
-    # Validate method up-front (raises InvalidDetectionParams on unknown).
-    detector = _build_detector(method, params)
-
+    _build_detector(method, params)  # unknown method -> InvalidDetectionParams, before discovery
     files = _discover_files(input_dir, recursive=recursive, file_filter=_is_audio)
+    return batch_detect_files(
+        files,
+        output_dir,
+        method,
+        continue_on_error=continue_on_error,
+        max_workers=max_workers,
+        on_progress=on_progress,
+        **params,
+    )
 
+
+def batch_detect_files(
+    files: list[str | Path],
+    output_dir: str | Path,
+    method: str = "energy",
+    *,
+    continue_on_error: bool = True,
+    max_workers: int = 1,
+    on_progress: OnProgress | None = None,
+    **params: Any,
+) -> BatchResult:
+    """Run a detector over an explicit list of audio files.
+
+    Writes ``<output_dir>/detections_<method>.json`` with one entry per file that
+    was processed (in input order), each with its detections. Nothing is written
+    when no file succeeds.
+
+    Args:
+        files: Audio files to process; a file listed more than once runs once.
+        output_dir: Directory where the aggregated JSON is written.
+        method: Detector to run ("energy", "ribbit", "peaks", "accelerating").
+        continue_on_error: Keep going when an individual file fails.
+        max_workers: Number of worker threads (1 = sequential).
+        on_progress: Optional ``(completed, total)`` progress callback.
+        **params: Detector-specific parameters (e.g. low_freq, high_freq).
+
+    Returns:
+        A :class:`bioamla.batch.BatchResult`. Its ``metadata`` holds ``method``,
+        ``total_detections``, ``output_file`` (``None`` when nothing was written)
+        and ``file_counts`` (file path -> number of detections, for files that
+        succeeded).
+
+    Raises:
+        InvalidDetectionParams: If ``method`` is unknown.
+    """
+    detector = _build_detector(method, params)
+    files = list(dict.fromkeys(Path(f) for f in files))
     by_path: dict[Path, dict[str, Any]] = {}
 
     def _process(path: Path) -> str:
-        if method == "peaks":
-            peaks = detector.detect_from_file(path)
-            detections: list[Detection] = [
-                Detection(
-                    start_time=p.time,
-                    end_time=p.time + p.width,
-                    confidence=p.prominence,
-                    metadata={"amplitude": p.amplitude, "width": p.width},
-                )
-                for p in peaks
-            ]
-        else:
-            detections = detector.detect_from_file(path)
-
-        by_path[path] = {
-            "filepath": str(path),
-            "detector_type": method,
-            "num_detections": len(detections),
-            "detections": [d.to_dict() for d in detections],
-        }
+        by_path[path] = _detection_record(detector, method, path)
         return str(path)
 
     result = run_batch(
@@ -147,18 +172,49 @@ def batch_detect_dir(
     )
     # Input order, whichever order the workers finished in.
     aggregated = [by_path[f] for f in files if f in by_path]
-
-    output_path: Path | None = None
-    if aggregated:
-        output_path = Path(output_dir) / f"detections_{method}.json"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(aggregated, indent=2), encoding="utf-8")
-
-    total_detections = sum(item["num_detections"] for item in aggregated)
+    output_path = _write_detections_json(aggregated, output_dir, method)
     result.metadata = {
         "method": method,
-        "total_detections": total_detections,
+        "total_detections": sum(item["num_detections"] for item in aggregated),
         "output_file": str(output_path) if output_path else None,
+        "file_counts": {item["filepath"]: item["num_detections"] for item in aggregated},
+    }
+    return result
+
+
+def _detection_record(detector: Any, method: str, path: Path) -> dict[str, Any]:
+    """Run ``detector`` on one file; return its entry for ``detections_<method>.json``.
+
+    Peaks become detections spanning each peak's width, with its prominence as the
+    confidence, so every method's entries have the same shape.
+    """
+    if method == "peaks":
+        detections: list[Detection] = [
+            Detection(
+                start_time=p.time,
+                end_time=p.time + p.width,
+                confidence=p.prominence,
+                metadata={"amplitude": p.amplitude, "width": p.width},
+            )
+            for p in detector.detect_from_file(path)
+        ]
+    else:
+        detections = detector.detect_from_file(path)
+    return {
+        "filepath": str(path),
+        "detector_type": method,
+        "num_detections": len(detections),
+        "detections": [d.to_dict() for d in detections],
     }
 
-    return result
+
+def _write_detections_json(
+    records: list[dict[str, Any]], output_dir: str | Path, method: str
+) -> Path | None:
+    """Write ``<output_dir>/detections_<method>.json``; None (nothing written) if empty."""
+    if not records:
+        return None
+    output_path = Path(output_dir) / f"detections_{method}.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
+    return output_path

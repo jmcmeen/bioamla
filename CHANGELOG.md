@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `batch_detect_files()` (`bioamla.detect`): detection over an explicit list of files, writing
+  the same `detections_<method>.json` as `batch_detect_dir()` and returning per-file counts.
 - `bioamla --json <command>`: machine-readable output for scripts and agents. stdout gets
   exactly one JSON envelope (`{"bioamla", "command", "ok", "result"}`, or `"error": {"type",
   "message"}` on failure), and everything meant for people goes to stderr. `annotation summary`,
@@ -43,6 +45,15 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- CSV-mode `batch detect` ran every detector and threw the detections away. Each row now gains
+  a `num_detections` column (blank for a file that failed), and the detections are written to the
+  same `detections_<method>.json` as in directory mode, beside the output CSV.
+- CSV-mode `batch cluster` wrote its input CSV back without the cluster labels. Each row now gains
+  `cluster` and `cluster_labels` (`;`-separated; both blank for a file that wasn't clustered).
+- `batch cluster` exited 0 when clustering failed or no embedding could be loaded; it now fails
+  with a `ClusteringError`.
+- A batch command's `results_file` no longer names a file left over from an earlier run when
+  this run wrote nothing.
 - `catalogs inat search --project-id` was accepted but never passed on, so it searched without
   the project filter; `inat.search()` now takes `project_id`.
 - `models ast init-config` on an existing file and a failed `system deps --install` printed
@@ -70,6 +81,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- `cluster_embedding_files()` and `cluster_batch_files()` raise `ClusteringError` when clustering
+  fails or no embedding file can be loaded, instead of returning a result with the error in
+  `errors`. They cluster a file listed twice only once, and each entry in
+  `metadata["file_assignments"]` (and `cluster_assignments.json`) has a `cluster`: the most
+  common non-noise label, ties to the smallest.
 - The `annotation` commands check that their input file exists through Click, so a missing
   file is a usage error (exit status 2, `Error: Invalid value for 'INPUT_FILE': ... does not
   exist`) instead of exit status 1.

@@ -823,8 +823,18 @@ def test_models_embed_csv(runner, csv_with_audio, tmp_path, mocker):
 # --------------------------------------------------------------------------- #
 
 
+def _cluster_result(files=()):
+    """What a successful clustering run returns: assignments per file."""
+    result = _result()
+    result.metadata = {
+        "output_file": "out/cluster_assignments.json",
+        "file_assignments": [{"filepath": str(f), "cluster_labels": [1]} for f in files],
+    }
+    return result
+
+
 def test_cluster_dir(runner, test_audio_dir, tmp_path, mocker):
-    m = mocker.patch("bioamla.cluster.cluster_batch_files", return_value=_result())
+    m = mocker.patch("bioamla.cluster.cluster_batch_files", return_value=_cluster_result())
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
@@ -861,7 +871,7 @@ def test_cluster_error(runner, test_audio_dir, tmp_path, mocker):
 
 
 def test_cluster_csv(runner, csv_with_audio, tmp_path, mocker):
-    mocker.patch("bioamla.cluster.batch.cluster_embedding_files", return_value=_result())
+    mocker.patch("bioamla.cluster.batch.cluster_embedding_files", return_value=_cluster_result())
     out = tmp_path / "out"
     result = runner.invoke(
         cli,

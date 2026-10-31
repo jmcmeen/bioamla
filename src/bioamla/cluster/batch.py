@@ -15,6 +15,7 @@ direct ``pathlib`` I/O.
 
 import json
 import pickle
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ import numpy as np
 from bioamla.batch import BatchResult, run_batch
 from bioamla.batch import discover_files as _discover_files
 from bioamla.cluster.core import cluster_embeddings
-from bioamla.exceptions import InvalidInputError
+from bioamla.exceptions import ClusteringError, InvalidInputError
 from bioamla.protocols import OnProgress
 
 EMBEDDING_EXTENSIONS = {".npy", ".pkl", ".pickle", ".json"}
@@ -183,10 +184,21 @@ def cluster_embedding_files(
         on_progress: Optional ``(completed, total)`` callback for the loading phase.
         **kwargs: Additional arguments forwarded to the clusterer.
 
+    A file listed more than once is loaded and clustered once.
+
     Returns:
-        A :class:`bioamla.batch.BatchResult` summarizing the run.
+        A :class:`bioamla.batch.BatchResult` summarizing the run. Its
+        ``metadata`` has ``output_file`` and ``file_assignments``: each file's
+        ``cluster_labels`` (one per embedding row) and ``cluster`` (the file's
+        label: the most common non-noise label, ties to the smallest; ``-1`` only
+        when every row is noise). With no files given there is nothing to do and
+        the result is empty.
+
+    Raises:
+        ClusteringError: If files were given but none could be loaded, or the
+            clustering step itself fails.
     """
-    files = [Path(f) for f in files]
+    files = list(dict.fromkeys(Path(f) for f in files))  # once each, in order
 
     # Phase 1: load each file, recording successes/failures.
     loaded: list[tuple[str, np.ndarray]] = []
@@ -203,8 +215,13 @@ def cluster_embedding_files(
         operation="load-embeddings",
     )
 
-    if not loaded:
+    if not files:
         return result
+    if not loaded:
+        raise ClusteringError(
+            f"No embeddings could be loaded: {result.failed} of {result.total_files} file(s) "
+            f"failed (first: {result.errors[0] if result.errors else 'unknown'})"
+        )
 
     filepaths = [fp for fp, _ in loaded]
     embeddings = [emb for _, emb in loaded]
@@ -229,10 +246,12 @@ def cluster_embedding_files(
         for file_path, embedding in zip(filepaths, embeddings, strict=False):
             n_samples = embedding.shape[0]
             file_labels = labels[label_idx : label_idx + n_samples]
+            file_labels = [int(label) for label in file_labels]
             assignments.append(
                 {
                     "filepath": file_path,
-                    "cluster_labels": [int(label) for label in file_labels],
+                    "cluster": file_cluster(file_labels),
+                    "cluster_labels": file_labels,
                     "n_samples": int(n_samples),
                 }
             )
@@ -257,10 +276,24 @@ def cluster_embedding_files(
             "n_samples": summary.n_samples,
             "n_noise": summary.n_noise,
             "output_file": str(output_path),
+            "file_assignments": assignments,
         }
+    except ClusteringError:
+        raise
     except Exception as e:
-        result.errors.append(f"Clustering processing failed: {e}")
-        result.failed = result.total_files
-        result.successful = 0
+        raise ClusteringError(f"Clustering failed: {e}") from e
 
     return result
+
+
+def file_cluster(labels: list[int]) -> int:
+    """One cluster label for a file from its rows' labels.
+
+    The most common label, ignoring noise (``-1``) when the file has any real
+    assignment; ties go to the smallest label, so the result doesn't depend on row
+    order. ``-1`` only when every row is noise.
+    """
+    real = [label for label in labels if label != -1] or labels
+    counts = Counter(real)
+    top = max(counts.values())
+    return min(label for label, count in counts.items() if count == top)

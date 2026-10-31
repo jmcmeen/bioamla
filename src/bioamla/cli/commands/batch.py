@@ -91,9 +91,12 @@ def _batch_json(result, output_dir: str | None, saved_hint: str | None) -> dict:
     wrote, only when it exists. Per-file rows, predictions and segments the
     library keeps in ``metadata`` are left out: they are in the results files.
     """
-    results_file = result.metadata.get("output_file")
-    if not results_file and output_dir and saved_hint:
+    if "output_file" in result.metadata:  # the library says what it wrote (None: nothing)
+        results_file = result.metadata["output_file"]
+    elif output_dir and saved_hint:
         results_file = str(Path(output_dir) / saved_hint)
+    else:
+        results_file = None
     if results_file and not Path(results_file).exists():
         results_file = None
     data = {
@@ -1122,15 +1125,26 @@ def _run_detect(config: BatchConfig, method: str, output_dir, quiet, recursive, 
     from bioamla.detect import batch_detect_dir
 
     if config.input_file:
-        from bioamla.detect.batch import _build_detector
+        from bioamla.batch import merge_analysis_results
+        from bioamla.detect import batch_detect_files
 
-        detector = _build_detector(method, params)
-
-        def _process(path: Path) -> None:
-            detector.detect_from_file(path)
-
-        result = _run_csv_process(config, _process)
-        _report(result, config.output_dir or None, quiet)
+        context = _csv_context(config)
+        # The detections file goes beside the output CSV, as in directory mode.
+        out_dir = Path(context.output_dir) if context.output_dir else context.csv_path.parent
+        result = batch_detect_files(
+            [row.file_path for row in context.rows],
+            out_dir,
+            method,
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            **params,
+        )
+        counts = result.metadata["file_counts"]
+        for row in context.rows:
+            # Blank for a file that failed, so no earlier run's count lingers.
+            merge_analysis_results(row, {"num_detections": counts.get(str(row.file_path), "")})
+        _write_metadata_csv(result, context, quiet)
+        _report(result, config.output_dir or None, quiet, saved_hint=f"detections_{method}.json")
         return
 
     from bioamla.cli.console import ProgressBar
@@ -1682,6 +1696,7 @@ def cluster_batch(
             print_header(f"Clustering embeddings using {method}...")
 
         if config.input_file:
+            from bioamla.batch import merge_analysis_results
             from bioamla.cluster.batch import cluster_embedding_files
 
             context = _csv_context(config)
@@ -1697,7 +1712,20 @@ def cluster_batch(
                     min_samples=min_samples,
                     on_progress=bar.on_progress,
                 )
-            _write_metadata_csv(result, context, quiet=True)
+            by_file = {a["filepath"]: a for a in result.metadata.get("file_assignments", [])}
+            for row in context.rows:
+                # Blank for a file that wasn't clustered, so no earlier run's value lingers.
+                assignment = by_file.get(str(row.file_path))
+                merge_analysis_results(
+                    row,
+                    {
+                        "cluster": assignment["cluster"] if assignment else "",
+                        "cluster_labels": ";".join(str(x) for x in assignment["cluster_labels"])
+                        if assignment
+                        else "",
+                    },
+                )
+            _write_metadata_csv(result, context, quiet)
             _report(result, output_dir, quiet, saved_hint="cluster_assignments.json")
             return
 
