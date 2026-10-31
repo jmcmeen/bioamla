@@ -23,6 +23,7 @@ Heavy backends are imported lazily:
   never required to generate a spectrogram.
 """
 
+import threading
 from pathlib import Path
 from typing import Literal
 
@@ -34,6 +35,9 @@ from bioamla.viz._backend import Backend, mel_power, select_backend, stft_magnit
 
 VisualizationType = Literal["stft", "mel", "mfcc", "waveform"]
 WindowType = Literal["hann", "hamming", "blackman", "bartlett", "rectangular", "kaiser"]
+
+# Serializes figure rendering in generate_spectrogram (see the comment there).
+_RENDER_LOCK = threading.Lock()
 
 
 def _get_pyplot():  # noqa: ANN202 - returns matplotlib.pyplot module
@@ -149,95 +153,97 @@ def generate_spectrogram(
     # Get window function
     win_func = _get_window_function(window, n_fft)
 
-    # A standalone Figure, not pyplot: pyplot keeps global state, and batch
-    # generation calls this from worker threads.
+    # Matplotlib isn't thread-safe, and batch generation calls this from worker
+    # threads: draw on a standalone Figure (no pyplot global state) and render
+    # one figure at a time. Loading the audio above still runs in parallel.
     from matplotlib.figure import Figure
 
-    fig = Figure(figsize=figsize)
-    ax = fig.subplots()
+    with _RENDER_LOCK:
+        fig = Figure(figsize=figsize)
+        ax = fig.subplots()
 
-    if title is None:
-        title = audio_path.name
+        if title is None:
+            title = audio_path.name
 
-    if viz_type == "stft":
-        _plot_stft_spectrogram(
-            audio,
-            sample_rate,
-            ax,
-            hop_length=hop_length,
-            n_fft=n_fft,
-            window=win_func,
-            cmap=cmap,
-            title=title,
-            db_min=db_min,
-            db_max=db_max,
-            show_legend=show_colorbar,
-            backend=resolved_backend,
-        )
-    elif viz_type == "mel":
-        _plot_mel_spectrogram(
-            audio,
-            sample_rate,
-            ax,
-            n_mels=n_mels,
-            hop_length=hop_length,
-            n_fft=n_fft,
-            window=win_func,
-            cmap=cmap,
-            title=title,
-            db_min=db_min,
-            db_max=db_max,
-            show_legend=show_colorbar,
-            backend=resolved_backend,
-        )
-    elif viz_type == "mfcc":
-        _plot_mfcc(
-            audio,
-            sample_rate,
-            ax,
-            n_mfcc=n_mfcc,
-            hop_length=hop_length,
-            n_fft=n_fft,
-            window=win_func,
-            cmap=cmap,
-            title=title,
-            show_legend=show_colorbar,
-            backend=resolved_backend,
-        )
-    elif viz_type == "waveform":
-        _plot_waveform(audio, sample_rate, ax, title=title, show_legend=show_colorbar)
+        if viz_type == "stft":
+            _plot_stft_spectrogram(
+                audio,
+                sample_rate,
+                ax,
+                hop_length=hop_length,
+                n_fft=n_fft,
+                window=win_func,
+                cmap=cmap,
+                title=title,
+                db_min=db_min,
+                db_max=db_max,
+                show_legend=show_colorbar,
+                backend=resolved_backend,
+            )
+        elif viz_type == "mel":
+            _plot_mel_spectrogram(
+                audio,
+                sample_rate,
+                ax,
+                n_mels=n_mels,
+                hop_length=hop_length,
+                n_fft=n_fft,
+                window=win_func,
+                cmap=cmap,
+                title=title,
+                db_min=db_min,
+                db_max=db_max,
+                show_legend=show_colorbar,
+                backend=resolved_backend,
+            )
+        elif viz_type == "mfcc":
+            _plot_mfcc(
+                audio,
+                sample_rate,
+                ax,
+                n_mfcc=n_mfcc,
+                hop_length=hop_length,
+                n_fft=n_fft,
+                window=win_func,
+                cmap=cmap,
+                title=title,
+                show_legend=show_colorbar,
+                backend=resolved_backend,
+            )
+        elif viz_type == "waveform":
+            _plot_waveform(audio, sample_rate, ax, title=title, show_legend=show_colorbar)
 
-    # Only use tight_layout when legend is shown, otherwise use full canvas
-    if show_colorbar:
-        fig.tight_layout()
-    else:
-        # Remove all margins for borderless output
-        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        fig.tight_layout(pad=0)
+        # Only use tight_layout when legend is shown, otherwise use full canvas
+        if show_colorbar:
+            fig.tight_layout()
+        else:
+            # Remove all margins for borderless output
+            fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+            fig.tight_layout(pad=0)
 
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Determine output format
-    if format is None:
-        ext = output_path.suffix.lower()
-        format = "jpeg" if ext in (".jpg", ".jpeg") else "png"
+        # Determine output format
+        if format is None:
+            ext = output_path.suffix.lower()
+            format = "jpeg" if ext in (".jpg", ".jpeg") else "png"
 
-    # Save with appropriate settings for format
-    save_kwargs = {"dpi": dpi, "bbox_inches": "tight"}
-    if not show_colorbar:
-        save_kwargs["pad_inches"] = 0
+        # Save with appropriate settings for format
+        save_kwargs = {"dpi": dpi, "bbox_inches": "tight"}
+        if not show_colorbar:
+            save_kwargs["pad_inches"] = 0
 
-    if format == "jpeg":
-        save_kwargs["format"] = "jpeg"
-        save_kwargs["pil_kwargs"] = {"quality": 95}
-    else:
-        save_kwargs["format"] = "png"
+        if format == "jpeg":
+            save_kwargs["format"] = "jpeg"
+            save_kwargs["pil_kwargs"] = {"quality": 95}
+        else:
+            save_kwargs["format"] = "png"
 
-    try:
-        fig.savefig(output_path, **save_kwargs)
-    except Exception as e:
-        raise ProcessingError(f"Failed to save visualization: {e}") from e
+        try:
+            fig.savefig(output_path, **save_kwargs)
+        except Exception as e:
+            raise ProcessingError(f"Failed to save visualization: {e}") from e
 
     return str(output_path)
 

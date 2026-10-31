@@ -259,7 +259,7 @@ def batch_augment(
         AugmentationError: If no augmentations are enabled.
     """
     from bioamla.audio import save_audio
-    from bioamla.batch import run_batch
+    from bioamla.batch import output_stems, run_batch
     from bioamla.common.files import get_files_by_extension
 
     input_path = Path(input_dir)
@@ -293,31 +293,27 @@ def batch_augment(
         logger.info(f"Found {len(audio_files)} audio files to process")
         logger.info(f"Creating {config.multiply} augmented copies per file")
 
+    files = [str(f) for f in audio_files]
+    stems = output_stems(files, input_path)
     # Every file written, including those from an input that later fails
     # (list.append is atomic, so worker threads can share it).
     created: list[Path] = []
 
     def _augment(raw_path: str) -> None:
-        audio_path = Path(raw_path)
-        try:
-            rel_path = audio_path.relative_to(input_path)
-        except ValueError:
-            rel_path = Path(audio_path.name)
-
-        audio, orig_sr = _load_waveform(str(audio_path))
+        stem = stems[raw_path]
+        audio, orig_sr = _load_waveform(raw_path)
 
         if orig_sr != config.sample_rate:
             audio = _resample(audio, orig_sr, config.sample_rate)
 
         for i in range(config.multiply):
-            stem = rel_path.stem
             suffix = ".wav"  # Always output as WAV
             if config.multiply > 1:
-                out_name = f"{stem}_aug{i + 1}{suffix}"
+                out_name = f"{stem.name}_aug{i + 1}{suffix}"
             else:
-                out_name = f"{stem}_aug{suffix}"
+                out_name = f"{stem.name}_aug{suffix}"
 
-            out_path = output_path / rel_path.parent / out_name
+            out_path = output_path / stem.parent / out_name
             augmented = augment_audio(audio, config.sample_rate, pipeline)
 
             out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -327,18 +323,7 @@ def batch_augment(
             if verbose:
                 logger.info(f"  Created: {out_path}")
 
-    result = run_batch(
-        [str(f) for f in audio_files],
-        _augment,
-        max_workers=max_workers,
-        on_progress=on_progress,
-    )
-
-    if verbose:
-        logger.info(
-            f"Processed {result.successful} files, created {len(created)} "
-            f"augmented files, {result.failed} failed"
-        )
+    result = run_batch(files, _augment, max_workers=max_workers, on_progress=on_progress)
 
     return {
         "files_processed": result.successful,

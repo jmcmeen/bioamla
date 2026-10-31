@@ -318,6 +318,7 @@ def test_dataset_augment(runner: CliRunner, tmp_path) -> None:
     stats = {
         "files_created": 20,
         "files_processed": 10,
+        "files_failed": 0,
         "output_dir": str(tmp_path / "out"),
     }
     with patch("bioamla.datasets.batch_augment", return_value=stats):
@@ -338,6 +339,18 @@ def test_dataset_augment(runner: CliRunner, tmp_path) -> None:
     assert "Created 20 augmented files" in result.output
 
 
+def test_dataset_augment_summary_reports_failures(runner: CliRunner, tmp_path) -> None:
+    stats = {"files_created": 4, "files_processed": 2, "files_failed": 1, "output_dir": "o"}
+    with patch("bioamla.datasets.batch_augment", return_value=stats):
+        result = runner.invoke(
+            cli,
+            ["dataset", "augment", str(tmp_path), "-o", str(tmp_path / "out"), "--gain", "-6,6"],
+        )
+    assert result.exit_code == 0, result.output
+    assert result.output.count("Created 4 augmented files") == 1
+    assert "1 failed" in result.output
+
+
 def test_dataset_augment_no_options(runner: CliRunner, tmp_path) -> None:
     result = runner.invoke(cli, ["dataset", "augment", str(tmp_path), "-o", str(tmp_path / "out")])
     assert result.exit_code != 0
@@ -345,7 +358,7 @@ def test_dataset_augment_no_options(runner: CliRunner, tmp_path) -> None:
 
 
 def test_dataset_augment_ranges(runner: CliRunner, tmp_path) -> None:
-    stats = {"files_created": 1, "files_processed": 1, "output_dir": "o"}
+    stats = {"files_created": 1, "files_processed": 1, "files_failed": 0, "output_dir": "o"}
     with patch("bioamla.datasets.batch_augment", return_value=stats):
         result = runner.invoke(
             cli,

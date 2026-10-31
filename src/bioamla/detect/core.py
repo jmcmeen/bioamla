@@ -1441,8 +1441,10 @@ def batch_detect(
     """
     Run detection on multiple files.
 
-    Per-file failures are logged and recorded as an empty detection list so a
-    single bad file does not abort the whole run.
+    A file that can't be loaded or analysed (:class:`AudioLoadError`,
+    :class:`DetectionError`) is logged and recorded as an empty detection list,
+    so a single bad file does not abort the whole run. Any other exception is
+    raised.
 
     Args:
         filepaths: List of audio file paths.
@@ -1457,21 +1459,32 @@ def batch_detect(
     from bioamla.batch import run_batch
 
     paths = [str(p) for p in filepaths]
-    position = {p: i for i, p in reversed(list(enumerate(paths, 1)))}
+    unique = list(dict.fromkeys(paths))
+    position = {p: i for i, p in enumerate(unique, 1)}
     by_path: dict[str, list[Detection]] = {}
 
     def _detect(filepath: str) -> None:
         if verbose:
-            logger.info(f"[{position[filepath]}/{len(paths)}] Processing {filepath}")
-        by_path[filepath] = []
-        if hasattr(detector, "detect_from_file"):
-            detections = detector.detect_from_file(filepath)
-        else:
-            audio, sr = _load_audio_file(filepath)
-            detections = detector.detect(audio, sr)
+            logger.info(f"[{position[filepath]}/{len(unique)}] Processing {filepath}")
+        try:
+            if hasattr(detector, "detect_from_file"):
+                detections = detector.detect_from_file(filepath)
+            else:
+                audio, sr = _load_audio_file(filepath)
+                detections = detector.detect(audio, sr)
+        except (AudioLoadError, DetectionError) as e:
+            logger.warning(f"Error processing {filepath}: {e}")
+            detections = []
         by_path[filepath] = detections
         if verbose:
             logger.info(f"  Found {len(detections)} detections in {filepath}")
 
-    run_batch(paths, _detect, max_workers=max_workers, on_progress=on_progress)
-    return {p: by_path[p] for p in paths}
+    # Expected per-file errors are handled above; anything else stops the run.
+    run_batch(
+        unique,
+        _detect,
+        max_workers=max_workers,
+        continue_on_error=False,
+        on_progress=on_progress,
+    )
+    return {p: by_path[p] for p in unique}

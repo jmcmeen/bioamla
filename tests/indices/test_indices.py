@@ -94,3 +94,12 @@ class TestBatchComputeIndices:
         assert [r["success"] for r in results] == [True, False, True, True]
         assert results[1]["error"]
         assert "ndsi" in results[0]
+
+    def test_repeated_path_computed_once(self, test_audio_dir: str) -> None:
+        path = str(sorted(Path(test_audio_dir).glob("*.wav"))[0])
+        calls: list[tuple[int, int]] = []
+        results = batch_compute_indices(
+            [path, path], verbose=True, on_progress=lambda d, t: calls.append((d, t))
+        )
+        assert results[0] == results[1]
+        assert calls == [(1, 1)]

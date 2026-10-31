@@ -291,15 +291,17 @@ def analyze_audio_batch(
     from bioamla.batch import run_batch
 
     paths = [str(p) for p in filepaths]
-    position = {p: i for i, p in reversed(list(enumerate(paths, 1)))}
+    # Each distinct file is analyzed once; a repeated path shares its result.
+    unique = list(dict.fromkeys(paths))
+    position = {p: i for i, p in enumerate(unique, 1)}
     by_path: dict[str, AudioAnalysis] = {}
 
     def _analyze(filepath: str) -> None:
         by_path[filepath] = analyze_audio(filepath, silence_threshold_db)
         if verbose:
-            logger.info(f"[{position[filepath]}/{len(paths)}] Analyzed: {filepath}")
+            logger.info(f"[{position[filepath]}/{len(unique)}] Analyzed: {filepath}")
 
-    run_batch(paths, _analyze, max_workers=max_workers, on_progress=on_progress)
+    run_batch(unique, _analyze, max_workers=max_workers, on_progress=on_progress)
     return [by_path[p] for p in paths if p in by_path]
 
 

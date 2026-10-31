@@ -355,7 +355,7 @@ def batch_process(
         NotFoundError: If the input directory does not exist.
     """
     from bioamla.audio.discovery import get_audio_files
-    from bioamla.batch import run_batch
+    from bioamla.batch import output_stems, run_batch
     from bioamla.exceptions import NotFoundError
 
     in_dir = Path(input_dir)
@@ -376,28 +376,18 @@ def batch_process(
     if verbose:
         logger.info(f"Found {len(audio_files)} audio files to process")
 
-    def _process(audio_path: str) -> Path:
-        path = Path(audio_path)
-        try:
-            rel_path = path.relative_to(in_dir)
-        except ValueError:
-            rel_path = Path(path.name)
+    files = [str(f) for f in audio_files]
+    stems = output_stems(files, in_dir)
 
-        out_path = out_dir / rel_path.with_suffix(".wav")
-        process_file(str(path), str(out_path), processor_fn, sample_rate)
+    def _process(audio_path: str) -> Path:
+        stem = stems[audio_path]
+        out_path = out_dir / stem.parent / f"{stem.name}.wav"
+        process_file(audio_path, str(out_path), processor_fn, sample_rate)
         if verbose:
             logger.info(f"  Processed: {out_path}")
         return out_path
 
-    result = run_batch(
-        [str(f) for f in audio_files],
-        _process,
-        max_workers=max_workers,
-        on_progress=on_progress,
-    )
-
-    if verbose:
-        logger.info(f"Processed {result.successful} files, {result.failed} failed")
+    result = run_batch(files, _process, max_workers=max_workers, on_progress=on_progress)
 
     return {
         "files_processed": result.successful,

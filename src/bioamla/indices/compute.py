@@ -832,12 +832,14 @@ def batch_compute_indices(
     from bioamla.batch import run_batch
 
     paths = [str(p) for p in filepaths]
-    position = {p: i for i, p in reversed(list(enumerate(paths, 1)))}
+    # Each distinct file is computed once; a repeated path shares its result.
+    unique = list(dict.fromkeys(paths))
+    position = {p: i for i, p in enumerate(unique, 1)}
     by_path: dict[str, dict[str, Any]] = {}
 
     def _compute(filepath: str) -> None:
         if verbose:
-            logger.info(f"[{position[filepath]}/{len(paths)}] Processing {filepath}")
+            logger.info(f"[{position[filepath]}/{len(unique)}] Processing {filepath}")
         try:
             indices = compute_indices_from_file(filepath, **kwargs)
         except Exception as e:
@@ -849,7 +851,7 @@ def batch_compute_indices(
         result["success"] = True
         by_path[filepath] = result
 
-    run_batch(paths, _compute, max_workers=max_workers, on_progress=on_progress)
+    run_batch(unique, _compute, max_workers=max_workers, on_progress=on_progress)
     return [by_path[p] for p in paths]
 
 

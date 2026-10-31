@@ -14,7 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from bioamla.audio.discovery import list_audio_files
-from bioamla.batch import run_batch
+from bioamla.batch import output_stems, run_batch
 from bioamla.exceptions import NotFoundError
 from bioamla.viz.core import (
     VisualizationType,
@@ -97,16 +97,14 @@ def batch_generate_spectrograms(
     # Determine output extension
     out_ext = ".jpg" if format.lower() in ("jpg", "jpeg") else ".png"
 
-    def _generate(audio_path: str) -> Path:
-        path = Path(audio_path)
-        try:
-            rel_path = path.relative_to(in_dir)
-        except ValueError:
-            rel_path = Path(path.name)
+    files = [str(f) for f in audio_files]
+    stems = output_stems(files, in_dir)
 
-        output_path = out_dir / rel_path.with_suffix(out_ext)
+    def _generate(audio_path: str) -> Path:
+        stem = stems[audio_path]
+        output_path = out_dir / stem.parent / f"{stem.name}{out_ext}"
         generate_spectrogram(
-            audio_path=str(path),
+            audio_path=audio_path,
             output_path=str(output_path),
             viz_type=viz_type,
             sample_rate=sample_rate,
@@ -126,15 +124,7 @@ def batch_generate_spectrograms(
             logger.info(f"  Generated: {output_path}")
         return output_path
 
-    result = run_batch(
-        [str(f) for f in audio_files],
-        _generate,
-        max_workers=max_workers,
-        on_progress=on_progress,
-    )
-
-    if verbose:
-        logger.info(f"Processed {result.successful} files, {result.failed} failed")
+    result = run_batch(files, _generate, max_workers=max_workers, on_progress=on_progress)
 
     return {
         "files_processed": result.successful,
