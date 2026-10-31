@@ -71,7 +71,8 @@ def batch_generate_spectrograms(
         max_workers: Worker threads; 1 runs sequentially.
 
     Returns:
-        Statistics dict with ``files_processed``, ``files_failed``, ``output_dir``.
+        Statistics dict with ``files_processed``, ``files_failed``, ``output_dir``,
+        ``output_files`` and ``errors`` (one ``"<file>: <error>"`` per failure).
 
     Raises:
         NotFoundError: If the input directory does not exist.
@@ -89,7 +90,13 @@ def batch_generate_spectrograms(
     if not audio_files:
         if verbose:
             logger.info(f"No audio files found in {in_dir}")
-        return {"files_processed": 0, "files_failed": 0, "output_dir": str(out_dir)}
+        return {
+            "files_processed": 0,
+            "files_failed": 0,
+            "output_dir": str(out_dir),
+            "output_files": [],
+            "errors": [],
+        }
 
     if verbose:
         logger.info(f"Found {len(audio_files)} audio files to process")
@@ -132,6 +139,8 @@ def batch_generate_spectrograms(
         "files_processed": result.successful,
         "files_failed": result.failed,
         "output_dir": str(out_dir),
+        "output_files": result.output_files,
+        "errors": result.errors,
     }
 
 

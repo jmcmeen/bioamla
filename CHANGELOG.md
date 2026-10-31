@@ -24,6 +24,11 @@ All notable changes to this project are documented here. The format is based on
   `generate-labels`, `generate-frame-labels`: counts, labels, output paths) and the `dataset`
   commands (`merge`, `extract-clips`, `manifest`, `partition`, `build`, `license`, `augment`,
   `remix`: their stats as returned by the library).
+- `--json` results for the 19 `batch` commands: counts, timing, output files and each failure's
+  file and error, the output directory, `results_file` (the aggregate file the command wrote,
+  only if it exists) and, in CSV mode, `metadata_csv`, the updated metadata CSV. `batch audio
+  validate` with invalid files is a failure envelope with the batch result in `error.details`.
+- `batch_generate_spectrograms()` also returns `output_files` and `errors`.
 - `get_model_info()` returns `labels`, every class label in class-index order. `classes` is still
   the first 10.
 

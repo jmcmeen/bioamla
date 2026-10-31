@@ -83,10 +83,61 @@ def _require_input_dir(config: BatchConfig) -> str:
     return config.input_dir
 
 
-def _report(result, output_dir: str | None, quiet: bool, saved_hint: str | None = None) -> None:
-    """Print a standard BatchResult summary."""
-    from bioamla.cli.console import print_success, print_warning
+def _batch_json(result, output_dir: str | None, saved_hint: str | None) -> dict:
+    """The ``--json`` result for a BatchResult.
 
+    Counts, timing, output files and each failure's error; ``metadata_csv`` (CSV
+    mode); ``output_dir``; and ``results_file``, the aggregate file the command
+    wrote, only when it exists. Per-file rows, predictions and segments the
+    library keeps in ``metadata`` are left out: they are in the results files.
+    """
+    results_file = result.metadata.get("output_file")
+    if not results_file and output_dir and saved_hint:
+        results_file = str(Path(output_dir) / saved_hint)
+    if results_file and not Path(results_file).exists():
+        results_file = None
+    data = {
+        name: getattr(result, name)
+        for name in (
+            "total_files",
+            "successful",
+            "failed",
+            "skipped",
+            "start_time",
+            "end_time",
+            "duration_seconds",
+            "output_files",
+            "errors",
+        )
+    }
+    data["metadata_csv"] = result.metadata.get("metadata_csv")
+    data["output_dir"] = output_dir
+    data["results_file"] = results_file
+    return data
+
+
+def _report(
+    result,
+    output_dir: str | None,
+    quiet: bool,
+    saved_hint: str | None = None,
+    *,
+    failure: str | None = None,
+) -> None:
+    """Report a BatchResult: the summary for people, or the ``--json`` result.
+
+    ``failure``: the run counts as failed (e.g. validation found bad files). In
+    JSON mode that is a failure envelope with the result in ``error.details``;
+    for people the summary prints as usual and the caller exits non-zero.
+    """
+    from bioamla.cli.console import print_success, print_warning
+    from bioamla.cli.output import emit_result, fail, json_mode
+
+    data = _batch_json(result, output_dir, saved_hint)
+    if failure and json_mode():
+        fail(failure, "InvalidInputError", details=data)
+    if emit_result(data):
+        return
     if quiet:
         return
     summary = (
@@ -97,8 +148,19 @@ def _report(result, output_dir: str | None, quiet: bool, saved_hint: str | None 
         print_warning(summary)
     else:
         print_success(summary)
-    if output_dir and saved_hint:
-        print_success(f"Results saved to {output_dir}/{saved_hint}")
+    if data["results_file"]:
+        print_success(f"Results saved to {data['results_file']}")
+
+
+def _write_metadata_csv(result, context, quiet: bool) -> None:
+    """Write the CSV-mode metadata CSV and record its path in the result."""
+    from bioamla.batch import write_csv
+    from bioamla.cli.console import print_success
+
+    out_csv = write_csv(context)
+    result.metadata["metadata_csv"] = str(out_csv)
+    if not quiet:
+        print_success(f"Updated metadata CSV written to: {out_csv}")
 
 
 def _stty_sane() -> None:
@@ -137,8 +199,7 @@ def _run_csv_merge(
     Runs ``analyze_row`` over each listed file, merges the returned column dict
     into the row, and writes the updated CSV (column-union, file_name first).
     """
-    from bioamla.batch import merge_analysis_results, run_csv_batch, write_csv
-    from bioamla.cli.console import print_success
+    from bioamla.batch import merge_analysis_results, run_csv_batch
 
     context = _csv_context(config)
 
@@ -154,9 +215,7 @@ def _run_csv_merge(
         continue_on_error=config.continue_on_error,
         operation=_operation(),
     )
-    out_csv = write_csv(context)
-    if not config.quiet:
-        print_success(f"Updated metadata CSV written to: {out_csv}")
+    _write_metadata_csv(result, context, config.quiet)
     return result
 
 
@@ -173,8 +232,7 @@ def _run_csv_transform(
     invokes ``transform_row(input_path, output_path)``, and updates the row's
     ``file_name`` to the new path before writing the CSV.
     """
-    from bioamla.batch import resolve_output_path, run_csv_batch, update_row_path, write_csv
-    from bioamla.cli.console import print_success
+    from bioamla.batch import resolve_output_path, run_csv_batch, update_row_path
 
     context = _csv_context(config)
 
@@ -192,9 +250,7 @@ def _run_csv_transform(
         continue_on_error=config.continue_on_error,
         operation=_operation(),
     )
-    out_csv = write_csv(context)
-    if not config.quiet:
-        print_success(f"Updated metadata CSV written to: {out_csv}")
+    _write_metadata_csv(result, context, config.quiet)
     return result
 
 
@@ -208,7 +264,7 @@ def _run_csv_process(
     Runs ``process_row`` per file; the CSV is written back unchanged (rows
     preserved, paths re-resolved relative to the output CSV location).
     """
-    from bioamla.batch import run_csv_batch, write_csv
+    from bioamla.batch import run_csv_batch
 
     context = _csv_context(config)
 
@@ -223,7 +279,7 @@ def _run_csv_process(
         continue_on_error=config.continue_on_error,
         operation=_operation(),
     )
-    write_csv(context)
+    _write_metadata_csv(result, context, quiet=True)
     return result
 
 
@@ -242,9 +298,7 @@ def _run_csv_segment(
         expand_row_for_segments,
         resolve_output_path,
         run_csv_batch,
-        write_csv,
     )
-    from bioamla.cli.console import print_success
 
     context = _csv_context(config)
     segment_mapping: dict = {}
@@ -280,9 +334,7 @@ def _run_csv_segment(
         if field not in context.fieldnames:
             context.fieldnames.append(field)
 
-    out_csv = write_csv(context)
-    if not config.quiet:
-        print_success(f"Updated metadata CSV written to: {out_csv}")
+    _write_metadata_csv(result, context, config.quiet)
     return result
 
 
@@ -299,8 +351,7 @@ def _run_csv_predict_segments(
     the expanded CSV is written. Unlike :func:`_run_csv_segment`, no segment files
     are written; rows describe sub-spans of the original file.
     """
-    from bioamla.batch import MetadataRow, run_csv_batch, write_csv
-    from bioamla.cli.console import print_success
+    from bioamla.batch import MetadataRow, run_csv_batch
 
     context = _csv_context(config)
     segment_mapping: dict = {}
@@ -350,9 +401,7 @@ def _run_csv_predict_segments(
         if fld not in context.fieldnames:
             context.fieldnames.append(fld)
 
-    out_csv = write_csv(context)
-    if not config.quiet:
-        print_success(f"Updated metadata CSV written to: {out_csv}")
+    _write_metadata_csv(result, context, config.quiet)
     return result
 
 
@@ -493,7 +542,7 @@ def audio_info(input_dir, input_file, output_dir, max_workers, recursive, quiet)
 
         if config.input_file:
             result = _run_csv_merge(config, _analyze)
-            _report(result, None, quiet)
+            _report(result, config.output_dir or None, quiet)
             return
 
         bar = ProgressBar(description="Reading metadata", disable=quiet)
@@ -505,7 +554,7 @@ def audio_info(input_dir, input_file, output_dir, max_workers, recursive, quiet)
                 max_workers=config.max_workers,
                 on_progress=bar.on_progress,
             )
-        _report(result, output_dir if result.output_files else None, quiet, "audio_info.csv")
+        _report(result, output_dir, quiet, "audio_info.csv")
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
     finally:
@@ -556,7 +605,12 @@ def audio_validate(input_dir, input_file, output_dir, max_workers, recursive, qu
                 return row
 
             result = _run_csv_merge(config, _check_row)
-            _report(result, None, quiet)
+            _report(
+                result,
+                config.output_dir or None,
+                quiet,
+                failure=f"{len(invalid)} invalid file(s)" if invalid else None,
+            )
             if invalid:
                 raise click.exceptions.Exit(1)
             return
@@ -586,7 +640,13 @@ def audio_validate(input_dir, input_file, output_dir, max_workers, recursive, qu
             write_rows_csv(
                 Path(output_dir) / "validation_report.csv", rows, ["file_name", "valid", "error"]
             )
-        _report(result, output_dir, quiet, saved_hint="validation_report.csv")
+        _report(
+            result,
+            output_dir,
+            quiet,
+            saved_hint="validation_report.csv",
+            failure=f"{result.failed} invalid file(s)" if result.failed else None,
+        )
         if result.failed:
             raise click.exceptions.Exit(1)
     except BioamlaError as e:
@@ -627,7 +687,7 @@ def audio_metadata(input_dir, input_file, output_dir, max_workers, recursive, qu
                 return get_recording_metadata(str(path)).to_dict()
 
             result = _run_csv_merge(config, _row_meta)
-            _report(result, None, quiet)
+            _report(result, config.output_dir or None, quiet)
             return
 
         all_files = list_audio_files(_require_input_dir(config), recursive=recursive)
@@ -721,7 +781,7 @@ def audio_convert(
                 return Path(saved)
 
             result = _run_csv_transform(config, _convert_row, new_extension=f".{out_format}")
-            _report(result, None, quiet)
+            _report(result, config.output_dir or None, quiet)
             return
 
         _require_input_dir(config)
@@ -764,7 +824,7 @@ def audio_resample(
         if not quiet:
             print_header("Resampling audio files...")
         result = _run_audio_transform(config, _passthrough, sample_rate=sample_rate)
-        _report(result, output_dir if not config.input_file else None, quiet)
+        _report(result, output_dir, quiet)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -793,7 +853,7 @@ def audio_normalize(
             else functools.partial(_proc_normalize_rms, target_db=target_db)
         )
         result = _run_audio_transform(config, processor)
-        _report(result, output_dir if not config.input_file else None, quiet)
+        _report(result, output_dir, quiet)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -842,7 +902,7 @@ def audio_trim(
         else:
             processor = functools.partial(_proc_trim_range, start=start, end=end)
         result = _run_audio_transform(config, processor)
-        _report(result, output_dir if not config.input_file else None, quiet)
+        _report(result, output_dir, quiet)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -898,7 +958,7 @@ def audio_filter(
             _proc_filter, lowpass=lowpass, highpass=highpass, bandpass=bandpass, order=order
         )
         result = _run_audio_transform(config, processor)
-        _report(result, output_dir if not config.input_file else None, quiet)
+        _report(result, output_dir, quiet)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -922,7 +982,7 @@ def audio_denoise(
             print_header(f"Applying spectral noise reduction (strength={strength})...")
         processor = functools.partial(_proc_denoise, strength=strength)
         result = _run_audio_transform(config, processor)
-        _report(result, output_dir if not config.input_file else None, quiet)
+        _report(result, output_dir, quiet)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -966,7 +1026,7 @@ def audio_segment(
                 )
 
             result = _run_csv_segment(config, _segment_row)
-            _report(result, None, quiet)
+            _report(result, config.output_dir or None, quiet)
             return
 
         in_dir = _require_input_dir(config)
@@ -1009,7 +1069,8 @@ def audio_visualize(
     input_dir, input_file, output_dir, plot_type, legend, max_workers, recursive, quiet
 ) -> None:
     """Batch generate audio visualizations."""
-    from bioamla.cli.console import print_header, print_success, print_warning
+    from bioamla.batch import BatchResult
+    from bioamla.cli.console import print_header
     from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.viz import batch_generate_spectrograms
 
@@ -1030,12 +1091,15 @@ def audio_visualize(
             verbose=not quiet,
             max_workers=max_workers,
         )
-        if not quiet:
-            summary = f"Processed {stats['files_processed']} files, {stats['files_failed']} failed"
-            if stats["files_failed"] > 0:
-                print_warning(summary)
-            else:
-                print_success(summary)
+
+        result = BatchResult(
+            total_files=stats["files_processed"] + stats["files_failed"],
+            successful=stats["files_processed"],
+            failed=stats["files_failed"],
+            output_files=stats.get("output_files", []),
+            errors=stats.get("errors", []),
+        )
+        _report(result, output_dir, quiet)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
     finally:
@@ -1066,7 +1130,7 @@ def _run_detect(config: BatchConfig, method: str, output_dir, quiet, recursive, 
             detector.detect_from_file(path)
 
         result = _run_csv_process(config, _process)
-        _report(result, None, quiet)
+        _report(result, config.output_dir or None, quiet)
         return
 
     from bioamla.cli.console import ProgressBar
@@ -1084,7 +1148,7 @@ def _run_detect(config: BatchConfig, method: str, output_dir, quiet, recursive, 
             on_progress=bar.on_progress,
             **params,
         )
-    _report(result, output_dir, quiet, saved_hint=f"detections_{method}.json")
+    _report(result, out_dir, quiet, saved_hint=f"detections_{method}.json")
 
 
 @detect.command("energy")
@@ -1328,7 +1392,7 @@ def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursi
                 return result
 
             result = _run_csv_merge(config, _analyze)
-            _report(result, None, quiet)
+            _report(result, config.output_dir or None, quiet)
             return
 
         bar = ProgressBar(description="Calculating indices", disable=quiet)
@@ -1341,7 +1405,7 @@ def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursi
                 max_workers=config.max_workers,
                 on_progress=bar.on_progress,
             )
-        _report(result, output_dir if result.output_files else None, quiet, "indices.csv")
+        _report(result, output_dir, quiet, "indices.csv")
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
     finally:
@@ -1618,7 +1682,6 @@ def cluster_batch(
             print_header(f"Clustering embeddings using {method}...")
 
         if config.input_file:
-            from bioamla.batch import write_csv
             from bioamla.cluster.batch import cluster_embedding_files
 
             context = _csv_context(config)
@@ -1634,7 +1697,7 @@ def cluster_batch(
                     min_samples=min_samples,
                     on_progress=bar.on_progress,
                 )
-            write_csv(context)
+            _write_metadata_csv(result, context, quiet=True)
             _report(result, output_dir, quiet, saved_hint="cluster_assignments.json")
             return
 
