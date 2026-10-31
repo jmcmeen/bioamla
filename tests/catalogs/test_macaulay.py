@@ -134,9 +134,14 @@ class TestDownloadRecording:
         path = ml.download_recording("55", tmp_path)
         assert "ML" in path.name
 
-    def test_no_download_url_raises(self, tmp_path) -> None:
-        # Empty download_url AND empty asset_id so get_download_url() yields nothing.
-        with pytest.raises(CatalogError):
+    def test_no_download_url_raises(self, tmp_path, monkeypatch) -> None:
+        # Empty download_url AND empty asset_id so get_download_url() yields nothing,
+        # and the error comes before any request is made.
+        def no_network(url, fp):
+            raise AssertionError(f"tried to download {url}")
+
+        monkeypatch.setattr(ml._client, "download", no_network)
+        with pytest.raises(CatalogError, match="No download URL"):
             ml.download_recording(_rec(asset_id="", catalog_id="", url=""), tmp_path)
 
     def test_download_failure_raises(self, tmp_path, monkeypatch) -> None:

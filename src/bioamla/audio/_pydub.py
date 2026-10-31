@@ -407,7 +407,8 @@ def save_audio(
         path.parent.mkdir(parents=True, exist_ok=True)
         channels = 1 if audio.ndim == 1 else audio.shape[1]
         segment = _numpy_to_audiosegment(audio, sample_rate, channels)
-        segment.export(str(path), format=format_to_use)
+        # export() returns the open output file; close it rather than leak it.
+        segment.export(str(path), format=format_to_use).close()
     except Exception as e:
         raise AudioSaveError(f"Failed to save audio to '{filepath}': {e}") from e
 
