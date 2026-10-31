@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-10-31
+
 ### Fixed
 
 - Raven selection tables with numeric scores and custom `Confidence` values share one column.
@@ -513,7 +515,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/jmcmeen/bioamla/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/jmcmeen/bioamla/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/jmcmeen/bioamla/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/jmcmeen/bioamla/compare/v0.3.2...v0.3.3
