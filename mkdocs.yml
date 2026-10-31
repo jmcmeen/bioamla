@@ -38,6 +38,8 @@ nav:
       - datasets: api/datasets.md
       - ml: api/ml.md
       - batch: api/batch.md
+      - system: api/system.md
+      - common: api/common.md
       - exceptions: api/exceptions.md
 
 plugins:
