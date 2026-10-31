@@ -272,7 +272,8 @@ def run_batch(
     total = len(items)
 
     if max_workers > 1:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        executor = ThreadPoolExecutor(max_workers=max_workers)
+        try:
             futures = {executor.submit(process_fn, item): item for item in items}
             for future in as_completed(futures):
                 item = futures[future]
@@ -286,6 +287,12 @@ def run_batch(
                 completed += 1
                 if on_progress:
                     on_progress(completed, total)
+        except BaseException:
+            # Stopping early (a re-raised error, or on_progress raising to
+            # cancel): drop the queued items instead of running them all first.
+            executor.shutdown(wait=True, cancel_futures=True)
+            raise
+        executor.shutdown(wait=True)
     else:
         for item in items:
             try:
