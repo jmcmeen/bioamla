@@ -187,8 +187,8 @@ def run_batch(
         items: Items to process.
         process_fn: Callable applied to each item.
         max_workers: Number of worker threads; 1 runs sequentially.
-        continue_on_error: If True, collect errors and keep going; if False,
-            re-raise the first exception encountered.
+        continue_on_error: If True, collect errors (each logged as a warning) and
+            keep going; if False, re-raise the first exception encountered.
         on_progress: Optional callback ``(completed, total)`` invoked after each
             item completes.
 
@@ -222,6 +222,7 @@ def run_batch(
                     _record_failure(item, e)
                     if not continue_on_error:
                         raise
+                    logger.warning(f"Error processing {item}: {e}")
                 completed += 1
                 if on_progress:
                     on_progress(completed, total)
@@ -233,6 +234,7 @@ def run_batch(
                 _record_failure(item, e)
                 if not continue_on_error:
                     raise
+                logger.warning(f"Error processing {item}: {e}")
             completed += 1
             if on_progress:
                 on_progress(completed, total)
@@ -463,7 +465,6 @@ def run_csv_batch(
     *,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    quiet: bool = False,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> BatchResult:
     """Run ``process_row`` over every row of a loaded CSV context.
@@ -485,8 +486,8 @@ def run_csv_batch(
             (sequentially) so it may close over and mutate ``context``.
         max_workers: Reserved for parity; CSV rows are processed sequentially
             because ``process_row`` typically mutates shared state.
-        continue_on_error: Collect per-row errors and keep going if True.
-        quiet: Suppress the per-error warning log.
+        continue_on_error: Collect per-row errors (each logged as a warning) and
+            keep going if True.
         on_progress: Optional ``(completed, total)`` progress callback.
 
     Returns:
@@ -513,8 +514,7 @@ def run_csv_batch(
             result.errors.append(f"{row.file_path}: {e}")
             if not continue_on_error:
                 raise
-            if not quiet:
-                logger.warning(f"Error processing {row.file_path}: {e}")
+            logger.warning(f"Error processing {row.file_path}: {e}")
         completed += 1
         if on_progress:
             on_progress(completed, total)

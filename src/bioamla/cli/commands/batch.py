@@ -71,7 +71,7 @@ def _require_input_dir(config: BatchConfig) -> str:
 
 def _report(result, output_dir: str | None, quiet: bool, saved_hint: str | None = None) -> None:
     """Print a standard BatchResult summary."""
-    from bioamla.cli.console import echo, print_success, print_warning
+    from bioamla.cli.console import print_success, print_warning
 
     if quiet:
         return
@@ -85,8 +85,6 @@ def _report(result, output_dir: str | None, quiet: bool, saved_hint: str | None 
         print_success(summary)
     if output_dir and saved_hint:
         print_success(f"Results saved to {output_dir}/{saved_hint}")
-    for error in result.errors:
-        echo(f"  Error: {error}")
 
 
 def _stty_sane() -> None:
@@ -137,7 +135,6 @@ def _run_csv_merge(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
-        quiet=config.quiet,
     )
     out_csv = write_csv(context)
     if not config.quiet:
@@ -175,7 +172,6 @@ def _run_csv_transform(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
-        quiet=config.quiet,
     )
     out_csv = write_csv(context)
     if not config.quiet:
@@ -204,7 +200,6 @@ def _run_csv_process(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
-        quiet=config.quiet,
     )
     write_csv(context)
     return result
@@ -242,7 +237,6 @@ def _run_csv_segment(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
-        quiet=config.quiet,
     )
 
     # Expand rows BEFORE writing the CSV.
@@ -294,7 +288,6 @@ def _run_csv_predict_segments(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
-        quiet=config.quiet,
     )
 
     new_rows = []
@@ -1297,10 +1290,11 @@ def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursi
     import csv
 
     from bioamla.audio.discovery import list_audio_files
-    from bioamla.cli.console import echo, print_header, print_success, print_warning
+    from bioamla.cli.console import print_header, print_success, print_warning
     from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.indices import batch_compute_indices, compute_indices_from_file
 
+    configure_cli_logging()
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
         if not quiet:
@@ -1320,7 +1314,6 @@ def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursi
             return
 
         filepaths = list_audio_files(_require_input_dir(config), recursive=recursive)
-        configure_cli_logging()
         results = batch_compute_indices(filepaths, verbose=not quiet)
 
         if output_dir and results:
@@ -1346,9 +1339,6 @@ def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursi
                 print_success(summary)
             if output_dir:
                 print_success(f"Results saved to {output_dir}/indices.csv")
-            for r in results:
-                if not r.get("success"):
-                    echo(f"  Error: {r.get('filepath')}: {r.get('error')}")
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
     finally:

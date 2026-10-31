@@ -205,7 +205,7 @@ def test_audio_validate_dir_all_valid(runner, test_audio_dir, tmp_path):
     assert list(rows[0]) == ["file_name", "valid", "error"]
 
 
-def test_audio_validate_dir_invalid_and_skipped(runner, test_audio_dir, tmp_path):
+def test_audio_validate_dir_invalid_and_skipped(runner, test_audio_dir, tmp_path, caplog):
     (Path(test_audio_dir) / "broken.wav").write_bytes(b"RIFF\x00\x00\x00\x00WAVEnope")
     (Path(test_audio_dir) / "clip.flac").write_bytes(b"fLaC")
     out = tmp_path / "out"
@@ -215,7 +215,8 @@ def test_audio_validate_dir_invalid_and_skipped(runner, test_audio_dir, tmp_path
     )
     assert result.exit_code == 1, result.output
     assert "1 failed" in result.output
-    assert "broken.wav" in result.output
+    # The failure itself is reported as a warning from the batch engine.
+    assert any("broken.wav" in r.getMessage() for r in caplog.records if r.levelname == "WARNING")
     by_name = {
         Path(r["file_name"]).name: r for r in csv.DictReader(open(out / "validation_report.csv"))
     }
