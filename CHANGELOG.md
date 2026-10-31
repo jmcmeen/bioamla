@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-10-31
+
 ### Security
 
 - Locked dependencies updated past open security advisories (all indirect): pillow 13.0.0,
@@ -542,7 +544,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.8...HEAD
+[0.3.8]: https://github.com/jmcmeen/bioamla/compare/v0.3.7...v0.3.8
 [0.3.6]: https://github.com/jmcmeen/bioamla/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/jmcmeen/bioamla/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/jmcmeen/bioamla/compare/v0.3.3...v0.3.4
