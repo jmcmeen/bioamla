@@ -501,3 +501,81 @@ def test_annotation_generate_frame_labels_no_duration(runner: CliRunner, tmp_pat
         )
     assert result.exit_code != 0
     assert "audio-duration" in result.output
+
+
+def test_convert_recording_needs_arbimon_output(tmp_path):
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    src = tmp_path / "a.csv"
+    src.write_text("start_time,end_time,label\n0,1,x\n")
+    result = CliRunner().invoke(
+        cli, ["annotation", "convert", str(src), str(tmp_path / "b.txt"), "--recording", "r.wav"]
+    )
+    assert result.exit_code == 2
+    assert "--recording only applies to --to arbimon" in result.output
+
+
+def test_convert_to_arbimon_takes_recording_from_bioamla_json(tmp_path):
+    import csv
+    import json
+
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    src = tmp_path / "a.json"
+    src.write_text(json.dumps({"format": "bioamla-annotations/1", "audio_file": "night.wav",
+                               "annotations": [{"start_time": 0, "end_time": 1, "label": "x"}]}))  # fmt: skip
+    out = tmp_path / "rois.csv"
+    result = CliRunner().invoke(
+        cli, ["annotation", "convert", str(src), str(out), "--to", "arbimon"]
+    )
+    assert result.exit_code == 0, result.output
+    (row,) = csv.DictReader(out.open())
+    assert row["recording"] == "night.wav" and row["species"] == "x"
+
+
+_ROIS = (
+    "id,recording,species,songtype,x1,x2,y1,y2\n"
+    "1,a.wav,Hyla,call,0.5,1.0,1000,3000\n"
+    "2,b.wav,Rana,call,0.2,0.4,500,900\n"
+)
+
+
+def test_filter_keeps_arbimon_layout(tmp_path):
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    src = tmp_path / "rois.csv"
+    src.write_text(_ROIS)
+    out = tmp_path / "kept.csv"
+    result = CliRunner().invoke(cli, ["annotation", "filter", str(src), str(out), "-i", "Hyla"])
+    assert result.exit_code == 0, result.output
+    header = out.read_text().splitlines()[0]
+    assert header.startswith("id,recording,site") and "x1" in header
+    assert out.read_text().count("\n") == 2  # header + the Hyla row
+
+
+def test_frame_labels_need_one_recording(tmp_path):
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    src = tmp_path / "rois.csv"
+    src.write_text(_ROIS)
+    out = tmp_path / "labels.npy"
+    args = ["annotation", "generate-frame-labels", str(src), str(out), "--audio-duration", "2",
+            "--frame-size", "0.5"]  # fmt: skip
+    result = CliRunner().invoke(cli, args)
+    assert result.exit_code == 1
+    assert "covers 2 recordings" in result.output and "--recording" in result.output
+
+    result = CliRunner().invoke(cli, [*args, "--recording", "a.wav"])
+    assert result.exit_code == 0, result.output
+
+    result = CliRunner().invoke(cli, [*args, "--recording", "c.wav"])
+    assert result.exit_code == 1
+    assert "No rows" in result.output

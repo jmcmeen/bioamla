@@ -6,7 +6,27 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Arbimon annotations: an `arbimon` format for the CSV layout of Arbimon's pattern-matching ROI
+  export (`x1`/`x2` seconds, `y1`/`y2` Hz, `species`, `songtype`, `recording`, `validated`,
+  `score`, ...). An input file is recognized from its header wherever annotations are read
+  (`annotation convert|summary|filter|remap|generate-labels|generate-frame-labels`, `dataset
+  extract-clips`), and `filter`/`remap` keep it in Arbimon layout. Write it with `annotation
+  convert ... --to arbimon`, naming the recording with `--recording` (or from a bioamla `.json`
+  input's `audio_file`). Library: `load_arbimon_annotations()`, `save_arbimon_annotations()`,
+  `ARBIMON_COLUMNS`.
+- Annotation files that name each row's recording (a `recording` column, as Arbimon exports
+  have) can cover many recordings. `dataset extract-clips` uses only the rows for the audio file
+  being cut (matched by name, case-insensitively, with or without the extension), and
+  `annotation generate-labels|generate-frame-labels` take `--recording` and refuse a file that
+  covers several recordings without it.
+
 ### Fixed
+
+- Raven selection tables keep confidence (a `Confidence` column, written when any annotation has
+  one and read back when numeric; text values such as `high` stay a custom column) and write
+  frequencies to three decimals instead of rounding to 0.1 Hz.
 
 - `audio video -t trajectory`: on narrow frames (e.g. `--size 1080x1920`) the title no longer
   overprints the time: it moves to the line below, and is shortened or left out when even that

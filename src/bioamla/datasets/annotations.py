@@ -283,12 +283,17 @@ def load_raven_selection_table(
                     low_freq = _parse_float(row.get("Low Freq (Hz)"))
                     high_freq = _parse_float(row.get("High Freq (Hz)"))
                     channel = int(row.get("Channel", 1) or 1)
+                    # A numeric Confidence column is the confidence; anything else
+                    # (e.g. "high"/"low") stays a custom field.
+                    confidence = _parse_float(row.get("Confidence"))
 
                     label = ""
                     if label_column and label_column in row:
                         label = str(row[label_column]).strip()
 
                     standard_cols = set(RAVEN_COLUMN_MAP.keys())
+                    if confidence is not None:
+                        standard_cols.add("Confidence")
                     custom_fields = {
                         k: v
                         for k, v in row.items()
@@ -303,6 +308,7 @@ def load_raven_selection_table(
                             high_freq=high_freq,
                             label=label,
                             channel=channel,
+                            confidence=confidence,
                             custom_fields=custom_fields,
                         )
                     )
@@ -351,6 +357,8 @@ def save_raven_selection_table(
         "High Freq (Hz)",
         "Annotation",
     ]
+    if any(ann.confidence is not None for ann in annotations):
+        columns.append("Confidence")
 
     if include_custom_fields:
         custom_cols = set()
@@ -370,10 +378,12 @@ def save_raven_selection_table(
                     "Channel": ann.channel,
                     "Begin Time (s)": f"{ann.start_time:.6f}",
                     "End Time (s)": f"{ann.end_time:.6f}",
-                    "Low Freq (Hz)": f"{ann.low_freq:.1f}" if ann.low_freq is not None else "",
-                    "High Freq (Hz)": f"{ann.high_freq:.1f}" if ann.high_freq is not None else "",
+                    "Low Freq (Hz)": f"{ann.low_freq:.3f}" if ann.low_freq is not None else "",
+                    "High Freq (Hz)": f"{ann.high_freq:.3f}" if ann.high_freq is not None else "",
                     "Annotation": ann.label,
                 }
+                if "Confidence" in columns:
+                    row["Confidence"] = "" if ann.confidence is None else f"{ann.confidence}"
                 if include_custom_fields:
                     row.update(ann.custom_fields)
                 writer.writerow(row)
@@ -721,6 +731,168 @@ def save_parquet_annotations(annotations: list[Annotation], filepath: str) -> st
     except Exception as e:
         raise AnnotationError(f"Failed to write Parquet annotations {filepath}: {e}") from e
 
+    logger.info(f"Saved {len(annotations)} annotations to {filepath}")
+    return str(path)
+
+
+# =============================================================================
+# Arbimon
+# =============================================================================
+
+#: Columns of Arbimon's pattern-matching ROI export, in its order. ``x1``/``x2`` are
+#: seconds into the recording, ``y1``/``y2`` Hz.
+ARBIMON_COLUMNS = [
+    "id",
+    "recording",
+    "site",
+    "year",
+    "month",
+    "day",
+    "hour",
+    "min",
+    "species",
+    "songtype",
+    "x1",
+    "x2",
+    "y1",
+    "y2",
+    "validated",
+    "uri",
+    "score",
+    "site_id",
+]
+_ARBIMON_REQUIRED = {"species", "x1", "x2"}
+_ARBIMON_NOT_VALIDATED = "(not validated)"
+
+
+def is_arbimon_csv(filepath: str | Path) -> bool:
+    """True if the CSV's header has Arbimon's ROI columns (``species``, ``x1``, ``x2``)."""
+    try:
+        with open(filepath, newline="", encoding="utf-8-sig") as f:
+            header = next(csv.reader(f), [])
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return False
+    return _ARBIMON_REQUIRED <= {h.strip() for h in header}
+
+
+def load_arbimon_annotations(filepath: str, encoding: str = "utf-8-sig") -> list[Annotation]:
+    """Load regions of interest from an Arbimon pattern-matching export CSV.
+
+    Each row becomes an annotation: ``x1``-``x2`` seconds, ``y1``-``y2`` Hz, the
+    ``species`` as the label and ``score`` as the confidence. One export covers many
+    recordings, so ``recording``, ``songtype``, ``site``, ``validated`` and the other
+    Arbimon columns are kept in ``custom_fields`` (and written back by
+    :func:`save_arbimon_annotations`).
+
+    Args:
+        filepath: Path to the CSV.
+        encoding: File encoding.
+
+    Returns:
+        List of Annotation objects.
+
+    Raises:
+        NotFoundError: If the file doesn't exist.
+        AnnotationError: If the file isn't an Arbimon export or can't be parsed.
+    """
+    path = Path(filepath)
+    if not path.exists():
+        raise NotFoundError(f"Arbimon file not found: {filepath}")
+    annotations: list[Annotation] = []
+    try:
+        with open(path, newline="", encoding=encoding) as f:
+            reader = csv.DictReader(f)
+            missing = _ARBIMON_REQUIRED - {h.strip() for h in reader.fieldnames or ()}
+            if missing:
+                raise AnnotationError(
+                    f"Not an Arbimon export (missing {', '.join(sorted(missing))}): {filepath}"
+                )
+            for row in reader:
+                row = {k.strip(): (v or "").strip() for k, v in row.items() if k}
+                start, end = _parse_float(row.get("x1")), _parse_float(row.get("x2"))
+                if start is None or end is None:
+                    raise AnnotationError(
+                        f"{filepath}, line {reader.line_num}: x1/x2 must be numbers"
+                    )
+                annotations.append(
+                    Annotation(
+                        start_time=start,
+                        end_time=end,
+                        low_freq=_parse_float(row.get("y1")),
+                        high_freq=_parse_float(row.get("y2")),
+                        label=row.get("species", ""),
+                        confidence=_parse_float(row.get("score")),
+                        custom_fields={
+                            k: v
+                            for k, v in row.items()
+                            if k not in ("x1", "x2", "y1", "y2", "species", "score") and v
+                        },
+                    )
+                )
+    except UnicodeDecodeError as e:
+        raise AnnotationError(
+            f"{filepath} is not UTF-8 text ({e.reason}); re-save it as UTF-8"
+        ) from e
+    except (OSError, csv.Error) as e:
+        raise AnnotationError(f"Failed to read Arbimon file {filepath}: {e}") from e
+    logger.info(f"Loaded {len(annotations)} annotations from {filepath}")
+    return annotations
+
+
+def save_arbimon_annotations(
+    annotations: list[Annotation],
+    filepath: str,
+    recording: str | None = None,
+    encoding: str = "utf-8",
+) -> str:
+    """Save annotations in the layout of Arbimon's pattern-matching ROI export.
+
+    The columns are :data:`ARBIMON_COLUMNS`: ``x1``/``x2`` the times in seconds,
+    ``y1``/``y2`` the band in Hz (blank when unknown), ``species`` the label and
+    ``score`` the confidence. ``recording``, ``songtype``, ``site``, ``validated`` and
+    the rest come from each annotation's ``custom_fields``, so a file read with
+    :func:`load_arbimon_annotations` round-trips. ``validated`` defaults to
+    ``(not validated)``; ``id`` (Arbimon's own ROI id) is left blank for rows that
+    don't carry one, so it never collides with a real one.
+
+    Args:
+        annotations: Annotations to save.
+        filepath: Output CSV path.
+        recording: Recording name for annotations that don't carry one.
+        encoding: File encoding.
+
+    Returns:
+        Path to the saved file.
+
+    Raises:
+        AnnotationError: If the file cannot be written.
+    """
+    path = Path(filepath)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    def fmt(value: float | None) -> str:
+        return "" if value is None else repr(float(value))  # full precision
+
+    try:
+        with open(path, "w", newline="", encoding=encoding) as f:
+            writer = csv.DictWriter(f, fieldnames=ARBIMON_COLUMNS, extrasaction="ignore")
+            writer.writeheader()
+            for ann in annotations:
+                extra = {k: str(v) for k, v in ann.custom_fields.items() if v not in (None, "")}
+                row = {
+                    **extra,
+                    "recording": extra.get("recording", recording or ""),
+                    "validated": extra.get("validated", _ARBIMON_NOT_VALIDATED),
+                    "species": ann.label,
+                    "x1": fmt(ann.start_time),
+                    "x2": fmt(ann.end_time),
+                    "y1": fmt(ann.low_freq),
+                    "y2": fmt(ann.high_freq),
+                    "score": fmt(ann.confidence),
+                }
+                writer.writerow(row)
+    except OSError as e:
+        raise AnnotationError(f"Failed to write Arbimon file {filepath}: {e}") from e
     logger.info(f"Saved {len(annotations)} annotations to {filepath}")
     return str(path)
 

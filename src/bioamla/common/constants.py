@@ -45,7 +45,7 @@ DEFAULT_WIN_LENGTH: int = 2048
 # Annotation file formats read and written by bioamla.datasets. Kept here, not in
 # the datasets package, so the CLI can build its --format choices without
 # importing that package (and numpy/pandas with it) at startup.
-ANNOTATION_FORMATS: list[str] = ["raven", "csv", "bioamla"]
+ANNOTATION_FORMATS: list[str] = ["raven", "csv", "bioamla", "arbimon"]
 
 
 # =============================================================================

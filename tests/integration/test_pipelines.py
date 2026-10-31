@@ -169,3 +169,41 @@ class TestFeaturesAndVideo:
         np.testing.assert_allclose(
             video["explained_variance_ratio"], features["explained_variance_ratio"]
         )
+
+
+class TestArbimon:
+    def test_detections_to_arbimon_and_back_into_clips(self, recording, tmp_path) -> None:
+        """Two recordings' detections in one Arbimon file; clips come from the right one."""
+        other = tmp_path / "other.wav"
+        audio, sr = sf.read(recording)
+        sf.write(other, audio[: len(audio) // 2], sr)  # the first four calls only
+
+        rows = []
+        for wav in (recording, other):
+            det = bioamla("detect", "energy", str(wav), "-o", str(tmp_path / f"{wav.stem}.csv"))
+            out = tmp_path / f"{wav.stem}.arbimon.csv"
+            conv = bioamla(
+                "annotation", "convert", det["output"], str(out), "--to", "arbimon",
+                "--recording", wav.name,
+            )  # fmt: skip
+            assert conv["count"] == det["count"]
+            rows += read_csv(out)
+        combined = tmp_path / "rois.csv"
+        with open(combined, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(rows)
+
+        summary = bioamla("annotation", "summary", str(combined))  # detected as arbimon
+        assert summary["total_annotations"] == len(rows) == 7 + 4
+
+        for wav, expected in ((recording, 7), (other, 4)):
+            clips = bioamla(
+                "dataset", "extract-clips", str(wav), str(tmp_path / f"clips-{wav.stem}"),
+                "--annotations", str(combined),
+            )  # fmt: skip
+            assert clips["clips_written"] == expected  # only this recording's rows
+            assert {r["low_freq"] for r in read_csv(clips["metadata_file"])} == {"500.0"}
+
+        back = bioamla("annotation", "convert", str(combined), str(tmp_path / "sel.txt"))
+        assert back["from_format"] == "arbimon" and back["to_format"] == "raven"

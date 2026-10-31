@@ -7,6 +7,7 @@ Raven label auto-detect / custom-field branches not hit by ``test_datasets.py``.
 
 from __future__ import annotations
 
+import csv
 import json
 
 import pytest
@@ -280,3 +281,174 @@ class TestDetectionOutputAsAnnotations:
         )  # fmt: skip
         assert (ann.low_freq, ann.high_freq, ann.confidence) == (500.0, 5000.0, None)
         assert "frequency_low" not in ann.custom_fields
+
+
+ARBIMON_EXAMPLE = (
+    "id,recording,site,year,month,day,hour,min,species,songtype,x1,x2,y1,y2,validated,uri,"
+    "score,site_id\n"
+    "24735680,sabana_seca1-2014-07-15_05-50.flac,Sabana Seca,2014,7,15,5,50,"
+    "Eleutherodactylus juanariveroi,Common Song,42.92266667,44.032,6562.5,8343.75,"
+    "(not validated),https://example.org/24735680.png,0.300001416,506\n"
+    "24721339,sabana_seca1-2014-06-29_05-10.flac,Sabana Seca,2014,6,29,5,10,"
+    "Eleutherodactylus juanariveroi,Common Song,17.36,18.46933333,6562.5,8343.75,"
+    "present,,0.30000146,506\n"
+)
+
+
+class TestArbimon:
+    @pytest.fixture
+    def export(self, tmp_path):
+        path = tmp_path / "pattern_matching_rois.csv"
+        path.write_text(ARBIMON_EXAMPLE)
+        return path
+
+    def test_load(self, export) -> None:
+        from bioamla.datasets.annotations import load_arbimon_annotations
+
+        first, second = load_arbimon_annotations(str(export))
+        assert (first.start_time, first.end_time) == (42.92266667, 44.032)
+        assert (first.low_freq, first.high_freq) == (6562.5, 8343.75)
+        assert first.label == "Eleutherodactylus juanariveroi"
+        assert first.confidence == pytest.approx(0.300001416)
+        assert first.custom_fields["recording"] == "sabana_seca1-2014-07-15_05-50.flac"
+        assert first.custom_fields["songtype"] == "Common Song"
+        assert second.custom_fields["validated"] == "present"
+        assert "uri" not in second.custom_fields  # empty cells aren't kept
+
+    def test_round_trip_is_exact(self, export, tmp_path) -> None:
+        from bioamla.datasets.annotations import (
+            load_arbimon_annotations,
+            save_arbimon_annotations,
+        )
+
+        out = tmp_path / "out.csv"
+        save_arbimon_annotations(load_arbimon_annotations(str(export)), str(out))
+        assert out.read_text().splitlines() == ARBIMON_EXAMPLE.splitlines()
+
+    def test_write_from_plain_annotations(self, tmp_path) -> None:
+        from bioamla.datasets.annotations import ARBIMON_COLUMNS, save_arbimon_annotations
+
+        out = tmp_path / "rois.csv"
+        anns = [Annotation(start_time=1.5, end_time=2.0, label="Hyla", confidence=0.9),
+                Annotation(start_time=3.0, end_time=3.25, low_freq=1000, high_freq=4000,
+                           label="Rana", custom_fields={"recording": "other.wav"})]  # fmt: skip
+        save_arbimon_annotations(anns, str(out), recording="night.wav")
+        rows = list(csv.DictReader(out.open()))
+        assert list(rows[0]) == ARBIMON_COLUMNS
+        assert rows[0]["id"] == "" and rows[0]["recording"] == "night.wav"  # no made-up ids
+        assert (rows[0]["x1"], rows[0]["x2"], rows[0]["y1"], rows[0]["score"]) == (
+            "1.5", "2.0", "", "0.9",
+        )  # fmt: skip
+        assert rows[0]["validated"] == "(not validated)"
+        assert rows[1]["recording"] == "other.wav"  # its own recording wins
+        assert (rows[1]["y1"], rows[1]["y2"]) == ("1000.0", "4000.0")
+
+    def test_detected_from_header(self, export, tmp_path) -> None:
+        from bioamla.datasets._io import detect_annotation_format
+
+        plain = tmp_path / "plain.csv"
+        plain.write_text("start_time,end_time,label\n0,1,x\n")
+        assert detect_annotation_format(export, read_header=True) == "arbimon"
+        assert detect_annotation_format(plain, read_header=True) == "csv"
+        assert detect_annotation_format(tmp_path / "new.csv", read_header=True) == "csv"
+        # An output path is never read: an existing Arbimon file doesn't change the format.
+        assert detect_annotation_format(export) == "csv"
+
+    def test_not_an_export(self, tmp_path) -> None:
+        from bioamla.datasets.annotations import load_arbimon_annotations
+
+        path = tmp_path / "x.csv"
+        path.write_text("start_time,end_time\n0,1\n")
+        with pytest.raises(AnnotationError, match="missing species, x1, x2"):
+            load_arbimon_annotations(str(path))
+
+    def test_bad_time(self, tmp_path) -> None:
+        from bioamla.datasets.annotations import load_arbimon_annotations
+
+        path = tmp_path / "x.csv"
+        path.write_text("species,x1,x2\nHyla,soon,2\n")
+        with pytest.raises(AnnotationError, match="line 2: x1/x2"):
+            load_arbimon_annotations(str(path))
+
+
+class TestRavenKeepsDetail:
+    def test_confidence_and_band_precision_round_trip(self, tmp_path) -> None:
+        path = tmp_path / "sel.txt"
+        anns = [Annotation(start_time=1.0, end_time=2.0, low_freq=6562.5, high_freq=8343.75,
+                           label="x", confidence=0.300001416)]  # fmt: skip
+        save_raven_selection_table(anns, str(path))
+        (back,) = load_raven_selection_table(str(path))
+        assert (back.low_freq, back.high_freq) == (6562.5, 8343.75)
+        assert back.confidence == pytest.approx(0.300001416)
+        assert "Confidence" not in back.custom_fields
+
+    def test_no_confidence_column_without_confidences(self, tmp_path) -> None:
+        path = tmp_path / "sel.txt"
+        save_raven_selection_table([Annotation(start_time=0, end_time=1, label="x")], str(path))
+        assert "Confidence" not in path.read_text().splitlines()[0]
+
+
+class TestArbimonEdgeCases:
+    def test_not_utf8(self, tmp_path) -> None:
+        from bioamla.datasets.annotations import load_arbimon_annotations
+
+        path = tmp_path / "x.csv"
+        path.write_bytes("species,x1,x2,site\nHyla,1,2,Cañas\n".encode("cp1252"))
+        with pytest.raises(AnnotationError, match="not UTF-8"):
+            load_arbimon_annotations(str(path))
+
+    def test_text_confidence_stays_a_raven_custom_field(self, tmp_path) -> None:
+        path = tmp_path / "sel.txt"
+        path.write_text(
+            "Selection\tView\tChannel\tBegin Time (s)\tEnd Time (s)\tAnnotation\tConfidence\n"
+            "1\tSpectrogram 1\t1\t0.5\t1.0\tHyla\thigh\n"
+        )
+        (ann,) = load_raven_selection_table(str(path))
+        assert ann.confidence is None
+        assert ann.custom_fields["Confidence"] == "high"
+
+    @pytest.mark.parametrize(
+        ("recording", "audio", "match"),
+        [
+            ("rec_01.wav", "rec_01.wav", True),
+            ("REC_01.WAV", "rec_01.wav", True),
+            ("rec_01", "rec_01.flac", True),
+            ("rec_01.flac", "rec_01.wav", True),  # same recording, converted
+            ("site.2020.01.15", "site.2020.01.15.flac", True),
+            ("site.2020.01.15.flac", "site.2020.01.16.flac", False),
+            ("rec_02.wav", "rec_01.wav", False),
+        ],
+    )
+    def test_recording_matching(self, recording, audio, match) -> None:
+        from bioamla.datasets._io import annotations_for_recording
+
+        ann = Annotation(
+            start_time=0, end_time=1, label="x", custom_fields={"recording": recording}
+        )
+        other = Annotation(
+            start_time=0, end_time=1, label="y", custom_fields={"recording": "zzz.wav"}
+        )
+        assert (annotations_for_recording([ann, other], audio) == [ann]) is match
+
+    def test_unnamed_rows_are_all_kept(self) -> None:
+        from bioamla.datasets._io import annotations_for_recording
+
+        anns = [Annotation(start_time=0, end_time=1, label="x")]
+        assert annotations_for_recording(anns, "anything.wav") == anns
+
+    def test_recording_from_metadata_is_a_file_name(self, tmp_path) -> None:
+        from bioamla.datasets._io import save_annotations
+
+        out = tmp_path / "rois.csv"
+        anns = [Annotation(start_time=0, end_time=1, label="x")]
+        save_annotations(anns, out, "arbimon", metadata={"audio_file": "/data/site/night.wav"})
+        (row,) = csv.DictReader(out.open())
+        assert row["recording"] == "night.wav"
+
+    def test_missing_recording_warns(self, tmp_path, caplog) -> None:
+        from bioamla.datasets._io import save_annotations
+
+        save_annotations(
+            [Annotation(start_time=0, end_time=1, label="x")], tmp_path / "r.csv", "arbimon"
+        )
+        assert "no recording name" in caplog.text
