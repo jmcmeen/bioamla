@@ -339,7 +339,8 @@ def run_batch(
         result.successful += 1
         if value is not None:
             result.output_files.append(str(value))
-        logger.debug("%s: processed %s", operation, item, **_fields(item))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("%s: processed %s", operation, item, **_fields(item))
 
     def _record_failure(item: Any, exc: Exception) -> None:
         result.failed += 1
@@ -650,6 +651,17 @@ def run_csv_batch(
 
     completed = 0
     total = len(rows)
+
+    def _fields(row: MetadataRow, **extra: Any) -> dict[str, dict[str, Any]]:
+        return log_fields(
+            operation=operation,
+            file=str(row.file_path),
+            index=completed + 1,
+            total=total,
+            elapsed_s=_elapsed(start_time),
+            **extra,
+        )
+
     for row in rows:
         try:
             if not row.file_path.exists():
@@ -658,18 +670,8 @@ def run_csv_batch(
             result.successful += 1
             if value is not None:
                 result.output_files.append(str(value))
-            logger.debug(
-                "%s: processed %s",
-                operation,
-                row.file_path,
-                **log_fields(
-                    operation=operation,
-                    file=str(row.file_path),
-                    index=completed + 1,
-                    total=total,
-                    elapsed_s=_elapsed(start_time),
-                ),
-            )
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("%s: processed %s", operation, row.file_path, **_fields(row))
         except Exception as e:
             result.failed += 1
             result.errors.append(f"{row.file_path}: {e}")
@@ -679,14 +681,7 @@ def run_csv_batch(
                 "Error processing %s: %s",
                 row.file_path,
                 e,
-                **log_fields(
-                    operation=operation,
-                    file=str(row.file_path),
-                    index=completed + 1,
-                    total=total,
-                    elapsed_s=_elapsed(start_time),
-                    error=_short_error(e),
-                ),
+                **_fields(row, error=_short_error(e)),
             )
         completed += 1
         if on_progress:
