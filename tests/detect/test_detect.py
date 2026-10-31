@@ -19,6 +19,7 @@ from bioamla.detect import (
     export_detections,
 )
 from bioamla.detect.batch import batch_detect_dir
+from bioamla.exceptions import AudioLoadError
 
 
 @pytest.fixture
@@ -215,6 +216,35 @@ class TestBatchDetect:
         detector = BandLimitedEnergyDetector(low_freq=500, high_freq=5000)
         results = batch_detect(["/nope/missing.wav"], detector, verbose=False)
         assert results["/nope/missing.wav"] == []
+
+    def test_parallel_keeps_input_order(self) -> None:
+        class StubDetector:
+            def detect_from_file(self, filepath):
+                if filepath == "bad.wav":
+                    raise AudioLoadError("unreadable")
+                return [Detection(start_time=0.0, end_time=1.0, label=filepath)]
+
+        paths = ["c.wav", "bad.wav", "a.wav", "b.wav", "a.wav"]
+        calls: list[tuple[int, int]] = []
+        results = batch_detect(
+            paths,
+            StubDetector(),
+            verbose=True,
+            max_workers=3,
+            on_progress=lambda done, total: calls.append((done, total)),
+        )
+        assert list(results) == ["c.wav", "bad.wav", "a.wav", "b.wav"]
+        assert results["bad.wav"] == []
+        assert [d.label for d in results["c.wav"]] == ["c.wav"]
+        assert calls[-1] == (4, 4)
+
+    def test_unexpected_error_propagates(self) -> None:
+        class BrokenDetector:
+            def detect_from_file(self, filepath):
+                raise RuntimeError("detector bug")
+
+        with pytest.raises(RuntimeError, match="detector bug"):
+            batch_detect(["a.wav"], BrokenDetector(), verbose=False)
 
 
 class TestBatchDetectDir:

@@ -668,7 +668,7 @@ def dataset_augment(
         # Time-stretch only
         bioamla dataset augment ./clips -o ./aug --time-stretch 0.9-1.1
     """
-    from bioamla.cli.console import echo, print_error, print_success
+    from bioamla.cli.console import echo, print_error, print_success, print_warning
     from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.datasets import AugmentationConfig, batch_augment
 
@@ -718,11 +718,14 @@ def dataset_augment(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
-    if quiet:
-        print_success(
-            f"Created {stats['files_created']} augmented files from "
-            f"{stats['files_processed']} source files in {stats['output_dir']}"
-        )
+    summary = (
+        f"Created {stats['files_created']} augmented files from "
+        f"{stats['files_processed']} source files in {stats['output_dir']}"
+    )
+    if stats["files_failed"]:
+        print_warning(f"{summary}; {stats['files_failed']} failed")
+    else:
+        print_success(summary)
 
 
 @dataset.command("remix")

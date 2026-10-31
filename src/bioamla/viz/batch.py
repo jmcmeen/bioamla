@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from bioamla.audio.discovery import list_audio_files
+from bioamla.batch import output_stems, run_batch
 from bioamla.exceptions import NotFoundError
 from bioamla.viz.core import (
     VisualizationType,
@@ -43,6 +44,7 @@ def batch_generate_spectrograms(
     recursive: bool = True,
     verbose: bool = True,
     on_progress: Callable[[int, int], None] | None = None,
+    max_workers: int = 1,
 ) -> dict:
     """
     Generate spectrograms for all audio files in a directory.
@@ -66,6 +68,7 @@ def batch_generate_spectrograms(
         recursive: Whether to search subdirectories.
         verbose: Whether to log progress at INFO level.
         on_progress: Optional ``(completed, total)`` progress callback.
+        max_workers: Worker threads; 1 runs sequentially.
 
     Returns:
         Statistics dict with ``files_processed``, ``files_failed``, ``output_dir``.
@@ -91,56 +94,41 @@ def batch_generate_spectrograms(
     if verbose:
         logger.info(f"Found {len(audio_files)} audio files to process")
 
-    files_processed = 0
-    files_failed = 0
-    total = len(audio_files)
-
     # Determine output extension
     out_ext = ".jpg" if format.lower() in ("jpg", "jpeg") else ".png"
 
-    for idx, audio_path in enumerate(audio_files, start=1):
-        audio_path = Path(audio_path)
-        try:
-            rel_path = audio_path.relative_to(in_dir)
-        except ValueError:
-            rel_path = Path(audio_path.name)
+    files = [str(f) for f in audio_files]
+    stems = output_stems(files, in_dir)
 
-        output_path = out_dir / rel_path.with_suffix(out_ext)
+    def _generate(audio_path: str) -> Path:
+        stem = stems[audio_path]
+        output_path = out_dir / stem.parent / f"{stem.name}{out_ext}"
+        generate_spectrogram(
+            audio_path=audio_path,
+            output_path=str(output_path),
+            viz_type=viz_type,
+            sample_rate=sample_rate,
+            n_mels=n_mels,
+            n_mfcc=n_mfcc,
+            hop_length=hop_length,
+            n_fft=n_fft,
+            window=window,
+            figsize=figsize,
+            cmap=cmap,
+            db_min=db_min,
+            db_max=db_max,
+            dpi=dpi,
+            format=format,
+        )
+        if verbose:
+            logger.info(f"  Generated: {output_path}")
+        return output_path
 
-        try:
-            generate_spectrogram(
-                audio_path=str(audio_path),
-                output_path=str(output_path),
-                viz_type=viz_type,
-                sample_rate=sample_rate,
-                n_mels=n_mels,
-                n_mfcc=n_mfcc,
-                hop_length=hop_length,
-                n_fft=n_fft,
-                window=window,
-                figsize=figsize,
-                cmap=cmap,
-                db_min=db_min,
-                db_max=db_max,
-                dpi=dpi,
-                format=format,
-            )
-            files_processed += 1
-            if verbose:
-                logger.info(f"  Generated: {output_path}")
-        except Exception as e:
-            files_failed += 1
-            logger.warning(f"Failed: {audio_path} - {e}")
-
-        if on_progress:
-            on_progress(idx, total)
-
-    if verbose:
-        logger.info(f"Processed {files_processed} files, {files_failed} failed")
+    result = run_batch(files, _generate, max_workers=max_workers, on_progress=on_progress)
 
     return {
-        "files_processed": files_processed,
-        "files_failed": files_failed,
+        "files_processed": result.successful,
+        "files_failed": result.failed,
         "output_dir": str(out_dir),
     }
 

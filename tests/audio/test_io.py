@@ -155,6 +155,25 @@ class TestBatchProcess:
         assert stats["files_processed"] == 3
         assert stats["files_failed"] == 0
 
+    def test_parallel_with_progress(self, test_audio_dir: str, tmp_path) -> None:
+        calls: list[tuple[int, int]] = []
+        out_dir = tmp_path / "out"
+        stats = batch_process(
+            test_audio_dir,
+            str(out_dir),
+            lambda a, sr: a,
+            verbose=False,
+            max_workers=3,
+            on_progress=lambda done, total: calls.append((done, total)),
+        )
+        assert stats["files_processed"] == 3
+        assert sorted(p.name for p in out_dir.glob("*.wav")) == [
+            "audio_0.wav",
+            "audio_1.wav",
+            "audio_2.wav",
+        ]
+        assert calls[-1] == (3, 3)
+
     def test_missing_input_dir_raises(self, tmp_path) -> None:
         with pytest.raises(NotFoundError):
             batch_process(str(tmp_path / "nope"), str(tmp_path / "out"), lambda a, sr: a)

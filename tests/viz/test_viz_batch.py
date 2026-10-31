@@ -18,6 +18,16 @@ class TestBatchGenerateSpectrograms:
         assert stats["files_processed"] == 3
         assert stats["files_failed"] == 0
 
+    def test_parallel_matches_sequential(self, test_audio_dir: str, tmp_path) -> None:
+        seq = tmp_path / "seq"
+        par = tmp_path / "par"
+        batch_generate_spectrograms(test_audio_dir, str(seq), verbose=False)
+        stats = batch_generate_spectrograms(test_audio_dir, str(par), verbose=False, max_workers=3)
+        assert stats == {"files_processed": 3, "files_failed": 0, "output_dir": str(par)}
+        for image in seq.glob("*.png"):
+            # Same pixels whichever thread drew it: no pyplot state is shared.
+            assert (par / image.name).read_bytes() == image.read_bytes()
+
     def test_jpg_format(self, test_audio_dir: str, tmp_path) -> None:
         stats = batch_generate_spectrograms(
             test_audio_dir,

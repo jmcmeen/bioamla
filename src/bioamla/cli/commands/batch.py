@@ -1016,6 +1016,7 @@ def audio_visualize(
             viz_type=plot_type,
             recursive=recursive,
             verbose=not quiet,
+            max_workers=max_workers,
         )
         if not quiet:
             summary = f"Processed {stats['files_processed']} files, {stats['files_failed']} failed"
@@ -1314,7 +1315,9 @@ def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursi
             return
 
         filepaths = list_audio_files(_require_input_dir(config), recursive=recursive)
-        results = batch_compute_indices(filepaths, verbose=not quiet)
+        results = batch_compute_indices(
+            filepaths, verbose=not quiet, max_workers=config.max_workers
+        )
 
         if output_dir and results:
             out_path = Path(output_dir) / "indices.csv"

@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any
 from bioamla.exceptions import AugmentationError, NotFoundError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -233,6 +235,9 @@ def batch_augment(
     config: AugmentationConfig,
     recursive: bool = True,
     verbose: bool = True,
+    *,
+    max_workers: int = 1,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
     """Augment all audio files in a directory.
 
@@ -242,6 +247,8 @@ def batch_augment(
         config: Augmentation configuration.
         recursive: Whether to search subdirectories.
         verbose: Whether to log progress at INFO level.
+        max_workers: Worker threads; 1 runs sequentially.
+        on_progress: Optional ``(completed, total)`` progress callback.
 
     Returns:
         Dict with keys ``files_processed``, ``files_created``, ``files_failed``,
@@ -252,6 +259,7 @@ def batch_augment(
         AugmentationError: If no augmentations are enabled.
     """
     from bioamla.audio import save_audio
+    from bioamla.batch import output_stems, run_batch
     from bioamla.common.files import get_files_by_extension
 
     input_path = Path(input_dir)
@@ -285,57 +293,42 @@ def batch_augment(
         logger.info(f"Found {len(audio_files)} audio files to process")
         logger.info(f"Creating {config.multiply} augmented copies per file")
 
-    files_processed = 0
-    files_created = 0
-    files_failed = 0
+    files = [str(f) for f in audio_files]
+    stems = output_stems(files, input_path)
+    # Every file written, including those from an input that later fails
+    # (list.append is atomic, so worker threads can share it).
+    created: list[Path] = []
 
-    for raw_path in audio_files:
-        audio_path = Path(raw_path)
+    def _augment(raw_path: str) -> None:
+        stem = stems[raw_path]
+        audio, orig_sr = _load_waveform(raw_path)
 
-        try:
-            rel_path = audio_path.relative_to(input_path)
-        except ValueError:
-            rel_path = Path(audio_path.name)
+        if orig_sr != config.sample_rate:
+            audio = _resample(audio, orig_sr, config.sample_rate)
 
-        try:
-            audio, orig_sr = _load_waveform(str(audio_path))
+        for i in range(config.multiply):
+            suffix = ".wav"  # Always output as WAV
+            if config.multiply > 1:
+                out_name = f"{stem.name}_aug{i + 1}{suffix}"
+            else:
+                out_name = f"{stem.name}_aug{suffix}"
 
-            if orig_sr != config.sample_rate:
-                audio = _resample(audio, orig_sr, config.sample_rate)
+            out_path = output_path / stem.parent / out_name
+            augmented = augment_audio(audio, config.sample_rate, pipeline)
 
-            for i in range(config.multiply):
-                stem = rel_path.stem
-                suffix = ".wav"  # Always output as WAV
-                if config.multiply > 1:
-                    out_name = f"{stem}_aug{i + 1}{suffix}"
-                else:
-                    out_name = f"{stem}_aug{suffix}"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            save_audio(str(out_path), augmented, config.sample_rate)
+            created.append(out_path)
 
-                out_path = output_path / rel_path.parent / out_name
-                augmented = augment_audio(audio, config.sample_rate, pipeline)
+            if verbose:
+                logger.info(f"  Created: {out_path}")
 
-                out_path.parent.mkdir(parents=True, exist_ok=True)
-                save_audio(str(out_path), augmented, config.sample_rate)
-                files_created += 1
-
-                if verbose:
-                    logger.info(f"  Created: {out_path}")
-
-            files_processed += 1
-        except Exception as e:  # noqa: BLE001 - report per-file failures, continue batch
-            files_failed += 1
-            logger.warning(f"Failed: {audio_path} - {e}")
-
-    if verbose:
-        logger.info(
-            f"Processed {files_processed} files, created {files_created} "
-            f"augmented files, {files_failed} failed"
-        )
+    result = run_batch(files, _augment, max_workers=max_workers, on_progress=on_progress)
 
     return {
-        "files_processed": files_processed,
-        "files_created": files_created,
-        "files_failed": files_failed,
+        "files_processed": result.successful,
+        "files_created": len(created),
+        "files_failed": result.failed,
         "output_dir": str(output_path),
     }
 

@@ -159,6 +159,41 @@ def discover_files(
     return sorted(files)
 
 
+def output_stems(files: list[str], root: str | Path) -> dict[str, Path]:
+    """
+    Map each input file to its output stem: its path under ``root`` minus the suffix.
+
+    Inputs that differ only in extension (``a.wav`` and ``a.mp3``) would write
+    to the same output, so those keep the extension in the stem (``a_wav``,
+    ``a_mp3``). Files outside ``root`` use just their name.
+
+    Args:
+        files: Input file paths.
+        root: Directory the output tree mirrors.
+
+    Returns:
+        Dict mapping each input path to a relative stem with no suffix. Build an
+        output path with ``stem.parent / f"{stem.name}.wav"``.
+    """
+    root = Path(root)
+    rel: dict[str, Path] = {}
+    for f in files:
+        path = Path(f)
+        try:
+            rel[f] = path.relative_to(root)
+        except ValueError:
+            rel[f] = Path(path.name)
+
+    plain = {f: r.parent / r.stem for f, r in rel.items()}
+    counts: dict[Path, int] = {}
+    for stem in plain.values():
+        counts[stem] = counts.get(stem, 0) + 1
+    return {
+        f: plain[f] if counts[plain[f]] == 1 else r.parent / f"{r.stem}_{r.suffix.lstrip('.')}"
+        for f, r in rel.items()
+    }
+
+
 # =============================================================================
 # Generic batch runner
 # =============================================================================
@@ -587,6 +622,7 @@ __all__ = [
     "CSVBatchContext",
     # Discovery / runner
     "discover_files",
+    "output_stems",
     "run_batch",
     "run_csv_batch",
     # CSV helpers
