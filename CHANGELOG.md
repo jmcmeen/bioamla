@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- `bioamla --help` (and every command) starts in about 50 ms instead of about 400 ms. The
+  `annotation` and `batch` command modules imported the datasets package, numpy and the batch
+  engine at load time; they now import them when a command runs.
+
 ## [0.3.0] - 2026-10-31
 
 ### Changed

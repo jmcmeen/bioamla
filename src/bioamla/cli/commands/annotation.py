@@ -4,11 +4,29 @@ from pathlib import Path
 
 import click
 
-from bioamla.datasets._io import ANNOTATION_FORMATS as _FORMAT_CHOICES
-from bioamla.datasets._io import detect_annotation_format as _detect_format
-from bioamla.datasets._io import load_annotations as _load
-from bioamla.datasets._io import save_annotations as _save
+from bioamla.common.constants import ANNOTATION_FORMATS as _FORMAT_CHOICES
 from bioamla.exceptions import BioamlaError
+
+# The datasets package (and numpy/pandas with it) is imported only when a command
+# runs, so `bioamla --help` stays fast. These wrappers keep the call sites short.
+
+
+def _detect_format(*args, **kwargs):
+    from bioamla.datasets._io import detect_annotation_format
+
+    return detect_annotation_format(*args, **kwargs)
+
+
+def _load(*args, **kwargs):
+    from bioamla.datasets._io import load_annotations
+
+    return load_annotations(*args, **kwargs)
+
+
+def _save(*args, **kwargs):
+    from bioamla.datasets._io import save_annotations
+
+    return save_annotations(*args, **kwargs)
 
 
 @click.group()
