@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
 ### Changed
 
 - **Breaking: the heavy dependencies are now extras.** `pip install bioamla` installs a slim
@@ -262,7 +264,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.2.15...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jmcmeen/bioamla/compare/v0.2.26...v0.3.0
 [0.2.15]: https://github.com/jmcmeen/bioamla/compare/v0.2.14...v0.2.15
 [0.2.10]: https://github.com/jmcmeen/bioamla/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/jmcmeen/bioamla/compare/v0.2.8...v0.2.9
