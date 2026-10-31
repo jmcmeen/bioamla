@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from bioamla.exceptions import TrainingError
-from bioamla.ml.ast_service import TrainResult
+from bioamla.exceptions import TrainingCancelled, TrainingError
+from bioamla.ml.ast_service import TrainProgress, TrainResult
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from bioamla.datasets.augmentation import AugmentationConfig
 
 logger = logging.getLogger(__name__)
@@ -232,6 +234,81 @@ def _load_directory_dataset(
     )
 
 
+# Timing counters transformers adds to evaluation metrics; not model metrics.
+_EVAL_BOOKKEEPING = {"eval_runtime", "eval_samples_per_second", "eval_steps_per_second"}
+
+
+def _progress_callback(
+    on_progress: Callable[[TrainProgress], None] | None,
+    should_stop: Callable[[], bool] | None,
+) -> Any:
+    """Build the ``TrainerCallback`` behind ``train_ast``'s progress and cancel hooks."""
+    from transformers import TrainerCallback
+
+    class _ProgressCallback(TrainerCallback):
+        def __init__(self) -> None:
+            self.cancelled = False
+            self.loss: float | None = None
+            self.eval_metrics: dict[str, float] = {}
+
+        def _report(self, state) -> None:
+            if on_progress is not None:
+                on_progress(
+                    TrainProgress(
+                        step=state.global_step,
+                        total_steps=state.max_steps,
+                        epoch=float(state.epoch or 0.0),
+                        loss=self.loss,
+                        eval_metrics=dict(self.eval_metrics),
+                    )
+                )
+
+        def on_log(self, args, state, control, logs=None, **kwargs):
+            # Loss is logged after on_step_end, so report again with the fresh value.
+            if logs and "loss" in logs:
+                self.loss = float(logs["loss"])
+                self._report(state)
+
+        def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+            if metrics:
+                self.eval_metrics = {
+                    k: float(v)
+                    for k, v in metrics.items()
+                    if k.startswith("eval_")
+                    and k not in _EVAL_BOOKKEEPING
+                    and isinstance(v, (int, float))
+                }
+            self._report(state)
+
+        def _stop_now(self, control) -> None:
+            # transformers' flow callback (which runs first) may have scheduled an
+            # evaluation and checkpoint for this step or epoch end; a cancelled run
+            # skips both.
+            control.should_training_stop = True
+            control.should_evaluate = False
+            control.should_save = False
+
+        def on_step_end(self, args, state, control, **kwargs):
+            self._report(state)
+            if (
+                not self.cancelled
+                and should_stop is not None
+                and state.global_step < state.max_steps  # a finished run is kept
+                and should_stop()
+            ):
+                self.cancelled = True
+            if self.cancelled:
+                self._stop_now(control)
+            return control
+
+        def on_epoch_end(self, args, state, control, **kwargs):
+            if self.cancelled:
+                self._stop_now(control)
+            return control
+
+    return _ProgressCallback()
+
+
 def train_ast(
     *,
     train_dataset: str,
@@ -263,6 +340,8 @@ def train_ast(
     mlflow_run_name: str | None = None,
     augmentation: AugmentationConfig | None = None,
     augment_multiplier: int = 1,
+    on_progress: Callable[[TrainProgress], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> TrainResult:
     """Fine-tune an AST model on a custom dataset.
 
@@ -281,6 +360,16 @@ def train_ast(
         augmentation: On-the-fly training augmentation; ``None`` disables it.
         augment_multiplier: Repeat the training split N times (with augmentation)
             to enlarge it; ``1`` means no duplication.
+        on_progress: Called with a :class:`~bioamla.ml.TrainProgress` after each
+            optimizer step and each evaluation.
+        should_stop: Polled between the preprocessing phases (loading the
+            dataset, mapping labels, filtering, normalization statistics, loading
+            the model and metrics) and after each optimizer step except the
+            last. When it returns True the run stops there, without the pending
+            evaluation or checkpoint and without saving ``best_model``, shuts
+            down its workers, and raises
+            :class:`~bioamla.exceptions.TrainingCancelled`. A phase already
+            under way (e.g. a download) finishes first.
 
     Returns:
         A :class:`~bioamla.ml.ast_service.TrainResult` with the best-model path,
@@ -288,6 +377,7 @@ def train_ast(
 
     Raises:
         TrainingError: On an unusable dataset/params or an empty training set.
+        TrainingCancelled: If ``should_stop`` returned True.
     """
     import os
 
@@ -340,6 +430,11 @@ def train_ast(
     if isinstance(report_to, str) and "," in report_to:
         report_to = [r.strip() for r in report_to.split(",")]
 
+    def _check_stop(phase: str) -> None:
+        if should_stop is not None and should_stop():
+            raise TrainingCancelled(f"Training cancelled before {phase}")
+
+    _check_stop("loading the dataset")
     dataset, category_label_column = _load_train_dataset(
         train_dataset, split, category_label_column
     )
@@ -355,6 +450,8 @@ def train_ast(
     label_to_id = {name: idx for idx, name in enumerate(class_names)}
     num_labels = len(class_names)
 
+    _check_stop("mapping labels")
+
     def convert_labels(example):
         example["labels"] = label_to_id[example[category_label_column]]
         return example
@@ -369,6 +466,7 @@ def train_ast(
 
     dataset = dataset.cast_column("audio", Audio(sampling_rate=SAMPLING_RATE))
 
+    _check_stop("loading the feature extractor")
     pretrained_model = base_model
     feature_extractor = ASTFeatureExtractor.from_pretrained(pretrained_model)
     model_input_name = feature_extractor.model_input_names[0]
@@ -457,6 +555,7 @@ def train_ast(
         except (RuntimeError, Exception):
             return False
 
+    _check_stop("filtering corrupted audio")
     logger.info("Filtering out corrupted audio files...")
     original_sizes = {}
     filter_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else None
@@ -490,6 +589,7 @@ def train_ast(
             stds = [float(torch.std(values[i])) for i in range(values.shape[0])]
             return {"_mean": means, "_std": stds}
 
+        _check_stop("computing normalization statistics")
         logger.info("Calculating dataset normalization statistics...")
         norm_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else None
         stats_dataset = train_dataset_for_norm.map(
@@ -523,6 +623,7 @@ def train_ast(
     else:
         raise TrainingError("Expected DatasetDict for transform application")
 
+    _check_stop("loading the model")
     config = ASTConfig.from_pretrained(pretrained_model)
     config.num_labels = num_labels
     config.label2id = label2id
@@ -574,6 +675,7 @@ def train_ast(
         run_name=mlflow_run_name,
     )
 
+    _check_stop("loading metrics")
     accuracy = evaluate.load("accuracy")
     recall = evaluate.load("recall")
     precision = evaluate.load("precision")
@@ -614,60 +716,77 @@ def train_ast(
     else:
         raise TrainingError("Expected DatasetDict for trainer setup")
 
+    _check_stop("training")
+    progress = (
+        _progress_callback(on_progress, should_stop)
+        if on_progress is not None or should_stop is not None
+        else None
+    )
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_data,
         eval_dataset=eval_data,
         compute_metrics=compute_metrics,
+        callbacks=[progress] if progress is not None else None,
     )
 
-    trainer.train()
-
-    Path(best_model_path).mkdir(parents=True, exist_ok=True)
-    trainer.save_model(best_model_path)
-
-    # Pull final eval metrics from the trainer's log history (no extra eval pass).
     final_accuracy = None
     final_loss = None
-    for entry in reversed(trainer.state.log_history):
-        if final_accuracy is None and "eval_accuracy" in entry:
-            final_accuracy = float(entry["eval_accuracy"])
-        if final_loss is None and "eval_loss" in entry:
-            final_loss = float(entry["eval_loss"])
-        if final_accuracy is not None and final_loss is not None:
-            break
-
-    # Cleanup to prevent hanging from dataloader workers.
-    if hasattr(trainer, "accelerator") and trainer.accelerator is not None:
-        trainer.accelerator.free_memory()
-    if hasattr(trainer, "_train_dataloader"):
-        del trainer._train_dataloader
-    if hasattr(trainer, "_eval_dataloader"):
-        del trainer._eval_dataloader
-
-    del trainer
-    del model
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
+    cancelled = False
+    run_status = "FAILED"  # MLflow status if train() raises
     try:
-        import mlflow
+        trainer.train()
+        cancelled = progress is not None and progress.cancelled
+        run_status = "KILLED" if cancelled else "FINISHED"
 
-        if mlflow.active_run():
-            mlflow.end_run()
-    except ImportError:
-        pass
+        if not cancelled:
+            Path(best_model_path).mkdir(parents=True, exist_ok=True)
+            trainer.save_model(best_model_path)
 
-    import gc
+            # Pull final eval metrics from the trainer's log history (no extra eval pass).
+            for entry in reversed(trainer.state.log_history):
+                if final_accuracy is None and "eval_accuracy" in entry:
+                    final_accuracy = float(entry["eval_accuracy"])
+                if final_loss is None and "eval_loss" in entry:
+                    final_loss = float(entry["eval_loss"])
+                if final_accuracy is not None and final_loss is not None:
+                    break
+    finally:
+        # Cleanup to prevent hanging from dataloader workers, whether the run
+        # finished, was cancelled, or failed.
+        if hasattr(trainer, "accelerator") and trainer.accelerator is not None:
+            trainer.accelerator.free_memory()
+        if hasattr(trainer, "_train_dataloader"):
+            del trainer._train_dataloader
+        if hasattr(trainer, "_eval_dataloader"):
+            del trainer._eval_dataloader
 
-    gc.collect()
+        del trainer
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
-    import multiprocessing
+        try:
+            import mlflow
 
-    for child in multiprocessing.active_children():
-        child.terminate()
-        child.join(timeout=1)
+            if mlflow.active_run():
+                mlflow.end_run(status=run_status)
+        except ImportError:
+            pass
+
+        import gc
+
+        gc.collect()
+
+        import multiprocessing
+
+        for child in multiprocessing.active_children():
+            child.terminate()
+            child.join(timeout=1)
+
+    if cancelled:
+        raise TrainingCancelled("Training cancelled; no model was saved")
 
     return TrainResult(
         model_path=best_model_path,

@@ -14,7 +14,7 @@ Heavy deps (torch / transformers / torchaudio / pandas) are imported lazily for
 fast startup.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -51,6 +51,35 @@ class EvaluationResult:
         if self.confusion_matrix is not None:
             d["confusion_matrix"] = self.confusion_matrix
         return d
+
+
+@dataclass
+class TrainProgress:
+    """Progress of a running :func:`~bioamla.ml.train_ast` call.
+
+    Attributes:
+        step: Optimizer steps completed.
+        total_steps: Steps the run will take in total.
+        epoch: Fractional epoch reached (e.g. ``1.5``).
+        loss: Most recent logged training loss, if any yet.
+        eval_metrics: Most recent evaluation metrics (``eval_accuracy``, ...).
+    """
+
+    step: int
+    total_steps: int
+    epoch: float
+    loss: float | None = None
+    eval_metrics: dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to a plain dict."""
+        return {
+            "step": self.step,
+            "total_steps": self.total_steps,
+            "epoch": self.epoch,
+            "loss": self.loss,
+            "eval_metrics": dict(self.eval_metrics),
+        }
 
 
 @dataclass

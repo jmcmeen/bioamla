@@ -33,6 +33,7 @@ from bioamla.ml.ast_model import ASTModel
 # --- AST service-level operations --------------------------------------------
 from bioamla.ml.ast_service import (
     EvaluationResult,
+    TrainProgress,
     TrainResult,
     evaluate_directory,
     extract_embeddings_file,
@@ -129,6 +130,7 @@ __all__ = [
     "extract_embeddings_file",
     "get_model_info",
     "EvaluationResult",
+    "TrainProgress",
     "TrainResult",
     "train_ast",
     "write_train_config",
