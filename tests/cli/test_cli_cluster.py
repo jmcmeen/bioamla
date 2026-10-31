@@ -107,7 +107,9 @@ def test_cluster_cluster_error(runner: CliRunner, embeddings_file, tmp_path) -> 
 
 
 def _analysis():
-    return SimpleNamespace(
+    from bioamla.cluster.models import ClusterAnalysis
+
+    return ClusterAnalysis(
         n_clusters=3,
         n_samples=20,
         n_noise=2,
@@ -148,7 +150,7 @@ def test_cluster_analyze_error(runner: CliRunner, embeddings_file, labels_file) 
 
 def test_cluster_novelty(runner: CliRunner, embeddings_file, tmp_path) -> None:
     out = tmp_path / "novelty.npy"
-    summary = SimpleNamespace(n_novel=3, novel_percentage=15.0)
+    summary = SimpleNamespace(n_novel=3, novel_percentage=15.0, novel_indices=[0, 1, 2])
     is_novel = np.array([True] * 3 + [False] * 17)
     scores = np.random.RandomState(1).rand(20)
     with patch("bioamla.cluster.detect_novelty", return_value=(summary, is_novel, scores)):
@@ -164,7 +166,7 @@ def test_cluster_novelty_with_labels(
     runner: CliRunner, embeddings_file, labels_file, tmp_path
 ) -> None:
     out = tmp_path / "novelty.npy"
-    summary = SimpleNamespace(n_novel=0, novel_percentage=0.0)
+    summary = SimpleNamespace(n_novel=0, novel_percentage=0.0, novel_indices=[])
     is_novel = np.array([False] * 20)
     scores = np.zeros(20)
     with patch("bioamla.cluster.detect_novelty", return_value=(summary, is_novel, scores)):

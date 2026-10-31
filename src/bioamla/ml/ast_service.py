@@ -219,8 +219,9 @@ def get_model_info(model_path: str) -> dict[str, Any]:
         model_path: Path to model or HuggingFace identifier.
 
     Returns:
-        A dict with ``path``, ``model_type``, ``num_classes``, ``classes``,
-        ``has_more_classes``, and ``hidden_size``.
+        A dict with ``path``, ``model_type``, ``num_classes``, ``classes`` (the
+        first 10, for display), ``has_more_classes``, ``labels`` (all class labels,
+        in output order) and ``hidden_size``.
 
     Raises:
         ModelError: On model-load or inference failure.

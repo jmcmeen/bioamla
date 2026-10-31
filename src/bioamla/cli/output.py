@@ -144,7 +144,8 @@ def command_options(exclude: tuple[str, ...] = ()) -> dict[str, Any]:
     ctx = click.get_current_context()
     options: dict[str, Any] = {}
     for param in ctx.command.params:
-        if not isinstance(param, click.Option) or param.name in exclude:
+        # --quiet only changes what people see, so it isn't part of the result.
+        if not isinstance(param, click.Option) or param.name in (*exclude, "quiet"):
             continue
         if param.name not in ctx.params:
             continue

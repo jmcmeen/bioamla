@@ -175,6 +175,7 @@ def ast_predict(
     from pathlib import Path
 
     from bioamla.cli.console import echo, print_success
+    from bioamla.cli.output import emit_file_result, json_mode
     from bioamla.ml import ASTInference
 
     try:
@@ -192,14 +193,40 @@ def ast_predict(
 
     if output:
         out_path = Path(output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with out_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["filepath", "start", "stop", "prediction", "confidence"])
-            for r in results:
-                writer.writerow(
-                    [r.filepath, r.start_time, r.end_time, r.predicted_label, f"{r.confidence:.6f}"]
-                )
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            with out_path.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["filepath", "start", "stop", "prediction", "confidence"])
+                for r in results:
+                    writer.writerow(
+                        [
+                            r.filepath,
+                            r.start_time,
+                            r.end_time,
+                            r.predicted_label,
+                            f"{r.confidence:.6f}",
+                        ]
+                    )
+        except OSError as e:
+            raise click.ClickException(f"Failed to write {output}: {e}") from e
+
+    if json_mode():
+        emit_file_result(
+            file,
+            count=len(results),
+            predictions=[
+                {
+                    "start_time": r.start_time,
+                    "end_time": r.end_time,
+                    "label": r.predicted_label,
+                    "confidence": r.confidence,
+                }
+                for r in results
+            ],
+        )
+        return
+    if output:
         print_success(f"Wrote {len(results)} prediction(s) to {output}")
         return
 
@@ -673,6 +700,7 @@ def ast_evaluate(
     from pathlib import Path as PathLib
 
     from bioamla.cli.console import echo, print_header, print_kv, print_success
+    from bioamla.cli.output import command_options, emit_result, json_mode
     from bioamla.ml import evaluate_directory
 
     try:
@@ -688,6 +716,39 @@ def ast_evaluate(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if output:
+        out_path = PathLib(output)
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            metrics = eval_result.to_dict()
+            if output_format == "json":
+                out_path.write_text(json_lib.dumps(metrics, indent=2), encoding="utf-8")
+            elif output_format == "csv":
+                import csv
+
+                scalars = {k: v for k, v in metrics.items() if not isinstance(v, (list, dict))}
+                with out_path.open("w", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, fieldnames=list(scalars))
+                    writer.writeheader()
+                    writer.writerow(scalars)
+            else:
+                out_path.write_text(
+                    "".join(f"{k}: {v}\n" for k, v in metrics.items()), encoding="utf-8"
+                )
+        except OSError as e:
+            raise click.ClickException(f"Failed to write {output}: {e}") from e
+
+    if json_mode():
+        emit_result(
+            {
+                "path": path,
+                "params": command_options(exclude=("output", "output_format")),
+                "metrics": eval_result.to_dict(),
+                "output": output,
+            }
+        )
+        return
+
     if not quiet:
         print_header("\nEvaluation Results:")
         echo("-" * 40)
@@ -696,14 +757,7 @@ def ast_evaluate(
     print_kv("Recall", f"{eval_result.recall:.4f}")
     print_kv("F1 Score", f"{eval_result.f1_score:.4f}")
     print_kv("Total Samples", eval_result.total_samples)
-
     if output:
-        out_path = PathLib(output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        if output_format == "json":
-            out_path.write_text(json_lib.dumps(eval_result.to_dict(), indent=2), encoding="utf-8")
-        else:
-            out_path.write_text(str(eval_result.to_dict()), encoding="utf-8")
         print_success(f"Results saved to: {output}")
 
 
@@ -724,6 +778,7 @@ def ast_embed(file: str, model_path: str, output: str, layer: str, sample_rate: 
     import numpy as np
 
     from bioamla.cli.console import print_info, print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.ml import extract_embeddings_file
 
     print_info(f"Loading AST model from {model_path}...")
@@ -739,8 +794,14 @@ def ast_embed(file: str, model_path: str, output: str, layer: str, sample_rate: 
         raise click.ClickException(str(e)) from e
 
     embeddings = result["embeddings"]
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    np.save(output, embeddings)
+    try:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        np.save(output, embeddings)
+    except OSError as e:
+        raise click.ClickException(f"Failed to write {output}: {e}") from e
+    # The vectors stay in the .npy file; the result says where and what shape.
+    if emit_file_result(file, shape=list(embeddings.shape), dtype=str(embeddings.dtype)):
+        return
     print_success(f"Embeddings saved to {output} (shape: {embeddings.shape})")
 
 
@@ -753,12 +814,25 @@ def ast_info(model_path: str) -> None:
         bioamla models ast info bioamla/scp-frogs
     """
     from bioamla.cli.console import print_kv
+    from bioamla.cli.output import emit_result, json_mode
     from bioamla.ml import get_model_info
 
     try:
         info = get_model_info(model_path)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if json_mode():
+        emit_result(
+            {
+                "model": info["path"],
+                "model_type": info["model_type"],
+                "num_classes": info["num_classes"],
+                "labels": info["labels"],
+                "hidden_size": info["hidden_size"],
+            }
+        )
+        return
 
     print_kv("Model", info["path"])
     print_kv("Type", info["model_type"])

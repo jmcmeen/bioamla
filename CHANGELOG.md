@@ -16,6 +16,22 @@ All notable changes to this project are documented here. The format is based on
   options used and any `-o` path), `indices compute|temporal|aci|adi|aei|bio|ndsi|entropy`,
   `audio info` and `audio list`. Reported options are keyed by option name (`--threshold-db` as
   `threshold_db`), not by internal parameter name.
+- `--json` results for `models ast predict` (predictions with times, label and confidence),
+  `evaluate` (the metrics), `embed` (output path and shape; the vectors stay in the file) and
+  `info` (every class label), and for `cluster reduce|fit|analyze|novelty` (shapes, cluster sizes,
+  quality scores, novel sample indices).
+- `get_model_info()` returns `labels`, every class label in class-index order. `classes` is still
+  the first 10.
+
+### Fixed
+
+- The `cluster` commands report an unreadable `.npy` input (missing, empty or the wrong shape)
+  as `InvalidInputError` and a failed write as an error, instead of a traceback;
+  `models ast predict|evaluate|embed` do the same for a failed write.
+- `get_model_info()` listed classes in the config's key order, which for more than 10 classes is
+  often string order ("0", "1", "10", "2", ...); they now follow the class index.
+- `models ast evaluate --format csv|txt -o FILE` wrote a Python dict repr. `csv` now writes a
+  header and one row of the scalar metrics; `txt` one `name: value` line per metric.
 
 ### Deprecated
 
