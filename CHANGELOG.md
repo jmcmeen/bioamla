@@ -34,7 +34,8 @@ All notable changes to this project are documented here. The format is based on
 ### Changed
 
 - The ffmpeg encoding loop behind `generate_spectrogram_video()` is shared with the trajectory
-  video; spectrogram videos are unchanged.
+  video. A `--start`/`--end` clip at the file's own sample rate now decodes only that window, so
+  a short clip of a long recording no longer loads the whole file.
 
 ## [0.3.3] - 2026-10-31
 
