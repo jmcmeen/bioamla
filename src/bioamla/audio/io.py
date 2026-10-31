@@ -13,6 +13,7 @@ Raising free functions for audio file I/O, ported from the old
 Heavy/optional backends (pydub/ffmpeg) are imported lazily inside the functions.
 """
 
+import logging
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -22,6 +23,8 @@ import numpy as np
 from bioamla.audio.data import AudioData
 from bioamla.common.files import prepare_output_path, require_exists
 from bioamla.exceptions import AudioLoadError, AudioSaveError
+
+logger = logging.getLogger(__name__)
 
 
 def load_audio_data(filepath: str | Path, *, sample_rate: int | None = None) -> AudioData:
@@ -338,7 +341,7 @@ def batch_process(
             processed audio array.
         sample_rate: Optional target sample rate for the output.
         recursive: Search subdirectories.
-        verbose: Print progress.
+        verbose: Log progress at INFO level.
 
     Returns:
         Statistics dict with ``files_processed``, ``files_failed``, ``output_dir``.
@@ -361,11 +364,11 @@ def batch_process(
 
     if not audio_files:
         if verbose:
-            print(f"No audio files found in {in_dir}")
+            logger.info(f"No audio files found in {in_dir}")
         return {"files_processed": 0, "files_failed": 0, "output_dir": str(out_dir)}
 
     if verbose:
-        print(f"Found {len(audio_files)} audio files to process")
+        logger.info(f"Found {len(audio_files)} audio files to process")
 
     files_processed = 0
     files_failed = 0
@@ -384,14 +387,13 @@ def batch_process(
             process_file(str(audio_path), str(out_path), processor_fn, sample_rate)
             files_processed += 1
             if verbose:
-                print(f"  Processed: {out_path}")
+                logger.info(f"  Processed: {out_path}")
         except Exception as e:
             files_failed += 1
-            if verbose:
-                print(f"  Failed: {audio_path} - {e}")
+            logger.warning(f"Failed: {audio_path} - {e}")
 
     if verbose:
-        print(f"Processed {files_processed} files, {files_failed} failed")
+        logger.info(f"Processed {files_processed} files, {files_failed} failed")
 
     return {
         "files_processed": files_processed,

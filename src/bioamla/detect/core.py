@@ -1443,7 +1443,7 @@ def batch_detect(
     Args:
         filepaths: List of audio file paths.
         detector: Detector instance to use.
-        verbose: Print progress.
+        verbose: Log progress at INFO level.
 
     Returns:
         Dictionary mapping filepath to list of detections.
@@ -1452,7 +1452,7 @@ def batch_detect(
 
     for i, filepath in enumerate(filepaths, 1):
         if verbose:
-            print(f"[{i}/{len(filepaths)}] Processing {filepath}")
+            logger.info(f"[{i}/{len(filepaths)}] Processing {filepath}")
 
         try:
             if hasattr(detector, "detect_from_file"):
@@ -1464,10 +1464,10 @@ def batch_detect(
             results[str(filepath)] = detections
 
             if verbose:
-                print(f"  Found {len(detections)} detections")
+                logger.info(f"  Found {len(detections)} detections")
 
         except (AudioLoadError, DetectionError) as e:
-            logger.error(f"Error processing {filepath}: {e}")
+            logger.warning(f"Error processing {filepath}: {e}")
             results[str(filepath)] = []
 
     return results

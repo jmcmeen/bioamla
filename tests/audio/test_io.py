@@ -172,3 +172,17 @@ class TestBatchProcess:
         stats = batch_process(test_audio_dir, str(tmp_path / "out"), boom, verbose=True)
         assert stats["files_failed"] == 3
         assert stats["files_processed"] == 0
+
+    def test_reports_through_logging_not_stdout(
+        self, test_audio_dir: str, tmp_path, caplog, capsys
+    ) -> None:
+        def boom(_a, _sr):
+            raise RuntimeError("nope")
+
+        with caplog.at_level("INFO", logger="bioamla"):
+            batch_process(test_audio_dir, str(tmp_path / "out"), boom, verbose=True)
+
+        assert capsys.readouterr().out == ""
+        levels = {r.levelname for r in caplog.records}
+        assert levels == {"INFO", "WARNING"}
+        assert sum(r.levelname == "WARNING" for r in caplog.records) == 3

@@ -9,6 +9,7 @@ removed: progress is reported via an optional callback / simple prints, and file
 discovery uses pathlib instead of the file repository.
 """
 
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from bioamla.viz.core import (
     WindowType,
     generate_spectrogram,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def batch_generate_spectrograms(
@@ -61,7 +64,7 @@ def batch_generate_spectrograms(
         dpi: Resolution for output images.
         format: Output format ('png' or 'jpg').
         recursive: Whether to search subdirectories.
-        verbose: Whether to print progress messages.
+        verbose: Whether to log progress at INFO level.
         on_progress: Optional ``(completed, total)`` progress callback.
 
     Returns:
@@ -82,11 +85,11 @@ def batch_generate_spectrograms(
 
     if not audio_files:
         if verbose:
-            print(f"No audio files found in {in_dir}")
+            logger.info(f"No audio files found in {in_dir}")
         return {"files_processed": 0, "files_failed": 0, "output_dir": str(out_dir)}
 
     if verbose:
-        print(f"Found {len(audio_files)} audio files to process")
+        logger.info(f"Found {len(audio_files)} audio files to process")
 
     files_processed = 0
     files_failed = 0
@@ -124,17 +127,16 @@ def batch_generate_spectrograms(
             )
             files_processed += 1
             if verbose:
-                print(f"  Generated: {output_path}")
+                logger.info(f"  Generated: {output_path}")
         except Exception as e:
             files_failed += 1
-            if verbose:
-                print(f"  Failed: {audio_path} - {e}")
+            logger.warning(f"Failed: {audio_path} - {e}")
 
         if on_progress:
             on_progress(idx, total)
 
     if verbose:
-        print(f"Processed {files_processed} files, {files_failed} failed")
+        logger.info(f"Processed {files_processed} files, {files_failed} failed")
 
     return {
         "files_processed": files_processed,

@@ -25,6 +25,7 @@ def util_download(url: str, output_dir: str) -> None:
     from urllib.parse import urlparse
 
     from bioamla.cli.console import print_success
+    from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.common.files import download_file
 
     if output_dir == ".":
@@ -34,6 +35,7 @@ def util_download(url: str, output_dir: str) -> None:
     filename = os.path.basename(parsed_url.path) or "downloaded_file"
     output_path = os.path.join(output_dir, filename)
 
+    configure_cli_logging()
     try:
         download_file(url, output_path)
     except BioamlaError as e:

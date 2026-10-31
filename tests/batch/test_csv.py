@@ -106,15 +106,17 @@ class TestCsvRoundTrip:
         with csv_path.open(encoding="utf-8") as f:
             assert "score" not in next(csv.reader(f))
 
-    def test_missing_file_recorded_as_failure(self, test_audio_dir):
+    def test_missing_file_recorded_as_failure(self, test_audio_dir, caplog):
         csv_dir = Path(test_audio_dir)
         csv_path = _make_meta_csv(csv_dir, ["audio_0.wav", "does_not_exist.wav"])
         ctx = load_csv(str(csv_path))
 
-        result = run_csv_batch(ctx, lambda row: None, quiet=True)
+        with caplog.at_level("WARNING", logger="bioamla"):
+            result = run_csv_batch(ctx, lambda row: None)
         assert result.successful == 1
         assert result.failed == 1
         assert any("does_not_exist.wav" in e for e in result.errors)
+        assert any("does_not_exist.wav" in r.getMessage() for r in caplog.records)
 
 
 class TestTransformPathUpdate:

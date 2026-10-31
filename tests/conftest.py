@@ -1,12 +1,29 @@
 """Shared fixtures for domain tests."""
 
 import functools
+import logging
 import shutil
 
 import numpy as np
 import pytest
 
 from bioamla.audio import AudioData
+
+
+@pytest.fixture(autouse=True)
+def _restore_bioamla_logger():
+    """Undo configure_cli_logging() after each test.
+
+    CLI commands attach console handlers to the ``bioamla`` logger and stop it
+    propagating. Left in place, those handlers keep writing to the streams of a
+    finished CliRunner invocation, and caplog (which listens at the root logger)
+    stops seeing bioamla records.
+    """
+    logger = logging.getLogger("bioamla")
+    saved = (logger.handlers[:], logger.level, logger.propagate)
+    yield
+    logger.handlers, level, logger.propagate = saved
+    logger.setLevel(level)
 
 
 @functools.cache
