@@ -29,11 +29,25 @@ All notable changes to this project are documented here. The format is based on
   only if it exists) and, in CSV mode, `metadata_csv`, the updated metadata CSV. `batch audio
   validate` with invalid files is a failure envelope with the batch result in `error.details`.
 - `batch_generate_spectrograms()` also returns `output_files` and `errors`.
+- `--json` results for the rest of the CLI: the `audio` transforms, `segment`, `visualize`
+  and `video` (input, output, options), `system version|devices|deps|schema`,
+  `util download|unzip|zip`, `models ast init-config|train` (the `TrainResult`) and all 15
+  `catalogs` commands (search results, downloads, Hub pushes and pulls, cache contents). Every
+  command now reports a result; `audio play` refuses `--json`, and `system deps --install` and
+  `catalogs hf cache --purge` need `--yes` with it (a purge that fails for some repos is a
+  failure envelope with the details). Per-file results all use `file`/`output`, and
+  `inat search` reports the same rows it saves to CSV. A test walks the command tree so a new
+  command can't skip the contract.
 - `get_model_info()` returns `labels`, every class label in class-index order. `classes` is still
   the first 10.
 
 ### Fixed
 
+- `catalogs inat search --project-id` was accepted but never passed on, so it searched without
+  the project filter; `inat.search()` now takes `project_id`.
+- `models ast init-config` on an existing file and a failed `system deps --install` printed
+  an error and exited; they raise a regular CLI error now, so `--json` gets the message.
+  `system deps`'s help examples named a `bioamla config deps` command that doesn't exist.
 - The `annotation` and `dataset` commands that printed an error and exited now raise a regular
   CLI error: the same `Error: ...` line for people, and the actual message (not "exited with
   status 1") in a `--json` failure envelope. `dataset license --batch` with failed datasets now
@@ -62,6 +76,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Deprecated
 
+- `catalogs inat search --has-sounds`: it never had an effect; the search only returns
+  observations with sounds.
 - The per-command `--json` flags of `annotation summary`, `audio metadata` and `dataset stats`.
   They still print bare JSON (now with a note on stderr); use `bioamla --json <command>`.
 

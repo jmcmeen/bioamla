@@ -22,6 +22,11 @@ def system_version() -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(version_data):
+        return
+
     console.print("\n[bold]BioAMLA Version Information[/bold]\n")
     console.print(f"  bioamla:  {version_data.bioamla_version}")
     console.print(f"  Python:   {version_data.python_version.split()[0]}")
@@ -45,6 +50,11 @@ def system_devices() -> None:
         devices_data = util.get_device_info()
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    from bioamla.cli.output import emit_result
+
+    if emit_result(devices_data):
+        return
 
     console.print("\n[bold]Available Compute Devices[/bold]\n")
 
@@ -91,17 +101,35 @@ def system_deps(do_install: bool, yes: bool) -> None:
 
     \b
     Examples:
-        bioamla config deps              # Check dependencies
-        bioamla config deps --install    # Install missing dependencies
-        bioamla config deps --install -y # Install without confirmation
+        bioamla system deps              # Check dependencies
+        bioamla system deps --install    # Install missing dependencies
+        bioamla system deps --install -y # Install without confirmation
     """
     from bioamla.cli.console import console
+    from bioamla.cli.output import emit_result, json_mode
     from bioamla.system import dependency
+
+    if json_mode() and do_install and not yes:
+        raise click.UsageError("--install with --json needs --yes (there is no prompt).")
 
     try:
         report = dependency.check_all()
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if json_mode():
+        if not do_install:
+            emit_result(report)
+            return
+        if report.all_installed:  # nothing to do, as in the normal path
+            emit_result({"installed": None, "report": report})
+            return
+        try:
+            message = dependency.install(report.os_type)
+        except BioamlaError as e:
+            raise click.ClickException(str(e)) from e
+        emit_result({"installed": message, "report": dependency.check_all()})
+        return
 
     console.print("\n[bold]System Dependencies[/bold]")
     console.print(f"[dim]Detected OS: {report.os_type}[/dim]\n")
@@ -140,8 +168,7 @@ def system_deps(do_install: bool, yes: bool) -> None:
         try:
             message = dependency.install(report.os_type)
         except BioamlaError as e:
-            console.print(f"[red]{e}[/red]")
-            raise SystemExit(1) from e
+            raise click.ClickException(str(e)) from e
 
         console.print(f"[green]{message}[/green]")
         console.print("\n[bold]Verifying installation...[/bold]")
@@ -172,6 +199,7 @@ def system_schema(name: str | None, output: str | None, export_all: bool) -> Non
     import json
     from pathlib import Path
 
+    from bioamla.cli.output import emit_result
     from bioamla.common.config import CONFIG_CLASSES, config_schema
     from bioamla.exceptions import DependencyError
 
@@ -180,28 +208,38 @@ def system_schema(name: str | None, output: str | None, export_all: bool) -> Non
             raise click.UsageError("--all takes no NAME and needs --output DIRECTORY.")
         out_dir = Path(output)
         out_dir.mkdir(parents=True, exist_ok=True)
+        written: list[str] = []
+        skipped: list[dict[str, str]] = []
         for config_name in CONFIG_CLASSES:
             try:
                 schema = config_schema(config_name)
             except DependencyError as e:
+                skipped.append({"name": config_name, "reason": str(e)})
                 click.echo(f"Skipped {config_name}: {e}", err=True)
                 continue
             path = out_dir / f"{config_name}.schema.json"
             path.write_text(json.dumps(schema, indent=2) + "\n")
+            written.append(str(path))
             click.echo(f"Wrote {path}")
+        emit_result({"written": written, "skipped": skipped})
         return
 
     if not name:
+        if emit_result({"configs": {n: t.replace(":", ".") for n, t in CONFIG_CLASSES.items()}}):
+            return
         for config_name, target in CONFIG_CLASSES.items():
             click.echo(f"{config_name:<26} {target.replace(':', '.')}")
         return
 
     try:
-        text = json.dumps(config_schema(name), indent=2) + "\n"
+        schema = config_schema(name)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+    text = json.dumps(schema, indent=2) + "\n"
     if output:
         Path(output).write_text(text)
+        if emit_result({"name": name, "output": output}):
+            return
         click.echo(f"Wrote {output}")
-    else:
+    elif not emit_result({"name": name, "schema": schema}):
         click.echo(text, nl=False)

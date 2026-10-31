@@ -155,12 +155,16 @@ def command_options(exclude: tuple[str, ...] = ()) -> dict[str, Any]:
     return options
 
 
-def emit_file_result(file: str, **fields: Any) -> bool:
+_NO_OUTPUT = object()
+
+
+def emit_file_result(file: str, output: Any = _NO_OUTPUT, **fields: Any) -> bool:
     """Report a per-file command's result: the file, its options and ``fields``.
 
-    The result is ``{"file", "params", **fields}``, plus ``"output"`` (the ``-o``
-    path or ``None``) for commands that have an ``--output`` option. Returns True in
-    JSON mode, so the caller can skip its human output:
+    The result is ``{"file", "params", **fields}`` plus ``"output"``: the
+    ``output`` argument when given (the path the command wrote), else the
+    ``--output`` value for commands that have that option. Returns True in JSON
+    mode, so the caller can skip its human output:
     ``if emit_file_result(file, count=n): return``.
     """
     import click
@@ -173,7 +177,9 @@ def emit_file_result(file: str, **fields: Any) -> bool:
         "params": command_options(exclude=("output", "output_format")),
         **fields,
     }
-    if "output" in ctx.params:
+    if output is not _NO_OUTPUT:
+        result["output"] = None if output is None else str(output)
+    elif "output" in ctx.params:
         result["output"] = ctx.params["output"]
     emit_result(result)
     return True

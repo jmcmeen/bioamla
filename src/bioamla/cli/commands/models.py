@@ -120,13 +120,15 @@ def ast_init_config(output: str, force: bool) -> None:
     try:
         path = write_train_config(output, force=force)
     except InvalidInputError as e:
-        click.echo(str(e), err=True)
-        if "already exists" in str(e):
-            click.echo("Use --force to overwrite.")
-        raise SystemExit(1) from e
+        hint = " Use --force to overwrite." if "already exists" in str(e) else ""
+        raise click.ClickException(f"{e}{hint}") from e
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result({"output": str(path)}):
+        return
     print_success(f"Created training config: {path}")
 
 
@@ -644,6 +646,10 @@ def ast_train(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(result):
+        return
     print_success(f"Training complete. Best model saved to: {result.model_path}")
     if result.final_accuracy is not None:
         print_kv("Final eval accuracy", f"{result.final_accuracy:.4f}")

@@ -119,11 +119,22 @@ def test_failure_envelope(args, error_type, code) -> None:
 
 
 def test_human_output_goes_to_stderr_and_missing_result_is_null() -> None:
-    proc = _run("--json", "system", "version")
-    assert proc.returncode == 0
-    envelope = json.loads(proc.stdout)  # the version table didn't reach stdout
-    assert envelope == {**envelope, "ok": True, "result": None, "command": "system version"}
-    assert "Version Information" in proc.stderr
+    import click
+
+    @click.command("no-result")
+    def no_result() -> None:
+        click.echo("human output")
+        print("printed too")
+
+    cli.add_command(no_result)
+    try:
+        result = CliRunner().invoke(cli, ["--json", "no-result"])
+    finally:
+        cli.commands.pop("no-result")
+    assert result.exit_code == 0
+    envelope = json.loads(result.stdout)  # only the envelope reached stdout
+    assert envelope["result"] is None and envelope["command"] == "no-result"
+    assert "human output" in result.stderr and "printed too" in result.stderr
 
 
 # --- Regressions from review -------------------------------------------------

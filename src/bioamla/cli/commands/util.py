@@ -43,6 +43,10 @@ def util_download(url: str, output_dir: str) -> None:
     except OSError as e:
         raise click.ClickException(f"Download failed: {e}") from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result({"url": url, "output": str(output_path)}):
+        return
     print_success(f"Downloaded to {output_path}")
 
 
@@ -66,6 +70,10 @@ def util_unzip(file_path: str, output_path: str) -> None:
     except OSError as e:
         raise click.ClickException(f"Extraction failed: {e}") from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result({"file": file_path, "output": str(output_path)}):
+        return
     print_success(f"Extracted to {output_path}")
 
 
@@ -89,4 +97,8 @@ def util_zip(source_path: str, output_file: str) -> None:
     except OSError as e:
         raise click.ClickException(f"ZIP creation failed: {e}") from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result({"source": source_path, "output": str(output_file)}):
+        return
     print_success(f"Created {output_file}")
