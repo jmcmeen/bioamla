@@ -209,3 +209,74 @@ class TestLoadFromDirectory:
         )
         # Parsed but yields zero annotations (no recognizable time columns).
         assert results.get("bad.txt") == [] or "bad.txt" not in results
+
+
+class TestDetectionOutputAsAnnotations:
+    """Files written by ``bioamla detect -o`` name the band frequency_low/_high."""
+
+    def test_csv_band_columns(self, tmp_path) -> None:
+        path = tmp_path / "det.csv"
+        path.write_text(
+            "start_time,end_time,confidence,frequency_low,frequency_high,label\n"
+            "0.5,0.8,0.3,500.0,5000.0,band_energy\n"
+        )
+        (ann,) = load_csv_annotations(str(path))
+        assert (ann.low_freq, ann.high_freq) == (500.0, 5000.0)
+        assert "frequency_low" not in ann.custom_fields
+
+    def test_standard_columns_win(self, tmp_path) -> None:
+        path = tmp_path / "a.csv"
+        path.write_text(
+            "start_time,end_time,low_freq,high_freq,frequency_low,frequency_high,label\n"
+            "0.5,0.8,100,200,500,5000,x\n"
+        )
+        (ann,) = load_csv_annotations(str(path))
+        assert (ann.low_freq, ann.high_freq) == (100.0, 200.0)
+
+    def test_json_list_of_detections(self, tmp_path) -> None:
+        from bioamla.datasets.annotations import load_bioamla_annotations
+
+        path = tmp_path / "det.json"
+        path.write_text(json.dumps([
+            {"start_time": 0.5, "end_time": 0.8, "frequency_low": 500.0,
+             "frequency_high": 5000.0, "label": "band_energy", "confidence": 0.3},
+        ]))  # fmt: skip
+        annotations, metadata = load_bioamla_annotations(str(path))
+        assert metadata == {}
+        assert (annotations[0].low_freq, annotations[0].high_freq) == (500.0, 5000.0)
+        assert annotations[0].label == "band_energy"
+
+    def test_json_list_of_non_objects_rejected(self, tmp_path) -> None:
+        from bioamla.datasets.annotations import load_bioamla_annotations
+
+        path = tmp_path / "bad.json"
+        path.write_text("[1, 2, 3]")
+        with pytest.raises(AnnotationError, match="record 0 .* no start_time/end_time"):
+            load_bioamla_annotations(str(path))
+
+    def test_json_list_of_points_rejected(self, tmp_path) -> None:
+        """Peak detections are points in time (time/amplitude/width), not regions."""
+        from bioamla.datasets.annotations import load_bioamla_annotations
+
+        path = tmp_path / "peaks.json"
+        path.write_text(json.dumps([{"time": 1.2, "amplitude": 0.5, "width": 0.01}]))
+        with pytest.raises(AnnotationError, match="no start_time/end_time"):
+            load_bioamla_annotations(str(path))
+
+    def test_empty_standard_column_falls_back_to_detector_column(self, tmp_path) -> None:
+        path = tmp_path / "mixed.csv"
+        path.write_text(
+            "start_time,end_time,low_freq,high_freq,frequency_low,frequency_high,label\n"
+            "0.5,0.8,,,500,5000,x\n"
+        )
+        (ann,) = load_csv_annotations(str(path))
+        assert (ann.low_freq, ann.high_freq) == (500.0, 5000.0)
+
+    def test_from_dict_treats_float_nan_as_missing(self) -> None:
+        nan = float("nan")
+        ann = Annotation.from_dict(
+            {"start_time": 0.1, "end_time": 0.2, "low_freq": nan, "high_freq": nan,
+             "frequency_low": 500.0, "frequency_high": 5000.0, "confidence": nan}
+        )  # fmt: skip
+        assert (ann.low_freq, ann.high_freq, ann.confidence) == (500.0, 5000.0, None)
+        assert "frequency_low" not in ann.custom_fields

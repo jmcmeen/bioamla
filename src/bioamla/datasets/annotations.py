@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +27,28 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Core Annotation Data Structure
 # =============================================================================
+
+
+# Standard band column -> the name detection output uses for it.
+_BAND_ALIASES = {"low_freq": "frequency_low", "high_freq": "frequency_high"}
+
+
+def _missing(value: Any) -> bool:
+    """True for None, "", "nan" and float NaN (as pandas writes empty cells)."""
+    if value is None:
+        return True
+    if isinstance(value, float):
+        return math.isnan(value)
+    return str(value).strip().lower() in ("", "nan")
+
+
+def _band_value(record: dict[str, Any], name: str) -> Any:
+    """``record[name]``, falling back to the detector's name for the band column."""
+    value = record.get(name)
+    alias = _BAND_ALIASES.get(name)
+    if _missing(value) and alias is not None:
+        value = record.get(alias)
+    return None if _missing(value) else value
 
 
 @dataclass
@@ -124,7 +147,12 @@ class Annotation:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Annotation:
-        """Create an Annotation from a dictionary."""
+        """Create an Annotation from a dictionary.
+
+        The band may also be given as ``frequency_low`` / ``frequency_high``, the
+        names detections use.
+        """
+        low, high = _band_value(data, "low_freq"), _band_value(data, "high_freq")
         known_fields = {
             "start_time",
             "end_time",
@@ -134,23 +162,18 @@ class Annotation:
             "channel",
             "confidence",
             "notes",
+            *_BAND_ALIASES.values(),
         }
         custom = {k: v for k, v in data.items() if k not in known_fields}
 
         return cls(
             start_time=float(data.get("start_time", 0)),
             end_time=float(data.get("end_time", 0)),
-            low_freq=float(data["low_freq"])
-            if data.get("low_freq") not in (None, "", "nan")
-            else None,
-            high_freq=float(data["high_freq"])
-            if data.get("high_freq") not in (None, "", "nan")
-            else None,
+            low_freq=None if low is None else float(low),
+            high_freq=None if high is None else float(high),
             label=str(data.get("label", "")),
             channel=int(data.get("channel", 1)),
-            confidence=float(data["confidence"])
-            if data.get("confidence") not in (None, "", "nan")
-            else None,
+            confidence=None if _missing(data.get("confidence")) else float(data["confidence"]),
             notes=str(data.get("notes", "")),
             custom_fields=custom,
         )
@@ -412,8 +435,17 @@ def load_csv_annotations(
                         logger.warning(f"Skipping row with missing time values: {row}")
                         continue
 
-                    low_freq = _parse_float(row.get(low_freq_col))
-                    high_freq = _parse_float(row.get(high_freq_col))
+                    # Detection files (bioamla detect -o) name the band frequency_low/_high.
+                    low_freq = _parse_float(
+                        row.get(low_freq_col)
+                        if low_freq_col != "low_freq"
+                        else _band_value(row, "low_freq")
+                    )
+                    high_freq = _parse_float(
+                        row.get(high_freq_col)
+                        if high_freq_col != "high_freq"
+                        else _band_value(row, "high_freq")
+                    )
                     label = str(row.get(label_col, "")).strip()
 
                     confidence = _parse_float(row.get("confidence"))
@@ -425,6 +457,7 @@ def load_csv_annotations(
                         end_time_col,
                         low_freq_col,
                         high_freq_col,
+                        *_BAND_ALIASES.values(),
                         label_col,
                         "confidence",
                         "notes",
@@ -608,6 +641,9 @@ def save_bioamla_annotations(
 def load_bioamla_annotations(filepath: str) -> tuple[list[Annotation], dict[str, Any]]:
     """Load annotations from a bioamla JSON format file.
 
+    Also reads a bare JSON list of records, as ``bioamla detect -o x.json`` writes
+    (``frequency_low`` / ``frequency_high`` are read as the band); its metadata is empty.
+
     Args:
         filepath: Path to a ``.json`` file in the bioamla annotation format.
 
@@ -631,14 +667,28 @@ def load_bioamla_annotations(filepath: str) -> tuple[list[Annotation], dict[str,
     except (OSError, json.JSONDecodeError) as e:
         raise AnnotationError(f"Failed to read bioamla annotations {filepath}: {e}") from e
 
+    if isinstance(data, list):  # a bare list of records, as `bioamla detect -o x.json` writes
+        untimed = [
+            i
+            for i, rec in enumerate(data)
+            if not isinstance(rec, dict)
+            or _missing(rec.get("start_time"))
+            or _missing(rec.get("end_time"))
+        ]
+        if untimed:
+            raise AnnotationError(
+                f"Not annotations: record {untimed[0]} of {filepath} has no start_time/end_time "
+                "(peak detections, for example, are points in time, not regions)"
+            )
+        data = {"annotations": data}
     if not isinstance(data, dict) or "annotations" not in data:
         raise AnnotationError(
             f"Not a bioamla annotation file (missing 'annotations' key): {filepath}"
         )
 
     records = data.get("annotations", [])
-    if not isinstance(records, list):
-        raise AnnotationError(f"'annotations' must be a list in {filepath}")
+    if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
+        raise AnnotationError(f"'annotations' must be a list of objects in {filepath}")
 
     annotations = [Annotation.from_dict(rec) for rec in records]
     metadata = {k: v for k, v in data.items() if k not in _BIOAMLA_RESERVED_KEYS}
