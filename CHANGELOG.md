@@ -12,6 +12,10 @@ All notable changes to this project are documented here. The format is based on
   exactly one JSON envelope (`{"bioamla", "command", "ok", "result"}`, or `"error": {"type",
   "message"}` on failure), and everything meant for people goes to stderr. `annotation summary`,
   `audio metadata` and `dataset stats` report results so far; the other commands follow.
+- `--json` results for `detect energy|ribbit|peaks|accelerating` (`detections`, `count`, the
+  options used and any `-o` path), `indices compute|temporal|aci|adi|aei|bio|ndsi|entropy`,
+  `audio info` and `audio list`. Reported options are keyed by option name (`--threshold-db` as
+  `threshold_db`), not by internal parameter name.
 
 ### Deprecated
 
