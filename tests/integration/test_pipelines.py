@@ -406,3 +406,16 @@ class TestWorkspace:
         assert tuned["count"] < default["count"]
         bioamla("workspace", "config", "unset", "detect.energy.threshold_db")
         assert bioamla("detect", "energy", str(recording))["params"]["threshold_db"] == -20.0
+
+    def test_runs_are_recorded_with_their_outputs(self, recording, tmp_path, monkeypatch):
+        root = tmp_path / "survey"
+        bioamla("workspace", "init", str(root))
+        monkeypatch.chdir(root)
+        bioamla("detect", "energy", str(recording), "-o", "det.csv")
+        bioamla_error("detect", "energy", "missing.wav")
+        runs = bioamla("workspace", "history")["runs"]
+        detect_ok, detect_failed = runs[-2:]
+        assert detect_ok["ok"] and detect_ok["outputs"] == ["det.csv"]
+        assert (root / detect_ok["outputs"][0]).is_file()
+        assert not detect_failed["ok"] and detect_failed["error"]["type"] == "BadParameter"
+        assert [r["command"] for r in runs][0] == "workspace init"

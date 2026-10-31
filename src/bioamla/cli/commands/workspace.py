@@ -39,6 +39,9 @@ def _current(ctx: click.Context):
         raise click.ClickException(
             f"Not inside a bioamla workspace ({where}). Create one with `bioamla workspace init`."
         )
+    from bioamla.cli.output import note_workspace
+
+    note_workspace(ws)  # this run's history goes to the workspace it worked on
     return ws
 
 
@@ -63,6 +66,9 @@ def workspace_init(ctx: click.Context, directory: str, name: str | None) -> None
         ws = create_workspace(root, name=name)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+    from bioamla.cli.output import note_workspace
+
+    note_workspace(ws)
     if emit_result(ws.to_dict()):
         return
     print_success(f"Created workspace {ws.name!r}")
@@ -202,6 +208,39 @@ def workspace_remove(ctx: click.Context, artifact_id: str, delete_import: bool) 
     print_success(f"Removed {artifact.kind} {artifact.path}")
     if delete_import and not deleted:
         click.echo("  It was linked, not imported: the file was left where it is.")
+
+
+@workspace.command("history")
+@click.option("--limit", "-n", type=click.IntRange(min=1), default=20, show_default=True,
+              help="Show the last N runs")  # fmt: skip
+@click.option("--failed", is_flag=True, help="Only runs that failed")
+@click.option("--all", "show_all", is_flag=True, help="Every run (ignores --limit)")
+@click.pass_context
+def workspace_history(ctx: click.Context, limit: int, failed: bool, show_all: bool) -> None:
+    """Commands run in this workspace: when, what, and whether they worked.
+
+    Every bioamla command run inside a workspace is recorded in
+    .bioamla/history.jsonl (values of secret-looking options are hidden).
+    """
+    from bioamla.cli.console import print_table
+    from bioamla.cli.output import emit_result
+
+    ws = _current(ctx)
+    runs = ws.history(limit=None if show_all else limit, failed_only=failed)
+    if emit_result({"workspace": str(ws.root), "runs": runs}):
+        return
+    if not runs:
+        click.echo("No runs recorded yet." if not failed else "No failed runs.")
+        return
+    rows = []
+    for run in runs:  # hand-edited records may lack fields or hold odd types
+        status = "ok" if run.get("ok") else f"exit {run.get('exit_code')}"
+        argv = run.get("argv")
+        command = " ".join(map(str, argv)) if isinstance(argv, list) else str(run.get("command"))
+        duration = run.get("duration")
+        took = f"{duration:.1f}s" if isinstance(duration, (int, float)) else "?"
+        rows.append([str(run.get("time", ""))[:19].replace("T", " "), command, status, took])
+    print_table(f"History of {ws.name}", ["time (UTC)", "command", "result", "took"], rows)
 
 
 @workspace.group("config")

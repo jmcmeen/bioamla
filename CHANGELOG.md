@@ -27,6 +27,12 @@ All notable changes to this project are documented here. The format is based on
   (`[detect.energy]`) and keys name options by their long name. `bioamla workspace config
   list|get|set|unset [--user]` manages them; unknown keys are reported. See the new Settings
   page. Library: `bioamla.common.settings`.
+- Run history: every command run inside a workspace is recorded in `.bioamla/history.jsonl`
+  (time, duration, command line, working folder, host, user, bioamla version, success, exit
+  code, error, and the output files its result names). Values of secret-looking options are
+  hidden; `--help`/`--version` runs aren't recorded, and a problem writing the file never fails
+  the command. `bioamla workspace history [-n N] [--failed] [--all]` shows it. Library:
+  `Workspace.record_run()` and `Workspace.history()`.
 
 ## [0.3.8] - 2026-10-31
 

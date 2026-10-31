@@ -206,8 +206,9 @@ class Workspace:
 
     @contextmanager
     def _locked(self) -> Iterator[None]:
-        """Hold an exclusive lock on the workspace's artifact list while changing it,
-        so two processes (bioamla and MagPy, say) never lose each other's updates."""
+        """Hold the workspace's exclusive lock while changing its files (the artifact
+        list, the run history), so two processes (bioamla and MagPy, say) never lose
+        or interleave each other's updates."""
         self.dir.mkdir(parents=True, exist_ok=True)
         with open(self.dir / ".artifacts.lock", "a+") as handle:
             if sys.platform == "win32":
@@ -240,10 +241,13 @@ class Workspace:
                 return artifact
         raise NotFoundError(f"No artifact {artifact_id!r} in workspace {self.name!r}")
 
+    def relative(self, path: str | Path) -> str:
+        """``path`` relative to the workspace root (``/``-separated) if it's inside the
+        workspace, also when one of them is reached through a symlink (e.g. /var vs
+        /private/var on macOS); otherwise absolute, keeping symlinks as given."""
+        return self._stored_link_path(Path(path))
+
     def _stored_link_path(self, path: Path) -> str:
-        """Relative to the root if the path is inside the workspace (also when one
-        of them is reached through a symlink, e.g. /var vs /private/var on macOS);
-        otherwise absolute, keeping symlinks as given."""
         absolute = Path(os.path.abspath(path))
         for candidate, root in (
             (absolute, Path(os.path.abspath(self.root))),
@@ -404,6 +408,41 @@ class Workspace:
                 f"Unknown artifact kind {kind!r}; expected one of {', '.join(ARTIFACT_KINDS)}"
             )
         return kind
+
+    # -- run history ---------------------------------------------------------
+
+    def record_run(self, record: dict[str, Any]) -> None:
+        """Append one run record to ``history.jsonl`` (one JSON object per line).
+
+        Appends happen under the workspace lock, so concurrent runs never interleave.
+        """
+        line = json.dumps(record, ensure_ascii=False, default=str) + "\n"
+        with self._locked():
+            with open(self.history_path, "a", encoding="utf-8") as f:
+                f.write(line)
+
+    def history(self, limit: int | None = None, failed_only: bool = False) -> list[dict]:
+        """Run records, oldest first; the last ``limit`` of them if given.
+
+        Lines that aren't valid JSON objects (a crash mid-write, a hand edit) are
+        skipped rather than failing.
+        """
+        if not self.history_path.exists():
+            return []
+        from collections import deque
+
+        # Keep only what's needed: the last `limit` records unless filtering first.
+        records: Any = deque(maxlen=limit) if limit and not failed_only else []
+        with open(self.history_path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(record, dict) and (not failed_only or not record.get("ok", True)):
+                    records.append(record)
+        records = list(records)
+        return records[-limit:] if limit else records
 
     def to_dict(self) -> dict[str, Any]:
         """Workspace metadata and a count of artifacts per kind."""

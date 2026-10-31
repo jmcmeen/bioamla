@@ -34,6 +34,40 @@ from typing import IO, Any, NoReturn
 _real_stdout: IO[str] | None = None
 _installed: IO[str] | None = None  # the stream we put on sys.stdout
 _emitted = False
+# The run's result and error, remembered in every mode (not only --json) so the
+# workspace history can record what a command produced.
+_last_result: Any = None
+_last_error: dict[str, Any] | None = None
+_run_workspace: Any = None
+
+
+def reset_run_record() -> None:
+    """Forget the previous run's result, error and workspace (start and end of a run)."""
+    global _last_result, _last_error, _run_workspace
+    _last_result = None
+    _last_error = None
+    _run_workspace = None
+
+
+def last_result() -> Any:
+    """The result the running command reported, as the command passed it, or ``None``."""
+    return _last_result
+
+
+def note_workspace(workspace: Any) -> None:
+    """Say which workspace the running command works on (for its history record)."""
+    global _run_workspace
+    _run_workspace = workspace
+
+
+def run_workspace() -> Any:
+    """The workspace the running command said it works on, or ``None``."""
+    return _run_workspace
+
+
+def last_error() -> dict[str, Any] | None:
+    """The error the running command ended with, as ``{"type", "message"}``, or ``None``."""
+    return _last_error
 
 
 def json_mode() -> bool:
@@ -169,8 +203,6 @@ def emit_file_result(file: str, output: Any = _NO_OUTPUT, **fields: Any) -> bool
     """
     import click
 
-    if not json_mode():
-        return False
     ctx = click.get_current_context()
     result: dict[str, Any] = {
         "file": file,
@@ -181,8 +213,7 @@ def emit_file_result(file: str, output: Any = _NO_OUTPUT, **fields: Any) -> bool
         result["output"] = None if output is None else str(output)
     elif "output" in ctx.params:
         result["output"] = ctx.params["output"]
-    emit_result(result)
-    return True
+    return emit_result(result)
 
 
 def emit_result(result: Any) -> bool:
@@ -191,6 +222,8 @@ def emit_result(result: Any) -> bool:
     Returns True if it reported, so a command can skip its human output:
     ``if emit_result({...}): return``.
     """
+    global _last_result
+    _last_result = result  # kept as-is; the history reads only its output paths
     if not json_mode():
         return False
     _write(_envelope(current_command(), ok=True, result=to_jsonable(result)))
@@ -221,8 +254,10 @@ def emit_error(command: str | None, error_type: str, message: str, details: Any 
     ``details`` (optional) goes in ``error.details``: structured data about the
     failure, such as which items of a batch failed and why.
     """
+    global _last_error
+    _last_error = {"type": error_type, "message": message}
     if json_mode():
-        error = {"type": error_type, "message": message}
+        error = dict(_last_error)
         if details is not None:
             error["details"] = to_jsonable(details)
         _write(_envelope(command, ok=False, error=error))
@@ -327,6 +362,11 @@ __all__ = [
     "enable_json_mode",
     "finish",
     "json_mode",
+    "last_error",
+    "last_result",
+    "note_workspace",
+    "reset_run_record",
+    "run_workspace",
     "legacy_json",
     "to_jsonable",
 ]
