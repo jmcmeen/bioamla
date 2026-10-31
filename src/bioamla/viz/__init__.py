@@ -11,6 +11,11 @@ Example:
     >>> generate_spectrogram_video("recording.wav", "out.mp4")
 """
 
+from bioamla._extras import require_extra
+
+# Fail early, with the install command, if the [viz] extra is missing.
+require_extra("viz", "bioamla.viz")
+
 from bioamla.viz.batch import batch_generate_spectrograms
 from bioamla.viz.core import (
     VisualizationType,

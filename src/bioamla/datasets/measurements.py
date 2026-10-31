@@ -9,7 +9,9 @@ Frequency-domain metrics are computed from a single Welch PSD that is restricted
 to the annotation's ``low_freq``/``high_freq`` box when both bounds are set
 (matching ``centroid``/``rolloff`` behaviour); the per-frame peak-frequency
 contour honours the same band. Amplitude (dB) and entropy metrics reuse the
-domain primitives in :mod:`bioamla.audio` and :mod:`bioamla.indices`.
+domain primitives in :mod:`bioamla.audio` and :mod:`bioamla.indices`, so the
+entropy metrics (and ``metrics="all"``) need the ``indices`` extra; the rest
+work on the base install.
 
 Metrics that cannot be computed for a given region (e.g. a frequency metric when
 the PSD is empty, or the contour for a clip too short to frame) are **omitted**

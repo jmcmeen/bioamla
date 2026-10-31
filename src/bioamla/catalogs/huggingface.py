@@ -15,6 +15,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from bioamla._extras import import_extra
 from bioamla.catalogs._models import CachedRepo, PullResult, PurgeResult, PushResult
 from bioamla.exceptions import CatalogError, InvalidInputError
 
@@ -244,7 +245,7 @@ def push_dataset(
 
 def _detect_audio_column(features: Any, audio_column: str | None) -> str:
     """Find the dataset's audio column (an ``Audio`` feature), or validate the override."""
-    from datasets import Audio
+    Audio = import_extra("datasets", "ml").Audio
 
     if audio_column is not None:
         if audio_column not in features:
@@ -260,7 +261,7 @@ def _detect_audio_column(features: Any, audio_column: str | None) -> str:
 
 def _detect_label_column(features: Any, label_column: str | None) -> str:
     """Find a label column: an explicit override, a ClassLabel feature, or a known name."""
-    from datasets import ClassLabel
+    ClassLabel = import_extra("datasets", "ml").ClassLabel
 
     if label_column is not None:
         if label_column not in features:
@@ -297,7 +298,7 @@ def _extract_audio(cell: Any) -> tuple[Any, int, str | None]:
 
 def _label_to_str(value: Any, feature: Any) -> str:
     """Render a label cell as a folder-safe string (decoding ClassLabel ints)."""
-    from datasets import ClassLabel
+    ClassLabel = import_extra("datasets", "ml").ClassLabel
 
     if isinstance(feature, ClassLabel) and isinstance(value, int):
         return feature.int2str(value)
@@ -350,7 +351,9 @@ def pull_dataset(
     from bioamla.audio import save_audio
     from bioamla.datasets._metadata import write_metadata_csv
     from bioamla.datasets.annotation_utils import create_label_map
-    from datasets import Audio, Dataset, load_dataset
+
+    hf_datasets = import_extra("datasets", "ml")
+    Audio, Dataset, load_dataset = hf_datasets.Audio, hf_datasets.Dataset, hf_datasets.load_dataset
 
     try:
         loaded = load_dataset(repo_id, config, split=split)

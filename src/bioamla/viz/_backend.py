@@ -17,6 +17,8 @@ import logging
 import librosa
 import numpy as np
 
+from bioamla._extras import import_extra
+
 logger = logging.getLogger(__name__)
 
 Backend = str  # "librosa" | "torch"
@@ -48,8 +50,7 @@ def select_backend(prefer: str = "auto") -> Backend:
     if prefer == "librosa":
         return "librosa"
     if prefer == "torch":
-        import torch  # noqa: F401
-
+        import_extra("torch", "ml")
         return "torch"
     # auto
     return "torch" if _torch_gpu_available() else "librosa"

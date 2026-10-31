@@ -35,17 +35,42 @@ dependencies = [
   "python-dotenv>=1.0",
   "numpy",
   "scipy",
-  "numba",
   "pandas",
-  "pyarrow",
-  "librosa",
   "soundfile",
   "pydub",
+  "audioop-lts; python_version >= '3.13'",  # pydub needs audioop, removed from the stdlib in 3.13
   "riffy>=0.3.9",
-  "matplotlib",
   "requests>=2.28.0",
   "huggingface_hub",
   "pyinaturalist",
+  "pyarrow",  # parquet annotations (datasets)
+]
+
+[project.scripts]
+bioamla = "bioamla._cli_entry:main"
+
+[project.optional-dependencies]
+# The base install covers audio I/O and metadata, file discovery, the batch
+# engine, dataset tooling and the catalog clients. Heavier features live in the
+# extras below; `bioamla[all]` installs every one of them. Using a feature
+# without its extra raises DependencyError naming the extra to install.
+audio = [  # signal processing (resample, filter, denoise, ...) and playback
+  "librosa",
+  "sounddevice>=0.4.0",
+]
+viz = [  # spectrograms, waveform plots, spectrogram videos
+  "bioamla[audio]",
+  "matplotlib",
+]
+indices = [  # acoustic indices
+  "bioamla[audio]",
+  "numba",
+]
+detect = [  # event detection
+  "bioamla[audio]",
+]
+ml = [  # AST inference, training and embeddings; augmentation; HF datasets
+  "bioamla[audio]",
   "torch",
   "torchvision",
   "torchaudio",
@@ -54,17 +79,16 @@ dependencies = [
   "audiomentations",
   "evaluate",
   "tensorboard",
+  "mlflow>=2.0",
+]
+cluster = [  # dimensionality reduction, clustering, novelty detection
   "umap-learn>=0.5.0",
   "hdbscan>=0.8.0",
   "scikit-learn>=1.0.0",
-  "sounddevice>=0.4.0",
-  "mlflow>=2.0",
 ]
-
-[project.scripts]
-bioamla = "bioamla._cli_entry:main"
-
-[project.optional-dependencies]
+all = [
+  "bioamla[audio,viz,indices,detect,ml,cluster]",
+]
 # The command-line interface. The library itself (`import bioamla`) does not need
 # these — only the `bioamla` console command does. Install with
 # `pip install bioamla[cli]` to get the CLI.
@@ -73,7 +97,7 @@ cli = [
   "rich",
 ]
 dev = [
-  "bioamla[cli]",  # the test suite exercises the CLI, so dev pulls in the cli extra
+  "bioamla[all,cli]",  # the test suite covers every domain and the CLI
   "pytest>=7.0",
   "pytest-cov",
   "pytest-mock",
@@ -158,6 +182,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011", "E402"]  # allow assert statements; allow imports after pytest.importorskip
+# The extra-gated domains check their extra (require_extra) before importing it.
+"src/bioamla/{viz,indices,detect,ml,cluster}/__init__.py" = ["E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["bioamla"]

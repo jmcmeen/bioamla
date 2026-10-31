@@ -215,7 +215,7 @@ def get_install_commands(os_type: str) -> dict[str, str]:
         "windows": {
             "ffmpeg": "choco install ffmpeg  # or download from ffmpeg.org",
             "libsndfile": "pip install soundfile  # usually bundled on Windows",
-            "portaudio": "pip install sounddevice  # usually bundled on Windows",
+            "portaudio": "pip install 'bioamla[audio]'  # sounddevice bundles it on Windows",
         },
     }
     return commands.get(os_type, {})

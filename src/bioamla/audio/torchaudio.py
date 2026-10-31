@@ -6,8 +6,9 @@ loading, resampling, splitting into segments, and loading from raw bytes.
 These are used by the ML domain (AST training/inference) and the dataset
 augmentation pipeline.
 
-``torch`` / ``torchaudio`` ship in the base install but are imported lazily
-inside each function so importing this module stays light.
+``torch`` / ``torchaudio`` come with the ``ml`` extra (``pip install 'bioamla[ml]'``)
+and are imported lazily inside each function so importing this module stays
+light.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from bioamla._extras import install_hint
 from bioamla.common.constants import DefaultConfig
 from bioamla.common.files import get_files_by_extension
 from bioamla.exceptions import AudioLoadError, DependencyError
@@ -34,7 +36,10 @@ def _import_torchaudio() -> Any:
     try:
         import torchaudio
     except (ImportError, OSError) as e:
-        raise DependencyError(f"torchaudio could not be imported: {e}") from e
+        raise DependencyError(
+            f"torchaudio could not be imported: {e}. It comes with the [ml] extra: "
+            f"{install_hint('ml')}"
+        ) from e
 
     return torchaudio
 
@@ -48,7 +53,9 @@ def _import_torch() -> Any:
     try:
         import torch
     except (ImportError, OSError) as e:
-        raise DependencyError(f"torch could not be imported: {e}") from e
+        raise DependencyError(
+            f"torch could not be imported: {e}. It comes with the [ml] extra: {install_hint('ml')}"
+        ) from e
 
     return torch
 

@@ -75,3 +75,24 @@ def test_main_handles_keyboard_interrupt(monkeypatch):
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 1
+
+
+def test_main_reports_missing_extra(monkeypatch, capsys):
+    def raise_err(**kw):
+        raise ModuleNotFoundError("No module named 'librosa'", name="librosa")
+
+    monkeypatch.setattr(cli, "main", raise_err)
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert "pip install 'bioamla[audio]'" in captured.out + captured.err
+
+
+def test_main_reraises_unrelated_missing_module(monkeypatch):
+    def raise_err(**kw):
+        raise ModuleNotFoundError("No module named 'nope'", name="nope")
+
+    monkeypatch.setattr(cli, "main", raise_err)
+    with pytest.raises(ModuleNotFoundError):
+        main()

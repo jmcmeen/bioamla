@@ -54,7 +54,7 @@ def get_version() -> VersionData:
         pytorch_version = torch.__version__
         if torch.cuda.is_available():
             cuda_version = torch.version.cuda
-    except ImportError:
+    except (ImportError, OSError):
         pass
 
     return VersionData(
@@ -67,8 +67,15 @@ def get_version() -> VersionData:
 
 
 def get_device_info() -> DevicesData:
-    """Return available compute devices (CUDA, MPS, CPU)."""
-    import torch
+    """Return available compute devices (CUDA, MPS, CPU).
+
+    Without torch (the [ml] extra) only the CPU is reported.
+    """
+    try:
+        import torch
+    except (ImportError, OSError):  # not installed, or its native libraries fail to load
+        cpu = DeviceInfo(name="CPU", device_type="cpu", device_id="cpu")
+        return DevicesData(devices=[cpu], cuda_available=False, mps_available=False)
 
     devices: list[DeviceInfo] = []
     cuda_available = torch.cuda.is_available()

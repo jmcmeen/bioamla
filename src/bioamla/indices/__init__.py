@@ -11,6 +11,11 @@ Example:
     >>> print(idx.aci, idx.ndsi)
 """
 
+from bioamla._extras import require_extra
+
+# Fail early, with the install command, if the [indices] extra is missing.
+require_extra("indices", "bioamla.indices")
+
 from bioamla.indices.batch import batch_index_files
 from bioamla.indices.compute import (
     AVAILABLE_INDICES,

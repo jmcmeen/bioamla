@@ -114,6 +114,20 @@ class TestResample:
         out = resample_audio(sample_audio_data.samples, 16000, 16000)
         assert out is sample_audio_data.samples
 
+    def test_resample_keeps_frequency(self) -> None:
+        sr_in, sr_out, freq = 44100, 16000, 1000.0
+        t = np.arange(sr_in) / sr_in
+        out = resample_audio(np.sin(2 * np.pi * freq * t).astype(np.float32), sr_in, sr_out)
+        assert out.dtype == np.float32
+        assert len(out) == sr_out
+        spectrum = np.abs(np.fft.rfft(out))
+        peak_hz = np.argmax(spectrum) * sr_out / len(out)
+        assert peak_hz == pytest.approx(freq, abs=2)
+
+    def test_resample_multichannel_along_last_axis(self) -> None:
+        out = resample_audio(np.zeros((2, 16000), dtype=np.float32), 16000, 8000)
+        assert out.shape == (2, 8000)
+
 
 class TestTrim:
     def test_trim_audio_range(self, sample_audio_3s: AudioData) -> None:

@@ -6,8 +6,9 @@ Real-time audio playback via ``sounddevice``, folded from
 ``services/audio_playback.py``. The :class:`AudioPlayer` state machine,
 threading, and position logic are unchanged.
 
-``sounddevice`` ships in the base install but is imported lazily inside the
-methods that need it, so importing this module stays light.
+``sounddevice`` comes with the ``audio`` extra (``pip install 'bioamla[audio]'``)
+and is imported lazily inside the methods that need it, so importing this
+module stays light.
 """
 
 import logging
@@ -44,10 +45,10 @@ class PlaybackPosition:
 
 
 def _import_sounddevice() -> Any:
-    """Import and return the sounddevice module (lazy import)."""
-    import sounddevice as sd
+    """Import and return the sounddevice module (lazy; it comes with the [audio] extra)."""
+    from bioamla._extras import import_extra
 
-    return sd
+    return import_extra("sounddevice", "audio")
 
 
 class AudioPlayer:
@@ -59,7 +60,7 @@ class AudioPlayer:
     (by time or sample), looping, and playback-event callbacks.
 
     Note:
-        Uses ``sounddevice`` (a base dependency) for audio output.
+        Uses ``sounddevice`` (the ``audio`` extra) for audio output.
     """
 
     def __init__(self) -> None:
@@ -258,7 +259,7 @@ class AudioPlayer:
         self, outdata: np.ndarray, frames: int, time_info: Any, status: Any
     ) -> None:
         """Callback for sounddevice output stream."""
-        import sounddevice as sd
+        sd = _import_sounddevice()
 
         if status:
             logger.warning(f"Playback status: {status}")

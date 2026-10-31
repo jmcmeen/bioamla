@@ -835,7 +835,9 @@ def extract_embeddings_batch(
         Embeddings array of shape (n_samples, embedding_dim)
 
     """
-    import torch
+    from bioamla._extras import import_extra
+
+    torch = import_extra("torch", "ml")
 
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

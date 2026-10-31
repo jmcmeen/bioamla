@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: the heavy dependencies are now extras.** `pip install bioamla` installs a slim
+  base (audio I/O and metadata, resampling, discovery, batch, datasets, catalogs). The
+  librosa-based signal processing and playback need `bioamla[audio]`; `bioamla.viz`, `bioamla.indices`, `bioamla.detect`,
+  `bioamla.ml` and `bioamla.cluster` need the extra of the same name. `bioamla[all]` installs
+  everything, as a plain install did before. A missing extra raises `DependencyError` with the
+  `pip install` command, and the `bioamla` command prints the same hint.
+- `resample_audio` (and everything that resamples through it: `load_audio_data(sample_rate=...)`,
+  `save_audio(target_sample_rate=...)`, clip extraction, augmentation) uses scipy's polyphase
+  resampler instead of librosa, so it works on the base install. Output differs slightly from
+  before.
+
+### Fixed
+
+- On Python 3.13 and later, pydub's `audioop` replacement (`audioop-lts`) is now a direct
+  dependency instead of arriving through librosa.
+
 ## [0.2.15] - 2026-10-27
 
 ### Added

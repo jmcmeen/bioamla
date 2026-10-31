@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import types
 
 import pytest
@@ -100,3 +101,18 @@ def test_get_device_info_mps_branch(monkeypatch):
     assert len(mps_devs) == 1
     assert mps_devs[0].device_id == "mps"
     assert data.devices[-1].device_type == "cpu"
+
+
+@pytest.mark.parametrize("error", [ImportError("no torch"), OSError("libtorch.so missing")])
+def test_get_device_info_without_usable_torch(monkeypatch, error):
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "torch":
+            raise error
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    info = get_device_info()
+    assert [d.device_type for d in info.devices] == ["cpu"]
+    assert not info.cuda_available and not info.mps_available
