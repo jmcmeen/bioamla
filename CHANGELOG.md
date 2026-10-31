@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Security
+
+- Locked dependencies updated past open security advisories (all indirect): pillow 13.0.0,
+  anyio 4.14.2, aiohttp 3.14.5, cryptography 50.0.2, filelock 4.2.6, fsspec 2026.7.0,
+  urllib3 2.8.0, starlette 1.10.0, graphql-core 3.2.13, sqlparse 0.6.0, mako 1.4.3,
+  multidict 7.2.1, opentelemetry 1.45.2, werkzeug 3.1.9, setuptools 84.2.1 and, for the docs
+  build, pymdown-extensions 11.0.2 (held below 12, which breaks mkdocstrings). On Python 3.10,
+  pillow and filelock stay at 12.3.0 and 4.1.0, the last releases that support it.
+
 ## [0.3.6] - 2026-10-31
 
 ### Fixed
