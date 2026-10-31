@@ -96,9 +96,72 @@ jobs:
           import sys
           import bioamla  # noqa: F401
           import bioamla.cli.cli  # noqa: F401
-          # Heavy deps now ship in base, but lazy imports must keep startup fast:
-          # a bare `import bioamla` / CLI load must not import these eagerly.
+          # Heavy deps come with extras and must stay lazy: a bare
+          # `import bioamla` / CLI load must not import these eagerly.
           eager = [m for m in ("torch", "transformers", "librosa", "numba") if m in sys.modules]
           assert not eager, f"import pulled heavy modules eagerly: {eager}"
           print("lazy import OK; version", bioamla.__version__)
           PY
+
+  slim-install:
+    name: slim install (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # full history + tags for hatch-vcs versioning
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      # The base install plus [cli], none of the heavy extras: the core must
+      # work on its own, and the extras' features must say what to install.
+      - name: Install (base + cli only)
+        run: |
+          uv venv --python ${{ matrix.python-version }} /tmp/slim
+          uv pip install --python /tmp/slim/bin/python ".[cli]"
+
+      - name: Base works, extras explain themselves
+        working-directory: /tmp
+        run: |
+          /tmp/slim/bin/python - <<'PY'
+          import importlib
+          import importlib.util
+
+          import numpy as np
+          import soundfile as sf
+
+          from bioamla.audio import get_audio_info
+          from bioamla.exceptions import DependencyError
+
+          heavy = ("librosa", "torch", "matplotlib", "numba", "umap", "sklearn")
+          present = [m for m in heavy if importlib.util.find_spec(m)]
+          assert not present, f"slim install has heavy modules: {present}"
+
+          sf.write("tone.wav", np.zeros(16000, dtype="float32"), 16000)
+          assert get_audio_info("tone.wav").sample_rate == 16000
+          from bioamla.audio import load_audio_data
+          clip = load_audio_data("tone.wav", sample_rate=8000)  # resampling is base
+          assert clip.sample_rate == 8000 and len(clip.samples) == 8000
+
+          for package in ("viz", "indices", "detect", "ml", "cluster"):
+              try:
+                  importlib.import_module(f"bioamla.{package}")
+              except DependencyError as e:
+                  assert f"bioamla[{package}]" in str(e), e
+              else:
+                  raise AssertionError(f"bioamla.{package} imported without its extra")
+          print("slim install OK")
+          PY
+          if /tmp/slim/bin/bioamla indices compute tone.wav > out.txt 2>&1; then
+            echo "expected a missing-extra error"; exit 1
+          fi
+          cat out.txt
+          grep -q "bioamla\[indices\]" out.txt

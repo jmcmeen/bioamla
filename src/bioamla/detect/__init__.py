@@ -11,6 +11,11 @@ Example:
     >>> detections = detector.detect_from_file("recording.wav")
 """
 
+from bioamla._extras import require_extra
+
+# Fail early, with the install command, if the [detect] extra is missing.
+require_extra("detect", "bioamla.detect")
+
 from bioamla.detect.batch import batch_detect_dir
 from bioamla.detect.core import (
     AcceleratingPatternDetector,

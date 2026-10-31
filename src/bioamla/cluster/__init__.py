@@ -15,6 +15,11 @@ Example:
     >>> labels = AudioClusterer(method="kmeans").fit_predict(reduced)
 """
 
+from bioamla._extras import require_extra
+
+# Fail early, with the install command, if the [cluster] extra is missing.
+require_extra("cluster", "bioamla.cluster")
+
 from bioamla.cluster.batch import (
     cluster_batch_files,
     cluster_embedding_files,

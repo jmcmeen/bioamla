@@ -6,16 +6,19 @@ Signal-processing transforms folded from ``core/signal.py``: filtering,
 denoising, segmentation, onset detection, normalization, resampling, and
 trimming. Functions operate on raw ``numpy`` arrays plus a sample rate.
 
-These are deterministic ``numpy``/``scipy``/``librosa`` routines (all base
-dependencies). They raise :class:`~bioamla.exceptions.ProcessingError` on bad
-parameters and otherwise return processed arrays.
+These are deterministic ``numpy``/``scipy``/``librosa`` routines. The
+``numpy``/``scipy`` ones (filters, normalization, resampling, trimming) need
+only the base install; the ``librosa`` ones need the ``audio`` extra. They
+raise :class:`~bioamla.exceptions.ProcessingError` on bad parameters and otherwise return processed arrays.
 """
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
 from scipy import signal as scipy_signal
 
+from bioamla._extras import import_extra
 from bioamla.exceptions import ProcessingError
 
 # ``librosa`` is imported inside the functions that use it (not at module top)
@@ -150,7 +153,7 @@ def spectral_denoise(
     Returns:
         Denoised audio as numpy array.
     """
-    import librosa
+    librosa = import_extra("librosa", "audio")
 
     # Compute STFT
     stft = librosa.stft(audio, n_fft=n_fft, hop_length=hop_length)
@@ -216,7 +219,7 @@ def segment_on_silence(
     if audio.ndim > 1:
         audio = audio.mean(axis=0)
 
-    import librosa
+    librosa = import_extra("librosa", "audio")
 
     # Get intervals of non-silence
     intervals = librosa.effects.split(
@@ -311,7 +314,7 @@ def detect_onsets(
     if audio.ndim > 1:
         audio = audio.mean(axis=0)
 
-    import librosa
+    librosa = import_extra("librosa", "audio")
 
     # Compute onset strength
     onset_env = librosa.onset.onset_strength(y=audio, sr=sample_rate)
@@ -418,6 +421,9 @@ def resample_audio(
     """
     Resample audio to a different sample rate.
 
+    Uses polyphase filtering (:func:`scipy.signal.resample_poly`) along the last axis, so it
+    needs no extra.
+
     Args:
         audio: Audio data as numpy array.
         orig_sr: Original sample rate in Hz.
@@ -429,9 +435,8 @@ def resample_audio(
     if orig_sr == target_sr:
         return audio
 
-    import librosa
-
-    resampled = librosa.resample(audio, orig_sr=orig_sr, target_sr=target_sr)
+    g = math.gcd(int(orig_sr), int(target_sr))
+    resampled = scipy_signal.resample_poly(audio, target_sr // g, orig_sr // g, axis=-1)
 
     return resampled.astype(np.float32)
 
@@ -502,7 +507,7 @@ def pitch_shift(
     Returns:
         Pitch-shifted audio as numpy array.
     """
-    import librosa
+    librosa = import_extra("librosa", "audio")
 
     shifted = librosa.effects.pitch_shift(y=audio, sr=sample_rate, n_steps=n_steps)
     return shifted.astype(np.float32)
@@ -527,7 +532,7 @@ def time_stretch(
     """
     if rate <= 0:
         raise ProcessingError(f"Time-stretch rate must be positive, got {rate}")
-    import librosa
+    librosa = import_extra("librosa", "audio")
 
     stretched = librosa.effects.time_stretch(y=audio, rate=rate)
     return stretched.astype(np.float32)
@@ -601,7 +606,7 @@ def trim_silence(
     else:
         audio_mono = audio
 
-    import librosa
+    librosa = import_extra("librosa", "audio")
 
     # Trim silence
     trimmed, index = librosa.effects.trim(audio_mono, top_db=-threshold_db)

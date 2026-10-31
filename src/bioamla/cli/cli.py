@@ -125,6 +125,17 @@ def main() -> None:
         raise SystemExit(e.exit_code) from e
     except (click.exceptions.Abort, KeyboardInterrupt) as e:
         raise SystemExit(1) from e
+    except ModuleNotFoundError as e:
+        # A library that comes with an extra (bioamla[audio], [ml], ...) isn't
+        # installed: say which extra, instead of a traceback.
+        from bioamla._extras import extra_hint
+        from bioamla.cli.console import print_error
+
+        hint = extra_hint(e)
+        if hint is None:
+            raise
+        print_error(f"{e}. {hint}")
+        raise SystemExit(1) from e
 
 
 if __name__ == "__main__":

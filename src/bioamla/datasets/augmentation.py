@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from bioamla._extras import import_extra
 from bioamla.exceptions import AugmentationError, NotFoundError
 
 if TYPE_CHECKING:
@@ -98,6 +99,7 @@ def create_augmentation_pipeline(config: AugmentationConfig) -> Any:
     Returns:
         A ``Compose`` pipeline, or None if no augmentations are enabled.
     """
+    import_extra("audiomentations", "ml")
     from audiomentations import (
         AddGaussianSNR,
         ClippingDistortion,
@@ -258,7 +260,7 @@ def batch_augment(
         NotFoundError: If the input directory doesn't exist.
         AugmentationError: If no augmentations are enabled.
     """
-    from bioamla.audio import save_audio
+    from bioamla.audio import resample_audio, save_audio
     from bioamla.batch import output_stems, run_batch
     from bioamla.common.files import get_files_by_extension
 
@@ -304,7 +306,7 @@ def batch_augment(
         audio, orig_sr = _load_waveform(raw_path)
 
         if orig_sr != config.sample_rate:
-            audio = _resample(audio, orig_sr, config.sample_rate)
+            audio = resample_audio(audio, orig_sr, config.sample_rate)
 
         for i in range(config.multiply):
             suffix = ".wav"  # Always output as WAV
@@ -344,13 +346,3 @@ def _load_waveform(path: str) -> tuple[np.ndarray, int]:
     else:
         audio = audio.squeeze()
     return audio, orig_sr
-
-
-def _resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
-    """Resample a mono waveform with torchaudio (lazy import)."""
-    import torch
-    import torchaudio
-
-    waveform_tensor = torch.from_numpy(audio).unsqueeze(0)
-    resampler = torchaudio.transforms.Resample(orig_sr, target_sr)
-    return resampler(waveform_tensor).squeeze().numpy()

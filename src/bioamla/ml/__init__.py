@@ -19,6 +19,11 @@ Example:
 # Imports are grouped logically below but kept import-sorted (ruff/isort):
 # device + base are the preserved foundations; ast / ast_model / ast_service /
 # inference / embedding / batch are the folded ml-domain modules.
+from bioamla._extras import require_extra
+
+# Fail early, with the install command, if the [ml] extra is missing.
+require_extra("ml", "bioamla.ml")
+
 from bioamla.ml.ast import (
     InferenceConfig,
     ast_predict,

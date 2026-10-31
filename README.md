@@ -36,27 +36,46 @@ Two conventions matter for consumers:
 - **Errors are exceptions.** Functions return plain data and raise from a single hierarchy
   rooted at `bioamla.exceptions.BioamlaError` (e.g. `AudioLoadError`, `InvalidInputError`,
   `DependencyError`). Catch the base class to handle everything.
-- **Batteries included.** A single `pip install bioamla` installs the full analysis/ML runtime
-  stack — audio/signal/indices/detect/viz, the PyTorch + AST ML stack, clustering, and playback.
-  Heavy imports are still **lazy**, so `import bioamla` and `bioamla --help` stay fast and don't
-  load torch until you actually call a feature that needs it. The command-line interface lives in
-  a thin `[cli]` extra (`pip install bioamla[cli]`) — the library never imports it.
+- **Slim base, opt-in extras.** `pip install bioamla` installs the light core: audio I/O and
+  recorder metadata, file discovery, the batch engine, dataset tooling and the catalog clients.
+  Signal processing, indices, detection, plotting, ML and clustering each come with an extra
+  (see [Install](#install)). Calling a feature whose extra isn't installed raises
+  `DependencyError` with the `pip install` command to run. Heavy imports stay **lazy**, so
+  `import bioamla` and `bioamla --help` are fast either way.
 
 ## Install
 
-Requires Python ≥ 3.10. Install into a **virtual environment** so bioamla's dependency stack
-(PyTorch, librosa, transformers, …) stays isolated from other projects and your system Python:
+Requires Python ≥ 3.10. Install into a **virtual environment** so bioamla's dependencies stay
+isolated from other projects and your system Python:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate    # or: uv venv / conda create -n bioamla
-pip install bioamla                 # the full analysis/ML library
-
-pip install "bioamla[cli]"          # + the `bioamla` command-line interface
-pip install "bioamla[dev]"          # + contributor tooling (pytest, ruff, mkdocs; includes [cli])
+pip install "bioamla[all,cli]"      # everything, plus the `bioamla` command
+pip install bioamla                 # the slim base only
+pip install "bioamla[audio,cli]"    # or pick the extras you need
 ```
 
-The `bioamla` console command needs the `[cli]` extra; on a library-only install it prints an
-install hint pointing you to `pip install bioamla[cli]`.
+> **Breaking change: the dependencies were split into extras.** Up to 0.2.x a plain
+> `pip install bioamla` pulled in the whole stack (PyTorch, transformers, librosa, …). From
+> 0.3.0 the base is slim and the heavy parts are extras. To keep the old behavior,
+> install `bioamla[all]` (add `cli` for the command).
+
+| Extra | Adds | Unlocks |
+|---|---|---|
+| *(base)* | numpy, scipy, pandas, pyarrow, soundfile, pydub, riffy, requests, huggingface_hub, pyinaturalist | audio I/O and info, resampling, recorder metadata, discovery, `run_batch`, `datasets` (entropy measurements need `indices`), `catalogs` |
+| `audio` | librosa, sounddevice | librosa signal processing (denoise, segment, onsets, …), playback |
+| `viz` | `audio` + matplotlib | `bioamla.viz`: spectrograms, plots, videos |
+| `indices` | `audio` + numba | `bioamla.indices`: acoustic indices |
+| `detect` | `audio` | `bioamla.detect`: event detection |
+| `ml` | `audio` + torch, torchaudio, transformers, datasets, audiomentations, evaluate, mlflow, … | `bioamla.ml` (AST inference, training, embeddings; UMAP reduction also needs `cluster`), augmentation, Hugging Face datasets |
+| `cluster` | umap-learn, hdbscan, scikit-learn | `bioamla.cluster` |
+| `all` | every extra above | everything |
+| `cli` | click, rich | the `bioamla` command |
+| `dev` | `all` + `cli` + pytest, ruff, mkdocs, … | contributor tooling |
+
+Without an extra, `import bioamla.viz` (or any function that needs it) raises `DependencyError`
+naming the extra, e.g. `pip install 'bioamla[viz]'`; the `bioamla` command prints the same hint.
+Without `[cli]`, the `bioamla` command prints a hint to install it.
 
 ### System dependencies
 
@@ -204,12 +223,12 @@ its WAV metadata.
 ## Development
 
 ```bash
-make install        # uv sync --extra dev (full stack + tooling)
+make install        # uv sync --extra dev (every extra + tooling)
 make test           # pytest
 make check          # lint + format-check + test
 ```
 
-`make install` brings in the full runtime stack plus contributor tooling, so the whole test
+`make install` brings in every extra plus contributor tooling, so the whole test
 suite runs.
 
 ## Contributing

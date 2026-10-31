@@ -59,7 +59,7 @@ class EmbeddingConfig:
     device: str | None = None
 
     # Reduction settings
-    reduce_method: str | None = None  # None, "pca", "umap"
+    reduce_method: str | None = None  # None, "pca", "umap" (needs the [cluster] extra)
     n_components: int = 128
     normalize: bool = True
 
