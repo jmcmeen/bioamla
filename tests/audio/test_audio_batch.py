@@ -154,6 +154,28 @@ class TestSegmentCleanup:
             segment_audio_file(test_audio_path_3s, str(out), duration=1.0)
         assert list(out.glob("*.wav")) == []
 
+    @pytest.mark.parametrize("error", [OSError("disk full"), KeyboardInterrupt()])
+    def test_half_written_segment_removed_too(
+        self, test_audio_path_3s: str, tmp_path, monkeypatch, error
+    ) -> None:
+        import bioamla.audio.batch as audio_batch
+
+        real_save = audio_batch.save_audio
+        calls = {"n": 0}
+
+        def save_then_fail(path, chunk, sr):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                Path(path).write_bytes(b"RIFF partial")  # died mid-write
+                raise error
+            return real_save(path, chunk, sr)
+
+        monkeypatch.setattr(audio_batch, "save_audio", save_then_fail)
+        out = tmp_path / "segments"
+        with pytest.raises(type(error)):
+            segment_audio_file(test_audio_path_3s, str(out), duration=1.0)
+        assert list(out.glob("*.wav")) == []
+
 
 class TestBatchSegmentFiles:
     def test_creates_output_dir_with_no_inputs(self, tmp_path) -> None:

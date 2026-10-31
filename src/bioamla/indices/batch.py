@@ -13,7 +13,7 @@ from typing import Any
 from bioamla.audio.discovery import list_audio_files
 from bioamla.batch import BatchResult, run_batch, write_rows_csv
 from bioamla.exceptions import NotFoundError
-from bioamla.indices.compute import check_index_names, failed_indices_row, indices_row
+from bioamla.indices.compute import _failed_indices_row, _indices_row, check_index_names
 
 
 def batch_index_files(
@@ -53,7 +53,7 @@ def batch_index_files(
         InvalidInputError: If ``indices`` names an unknown index.
     """
     if indices is not None:
-        check_index_names(indices)  # fail once up front, not once per file
+        check_index_names(indices)
     in_dir = Path(input_dir)
     if not in_dir.exists():
         raise NotFoundError(f"Input directory not found: {in_dir}")
@@ -63,9 +63,9 @@ def batch_index_files(
 
     def _index(path: str) -> None:
         try:
-            by_path[path] = indices_row(path, indices, **kwargs)
+            by_path[path] = _indices_row(path, indices, **kwargs)
         except Exception as e:
-            by_path[path] = failed_indices_row(path, e)
+            by_path[path] = _failed_indices_row(path, e)
             raise
 
     result = run_batch(
@@ -78,8 +78,20 @@ def batch_index_files(
     rows = [by_path[f] for f in files if f in by_path]
     result.metadata["rows"] = rows
     if output_dir is not None and rows:
-        result.output_files = [str(write_rows_csv(Path(output_dir) / "indices.csv", rows))]
+        result.output_files = [
+            str(write_rows_csv(Path(output_dir) / "indices.csv", rows, _columns(rows)))
+        ]
     return result
+
+
+def _columns(rows: list[dict[str, Any]]) -> list[str]:
+    """``filepath``, then index columns in first-seen order, then ``success``/``error``."""
+    bookkeeping = ("filepath", "success", "error")
+    values: list[str] = []
+    for row in rows:
+        values.extend(k for k in row if k not in bookkeeping and k not in values)
+    tail = ["success", "error"] if any("error" in row for row in rows) else ["success"]
+    return ["filepath", *values, *tail]
 
 
 __all__ = ["batch_index_files"]

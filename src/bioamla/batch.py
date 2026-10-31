@@ -213,25 +213,30 @@ def output_stems(files: list[str], root: str | Path) -> dict[str, Path]:
         except ValueError:
             rel[f] = Path(path.name)
 
+    # Compared case-insensitively: A.wav and a.mp3 would write to the same file on
+    # a case-insensitive filesystem (the macOS and Windows defaults).
+    def key(stem: Path) -> str:
+        return str(stem).casefold()
+
     plain = {f: r.parent / r.stem for f, r in rel.items()}
-    counts: dict[Path, int] = {}
+    counts: dict[str, int] = {}
     for stem in plain.values():
-        counts[stem] = counts.get(stem, 0) + 1
+        counts[key(stem)] = counts.get(key(stem), 0) + 1
 
     # Unique stems keep their plain name; colliding ones take their extension,
     # plus a counter if that name is taken too (a.wav + a.mp3 + a_wav.flac).
     stems: dict[str, Path] = {}
-    taken = {stem for stem in plain.values() if counts[stem] == 1}
+    taken = {key(stem) for stem in plain.values() if counts[key(stem)] == 1}
     for f, r in rel.items():
-        if counts[plain[f]] == 1:
+        if counts[key(plain[f])] == 1:
             stems[f] = plain[f]
             continue
         candidate = r.parent / f"{r.stem}_{r.suffix.lstrip('.')}"
         n = 2
-        while candidate in taken:
+        while key(candidate) in taken:
             candidate = r.parent / f"{r.stem}_{r.suffix.lstrip('.')}_{n}"
             n += 1
-        taken.add(candidate)
+        taken.add(key(candidate))
         stems[f] = candidate
     return stems
 

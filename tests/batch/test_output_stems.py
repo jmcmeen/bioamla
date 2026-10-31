@@ -44,3 +44,9 @@ def test_write_rows_csv_fixed_columns(tmp_path) -> None:
 
     out = write_rows_csv(tmp_path / "rows.csv", [{"b": 2, "a": 1}], ["a", "b"])
     assert out.read_text().splitlines() == ["a,b", "1,2"]
+
+
+def test_stems_differing_only_in_case_kept_apart(tmp_path) -> None:
+    files = [str(tmp_path / "A.WAV"), str(tmp_path / "a.mp3")]
+    stems = output_stems(files, tmp_path)
+    assert {str(s).casefold() for s in stems.values()} == {"a_wav", "a_mp3"}
