@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- `audio video -t trajectory`: on narrow frames (e.g. `--size 1080x1920`) the title no longer
+  overprints the time: it moves to the line below, and is shortened or left out when even that
+  is too narrow. The view is fitted to the 1-99th percentile of the path instead of the 2-98th,
+  so far less of a dense, loud passage runs off the frame.
+
 ## [0.3.4] - 2026-10-31
 
 ### Added
