@@ -29,6 +29,7 @@ from typing import Any
 
 import numpy as np
 
+from bioamla.common.config import config_dataclass
 from bioamla.exceptions import ModelError
 
 logger = logging.getLogger(__name__)
@@ -39,12 +40,12 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-@dataclass
+@config_dataclass
 class EmbeddingConfig:
     """Configuration for embedding extraction."""
 
     # Model settings
-    model_path: str = "MIT/ast-finetuned-audioset-10-10-0.4593"
+    model_path: str | Path = "MIT/ast-finetuned-audioset-10-10-0.4593"
     model_type: str = "ast"  # "ast"
     layer: str = "last_hidden_state"  # Layer to extract embeddings from
 

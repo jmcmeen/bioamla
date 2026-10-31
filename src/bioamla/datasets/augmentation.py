@@ -9,11 +9,12 @@ for fast startup.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from bioamla._extras import import_extra
+from bioamla.common.config import config_dataclass
+from bioamla.common.deprecation import deprecated_aliases
 from bioamla.exceptions import AugmentationError, NotFoundError
 
 if TYPE_CHECKING:
@@ -29,8 +30,8 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-@dataclass
-class AugmentationConfig:
+@config_dataclass
+class WaveformAugmentationConfig:
     """Configuration for the audio augmentation pipeline."""
 
     # Noise augmentation
@@ -86,7 +87,7 @@ class AugmentationConfig:
 # =============================================================================
 
 
-def create_augmentation_pipeline(config: AugmentationConfig) -> Any:
+def create_augmentation_pipeline(config: WaveformAugmentationConfig) -> Any:
     """Create an ``audiomentations`` Compose pipeline from a config.
 
     This is the single builder shared by both augmentation use cases: synthetic
@@ -234,7 +235,7 @@ def augment_audio(audio: np.ndarray, sample_rate: int, pipeline: Any) -> np.ndar
 def batch_augment(
     input_dir: str,
     output_dir: str,
-    config: AugmentationConfig,
+    config: WaveformAugmentationConfig,
     recursive: bool = True,
     verbose: bool = True,
     *,
@@ -346,3 +347,9 @@ def _load_waveform(path: str) -> tuple[np.ndarray, int]:
     else:
         audio = audio.squeeze()
     return audio, orig_sr
+
+
+# Renamed so it isn't confused with bioamla.ml's SpectrogramAugmentationConfig.
+__getattr__ = deprecated_aliases(
+    __name__, globals(), {"AugmentationConfig": "WaveformAugmentationConfig"}
+)

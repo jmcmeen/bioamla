@@ -20,25 +20,25 @@ pytest.importorskip("transformers")
 class TestValidateAugmentation:
     def test_inverted_range_raises(self) -> None:
         pytest.importorskip("audiomentations")
-        from bioamla.datasets.augmentation import AugmentationConfig
+        from bioamla.datasets.augmentation import WaveformAugmentationConfig
         from bioamla.ml.training import _validate_augmentation
 
-        cfg = AugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
+        cfg = WaveformAugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
         with pytest.raises(TrainingError):
             _validate_augmentation(cfg)
 
     def test_valid_ranges_pass(self) -> None:
-        from bioamla.datasets.augmentation import AugmentationConfig
+        from bioamla.datasets.augmentation import WaveformAugmentationConfig
         from bioamla.ml.training import _validate_augmentation
 
-        _validate_augmentation(AugmentationConfig())  # defaults are valid
+        _validate_augmentation(WaveformAugmentationConfig())  # defaults are valid
 
     def test_inverted_range_ignored_when_layer_disabled(self) -> None:
-        from bioamla.datasets.augmentation import AugmentationConfig
+        from bioamla.datasets.augmentation import WaveformAugmentationConfig
         from bioamla.ml.training import _validate_augmentation
 
         # add_noise is off, so its inverted SNR range is not a misconfiguration.
-        _validate_augmentation(AugmentationConfig(noise_min_snr=30.0, noise_max_snr=10.0))
+        _validate_augmentation(WaveformAugmentationConfig(noise_min_snr=30.0, noise_max_snr=10.0))
 
 
 class TestLoadCsvDataset:
@@ -563,10 +563,10 @@ def _real_dataset_dict():
 class TestTrainAst:
     def test_augmentation_validation_rejected(self) -> None:
         pytest.importorskip("audiomentations")
-        from bioamla.datasets.augmentation import AugmentationConfig
+        from bioamla.datasets.augmentation import WaveformAugmentationConfig
         from bioamla.ml.training import train_ast
 
-        bad = AugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
+        bad = WaveformAugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
         with pytest.raises(TrainingError):
             train_ast(train_dataset="owner/ds", augmentation=bad)
 

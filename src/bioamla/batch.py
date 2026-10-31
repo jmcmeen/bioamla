@@ -30,6 +30,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TypeVar
 
+from bioamla.common.config import config_dataclass
 from bioamla.exceptions import InvalidInputError, NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ I = TypeVar("I")  # noqa: E741 - item type
 # =============================================================================
 
 
-@dataclass
+@config_dataclass
 class BatchConfig:
     """Configuration for batch operations.
 
@@ -56,9 +57,9 @@ class BatchConfig:
     ``_skip_validation=True`` (useful for testing or advanced use cases).
     """
 
-    input_dir: str | None = None
-    input_file: str | None = None
-    output_dir: str = ""
+    input_dir: str | Path | None = None
+    input_file: str | Path | None = None
+    output_dir: str | Path = ""
     recursive: bool = True
     max_workers: int = 1
     continue_on_error: bool = True

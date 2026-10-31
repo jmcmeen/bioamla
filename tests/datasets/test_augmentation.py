@@ -11,7 +11,7 @@ import pytest
 import scipy.io.wavfile as wav
 
 from bioamla.datasets.augmentation import (
-    AugmentationConfig,
+    WaveformAugmentationConfig,
     augment_audio,
     batch_augment,
     create_augmentation_pipeline,
@@ -30,10 +30,10 @@ def _write_wav(path, sample_rate: int = 16000, duration: float = 0.5) -> None:
 
 class TestCreatePipeline:
     def test_no_transforms_returns_none(self) -> None:
-        assert create_augmentation_pipeline(AugmentationConfig()) is None
+        assert create_augmentation_pipeline(WaveformAugmentationConfig()) is None
 
     def test_all_transforms_enabled(self) -> None:
-        config = AugmentationConfig(
+        config = WaveformAugmentationConfig(
             add_noise=True,
             time_stretch=True,
             pitch_shift=True,
@@ -53,7 +53,7 @@ class TestDescribePipeline:
         assert describe_augmentation_pipeline(None) == []
 
     def test_one_line_per_transform_with_params(self) -> None:
-        config = AugmentationConfig(
+        config = WaveformAugmentationConfig(
             add_noise=True,
             noise_min_snr=5.0,
             noise_max_snr=25.0,
@@ -75,14 +75,14 @@ class TestDescribePipeline:
 
 class TestAugmentAudio:
     def test_applies_pipeline(self) -> None:
-        config = AugmentationConfig(gain=True, gain_probability=1.0)
+        config = WaveformAugmentationConfig(gain=True, gain_probability=1.0)
         pipeline = create_augmentation_pipeline(config)
         audio = np.sin(np.linspace(0, 10, 8000)).astype(np.float32)
         out = augment_audio(audio, 16000, pipeline)
         assert out.shape == audio.shape
 
     def test_casts_non_float32_and_downmixes(self) -> None:
-        config = AugmentationConfig(gain=True)
+        config = WaveformAugmentationConfig(gain=True)
         pipeline = create_augmentation_pipeline(config)
         # 2-D float64 input -> cast to float32 and averaged to mono.
         stereo = np.random.rand(2, 8000).astype(np.float64)
@@ -97,14 +97,14 @@ class TestBatchAugment:
             batch_augment(
                 str(tmp_path / "nope"),
                 str(tmp_path / "out"),
-                AugmentationConfig(gain=True),
+                WaveformAugmentationConfig(gain=True),
             )
 
     def test_no_augmentations_raises(self, tmp_path) -> None:
         in_dir = tmp_path / "in"
         in_dir.mkdir()
         with pytest.raises(AugmentationError, match="No augmentations configured"):
-            batch_augment(str(in_dir), str(tmp_path / "out"), AugmentationConfig())
+            batch_augment(str(in_dir), str(tmp_path / "out"), WaveformAugmentationConfig())
 
     def test_empty_directory_returns_zero_stats(self, tmp_path) -> None:
         in_dir = tmp_path / "in"
@@ -112,7 +112,7 @@ class TestBatchAugment:
         stats = batch_augment(
             str(in_dir),
             str(tmp_path / "out"),
-            AugmentationConfig(gain=True),
+            WaveformAugmentationConfig(gain=True),
             verbose=True,
         )
         assert stats["files_processed"] == 0
@@ -128,7 +128,7 @@ class TestBatchAugment:
         stats = batch_augment(
             str(in_dir),
             str(out_dir),
-            AugmentationConfig(gain=True, sample_rate=16000, multiply=1),
+            WaveformAugmentationConfig(gain=True, sample_rate=16000, multiply=1),
             verbose=False,
         )
         assert stats["files_processed"] == 1
@@ -146,7 +146,7 @@ class TestBatchAugment:
         stats = batch_augment(
             str(in_dir),
             str(tmp_path / "out"),
-            AugmentationConfig(gain=True, sample_rate=16000, multiply=2),
+            WaveformAugmentationConfig(gain=True, sample_rate=16000, multiply=2),
             verbose=False,
             max_workers=3,
             on_progress=lambda done, total: calls.append((done, total)),
@@ -166,7 +166,7 @@ class TestBatchAugment:
         stats = batch_augment(
             str(in_dir),
             str(out_dir),
-            AugmentationConfig(gain=True, sample_rate=16000, multiply=2),
+            WaveformAugmentationConfig(gain=True, sample_rate=16000, multiply=2),
             verbose=True,
         )
         assert stats["files_processed"] == 1
@@ -184,7 +184,7 @@ class TestBatchAugment:
         stats = batch_augment(
             str(in_dir),
             str(out_dir),
-            AugmentationConfig(gain=True, sample_rate=16000),
+            WaveformAugmentationConfig(gain=True, sample_rate=16000),
             verbose=True,
         )
         assert stats["files_failed"] == 1

@@ -64,6 +64,14 @@ class ConfigError(BioamlaError):
     """Configuration file parse or validation failure."""
 
 
+class ConfigValidationError(ConfigError, InvalidInputError):
+    """A config value has the wrong type or is out of range, or a field is unknown.
+
+    Also an :class:`InvalidInputError`, so code that catches bad arguments keeps
+    working when a function passes them on to a validated config.
+    """
+
+
 class ProcessingError(BioamlaError):
     """A pipeline/processing failure that doesn't fit a more specific class."""
 
@@ -118,6 +126,7 @@ __all__ = [
     "TrainingCancelled",
     "CatalogError",
     "ConfigError",
+    "ConfigValidationError",
     "ProcessingError",
     "SpeciesError",
     "ClusteringError",

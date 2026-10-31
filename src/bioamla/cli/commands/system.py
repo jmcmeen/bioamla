@@ -1,4 +1,4 @@
-"""System information commands (version, devices, dependencies)."""
+"""System information commands (version, devices, dependencies, config schemas)."""
 
 import click
 
@@ -7,7 +7,7 @@ from bioamla.exceptions import BioamlaError
 
 @click.group()
 def system() -> None:
-    """System information commands (version, devices, dependencies)."""
+    """System information commands (version, devices, dependencies, config schemas)."""
     pass
 
 
@@ -127,7 +127,7 @@ def system_deps(do_install: bool, yes: bool) -> None:
         console.print("[bold]To install all missing dependencies:[/bold]")
         console.print(f"  {report.install_command}")
         console.print()
-        console.print("[dim]Or run: bioamla config deps --install[/dim]")
+        console.print("[dim]Or run: bioamla system deps --install[/dim]")
 
     if do_install:
         console.print()
@@ -151,3 +151,57 @@ def system_deps(do_install: bool, yes: bool) -> None:
                 console.print(f"[green]✓[/green] {dep.name}")
             else:
                 console.print(f"[red]✗[/red] {dep.name}")
+
+
+@system.command("schema")
+@click.argument("name", required=False)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default=None,
+    help="Write to this file (with --all, this directory) instead of stdout",
+)
+@click.option("--all", "export_all", is_flag=True, help="Export every config into --output")
+def system_schema(name: str | None, output: str | None, export_all: bool) -> None:
+    """Print the JSON Schema of a config, or list the configs.
+
+    With no NAME, lists the configs that have a schema. Point an editor's TOML
+    or JSON schema support at the output to get completion and validation.
+    """
+    import json
+    from pathlib import Path
+
+    from bioamla.common.config import CONFIG_CLASSES, config_schema
+    from bioamla.exceptions import DependencyError
+
+    if export_all:
+        if name or not output:
+            raise click.UsageError("--all takes no NAME and needs --output DIRECTORY.")
+        out_dir = Path(output)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for config_name in CONFIG_CLASSES:
+            try:
+                schema = config_schema(config_name)
+            except DependencyError as e:
+                click.echo(f"Skipped {config_name}: {e}", err=True)
+                continue
+            path = out_dir / f"{config_name}.schema.json"
+            path.write_text(json.dumps(schema, indent=2) + "\n")
+            click.echo(f"Wrote {path}")
+        return
+
+    if not name:
+        for config_name, target in CONFIG_CLASSES.items():
+            click.echo(f"{config_name:<26} {target.replace(':', '.')}")
+        return
+
+    try:
+        text = json.dumps(config_schema(name), indent=2) + "\n"
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    if output:
+        Path(output).write_text(text)
+        click.echo(f"Wrote {output}")
+    else:
+        click.echo(text, nl=False)

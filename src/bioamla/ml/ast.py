@@ -18,11 +18,11 @@ Performance features:
 - ``torch.compile()`` for optimized model execution
 """
 
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from bioamla.common.config import config_dataclass
 from bioamla.exceptions import ModelError
 
 if TYPE_CHECKING:
@@ -55,7 +55,7 @@ def _torchaudio_helpers():
     return load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor
 
 
-@dataclass
+@config_dataclass
 class InferenceConfig:
     """Configuration for optimized batch inference."""
 

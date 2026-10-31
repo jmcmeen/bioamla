@@ -535,17 +535,17 @@ class TestDatasetStats:
 
 class TestAugmentationConfigImport:
     def test_config_importable_on_slim_install(self) -> None:
-        # AugmentationConfig must import without audiomentations/torch installed.
-        from bioamla.datasets import AugmentationConfig
+        # WaveformAugmentationConfig must import without audiomentations/torch installed.
+        from bioamla.datasets import WaveformAugmentationConfig
 
-        cfg = AugmentationConfig(add_noise=True)
+        cfg = WaveformAugmentationConfig(add_noise=True)
         assert cfg.add_noise is True
         assert cfg.sample_rate == 16000
 
     def test_new_config_defaults_preserve_dataset_behavior(self) -> None:
-        from bioamla.datasets import AugmentationConfig
+        from bioamla.datasets import WaveformAugmentationConfig
 
-        cfg = AugmentationConfig()
+        cfg = WaveformAugmentationConfig()
         # Pipeline-level defaults keep the synthetic-dataset path unchanged.
         assert cfg.pipeline_probability == 1.0
         assert cfg.shuffle is False
@@ -556,15 +556,15 @@ class TestAugmentationConfigImport:
 class TestCreateAugmentationPipeline:
     def test_returns_none_when_nothing_enabled(self) -> None:
         pytest.importorskip("audiomentations")
-        from bioamla.datasets import AugmentationConfig, create_augmentation_pipeline
+        from bioamla.datasets import WaveformAugmentationConfig, create_augmentation_pipeline
 
-        assert create_augmentation_pipeline(AugmentationConfig()) is None
+        assert create_augmentation_pipeline(WaveformAugmentationConfig()) is None
 
     def test_dataset_style_pipeline(self) -> None:
         pytest.importorskip("audiomentations")
-        from bioamla.datasets import AugmentationConfig, create_augmentation_pipeline
+        from bioamla.datasets import WaveformAugmentationConfig, create_augmentation_pipeline
 
-        cfg = AugmentationConfig(add_noise=True, pitch_shift=True)
+        cfg = WaveformAugmentationConfig(add_noise=True, pitch_shift=True)
         pipeline = create_augmentation_pipeline(cfg)
         assert pipeline is not None
         assert len(pipeline.transforms) == 2
@@ -577,12 +577,12 @@ class TestCreateAugmentationPipeline:
         import numpy as np
 
         from bioamla.datasets import (
-            AugmentationConfig,
+            WaveformAugmentationConfig,
             augment_audio,
             create_augmentation_pipeline,
         )
 
-        cfg = AugmentationConfig(
+        cfg = WaveformAugmentationConfig(
             add_noise=True,
             time_stretch=True,
             pitch_shift=True,

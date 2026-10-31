@@ -6,11 +6,35 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Config objects are validated. `BatchConfig`, `ReductionConfig`, `ClusteringConfig`,
+  `ModelConfig`, `InferenceConfig`, `EmbeddingConfig` and the augmentation configs check their
+  fields on construction and raise `ConfigValidationError` (a `ConfigError` and an
+  `InvalidInputError`) naming each bad or unknown field. They remain dataclasses: positional
+  arguments, `asdict` and `replace` work as before. pydantic is a new base dependency; it loads
+  when a config is first used, so `import bioamla` and the CLI start as fast as before.
+- `bioamla models ast train --config` validates the whole file before training. An unknown
+  section or key, or a value of the wrong type or out of range, is reported with its
+  `section.key` path instead of being ignored or failing mid-run.
+- JSON Schema for every config: `bioamla system schema [NAME]`, `config_schema()` and
+  `validate_config()` in `bioamla.common.config`. The schemas are also published under
+  `docs/schemas/`, so editors can complete and check a training config file.
+
+### Deprecated
+
+- `bioamla.datasets.AugmentationConfig` is renamed `WaveformAugmentationConfig`, and
+  `bioamla.ml.AugmentationConfig` is renamed `SpectrogramAugmentationConfig`. The two were
+  unrelated classes with the same name. The old names still work and emit a
+  `DeprecationWarning`; they will be removed in a future minor release.
+
 ### Fixed
 
 - `bioamla --help` (and every command) starts in about 50 ms instead of about 400 ms. The
   `annotation` and `batch` command modules imported the datasets package, numpy and the batch
   engine at load time; they now import them when a command runs.
+- `bioamla system deps` suggested `bioamla config deps --install`, a command that doesn't exist;
+  it now says `bioamla system deps --install`.
 
 ## [0.3.0] - 2026-10-31
 

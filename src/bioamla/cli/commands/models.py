@@ -68,15 +68,19 @@ def _apply_train_config(ctx: click.Context, config_path: str | None, values: dic
     if not config_path:
         return values
 
+    from dataclasses import asdict
+
     from click.core import ParameterSource
 
-    from bioamla.common.config import load_toml
+    from bioamla.common.config import load_toml, validate_config
+    from bioamla.ml.train_config import AstTrainConfigFile
 
-    cfg = load_toml(config_path)
+    # Validate the whole file first, so a typo or a wrong type fails before training.
+    cfg = asdict(validate_config(AstTrainConfigFile, load_toml(config_path), source=config_path))
     resolved = dict(values)
     for name, (section, key) in _TRAIN_CONFIG_MAP.items():
         from_default = ctx.get_parameter_source(name) == ParameterSource.DEFAULT
-        cfg_value = cfg.get(section, {}).get(key)
+        cfg_value = cfg[section][key]
         if from_default and cfg_value is not None:
             resolved[name] = cfg_value
     return resolved
@@ -461,7 +465,7 @@ def ast_train(
     """
     from bioamla.cli.console import print_kv, print_success
     from bioamla.cli.logging_setup import configure_cli_logging
-    from bioamla.datasets.augmentation import AugmentationConfig
+    from bioamla.datasets.augmentation import WaveformAugmentationConfig
     from bioamla.ml import train_ast
 
     # Surface the library's INFO progress messages on the console.
@@ -538,7 +542,7 @@ def ast_train(
     )
     augment_multiplier = overrides["augment_multiplier"]
     aug_config = (
-        AugmentationConfig(
+        WaveformAugmentationConfig(
             add_noise=overrides["add_noise"],
             noise_min_snr=overrides["min_snr_db"],
             noise_max_snr=overrides["max_snr_db"],

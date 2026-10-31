@@ -1,0 +1,80 @@
+{
+  "additionalProperties": false,
+  "description": "Configuration for clustering.",
+  "properties": {
+    "method": {
+      "default": "hdbscan",
+      "enum": [
+        "hdbscan",
+        "kmeans",
+        "dbscan",
+        "agglomerative"
+      ],
+      "title": "Method",
+      "type": "string"
+    },
+    "min_cluster_size": {
+      "default": 5,
+      "title": "Min Cluster Size",
+      "type": "integer"
+    },
+    "min_samples": {
+      "default": 3,
+      "title": "Min Samples",
+      "type": "integer"
+    },
+    "cluster_selection_epsilon": {
+      "default": 0.0,
+      "title": "Cluster Selection Epsilon",
+      "type": "number"
+    },
+    "cluster_selection_method": {
+      "default": "eom",
+      "enum": [
+        "eom",
+        "leaf"
+      ],
+      "title": "Cluster Selection Method",
+      "type": "string"
+    },
+    "n_clusters": {
+      "default": 10,
+      "title": "N Clusters",
+      "type": "integer"
+    },
+    "n_init": {
+      "default": 10,
+      "title": "N Init",
+      "type": "integer"
+    },
+    "max_iter": {
+      "default": 300,
+      "title": "Max Iter",
+      "type": "integer"
+    },
+    "eps": {
+      "default": 0.5,
+      "title": "Eps",
+      "type": "number"
+    },
+    "linkage": {
+      "default": "ward",
+      "title": "Linkage",
+      "type": "string"
+    },
+    "distance_threshold": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Distance Threshold"
+    }
+  },
+  "title": "ClusteringConfig",
+  "type": "object"
+}

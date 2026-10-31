@@ -1,0 +1,148 @@
+{
+  "additionalProperties": false,
+  "description": "Configuration for the audio augmentation pipeline.",
+  "properties": {
+    "add_noise": {
+      "default": false,
+      "title": "Add Noise",
+      "type": "boolean"
+    },
+    "noise_min_snr": {
+      "default": 3.0,
+      "title": "Noise Min Snr",
+      "type": "number"
+    },
+    "noise_max_snr": {
+      "default": 30.0,
+      "title": "Noise Max Snr",
+      "type": "number"
+    },
+    "noise_probability": {
+      "default": 1.0,
+      "title": "Noise Probability",
+      "type": "number"
+    },
+    "time_stretch": {
+      "default": false,
+      "title": "Time Stretch",
+      "type": "boolean"
+    },
+    "time_stretch_min": {
+      "default": 0.8,
+      "title": "Time Stretch Min",
+      "type": "number"
+    },
+    "time_stretch_max": {
+      "default": 1.2,
+      "title": "Time Stretch Max",
+      "type": "number"
+    },
+    "time_stretch_probability": {
+      "default": 1.0,
+      "title": "Time Stretch Probability",
+      "type": "number"
+    },
+    "pitch_shift": {
+      "default": false,
+      "title": "Pitch Shift",
+      "type": "boolean"
+    },
+    "pitch_shift_min": {
+      "default": -4.0,
+      "title": "Pitch Shift Min",
+      "type": "number"
+    },
+    "pitch_shift_max": {
+      "default": 4.0,
+      "title": "Pitch Shift Max",
+      "type": "number"
+    },
+    "pitch_shift_probability": {
+      "default": 1.0,
+      "title": "Pitch Shift Probability",
+      "type": "number"
+    },
+    "gain": {
+      "default": false,
+      "title": "Gain",
+      "type": "boolean"
+    },
+    "gain_min_db": {
+      "default": -12.0,
+      "title": "Gain Min Db",
+      "type": "number"
+    },
+    "gain_max_db": {
+      "default": 12.0,
+      "title": "Gain Max Db",
+      "type": "number"
+    },
+    "gain_probability": {
+      "default": 1.0,
+      "title": "Gain Probability",
+      "type": "number"
+    },
+    "gain_transition": {
+      "default": false,
+      "title": "Gain Transition",
+      "type": "boolean"
+    },
+    "gain_transition_min_duration": {
+      "default": 0.01,
+      "title": "Gain Transition Min Duration",
+      "type": "number"
+    },
+    "gain_transition_max_duration": {
+      "default": 0.3,
+      "title": "Gain Transition Max Duration",
+      "type": "number"
+    },
+    "gain_transition_probability": {
+      "default": 0.5,
+      "title": "Gain Transition Probability",
+      "type": "number"
+    },
+    "clipping_distortion": {
+      "default": false,
+      "title": "Clipping Distortion",
+      "type": "boolean"
+    },
+    "clipping_min_percentile": {
+      "default": 0,
+      "title": "Clipping Min Percentile",
+      "type": "integer"
+    },
+    "clipping_max_percentile": {
+      "default": 30,
+      "title": "Clipping Max Percentile",
+      "type": "integer"
+    },
+    "clipping_probability": {
+      "default": 0.5,
+      "title": "Clipping Probability",
+      "type": "number"
+    },
+    "pipeline_probability": {
+      "default": 1.0,
+      "title": "Pipeline Probability",
+      "type": "number"
+    },
+    "shuffle": {
+      "default": false,
+      "title": "Shuffle",
+      "type": "boolean"
+    },
+    "sample_rate": {
+      "default": 16000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "multiply": {
+      "default": 1,
+      "title": "Multiply",
+      "type": "integer"
+    }
+  },
+  "title": "WaveformAugmentationConfig",
+  "type": "object"
+}

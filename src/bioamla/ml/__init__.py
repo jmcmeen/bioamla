@@ -20,6 +20,7 @@ Example:
 # device + base are the preserved foundations; ast / ast_model / ast_service /
 # inference / embedding / batch are the folded ml-domain modules.
 from bioamla._extras import require_extra
+from bioamla.common.deprecation import deprecated_aliases
 
 # Fail early, with the install command, if the [ml] extra is missing.
 require_extra("ml", "bioamla.ml")
@@ -92,7 +93,7 @@ from bioamla.ml.inference import (
 )
 
 # --- Preprocessing / augmentation --------------------------------------------
-from bioamla.ml.preprocessing import AugmentationConfig, BioamlaPreprocessor
+from bioamla.ml.preprocessing import BioamlaPreprocessor, SpectrogramAugmentationConfig
 
 # --- Training -----------------------------------------------------------------
 from bioamla.ml.train_config import write_train_config
@@ -157,6 +158,10 @@ __all__ = [
     "batch_predict_segments",
     "batch_embed_files",
     # Preprocessing / augmentation
-    "AugmentationConfig",
+    "SpectrogramAugmentationConfig",
     "BioamlaPreprocessor",
 ]
+
+__getattr__ = deprecated_aliases(
+    __name__, globals(), {"AugmentationConfig": "SpectrogramAugmentationConfig"}
+)

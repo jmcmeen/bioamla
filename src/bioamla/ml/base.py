@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 
+from bioamla.common.config import config_dataclass
 from bioamla.exceptions import InvalidInputError, ModelError
 
 if TYPE_CHECKING:
@@ -93,7 +94,7 @@ class BatchPredictionResult:
         }
 
 
-@dataclass
+@config_dataclass
 class ModelConfig:
     """Base configuration for all models."""
 

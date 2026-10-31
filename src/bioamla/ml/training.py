@@ -20,7 +20,7 @@ from bioamla.ml.ast_service import TrainProgress, TrainResult
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from bioamla.datasets.augmentation import AugmentationConfig
+    from bioamla.datasets.augmentation import WaveformAugmentationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ def _dataframe_to_ast_dataset(df, label_column, sampling_rate=SAMPLING_RATE):
     return DatasetDict(splits), True
 
 
-def _validate_augmentation(aug: AugmentationConfig) -> None:
+def _validate_augmentation(aug: WaveformAugmentationConfig) -> None:
     """Raise :class:`TrainingError` on inverted min/max ranges for *enabled* layers.
 
     Ranges for disabled transforms are ignored — a layer that isn't added can't
@@ -383,7 +383,7 @@ def train_ast(
     mlflow_tracking_uri: str | None = None,
     mlflow_experiment_name: str | None = None,
     mlflow_run_name: str | None = None,
-    augmentation: AugmentationConfig | None = None,
+    augmentation: WaveformAugmentationConfig | None = None,
     augment_multiplier: int = 1,
     on_progress: Callable[[TrainProgress], None] | None = None,
     should_stop: Callable[[], bool] | None = None,

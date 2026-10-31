@@ -18,6 +18,7 @@ HEAVY_MODULES = (
     "scipy",
     "soundfile",
     "pydub",
+    "pydantic",  # validated configs load it; startup must not
     "bioamla.audio",
     "bioamla.datasets",
     "bioamla.detect",
@@ -37,13 +38,14 @@ def _loaded_after(code: str) -> set[str]:
 @pytest.mark.parametrize(
     "code",
     [
+        "import bioamla",
         "import bioamla.cli.cli",
         # Build the whole command tree, as `bioamla --help` does.
         "from click.testing import CliRunner\n"
         "from bioamla.cli.cli import cli\n"
         "assert CliRunner().invoke(cli, ['--help']).exit_code == 0",
     ],
-    ids=["import", "help"],
+    ids=["import-bioamla", "import-cli", "help"],
 )
 def test_cli_startup_skips_heavy_imports(code: str) -> None:
     loaded = _loaded_after(code)

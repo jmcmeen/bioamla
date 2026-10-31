@@ -1,0 +1,58 @@
+{
+  "additionalProperties": false,
+  "description": "Configuration for dimensionality reduction.",
+  "properties": {
+    "method": {
+      "default": "umap",
+      "enum": [
+        "umap",
+        "tsne",
+        "pca"
+      ],
+      "title": "Method",
+      "type": "string"
+    },
+    "n_components": {
+      "default": 2,
+      "title": "N Components",
+      "type": "integer"
+    },
+    "n_neighbors": {
+      "default": 15,
+      "title": "N Neighbors",
+      "type": "integer"
+    },
+    "min_dist": {
+      "default": 0.1,
+      "title": "Min Dist",
+      "type": "number"
+    },
+    "metric": {
+      "default": "euclidean",
+      "title": "Metric",
+      "type": "string"
+    },
+    "perplexity": {
+      "default": 30.0,
+      "title": "Perplexity",
+      "type": "number"
+    },
+    "learning_rate": {
+      "default": 200.0,
+      "title": "Learning Rate",
+      "type": "number"
+    },
+    "max_iter": {
+      "default": 1000,
+      "title": "Max Iter",
+      "type": "integer"
+    },
+    "whiten": {
+      "default": false,
+      "title": "Whiten",
+      "type": "boolean"
+    }
+  },
+  "title": "ReductionConfig",
+  "type": "object"
+}

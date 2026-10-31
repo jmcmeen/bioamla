@@ -25,8 +25,6 @@ from importlib.metadata import PackageNotFoundError, version
 
 from dotenv import load_dotenv
 
-from bioamla.batch import BatchConfig, BatchResult, SegmentInfo
-
 # Exception hierarchy base — catch the whole family with a single except.
 from bioamla.exceptions import BioamlaError
 
@@ -51,16 +49,25 @@ _LAZY_DOMAINS = frozenset(
 )
 
 
-def __getattr__(name: str):  # noqa: ANN202 - returns a submodule
+# The batch types are lazy too: BatchConfig is a validated config, and importing
+# pydantic for it would slow every `import bioamla` and CLI start.
+_LAZY_BATCH_TYPES = frozenset({"BatchConfig", "BatchResult", "SegmentInfo"})
+
+
+def __getattr__(name: str):  # noqa: ANN202 - returns a submodule or class
     if name in _LAZY_DOMAINS:
         module = importlib.import_module(f"bioamla.{name}")
         globals()[name] = module  # cache so subsequent access skips __getattr__
         return module
+    if name in _LAZY_BATCH_TYPES:
+        value = getattr(importlib.import_module("bioamla.batch"), name)
+        globals()[name] = value
+        return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def __dir__():  # noqa: ANN202
-    return sorted([*globals().keys(), *_LAZY_DOMAINS])
+    return sorted({*globals().keys(), *_LAZY_DOMAINS, *_LAZY_BATCH_TYPES})
 
 
 __all__ = [

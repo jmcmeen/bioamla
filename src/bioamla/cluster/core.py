@@ -28,7 +28,7 @@ import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -37,6 +37,7 @@ from bioamla.cluster.models import (
     ClusteringSummary,
     NoveltyDetectionSummary,
 )
+from bioamla.common.config import config_dataclass
 from bioamla.exceptions import ClusteringError, DependencyError, InvalidInputError
 
 logger = logging.getLogger(__name__)
@@ -47,11 +48,11 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-@dataclass
+@config_dataclass
 class ReductionConfig:
     """Configuration for dimensionality reduction."""
 
-    method: str = "umap"  # "umap", "tsne", "pca"
+    method: Literal["umap", "tsne", "pca"] = "umap"
     n_components: int = 2
 
     # UMAP parameters
@@ -198,17 +199,17 @@ class IncrementalReducer:
 # =============================================================================
 
 
-@dataclass
+@config_dataclass
 class ClusteringConfig:
     """Configuration for clustering."""
 
-    method: str = "hdbscan"  # "hdbscan", "kmeans", "dbscan", "agglomerative"
+    method: Literal["hdbscan", "kmeans", "dbscan", "agglomerative"] = "hdbscan"
 
     # HDBSCAN parameters
     min_cluster_size: int = 5
     min_samples: int = 3
     cluster_selection_epsilon: float = 0.0
-    cluster_selection_method: str = "eom"  # "eom" or "leaf"
+    cluster_selection_method: Literal["eom", "leaf"] = "eom"
 
     # K-means parameters
     n_clusters: int = 10
