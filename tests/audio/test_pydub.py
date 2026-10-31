@@ -121,6 +121,16 @@ class TestLoadAudio:
 
 
 class TestSaveAudio:
+    def test_save_closes_the_output_file(self, tmp_path) -> None:
+        import gc
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", ResourceWarning)
+            _pydub.save_audio(str(tmp_path / "out.wav"), np.zeros(160, dtype=np.float32), 16000)
+            gc.collect()
+        assert not [w for w in caught if issubclass(w.category, ResourceWarning)]
+
     def test_save_wav(self, tmp_path) -> None:
         seg = MagicMock()
         with patch.object(_pydub, "_numpy_to_audiosegment", return_value=seg):

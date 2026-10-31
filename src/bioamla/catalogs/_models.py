@@ -377,10 +377,10 @@ class MLRecording(ToDictMixin):
         )
 
     def get_download_url(self) -> str:
-        """Get the download URL for this recording."""
+        """Get the download URL for this recording, or ``""`` if it has none."""
         if self.download_url:
             return self.download_url
-        return f"{ML_ASSET_URL}/{self.asset_id}"
+        return f"{ML_ASSET_URL}/{self.asset_id}" if self.asset_id else ""
 
 
 @dataclass

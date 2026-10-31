@@ -102,6 +102,9 @@ class TestMLRecording:
         )
         assert rec.get_download_url() == "https://example.com/a.mp3"
 
+    def test_get_download_url_empty_without_asset_id(self) -> None:
+        assert MLRecording.from_api_response({}).get_download_url() == ""
+
     def test_rating_handles_none(self) -> None:
         rec = MLRecording.from_api_response({"assetId": "1", "rating": None})
         assert rec.rating == 0
