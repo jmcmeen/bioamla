@@ -16,7 +16,7 @@ from bioamla.audio.torchaudio import (  # noqa: E402
     resample_waveform_tensor,
     split_waveform_tensor,
 )
-from bioamla.exceptions import AudioLoadError  # noqa: E402
+from bioamla.exceptions import AudioLoadError, DependencyError  # noqa: E402
 
 
 class TestSplitWaveformTensor:
@@ -141,3 +141,12 @@ class TestMockedTorchaudio:
         with patch("bioamla.audio.torchaudio._import_torchaudio", return_value=fake_ta):
             with pytest.raises(AudioLoadError):
                 load_audio_from_bytes(b"bad")
+
+
+class TestImportHelpers:
+    def test_broken_torchaudio_raises_dependency_error(self) -> None:
+        from bioamla.audio import torchaudio as backend
+
+        with patch.dict("sys.modules", {"torchaudio": None}):
+            with pytest.raises(DependencyError, match="torchaudio"):
+                backend._import_torchaudio()

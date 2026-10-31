@@ -148,6 +148,12 @@ class TestSaveAudio:
             with pytest.raises(AudioSaveError, match="Failed to save"):
                 _pydub.save_audio(str(tmp_path / "out.wav"), np.zeros(10, dtype=np.float32), 16000)
 
+    def test_save_unwritable_parent_wrapped(self, tmp_path) -> None:
+        blocker = tmp_path / "file"
+        blocker.write_text("not a directory")
+        with pytest.raises(AudioSaveError, match="Failed to save"):
+            _pydub.save_audio(str(blocker / "out.wav"), np.zeros(10, dtype=np.float32), 16000)
+
 
 class TestGetMetadataFfprobe:
     def _ffprobe_json(self) -> str:

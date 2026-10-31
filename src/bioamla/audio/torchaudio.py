@@ -19,22 +19,36 @@ import numpy as np
 
 from bioamla.common.constants import DefaultConfig
 from bioamla.common.files import get_files_by_extension
-from bioamla.exceptions import AudioLoadError
+from bioamla.exceptions import AudioLoadError, DependencyError
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     import torch
 
 
 def _import_torchaudio() -> Any:
-    """Import and return the ``torchaudio`` module."""
-    import torchaudio
+    """Import and return the ``torchaudio`` module.
+
+    Raises:
+        DependencyError: If torchaudio (or a library it loads) can't be imported.
+    """
+    try:
+        import torchaudio
+    except (ImportError, OSError) as e:
+        raise DependencyError(f"torchaudio could not be imported: {e}") from e
 
     return torchaudio
 
 
 def _import_torch() -> Any:
-    """Import and return the ``torch`` module."""
-    import torch
+    """Import and return the ``torch`` module.
+
+    Raises:
+        DependencyError: If torch (or a library it loads) can't be imported.
+    """
+    try:
+        import torch
+    except (ImportError, OSError) as e:
+        raise DependencyError(f"torch could not be imported: {e}") from e
 
     return torch
 

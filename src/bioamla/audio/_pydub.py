@@ -204,7 +204,6 @@ def save_audio(
         AudioSaveError: If file cannot be saved.
     """
     path = Path(filepath)
-    path.parent.mkdir(parents=True, exist_ok=True)
 
     format_to_use = format
     if format_to_use is None:
@@ -219,6 +218,7 @@ def save_audio(
         format_to_use = format_map.get(ext, "wav")
 
     try:
+        path.parent.mkdir(parents=True, exist_ok=True)
         channels = 1 if audio.ndim == 1 else audio.shape[1]
         segment = _numpy_to_audiosegment(audio, sample_rate, channels)
         segment.export(str(path), format=format_to_use)
