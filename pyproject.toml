@@ -108,6 +108,7 @@ dev = [
   "mkdocs-material>=9.5",
   "mkdocstrings[python]>=0.26",
   "mkdocs-click>=0.8",
+  "pymdown-extensions>=11.0.1,<12",  # 11.0.1 fixes advisories; 12 breaks mkdocstrings highlighting
 ]
 
 [project.urls]
