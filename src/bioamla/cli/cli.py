@@ -23,6 +23,7 @@ from .commands import (
     models,
     system,
     util,
+    workspace,
 )
 
 _BANNER = r"""
@@ -174,6 +175,7 @@ cli.add_command(indices)
 cli.add_command(models)
 cli.add_command(system)
 cli.add_command(util)
+cli.add_command(workspace)
 
 
 def main() -> None:

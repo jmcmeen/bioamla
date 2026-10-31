@@ -263,3 +263,43 @@ def test_concurrent_links_are_all_kept(tmp_path) -> None:
     with multiprocessing.get_context("spawn").Pool(8) as pool:
         pool.map(_link_many, jobs)
     assert len(ws.artifacts()) == 80
+
+
+class TestBatches:
+    def test_link_many_is_all_or_nothing(self, ws, tmp_path) -> None:
+        (tmp_path / "a.wav").write_bytes(b"RIFF")
+        with pytest.raises(NotFoundError):
+            ws.link_many([tmp_path / "a.wav", tmp_path / "missing.wav"])
+        assert ws.artifacts() == []
+
+    def test_link_many_dedupes(self, ws, tmp_path) -> None:
+        (tmp_path / "a.wav").write_bytes(b"RIFF")
+        first, second = ws.link_many([tmp_path / "a.wav", tmp_path / "a.wav"])
+        assert first.id == second.id and len(ws.artifacts()) == 1
+
+    def test_import_many_failure_keeps_no_copies(self, ws, tmp_path, monkeypatch) -> None:
+        for name in ("a.wav", "b.wav"):
+            (tmp_path / name).write_bytes(b"RIFF")
+        real_copy = shutil.copy2
+        calls = []
+
+        def flaky(src, dst, *a, **k):
+            calls.append(src)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            return real_copy(src, dst, *a, **k)
+
+        monkeypatch.setattr(shutil, "copy2", flaky)
+        with pytest.raises(OSError):
+            ws.import_many([tmp_path / "a.wav", tmp_path / "b.wav"])
+        assert ws.artifacts() == [] and not any(ws.imported_dir.iterdir())
+
+
+def test_symlinked_root_still_stores_relative(tmp_path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(real)
+    ws = create_workspace(alias / "survey")
+    (real / "survey" / "a.wav").write_bytes(b"RIFF")
+    assert ws.link(real / "survey" / "a.wav").path == "a.wav"

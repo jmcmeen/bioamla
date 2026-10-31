@@ -33,7 +33,7 @@ import os
 import shutil
 import sys
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -252,11 +252,19 @@ class Workspace:
         raise NotFoundError(f"No artifact {artifact_id!r} in workspace {self.name!r}")
 
     def _stored_link_path(self, path: Path) -> str:
+        """Relative to the root if the path is inside the workspace (also when one
+        of them is reached through a symlink, e.g. /var vs /private/var on macOS);
+        otherwise absolute, keeping symlinks as given."""
         absolute = Path(os.path.abspath(path))
-        try:
-            return absolute.relative_to(os.path.abspath(self.root)).as_posix()
-        except ValueError:
-            return str(absolute)
+        for candidate, root in (
+            (absolute, Path(os.path.abspath(self.root))),
+            (Path(os.path.realpath(path)), Path(os.path.realpath(self.root))),
+        ):
+            try:
+                return candidate.relative_to(root).as_posix()
+            except ValueError:
+                continue
+        return str(absolute)
 
     def link(self, path: str | Path, kind: str | None = None, name: str = "") -> Artifact:
         """Point the workspace at ``path`` without copying it.
@@ -267,17 +275,34 @@ class Workspace:
             NotFoundError: If ``path`` does not exist.
             InvalidInputError: If ``kind`` is not a known kind.
         """
-        path = require_exists(path)
-        kind = self._check_kind(kind or _guess_kind(path))
-        stored = self._stored_link_path(path)
+        return self.link_many([path], kind=kind, name=name)[0]
+
+    def link_many(
+        self, paths: Iterable[str | Path], kind: str | None = None, name: str = ""
+    ) -> list[Artifact]:
+        """:meth:`link` for several paths at once: all are checked first, then
+        recorded in one write, so either every path is linked or none is.
+
+        Raises:
+            NotFoundError: If any path does not exist (nothing is linked).
+            InvalidInputError: If ``kind`` is not a known kind.
+        """
+        checked = [require_exists(p) for p in paths]
+        kinds = [self._check_kind(kind or _guess_kind(p)) for p in checked]
+        stored = [self._stored_link_path(p) for p in checked]
+        result: list[Artifact] = []
         with self._locked():
             artifacts = self._load_artifacts()
-            for existing in artifacts:
-                if existing.mode == "linked" and existing.path == stored:
-                    return existing
-            artifact = Artifact(kind=kind, path=stored, mode="linked", name=name)
-            self._save_artifacts([*artifacts, artifact])
-        return artifact
+            by_path = {a.path: a for a in artifacts if a.mode == "linked"}
+            for path_kind, path_stored in zip(kinds, stored, strict=True):
+                existing = by_path.get(path_stored)
+                if existing is None:
+                    existing = Artifact(kind=path_kind, path=path_stored, mode="linked", name=name)
+                    artifacts.append(existing)
+                    by_path[path_stored] = existing
+                result.append(existing)
+            self._save_artifacts(artifacts)
+        return result
 
     def import_copy(self, path: str | Path, kind: str | None = None, name: str = "") -> Artifact:
         """Copy ``path`` (a file or folder) into ``.bioamla/imported/`` and record it.
@@ -290,31 +315,54 @@ class Workspace:
             InvalidInputError: If ``kind`` is not a known kind, or ``path`` contains
                 the workspace's ``.bioamla/`` folder (it would copy into itself).
         """
-        path = require_exists(path)
-        kind = self._check_kind(kind or _guess_kind(path))
-        source = Path(os.path.abspath(path))
-        if path.is_dir() and Path(os.path.abspath(self.dir)).is_relative_to(source):
-            raise InvalidInputError(f"Can't import {path}: it contains this workspace")
+        return self.import_many([path], kind=kind, name=name)[0]
+
+    def import_many(
+        self, paths: Iterable[str | Path], kind: str | None = None, name: str = ""
+    ) -> list[Artifact]:
+        """:meth:`import_copy` for several paths: all are checked first, then copied
+        and recorded in one write. If anything fails, the copies made are removed and
+        nothing is recorded.
+
+        Raises:
+            NotFoundError: If any path does not exist.
+            InvalidInputError: If ``kind`` is not a known kind, or a path contains
+                this workspace.
+        """
+        checked = [require_exists(p) for p in paths]
+        kinds = [self._check_kind(kind or _guess_kind(p)) for p in checked]
+        inside = Path(os.path.abspath(self.dir))
+        for path in checked:
+            if path.is_dir() and inside.is_relative_to(Path(os.path.abspath(path))):
+                raise InvalidInputError(f"Can't import {path}: it contains this workspace")
+        copies: list[Path] = []
+        result: list[Artifact] = []
         with self._locked():
             artifacts = self._load_artifacts()  # fail before copying anything
             self.imported_dir.mkdir(parents=True, exist_ok=True)
-            dest = self.imported_dir / path.name
-            if dest.exists():
-                dest = self.imported_dir / f"{_new_id()[:8]}_{path.name}"
-            if path.is_dir():
-                shutil.copytree(path, dest)
-            else:
-                shutil.copy2(path, dest)
-            artifact = Artifact(
-                kind=kind, path=dest.relative_to(self.imported_dir).as_posix(), mode="imported",
-                name=name,
-            )  # fmt: skip
             try:
-                self._save_artifacts([*artifacts, artifact])
+                for path, path_kind in zip(checked, kinds, strict=True):
+                    dest = self.imported_dir / path.name
+                    if dest.exists():
+                        dest = self.imported_dir / f"{_new_id()[:8]}_{path.name}"
+                    copies.append(dest)
+                    if path.is_dir():
+                        shutil.copytree(path, dest)
+                    else:
+                        shutil.copy2(path, dest)
+                    result.append(Artifact(
+                        kind=path_kind, path=dest.relative_to(self.imported_dir).as_posix(),
+                        mode="imported", name=name,
+                    ))  # fmt: skip
+                self._save_artifacts([*artifacts, *result])
             except BaseException:
-                shutil.rmtree(dest) if dest.is_dir() else dest.unlink(missing_ok=True)
+                for dest in copies:
+                    if dest.is_dir():
+                        shutil.rmtree(dest, ignore_errors=True)
+                    else:
+                        dest.unlink(missing_ok=True)
                 raise
-        return artifact
+        return result
 
     def remove(self, artifact_id: str, delete_import: bool = False) -> Artifact:
         """Forget an artifact. Linked files are never touched; an imported copy is

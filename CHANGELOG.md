@@ -15,6 +15,12 @@ All notable changes to this project are documented here. The format is based on
   place; paths inside the workspace stored relative so it can move) or imported (copied in).
   `WorkspaceError` for malformed workspaces and ones written by a newer bioamla. First piece of
   the 0.4.0 workspace and remote work; the format is shared with MagPy.
+- `bioamla workspace init|status|add|import|list|remove`: create a workspace, see what it holds,
+  link files or folders in place (`add`) or copy them in (`import`), list artifacts (flagging
+  any whose linked file has gone missing), and forget one (`--delete-import` also removes an
+  imported copy). Commands find the workspace from the current directory or `-C PATH` (relative
+  paths then resolve against it, as with `git -C`); several PATHS are added all-or-nothing; all
+  report `--json` results. Library: `Workspace.link_many()` and `import_many()`.
 
 ## [0.3.8] - 2026-10-31
 

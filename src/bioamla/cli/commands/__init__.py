@@ -11,6 +11,7 @@ from .indices import indices
 from .models import models
 from .system import system
 from .util import util
+from .workspace import workspace
 
 __all__ = [
     "annotation",
@@ -24,4 +25,5 @@ __all__ = [
     "models",
     "system",
     "util",
+    "workspace",
 ]

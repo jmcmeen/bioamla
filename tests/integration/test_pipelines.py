@@ -376,3 +376,21 @@ class TestEmbedToCluster:
         assert result["total_files"] == 2 and result["failed"] == 0  # the .wav isn't tried
         rows = {Path(r["file_name"]).name: r for r in read_csv(tmp_path / "cl" / "meta.csv")}
         assert rows["a2.wav"]["cluster"] == ""
+
+
+class TestWorkspace:
+    def test_init_add_and_detect_inside(self, recording, tmp_path, monkeypatch) -> None:
+        root = tmp_path / "survey"
+        created = bioamla("workspace", "init", str(root))
+        recs = root / "recordings"
+        recs.mkdir()
+        (recs / recording.name).write_bytes(recording.read_bytes())
+
+        monkeypatch.chdir(root / "recordings")  # commands find the workspace from below
+        (linked,) = bioamla("workspace", "add", ".")["artifacts"]
+        assert linked["path"] == "recordings" and linked["kind"] == "folder"
+
+        detections = bioamla("detect", "energy", recording.name, "-o", "../det.csv")
+        assert detections["count"] == 7
+        status = bioamla("workspace", "status")
+        assert status["id"] == created["id"] and status["artifacts"] == {"folder": 1}
