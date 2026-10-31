@@ -90,8 +90,11 @@ from bioamla.datasets.redact import (
     location_columns,
     redact_rows,
     redact_sites,
+    redact_wav_location,
+    redacted_audio_files,
     redacted_dataset_files,
     unredacted_location_files,
+    wavs_with_location,
 )
 from bioamla.datasets.remix import RemixRecipe, RemixSource, remix_dataset
 from bioamla.datasets.stats import get_dataset_stats
@@ -168,6 +171,9 @@ __all__ = [
     "redact_sites",
     "redacted_dataset_files",
     "unredacted_location_files",
+    "redact_wav_location",
+    "redacted_audio_files",
+    "wavs_with_location",
     # Augmentation
     "AugmentationConfig",
     "create_augmentation_pipeline",

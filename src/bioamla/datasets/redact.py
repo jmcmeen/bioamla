@@ -13,10 +13,11 @@ leaving the local dataset untouched:
 - ``strip``: coordinate columns are dropped and the manifest lists no sites.
 
 Either way, free-text location columns are dropped, since text can't be rounded.
+The same modes apply to the position recorders embed in WAV files (GUANO and
+Wildlife Acoustics WAMD), via :func:`redacted_audio_files`.
 
 Not covered (:func:`unredacted_location_files` reports these so callers can
-warn): GPS embedded in audio files (GUANO and other recorder chunks), JSON/JSONL
-and text files that mention coordinates, and Parquet files.
+warn): JSON/JSONL and text files that mention coordinates, and Parquet files.
 """
 
 from __future__ import annotations
@@ -265,41 +266,29 @@ def redacted_dataset_files(
     return out
 
 
-def unredacted_location_files(dataset_dir: str | Path, wav_limit: int = 200) -> list[str]:
+def unredacted_location_files(dataset_dir: str | Path) -> list[str]:
     """
-    List files that may carry locations ``redacted_dataset_files`` doesn't change.
+    List files that may carry locations a redacted push doesn't change.
 
-    - WAVs whose recorder metadata has a position (headers only; at most
-      ``wav_limit`` WAVs are checked, since one is enough to know).
     - JSON/JSONL/TXT files (other than ``dataset.json``) that mention a
       latitude or longitude.
     - Parquet files, which aren't inspected.
 
+    (Metadata tables, the manifest, a generated card and WAV recorder metadata
+    are all redacted; see :func:`redacted_dataset_files` and
+    :func:`redacted_audio_files`.)
+
     Returns:
         Paths relative to ``dataset_dir``.
     """
-    from bioamla.audio.metadata import get_recording_metadata
-    from bioamla.exceptions import BioamlaError
-
     base = Path(dataset_dir)
     found: list[str] = []
-    wavs_checked = 0
     for path in sorted(base.rglob("*")):
         if not path.is_file():
             continue
         rel = path.relative_to(base).as_posix()
         suffix = path.suffix.lower()
-        if suffix == ".wav":
-            if wavs_checked >= wav_limit:
-                continue
-            wavs_checked += 1
-            try:
-                meta = get_recording_metadata(str(path))
-            except BioamlaError:
-                continue
-            if meta.latitude is not None or meta.longitude is not None:
-                found.append(rel)
-        elif suffix in (".json", ".jsonl", ".txt") and rel != "dataset.json":
+        if suffix in (".json", ".jsonl", ".txt") and rel != "dataset.json":
             try:
                 text = path.read_text(encoding="utf-8", errors="replace").lower()
             except OSError:
@@ -311,6 +300,138 @@ def unredacted_location_files(dataset_dir: str | Path, wav_limit: int = 200) -> 
     return found
 
 
+def redact_wav_location(src: str | Path, dest: str | Path, mode: str, decimals: int = 2) -> bool:
+    """
+    Write a copy of a WAV with the location in its recorder metadata redacted.
+
+    GUANO: ``round`` rounds ``Loc Position`` and removes every other positional
+    field (``Loc Elevation``, ``Loc Accuracy``, vendor GPS keys), since an
+    elevation narrows down a rounded position and other formats can't be
+    rounded safely; ``strip`` removes them all. Wildlife Acoustics WAMD (a
+    ``wamd`` chunk, or WAMD in a ``junk`` chunk): ``round`` rounds the GPS
+    waypoint, keeping its datum and dropping its altitude, and removes the GPS
+    track; ``strip`` removes both.
+
+    The audio and all other chunks are streamed across unchanged, so this works
+    for any WAV (PCM, float, extensible; RIFF or RF64) without loading it into
+    memory.
+
+    Args:
+        src: Source WAV (not modified).
+        dest: Where to write the redacted copy (only written when something
+            changed).
+        mode: ``keep``, ``round`` or ``strip``.
+        decimals: Decimal places kept by ``round``.
+
+    Returns:
+        True if ``src`` carried a location and ``dest`` was written.
+
+    Raises:
+        InvalidInputError: For an unknown mode or bad ``decimals``.
+        DatasetError: If the WAV can't be parsed or rewritten.
+    """
+    from bioamla.audio._riffy import rewrite_wav_location
+    from bioamla.exceptions import BioamlaError
+
+    check_coordinate_mode(mode, decimals)
+    if mode == "keep":
+        return False
+    try:
+        return rewrite_wav_location(src, dest, mode, decimals)
+    except BioamlaError as e:
+        raise DatasetError(f"Can't redact the location in {Path(src).name}: {e}") from e
+    except Exception as e:  # noqa: BLE001 - anything unexpected must not mean an unredacted upload
+        raise DatasetError(f"Can't redact the location in {Path(src).name}: {e}") from e
+
+
+def _wav_paths(base: Path) -> list[Path]:
+    from bioamla.audio._riffy import is_wav_path
+
+    return sorted(p for p in base.rglob("*") if p.is_file() and is_wav_path(p))
+
+
+def redacted_audio_files(
+    dataset_dir: str | Path, mode: str, decimals: int, workdir: str | Path
+) -> dict[str, Path]:
+    """
+    Write redacted copies of a dataset's WAVs that carry a location.
+
+    Only headers are read to decide which files need a copy. Each copy is
+    checked afterwards: in ``strip`` mode it must carry no location at all.
+
+    Args:
+        dataset_dir: Dataset directory (not modified).
+        mode: ``keep``, ``round`` or ``strip``.
+        decimals: Decimal places kept by ``round``.
+        workdir: Directory the redacted copies are written under (mirroring the
+            dataset's layout); the caller cleans it up.
+
+    Returns:
+        Mapping of path (relative to ``dataset_dir``, POSIX style) to the
+        redacted copy, for each WAV that carried a location.
+
+    Raises:
+        InvalidInputError: For an unknown mode or bad ``decimals``.
+        DatasetError: If a WAV can't be parsed or rewritten, or there isn't
+            room in ``workdir`` for a copy (a file is never uploaded
+            unredacted).
+    """
+    import shutil
+
+    from bioamla.audio._riffy import wav_has_location
+    from bioamla.exceptions import BioamlaError
+
+    check_coordinate_mode(mode, decimals)
+    if mode == "keep":
+        return {}
+    base = Path(dataset_dir)
+    out: dict[str, Path] = {}
+    for path in _wav_paths(base):
+        rel = path.relative_to(base).as_posix()
+        try:
+            if not wav_has_location(path):
+                continue
+        except BioamlaError as e:
+            raise DatasetError(f"Can't check {rel} for an embedded location: {e}") from e
+        Path(workdir).mkdir(parents=True, exist_ok=True)
+        if shutil.disk_usage(workdir).free < path.stat().st_size * 1.05:
+            raise DatasetError(
+                f"Not enough free space in {workdir} for a redacted copy of {rel} "
+                f"({path.stat().st_size / 1e9:.1f} GB). Set TMPDIR to a larger disk."
+            )
+        dest = Path(workdir) / rel
+        if not redact_wav_location(path, dest, mode, decimals):
+            continue
+        if mode == "strip" and wav_has_location(dest):
+            raise DatasetError(f"Redacted copy of {rel} still carries a location")
+        out[rel] = dest
+    return out
+
+
+def wavs_with_location(dataset_dir: str | Path, limit: int = 200) -> list[str]:
+    """
+    Find WAVs whose recorder metadata carries a location (headers only).
+
+    Checks at most ``limit`` WAVs, since one is enough to know a dataset needs
+    attention. Files that can't be read are skipped.
+
+    Returns:
+        Paths relative to ``dataset_dir``.
+    """
+    from bioamla.audio._riffy import wav_has_location
+    from bioamla.exceptions import BioamlaError
+
+    base = Path(dataset_dir)
+    found: list[str] = []
+    for path in _wav_paths(base)[:limit]:
+        try:
+            if wav_has_location(path):
+                found.append(path.relative_to(base).as_posix())
+        except BioamlaError:
+            continue
+    return found
+
+
 __all__ = [
     "COORDINATE_MODES",
     "check_coordinate_mode",
@@ -318,6 +439,9 @@ __all__ = [
     "location_columns",
     "redact_rows",
     "redact_sites",
+    "redact_wav_location",
+    "redacted_audio_files",
     "redacted_dataset_files",
     "unredacted_location_files",
+    "wavs_with_location",
 ]
