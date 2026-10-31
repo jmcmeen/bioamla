@@ -349,15 +349,17 @@ def download_file(url: str, output_path: str | Path, show_progress: bool = True)
 # =============================================================================
 
 
-def sanitize_filename(name: str) -> str:
+def sanitize_filename(name: str, *, lowercase: bool = True) -> str:
     """
     Sanitize a string for use as a filename or directory name.
 
-    Converts the name to lowercase, replaces spaces with underscores,
-    removes invalid characters, and ensures a valid result.
+    Converts the name to lowercase (unless ``lowercase=False``), replaces spaces,
+    control characters (tabs, newlines, ...) and characters invalid in file
+    names with underscores, and ensures a valid result.
 
     Args:
         name: The string to sanitize
+        lowercase: Lowercase the result (the default).
 
     Returns:
         A sanitized string safe for use as a filename.
@@ -375,11 +377,12 @@ def sanitize_filename(name: str) -> str:
         return "unknown"
 
     invalid_chars = '<>:"/\\|?*'
-    sanitized = name.lower()
+    sanitized = name.lower() if lowercase else name
     sanitized = sanitized.replace(" ", "_")
 
     for char in invalid_chars:
         sanitized = sanitized.replace(char, "_")
+    sanitized = "".join("_" if ord(c) < 32 or c == "\x7f" else c for c in sanitized)
 
     sanitized = sanitized.strip(". ")
 

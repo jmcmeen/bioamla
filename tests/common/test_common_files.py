@@ -193,6 +193,10 @@ class TestPathUtilities:
     def test_sanitize_filename(self, name, expected):
         assert sanitize_filename(name) == expected
 
+    def test_sanitize_filename_keeps_case_on_request_and_drops_control_chars(self):
+        assert sanitize_filename("Rana Sp.\tA\nB", lowercase=False) == "Rana_Sp._A_B"
+        assert sanitize_filename("Rana Sp.\x7f") == "rana_sp._"
+
     def test_get_relative_path(self, tmp_path):
         base = tmp_path
         f = tmp_path / "sub" / "a.txt"

@@ -42,15 +42,9 @@ def sweep_audio_path(tmp_path) -> str:
 
 
 @pytest.fixture
-def two_tone_audio_path(tmp_path) -> str:
+def two_tone_audio_path(make_tone_wav) -> str:
     """A 16 kHz file with a weak 1 kHz tone and a strong 6 kHz tone."""
-    sample_rate = 16000
-    t = np.linspace(0, 2.0, int(sample_rate * 2.0), dtype=np.float32)
-    signal = 0.2 * np.sin(2 * np.pi * 1000.0 * t) + 0.6 * np.sin(2 * np.pi * 6000.0 * t)
-    samples = (signal * 32767).astype(np.int16)
-    path = tmp_path / "two_tone.wav"
-    wav.write(str(path), sample_rate, samples)
-    return str(path)
+    return make_tone_wav("two_tone.wav", [(1000.0, 0.2), (6000.0, 0.6)])
 
 
 def _ann(**kw) -> Annotation:
