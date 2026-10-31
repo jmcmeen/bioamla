@@ -10,6 +10,7 @@ direct ``pathlib`` I/O (no repository DI, no ServiceResult).
 """
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +80,7 @@ def batch_detect_dir(
     recursive: bool = True,
     continue_on_error: bool = True,
     max_workers: int = 1,
+    on_progress: Callable[[int, int], None] | None = None,
     **params: Any,
 ) -> BatchResult:
     """Run a detector over every audio file in ``input_dir``.
@@ -94,7 +96,8 @@ def batch_detect_dir(
         method: Detector to run ("energy", "ribbit", "peaks", "accelerating").
         recursive: Whether to recurse into subdirectories.
         continue_on_error: Keep going when an individual file fails.
-        max_workers: Number of worker processes (1 = sequential).
+        max_workers: Number of worker threads (1 = sequential).
+        on_progress: Optional ``(completed, total)`` progress callback.
         **params: Detector-specific parameters (e.g. low_freq, high_freq).
 
     Returns:
@@ -109,7 +112,7 @@ def batch_detect_dir(
 
     files = _discover_files(input_dir, recursive=recursive, file_filter=_is_audio)
 
-    aggregated: list[dict[str, Any]] = []
+    by_path: dict[Path, dict[str, Any]] = {}
 
     def _process(path: Path) -> str:
         if method == "peaks":
@@ -126,14 +129,12 @@ def batch_detect_dir(
         else:
             detections = detector.detect_from_file(path)
 
-        aggregated.append(
-            {
-                "filepath": str(path),
-                "detector_type": method,
-                "num_detections": len(detections),
-                "detections": [d.to_dict() for d in detections],
-            }
-        )
+        by_path[path] = {
+            "filepath": str(path),
+            "detector_type": method,
+            "num_detections": len(detections),
+            "detections": [d.to_dict() for d in detections],
+        }
         return str(path)
 
     result = run_batch(
@@ -141,7 +142,10 @@ def batch_detect_dir(
         _process,
         max_workers=max_workers,
         continue_on_error=continue_on_error,
+        on_progress=on_progress,
     )
+    # Input order, whichever order the workers finished in.
+    aggregated = [by_path[f] for f in files if f in by_path]
 
     output_path: Path | None = None
     if aggregated:

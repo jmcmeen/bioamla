@@ -11,6 +11,7 @@ from bioamla.indices import (
     AVAILABLE_INDICES,
     AcousticIndices,
     batch_compute_indices,
+    batch_index_files,
     compute_all_indices,
     compute_index,
     describe_index,
@@ -103,3 +104,28 @@ class TestBatchComputeIndices:
         )
         assert results[0] == results[1]
         assert calls == [(1, 1)]
+
+
+class TestBatchIndexFiles:
+    def test_rows_csv_progress_and_failures(self, test_audio_dir: str, tmp_path) -> None:
+        (Path(test_audio_dir) / "broken.wav").write_bytes(b"not audio")
+        calls: list[tuple[int, int]] = []
+
+        result = batch_index_files(
+            test_audio_dir,
+            tmp_path / "out",
+            max_workers=4,
+            on_progress=lambda done, total: calls.append((done, total)),
+        )
+
+        rows = result.metadata["rows"]
+        assert [Path(r["filepath"]).name for r in rows] == [
+            "audio_0.wav",
+            "audio_1.wav",
+            "audio_2.wav",
+            "broken.wav",
+        ]
+        assert [r["success"] for r in rows] == [True, True, True, False]
+        assert result.failed == 1
+        assert calls[-1] == (4, 4)
+        assert (tmp_path / "out" / "indices.csv").exists()

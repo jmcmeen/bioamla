@@ -19,7 +19,7 @@ from bioamla.audio.convert import convert_audio_file
 from bioamla.audio.discovery import list_audio_files
 from bioamla.audio.io import load_audio, save_audio
 from bioamla.audio.processing import resample_audio
-from bioamla.batch import BatchResult, SegmentInfo, run_batch
+from bioamla.batch import BatchResult, SegmentInfo, output_stems, run_batch, write_rows_csv
 from bioamla.exceptions import InvalidInputError, NotFoundError
 
 
@@ -41,10 +41,11 @@ def batch_transform_files(
         input_dir: Directory containing the input audio files.
         output_dir: Directory to write the processed ``.wav`` files to.
         processor_fn: Callable taking ``(audio, sample_rate)`` and returning the
-            processed audio array. Must be picklable for parallel execution.
+            processed audio array. With ``max_workers > 1`` it runs in worker
+            threads, so it must be thread-safe.
         sample_rate: Optional target sample rate for the outputs.
         recursive: Search subdirectories.
-        max_workers: Number of worker processes (1 = sequential).
+        max_workers: Number of worker threads (1 = sequential).
         continue_on_error: Collect per-file errors and keep going if True.
         on_progress: Optional ``(completed, total)`` progress callback.
 
@@ -61,18 +62,15 @@ def batch_transform_files(
         raise NotFoundError(f"Input directory not found: {in_dir}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    files = list_audio_files(str(in_dir), recursive=recursive)
+    files = [str(f) for f in list_audio_files(str(in_dir), recursive=recursive)]
+    stems = output_stems(files, in_dir)
 
-    def _process_one(audio_path: Path) -> str:
-        try:
-            rel_path = audio_path.relative_to(in_dir)
-        except ValueError:
-            rel_path = Path(audio_path.name)
-
-        out_path = out_dir / rel_path.with_suffix(".wav")
+    def _process_one(audio_path: str) -> str:
+        stem = stems[audio_path]
+        out_path = out_dir / stem.parent / f"{stem.name}.wav"
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        audio, sr = load_audio(str(audio_path))
+        audio, sr = load_audio(audio_path)
         processed = processor_fn(audio, sr)
         if sample_rate is not None and sample_rate != sr:
             processed = resample_audio(processed, sr, sample_rate)
@@ -148,16 +146,14 @@ def batch_convert_files(
         raise NotFoundError(f"Input directory not found: {in_dir}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    files = list_audio_files(str(in_dir), recursive=recursive)
+    files = [str(f) for f in list_audio_files(str(in_dir), recursive=recursive)]
+    stems = output_stems(files, in_dir)
 
-    def _process_one(audio_path: Path) -> str:
-        try:
-            rel_path = audio_path.relative_to(in_dir)
-        except ValueError:
-            rel_path = Path(audio_path.name)
-        out_path = out_dir / rel_path.with_suffix(f".{target_format}")
+    def _process_one(audio_path: str) -> str:
+        stem = stems[audio_path]
+        out_path = out_dir / stem.parent / f"{stem.name}.{target_format}"
         return convert_audio_file(
-            audio_path,
+            Path(audio_path),
             out_path,
             target_format=target_format,
             target_sample_rate=sample_rate,
@@ -237,9 +233,146 @@ def segment_audio_file(
     return segments
 
 
+def batch_info_files(
+    input_dir: str | Path,
+    output_dir: str | Path | None = None,
+    *,
+    recursive: bool = True,
+    max_workers: int = 1,
+    continue_on_error: bool = True,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> BatchResult:
+    """
+    Read the metadata of every audio file in a directory.
+
+    Args:
+        input_dir: Directory containing audio files.
+        output_dir: If given, ``audio_info.csv`` is written here, one row per
+            file that could be read, in discovery order.
+        recursive: Search subdirectories.
+        max_workers: Number of worker threads (1 = sequential).
+        continue_on_error: Collect per-file errors and keep going if True.
+        on_progress: Optional ``(completed, total)`` progress callback.
+
+    Returns:
+        A :class:`bioamla.batch.BatchResult`. Its ``metadata["rows"]`` holds
+        the per-file rows (``file_name``, ``duration``, ``sample_rate``,
+        ``channels``, ``samples``, ``format``); ``output_files`` holds the CSV
+        path when one was written.
+
+    Raises:
+        NotFoundError: If the input directory does not exist.
+    """
+    from bioamla.audio.info import get_audio_info
+
+    in_dir = Path(input_dir)
+    if not in_dir.exists():
+        raise NotFoundError(f"Input directory not found: {in_dir}")
+
+    files = [str(f) for f in list_audio_files(str(in_dir), recursive=recursive)]
+    by_path: dict[str, dict] = {}
+
+    def _info(path: str) -> None:
+        info = get_audio_info(path)
+        by_path[path] = {
+            "file_name": path,
+            "duration": info.duration,
+            "sample_rate": info.sample_rate,
+            "channels": info.channels,
+            "samples": info.samples,
+            "format": info.format,
+        }
+
+    result = run_batch(
+        files,
+        _info,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+    )
+    rows = [by_path[f] for f in files if f in by_path]
+    result.metadata["rows"] = rows
+    if output_dir is not None and rows:
+        result.output_files = [str(write_rows_csv(Path(output_dir) / "audio_info.csv", rows))]
+    return result
+
+
+def batch_segment_files(
+    input_dir: str | Path,
+    output_dir: str | Path,
+    *,
+    duration: float,
+    overlap: float = 0.0,
+    recursive: bool = True,
+    max_workers: int = 1,
+    continue_on_error: bool = True,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> BatchResult:
+    """
+    Split every audio file in a directory into fixed-duration segments.
+
+    Segments mirror the input tree under ``output_dir`` and are named
+    ``<stem>_seg0000.wav`` and so on (see :func:`segment_audio_file`).
+
+    Args:
+        input_dir: Directory containing audio files.
+        output_dir: Directory the segments are written under.
+        duration: Segment duration in seconds.
+        overlap: Overlap between consecutive segments in seconds.
+        recursive: Search subdirectories.
+        max_workers: Number of worker threads (1 = sequential).
+        continue_on_error: Collect per-file errors and keep going if True.
+        on_progress: Optional ``(completed, total)`` progress callback.
+
+    Returns:
+        A :class:`bioamla.batch.BatchResult` whose ``output_files`` lists every
+        segment written, in input order.
+
+    Raises:
+        NotFoundError: If the input directory does not exist.
+        InvalidInputError: If ``duration`` is not positive or ``overlap`` is not
+            smaller than ``duration``.
+    """
+    if duration <= 0:
+        raise InvalidInputError("duration must be positive.")
+    if overlap >= duration:
+        raise InvalidInputError("overlap must be smaller than duration.")
+
+    in_dir = Path(input_dir)
+    out_dir = Path(output_dir)
+    if not in_dir.exists():
+        raise NotFoundError(f"Input directory not found: {in_dir}")
+
+    files = [str(f) for f in list_audio_files(str(in_dir), recursive=recursive)]
+    stems = output_stems(files, in_dir)
+    by_path: dict[str, list[SegmentInfo]] = {}
+
+    def _segment(path: str) -> None:
+        stem = stems[path]
+        by_path[path] = segment_audio_file(
+            path,
+            str(out_dir / stem.parent),
+            duration=duration,
+            overlap=overlap,
+            prefix=stem.name,
+        )
+
+    result = run_batch(
+        files,
+        _segment,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+    )
+    result.output_files = [str(seg.segment_path) for f in files for seg in by_path.get(f, [])]
+    return result
+
+
 __all__ = [
     "batch_transform_files",
     "batch_resample_files",
     "batch_convert_files",
+    "batch_info_files",
+    "batch_segment_files",
     "segment_audio_file",
 ]

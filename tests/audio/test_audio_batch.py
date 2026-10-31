@@ -1,10 +1,16 @@
 """Coverage tests for bioamla.audio.batch."""
 
+import csv
+import shutil
+from pathlib import Path
+
 import pytest
 
 from bioamla.audio.batch import (
     batch_convert_files,
+    batch_info_files,
     batch_resample_files,
+    batch_segment_files,
     batch_transform_files,
     segment_audio_file,
 )
@@ -79,3 +85,69 @@ class TestSegmentAudioFile:
     def test_overlap_ge_duration_raises(self, test_audio_path_3s: str, tmp_path) -> None:
         with pytest.raises(InvalidInputError):
             segment_audio_file(test_audio_path_3s, str(tmp_path / "s"), duration=1.0, overlap=1.0)
+
+
+class TestDistinctOutputs:
+    def test_same_stem_different_extension(self, test_audio_dir: str, tmp_path) -> None:
+        src = Path(test_audio_dir)
+        # Two inputs whose names differ only in extension (the decoder reads
+        # the WAV header, whatever the suffix says).
+        shutil.copy(src / "audio_0.wav", src / "clip.wav")
+        shutil.copy(src / "audio_0.wav", src / "clip.flac")
+        out = tmp_path / "out"
+
+        result = batch_transform_files(test_audio_dir, str(out), lambda a, sr: a, max_workers=2)
+
+        assert result.failed == 0
+        assert {"clip_wav.wav", "clip_flac.wav"} <= {p.name for p in out.glob("*.wav")}
+
+
+class TestBatchInfoFiles:
+    def test_rows_csv_and_progress(self, test_audio_dir: str, tmp_path) -> None:
+        calls: list[tuple[int, int]] = []
+        result = batch_info_files(
+            test_audio_dir,
+            tmp_path / "out",
+            max_workers=3,
+            on_progress=lambda done, total: calls.append((done, total)),
+        )
+        rows = result.metadata["rows"]
+        assert result.successful == 3
+        assert [Path(r["file_name"]).name for r in rows] == [
+            "audio_0.wav",
+            "audio_1.wav",
+            "audio_2.wav",
+        ]
+        assert rows[0]["sample_rate"] == 16000
+        assert calls[-1] == (3, 3)
+        with open(result.output_files[0], newline="") as f:
+            assert len(list(csv.DictReader(f))) == 3
+
+    def test_no_output_dir_writes_nothing(self, test_audio_dir: str) -> None:
+        result = batch_info_files(test_audio_dir)
+        assert result.output_files == []
+        assert len(result.metadata["rows"]) == 3
+
+    def test_missing_input_raises(self, tmp_path) -> None:
+        with pytest.raises(NotFoundError):
+            batch_info_files(tmp_path / "nope")
+
+
+class TestBatchSegmentFiles:
+    def test_segments_in_input_order(self, test_audio_dir: str, tmp_path) -> None:
+        calls: list[tuple[int, int]] = []
+        result = batch_segment_files(
+            test_audio_dir,
+            tmp_path / "out",
+            duration=0.5,
+            max_workers=3,
+            on_progress=lambda done, total: calls.append((done, total)),
+        )
+        names = [Path(p).name for p in result.output_files]
+        assert names == [f"audio_{i}_seg{n:04d}.wav" for i in range(3) for n in range(2)]
+        assert calls[-1] == (3, 3)
+
+    @pytest.mark.parametrize(("duration", "overlap"), [(0, 0), (1.0, 1.0)])
+    def test_invalid_args_raise(self, test_audio_dir: str, tmp_path, duration, overlap) -> None:
+        with pytest.raises(InvalidInputError):
+            batch_segment_files(test_audio_dir, tmp_path, duration=duration, overlap=overlap)

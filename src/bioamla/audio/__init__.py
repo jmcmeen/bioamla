@@ -22,7 +22,9 @@ from bioamla.audio.analysis import (
 )
 from bioamla.audio.batch import (
     batch_convert_files,
+    batch_info_files,
     batch_resample_files,
+    batch_segment_files,
     batch_transform_files,
     segment_audio_file,
 )
@@ -180,6 +182,8 @@ __all__ = [
     "batch_transform_files",
     "batch_resample_files",
     "batch_convert_files",
+    "batch_info_files",
+    "batch_segment_files",
     "segment_audio_file",
     # Conversion
     "convert_audio_file",

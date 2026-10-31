@@ -155,7 +155,7 @@ def test_audio_info_csv(runner, csv_with_audio, mocker):
 
 def test_audio_info_error(runner, test_audio_dir, mocker):
     mocker.patch(
-        "bioamla.audio.discovery.list_audio_files",
+        "bioamla.audio.batch.list_audio_files",
         side_effect=ProcessingError("listfail"),
     )
     result = runner.invoke(cli, ["batch", "audio", "info", "--input-dir", test_audio_dir])
@@ -645,16 +645,16 @@ def test_detect_csv(runner, csv_with_audio, mocker):
 
 def test_indices_calculate_dir(runner, test_audio_dir, tmp_path, mocker):
     mocker.patch(
-        "bioamla.audio.discovery.list_audio_files",
+        "bioamla.indices.batch.list_audio_files",
         return_value=["a.wav", "b.wav"],
     )
-    mocker.patch(
-        "bioamla.indices.batch_compute_indices",
-        return_value=[
-            {"filepath": "a.wav", "aci": 1.0, "success": True},
-            {"filepath": "b.wav", "success": False, "error": "boom"},
-        ],
-    )
+
+    def fake_compute(path, **kwargs):
+        if path == "b.wav":
+            raise ProcessingError("boom")
+        return mocker.Mock(to_dict=lambda: {"aci": 1.0})
+
+    mocker.patch("bioamla.indices.batch.compute_indices_from_file", side_effect=fake_compute)
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
@@ -677,7 +677,7 @@ def test_indices_calculate_csv(runner, csv_with_audio, mocker):
 
 def test_indices_calculate_error(runner, test_audio_dir, mocker):
     mocker.patch(
-        "bioamla.audio.discovery.list_audio_files",
+        "bioamla.indices.batch.list_audio_files",
         side_effect=ProcessingError("x"),
     )
     result = runner.invoke(cli, ["batch", "index", "--input-dir", test_audio_dir])

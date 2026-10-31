@@ -48,6 +48,10 @@ class TrainingError(ModelError):
     """Model training failure: bad dataset/params, or an empty training set."""
 
 
+class TrainingCancelled(TrainingError):
+    """Training stopped early because the caller's ``should_stop`` returned True."""
+
+
 class CatalogError(BioamlaError):
     """External catalog / API failure (xeno-canto, iNaturalist, eBird, Macaulay, HF)."""
 
@@ -111,6 +115,7 @@ __all__ = [
     "DependencyError",
     "ModelError",
     "TrainingError",
+    "TrainingCancelled",
     "CatalogError",
     "ConfigError",
     "ProcessingError",

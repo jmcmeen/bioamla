@@ -403,6 +403,129 @@ class TestLoadTrainDatasetRouting:
 
 
 # ---------------------------------------------------------------------------
+# Progress / cancel callback
+# ---------------------------------------------------------------------------
+
+
+class TestProgressCallback:
+    @staticmethod
+    def _state(step: int) -> SimpleNamespace:
+        return SimpleNamespace(
+            global_step=step, max_steps=10, epoch=step / 5, is_world_process_zero=True
+        )
+
+    def test_reports_steps_loss_and_eval(self) -> None:
+        from transformers import TrainerControl
+
+        from bioamla.ml.training import _progress_callback
+
+        seen = []
+        cb = _progress_callback(seen.append, None)
+        control = TrainerControl()
+
+        cb.on_step_end(None, self._state(1), control)
+        cb.on_log(None, self._state(1), control, logs={"loss": 0.9})
+        cb.on_evaluate(
+            None,
+            self._state(5),
+            control,
+            metrics={"eval_accuracy": 0.5, "eval_runtime": 3.2, "epoch": 1},
+        )
+        cb.on_step_end(None, self._state(6), control)
+
+        assert [p.step for p in seen] == [1, 1, 5, 6]
+        assert seen[0].loss is None
+        assert seen[1].loss == 0.9  # reported as soon as it is logged
+        assert seen[3].loss == 0.9
+        assert seen[3].total_steps == 10
+        assert seen[3].epoch == 1.2
+        assert seen[3].eval_metrics == {"eval_accuracy": 0.5}
+        assert seen[3].to_dict()["eval_metrics"] == {"eval_accuracy": 0.5}
+        assert control.should_training_stop is False
+
+    def test_should_stop_ends_training(self) -> None:
+        from transformers import TrainerControl
+
+        from bioamla.ml.training import _progress_callback
+
+        stop = {"now": False}
+        cb = _progress_callback(None, lambda: stop["now"])
+        control = TrainerControl()
+
+        cb.on_step_end(None, self._state(1), control)
+        assert not cb.cancelled
+        stop["now"] = True
+        # transformers' flow callback runs first and may schedule eval/save.
+        control.should_evaluate = control.should_save = True
+        cb.on_step_end(None, self._state(2), control)
+        assert cb.cancelled
+        assert control.should_training_stop is True
+        assert not control.should_evaluate
+        assert not control.should_save
+
+        # ...and again at the end of the interrupted epoch.
+        epoch_control = TrainerControl(should_evaluate=True, should_save=True)
+        cb.on_epoch_end(None, self._state(2), epoch_control)
+        assert not epoch_control.should_evaluate
+        assert not epoch_control.should_save
+
+    def test_stop_on_last_step_keeps_the_run(self) -> None:
+        from transformers import TrainerControl
+
+        from bioamla.ml.training import _progress_callback
+
+        cb = _progress_callback(None, lambda: True)
+        control = TrainerControl()
+        state = SimpleNamespace(global_step=10, max_steps=10, epoch=2.0, is_world_process_zero=True)
+        cb.on_step_end(None, state, control)
+        assert not cb.cancelled
+        assert control.should_training_stop is False
+
+
+class TestTrainingHelpers:
+    def test_cleanup_step_logs_instead_of_raising(self, caplog) -> None:
+        from bioamla.ml.training import _cleanup_step
+
+        def boom() -> None:
+            raise RuntimeError("tracking server down")
+
+        with caplog.at_level("WARNING", logger="bioamla"):
+            _cleanup_step("end the MLflow run", boom)
+        assert "Could not end the MLflow run after training: tracking server down" in caplog.text
+
+    @pytest.mark.parametrize(
+        ("report_to", "active", "starts"),
+        [
+            ("tensorboard", None, False),
+            (["tensorboard", "mlflow"], None, True),
+            ("all", None, True),
+            ("mlflow", "caller-run", False),  # never take over the caller's run
+        ],
+    )
+    def test_start_mlflow_run(self, report_to, active, starts) -> None:
+        from bioamla.ml.training import _start_mlflow_run
+
+        fake = MagicMock()
+        fake.active_run.return_value = active
+        with patch.dict("sys.modules", {"mlflow": fake}):
+            run = _start_mlflow_run(report_to, "my-run")
+        assert (run is fake) is starts
+        if starts:
+            fake.start_run.assert_called_once_with(run_name="my-run")
+        else:
+            fake.start_run.assert_not_called()
+
+    def test_start_mlflow_run_failure_falls_back(self) -> None:
+        from bioamla.ml.training import _start_mlflow_run
+
+        fake = MagicMock()
+        fake.active_run.return_value = None
+        fake.start_run.side_effect = ConnectionError("tracking server down")
+        with patch.dict("sys.modules", {"mlflow": fake}):
+            assert _start_mlflow_run("mlflow", None) is None
+
+
+# ---------------------------------------------------------------------------
 # Full train_ast orchestration (everything heavy mocked)
 # ---------------------------------------------------------------------------
 
@@ -447,14 +570,11 @@ class TestTrainAst:
         with pytest.raises(TrainingError):
             train_ast(train_dataset="owner/ds", augmentation=bad)
 
-    @pytest.mark.usefixtures("requires_torchcodec")
-    def test_full_loop_mocked(self, tmp_path) -> None:
-        from bioamla.ml.training import train_ast
+    @staticmethod
+    def _mocks(fake_trainer, trainer_cls=None):
+        """The heavy-dependency patches shared by the mocked full-loop tests."""
+        from contextlib import ExitStack
 
-        dd = _real_dataset_dict()
-
-        # A feature extractor stub: returns a real tensor batch so compute_stats
-        # and the preprocess transforms run for real (just no learned weights).
         class _FE:
             model_input_names = ["input_values"]
             sampling_rate = 16000
@@ -463,10 +583,82 @@ class TestTrainAst:
             std = 1.0
 
             def __call__(self, wavs, sampling_rate=None, return_tensors=None):
-                n = len(wavs)
-                return {"input_values": torch.zeros(n, 4, 8)}
+                return {"input_values": torch.zeros(len(wavs), 4, 8)}
 
-        fe = _FE()
+        fake_config = SimpleNamespace(num_labels=2, label2id={}, id2label={})
+        stack = ExitStack()
+        for target, value in [
+            ("bioamla.ml.training._load_train_dataset", (_real_dataset_dict(), "category")),
+            ("transformers.ASTFeatureExtractor.from_pretrained", _FE()),
+            ("transformers.ASTConfig.from_pretrained", fake_config),
+            ("transformers.ASTForAudioClassification.from_pretrained", MagicMock()),
+            ("transformers.TrainingArguments", MagicMock()),
+            ("evaluate.load", MagicMock()),
+        ]:
+            stack.enter_context(patch(target, return_value=value))
+        stack.enter_context(
+            patch("transformers.Trainer", trainer_cls or MagicMock(return_value=fake_trainer))
+        )
+        stack.enter_context(patch.object(torch.cuda, "is_available", return_value=False))
+        return stack
+
+    @pytest.mark.usefixtures("requires_torchcodec")
+    def test_cancel_during_training_saves_nothing(self, tmp_path) -> None:
+        from transformers import TrainerControl
+
+        from bioamla.exceptions import TrainingCancelled
+        from bioamla.ml.training import train_ast
+
+        fake_trainer = MagicMock()
+        fake_trainer.accelerator = None
+        seen = []
+        training = {"started": False}
+
+        def make_trainer(*args, callbacks=None, **kwargs):
+            def train():
+                training["started"] = True
+                state = SimpleNamespace(
+                    global_step=1, max_steps=8, epoch=0.25, is_world_process_zero=True
+                )
+                callbacks[0].on_step_end(None, state, TrainerControl())
+
+            fake_trainer.train.side_effect = train
+            return fake_trainer
+
+        with self._mocks(fake_trainer, trainer_cls=MagicMock(side_effect=make_trainer)):
+            with pytest.raises(TrainingCancelled):
+                train_ast(
+                    train_dataset="owner/ds",
+                    training_dir=str(tmp_path),
+                    dataloader_num_workers=1,
+                    on_progress=seen.append,
+                    # Stop on the first step, not during preprocessing.
+                    should_stop=lambda: training["started"],
+                )
+
+        assert [p.step for p in seen] == [1]
+        fake_trainer.save_model.assert_not_called()
+        assert not (tmp_path / "best_model").exists()
+
+    @pytest.mark.usefixtures("requires_torchcodec")
+    def test_cancel_before_training_builds_no_trainer(self, tmp_path) -> None:
+        from bioamla.exceptions import TrainingCancelled
+        from bioamla.ml.training import train_ast
+
+        trainer_cls = MagicMock()
+        with self._mocks(MagicMock(), trainer_cls=trainer_cls):
+            with pytest.raises(TrainingCancelled, match="before loading the dataset"):
+                train_ast(
+                    train_dataset="owner/ds",
+                    training_dir=str(tmp_path),
+                    dataloader_num_workers=1,
+                    should_stop=lambda: True,
+                )
+        trainer_cls.assert_not_called()
+
+    @pytest.mark.usefixtures("requires_torchcodec")
+    def test_full_loop_mocked(self, tmp_path) -> None:
+        from bioamla.ml.training import train_ast
 
         fake_trainer = MagicMock()
         fake_trainer.state = SimpleNamespace(
@@ -474,21 +666,7 @@ class TestTrainAst:
         )
         fake_trainer.accelerator = None
 
-        fake_config = SimpleNamespace(num_labels=2, label2id={}, id2label={})
-
-        with (
-            patch("bioamla.ml.training._load_train_dataset", return_value=(dd, "category")),
-            patch("transformers.ASTFeatureExtractor.from_pretrained", return_value=fe),
-            patch("transformers.ASTConfig.from_pretrained", return_value=fake_config),
-            patch(
-                "transformers.ASTForAudioClassification.from_pretrained",
-                return_value=MagicMock(),
-            ),
-            patch("transformers.Trainer", return_value=fake_trainer),
-            patch("transformers.TrainingArguments", return_value=MagicMock()),
-            patch("evaluate.load", return_value=MagicMock()),
-            patch.object(torch.cuda, "is_available", return_value=False),
-        ):
+        with self._mocks(fake_trainer):
             result = train_ast(
                 train_dataset="owner/ds",
                 training_dir=str(tmp_path),

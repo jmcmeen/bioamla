@@ -48,6 +48,29 @@ class TestRunBatchParallel:
         assert result.failed == 2
         assert len(result.errors) == 2
 
+    def test_parallel_cancel_skips_queued_items(self):
+        import threading
+        import time
+
+        started: list[int] = []
+        lock = threading.Lock()
+
+        def work(i: int) -> int:
+            with lock:
+                started.append(i)
+            time.sleep(0.01)
+            return i
+
+        class Cancelled(Exception):
+            pass
+
+        def cancel(done: int, total: int) -> None:
+            raise Cancelled
+
+        with pytest.raises(Cancelled):
+            run_batch(list(range(200)), work, max_workers=2, on_progress=cancel)
+        assert len(started) < 200
+
     def test_parallel_supports_closures(self):
         # The domain batch wrappers pass closures as process_fn. Threads run them
         # in parallel fine; a process pool could not pickle them.
