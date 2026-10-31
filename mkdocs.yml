@@ -41,6 +41,7 @@ nav:
       - ml: api/ml.md
       - batch: api/batch.md
       - system: api/system.md
+      - workspace: api/workspace.md
       - common: api/common.md
       - protocols: api/protocols.md
       - exceptions: api/exceptions.md

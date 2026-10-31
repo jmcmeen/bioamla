@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `bioamla.workspace`: project workspaces. A workspace is a directory with a `.bioamla/` folder
+  (`workspace.toml`, `config.toml`, `artifacts.json`, and `annotations/`, `imported/`,
+  `datasets/`, `models/`, `runs/`); `create_workspace()`, `open_workspace()` and
+  `find_workspace()` (walks up from a directory, like git). Artifacts are linked (referenced in
+  place; paths inside the workspace stored relative so it can move) or imported (copied in).
+  `WorkspaceError` for malformed workspaces and ones written by a newer bioamla. First piece of
+  the 0.4.0 workspace and remote work; the format is shared with MagPy.
+
 ## [0.3.8] - 2026-10-31
 
 ### Security

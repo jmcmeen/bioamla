@@ -45,7 +45,18 @@ load_dotenv(override=False)
 # `bioamla --help` stay fast: accessing e.g. ``bioamla.audio`` imports it on first
 # use, but a bare ``import bioamla`` does not pull in librosa/numba/scipy/etc.
 _LAZY_DOMAINS = frozenset(
-    {"audio", "viz", "indices", "detect", "cluster", "catalogs", "datasets", "ml", "system"}
+    {
+        "audio",
+        "viz",
+        "indices",
+        "detect",
+        "cluster",
+        "catalogs",
+        "datasets",
+        "ml",
+        "system",
+        "workspace",
+    }
 )
 
 
@@ -82,6 +93,7 @@ __all__ = [
     "datasets",
     "ml",
     "system",
+    "workspace",
     # Batch types
     "BatchConfig",
     "BatchResult",

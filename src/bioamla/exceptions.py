@@ -114,6 +114,10 @@ class AnnotationError(BioamlaError):
     """An annotation operation (import/export/extraction/measurement) failed."""
 
 
+class WorkspaceError(BioamlaError):
+    """A workspace is malformed, already exists, or was written by a newer bioamla."""
+
+
 __all__ = [
     "BioamlaError",
     "InvalidInputError",
@@ -137,4 +141,5 @@ __all__ = [
     "AugmentationError",
     "LicenseGenerationError",
     "AnnotationError",
+    "WorkspaceError",
 ]
