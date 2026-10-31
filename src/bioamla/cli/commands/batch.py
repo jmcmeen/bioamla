@@ -490,7 +490,7 @@ def audio_info(input_dir, input_file, output_dir, max_workers, recursive, quiet)
 @recursive_option
 @quiet_option
 def audio_validate(input_dir, input_file, output_dir, max_workers, recursive, quiet) -> None:
-    """Check that WAV files are well-formed PCM (header only; no FFmpeg, no decoding).
+    """Check that WAV files are well-formed PCM or float (header only; no FFmpeg, no decoding).
 
     Writes validation_report.csv (file_name, valid, error) when --output-dir is given.
     Non-WAV files are reported as skipped. Exits 1 if any file is invalid, so this

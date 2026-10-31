@@ -43,11 +43,8 @@ class TestGetAudioInfo:
         assert info.subtype == "PCM_16"
         assert info.samples == 16000
 
-    def test_non_pcm_wav_falls_back_to_pydub(self, tmp_path) -> None:
-        import scipy.io.wavfile as wavfile
-
-        path = tmp_path / "float.wav"
-        wavfile.write(str(path), 16000, np.zeros(1600, dtype=np.float32))
+    def test_compressed_wav_falls_back_to_pydub(self, ulaw_wav) -> None:
+        path = ulaw_wav
         fake = {
             "duration": 0.1,
             "sample_rate": 16000,
@@ -184,15 +181,20 @@ class TestValidateWav:
         with pytest.raises(AudioLoadError):
             validate_wav(str(path))
 
-    def test_float_wav_raises(self, tmp_path) -> None:
+    def test_float_wav_is_valid(self, tmp_path) -> None:
         import scipy.io.wavfile as wavfile
 
         from bioamla.audio import validate_wav
 
         path = tmp_path / "float.wav"
         wavfile.write(str(path), 16000, np.zeros(160, dtype=np.float32))
+        assert validate_wav(str(path)).subtype == "FLOAT"
+
+    def test_compressed_wav_raises(self, ulaw_wav) -> None:
+        from bioamla.audio import validate_wav
+
         with pytest.raises(AudioLoadError):
-            validate_wav(str(path))
+            validate_wav(str(ulaw_wav))
 
     def test_non_wav_raises(self, tmp_path) -> None:
         from bioamla.audio import validate_wav

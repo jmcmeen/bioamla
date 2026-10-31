@@ -109,8 +109,8 @@ def read_audio_info_dict(filepath: str) -> dict[str, Any]:
     """
     Read header metadata for an audio file as a plain dictionary.
 
-    WAV files are read with riffy (pure Python, no FFmpeg). Anything riffy cannot
-    handle, such as a non-PCM WAV, and every other format goes through the pydub /
+    WAV files are read with riffy (pure Python, no FFmpeg; headers only). Compressed
+    WAVs, which riffy can't measure, and every other format go through the pydub /
     ffprobe backend. Keys: ``duration``, ``sample_rate``, ``channels``, ``samples``,
     ``format``, ``codec``, ``bit_depth``, ``subtype``.
 
@@ -167,7 +167,10 @@ def get_audio_info(filepath: str) -> AudioInfo:
 
 def validate_wav(filepath: str) -> AudioInfo:
     """
-    Check that ``filepath`` is a well-formed PCM WAV file.
+    Check that ``filepath`` is a well-formed, uncompressed WAV file.
+
+    Integer PCM and IEEE float audio pass, plain or ``WAVE_FORMAT_EXTENSIBLE``
+    (24-bit and multichannel recorder files).
 
     Parses the RIFF structure and format chunk with riffy (no decoding, no FFmpeg)
     and returns the header as :class:`AudioInfo` when the file is sound. Meant as a
@@ -177,7 +180,7 @@ def validate_wav(filepath: str) -> AudioInfo:
         NotFoundError: If the file does not exist.
         InvalidInputError: If the path is not a WAV file.
         AudioLoadError: If the RIFF structure is damaged, the format chunk is
-            malformed, or the audio is not PCM.
+            malformed, or the audio is compressed.
     """
     from bioamla.audio._riffy import get_wav_info
 

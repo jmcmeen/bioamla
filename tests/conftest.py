@@ -257,3 +257,24 @@ def test_audio_dir(tmp_path) -> str:
         wav.write(str(audio_path), sample_rate, samples)
 
     return str(audio_dir)
+
+
+@pytest.fixture
+def ulaw_wav(tmp_path):
+    """Path to a mu-law WAV: riffy can read its header but can't measure the audio."""
+    import struct
+
+    fmt = struct.pack("<HHIIHHH", 7, 1, 8000, 8000, 1, 8, 0)
+    path = tmp_path / "ulaw.wav"
+    path.write_bytes(
+        b"RIFF"
+        + struct.pack("<I", 4 + 8 + len(fmt) + 8 + 800)
+        + b"WAVE"
+        + b"fmt "
+        + struct.pack("<I", len(fmt))
+        + fmt
+        + b"data"
+        + struct.pack("<I", 800)
+        + b"\xff" * 800
+    )
+    return path

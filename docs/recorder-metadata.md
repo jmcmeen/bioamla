@@ -64,7 +64,9 @@ For chunk-level inspection or editing (fixing a wrong `Loc Position`, say) use t
 ## Whole deployments
 
 `bioamla batch audio validate` is a pre-flight step: it checks that every WAV under a
-directory is well-formed PCM from the header alone and exits 1 if any is not, writing
+directory is well-formed, uncompressed audio (integer PCM or IEEE float, including
+24-bit and multichannel extensible files) from the header alone and exits 1 if any is
+not, writing
 `validation_report.csv` (`file_name`, `valid`, `error`) when `--output-dir` is given.
 Non-WAV files are reported as `skipped`.
 

@@ -472,6 +472,8 @@ def _get_metadata_ffprobe(filepath: str) -> dict | None:
             "pcm_s32le": "PCM_32",
             "pcm_s32be": "PCM_32",
             "pcm_u8": "PCM_U8",
+            "pcm_f32le": "FLOAT",
+            "pcm_f64le": "DOUBLE",
             "flac": "FLAC",
             "mp3": "MP3",
             "mp3float": "MP3",
