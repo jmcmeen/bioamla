@@ -1,0 +1,74 @@
+{
+  "additionalProperties": false,
+  "description": "Settings for :func:`frame_features`.\n\n``n_fft``, ``hop`` and ``f_max`` default to values derived from the sample rate:\n``n_fft`` 1024 (2048 above 60 kHz), ``hop`` ``n_fft // 4``, and ``f_max`` the\nlower of 92% of Nyquist and 16 kHz.\n\nAttributes:\n    n_fft: FFT size in samples.\n    hop: Samples between frame starts.\n    n_mels: Number of mel bands.\n    n_mfcc: Number of MFCCs, including c0.\n    f_min: Lower edge of the analysis band in Hz.\n    f_max: Upper edge of the analysis band in Hz.\n    denoise: Subtract the stationary noise floor before measuring.\n    noise_percentile: Percentile (0-1) of each bin's magnitude taken as its noise floor.\n    noise_scale: Factor applied to that percentile before subtracting.",
+  "properties": {
+    "n_fft": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "N Fft"
+    },
+    "hop": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hop"
+    },
+    "n_mels": {
+      "default": 40,
+      "title": "N Mels",
+      "type": "integer"
+    },
+    "n_mfcc": {
+      "default": 13,
+      "title": "N Mfcc",
+      "type": "integer"
+    },
+    "f_min": {
+      "default": 250.0,
+      "title": "F Min",
+      "type": "number"
+    },
+    "f_max": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "F Max"
+    },
+    "denoise": {
+      "default": true,
+      "title": "Denoise",
+      "type": "boolean"
+    },
+    "noise_percentile": {
+      "default": 0.2,
+      "title": "Noise Percentile",
+      "type": "number"
+    },
+    "noise_scale": {
+      "default": 1.8,
+      "title": "Noise Scale",
+      "type": "number"
+    }
+  },
+  "title": "FrameFeatureConfig",
+  "type": "object"
+}

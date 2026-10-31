@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `frame_features()` (`bioamla.audio`): per-frame spectral descriptors (level, centroid, spread,
+  flatness, crest, rolloff, flux, peak frequency and the band edges within 20 dB of the peak), a
+  log-mel spectrogram and MFCCs, with optional stationary noise-floor subtraction. numpy only, so
+  it works on the base install. Settings are a validated `FrameFeatureConfig` (schema
+  `frame-features`); `FrameFeatures.to_dataframe()` gives one row per frame.
+
 ## [0.3.3] - 2026-10-31
 
 ### Added

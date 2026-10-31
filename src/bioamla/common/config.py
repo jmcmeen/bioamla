@@ -39,6 +39,7 @@ T = TypeVar("T")
 # names doesn't import the domain packages (several need an extra installed).
 CONFIG_CLASSES: dict[str, str] = {
     "batch": "bioamla.batch:BatchConfig",
+    "frame-features": "bioamla.audio.features:FrameFeatureConfig",
     "waveform-augmentation": "bioamla.datasets.augmentation:WaveformAugmentationConfig",
     "ast-train-file": "bioamla.ml.train_config:AstTrainConfigFile",
     "model": "bioamla.ml.base:ModelConfig",

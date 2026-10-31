@@ -39,6 +39,12 @@ from bioamla.audio.discovery import (
     get_wav_metadata,
     list_audio_files,
 )
+from bioamla.audio.features import (
+    DESCRIPTORS,
+    FrameFeatureConfig,
+    FrameFeatures,
+    frame_features,
+)
 from bioamla.audio.info import (
     AudioAnalysis,
     AudioInfo,
@@ -154,6 +160,11 @@ __all__ = [
     "get_frequency_stats",
     "detect_silence",
     "is_silent",
+    # Frame-level features (array-level)
+    "DESCRIPTORS",
+    "FrameFeatureConfig",
+    "FrameFeatures",
+    "frame_features",
     # Signal processing
     "AudioSegment",
     "AudioEvent",
