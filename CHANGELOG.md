@@ -13,6 +13,9 @@ All notable changes to this project are documented here. The format is based on
   log-mel spectrogram and MFCCs, with optional stationary noise-floor subtraction. numpy only, so
   it works on the base install. Settings are a validated `FrameFeatureConfig` (schema
   `frame-features`); `FrameFeatures.to_dataframe()` gives one row per frame.
+- `mfcc_trajectory()` (`bioamla.audio`): a recording's path through timbre space. Frames above a
+  level gate are projected onto the principal axes of their MFCCs (c0 left out), giving
+  per-frame coordinates, the explained variance per axis and the axes themselves.
 
 ## [0.3.3] - 2026-10-31
 

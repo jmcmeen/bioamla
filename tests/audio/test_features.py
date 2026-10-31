@@ -1,12 +1,13 @@
 """Frame-level descriptors, log-mel spectrogram and MFCCs."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from bioamla.audio import DESCRIPTORS, FrameFeatureConfig, frame_features
+from bioamla.audio import DESCRIPTORS, FrameFeatureConfig, frame_features, mfcc_trajectory
 from bioamla.exceptions import ConfigValidationError, InvalidInputError
 
 FIXTURE = Path(__file__).parent / "fixtures" / "frame_features_reference.json"
@@ -220,3 +221,97 @@ class TestErrors:
     def test_config_validates_types(self) -> None:
         with pytest.raises(ConfigValidationError, match="n_mels"):
             FrameFeatureConfig(n_mels="many")
+
+
+class TestTrajectory:
+    def test_matches_reference(self, features, reference) -> None:
+        traj = mfcc_trajectory(features, gate_db=reference["gate_db"], scale="equalize")
+        np.testing.assert_array_equal(traj.active, np.array(reference["active"], dtype=bool))
+        ref = np.array(reference["trajectory"])[traj.active]
+        ours = traj.coords[traj.active]
+        for k in range(3):  # each axis may come out with either sign
+            sign = np.sign(ref[:, k] @ ours[:, k])
+            np.testing.assert_allclose(sign * ours[:, k], ref[:, k], atol=1e-4)
+
+    def test_shapes_and_gating(self, features) -> None:
+        traj = mfcc_trajectory(features)
+        assert traj.coords.shape == (features.n_frames, 3)
+        assert traj.components.shape == (3, 12)
+        assert np.isnan(traj.coords[~traj.active]).all()
+        assert np.isfinite(traj.coords[traj.active]).all()
+        assert 0 < traj.active.sum() < features.n_frames  # the gaps are gated out
+
+    def test_axes_are_ordered_and_orthonormal(self, features) -> None:
+        traj = mfcc_trajectory(features, n_components=5)
+        ratio = traj.explained_variance_ratio
+        assert (np.diff(ratio) <= 0).all()
+        assert 0 < ratio.sum() <= 1
+        np.testing.assert_allclose(traj.components @ traj.components.T, np.eye(5), atol=1e-10)
+
+    def test_raw_coords_have_axis_variance(self, features) -> None:
+        traj = mfcc_trajectory(features)
+        var = traj.coords[traj.active].var(axis=0)
+        assert (np.diff(var) <= 0).all()
+
+    def test_deterministic_signs(self, features) -> None:
+        traj = mfcc_trajectory(features)
+        for row in traj.components:
+            assert row[np.abs(row).argmax()] > 0
+        # Flipping the input's MFCCs flips the data, not the convention.
+        flipped = mfcc_trajectory(replace(features, mfcc=-features.mfcc))
+        for row in flipped.components:
+            assert row[np.abs(row).argmax()] > 0
+
+    def test_times_are_a_copy(self, features) -> None:
+        traj = mfcc_trajectory(features)
+        traj.times += 1
+        assert features.times[0] < 1
+
+    def test_rank_deficient_input_has_no_negative_variance(self) -> None:
+        f = frame_features(tone(3000, seconds=2), 22050, FrameFeatureConfig(denoise=False))
+        traj = mfcc_trajectory(f, n_components=5)
+        assert (traj.explained_variance_ratio >= 0).all()
+
+    def test_similar_sounds_land_together(self) -> None:
+        sr = 22050
+        a, b = tone(2000, seconds=0.5), tone(6000, seconds=0.5)
+        f = frame_features(np.concatenate([a, b, a, b]), sr, FrameFeatureConfig(denoise=False))
+        traj = mfcc_trajectory(f, n_components=1)
+        pc1 = traj.coords[:, 0]
+        first = pc1[(f.times > 0.1) & (f.times < 0.4)].mean()
+        third = pc1[(f.times > 1.1) & (f.times < 1.4)].mean()
+        second = pc1[(f.times > 0.6) & (f.times < 0.9)].mean()
+        assert abs(first - third) < abs(first - second) / 10
+
+    def test_to_dataframe_and_dict(self, features) -> None:
+        traj = mfcc_trajectory(features)
+        df = traj.to_dataframe()
+        assert list(df.columns) == ["time", "active", "pc1", "pc2", "pc3"]
+        d = traj.to_dict()
+        json.dumps(d)  # NaN becomes None
+        assert (~traj.active).any()
+        gated = int(np.argmin(traj.active))
+        assert d["coords"][gated] == [None, None, None]
+
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"n_components": 0}, "n_components"),
+            ({"n_components": 13}, "n_components"),
+            ({"scale": "loud"}, "scale"),
+            ({"gate_db": 0}, "gate_db"),
+            ({"gate_db": float("nan")}, "gate_db"),
+            ({"n_components": 2.5}, "integer"),
+            ({"n_components": True}, "integer"),
+        ],
+    )
+    def test_bad_arguments(self, features, kwargs: dict, match: str) -> None:
+        with pytest.raises(InvalidInputError, match=match):
+            mfcc_trajectory(features, **kwargs)
+
+    def test_too_few_loud_frames(self) -> None:
+        x = np.zeros(22050)
+        x[5000:5100] = 0.5  # one click
+        f = frame_features(x, 22050, FrameFeatureConfig(denoise=False))
+        with pytest.raises(InvalidInputError, match="frames are within"):
+            mfcc_trajectory(f, gate_db=3)

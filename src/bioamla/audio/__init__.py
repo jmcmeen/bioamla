@@ -43,7 +43,9 @@ from bioamla.audio.features import (
     DESCRIPTORS,
     FrameFeatureConfig,
     FrameFeatures,
+    Trajectory,
     frame_features,
+    mfcc_trajectory,
 )
 from bioamla.audio.info import (
     AudioAnalysis,
@@ -165,6 +167,8 @@ __all__ = [
     "FrameFeatureConfig",
     "FrameFeatures",
     "frame_features",
+    "Trajectory",
+    "mfcc_trajectory",
     # Signal processing
     "AudioSegment",
     "AudioEvent",

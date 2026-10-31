@@ -1,4 +1,4 @@
-"""Frame-level spectral descriptors, log-mel spectrogram and MFCCs.
+"""Frame-level spectral descriptors, log-mel spectrogram, MFCCs and timbre trajectory.
 
 :func:`frame_features` describes a recording one short frame at a time, so you can
 follow how a call's pitch, bandwidth or tonality moves rather than summarising the
@@ -31,6 +31,9 @@ The analysis:
    relative to the loudest band, floored at -40 dB so leftover noise can't swing the
    cepstrum) and MFCCs (an unnormalised DCT-II of the log-mel frames).
 
+:func:`mfcc_trajectory` then follows the recording through timbre space: the
+MFCCs of the frames above a level gate are projected onto their principal axes.
+
 Only numpy is needed, so this works on the base install.
 """
 
@@ -39,7 +42,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import asdict, dataclass, field, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
@@ -66,6 +69,7 @@ DESCRIPTORS: tuple[str, ...] = (
 )
 
 _MIN_FRAMES = 8
+_EQUALIZE_SPAN = 2.2  # "equalize" scaling: puts most frames within about +-1
 
 
 @config_dataclass
@@ -375,4 +379,156 @@ def frame_features(
     )
 
 
-__all__ = ["DESCRIPTORS", "FrameFeatureConfig", "FrameFeatures", "frame_features"]
+@dataclass
+class Trajectory:
+    """A recording's path through timbre space, from :func:`mfcc_trajectory`.
+
+    Attributes:
+        times: Centre time of each frame in seconds, shape ``(frames,)``.
+        coords: Each frame's position on the principal axes, shape
+            ``(frames, n_components)``; NaN for frames below the level gate.
+        active: Which frames passed the gate, shape ``(frames,)``.
+        explained_variance_ratio: Share of the MFCC variance each axis carries.
+        components: The principal axes in MFCC 1..n space, shape
+            ``(n_components, n_mfcc - 1)``.
+        mean: Mean of MFCC 1..n over the active frames, shape ``(n_mfcc - 1,)``.
+        gate_db: The level gate used, in dB below the loudest frame.
+        scale: The axis scaling applied (``None`` or ``"equalize"``).
+    """
+
+    times: np.ndarray
+    coords: np.ndarray
+    active: np.ndarray
+    explained_variance_ratio: np.ndarray
+    components: np.ndarray
+    mean: np.ndarray
+    gate_db: float
+    scale: Literal["equalize"] | None = None
+
+    @property
+    def n_components(self) -> int:
+        """Number of axes."""
+        return self.coords.shape[1]
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """One row per frame: ``time``, ``active``, then ``pc1``..``pc<n>``."""
+        import pandas as pd
+
+        columns: dict[str, Any] = {"time": self.times, "active": self.active}
+        for k in range(self.n_components):
+            columns[f"pc{k + 1}"] = self.coords[:, k]
+        return pd.DataFrame(columns)
+
+    def to_dict(self) -> dict[str, Any]:
+        """All fields as lists; gated frames' coordinates are ``None``."""
+        return {
+            "times": self.times.tolist(),
+            "coords": [[None if np.isnan(v) else float(v) for v in row] for row in self.coords],
+            "active": self.active.tolist(),
+            "explained_variance_ratio": self.explained_variance_ratio.tolist(),
+            "components": self.components.tolist(),
+            "mean": self.mean.tolist(),
+            "gate_db": self.gate_db,
+            "scale": self.scale,
+        }
+
+
+def mfcc_trajectory(
+    features: FrameFeatures,
+    gate_db: float = 38.0,
+    n_components: int = 3,
+    scale: Literal["equalize"] | None = None,
+) -> Trajectory:
+    """Project each frame's timbre onto the principal axes of the recording's MFCCs.
+
+    Frames quieter than ``gate_db`` below the loudest frame are left out (silence
+    would otherwise dominate the fit). PCA runs on MFCC 1..n of the remaining
+    frames; c0 is left out because it tracks level, not timbre. Frames that sound
+    alike land close together, so a song traces a path whose shape follows its
+    structure. Each axis's sign is fixed (its largest loading is positive), so the
+    output is deterministic. If the active frames vary in fewer directions than
+    ``n_components`` (a steady tone, say), the extra axes carry no variance and
+    their direction is arbitrary.
+
+    Args:
+        features: Output of :func:`frame_features`.
+        gate_db: Level gate in dB below the loudest frame.
+        n_components: Number of axes to keep.
+        scale: ``None`` keeps raw PCA coordinates. ``"equalize"`` divides each axis
+            by ``2.2 * (var_1 * var_k) ** 0.25`` (``var_1`` the first axis's variance,
+            ``var_k`` this axis's, floored at ``1e-4 * var_1``). That evens the axes
+            out for display while keeping their order, and puts most frames within
+            about +-1.
+
+    Returns:
+        :class:`Trajectory`.
+
+    Raises:
+        InvalidInputError: If ``n_components`` is out of range, ``scale`` is unknown,
+            or too few frames pass the gate to fit the axes.
+
+    Example:
+        >>> from bioamla.audio import frame_features, load_audio, mfcc_trajectory
+        >>> traj = mfcc_trajectory(frame_features(*load_audio("wren.wav")))
+        >>> traj.explained_variance_ratio
+    """
+    mfcc = features.mfcc[:, 1:]
+    d = mfcc.shape[1]
+    if isinstance(n_components, bool) or not isinstance(n_components, (int, np.integer)):
+        raise InvalidInputError(f"n_components must be an integer, got {n_components!r}")
+    if not 1 <= n_components <= d:
+        raise InvalidInputError(
+            f"n_components must be between 1 and {d} (n_mfcc - 1), got {n_components}"
+        )
+    if scale not in (None, "equalize"):
+        raise InvalidInputError(f"scale must be None or 'equalize', got {scale!r}")
+    if not (math.isfinite(gate_db) and gate_db > 0):
+        raise InvalidInputError(f"gate_db must be a positive number, got {gate_db}")
+
+    active = features.descriptors["level_db"] > -gate_db
+    n = int(active.sum())
+    needed = max(4, n_components + 1)
+    if n < needed:
+        raise InvalidInputError(
+            f"only {n} frames are within {gate_db:g} dB of the loudest; "
+            f"need at least {needed} to fit {n_components} axes"
+        )
+
+    x = mfcc[active]
+    mean = x.mean(axis=0)
+    centred = x - mean
+    values, vectors = np.linalg.eigh(centred.T @ centred / n)
+    values = values.clip(min=0.0)  # round-off can leave tiny negatives
+    order = np.argsort(values)[::-1][:n_components]
+    variances = values[order]
+    components = vectors[:, order].T
+    signs = np.sign(components[np.arange(n_components), np.abs(components).argmax(axis=1)])
+    components *= np.where(signs == 0, 1.0, signs)[:, None]
+
+    projected = centred @ components.T
+    if scale == "equalize":
+        top = max(variances[0], 1e-12)
+        projected /= _EQUALIZE_SPAN * np.sqrt(np.sqrt(top * np.maximum(variances, top * 1e-4)))
+    coords = np.full((len(active), n_components), np.nan)
+    coords[active] = projected
+    total = values.sum()
+    return Trajectory(
+        times=features.times.copy(),
+        coords=coords,
+        active=active,
+        explained_variance_ratio=variances / total if total > 0 else np.zeros(n_components),
+        components=components,
+        mean=mean,
+        gate_db=float(gate_db),
+        scale=scale,
+    )
+
+
+__all__ = [
+    "DESCRIPTORS",
+    "FrameFeatureConfig",
+    "FrameFeatures",
+    "Trajectory",
+    "frame_features",
+    "mfcc_trajectory",
+]
