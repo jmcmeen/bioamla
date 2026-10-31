@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from bioamla.audio import _pydub
+from bioamla.exceptions import AudioLoadError, AudioSaveError, NotFoundError
 
 
 def _make_segment(samples: np.ndarray, sample_width: int, channels: int, frame_rate: int):
@@ -47,7 +48,7 @@ class TestAudioSegmentToNumpy:
 
     def test_unsupported_width_raises(self) -> None:
         seg = _make_segment(np.array([1, 2], dtype=np.int16), 5, 1, 16000)
-        with pytest.raises(ValueError):
+        with pytest.raises(AudioLoadError):
             _pydub._audiosegment_to_numpy(seg)
 
     def test_stereo_downmix(self) -> None:
@@ -80,7 +81,7 @@ class TestNumpyToAudioSegment:
 
 class TestLoadAudio:
     def test_missing_file(self, tmp_path) -> None:
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(NotFoundError):
             _pydub.load_audio(str(tmp_path / "missing.wav"))
 
     def test_wav_via_soundfile(self, test_audio_path: str) -> None:
@@ -109,7 +110,7 @@ class TestLoadAudio:
         path = tmp_path / "x.mp3"
         path.write_bytes(b"fake")
         with patch.object(_pydub.AudioSegment, "from_file", side_effect=RuntimeError("boom")):
-            with pytest.raises(Exception, match="Error opening"):
+            with pytest.raises(AudioLoadError, match="Error opening"):
                 _pydub.load_audio(str(path))
 
     def test_soundfile_stereo_downmix(self, test_audio_path: str) -> None:
@@ -144,8 +145,14 @@ class TestSaveAudio:
 
     def test_save_error_wrapped(self, tmp_path) -> None:
         with patch.object(_pydub, "_numpy_to_audiosegment", side_effect=RuntimeError("boom")):
-            with pytest.raises(Exception, match="Failed to save"):
+            with pytest.raises(AudioSaveError, match="Failed to save"):
                 _pydub.save_audio(str(tmp_path / "out.wav"), np.zeros(10, dtype=np.float32), 16000)
+
+    def test_save_unwritable_parent_wrapped(self, tmp_path) -> None:
+        blocker = tmp_path / "file"
+        blocker.write_text("not a directory")
+        with pytest.raises(AudioSaveError, match="Failed to save"):
+            _pydub.save_audio(str(blocker / "out.wav"), np.zeros(10, dtype=np.float32), 16000)
 
 
 class TestGetMetadataFfprobe:
@@ -220,7 +227,7 @@ class TestGetMetadataFfprobe:
 
 class TestGetAudioInfo:
     def test_missing_file(self, tmp_path) -> None:
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(NotFoundError):
             _pydub.get_audio_info(str(tmp_path / "missing.wav"))
 
     def test_ffprobe_path(self, test_audio_path: str) -> None:
@@ -248,5 +255,5 @@ class TestGetAudioInfo:
             patch.object(_pydub, "_get_metadata_ffprobe", return_value=None),
             patch.object(_pydub.AudioSegment, "from_file", side_effect=RuntimeError("boom")),
         ):
-            with pytest.raises(Exception, match="Failed to get audio info"):
+            with pytest.raises(AudioLoadError, match="Failed to get audio info"):
                 _pydub.get_audio_info(test_audio_path)

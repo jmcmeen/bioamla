@@ -21,6 +21,8 @@ from pathlib import Path
 import numpy as np
 from pydub import AudioSegment
 
+from bioamla.exceptions import AudioLoadError, AudioSaveError, NotFoundError
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,7 +39,7 @@ def _audiosegment_to_numpy(segment: AudioSegment) -> tuple[np.ndarray, int]:
         Tuple of (audio_array, sample_rate) where audio is mono float32 [-1.0, 1.0].
 
     Raises:
-        ValueError: If sample width is not 1, 2, 3, or 4 bytes.
+        AudioLoadError: If sample width is not 1, 2, 3, or 4 bytes.
     """
     array = np.array(segment.get_array_of_samples())
     sample_width = segment.sample_width
@@ -62,7 +64,7 @@ def _audiosegment_to_numpy(segment: AudioSegment) -> tuple[np.ndarray, int]:
             array = array.astype(np.int32)
             audio = array.astype(np.float32) / 2147483648.0
     else:
-        raise ValueError(
+        raise AudioLoadError(
             f"Unsupported sample width: {sample_width} bytes. "
             f"Expected 1 (8-bit), 2 (16-bit), 3 (24-bit), or 4 (32-bit)."
         )
@@ -122,18 +124,18 @@ def _load_via_pydub(filepath: str) -> tuple[np.ndarray, int]:
         Tuple of (audio_array, sample_rate).
 
     Raises:
-        FileNotFoundError: If file doesn't exist.
-        Exception: If file cannot be loaded.
+        NotFoundError: If file doesn't exist.
+        AudioLoadError: If file cannot be loaded.
     """
     path = Path(filepath)
     if not path.exists():
-        raise FileNotFoundError(f"Audio file not found: {filepath}")
+        raise NotFoundError(f"Audio file not found: {filepath}")
 
     try:
         segment = AudioSegment.from_file(str(path))
         return _audiosegment_to_numpy(segment)
     except Exception as e:
-        raise Exception(f"Error opening '{filepath}': {e}") from e
+        raise AudioLoadError(f"Error opening '{filepath}': {e}") from e
 
 
 def load_audio(filepath: str) -> tuple[np.ndarray, int]:
@@ -150,12 +152,12 @@ def load_audio(filepath: str) -> tuple[np.ndarray, int]:
         Tuple of (audio_array, sample_rate) where audio is mono float32 [-1.0, 1.0].
 
     Raises:
-        FileNotFoundError: If file doesn't exist.
-        Exception: If file cannot be loaded.
+        NotFoundError: If file doesn't exist.
+        AudioLoadError: If file cannot be loaded.
     """
     path = Path(filepath)
     if not path.exists():
-        raise FileNotFoundError(f"Audio file not found: {filepath}")
+        raise NotFoundError(f"Audio file not found: {filepath}")
 
     ext = path.suffix.lower()
 
@@ -199,10 +201,9 @@ def save_audio(
         format: Output format (auto-detected from extension if None).
 
     Raises:
-        Exception: If file cannot be saved.
+        AudioSaveError: If file cannot be saved.
     """
     path = Path(filepath)
-    path.parent.mkdir(parents=True, exist_ok=True)
 
     format_to_use = format
     if format_to_use is None:
@@ -217,11 +218,12 @@ def save_audio(
         format_to_use = format_map.get(ext, "wav")
 
     try:
+        path.parent.mkdir(parents=True, exist_ok=True)
         channels = 1 if audio.ndim == 1 else audio.shape[1]
         segment = _numpy_to_audiosegment(audio, sample_rate, channels)
         segment.export(str(path), format=format_to_use)
     except Exception as e:
-        raise Exception(f"Failed to save audio to '{filepath}': {e}") from e
+        raise AudioSaveError(f"Failed to save audio to '{filepath}': {e}") from e
 
 
 def _get_metadata_ffprobe(filepath: str) -> dict | None:
@@ -329,12 +331,12 @@ def get_audio_info(filepath: str) -> dict:
         format, codec, bit_depth, subtype.
 
     Raises:
-        FileNotFoundError: If file doesn't exist.
-        Exception: If metadata cannot be extracted.
+        NotFoundError: If file doesn't exist.
+        AudioLoadError: If metadata cannot be extracted.
     """
     path = Path(filepath)
     if not path.exists():
-        raise FileNotFoundError(f"Audio file not found: {filepath}")
+        raise NotFoundError(f"Audio file not found: {filepath}")
 
     # Try fast ffprobe extraction first
     metadata = _get_metadata_ffprobe(str(path))
@@ -368,4 +370,4 @@ def get_audio_info(filepath: str) -> dict:
             "subtype": subtype,
         }
     except Exception as e:
-        raise Exception(f"Failed to get audio info from '{filepath}': {e}") from e
+        raise AudioLoadError(f"Failed to get audio info from '{filepath}': {e}") from e
