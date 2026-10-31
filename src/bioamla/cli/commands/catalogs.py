@@ -335,14 +335,15 @@ def hf_push_dataset(
     without either are pushed as-is.
 
     ``--coordinates round`` or ``strip`` redacts recorder locations in what is
-    uploaded (metadata CSVs, manifest sites, generated card); the local folder
-    keeps full precision.
+    uploaded (metadata CSVs, manifest sites, generated card, and the position in
+    WAV recorder metadata); the local folder keeps full precision.
     """
     from bioamla.catalogs import huggingface as hf
     from bioamla.cli.console import echo, print_success, print_warning
     from bioamla.datasets import (
         has_location_columns,
         unredacted_location_files,
+        wavs_with_location,
         write_dataset_card,
     )
 
@@ -356,18 +357,23 @@ def hf_push_dataset(
         except BioamlaError as e:
             print_warning(f"Warning: could not generate dataset card ({e})")
 
-    if coordinates == "keep" and has_location_columns(path):
-        print_warning(
-            "The metadata includes per-file locations, which will be published as they are. "
-            "Use --coordinates round or --coordinates strip to redact them."
-        )
-    elif coordinates != "keep":
+    if coordinates == "keep":
+        where = []
+        if has_location_columns(path):
+            where.append("the metadata")
+        if wavs_with_location(path):
+            where.append("the WAV files' recorder metadata")
+        if where:
+            print_warning(
+                f"Per-file locations in {' and '.join(where)} will be published as they are. "
+                "Use --coordinates round or --coordinates strip to redact them."
+            )
+    else:
         unredacted = unredacted_location_files(path)
         if unredacted:
             print_warning(
                 f"{len(unredacted)} file(s) may still carry a location that --coordinates "
-                f"does not change (embedded WAV metadata, JSON/text, Parquet), e.g. "
-                f"{unredacted[0]}."
+                f"does not change (JSON/text, Parquet), e.g. {unredacted[0]}."
             )
 
     try:
