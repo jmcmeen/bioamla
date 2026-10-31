@@ -30,7 +30,6 @@ Example:
 """
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,6 +39,7 @@ import numpy as np
 from numba import njit
 
 from bioamla.exceptions import InvalidInputError
+from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
 
@@ -874,7 +874,7 @@ def batch_compute_indices(
     verbose: bool = True,
     *,
     max_workers: int = 1,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
     **kwargs: Any,
 ) -> list[dict[str, Any]]:
     """

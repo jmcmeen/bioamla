@@ -26,6 +26,7 @@ import numpy as np
 
 from bioamla.common.config import config_dataclass
 from bioamla.exceptions import InvalidInputError, ModelError
+from bioamla.protocols import OnProgress
 
 if TYPE_CHECKING:
     import torch
@@ -221,7 +222,7 @@ class BaseAudioModel(ABC):
     def predict_batch(
         self,
         audio_files: list[str],
-        progress_callback: Callable[[int, int], None] | None = None,
+        progress_callback: OnProgress | None = None,
     ) -> BatchPredictionResult:
         """
         Run batch prediction on multiple files.

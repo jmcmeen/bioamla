@@ -28,6 +28,12 @@ All notable changes to this project are documented here. The format is based on
 - `bioamla --log-format json` writes log records to stderr as JSON lines with those fields
   (`bioamla.common.log.JsonFormatter`), and `--log-level` sets the level for any command.
 
+- `bioamla.protocols`: the interfaces bioamla accepts from callers, as `typing.Protocol`s —
+  `OnProgress` (the `on_progress(completed, total)` hook), `OnBatchProgress`, `OnTrainProgress`,
+  `ShouldStop`, `OnDownloadProgress` and `AudioModel`. Function signatures now use them, and
+  `common.progress.ProgressCallback` and `catalogs.inat.ProgressCallback` are aliases of them.
+  The module imports only the standard library.
+
 ### Deprecated
 
 - `bioamla.datasets.AugmentationConfig` is renamed `WaveformAugmentationConfig`, and

@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TypeVar
 
+from bioamla.protocols import OnBatchProgress
+
 T = TypeVar("T")
 I = TypeVar("I")  # noqa: E741 - item type
 
@@ -35,7 +37,7 @@ class BatchProgress:
 
 
 # Type alias for progress callback
-ProgressCallback = Callable[[BatchProgress], None]
+ProgressCallback = OnBatchProgress  # alias kept for existing imports
 
 
 @dataclass

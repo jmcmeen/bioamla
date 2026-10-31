@@ -33,6 +33,7 @@ from typing import Any, TypeVar
 from bioamla.common.config import config_dataclass
 from bioamla.common.log import log_fields
 from bioamla.exceptions import InvalidInputError, NotFoundError
+from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +291,7 @@ def run_batch(
     *,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
     operation: str = "batch",
 ) -> BatchResult:
     """
@@ -611,7 +612,7 @@ def run_csv_batch(
     *,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
     operation: str = "batch",
 ) -> BatchResult:
     """Run ``process_row`` over every row of a loaded CSV context.

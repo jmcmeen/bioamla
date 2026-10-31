@@ -16,10 +16,9 @@ from bioamla._extras import import_extra
 from bioamla.common.config import config_dataclass
 from bioamla.common.deprecation import deprecated_aliases
 from bioamla.exceptions import AugmentationError, NotFoundError
+from bioamla.protocols import OnProgress
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -240,7 +239,7 @@ def batch_augment(
     verbose: bool = True,
     *,
     max_workers: int = 1,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> dict[str, Any]:
     """Augment all audio files in a directory.
 

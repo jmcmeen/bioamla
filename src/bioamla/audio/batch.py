@@ -21,6 +21,7 @@ from bioamla.audio.io import load_audio, save_audio
 from bioamla.audio.processing import resample_audio
 from bioamla.batch import BatchResult, SegmentInfo, output_stems, run_batch, write_rows_csv
 from bioamla.exceptions import InvalidInputError, NotFoundError
+from bioamla.protocols import OnProgress
 
 
 def batch_transform_files(
@@ -32,7 +33,7 @@ def batch_transform_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> BatchResult:
     """
     Apply a per-file transform to every audio file in a directory.
@@ -95,7 +96,7 @@ def batch_resample_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> BatchResult:
     """
     Resample every audio file in a directory to ``target_sample_rate``.
@@ -125,7 +126,7 @@ def batch_convert_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> BatchResult:
     """
     Convert every audio file in a directory to ``target_format``.
@@ -253,7 +254,7 @@ def batch_info_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> BatchResult:
     """
     Read the metadata of every audio file in a directory.
@@ -320,7 +321,7 @@ def batch_segment_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> BatchResult:
     """
     Split every audio file in a directory into fixed-duration segments.

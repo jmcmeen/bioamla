@@ -9,7 +9,6 @@ does not exist and :class:`AudioLoadError` when decoding fails.
 """
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,6 +24,7 @@ from bioamla.audio.analysis import (
     get_frequency_stats,
 )
 from bioamla.exceptions import AudioLoadError, NotFoundError
+from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
 
@@ -272,7 +272,7 @@ def analyze_audio_batch(
     verbose: bool = True,
     *,
     max_workers: int = 1,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> list[AudioAnalysis]:
     """
     Analyze multiple audio files.

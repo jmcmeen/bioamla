@@ -22,7 +22,7 @@ Example:
 """
 
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,6 +31,7 @@ import numpy as np
 
 from bioamla.common.config import config_dataclass
 from bioamla.exceptions import ModelError
+from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +270,7 @@ class EmbeddingExtractor:
     def extract_iter(
         self,
         audio_files: list[str],
-        progress_callback: Callable[[int, int], None] | None = None,
+        progress_callback: OnProgress | None = None,
     ) -> Iterator[EmbeddingResult]:
         """
         Extract embeddings from multiple files, yielding per-file results.
@@ -305,7 +306,7 @@ class EmbeddingExtractor:
         self,
         audio_files: list[str],
         aggregate: str = "mean",
-        progress_callback: Callable[[int, int], None] | None = None,
+        progress_callback: OnProgress | None = None,
     ) -> BatchEmbeddingResult:
         """
         Extract embeddings from multiple files into a single stacked array.
@@ -420,7 +421,7 @@ def extract_embeddings_batch(
     output_format: str = "npy",
     aggregate: str = "mean",
     normalize: bool = True,
-    progress_callback: Callable[[int, int], None] | None = None,
+    progress_callback: OnProgress | None = None,
 ) -> BatchEmbeddingResult:
     """
     Extract embeddings from multiple audio files, optionally saving them.

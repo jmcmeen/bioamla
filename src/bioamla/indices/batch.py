@@ -6,7 +6,6 @@ Directory-level wrapper for acoustic indices built on
 :func:`bioamla.batch.run_batch`.
 """
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +13,7 @@ from bioamla.audio.discovery import list_audio_files
 from bioamla.batch import BatchResult, run_batch, write_rows_csv
 from bioamla.exceptions import NotFoundError
 from bioamla.indices.compute import _failed_indices_row, _indices_row, check_index_names
+from bioamla.protocols import OnProgress
 
 
 def batch_index_files(
@@ -24,7 +24,7 @@ def batch_index_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
     **kwargs: Any,
 ) -> BatchResult:
     """

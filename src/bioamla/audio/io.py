@@ -23,6 +23,7 @@ import numpy as np
 from bioamla.audio.data import AudioData
 from bioamla.common.files import prepare_output_path, require_exists
 from bioamla.exceptions import AudioLoadError, AudioSaveError, DependencyError
+from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
 
@@ -440,7 +441,7 @@ def batch_process(
     verbose: bool = True,
     *,
     max_workers: int = 1,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> dict:
     """
     Process all audio files in a directory.

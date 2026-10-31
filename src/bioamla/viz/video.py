@@ -32,7 +32,6 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -42,6 +41,7 @@ import numpy as np
 
 from bioamla.audio.data import ToDictMixin
 from bioamla.exceptions import DependencyError, InvalidInputError, NotFoundError, ProcessingError
+from bioamla.protocols import OnProgress
 from bioamla.viz.core import WindowType, compute_mel_spectrogram, compute_stft, spectrogram_to_db
 
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ def generate_spectrogram_video(
     show_axes: bool = True,
     include_audio: bool = True,
     backend: str = "auto",
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> SpectrogramVideoResult:
     """
     Render an audio file as a spectrogram or waveform video in sync with its audio.

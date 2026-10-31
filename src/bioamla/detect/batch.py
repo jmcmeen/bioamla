@@ -10,7 +10,6 @@ direct ``pathlib`` I/O (no repository DI, no ServiceResult).
 """
 
 import json
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +24,7 @@ from bioamla.detect.core import (
     RibbitDetector,
 )
 from bioamla.exceptions import InvalidDetectionParams
+from bioamla.protocols import OnProgress
 
 __all__ = ["batch_detect_dir"]
 
@@ -80,7 +80,7 @@ def batch_detect_dir(
     recursive: bool = True,
     continue_on_error: bool = True,
     max_workers: int = 1,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
     **params: Any,
 ) -> BatchResult:
     """Run a detector over every audio file in ``input_dir``.

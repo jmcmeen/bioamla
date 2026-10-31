@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from bioamla.common.log import log_fields
 from bioamla.exceptions import TrainingCancelled, TrainingError
 from bioamla.ml.ast_service import TrainProgress, TrainResult
+from bioamla.protocols import OnTrainProgress, ShouldStop
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -287,8 +288,8 @@ _EVAL_BOOKKEEPING = {"eval_runtime", "eval_samples_per_second", "eval_steps_per_
 
 
 def _progress_callback(
-    on_progress: Callable[[TrainProgress], None] | None,
-    should_stop: Callable[[], bool] | None,
+    on_progress: OnTrainProgress | None,
+    should_stop: ShouldStop | None,
     run_id: str | None = None,
     started: float | None = None,
 ) -> Any:
@@ -414,8 +415,8 @@ def train_ast(
     mlflow_run_name: str | None = None,
     augmentation: WaveformAugmentationConfig | None = None,
     augment_multiplier: int = 1,
-    on_progress: Callable[[TrainProgress], None] | None = None,
-    should_stop: Callable[[], bool] | None = None,
+    on_progress: OnTrainProgress | None = None,
+    should_stop: ShouldStop | None = None,
 ) -> TrainResult:
     """Fine-tune an AST model on a custom dataset.
 
