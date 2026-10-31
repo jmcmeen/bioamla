@@ -202,3 +202,149 @@ def workspace_remove(ctx: click.Context, artifact_id: str, delete_import: bool) 
     print_success(f"Removed {artifact.kind} {artifact.path}")
     if delete_import and not deleted:
         click.echo("  It was linked, not imported: the file was left where it is.")
+
+
+@workspace.group("config")
+def workspace_config() -> None:
+    """Settings: option defaults for commands, from config.toml files.
+
+    A key names a command and one of its options, e.g. `detect.energy.threshold_db`
+    for `bioamla detect energy --threshold-db`. Workspace settings (.bioamla/config.toml)
+    override user settings (~/.config/bioamla/config.toml); BIOAMLA_* environment
+    variables override both, and a flag on the command line overrides everything.
+    """
+
+
+def _config_target(ctx: click.Context, user: bool):
+    """The settings file this command reads or writes: the user's, or the workspace's."""
+    from bioamla.common.settings import user_config_path
+
+    if user:
+        return user_config_path()
+    return _current(ctx.parent.parent).config_path
+
+
+def _effective(ctx: click.Context) -> dict[str, dict]:
+    """Every setting in effect for this command's workspace (or just the user's)."""
+    from bioamla.cli.settings_map import active_layers, effective_settings
+
+    start = (ctx.parent.parent.obj or {}).get("start")
+    try:
+        return effective_settings(ctx.find_root().command, active_layers(start))
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+
+@workspace_config.command("list")
+@click.pass_context
+def workspace_config_list(ctx: click.Context) -> None:
+    """Show every setting in effect here, and the file it comes from."""
+    from bioamla.cli.console import print_table
+    from bioamla.cli.output import emit_result
+
+    rows = sorted(_effective(ctx).values(), key=lambda r: r["key"])
+    if emit_result({"settings": rows}):
+        return
+    if not rows:
+        click.echo("No settings. Set one with `bioamla workspace config set KEY VALUE`.")
+        return
+    print_table("Settings", ["key", "value", "from"],
+                [[r["key"], repr(r["value"]), r["source"]] for r in rows])  # fmt: skip
+
+
+@workspace_config.command("get")
+@click.argument("key")
+@click.pass_context
+def workspace_config_get(ctx: click.Context, key: str) -> None:
+    """Show the value a setting has here, and where it comes from."""
+    from bioamla.cli.output import emit_result
+    from bioamla.cli.settings_map import canonical_key
+
+    found = _effective(ctx).get(canonical_key(ctx.find_root().command, key))
+    if found is None:
+        raise click.ClickException(f"{key} is not set (the command's own default applies)")
+    if emit_result(found):
+        return
+    click.echo(f"{found['value']!r}  (from {found['source']})")
+
+
+@workspace_config.command("set", context_settings={"ignore_unknown_options": True})
+@click.argument("key")
+@click.argument("value")
+@click.option("--user", is_flag=True, help="Write the user file instead of the workspace's")
+@click.pass_context
+def workspace_config_set(ctx: click.Context, key: str, value: str, user: bool) -> None:
+    """Set KEY to VALUE, converted by the option's own type (an int option gets an
+    int; text keeps exactly what you typed). Options that take several values take a
+    TOML list, e.g. '["frog", "toad"]'.
+
+    Comments in the file are not kept.
+
+    \b
+    Examples:
+        bioamla workspace config set detect.energy.threshold_db -25
+        bioamla workspace config set --user models.ast.predict.model_path bioamla/scp-frogs
+    """
+    from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_result
+    from bioamla.cli.settings_map import canonical_key, coerce_value, resolve_key
+    from bioamla.common.files import write_text_atomic
+    from bioamla.common.settings import (
+        dump_toml,
+        flatten,
+        read_settings_file,
+        set_dotted,
+        unset_dotted,
+    )
+
+    root = ctx.find_root().command
+    try:
+        _, option = resolve_key(root, key)
+        key = canonical_key(root, key)
+        path = _config_target(ctx, user)
+        settings = read_settings_file(path)
+        for name in list(flatten(settings)):  # one spelling per option in the file
+            if name != key and canonical_key(root, name) == key:
+                unset_dotted(settings, name)
+        parsed = coerce_value(option, value)
+        set_dotted(settings, key, parsed)
+        write_text_atomic(path, dump_toml(settings))
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    long_name = next((o for o in option.opts if o.startswith("--")), option.opts[0])
+    if emit_result({"key": key, "value": parsed, "file": str(path), "option": long_name}):
+        return
+    print_success(f"{key} = {parsed!r}  ({path})")
+
+
+@workspace_config.command("unset")
+@click.argument("key")
+@click.option("--user", is_flag=True, help="Change the user file instead of the workspace's")
+@click.pass_context
+def workspace_config_unset(ctx: click.Context, key: str, user: bool) -> None:
+    """Remove KEY, so the next level (or the command's default) applies."""
+    from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_result
+    from bioamla.cli.settings_map import canonical_key
+    from bioamla.common.files import write_text_atomic
+    from bioamla.common.settings import dump_toml, flatten, read_settings_file, unset_dotted
+
+    root = ctx.find_root().command
+    key = canonical_key(root, key)
+    try:
+        path = _config_target(ctx, user)
+        settings = read_settings_file(path)
+        removed = False
+        for name in list(flatten(settings)):
+            if canonical_key(root, name) == key:
+                removed = unset_dotted(settings, name) or removed
+        if removed:
+            write_text_atomic(path, dump_toml(settings))
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    if emit_result({"key": key, "removed": removed, "file": str(path)}):
+        return
+    if removed:
+        print_success(f"Removed {key} ({path})")
+    else:
+        click.echo(f"{key} was not set in {path}")

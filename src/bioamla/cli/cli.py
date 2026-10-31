@@ -92,6 +92,27 @@ class BioamlaGroup(click.Group):
     ``SystemExit`` or an unexpected exception, yields exactly one envelope.
     """
 
+    #: Marks the root: its options (--json, --log-level, ...) are decided before
+    #: settings are read, so settings files and BIOAMLA_* variables can't set them.
+    is_bioamla_root = True
+
+    def make_context(self, info_name, args, parent=None, **extra):
+        # Option defaults from the user's and the workspace's config.toml and
+        # BIOAMLA_<COMMAND>_<OPTION> environment variables (that order, later
+        # winning); a flag on the command line still wins over all of them.
+        # Done here, inside main()'s error handling, so a malformed settings file
+        # is reported like any other error (and as an envelope with --json).
+        if parent is None:
+            from bioamla.cli.settings_map import settings_default_map
+
+            words = [a for a in args if not a.startswith("-")]
+            lenient = any(a in ("--help", "-h", "--version") for a in args) or words[:2] == [
+                "workspace",
+                "config",
+            ]
+            extra.setdefault("default_map", settings_default_map(self, lenient=lenient))
+        return super().make_context(info_name, args, parent=parent, **extra)
+
     def main(self, args=None, prog_name=None, complete_var=None, standalone_mode=True, **extra):
         from bioamla.cli import output
 

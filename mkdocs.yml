@@ -27,6 +27,7 @@ theme:
 nav:
   - Home: index.md
   - CLI Reference: cli.md
+  - Settings: settings.md
   - Recorder metadata: recorder-metadata.md
   - Architecture:
       - Workspaces, remote work and skills: architecture/workspaces-and-remote.md

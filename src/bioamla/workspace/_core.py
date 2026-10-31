@@ -32,7 +32,6 @@ import json
 import os
 import shutil
 import sys
-import tempfile
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
@@ -42,7 +41,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from bioamla.common.constants import SUPPORTED_AUDIO_EXTENSIONS
-from bioamla.common.files import require_exists
+from bioamla.common.files import require_exists, write_text_atomic
 from bioamla.exceptions import InvalidInputError, NotFoundError, WorkspaceError
 
 #: Name of the folder that marks a workspace.
@@ -86,17 +85,7 @@ class Artifact:
         return asdict(self)
 
 
-def _write_atomic(path: Path, text: str) -> None:
-    """Write ``text`` to ``path`` via a temp file and rename, so readers never see half."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(text)
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+_write_atomic = write_text_atomic
 
 
 def _toml_scalars(values: dict[str, Any]) -> str:

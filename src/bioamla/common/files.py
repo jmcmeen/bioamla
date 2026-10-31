@@ -62,6 +62,24 @@ def write_text(filepath: str | Path, content: str, encoding: str = "utf-8") -> i
     return len(content)
 
 
+def write_text_atomic(filepath: str | Path, content: str, encoding: str = "utf-8") -> None:
+    """Write ``content`` via a temporary file in the same folder and a rename, so a
+    reader (or a crash) never sees a half-written file."""
+    import os
+    import tempfile
+
+    path = Path(filepath)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as f:
+            f.write(content)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
 def read_binary(filepath: str | Path) -> bytes:
     """
     Read entire binary file contents.

@@ -11,6 +11,20 @@ from bioamla.audio import AudioData
 
 
 @pytest.fixture(autouse=True)
+def _isolated_settings(tmp_path_factory, monkeypatch):
+    """Keep the developer's own settings out of the tests: a fresh user config
+    directory, and no BIOAMLA_* option variables from the shell."""
+    import os
+
+    home = tmp_path_factory.mktemp("config-home")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home))
+    monkeypatch.setenv("APPDATA", str(home))
+    for name in list(os.environ):
+        if name.startswith("BIOAMLA_"):
+            monkeypatch.delenv(name)
+
+
+@pytest.fixture(autouse=True)
 def _restore_bioamla_logger():
     """Undo configure_cli_logging() after each test.
 

@@ -394,3 +394,15 @@ class TestWorkspace:
         assert detections["count"] == 7
         status = bioamla("workspace", "status")
         assert status["id"] == created["id"] and status["artifacts"] == {"folder": 1}
+
+    def test_settings_written_by_config_set_reach_commands(self, recording, tmp_path, monkeypatch):
+        root = tmp_path / "survey"
+        bioamla("workspace", "init", str(root))
+        monkeypatch.chdir(root)
+        default = bioamla("detect", "energy", str(recording))
+        bioamla("workspace", "config", "set", "detect.energy.threshold_db", "-1")
+        tuned = bioamla("detect", "energy", str(recording))
+        assert tuned["params"]["threshold_db"] == -1.0
+        assert tuned["count"] < default["count"]
+        bioamla("workspace", "config", "unset", "detect.energy.threshold_db")
+        assert bioamla("detect", "energy", str(recording))["params"]["threshold_db"] == -20.0

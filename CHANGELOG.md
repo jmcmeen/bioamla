@@ -21,6 +21,12 @@ All notable changes to this project are documented here. The format is based on
   imported copy). Commands find the workspace from the current directory or `-C PATH` (relative
   paths then resolve against it, as with `git -C`); several PATHS are added all-or-nothing; all
   report `--json` results. Library: `Workspace.link_many()` and `import_many()`.
+- Settings: any command option can take its default from `~/.config/bioamla/config.toml`, the
+  workspace's `.bioamla/config.toml`, or a `BIOAMLA_<COMMAND>_<OPTION>` environment variable, in
+  that order, with the command-line flag winning over all of them. Tables name commands
+  (`[detect.energy]`) and keys name options by their long name. `bioamla workspace config
+  list|get|set|unset [--user]` manages them; unknown keys are reported. See the new Settings
+  page. Library: `bioamla.common.settings`.
 
 ## [0.3.8] - 2026-10-31
 
