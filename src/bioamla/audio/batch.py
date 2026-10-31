@@ -232,10 +232,13 @@ def segment_audio_file(
             )
             count += 1
             start_idx += step
-    except Exception:
-        # Don't leave a partial set behind for a later run to mix with.
+    except BaseException:
+        # Don't leave a partial set behind for a later run to mix with: remove the
+        # finished segments and the one being written (also on Ctrl-C).
         for seg in segments:
             seg.segment_path.unlink(missing_ok=True)
+        if start_idx < n:
+            (out_dir / f"{stem}_seg{count:04d}.wav").unlink(missing_ok=True)
         raise
 
     return segments

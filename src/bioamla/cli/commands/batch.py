@@ -1256,8 +1256,8 @@ def detect_accelerating(
 @batch_output_options
 @click.option(
     "--indices",
-    default="aci,adi,aei,bio,ndsi,h_spectral,h_temporal",
-    help="Comma-separated indices",
+    default="aci,adi,aei,bio,ndsi",
+    help="Comma-separated indices (add h_spectral,h_temporal for entropy)",
 )
 @max_workers_option
 @recursive_option
@@ -1266,7 +1266,8 @@ def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursi
     """Batch calculate acoustic indices for audio files."""
     from bioamla.cli.console import ProgressBar, print_header
     from bioamla.cli.logging_setup import configure_cli_logging
-    from bioamla.indices import batch_index_files, check_index_names, indices_row
+    from bioamla.indices import batch_index_files, check_index_names
+    from bioamla.indices.compute import _indices_row
 
     configure_cli_logging()
     try:
@@ -1279,7 +1280,7 @@ def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursi
         if config.input_file:
 
             def _analyze(path: Path) -> dict:
-                result = indices_row(path, selected)
+                result = _indices_row(path, selected)
                 # Drop the bookkeeping columns before merging into the CSV row.
                 for key in ("filepath", "success"):
                     result.pop(key, None)
