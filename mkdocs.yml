@@ -40,6 +40,7 @@ nav:
       - batch: api/batch.md
       - system: api/system.md
       - common: api/common.md
+      - protocols: api/protocols.md
       - exceptions: api/exceptions.md
 
 plugins:

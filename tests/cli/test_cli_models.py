@@ -414,3 +414,57 @@ def test_ast_info_error(runner: CliRunner) -> None:
     with patch("bioamla.ml.get_model_info", side_effect=ModelError("not found")):
         result = runner.invoke(cli, ["models", "ast", "info", "me/model"])
     assert result.exit_code != 0
+
+
+# --- train --config validation ---------------------------------------------
+
+
+def test_ast_train_rejects_bad_config_before_training(runner: CliRunner, tmp_path) -> None:
+    cfg = tmp_path / "bioamla.toml"
+    cfg.write_text('[training]\nepochs = "two"\nlerning_rate = 1e-4\n[augmentaton]\n')
+    with (
+        patch("bioamla.ml.train_ast") as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(
+            cli,
+            ["models", "ast", "train", "--train-dataset", "me/ds", "--config", str(cfg)],
+        )
+    assert result.exit_code == 1
+    assert "training.epochs:" in result.output
+    assert "training.lerning_rate: unknown field" in result.output
+    assert "augmentaton: unknown field" in result.output
+    m.assert_not_called()
+
+
+def test_train_config_template_matches_schema_and_flag_map() -> None:
+    pytest.importorskip("torch")
+    from dataclasses import asdict
+
+    from bioamla.cli.commands.models import _TRAIN_CONFIG_MAP
+    from bioamla.common.config import tomllib, validate_config
+    from bioamla.ml.train_config import TRAIN_CONFIG_TEMPLATE, AstTrainConfigFile
+
+    # The starter file validates, and sets every key the schema defines.
+    template = tomllib.loads(TRAIN_CONFIG_TEMPLATE)
+    validate_config(AstTrainConfigFile, template)
+    schema_keys = {
+        (section, key) for section, table in asdict(AstTrainConfigFile()).items() for key in table
+    }
+    template_keys = {(s, k) for s, table in template.items() for k in table}
+    assert template_keys == schema_keys
+    # Every schema key overlays exactly one CLI flag.
+    assert set(_TRAIN_CONFIG_MAP.values()) == schema_keys
+
+
+def test_train_config_accepts_transformers_strategies() -> None:
+    pytest.importorskip("torch")
+    from transformers.trainer_utils import IntervalStrategy, SaveStrategy
+
+    from bioamla.common.config import validate_config
+    from bioamla.ml.train_config import AstTrainConfigFile
+
+    for save in SaveStrategy:
+        validate_config(AstTrainConfigFile, {"training": {"save_strategy": save.value}})
+    for interval in IntervalStrategy:
+        validate_config(AstTrainConfigFile, {"training": {"eval_strategy": interval.value}})

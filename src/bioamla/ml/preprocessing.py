@@ -9,11 +9,14 @@ and fixed-size resizing; mel generation and augmentation run on the slim core.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import field
 from typing import TYPE_CHECKING, Any
 
 import librosa
 import numpy as np
+
+from bioamla.common.config import config_dataclass
+from bioamla.common.deprecation import deprecated_aliases
 
 if TYPE_CHECKING:
     import torch
@@ -26,8 +29,8 @@ def _require_torch():
     return torch
 
 
-@dataclass
-class AugmentationConfig:
+@config_dataclass
+class SpectrogramAugmentationConfig:
     """Configuration for spectrogram augmentation.
 
     Attributes:
@@ -68,8 +71,8 @@ class BioamlaPreprocessor:
         (128, 94)  # (n_mels, time_frames)
 
         >>> # With augmentation for training
-        >>> from bioamla.ml import AugmentationConfig
-        >>> aug_config = AugmentationConfig(time_mask=True, frequency_mask=True)
+        >>> from bioamla.ml import SpectrogramAugmentationConfig
+        >>> aug_config = SpectrogramAugmentationConfig(time_mask=True, frequency_mask=True)
         >>> preprocessor.enable_augmentation(aug_config)
         >>> augmented_spec = preprocessor.process_file("audio.wav")
     """
@@ -109,9 +112,9 @@ class BioamlaPreprocessor:
         self.height = height
         self.width = width
 
-        self._augmentation_config: AugmentationConfig | None = None
+        self._augmentation_config: SpectrogramAugmentationConfig | None = None
 
-    def enable_augmentation(self, config: AugmentationConfig) -> None:
+    def enable_augmentation(self, config: SpectrogramAugmentationConfig) -> None:
         """Enable augmentation with the given configuration."""
         self._augmentation_config = config
 
@@ -219,7 +222,7 @@ class BioamlaPreprocessor:
             return np.pad(samples, (0, target - n), mode="constant")
         return samples
 
-    def _augment_audio(self, samples: np.ndarray, cfg: AugmentationConfig) -> np.ndarray:
+    def _augment_audio(self, samples: np.ndarray, cfg: SpectrogramAugmentationConfig) -> np.ndarray:
         """Apply audio-domain augmentation (random gain, additive noise)."""
         rng = np.random.default_rng()
         out = samples.astype(np.float32, copy=True)
@@ -234,7 +237,9 @@ class BioamlaPreprocessor:
 
         return out
 
-    def _augment_spectrogram(self, spec: np.ndarray, cfg: AugmentationConfig) -> np.ndarray:
+    def _augment_spectrogram(
+        self, spec: np.ndarray, cfg: SpectrogramAugmentationConfig
+    ) -> np.ndarray:
         """Apply SpecAugment-style time/frequency masking (sets bands to 0)."""
         rng = np.random.default_rng()
         out = spec.copy()
@@ -324,3 +329,9 @@ class BioamlaPreprocessor:
             "width": self.width,
             "augmentation_enabled": self.augmentation_enabled,
         }
+
+
+# Renamed so it isn't confused with bioamla.datasets' WaveformAugmentationConfig.
+__getattr__ = deprecated_aliases(
+    __name__, globals(), {"AugmentationConfig": "SpectrogramAugmentationConfig"}
+)

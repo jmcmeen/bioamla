@@ -27,6 +27,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from bioamla.protocols import OnProgress
+
 logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -371,7 +373,7 @@ class APIClient:
         url: str,
         filepath: str | Path,
         chunk_size: int = 8192,
-        progress_callback: Callable[[int, int], None] | None = None,
+        progress_callback: OnProgress | None = None,
     ) -> Path:
         """
         Download a file from URL.

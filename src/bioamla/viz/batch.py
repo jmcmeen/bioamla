@@ -10,12 +10,12 @@ discovery uses pathlib instead of the file repository.
 """
 
 import logging
-from collections.abc import Callable
 from pathlib import Path
 
 from bioamla.audio.discovery import list_audio_files
 from bioamla.batch import output_stems, run_batch
 from bioamla.exceptions import NotFoundError
+from bioamla.protocols import OnProgress
 from bioamla.viz.core import (
     VisualizationType,
     WindowType,
@@ -43,7 +43,7 @@ def batch_generate_spectrograms(
     format: str = "png",
     recursive: bool = True,
     verbose: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
     max_workers: int = 1,
 ) -> dict:
     """
@@ -124,7 +124,9 @@ def batch_generate_spectrograms(
             logger.info(f"  Generated: {output_path}")
         return output_path
 
-    result = run_batch(files, _generate, max_workers=max_workers, on_progress=on_progress)
+    result = run_batch(
+        files, _generate, max_workers=max_workers, on_progress=on_progress, operation="spectrogram"
+    )
 
     return {
         "files_processed": result.successful,

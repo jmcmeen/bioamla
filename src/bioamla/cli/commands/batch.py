@@ -17,27 +17,25 @@ call in ``try/except BioamlaError -> ClickException`` so the central CLI error
 handler reports failures cleanly.
 """
 
+from __future__ import annotations
+
 import functools
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
-import numpy as np
 
-from bioamla.batch import (
-    BatchConfig,
-    CSVBatchContext,
-    expand_row_for_segments,
-    load_csv,
-    merge_analysis_results,
-    run_csv_batch,
-    update_row_path,
-    write_csv,
-    write_rows_csv,
-)
 from bioamla.cli.batch_options import batch_input_options, batch_output_options
 from bioamla.cli.options import max_workers_option, quiet_option, recursive_option
 from bioamla.exceptions import BioamlaError, InvalidInputError
+
+if TYPE_CHECKING:
+    # Kept out of module load so `bioamla --help` doesn't import numpy or the
+    # batch engine; the helpers below import what they use when they run.
+    import numpy as np
+
+    from bioamla.batch import BatchConfig, CSVBatchContext
 
 # =============================================================================
 # Shared helpers
@@ -53,6 +51,8 @@ def _build_config(
     quiet: bool,
 ) -> BatchConfig:
     """Build a :class:`BatchConfig` from the shared batch CLI options."""
+    from bioamla.batch import BatchConfig
+
     return BatchConfig(
         input_dir=input_dir,
         input_file=input_file,
@@ -61,6 +61,19 @@ def _build_config(
         max_workers=max_workers,
         quiet=quiet,
     )
+
+
+def _operation() -> str:
+    """The running command's path without the program name (e.g. ``batch audio info``),
+    used as the ``operation`` field on the batch engine's log records."""
+    ctx = click.get_current_context(silent=True)
+    if ctx is None:
+        return "batch"
+    names = []
+    while ctx.parent is not None:
+        names.append(ctx.info_name or "")
+        ctx = ctx.parent
+    return " ".join(reversed(names)) or "batch"
 
 
 def _require_input_dir(config: BatchConfig) -> str:
@@ -109,6 +122,8 @@ def _stty_sane() -> None:
 
 def _csv_context(config: BatchConfig) -> CSVBatchContext:
     """Load the CSV metadata context for ``config.input_file``."""
+    from bioamla.batch import load_csv
+
     output_dir = config.output_dir or None
     return load_csv(config.input_file, output_dir)
 
@@ -122,6 +137,7 @@ def _run_csv_merge(
     Runs ``analyze_row`` over each listed file, merges the returned column dict
     into the row, and writes the updated CSV (column-union, file_name first).
     """
+    from bioamla.batch import merge_analysis_results, run_csv_batch, write_csv
     from bioamla.cli.console import print_success
 
     context = _csv_context(config)
@@ -136,6 +152,7 @@ def _run_csv_merge(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
     out_csv = write_csv(context)
     if not config.quiet:
@@ -156,7 +173,7 @@ def _run_csv_transform(
     invokes ``transform_row(input_path, output_path)``, and updates the row's
     ``file_name`` to the new path before writing the CSV.
     """
-    from bioamla.batch import resolve_output_path
+    from bioamla.batch import resolve_output_path, run_csv_batch, update_row_path, write_csv
     from bioamla.cli.console import print_success
 
     context = _csv_context(config)
@@ -173,6 +190,7 @@ def _run_csv_transform(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
     out_csv = write_csv(context)
     if not config.quiet:
@@ -190,6 +208,8 @@ def _run_csv_process(
     Runs ``process_row`` per file; the CSV is written back unchanged (rows
     preserved, paths re-resolved relative to the output CSV location).
     """
+    from bioamla.batch import run_csv_batch, write_csv
+
     context = _csv_context(config)
 
     def _process(row) -> str:
@@ -201,6 +221,7 @@ def _run_csv_process(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
     write_csv(context)
     return result
@@ -217,7 +238,12 @@ def _run_csv_segment(
     per segment (carrying ``parent_file``/``segment_id``/``start_time``/
     ``end_time``/``duration``), then the expanded CSV is written.
     """
-    from bioamla.batch import resolve_output_path
+    from bioamla.batch import (
+        expand_row_for_segments,
+        resolve_output_path,
+        run_csv_batch,
+        write_csv,
+    )
     from bioamla.cli.console import print_success
 
     context = _csv_context(config)
@@ -238,6 +264,7 @@ def _run_csv_segment(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
 
     # Expand rows BEFORE writing the CSV.
@@ -272,7 +299,7 @@ def _run_csv_predict_segments(
     the expanded CSV is written. Unlike :func:`_run_csv_segment`, no segment files
     are written; rows describe sub-spans of the original file.
     """
-    from bioamla.batch import MetadataRow
+    from bioamla.batch import MetadataRow, run_csv_batch, write_csv
     from bioamla.cli.console import print_success
 
     context = _csv_context(config)
@@ -289,6 +316,7 @@ def _run_csv_predict_segments(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
 
     new_rows = []
@@ -415,6 +443,7 @@ def _run_audio_transform(config: BatchConfig, processor, *, sample_rate=None) ->
         recursive=config.recursive,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
 
 
@@ -499,7 +528,7 @@ def audio_validate(input_dir, input_file, output_dir, max_workers, recursive, qu
     from bioamla.audio._riffy import is_wav_path
     from bioamla.audio.discovery import list_audio_files
     from bioamla.audio.info import validate_wav
-    from bioamla.batch import run_batch
+    from bioamla.batch import run_batch, write_rows_csv
     from bioamla.cli.console import print_header
     from bioamla.exceptions import AudioLoadError
 
@@ -543,7 +572,13 @@ def audio_validate(input_dir, input_file, output_dir, max_workers, recursive, qu
                 raise AudioLoadError(f"{path}: {row['error']}")
             return str(path)
 
-        result = run_batch(files, _validate, max_workers=config.max_workers, continue_on_error=True)
+        result = run_batch(
+            files,
+            _validate,
+            max_workers=config.max_workers,
+            continue_on_error=True,
+            operation=_operation(),
+        )
         rows.sort(key=lambda r: r["file_name"])
         result.skipped = sum(1 for r in rows if r["valid"] == "skipped")
 
@@ -576,7 +611,7 @@ def audio_metadata(input_dir, input_file, output_dir, max_workers, recursive, qu
     from bioamla.audio._riffy import is_wav_path
     from bioamla.audio.discovery import list_audio_files
     from bioamla.audio.metadata import RECORDING_METADATA_FIELDS, get_recording_metadata
-    from bioamla.batch import run_batch
+    from bioamla.batch import run_batch, write_rows_csv
     from bioamla.cli.console import print_header
 
     try:
@@ -605,7 +640,13 @@ def audio_metadata(input_dir, input_file, output_dir, max_workers, recursive, qu
             rows.append(row)
             return str(path)
 
-        result = run_batch(files, _meta, max_workers=config.max_workers, continue_on_error=True)
+        result = run_batch(
+            files,
+            _meta,
+            max_workers=config.max_workers,
+            continue_on_error=True,
+            operation=_operation(),
+        )
         result.skipped = len(all_files) - len(files)
         rows.sort(key=lambda r: r["file_name"])
 
@@ -1577,6 +1618,7 @@ def cluster_batch(
             print_header(f"Clustering embeddings using {method}...")
 
         if config.input_file:
+            from bioamla.batch import write_csv
             from bioamla.cluster.batch import cluster_embedding_files
 
             context = _csv_context(config)

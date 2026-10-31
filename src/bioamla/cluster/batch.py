@@ -15,7 +15,6 @@ direct ``pathlib`` I/O.
 
 import json
 import pickle
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +24,7 @@ from bioamla.batch import BatchResult, run_batch
 from bioamla.batch import discover_files as _discover_files
 from bioamla.cluster.core import cluster_embeddings
 from bioamla.exceptions import InvalidInputError
+from bioamla.protocols import OnProgress
 
 EMBEDDING_EXTENSIONS = {".npy", ".pkl", ".pickle", ".json"}
 
@@ -109,7 +109,7 @@ def cluster_batch_files(
     min_samples: int = 3,
     recursive: bool = True,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
     **kwargs: Any,
 ) -> BatchResult:
     """
@@ -161,7 +161,7 @@ def cluster_embedding_files(
     min_cluster_size: int = 5,
     min_samples: int = 3,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
     **kwargs: Any,
 ) -> BatchResult:
     """
@@ -195,7 +195,13 @@ def cluster_embedding_files(
         loaded.append((str(path), load_embedding_file(path)))
         return None
 
-    result = run_batch(files, _load, continue_on_error=continue_on_error, on_progress=on_progress)
+    result = run_batch(
+        files,
+        _load,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+        operation="load-embeddings",
+    )
 
     if not loaded:
         return result

@@ -39,7 +39,6 @@ Example:
 """
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -55,6 +54,7 @@ from bioamla.exceptions import (
     DetectionError,
     InvalidDetectionParams,
 )
+from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
 
@@ -1436,7 +1436,7 @@ def batch_detect(
     verbose: bool = True,
     *,
     max_workers: int = 1,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> dict[str, list[Detection]]:
     """
     Run detection on multiple files.
@@ -1486,5 +1486,6 @@ def batch_detect(
         max_workers=max_workers,
         continue_on_error=False,
         on_progress=on_progress,
+        operation="detect",
     )
     return {p: by_path[p] for p in unique}

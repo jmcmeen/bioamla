@@ -90,6 +90,8 @@ class TrainResult:
     epochs: int
     final_accuracy: float | None = None
     final_loss: float | None = None
+    #: The run's identifier, also on its log records (``run_id`` field).
+    run_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dict."""
@@ -98,6 +100,7 @@ class TrainResult:
             "epochs": self.epochs,
             "final_accuracy": self.final_accuracy,
             "final_loss": self.final_loss,
+            "run_id": self.run_id,
         }
 
 

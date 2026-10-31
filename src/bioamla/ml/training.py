@@ -10,17 +10,24 @@ this module stays light.
 
 from __future__ import annotations
 
+import json
 import logging
+import time
+import uuid
+from collections.abc import Sequence
+from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from bioamla.common.log import log_fields
 from bioamla.exceptions import TrainingCancelled, TrainingError
 from bioamla.ml.ast_service import TrainProgress, TrainResult
+from bioamla.protocols import ExperimentTracker, OnTrainProgress, RunStatus, ShouldStop
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from bioamla.datasets.augmentation import AugmentationConfig
+    from bioamla.datasets.augmentation import WaveformAugmentationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +89,7 @@ def _dataframe_to_ast_dataset(df, label_column, sampling_rate=SAMPLING_RATE):
     return DatasetDict(splits), True
 
 
-def _validate_augmentation(aug: AugmentationConfig) -> None:
+def _validate_augmentation(aug: WaveformAugmentationConfig) -> None:
     """Raise :class:`TrainingError` on inverted min/max ranges for *enabled* layers.
 
     Ranges for disabled transforms are ignored — a layer that isn't added can't
@@ -234,12 +241,17 @@ def _load_directory_dataset(
     )
 
 
-def _cleanup_step(what: str, step: Callable[..., object], *args: Any) -> None:
-    """Run one post-training cleanup step, logging (not raising) any failure."""
+def _warn_on_failure(what: str, step: Callable[..., object], *args: Any) -> None:
+    """Run ``step``, logging (not raising) any failure as "Could not {what}: ..."."""
     try:
         step(*args)
-    except Exception as e:  # noqa: BLE001 - cleanup must not mask the training outcome
-        logger.warning(f"Could not {what} after training: {e}")
+    except Exception as e:  # noqa: BLE001 - bookkeeping must not change the training outcome
+        logger.warning(f"Could not {what}: {e}")
+
+
+def _cleanup_step(what: str, step: Callable[..., object], *args: Any) -> None:
+    """Run one post-training cleanup step, logging (not raising) any failure."""
+    _warn_on_failure(f"{what} after training", step, *args)
 
 
 def _free_trainer(trainer: Any) -> None:
@@ -251,32 +263,57 @@ def _free_trainer(trainer: Any) -> None:
             delattr(trainer, attr)
 
 
-def _start_mlflow_run(report_to: str | list[str], run_name: str | None) -> Any:
-    """Start an MLflow run for training when MLflow reporting is on.
+class _Trackers:
+    """Fan calls out to the run's experiment trackers; a failing tracker only warns."""
 
-    transformers' MLflow callback ends a run it started itself as FINISHED,
-    even when training was cancelled. Starting the run here makes the callback
-    log into it instead, so ``train_ast`` can end it with the real outcome.
+    def __init__(self, trackers: list[ExperimentTracker]) -> None:
+        self._trackers = trackers
 
-    Returns:
-        The ``mlflow`` module when this call started the run (the caller ends
-        it), or None when MLflow is off, missing, or a run is already active.
+    def __bool__(self) -> bool:
+        return bool(self._trackers)
+
+    def call(self, method: str, *args: Any) -> None:
+        for tracker in self._trackers:
+            _warn_on_failure(
+                f"call {type(tracker).__name__}.{method}", getattr(tracker, method), *args
+            )
+
+
+def _run_trackers(
+    tracker: ExperimentTracker | Sequence[ExperimentTracker] | None,
+    report_to: str | list[str],
+) -> tuple[_Trackers, list[str]]:
+    """The run's trackers, and the ``report_to`` list left for transformers.
+
+    MLflow gets one writer: an :class:`~bioamla.ml.trackers.MLflowTracker`. When
+    ``report_to`` asks for MLflow (by name, or ``"all"`` with MLflow installed) and
+    the caller didn't pass one, one is added; either way ``"mlflow"`` is removed from
+    transformers' list. transformers' own MLflow callback would log the same metrics
+    a second time, and it marks a run it started FINISHED even when training was
+    cancelled.
     """
+    from bioamla.ml.trackers import MLflowTracker
+
+    if tracker is None:
+        trackers: list[ExperimentTracker] = []
+    elif isinstance(tracker, Sequence):
+        trackers = list(tracker)
+    else:
+        trackers = [tracker]
+
     names = report_to if isinstance(report_to, list) else [report_to]
-    if "mlflow" not in names and "all" not in names:
-        return None
-    try:
-        import mlflow
-    except ImportError:
-        return None
-    try:
-        if mlflow.active_run() is not None:
-            return None
-        mlflow.start_run(run_name=run_name)
-    except Exception as e:  # noqa: BLE001 - fall back to transformers' own run handling
-        logger.warning(f"Could not start an MLflow run: {e}")
-        return None
-    return mlflow
+    if "all" in names:
+        from transformers.integrations import get_available_reporting_integrations
+
+        names = get_available_reporting_integrations()
+    names = [n for n in names if n != "none"]
+
+    has_mlflow_tracker = any(isinstance(t, MLflowTracker) for t in trackers)
+    if "mlflow" in names and not has_mlflow_tracker:
+        trackers.append(MLflowTracker())
+    if "mlflow" in names or has_mlflow_tracker:
+        names = [n for n in names if n != "mlflow"]
+    return _Trackers(trackers), names or ["none"]
 
 
 # Timing counters transformers adds to evaluation metrics; not model metrics.
@@ -284,11 +321,21 @@ _EVAL_BOOKKEEPING = {"eval_runtime", "eval_samples_per_second", "eval_steps_per_
 
 
 def _progress_callback(
-    on_progress: Callable[[TrainProgress], None] | None,
-    should_stop: Callable[[], bool] | None,
+    on_progress: OnTrainProgress | None,
+    should_stop: ShouldStop | None,
+    run_id: str | None = None,
+    started: float | None = None,
+    on_metrics: Callable[[int, dict[str, float]], None] | None = None,
 ) -> Any:
-    """Build the ``TrainerCallback`` behind ``train_ast``'s progress and cancel hooks."""
+    """Build the ``TrainerCallback`` behind ``train_ast``'s progress and cancel hooks.
+
+    It also logs each progress report at DEBUG, with the run's structured fields
+    (``run_id``, step as ``index``/``total``, ``epoch``, ``elapsed_s``).
+    """
     from transformers import TrainerCallback
+
+    if started is None:
+        started = time.monotonic()
 
     class _ProgressCallback(TrainerCallback):
         def __init__(self) -> None:
@@ -297,7 +344,25 @@ def _progress_callback(
             self.eval_metrics: dict[str, float] = {}
 
         def _report(self, state) -> None:
-            if on_progress is not None and state.is_world_process_zero:
+            if not state.is_world_process_zero:
+                return
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Training step %d/%d (epoch %.2f, loss %s)",
+                    state.global_step,
+                    state.max_steps,
+                    float(state.epoch or 0.0),
+                    self.loss,
+                    **log_fields(
+                        operation="train",
+                        run_id=run_id,
+                        index=state.global_step,
+                        total=state.max_steps,
+                        epoch=round(float(state.epoch or 0.0), 4),
+                        elapsed_s=round(time.monotonic() - started, 3),
+                    ),
+                )
+            if on_progress is not None:
                 on_progress(
                     TrainProgress(
                         step=state.global_step,
@@ -309,6 +374,14 @@ def _progress_callback(
                 )
 
         def on_log(self, args, state, control, logs=None, **kwargs):
+            if logs and on_metrics is not None and state.is_world_process_zero:
+                numeric = {
+                    k: float(v)
+                    for k, v in logs.items()
+                    if isinstance(v, (int, float)) and not isinstance(v, bool)
+                }
+                if numeric:
+                    on_metrics(state.global_step, numeric)
             # Loss is logged after on_step_end, so report again with the fresh value.
             if logs and "loss" in logs:
                 self.loss = float(logs["loss"])
@@ -383,12 +456,13 @@ def train_ast(
     mlflow_tracking_uri: str | None = None,
     mlflow_experiment_name: str | None = None,
     mlflow_run_name: str | None = None,
-    augmentation: AugmentationConfig | None = None,
+    augmentation: WaveformAugmentationConfig | None = None,
     augment_multiplier: int = 1,
-    on_progress: Callable[[TrainProgress], None] | None = None,
-    should_stop: Callable[[], bool] | None = None,
+    on_progress: OnTrainProgress | None = None,
+    should_stop: ShouldStop | None = None,
+    tracker: ExperimentTracker | Sequence[ExperimentTracker] | None = None,
 ) -> TrainResult:
-    """Fine-tune an AST model on a custom dataset.
+    r"""Fine-tune an AST model on a custom dataset.
 
     The remaining keyword arguments mirror ``transformers.TrainingArguments``
     (learning rate, batch size, eval/save strategy, fp16/bf16, etc.).
@@ -416,6 +490,14 @@ def train_ast(
             :class:`~bioamla.exceptions.TrainingCancelled`. A phase already
             under way (e.g. a download) finishes first. The hooks assume a
             single training process, which is how bioamla runs ``train_ast``.
+        tracker: One or more :class:`~bioamla.protocols.ExperimentTracker`\ s
+            (e.g. :class:`~bioamla.ml.trackers.MLflowTracker`) that receive the
+            run's parameters, every logged metric, the ``bioamla_run.json``
+            summary written next to the best model, and the final status
+            (finished, cancelled or failed). ``report_to`` still drives
+            transformers' own reporting, except MLflow: with ``"mlflow"`` in it
+            (or ``"all"`` with MLflow installed), an ``MLflowTracker`` is added and
+            is the run's only MLflow writer, so the run ends with the real status.
 
     Returns:
         A :class:`~bioamla.ml.ast_service.TrainResult` with the best-model path,
@@ -443,6 +525,9 @@ def train_ast(
         describe_augmentation_pipeline,
     )
     from datasets import Audio, Dataset, DatasetDict
+
+    run_id = uuid.uuid4().hex[:12]
+    started = time.monotonic()
 
     if augmentation is not None:
         _validate_augmentation(augmentation)
@@ -475,6 +560,7 @@ def train_ast(
 
     if isinstance(report_to, str) and "," in report_to:
         report_to = [r.strip() for r in report_to.split(",")]
+    trackers, report_to = _run_trackers(tracker, report_to)
 
     def _check_stop(phase: str) -> None:
         if should_stop is not None and should_stop():
@@ -763,10 +849,14 @@ def train_ast(
         raise TrainingError("Expected DatasetDict for trainer setup")
 
     _check_stop("training")
-    progress = (
-        _progress_callback(on_progress, should_stop)
-        if on_progress is not None or should_stop is not None
-        else None
+    progress = _progress_callback(
+        on_progress,
+        should_stop,
+        run_id,
+        started,
+        on_metrics=(lambda step, metrics: trackers.call("log_metrics", step, metrics))
+        if trackers
+        else None,
     )
     trainer = Trainer(
         model=model,
@@ -774,25 +864,42 @@ def train_ast(
         train_dataset=train_data,
         eval_dataset=eval_data,
         compute_metrics=compute_metrics,
-        callbacks=[progress] if progress is not None else None,
+        callbacks=[progress],
     )
 
     import multiprocessing
 
     # Child processes that exist before training aren't ours to terminate.
     children_before = set(multiprocessing.active_children())
-    mlflow_run = _start_mlflow_run(report_to, mlflow_run_name)
+    run_params = {
+        "run_id": run_id,
+        "train_dataset": train_dataset,
+        "base_model": base_model,
+        "finetune_mode": finetune_mode,
+        "learning_rate": learning_rate,
+        "epochs": num_train_epochs,
+        "batch_size": per_device_train_batch_size,
+        "gradient_accumulation_steps": gradient_accumulation_steps,
+        "augment_multiplier": augment_multiplier,
+        "augmentation": asdict(augmentation) if augmentation is not None else None,
+        "labels": list(class_names),
+    }
+    trackers.call("start_run", mlflow_run_name or f"bioamla-{run_id}", run_params)
 
     final_accuracy = None
     final_loss = None
     cancelled = False
-    run_status = "FAILED"  # MLflow status unless training and saving complete
+    status: RunStatus = "failed"  # unless training and saving complete
+    # The start and end records bracket the same try block, so every run that logs
+    # "started" also logs its status. Preprocessing failures and cancellations raise
+    # before either.
+    logger.info("Training run %s started", run_id, **log_fields(operation="train", run_id=run_id))
     try:
         trainer.train()
-        cancelled = progress is not None and progress.cancelled
+        cancelled = progress.cancelled
 
         if cancelled:
-            run_status = "KILLED"
+            status = "cancelled"
         else:
             Path(best_model_path).mkdir(parents=True, exist_ok=True)
             trainer.save_model(best_model_path)
@@ -805,15 +912,25 @@ def train_ast(
                     final_loss = float(entry["eval_loss"])
                 if final_accuracy is not None and final_loss is not None:
                     break
-            run_status = "FINISHED"
+            status = "finished"
+            # The model is saved, so the run has finished; a failed summary write
+            # only warns.
+            summary_path = Path(best_model_path) / "bioamla_run.json"
+            summary = {
+                "run_id": run_id,
+                "params": run_params,
+                "result": {"final_accuracy": final_accuracy, "final_loss": final_loss},
+            }
+            try:
+                summary_path.write_text(json.dumps(summary, indent=2, default=str) + "\n")
+            except OSError as e:
+                logger.warning(f"Could not write {summary_path}: {e}")
+            else:
+                trackers.call("log_artifact", str(summary_path))
     finally:
         # Cleanup to prevent hanging from dataloader workers, whether the run
         # finished, was cancelled, or failed. Each step is guarded so one
         # failure neither skips the rest nor replaces the training error.
-        def _end_mlflow_run() -> None:
-            if mlflow_run is not None:
-                mlflow_run.end_run(status=run_status)
-
         def _stop_workers() -> None:
             for child in set(multiprocessing.active_children()) - children_before:
                 child.terminate()
@@ -824,16 +941,29 @@ def train_ast(
         del model
         if torch.cuda.is_available():
             _cleanup_step("empty the CUDA cache", torch.cuda.empty_cache)
-        _cleanup_step("end the MLflow run", _end_mlflow_run)
+        trackers.call("end_run", status)
         import gc
 
         _cleanup_step("collect garbage", gc.collect)
         _cleanup_step("stop dataloader workers", _stop_workers)
 
+        (logger.error if status == "failed" else logger.info)(
+            "Training run %s %s",
+            run_id,
+            status,
+            **log_fields(
+                operation="train",
+                run_id=run_id,
+                status=status,
+                elapsed_s=round(time.monotonic() - started, 3),
+            ),
+        )
+
     if cancelled:
         raise TrainingCancelled("Training cancelled; no model was saved")
 
     return TrainResult(
+        run_id=run_id,
         model_path=best_model_path,
         epochs=num_train_epochs,
         final_accuracy=final_accuracy,

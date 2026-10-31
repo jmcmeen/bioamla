@@ -6,6 +6,7 @@ import click
 
 from bioamla import __version__
 from bioamla.cli.errors import handle_cli_error
+from bioamla.cli.logging_setup import LOG_FORMATS, LOG_LEVELS, set_cli_logging
 from bioamla.exceptions import BioamlaError
 
 from .commands import (
@@ -86,12 +87,25 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
     callback=_print_version,
     help="Show the version and exit.",
 )
-def cli() -> None:
+@click.option(
+    "--log-format",
+    type=click.Choice(LOG_FORMATS),
+    default="text",
+    show_default=True,
+    help="Log output: plain text, or JSON lines on stderr with structured fields.",
+)
+@click.option(
+    "--log-level",
+    type=click.Choice(LOG_LEVELS),
+    default=None,
+    help="Log level for library messages (default: each command's own).",
+)
+def cli(log_format: str, log_level: str | None) -> None:
     """BioAMLA - Bioacoustic & Machine Learning Applications
 
     Use 'bioamla COMMAND --help' for more information on a command.
     """
-    pass
+    set_cli_logging(log_format, log_level)
 
 
 # Register command groups (alphabetical — Click lists them in registration order)

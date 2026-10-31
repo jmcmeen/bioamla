@@ -1,0 +1,60 @@
+{
+  "additionalProperties": false,
+  "description": "Base configuration for all models.",
+  "properties": {
+    "sample_rate": {
+      "default": 16000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "clip_duration": {
+      "default": 3.0,
+      "title": "Clip Duration",
+      "type": "number"
+    },
+    "overlap": {
+      "default": 0.0,
+      "title": "Overlap",
+      "type": "number"
+    },
+    "min_confidence": {
+      "default": 0.0,
+      "title": "Min Confidence",
+      "type": "number"
+    },
+    "top_k": {
+      "default": 1,
+      "title": "Top K",
+      "type": "integer"
+    },
+    "batch_size": {
+      "default": 8,
+      "title": "Batch Size",
+      "type": "integer"
+    },
+    "num_workers": {
+      "default": 4,
+      "title": "Num Workers",
+      "type": "integer"
+    },
+    "use_fp16": {
+      "default": false,
+      "title": "Use Fp16",
+      "type": "boolean"
+    },
+    "device": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Device"
+    }
+  },
+  "title": "ModelConfig",
+  "type": "object"
+}

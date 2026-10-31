@@ -42,6 +42,11 @@ DEFAULT_N_FFT: int = 2048
 DEFAULT_HOP_LENGTH: int = 512
 DEFAULT_WIN_LENGTH: int = 2048
 
+# Annotation file formats read and written by bioamla.datasets. Kept here, not in
+# the datasets package, so the CLI can build its --format choices without
+# importing that package (and numpy/pandas with it) at startup.
+ANNOTATION_FORMATS: list[str] = ["raven", "csv", "bioamla"]
+
 
 # =============================================================================
 # Default Configuration
@@ -72,6 +77,7 @@ class DefaultConfig:
 # =============================================================================
 
 __all__ = [
+    "ANNOTATION_FORMATS",
     # Audio constants
     "SUPPORTED_AUDIO_EXTENSIONS",
     "DEFAULT_SAMPLE_RATE",

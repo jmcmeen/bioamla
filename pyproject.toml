@@ -44,6 +44,7 @@ dependencies = [
   "huggingface_hub",
   "pyinaturalist",
   "pyarrow",  # parquet annotations (datasets)
+  "pydantic>=2.7",  # validated config objects and their JSON Schema
 ]
 
 [project.scripts]

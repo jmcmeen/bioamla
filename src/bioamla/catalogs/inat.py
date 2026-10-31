@@ -10,7 +10,6 @@ Failures raise :class:`~bioamla.exceptions.CatalogError`; bad arguments raise
 import csv
 import logging
 import time
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -36,11 +35,12 @@ from bioamla.common.files import (
     sanitize_filename,
 )
 from bioamla.exceptions import CatalogError, InvalidInputError
+from bioamla.protocols import OnDownloadProgress
 
 logger = logging.getLogger(__name__)
 
-# Progress callback signature: (current, total, current_file) -> None
-ProgressCallback = Callable[[int, int, str], None]
+# Progress callback: (current, total, current_file) -> None. Alias kept for existing imports.
+ProgressCallback = OnDownloadProgress
 
 
 # =============================================================================

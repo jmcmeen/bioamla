@@ -13,11 +13,11 @@ Heavy deps (torch / transformers) are loaded lazily by the underlying ml
 functions for fast startup.
 """
 
-from collections.abc import Callable
 from pathlib import Path
 
 from bioamla.batch import BatchResult, discover_files, run_batch
 from bioamla.exceptions import NotFoundError
+from bioamla.protocols import OnProgress
 
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
 
@@ -37,7 +37,7 @@ def batch_predict_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> BatchResult:
     """
     Run AST prediction over every audio file in a directory.
@@ -97,6 +97,7 @@ def batch_predict_files(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="predict",
     )
     result.metadata = {"predictions": predictions}
     return result
@@ -113,7 +114,7 @@ def batch_predict_segments(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> BatchResult:
     """
     Run segmented AST prediction over every audio file in a directory.
@@ -181,6 +182,7 @@ def batch_predict_segments(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="predict-segments",
     )
     result.metadata = {"segments": segments}
     return result
@@ -196,7 +198,7 @@ def batch_embed_files(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> BatchResult:
     """
     Extract AST embeddings for every audio file in a directory, saving one
@@ -249,6 +251,7 @@ def batch_embed_files(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="embed",
     )
 
 

@@ -5,8 +5,11 @@ bioamla.ml — machine-learning domain.
 Audio Spectrogram Transformer (AST) inference, training, and embeddings, on top
 of the device / base-model foundations.
 
-PyTorch / torchaudio / transformers ship in the base install but are imported
-lazily inside functions/methods so this package imports fast. Load / inference
+PyTorch / torchaudio / transformers come with the ``ml`` extra
+(``pip install bioamla[ml]``) and are imported lazily inside functions/methods so
+this package imports fast. Training runs can report to any
+:class:`~bioamla.protocols.ExperimentTracker`; :class:`MLflowTracker` and
+:class:`TensorBoardTracker` are included. Load / inference
 failures raise :class:`~bioamla.exceptions.ModelError`.
 
 Example:
@@ -20,6 +23,7 @@ Example:
 # device + base are the preserved foundations; ast / ast_model / ast_service /
 # inference / embedding / batch are the folded ml-domain modules.
 from bioamla._extras import require_extra
+from bioamla.common.deprecation import deprecated_aliases
 
 # Fail early, with the install command, if the [ml] extra is missing.
 require_extra("ml", "bioamla.ml")
@@ -92,7 +96,8 @@ from bioamla.ml.inference import (
 )
 
 # --- Preprocessing / augmentation --------------------------------------------
-from bioamla.ml.preprocessing import AugmentationConfig, BioamlaPreprocessor
+from bioamla.ml.preprocessing import BioamlaPreprocessor, SpectrogramAugmentationConfig
+from bioamla.ml.trackers import MLflowTracker, TensorBoardTracker
 
 # --- Training -----------------------------------------------------------------
 from bioamla.ml.train_config import write_train_config
@@ -138,6 +143,8 @@ __all__ = [
     "TrainProgress",
     "TrainResult",
     "train_ast",
+    "MLflowTracker",
+    "TensorBoardTracker",
     "write_train_config",
     # Inference
     "ASTInference",
@@ -157,6 +164,10 @@ __all__ = [
     "batch_predict_segments",
     "batch_embed_files",
     # Preprocessing / augmentation
-    "AugmentationConfig",
+    "SpectrogramAugmentationConfig",
     "BioamlaPreprocessor",
 ]
+
+__getattr__ = deprecated_aliases(
+    __name__, globals(), {"AugmentationConfig": "SpectrogramAugmentationConfig"}
+)

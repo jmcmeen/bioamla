@@ -8,6 +8,7 @@ group and the dataset-extraction routines so format handling stays consistent.
 from pathlib import Path
 from typing import Any
 
+from bioamla.common.constants import ANNOTATION_FORMATS  # noqa: F401  (re-exported)
 from bioamla.datasets.annotations import (
     Annotation,
     load_bioamla_annotations,
@@ -17,9 +18,6 @@ from bioamla.datasets.annotations import (
     save_csv_annotations,
     save_raven_selection_table,
 )
-
-# Supported annotation file formats.
-ANNOTATION_FORMATS = ["raven", "csv", "bioamla"]
 
 
 def detect_annotation_format(path: Path, explicit: str | None = None) -> str:

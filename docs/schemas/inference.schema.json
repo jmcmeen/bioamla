@@ -1,0 +1,28 @@
+{
+  "additionalProperties": false,
+  "description": "Configuration for optimized batch inference.",
+  "properties": {
+    "batch_size": {
+      "default": 8,
+      "title": "Batch Size",
+      "type": "integer"
+    },
+    "use_fp16": {
+      "default": false,
+      "title": "Use Fp16",
+      "type": "boolean"
+    },
+    "use_compile": {
+      "default": false,
+      "title": "Use Compile",
+      "type": "boolean"
+    },
+    "num_workers": {
+      "default": 1,
+      "title": "Num Workers",
+      "type": "integer"
+    }
+  },
+  "title": "InferenceConfig",
+  "type": "object"
+}

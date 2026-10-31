@@ -8,8 +8,8 @@ import scipy.io.wavfile as wav
 import torch
 
 from bioamla.ml import (
-    AugmentationConfig,
     BioamlaPreprocessor,
+    SpectrogramAugmentationConfig,
 )
 
 
@@ -207,11 +207,11 @@ class TestBioamlaPreprocessor:
 
 
 class TestAugmentationConfig:
-    """Tests for AugmentationConfig class."""
+    """Tests for SpectrogramAugmentationConfig class."""
 
     def test_default_config(self) -> None:
         """Test default augmentation config."""
-        config = AugmentationConfig()
+        config = SpectrogramAugmentationConfig()
 
         assert config.time_mask is False
         assert config.frequency_mask is False
@@ -220,7 +220,7 @@ class TestAugmentationConfig:
 
     def test_custom_config(self) -> None:
         """Test custom augmentation config."""
-        config = AugmentationConfig(
+        config = SpectrogramAugmentationConfig(
             time_mask=True,
             frequency_mask=True,
             time_mask_max_masks=3,
@@ -254,7 +254,7 @@ class TestPreprocessorAugmentation:
     def test_enable_augmentation(self) -> None:
         """Test enabling augmentation."""
         preprocessor = BioamlaPreprocessor()
-        config = AugmentationConfig(time_mask=True)
+        config = SpectrogramAugmentationConfig(time_mask=True)
 
         assert not preprocessor.augmentation_enabled
 
@@ -265,7 +265,7 @@ class TestPreprocessorAugmentation:
     def test_disable_augmentation(self) -> None:
         """Test disabling augmentation."""
         preprocessor = BioamlaPreprocessor()
-        config = AugmentationConfig(time_mask=True)
+        config = SpectrogramAugmentationConfig(time_mask=True)
 
         preprocessor.enable_augmentation(config)
         assert preprocessor.augmentation_enabled
@@ -276,7 +276,7 @@ class TestPreprocessorAugmentation:
     def test_process_with_augmentation(self, sample_audio_path: str) -> None:
         """Test processing with augmentation enabled."""
         preprocessor = BioamlaPreprocessor()
-        config = AugmentationConfig(
+        config = SpectrogramAugmentationConfig(
             time_mask=True,
             frequency_mask=True,
         )
@@ -377,7 +377,7 @@ class TestPreprocessorIntegration:
         )
 
         # Enable augmentation
-        aug_config = AugmentationConfig(
+        aug_config = SpectrogramAugmentationConfig(
             time_mask=True,
             frequency_mask=True,
         )

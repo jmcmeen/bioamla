@@ -30,7 +30,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TypeVar
 
+from bioamla.common.config import config_dataclass
+from bioamla.common.log import log_fields
 from bioamla.exceptions import InvalidInputError, NotFoundError
+from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +46,7 @@ I = TypeVar("I")  # noqa: E741 - item type
 # =============================================================================
 
 
-@dataclass
+@config_dataclass
 class BatchConfig:
     """Configuration for batch operations.
 
@@ -56,9 +59,9 @@ class BatchConfig:
     ``_skip_validation=True`` (useful for testing or advanced use cases).
     """
 
-    input_dir: str | None = None
-    input_file: str | None = None
-    output_dir: str = ""
+    input_dir: str | Path | None = None
+    input_file: str | Path | None = None
+    output_dir: str | Path = ""
     recursive: bool = True
     max_workers: int = 1
     continue_on_error: bool = True
@@ -246,13 +249,50 @@ def output_stems(files: list[str], root: str | Path) -> dict[str, Path]:
 # =============================================================================
 
 
+def _item_file(item: Any) -> str | None:
+    """The ``file`` log field for a batch item: its path, if it is one."""
+    return str(item) if isinstance(item, (str, Path)) else None
+
+
+def _short_error(exc: Exception) -> str:
+    """The ``error`` log field: the exception's first line, capped at 300 characters.
+
+    The full text stays in the message; the field is for display and grouping, and
+    some backends (ffmpeg) put pages of output in their errors.
+    """
+    text = str(exc).strip().split("\n", 1)[0]
+    return text if len(text) <= 300 else text[:297] + "..."
+
+
+def _elapsed(start: datetime) -> float:
+    return round((datetime.now() - start).total_seconds(), 3)
+
+
+def _log_summary(operation: str, result: BatchResult) -> None:
+    """Log a run's last record: counts, duration and status."""
+    logger.debug(
+        "%s: %d of %d succeeded, %d failed",
+        operation,
+        result.successful,
+        result.total_files,
+        result.failed,
+        **log_fields(
+            operation=operation,
+            total=result.total_files,
+            elapsed_s=round(result.duration_seconds, 3),
+            status="finished" if result.failed == 0 else "failed",
+        ),
+    )
+
+
 def run_batch(
     items: list[I],
     process_fn: Callable[[I], T],
     *,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch",
 ) -> BatchResult:
     """
     Run ``process_fn`` over ``items`` sequentially or in parallel.
@@ -273,6 +313,8 @@ def run_batch(
             keep going; if False, re-raise the first exception encountered.
         on_progress: Optional callback ``(completed, total)`` invoked after each
             item completes.
+        operation: Name put in the ``operation`` field of the run's log records
+            (see :data:`bioamla.common.log.LOG_FIELDS`).
 
     Returns:
         A :class:`BatchResult` summarizing the run.
@@ -281,17 +323,29 @@ def run_batch(
     result = BatchResult(start_time=start_time.isoformat())
     result.total_files = len(items)
 
-    def _record_success(value: Any) -> None:
+    completed = 0
+    total = len(items)
+
+    def _fields(item: Any, **extra: Any) -> dict[str, dict[str, Any]]:
+        return log_fields(
+            operation=operation,
+            file=_item_file(item),
+            index=completed + 1,
+            total=total,
+            elapsed_s=_elapsed(start_time),
+            **extra,
+        )
+
+    def _record_success(item: Any, value: Any) -> None:
         result.successful += 1
         if value is not None:
             result.output_files.append(str(value))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("%s: processed %s", operation, item, **_fields(item))
 
     def _record_failure(item: Any, exc: Exception) -> None:
         result.failed += 1
         result.errors.append(f"{item}: {exc}")
-
-    completed = 0
-    total = len(items)
 
     if max_workers > 1:
         executor = ThreadPoolExecutor(max_workers=max_workers)
@@ -300,12 +354,14 @@ def run_batch(
             for future in as_completed(futures):
                 item = futures[future]
                 try:
-                    _record_success(future.result())
+                    _record_success(item, future.result())
                 except Exception as e:
                     _record_failure(item, e)
                     if not continue_on_error:
                         raise
-                    logger.warning(f"Error processing {item}: {e}")
+                    logger.warning(
+                        "Error processing %s: %s", item, e, **_fields(item, error=_short_error(e))
+                    )
                 completed += 1
                 if on_progress:
                     on_progress(completed, total)
@@ -318,12 +374,14 @@ def run_batch(
     else:
         for item in items:
             try:
-                _record_success(process_fn(item))
+                _record_success(item, process_fn(item))
             except Exception as e:
                 _record_failure(item, e)
                 if not continue_on_error:
                     raise
-                logger.warning(f"Error processing {item}: {e}")
+                logger.warning(
+                    "Error processing %s: %s", item, e, **_fields(item, error=_short_error(e))
+                )
             completed += 1
             if on_progress:
                 on_progress(completed, total)
@@ -331,6 +389,7 @@ def run_batch(
     end_time = datetime.now()
     result.end_time = end_time.isoformat()
     result.duration_seconds = (end_time - start_time).total_seconds()
+    _log_summary(operation, result)
     return result
 
 
@@ -554,7 +613,8 @@ def run_csv_batch(
     *,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch",
 ) -> BatchResult:
     """Run ``process_row`` over every row of a loaded CSV context.
 
@@ -578,6 +638,8 @@ def run_csv_batch(
         continue_on_error: Collect per-row errors (each logged as a warning) and
             keep going if True.
         on_progress: Optional ``(completed, total)`` progress callback.
+        operation: Name put in the ``operation`` field of the run's log records
+            (see :data:`bioamla.common.log.LOG_FIELDS`).
 
     Returns:
         A :class:`BatchResult` summarizing the run.
@@ -590,6 +652,17 @@ def run_csv_batch(
 
     completed = 0
     total = len(rows)
+
+    def _fields(row: MetadataRow, **extra: Any) -> dict[str, dict[str, Any]]:
+        return log_fields(
+            operation=operation,
+            file=str(row.file_path),
+            index=completed + 1,
+            total=total,
+            elapsed_s=_elapsed(start_time),
+            **extra,
+        )
+
     for row in rows:
         try:
             if not row.file_path.exists():
@@ -598,12 +671,19 @@ def run_csv_batch(
             result.successful += 1
             if value is not None:
                 result.output_files.append(str(value))
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("%s: processed %s", operation, row.file_path, **_fields(row))
         except Exception as e:
             result.failed += 1
             result.errors.append(f"{row.file_path}: {e}")
             if not continue_on_error:
                 raise
-            logger.warning(f"Error processing {row.file_path}: {e}")
+            logger.warning(
+                "Error processing %s: %s",
+                row.file_path,
+                e,
+                **_fields(row, error=_short_error(e)),
+            )
         completed += 1
         if on_progress:
             on_progress(completed, total)
@@ -611,6 +691,7 @@ def run_csv_batch(
     end_time = datetime.now()
     result.end_time = end_time.isoformat()
     result.duration_seconds = (end_time - start_time).total_seconds()
+    _log_summary(operation, result)
     return result
 
 

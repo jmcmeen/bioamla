@@ -6,6 +6,65 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Config objects are validated. `BatchConfig`, `ReductionConfig`, `ClusteringConfig`,
+  `ModelConfig`, `InferenceConfig`, `EmbeddingConfig` and the augmentation configs check their
+  fields on construction and raise `ConfigValidationError` (a `ConfigError` and an
+  `InvalidInputError`) naming each bad or unknown field. They remain dataclasses: positional
+  arguments, `asdict` and `replace` work as before. pydantic is a new base dependency; it loads
+  when a config is first used, so `import bioamla` and the CLI start as fast as before.
+- `bioamla models ast train --config` validates the whole file before training. An unknown
+  section or key, or a value of the wrong type or out of range, is reported with its
+  `section.key` path instead of being ignored or failing mid-run.
+- JSON Schema for every config: `bioamla system schema [NAME]`, `config_schema()` and
+  `validate_config()` in `bioamla.common.config`. The schemas are also published under
+  `docs/schemas/`, so editors can complete and check a training config file.
+- Structured fields on log records. The batch engine and every batch function attach
+  `operation`, `file`, `index`, `total`, `elapsed_s` (and `error` or `status`); `train_ast` attaches
+  `run_id`, the step as `index`/`total`, `epoch` and a final `status` (finished, cancelled or
+  failed). The names are documented in `bioamla.common.log.LOG_FIELDS`. `run_batch` and
+  `run_csv_batch` take an `operation` name, and `TrainResult` has the run's `run_id`.
+- `bioamla --log-format json` writes log records to stderr as JSON lines with those fields
+  (`bioamla.common.log.JsonFormatter`), and `--log-level` sets the level for any command.
+
+- `bioamla.protocols`: the interfaces bioamla accepts from callers, as `typing.Protocol`s —
+  `OnProgress` (the `on_progress(completed, total)` hook), `OnBatchProgress`, `OnTrainProgress`,
+  `ShouldStop`, `OnDownloadProgress` and `AudioModel`. Function signatures now use them, and
+  `common.progress.ProgressCallback` and `catalogs.inat.ProgressCallback` are aliases of them.
+  The module imports only the standard library.
+- Experiment-tracker hook for `train_ast`: `tracker=` takes one or more
+  `bioamla.protocols.ExperimentTracker`s, which receive the run's parameters (including the
+  augmentation config and label list), every logged metric, a `bioamla_run.json` summary written
+  next to the best model, and the final status: finished, cancelled or failed. `MLflowTracker`
+  and `TensorBoardTracker` are included in `bioamla.ml`. A tracker that fails only logs a
+  warning.
+
+### Changed
+
+- With MLflow in `report_to` (or `"all"` with MLflow installed), `train_ast` now reports to
+  MLflow through an `MLflowTracker` instead of transformers' MLflow callback, so each run has one
+  MLflow writer. Runs still end `KILLED` when cancelled and `FAILED` on error. The run's params
+  are now bioamla's (dataset, base model, hyperparameters, augmentation, labels, run id) rather
+  than transformers' full `TrainingArguments` dump, and training inside an already-active MLflow
+  run (e.g. a sweep) gets its own nested run. Param values longer than MLflow allows are
+  truncated.
+
+### Deprecated
+
+- `bioamla.datasets.AugmentationConfig` is renamed `WaveformAugmentationConfig`, and
+  `bioamla.ml.AugmentationConfig` is renamed `SpectrogramAugmentationConfig`. The two were
+  unrelated classes with the same name. The old names still work and emit a
+  `DeprecationWarning`; they will be removed in a future minor release.
+
+### Fixed
+
+- `bioamla --help` (and every command) starts in about 50 ms instead of about 400 ms. The
+  `annotation` and `batch` command modules imported the datasets package, numpy and the batch
+  engine at load time; they now import them when a command runs.
+- `bioamla system deps` suggested `bioamla config deps --install`, a command that doesn't exist;
+  it now says `bioamla system deps --install`.
+
 ## [0.3.0] - 2026-10-31
 
 ### Changed

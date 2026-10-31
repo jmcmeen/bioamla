@@ -1,0 +1,95 @@
+{
+  "additionalProperties": false,
+  "description": "Configuration for batch operations.\n\nSupports two input modes (mutually exclusive):\n- Directory mode: provide ``input_dir`` to process all files in a directory.\n- CSV metadata mode: provide ``input_file`` pointing to a CSV with a\n  ``file_name`` column.\n\nFor programmatic usage, validation can be bypassed by setting\n``_skip_validation=True`` (useful for testing or advanced use cases).",
+  "properties": {
+    "input_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "format": "path",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Input Dir"
+    },
+    "input_file": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "format": "path",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Input File"
+    },
+    "output_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "format": "path",
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "title": "Output Dir"
+    },
+    "recursive": {
+      "default": true,
+      "title": "Recursive",
+      "type": "boolean"
+    },
+    "max_workers": {
+      "default": 1,
+      "title": "Max Workers",
+      "type": "integer"
+    },
+    "continue_on_error": {
+      "default": true,
+      "title": "Continue On Error",
+      "type": "boolean"
+    },
+    "quiet": {
+      "default": false,
+      "title": "Quiet",
+      "type": "boolean"
+    },
+    "output_template": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Output Template"
+    },
+    "filters": {
+      "additionalProperties": true,
+      "title": "Filters",
+      "type": "object"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "title": "BatchConfig",
+  "type": "object"
+}

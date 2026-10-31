@@ -8,7 +8,6 @@ wired to the datasets domain at cut-over time. Functions raise
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from pathlib import Path
 
 from bioamla.batch import BatchResult, discover_files, run_batch
@@ -19,6 +18,7 @@ from bioamla.datasets.annotations import (
     save_raven_selection_table,
 )
 from bioamla.exceptions import InvalidInputError, NotFoundError
+from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def batch_convert_annotations(
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: OnProgress | None = None,
 ) -> BatchResult:
     """Convert every annotation file in a directory to another format.
 
@@ -100,4 +100,5 @@ def batch_convert_annotations(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="convert-annotations",
     )

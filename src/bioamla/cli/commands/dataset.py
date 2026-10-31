@@ -670,7 +670,7 @@ def dataset_augment(
     """
     from bioamla.cli.console import echo, print_error, print_success, print_warning
     from bioamla.cli.logging_setup import configure_cli_logging
-    from bioamla.datasets import AugmentationConfig, batch_augment
+    from bioamla.datasets import WaveformAugmentationConfig, batch_augment
 
     noise_enabled = add_noise is not None
     noise_min_snr, noise_max_snr = _parse_range(add_noise) if add_noise else (3.0, 30.0)
@@ -689,7 +689,7 @@ def dataset_augment(
         echo("Use --help for available options")
         raise SystemExit(1)
 
-    config = AugmentationConfig(
+    config = WaveformAugmentationConfig(
         sample_rate=sample_rate,
         multiply=multiply,
         add_noise=noise_enabled,

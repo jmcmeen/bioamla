@@ -1,0 +1,90 @@
+{
+  "additionalProperties": false,
+  "description": "Configuration for embedding extraction.",
+  "properties": {
+    "model_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "format": "path",
+          "type": "string"
+        }
+      ],
+      "default": "MIT/ast-finetuned-audioset-10-10-0.4593",
+      "title": "Model Path"
+    },
+    "model_type": {
+      "default": "ast",
+      "title": "Model Type",
+      "type": "string"
+    },
+    "layer": {
+      "default": "last_hidden_state",
+      "title": "Layer",
+      "type": "string"
+    },
+    "sample_rate": {
+      "default": 16000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "clip_duration": {
+      "default": 10.0,
+      "title": "Clip Duration",
+      "type": "number"
+    },
+    "overlap": {
+      "default": 0.0,
+      "title": "Overlap",
+      "type": "number"
+    },
+    "batch_size": {
+      "default": 8,
+      "title": "Batch Size",
+      "type": "integer"
+    },
+    "use_fp16": {
+      "default": false,
+      "title": "Use Fp16",
+      "type": "boolean"
+    },
+    "device": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Device"
+    },
+    "reduce_method": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reduce Method"
+    },
+    "n_components": {
+      "default": 128,
+      "title": "N Components",
+      "type": "integer"
+    },
+    "normalize": {
+      "default": true,
+      "title": "Normalize",
+      "type": "boolean"
+    }
+  },
+  "title": "EmbeddingConfig",
+  "type": "object"
+}

@@ -20,25 +20,25 @@ pytest.importorskip("transformers")
 class TestValidateAugmentation:
     def test_inverted_range_raises(self) -> None:
         pytest.importorskip("audiomentations")
-        from bioamla.datasets.augmentation import AugmentationConfig
+        from bioamla.datasets.augmentation import WaveformAugmentationConfig
         from bioamla.ml.training import _validate_augmentation
 
-        cfg = AugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
+        cfg = WaveformAugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
         with pytest.raises(TrainingError):
             _validate_augmentation(cfg)
 
     def test_valid_ranges_pass(self) -> None:
-        from bioamla.datasets.augmentation import AugmentationConfig
+        from bioamla.datasets.augmentation import WaveformAugmentationConfig
         from bioamla.ml.training import _validate_augmentation
 
-        _validate_augmentation(AugmentationConfig())  # defaults are valid
+        _validate_augmentation(WaveformAugmentationConfig())  # defaults are valid
 
     def test_inverted_range_ignored_when_layer_disabled(self) -> None:
-        from bioamla.datasets.augmentation import AugmentationConfig
+        from bioamla.datasets.augmentation import WaveformAugmentationConfig
         from bioamla.ml.training import _validate_augmentation
 
         # add_noise is off, so its inverted SNR range is not a misconfiguration.
-        _validate_augmentation(AugmentationConfig(noise_min_snr=30.0, noise_max_snr=10.0))
+        _validate_augmentation(WaveformAugmentationConfig(noise_min_snr=30.0, noise_max_snr=10.0))
 
 
 class TestLoadCsvDataset:
@@ -494,35 +494,52 @@ class TestTrainingHelpers:
         assert "Could not end the MLflow run after training: tracking server down" in caplog.text
 
     @pytest.mark.parametrize(
-        ("report_to", "active", "starts"),
+        ("report_to", "adds_mlflow", "left"),
         [
-            ("tensorboard", None, False),
-            (["tensorboard", "mlflow"], None, True),
-            ("all", None, True),
-            ("mlflow", "caller-run", False),  # never take over the caller's run
+            ("tensorboard", False, ["tensorboard"]),
+            (["tensorboard", "mlflow"], True, ["tensorboard"]),
+            ("none", False, ["none"]),
+            ("mlflow", True, ["none"]),
         ],
     )
-    def test_start_mlflow_run(self, report_to, active, starts) -> None:
-        from bioamla.ml.training import _start_mlflow_run
+    def test_mlflow_has_one_writer(self, report_to, adds_mlflow, left) -> None:
+        from bioamla.ml.trackers import MLflowTracker
+        from bioamla.ml.training import _run_trackers
 
-        fake = MagicMock()
-        fake.active_run.return_value = active
-        with patch.dict("sys.modules", {"mlflow": fake}):
-            run = _start_mlflow_run(report_to, "my-run")
-        assert (run is fake) is starts
-        if starts:
-            fake.start_run.assert_called_once_with(run_name="my-run")
-        else:
-            fake.start_run.assert_not_called()
+        trackers, remaining = _run_trackers(None, report_to)
+        assert [type(t) for t in trackers._trackers] == ([MLflowTracker] if adds_mlflow else [])
+        assert remaining == left  # transformers never gets "mlflow"
 
-    def test_start_mlflow_run_failure_falls_back(self) -> None:
-        from bioamla.ml.training import _start_mlflow_run
+    @pytest.mark.parametrize("installed", [["mlflow", "tensorboard"], ["tensorboard"]])
+    def test_all_expands_to_installed_integrations(self, installed) -> None:
+        from bioamla.ml.training import _run_trackers
 
-        fake = MagicMock()
-        fake.active_run.return_value = None
-        fake.start_run.side_effect = ConnectionError("tracking server down")
-        with patch.dict("sys.modules", {"mlflow": fake}):
-            assert _start_mlflow_run("mlflow", None) is None
+        with patch(
+            "transformers.integrations.get_available_reporting_integrations",
+            return_value=installed,
+        ):
+            trackers, remaining = _run_trackers(None, "all")
+        assert bool(trackers) is ("mlflow" in installed)  # no warning without mlflow
+        assert remaining == ["tensorboard"]
+
+    def test_callers_mlflow_tracker_is_the_only_writer(self) -> None:
+        from bioamla.ml.trackers import MLflowTracker
+        from bioamla.ml.training import _run_trackers
+
+        mine = MLflowTracker(experiment="x")
+        trackers, remaining = _run_trackers([mine], ["mlflow", "tensorboard"])
+        assert trackers._trackers == [mine]
+        assert remaining == ["tensorboard"]
+
+    def test_failing_tracker_only_warns(self, caplog) -> None:
+        from bioamla.ml.training import _Trackers
+
+        broken, fine = MagicMock(), MagicMock()
+        broken.start_run.side_effect = ConnectionError("server down")
+        with caplog.at_level("WARNING", logger="bioamla"):
+            _Trackers([broken, fine]).call("start_run", "run", {})
+        fine.start_run.assert_called_once_with("run", {})
+        assert "Could not call MagicMock.start_run: server down" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -563,10 +580,10 @@ def _real_dataset_dict():
 class TestTrainAst:
     def test_augmentation_validation_rejected(self) -> None:
         pytest.importorskip("audiomentations")
-        from bioamla.datasets.augmentation import AugmentationConfig
+        from bioamla.datasets.augmentation import WaveformAugmentationConfig
         from bioamla.ml.training import train_ast
 
-        bad = AugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
+        bad = WaveformAugmentationConfig(add_noise=True, noise_min_snr=30.0, noise_max_snr=10.0)
         with pytest.raises(TrainingError):
             train_ast(train_dataset="owner/ds", augmentation=bad)
 
@@ -641,7 +658,7 @@ class TestTrainAst:
         assert not (tmp_path / "best_model").exists()
 
     @pytest.mark.usefixtures("requires_torchcodec")
-    def test_cancel_before_training_builds_no_trainer(self, tmp_path) -> None:
+    def test_cancel_before_training_builds_no_trainer(self, tmp_path, caplog) -> None:
         from bioamla.exceptions import TrainingCancelled
         from bioamla.ml.training import train_ast
 
@@ -655,6 +672,8 @@ class TestTrainAst:
                     should_stop=lambda: True,
                 )
         trainer_cls.assert_not_called()
+        # No "started" record, so no run is left without a status record.
+        assert "Training run" not in caplog.text
 
     @pytest.mark.usefixtures("requires_torchcodec")
     def test_full_loop_mocked(self, tmp_path) -> None:
@@ -681,3 +700,116 @@ class TestTrainAst:
         assert result.final_loss == 0.3
         fake_trainer.train.assert_called_once()
         fake_trainer.save_model.assert_called_once()
+
+    @pytest.mark.usefixtures("requires_torchcodec")
+    def test_tracker_sees_a_finished_run(self, tmp_path) -> None:
+        import json
+
+        from bioamla.ml.training import train_ast
+
+        fake_trainer = MagicMock()
+        fake_trainer.state = SimpleNamespace(
+            log_history=[{"eval_accuracy": 0.75, "eval_loss": 0.3}]
+        )
+        fake_trainer.accelerator = None
+
+        def make_trainer(*args, callbacks=None, **kwargs):
+            def train():
+                state = SimpleNamespace(
+                    global_step=4, max_steps=8, epoch=0.5, is_world_process_zero=True
+                )
+                callbacks[0].on_log(
+                    None, state, None, logs={"loss": 0.5, "epoch": 0.5, "note": "x"}
+                )
+
+            fake_trainer.train.side_effect = train
+            return fake_trainer
+
+        tracker = MagicMock()
+        with self._mocks(fake_trainer, trainer_cls=MagicMock(side_effect=make_trainer)):
+            result = train_ast(
+                train_dataset="owner/ds",
+                training_dir=str(tmp_path),
+                dataloader_num_workers=1,
+                report_to="none",
+                tracker=tracker,
+            )
+
+        name, params = tracker.start_run.call_args.args
+        assert name == f"bioamla-{result.run_id}"
+        assert params["run_id"] == result.run_id and params["labels"]
+        tracker.log_metrics.assert_called_once_with(4, {"loss": 0.5, "epoch": 0.5})
+        summary = tmp_path / "best_model" / "bioamla_run.json"
+        tracker.log_artifact.assert_called_once_with(str(summary))
+        assert json.loads(summary.read_text())["result"]["final_accuracy"] == 0.75
+        tracker.end_run.assert_called_once_with("finished")
+
+    @pytest.mark.usefixtures("requires_torchcodec")
+    @pytest.mark.parametrize("outcome", ["cancelled", "failed"])
+    def test_tracker_sees_the_real_end_status(self, tmp_path, outcome) -> None:
+        from transformers import TrainerControl
+
+        from bioamla.exceptions import TrainingCancelled
+        from bioamla.ml.training import train_ast
+
+        fake_trainer = MagicMock()
+        fake_trainer.accelerator = None
+        training = {"started": False}
+
+        def make_trainer(*args, callbacks=None, **kwargs):
+            def train():
+                if outcome == "failed":
+                    raise RuntimeError("out of memory")
+                training["started"] = True
+                state = SimpleNamespace(
+                    global_step=1, max_steps=8, epoch=0.1, is_world_process_zero=True
+                )
+                callbacks[0].on_step_end(None, state, TrainerControl())
+
+            fake_trainer.train.side_effect = train
+            return fake_trainer
+
+        tracker = MagicMock()
+        expected = TrainingCancelled if outcome == "cancelled" else RuntimeError
+        with self._mocks(fake_trainer, trainer_cls=MagicMock(side_effect=make_trainer)):
+            with pytest.raises(expected):
+                train_ast(
+                    train_dataset="owner/ds",
+                    training_dir=str(tmp_path),
+                    dataloader_num_workers=1,
+                    report_to="none",
+                    tracker=tracker,
+                    should_stop=lambda: training["started"],
+                )
+        tracker.end_run.assert_called_once_with(outcome)
+        tracker.log_artifact.assert_not_called()
+
+    @pytest.mark.usefixtures("requires_torchcodec")
+    def test_failed_summary_write_keeps_the_run_finished(self, tmp_path, caplog) -> None:
+        from pathlib import Path
+
+        from bioamla.ml.training import train_ast
+
+        fake_trainer = MagicMock()
+        fake_trainer.state = SimpleNamespace(log_history=[])
+        fake_trainer.accelerator = None
+        tracker = MagicMock()
+        real_write = Path.write_text
+
+        def write_text(self, *args, **kwargs):
+            if self.name == "bioamla_run.json":
+                raise OSError("disk full")
+            return real_write(self, *args, **kwargs)
+
+        with self._mocks(fake_trainer), patch.object(Path, "write_text", write_text):
+            result = train_ast(
+                train_dataset="owner/ds",
+                training_dir=str(tmp_path),
+                dataloader_num_workers=1,
+                report_to="none",
+                tracker=tracker,
+            )
+        assert result.run_id
+        assert "disk full" in caplog.text
+        tracker.log_artifact.assert_not_called()
+        tracker.end_run.assert_called_once_with("finished")

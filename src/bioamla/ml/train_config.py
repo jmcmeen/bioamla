@@ -1,22 +1,103 @@
-"""On-demand generator for an AST training config file.
+"""The AST training config file: its schema and a documented starter.
 
 ``bioamla models ast train`` can read a TOML file (via ``--config``) whose
 ``[models]``, ``[training]``, and ``[augmentation]`` sections overlay the
-command-line defaults. This module produces a documented starter for that file.
+command-line defaults. :class:`AstTrainConfigFile` is that file's schema: the
+command validates the file against it before training, so an unknown key or a
+wrong type fails up front, and ``bioamla system schema ast-train-file`` exports
+it as JSON Schema for editors. :func:`write_train_config` writes a starter file.
 
 The template is a Python string (not a packaged data file) so it ships in the
 wheel without extra packaging rules, and its keys/defaults are kept in step with
-the ``ast train`` CLI options and the ``AugmentationConfig`` defaults.
+the ``ast train`` CLI options and the ``WaveformAugmentationConfig`` defaults.
 """
 
 from __future__ import annotations
 
+from dataclasses import field
 from pathlib import Path
+from typing import Annotated, Literal
 
+from pydantic import Field
+
+from bioamla.common.config import config_dataclass
 from bioamla.exceptions import InvalidInputError
 
-# Keep these values aligned with the `ast train` CLI option defaults and with
-# bioamla.datasets.augmentation.AugmentationConfig. Comments document intent;
+Probability = Annotated[float, Field(ge=0.0, le=1.0)]
+# transformers' IntervalStrategy and SaveStrategy values.
+EvalStrategy = Literal["epoch", "steps", "no"]
+SaveStrategy = Literal["epoch", "steps", "no", "best"]
+
+
+# Every key is optional: a key left out falls back to the command-line value.
+# Keep these in step with TRAIN_CONFIG_TEMPLATE below and with the overlay map in
+# bioamla.cli.commands.models (a test checks all three agree).
+
+
+@config_dataclass
+class AstModelSection:
+    """The ``[models]`` section."""
+
+    default_ast_model: str | None = None
+
+
+@config_dataclass
+class AstTrainingSection:
+    """The ``[training]`` section."""
+
+    learning_rate: Annotated[float, Field(gt=0.0)] | None = None
+    epochs: Annotated[int, Field(ge=1)] | None = None
+    batch_size: Annotated[int, Field(ge=1)] | None = None
+    eval_strategy: EvalStrategy | None = None
+    save_strategy: SaveStrategy | None = None
+    eval_steps: Annotated[int, Field(ge=1)] | None = None
+    save_steps: Annotated[int, Field(ge=1)] | None = None
+    logging_steps: Annotated[int, Field(ge=1)] | None = None
+    report_to: str | list[str] | None = None
+
+
+@config_dataclass
+class AstAugmentationSection:
+    """The ``[augmentation]`` section."""
+
+    add_noise: bool | None = None
+    time_stretch: bool | None = None
+    pitch_shift: bool | None = None
+    gain: bool | None = None
+    gain_transition: bool | None = None
+    clipping_distortion: bool | None = None
+    probability: Probability | None = None
+    multiplier: Annotated[int, Field(ge=1)] | None = None
+    min_snr_db: float | None = None
+    max_snr_db: float | None = None
+    noise_probability: Probability | None = None
+    min_time_stretch: Annotated[float, Field(gt=0.0)] | None = None
+    max_time_stretch: Annotated[float, Field(gt=0.0)] | None = None
+    time_stretch_probability: Probability | None = None
+    min_pitch_shift: int | None = None
+    max_pitch_shift: int | None = None
+    pitch_shift_probability: Probability | None = None
+    min_gain_db: float | None = None
+    max_gain_db: float | None = None
+    gain_probability: Probability | None = None
+    gain_transition_probability: Probability | None = None
+    clipping_probability: Probability | None = None
+    min_percentile_threshold: Annotated[int, Field(ge=0, le=100)] | None = None
+    max_percentile_threshold: Annotated[int, Field(ge=0, le=100)] | None = None
+
+
+@config_dataclass
+class AstTrainConfigFile:
+    """Schema of the TOML file passed to ``bioamla models ast train --config``."""
+
+    models: AstModelSection = field(default_factory=AstModelSection)
+    training: AstTrainingSection = field(default_factory=AstTrainingSection)
+    augmentation: AstAugmentationSection = field(default_factory=AstAugmentationSection)
+
+
+# Keep these values aligned with the `ast train` CLI option defaults, with
+# AstTrainConfigFile above, and with
+# bioamla.datasets.augmentation.WaveformAugmentationConfig. Comments document intent;
 # every layer is OFF by default so a fresh file trains with no augmentation.
 TRAIN_CONFIG_TEMPLATE = """\
 # Bioamla AST training configuration
@@ -42,7 +123,7 @@ learning_rate = 5.0e-5       # Initial learning rate
 epochs = 1                   # Number of training epochs
 batch_size = 8               # Per-device training batch size
 eval_strategy = "epoch"      # "epoch", "steps", or "no"
-save_strategy = "epoch"      # "epoch", "steps", or "no"
+save_strategy = "epoch"      # "epoch", "steps", "best", or "no"
 eval_steps = 1               # Steps between evals (only when eval_strategy = "steps")
 save_steps = 1               # Steps between checkpoints (only when save_strategy = "steps")
 logging_steps = 100          # Steps between log lines

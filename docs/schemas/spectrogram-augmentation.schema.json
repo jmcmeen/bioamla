@@ -1,0 +1,62 @@
+{
+  "additionalProperties": false,
+  "description": "Configuration for spectrogram augmentation.\n\nAttributes:\n    time_mask: Enable time masking (SpecAugment).\n    frequency_mask: Enable frequency masking (SpecAugment).\n    time_mask_max_masks: Maximum number of time masks.\n    time_mask_max_length: Maximum length of time mask (fraction of total).\n    frequency_mask_max_masks: Maximum number of frequency masks.\n    frequency_mask_max_length: Maximum length of frequency mask (fraction of total).\n    random_gain: Enable random gain adjustment.\n    gain_range_db: Gain range in dB (min, max).\n    add_noise: Enable adding background noise.",
+  "properties": {
+    "time_mask": {
+      "default": false,
+      "title": "Time Mask",
+      "type": "boolean"
+    },
+    "frequency_mask": {
+      "default": false,
+      "title": "Frequency Mask",
+      "type": "boolean"
+    },
+    "time_mask_max_masks": {
+      "default": 2,
+      "title": "Time Mask Max Masks",
+      "type": "integer"
+    },
+    "time_mask_max_length": {
+      "default": 0.1,
+      "title": "Time Mask Max Length",
+      "type": "number"
+    },
+    "frequency_mask_max_masks": {
+      "default": 2,
+      "title": "Frequency Mask Max Masks",
+      "type": "integer"
+    },
+    "frequency_mask_max_length": {
+      "default": 0.1,
+      "title": "Frequency Mask Max Length",
+      "type": "number"
+    },
+    "random_gain": {
+      "default": false,
+      "title": "Random Gain",
+      "type": "boolean"
+    },
+    "gain_range_db": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Gain Range Db",
+      "type": "array"
+    },
+    "add_noise": {
+      "default": false,
+      "title": "Add Noise",
+      "type": "boolean"
+    }
+  },
+  "title": "SpectrogramAugmentationConfig",
+  "type": "object"
+}
