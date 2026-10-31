@@ -403,7 +403,8 @@
               "enum": [
                 "epoch",
                 "steps",
-                "no"
+                "no",
+                "best"
               ],
               "type": "string"
             },
