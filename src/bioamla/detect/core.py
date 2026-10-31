@@ -1467,7 +1467,7 @@ def batch_detect(
                 logger.info(f"  Found {len(detections)} detections")
 
         except (AudioLoadError, DetectionError) as e:
-            logger.error(f"Error processing {filepath}: {e}")
+            logger.warning(f"Error processing {filepath}: {e}")
             results[str(filepath)] = []
 
     return results
