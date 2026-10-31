@@ -120,6 +120,12 @@ def normalize_catalog_row(row: dict[str, Any], source: str) -> dict[str, Any]:
     return out
 
 
+def resolve_metadata_path(path: str | Path, metadata_filename: str = "metadata.csv") -> Path:
+    """A dataset's metadata CSV, given the dataset directory or the CSV's own path."""
+    path = Path(path)
+    return path if path.is_file() else path / metadata_filename
+
+
 def read_metadata_csv(filepath: Path) -> tuple[list[dict], set[str]]:
     """Read metadata rows and field names from a CSV file.
 

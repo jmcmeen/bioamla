@@ -18,12 +18,31 @@ from pathlib import Path
 from typing import Any
 
 from bioamla.common.files import sanitize_filename
-from bioamla.datasets._metadata import read_metadata_csv, write_metadata_csv
+from bioamla.datasets._metadata import (
+    read_metadata_csv,
+    resolve_metadata_path,
+    write_metadata_csv,
+)
 from bioamla.exceptions import DatasetError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
 SPLIT_NAMES = ("train", "val", "test")
+
+
+def _allocate(n: int, fractions: tuple[float, float, float]) -> tuple[int, int, int]:
+    """Split ``n`` items by ``fractions``: floor each share, then give the leftover
+    items to the splits with the largest remainders. A zero fraction gets nothing."""
+    exact = [n * f for f in fractions]
+    counts = [int(e) for e in exact]
+    order = sorted(
+        (i for i, f in enumerate(fractions) if f > 0),
+        key=lambda i: (exact[i] - counts[i], fractions[i]),
+        reverse=True,
+    )
+    for i in order[: n - sum(counts)]:
+        counts[i] += 1
+    return counts[0], counts[1], counts[2]
 
 
 def _primary_label(group_rows: list[dict]) -> str:
@@ -48,7 +67,7 @@ def partition_dataset(
     """Partition a dataset into train/val/test.
 
     Args:
-        dataset_dir: Dataset directory containing ``metadata.csv``.
+        dataset_dir: Dataset directory containing ``metadata.csv``, or the CSV itself.
         splits: ``(train, val, test)`` fractions; must sum to 1.0 (val may be 0).
         seed: Reproducible shuffle seed.
         stratify: Balance each label across splits.
@@ -63,7 +82,9 @@ def partition_dataset(
         verbose: Log progress.
 
     Returns:
-        Dict with ``splits`` (split->count), ``groups``, ``mode``,
+        Dict with ``splits`` (split->count), ``empty_splits`` (splits given a
+        non-zero fraction that received no rows, e.g. because there were too
+        few groups; a warning is logged), ``groups``, ``mode``,
         ``metadata_file``, ``dataset_dir``.
 
     Raises:
@@ -76,7 +97,9 @@ def partition_dataset(
         raise DatasetError("splits must be three fractions summing to 1.0")
 
     dataset_path = Path(dataset_dir)
-    metadata_path = dataset_path / metadata_filename
+    metadata_path = resolve_metadata_path(dataset_path, metadata_filename)
+    if dataset_path.is_file():  # given the metadata CSV itself
+        dataset_path = metadata_path.parent
     if not metadata_path.exists():
         raise NotFoundError(f"Metadata file not found: {metadata_path}")
 
@@ -103,16 +126,13 @@ def partition_dataset(
             stratum = "__all__"
         strata[stratum].append(key)
 
-    train_f, val_f, _test_f = splits
     assignment: dict[str, str] = {}
     for stratum, keys in strata.items():
         keys = sorted(keys)  # deterministic base order
         # Per-stratum RNG keyed by (seed, stratum) so assignment is independent
         # of dict iteration order and stable across runs.
         random.Random(f"{seed}:{stratum}").shuffle(keys)
-        n = len(keys)
-        n_train = min(int(round(n * train_f)), n)
-        n_val = min(int(round(n * val_f)), n - n_train)
+        n_train, n_val, _n_test = _allocate(len(keys), splits)
         for i, key in enumerate(keys):
             if i < n_train:
                 assignment[key] = "train"
@@ -136,9 +156,23 @@ def partition_dataset(
 
     if verbose:
         logger.info(f"Partitioned {len(rows)} rows / {len(groups)} groups: {dict(split_counts)}")
+    empty = [
+        name
+        for name, fraction in zip(("train", "val", "test"), splits, strict=True)
+        if fraction > 0 and split_counts[name] == 0
+    ]
+    if empty:
+        if len(strata) > 1:
+            reason = f"{len(groups)} group(s) in {len(strata)} strata are too few per stratum"
+        else:
+            reason = f"only {len(groups)} group(s)"
+        if group_by:
+            reason += f"; rows sharing {group_by!r} stay together"
+        logger.warning(f"Empty split(s) {', '.join(empty)}: {reason}")
 
     return {
         "splits": dict(split_counts),
+        "empty_splits": empty,
         "groups": len(groups),
         "mode": mode,
         "metadata_file": str(metadata_path),

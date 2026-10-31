@@ -72,6 +72,63 @@ class TestGroupingNoLeakage:
         assert all(len(splits) == 1 for splits in source_to_splits.values())
 
 
+class TestEmptySplits:
+    def test_too_few_groups_reported(self, tmp_path, caplog):
+        d = _write_dataset(tmp_path, n_per_label=2, labels=("call",))  # one recording
+        result = partition_dataset(str(d), mode="column")
+        assert result["splits"] == {"train": 2}
+        assert result["empty_splits"] == ["val", "test"]
+        assert "Empty split(s) val, test: only 1 group(s)" in caplog.text
+        assert "source_file" in caplog.text
+
+    def test_stratified_shortfall_names_the_strata(self, tmp_path, caplog):
+        # 3 labels x 4 recordings: 12 groups overall, but 4 per label at 10% leaves one
+        # leftover group per stratum, so one of val/test gets nothing anywhere.
+        d = _write_dataset(tmp_path, n_per_label=8, labels=("a", "b", "c"))
+        result = partition_dataset(str(d), splits=(0.8, 0.1, 0.1), stratify=True, mode="column")
+        assert result["empty_splits"] == ["test"]
+        assert "too few per stratum" in caplog.text
+
+    def test_zero_fraction_split_is_not_reported(self, tmp_path):
+        d = _write_dataset(tmp_path, n_per_label=20, with_source=False)
+        result = partition_dataset(str(d), splits=(0.8, 0.2, 0.0), mode="column")
+        assert result["empty_splits"] == []
+
+    def test_filled_splits(self, tmp_path):
+        d = _write_dataset(tmp_path, n_per_label=30)
+        assert partition_dataset(str(d), mode="column")["empty_splits"] == []
+
+
+class TestAllocation:
+    @pytest.mark.parametrize(
+        ("n", "fractions", "expected"),
+        [
+            (5, (0.5, 0.5, 0.0), (3, 2, 0)),  # round-half-even used to give test a group
+            (1, (0.5, 0.5, 0.0), (1, 0, 0)),
+            (10, (0.8, 0.1, 0.1), (8, 1, 1)),
+            (7, (0.6, 0.2, 0.2), (4, 2, 1)),  # 4.2, 1.4, 1.4: the leftover goes to val
+            (3, (1.0, 0.0, 0.0), (3, 0, 0)),
+            (0, (0.8, 0.1, 0.1), (0, 0, 0)),
+        ],
+    )
+    def test_allocate(self, n, fractions, expected):
+        from bioamla.datasets.partition import _allocate
+
+        counts = _allocate(n, fractions)
+        assert counts == expected and sum(counts) == n
+
+    def test_zero_test_fraction_gets_no_rows(self, tmp_path):
+        d = _write_dataset(tmp_path, n_per_label=5, labels=("call",), with_source=False)
+        result = partition_dataset(str(d), splits=(0.5, 0.5, 0.0), mode="column")
+        assert "test" not in result["splits"]
+
+    def test_accepts_the_metadata_csv_path(self, tmp_path):
+        d = _write_dataset(tmp_path, n_per_label=10)
+        result = partition_dataset(str(d / "metadata.csv"), mode="column")
+        assert result["dataset_dir"] == str(d)
+        assert sum(result["splits"].values()) == 20
+
+
 class TestBackgroundLabel:
     def test_background_present_in_all_splits(self, tmp_path):
         d = _write_dataset(

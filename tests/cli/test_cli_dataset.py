@@ -492,3 +492,25 @@ def test_dataset_remix_error(runner: CliRunner, tmp_path) -> None:
         )
     assert result.exit_code != 0
     assert "bad label" in result.output
+
+
+def test_partition_help_describes_the_default_mode():
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    text = CliRunner().invoke(cli, ["dataset", "partition", "--help"]).output
+    assert "moved into train/val/test/<label>/" in text
+    assert "--mode column" in text
+    assert "writing a `split` column" not in text  # the old, wrong description
+
+
+def test_train_config_help_names_init_config():
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    text = " ".join(CliRunner().invoke(cli, ["models", "ast", "train", "--help"]).output.split())
+    assert "bioamla models ast init-config" in text
+    assert "bioamla config init" not in text
+    assert "[augmentation]" in text

@@ -12,6 +12,22 @@ All notable changes to this project are documented here. The format is based on
   overprints the time: it moves to the line below, and is shortened or left out when even that
   is too narrow. The view is fitted to the 1-99th percentile of the path instead of the 2-98th,
   so far less of a dense, loud passage runs off the frame.
+- Detections used as annotations keep their frequency band: the annotation readers accept the
+  `frequency_low` / `frequency_high` columns `bioamla detect -o` writes, so `dataset
+  extract-clips --annotations det.csv` fills `low_freq` / `high_freq` and `--bandpass` works.
+- Detections saved as JSON (`bioamla detect ... -o det.json`, a JSON list) are accepted wherever
+  annotations are read. Records without `start_time` / `end_time` (peak detections are points in
+  time) are rejected with a clear error rather than read as empty annotations.
+- `dataset partition` warns when a split it was asked to fill comes out empty (too few groups to
+  go round), and lists those splits as `empty_splits` in its result; its help no longer claims
+  the default only writes a `split` column (the default reorganizes into subdirs).
+- `dataset stats` and `dataset partition` accept the path of the metadata CSV as well as the
+  dataset directory.
+- `dataset partition` sizes splits from the fractions without rounding a zero split up: with
+  `--test 0` no group goes to test (round-half-to-even could put one there), and split sizes
+  can differ by one group from before for the same seed.
+- `models ast train --config` help names `models ast init-config`, which creates the file, and
+  all three sections it reads.
 
 ## [0.3.4] - 2026-10-31
 
