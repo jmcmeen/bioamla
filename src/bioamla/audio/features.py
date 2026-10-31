@@ -42,12 +42,13 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import asdict, dataclass, field, replace
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
 from bioamla.common.config import config_dataclass
-from bioamla.exceptions import InvalidInputError
+from bioamla.exceptions import InvalidInputError, NotFoundError
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -524,11 +525,129 @@ def mfcc_trajectory(
     )
 
 
+_TABLE_FORMATS = (".csv", ".parquet")
+
+
+@dataclass
+class FrameFeaturesFileResult:
+    """Output of :func:`frame_features_file`.
+
+    Attributes:
+        file: The audio file analysed.
+        output_path: Where the per-frame table was written, or ``None``.
+        features: The frame features.
+        trajectory: The timbre trajectory, when requested.
+        table: One row per frame: ``time``, the descriptors, the MFCCs, and
+            ``pc1``..``pcN`` when a trajectory was computed.
+    """
+
+    file: str
+    output_path: str | None
+    features: FrameFeatures = field(repr=False)
+    trajectory: Trajectory | None = field(repr=False)
+    table: pd.DataFrame = field(repr=False)
+
+    def to_dict(self) -> dict[str, Any]:
+        """A summary: file, output, frame count, duration, settings and explained variance."""
+        return {
+            "file": self.file,
+            "output_path": self.output_path,
+            "n_frames": self.features.n_frames,
+            "duration": self.features.duration,
+            "sample_rate": self.features.sample_rate,
+            "config": asdict(self.features.config),
+            "explained_variance_ratio": (
+                None
+                if self.trajectory is None
+                else self.trajectory.explained_variance_ratio.tolist()
+            ),
+        }
+
+
+def _table_suffix(path: Path) -> str:
+    """The table format from ``path``'s extension; raises for anything but csv/parquet."""
+    suffix = path.suffix.lower()
+    if suffix not in _TABLE_FORMATS:
+        raise InvalidInputError(f"output must end in .csv or .parquet, got {path.name!r}")
+    return suffix
+
+
+def write_frame_table(table: pd.DataFrame, path: str | Path) -> Path:
+    """Write a per-frame table as CSV or Parquet, chosen by the file extension.
+
+    Raises:
+        InvalidInputError: If the extension is not ``.csv`` or ``.parquet``.
+    """
+    path = Path(path)
+    suffix = _table_suffix(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if suffix == ".csv":
+        table.to_csv(path, index=False)
+    else:
+        table.to_parquet(path, index=False)
+    return path
+
+
+def frame_features_file(
+    audio_path: str | Path,
+    output_path: str | Path | None = None,
+    *,
+    config: FrameFeatureConfig | None = None,
+    trajectory: bool = False,
+    gate_db: float = 38.0,
+    n_components: int = 3,
+) -> FrameFeaturesFileResult:
+    """Frame features of an audio file, optionally with its trajectory, as a table.
+
+    Args:
+        audio_path: Audio file (any format bioamla can load).
+        output_path: Write the table here (``.csv`` or ``.parquet``). ``None`` writes nothing.
+        config: Analysis settings for :func:`frame_features`.
+        trajectory: Also compute :func:`mfcc_trajectory` and add ``pc1``..``pcN`` columns.
+        gate_db: Level gate for the trajectory.
+        n_components: Trajectory axes.
+
+    Returns:
+        :class:`FrameFeaturesFileResult`.
+
+    Raises:
+        NotFoundError: If the file does not exist.
+        InvalidInputError: If the audio is too short, a setting is out of range, or
+            the output extension is not supported.
+        AudioLoadError: If the file cannot be read.
+    """
+    from bioamla.audio.io import load_audio
+
+    audio_path = Path(audio_path)
+    if not audio_path.is_file():
+        raise NotFoundError(f"Audio file not found: {audio_path}")
+    if output_path is not None:
+        _table_suffix(Path(output_path))  # fail before the (slow) analysis
+    audio, sr = load_audio(str(audio_path))
+    features = frame_features(audio, sr, config)
+    traj = mfcc_trajectory(features, gate_db, n_components) if trajectory else None
+    table = features.to_dataframe()
+    if traj is not None:
+        for k in range(traj.n_components):
+            table[f"pc{k + 1}"] = traj.coords[:, k]
+    written = None if output_path is None else str(write_frame_table(table, output_path))
+    return FrameFeaturesFileResult(
+        file=str(audio_path),
+        output_path=written,
+        features=features,
+        trajectory=traj,
+        table=table,
+    )
+
+
 __all__ = [
     "DESCRIPTORS",
     "FrameFeatureConfig",
     "FrameFeatures",
+    "FrameFeaturesFileResult",
     "Trajectory",
     "frame_features",
+    "frame_features_file",
     "mfcc_trajectory",
+    "write_frame_table",
 ]

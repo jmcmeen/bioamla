@@ -12,6 +12,7 @@ transform, and returns a :class:`bioamla.batch.BatchResult`.
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -22,6 +23,9 @@ from bioamla.audio.processing import resample_audio
 from bioamla.batch import BatchResult, SegmentInfo, output_stems, run_batch, write_rows_csv
 from bioamla.exceptions import InvalidInputError, NotFoundError
 from bioamla.protocols import OnProgress
+
+if TYPE_CHECKING:
+    from bioamla.audio.features import FrameFeatureConfig
 
 
 def batch_transform_files(
@@ -385,6 +389,109 @@ def batch_segment_files(
     return result
 
 
+def frame_feature_table_paths(
+    files: list[str], root: str | Path, output_dir: str | Path | None, file_format: str
+) -> dict[str, Path]:
+    """Where each file's per-frame table goes: ``<stem>.features.<file_format>``.
+
+    With ``output_dir`` the tables mirror ``root``'s tree under it; without, each
+    table sits next to its audio. Stems come from :func:`bioamla.batch.output_stems`,
+    so files that would share a name (``a.wav`` and ``a.flac``, or two ``rec.wav``
+    from outside ``root``) get distinct tables.
+    """
+    stems = output_stems(files, root)
+    paths: dict[str, Path] = {}
+    for f in files:
+        stem = stems[f]
+        name = f"{stem.name}.features.{file_format}"
+        base = Path(f).parent if output_dir is None else Path(output_dir) / stem.parent
+        paths[f] = base / name
+    return paths
+
+
+def batch_frame_features_files(
+    input_dir: str | Path,
+    output_dir: str | Path,
+    *,
+    config: "FrameFeatureConfig | None" = None,
+    trajectory: bool = False,
+    gate_db: float = 38.0,
+    file_format: str = "csv",
+    recursive: bool = True,
+    max_workers: int = 1,
+    continue_on_error: bool = True,
+    on_progress: OnProgress | None = None,
+) -> BatchResult:
+    """
+    Write a per-frame feature table for every audio file in a directory.
+
+    Tables mirror the input tree under ``output_dir`` as
+    ``<stem>.features.csv`` (or ``.parquet``), named by
+    :func:`frame_feature_table_paths`; see :func:`frame_features_file`.
+
+    Args:
+        input_dir: Directory containing audio files.
+        output_dir: Directory to write the tables to.
+        config: Analysis settings for :func:`bioamla.audio.frame_features`.
+        trajectory: Add ``pc1``..``pc3`` trajectory columns.
+        gate_db: Level gate for the trajectory.
+        file_format: ``"csv"`` or ``"parquet"``.
+        recursive: Search subdirectories.
+        max_workers: Number of worker threads (1 = sequential).
+        continue_on_error: Collect per-file errors and keep going if True.
+        on_progress: Optional ``(completed, total)`` progress callback.
+
+    Returns:
+        A :class:`bioamla.batch.BatchResult`. ``output_files`` holds the tables
+        written and the index ``frame_features.csv`` (``file_name``,
+        ``features_file``, ``n_frames`` and ``duration`` per file, in discovery
+        order), whose rows are also in ``metadata["rows"]``.
+
+    Raises:
+        NotFoundError: If the input directory does not exist.
+        InvalidInputError: If ``file_format`` is not csv or parquet.
+    """
+    from bioamla.audio.features import frame_features_file
+
+    if file_format not in ("csv", "parquet"):
+        raise InvalidInputError(f"file_format must be 'csv' or 'parquet', got {file_format!r}")
+    in_dir = Path(input_dir)
+    if not in_dir.exists():
+        raise NotFoundError(f"Input directory not found: {in_dir}")
+    out_dir = Path(output_dir)
+    files = [str(f) for f in list_audio_files(str(in_dir), recursive=recursive)]
+    tables = frame_feature_table_paths(files, in_dir, out_dir, file_format)
+    by_path: dict[str, dict] = {}
+
+    def _process_one(audio_path: str) -> str:
+        out_path = tables[audio_path]
+        result = frame_features_file(
+            audio_path, out_path, config=config, trajectory=trajectory, gate_db=gate_db
+        )
+        by_path[audio_path] = {
+            "file_name": audio_path,
+            "features_file": result.output_path,
+            "n_frames": result.features.n_frames,
+            "duration": result.features.duration,
+        }
+        return str(out_path)
+
+    result = run_batch(
+        files,
+        _process_one,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+        operation="features",
+    )
+    rows = [by_path[f] for f in files if f in by_path]
+    result.metadata["rows"] = rows
+    if rows:
+        index = write_rows_csv(out_dir / "frame_features.csv", rows)
+        result.output_files = [*result.output_files, str(index)]
+    return result
+
+
 __all__ = [
     "batch_transform_files",
     "batch_resample_files",
@@ -392,4 +499,6 @@ __all__ = [
     "batch_info_files",
     "batch_segment_files",
     "segment_audio_file",
+    "batch_frame_features_files",
+    "frame_feature_table_paths",
 ]

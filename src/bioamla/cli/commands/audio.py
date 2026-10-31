@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 
+from bioamla.cli.options import frame_feature_options
 from bioamla.exceptions import BioamlaError
 
 
@@ -216,6 +217,77 @@ def audio_play(path: str, loop: bool) -> None:
         return
 
     print_success("Done.")
+
+
+@audio.command("features")
+@click.argument("path")
+@click.option(
+    "--output", "-o", default=None, help="Write the per-frame table here (.csv or .parquet)"
+)
+@frame_feature_options
+def audio_features(
+    path: str,
+    output: str | None,
+    trajectory: bool,
+    gate_db: float,
+    no_denoise: bool,
+    n_fft: int | None,
+    hop: int | None,
+    n_mels: int,
+    n_mfcc: int,
+    f_min: float,
+    f_max: float | None,
+) -> None:
+    """Frame-level spectral descriptors and MFCCs, one row per frame.
+
+    Each frame gets its level, spectral centroid, spread, flatness, crest,
+    rolloff, flux, peak frequency, band edges and MFCCs; --trajectory adds its
+    position on the recording's three main timbre axes. Without --output, a
+    summary of each descriptor is shown; with --json and no --output, the
+    per-frame records are in the result.
+
+    \b
+    Examples:
+        bioamla audio features wren.wav -o wren.features.csv
+        bioamla audio features wren.wav -o wren.parquet --trajectory
+        bioamla --json audio features wren.wav --trajectory
+    """
+    from bioamla.audio import DESCRIPTORS, frame_features_file
+    from bioamla.cli.options import frame_feature_config
+    from bioamla.cli.output import emit_file_result
+
+    try:
+        config = frame_feature_config(no_denoise, n_fft, hop, n_mels, n_mfcc, f_min, f_max)
+        result = frame_features_file(
+            path, output, config=config, trajectory=trajectory, gate_db=gate_db
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    summary = result.to_dict()
+    extra = {k: v for k, v in summary.items() if k not in ("file", "output_path")}
+    if output is None:
+        extra["frames"] = result.table.to_dict("records")
+    if emit_file_result(path, output=result.output_path, **extra):
+        return
+
+    from bioamla.cli.console import print_kv, print_success, print_table
+
+    print_kv("File", path)
+    print_kv("Frames", f"{summary['n_frames']} ({summary['duration']:.2f}s)")
+    if result.trajectory is not None:
+        ratio = ", ".join(f"{v:.0%}" for v in summary["explained_variance_ratio"])
+        print_kv("Trajectory", f"{int(result.trajectory.active.sum())} frames, variance {ratio}")
+    if output is not None:
+        print_success(f"Per-frame table saved to: {result.output_path}")
+        return
+    table = result.table
+    rows = []
+    for name in DESCRIPTORS:
+        q = table[name].quantile([0.1, 0.5, 0.9])
+        rows.append([name, *(f"{v:.4g}" for v in q)])
+    print_table("Descriptors over frames", ["descriptor", "p10", "median", "p90"], rows)
+    print_kv("Hint", "use --output to save every frame (.csv or .parquet)")
 
 
 @audio.command("convert")

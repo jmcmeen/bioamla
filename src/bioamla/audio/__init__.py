@@ -22,6 +22,7 @@ from bioamla.audio.analysis import (
 )
 from bioamla.audio.batch import (
     batch_convert_files,
+    batch_frame_features_files,
     batch_info_files,
     batch_resample_files,
     batch_segment_files,
@@ -43,9 +44,12 @@ from bioamla.audio.features import (
     DESCRIPTORS,
     FrameFeatureConfig,
     FrameFeatures,
+    FrameFeaturesFileResult,
     Trajectory,
     frame_features,
+    frame_features_file,
     mfcc_trajectory,
+    write_frame_table,
 )
 from bioamla.audio.info import (
     AudioAnalysis,
@@ -169,6 +173,9 @@ __all__ = [
     "frame_features",
     "Trajectory",
     "mfcc_trajectory",
+    "FrameFeaturesFileResult",
+    "frame_features_file",
+    "write_frame_table",
     # Signal processing
     "AudioSegment",
     "AudioEvent",
@@ -200,6 +207,7 @@ __all__ = [
     "batch_resample_files",
     "batch_convert_files",
     "batch_info_files",
+    "batch_frame_features_files",
     "batch_segment_files",
     "segment_audio_file",
     # Conversion

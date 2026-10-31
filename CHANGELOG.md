@@ -16,6 +16,15 @@ All notable changes to this project are documented here. The format is based on
 - `mfcc_trajectory()` (`bioamla.audio`): a recording's path through timbre space. Frames above a
   level gate are projected onto the principal axes of their MFCCs (c0 left out), giving
   per-frame coordinates, the explained variance per axis and the axes themselves.
+- `bioamla audio features FILE`: the per-frame table (time, descriptors, MFCCs, and `pc1`..`pc3`
+  with `--trajectory`) as `-o out.csv|out.parquet`, or a per-descriptor summary on screen.
+  `--json` reports a summary, plus every frame when there is no `-o`. Analysis settings are
+  options (`--no-denoise`, `--n-fft`, `--hop`, `--n-mels`, `--n-mfcc`, `--f-min`, `--f-max`,
+  `--gate-db`).
+- `bioamla batch audio features`: one `<name>.features.csv` (or `-f parquet`) per file, mirroring
+  the input tree, plus a `frame_features.csv` index; in CSV mode the `features_file` (relative to
+  the CSV where possible) and `n_frames` columns are added. Library: `frame_features_file()`,
+  `write_frame_table()`, `batch_frame_features_files()` and `frame_feature_table_paths()`.
 
 ## [0.3.3] - 2026-10-31
 

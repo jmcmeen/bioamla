@@ -315,3 +315,66 @@ class TestTrajectory:
         f = frame_features(x, 22050, FrameFeatureConfig(denoise=False))
         with pytest.raises(InvalidInputError, match="frames are within"):
             mfcc_trajectory(f, gate_db=3)
+
+
+class TestFiles:
+    @pytest.fixture
+    def wav(self, tmp_path) -> Path:
+        import soundfile as sf
+
+        x, sr = reference_signal()
+        path = tmp_path / "ref.wav"
+        sf.write(path, x, sr)
+        return path
+
+    def test_frame_features_file(self, wav, tmp_path) -> None:
+        from bioamla.audio import frame_features_file
+
+        out = tmp_path / "deep" / "t.csv"
+        result = frame_features_file(wav, out, trajectory=True)
+        assert result.output_path == str(out) and out.exists()
+        assert list(result.table.columns[-3:]) == ["pc1", "pc2", "pc3"]
+        summary = result.to_dict()
+        json.dumps(summary)
+        assert summary["n_frames"] == result.features.n_frames
+        assert len(summary["explained_variance_ratio"]) == 3
+
+    def test_no_output_writes_nothing(self, wav, tmp_path) -> None:
+        from bioamla.audio import frame_features_file
+
+        result = frame_features_file(wav)
+        assert result.output_path is None and result.trajectory is None
+        assert "pc1" not in result.table.columns
+
+    def test_bad_extension_fails_before_analysis(self, wav, tmp_path, mocker) -> None:
+        from bioamla.audio import frame_features_file
+
+        load = mocker.patch("bioamla.audio.io.load_audio")
+        with pytest.raises(InvalidInputError, match=".csv or .parquet"):
+            frame_features_file(wav, tmp_path / "t.xlsx")
+        load.assert_not_called()
+
+    def test_missing_file(self, tmp_path) -> None:
+        from bioamla.audio import frame_features_file
+        from bioamla.exceptions import NotFoundError
+
+        with pytest.raises(NotFoundError):
+            frame_features_file(tmp_path / "nope.wav")
+
+    def test_batch(self, wav, tmp_path) -> None:
+        from bioamla.audio import batch_frame_features_files
+
+        out = tmp_path / "out"
+        result = batch_frame_features_files(wav.parent, out, file_format="parquet")
+        assert result.successful == 1
+        assert result.output_files == [
+            str(out / "ref.features.parquet"),
+            str(out / "frame_features.csv"),
+        ]
+        assert result.metadata["rows"][0]["n_frames"] > 0
+
+    def test_batch_bad_format(self, wav, tmp_path) -> None:
+        from bioamla.audio import batch_frame_features_files
+
+        with pytest.raises(InvalidInputError, match="file_format"):
+            batch_frame_features_files(wav.parent, tmp_path, file_format="xlsx")
