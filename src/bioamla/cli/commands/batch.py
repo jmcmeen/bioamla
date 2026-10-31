@@ -201,15 +201,26 @@ def _csv_context(config: BatchConfig) -> CSVBatchContext:
 def _run_csv_merge(
     config: BatchConfig,
     analyze_row: Callable[[Path], dict],
+    *,
+    context: CSVBatchContext | None = None,
+    clear: tuple[str, ...] = (),
 ) -> object:
     """CSV mode for analysis commands (audio info, indices).
 
     Runs ``analyze_row`` over each listed file, merges the returned column dict
     into the row, and writes the updated CSV (column-union, file_name first).
+    ``context`` reuses an already loaded CSV. The ``clear`` columns are blanked
+    on every row first, so a row that fails this run doesn't keep a value from an
+    earlier one (an embedding from another model, say).
     """
     from bioamla.batch import merge_analysis_results, run_csv_batch
 
-    context = _csv_context(config)
+    if context is None:
+        context = _csv_context(config)
+    for row in context.rows:
+        for column in clear:
+            if column in row.metadata_fields or column in context.fieldnames:
+                row.metadata_fields[column] = ""
 
     def _process(row) -> str:
         results = analyze_row(row.file_path)
@@ -795,14 +806,13 @@ def audio_features(
                     path, tables[str(path)], config=analysis, trajectory=trajectory,
                     gate_db=gate_db,
                 )  # fmt: skip
-                table = Path(result.output_path)
-                try:  # relative to the CSV, like its file_name column
-                    shown = str(table.relative_to(context.csv_dir))
-                except ValueError:
-                    shown = str(table)
-                return {"features_file": shown, "n_frames": result.features.n_frames}
+                # A Path: written relative to wherever the metadata CSV is saved.
+                table = Path(result.output_path).resolve()
+                return {"features_file": table, "n_frames": result.features.n_frames}
 
-            result = _run_csv_merge(config, _analyze)
+            result = _run_csv_merge(
+                config, _analyze, context=context, clear=("features_file", "n_frames")
+            )
             _report(result, config.output_dir or None, quiet)
             return
 
@@ -1727,17 +1737,27 @@ def models_embed(input_dir, input_file, output_dir, model, max_workers, recursiv
         if config.input_file:
             import numpy as _np
 
+            from bioamla.batch import output_stems
             from bioamla.ml.embedding import EmbeddingConfig, EmbeddingExtractor
 
             out_dir = Path(output_dir)
-            out_dir.mkdir(parents=True, exist_ok=True)
+            context = _csv_context(config)  # read (and check) the CSV before loading the model
             extractor = EmbeddingExtractor(config=EmbeddingConfig(model_path=model))
+            listed = [str(row.file_path) for row in context.rows]
+            # Mirror the CSV's folder under out_dir; inputs that share a name get
+            # distinct files (a.wav + a.flac, or rec.wav in two folders).
+            stems = output_stems(listed, context.csv_dir)
 
-            def _process(path: Path) -> None:
+            def _analyze(path: Path) -> dict:
+                stem = stems[str(path)]
+                target = out_dir / stem.parent / f"{stem.name}_embeddings.npy"
+                target.parent.mkdir(parents=True, exist_ok=True)
                 emb = extractor.extract(str(path))
-                _np.save(str(out_dir / f"{path.stem}_embeddings.npy"), emb.embeddings)
+                _np.save(str(target), emb.embeddings)
+                # A Path: written relative to wherever the metadata CSV is saved.
+                return {"embedding_file": target.resolve()}
 
-            result = _run_csv_process(config, _process)
+            result = _run_csv_merge(config, _analyze, context=context, clear=("embedding_file",))
             _report(result, output_dir, quiet)
             return
 
@@ -1800,11 +1820,25 @@ def cluster_batch(
             print_header(f"Clustering embeddings using {method}...")
 
         if config.input_file:
-            from bioamla.batch import merge_analysis_results
+            from bioamla.batch import merge_analysis_results, resolve_file_path
             from bioamla.cluster.batch import cluster_embedding_files
 
             context = _csv_context(config)
-            embedding_paths = [str(row.file_path) for row in context.rows]
+            # A CSV from `batch models embed` names each row's embedding; a blank
+            # one (embedding failed) is skipped. Without that column, file_name
+            # is the embedding.
+            if "embedding_file" in context.fieldnames:
+                row_paths = [
+                    resolve_file_path(e, context.csv_dir)
+                    if (e := row.metadata_fields.get("embedding_file"))
+                    else None
+                    for row in context.rows
+                ]
+            else:
+                row_paths = [row.file_path for row in context.rows]
+            embedding_paths = [str(p) for p in row_paths if p is not None]
+            if not embedding_paths:
+                raise InvalidInputError(f"No row in {config.input_file} has an embedding_file")
             bar = ProgressBar(description="Loading embeddings", disable=quiet)
             with bar:
                 result = cluster_embedding_files(
@@ -1817,9 +1851,9 @@ def cluster_batch(
                     on_progress=bar.on_progress,
                 )
             by_file = {a["filepath"]: a for a in result.metadata.get("file_assignments", [])}
-            for row in context.rows:
+            for row, path in zip(context.rows, row_paths, strict=True):
                 # Blank for a file that wasn't clustered, so no earlier run's value lingers.
-                assignment = by_file.get(str(row.file_path))
+                assignment = by_file.get(str(path)) if path is not None else None
                 merge_analysis_results(
                     row,
                     {

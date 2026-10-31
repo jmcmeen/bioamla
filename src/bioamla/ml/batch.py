@@ -15,7 +15,7 @@ functions for fast startup.
 
 from pathlib import Path
 
-from bioamla.batch import BatchResult, discover_files, run_batch
+from bioamla.batch import BatchResult, discover_files, output_stems, run_batch
 from bioamla.exceptions import NotFoundError
 from bioamla.protocols import OnProgress
 
@@ -202,13 +202,15 @@ def batch_embed_files(
 ) -> BatchResult:
     """
     Extract AST embeddings for every audio file in a directory, saving one
-    ``.npy`` per input file under ``output_dir``.
+    ``.npy`` per input file under ``output_dir``, mirroring the input tree
+    (``<stem>_embeddings.npy``; files that would share a name get distinct ones,
+    see :func:`bioamla.batch.output_stems`).
 
     The extractor (and its model) is loaded once and reused across files.
 
     Args:
         input_dir: Directory containing input audio files.
-        output_dir: Directory to write ``<stem>_embeddings.npy`` files to.
+        output_dir: Directory to write the ``<stem>_embeddings.npy`` files to.
         model_path: Path to model or HuggingFace identifier.
         layer: Layer to extract embeddings from.
         normalize: L2-normalize embeddings.
@@ -239,9 +241,14 @@ def batch_embed_files(
     config = EmbeddingConfig(model_path=model_path, layer=layer, normalize=normalize)
     extractor = EmbeddingExtractor(config=config)
 
+    # Mirror the input tree; files that share a name get distinct outputs.
+    stems = output_stems([str(f) for f in files], in_dir)
+
     def _process_one(audio_path: Path) -> str:
         result = extractor.extract(str(audio_path), layer=layer)
-        out_path = out_dir / f"{audio_path.stem}_embeddings.npy"
+        stem = stems[str(audio_path)]
+        out_path = out_dir / stem.parent / f"{stem.name}_embeddings.npy"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         np.save(str(out_path), result.embeddings)
         return str(out_path)
 

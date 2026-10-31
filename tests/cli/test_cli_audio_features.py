@@ -144,7 +144,7 @@ class TestBatchAudioFeatures:
         assert result.exit_code == 0, result.output
         rows = list(csv.DictReader((out / "meta.csv").open()))
         assert [r["label"] for r in rows] == ["x", "y"]
-        assert rows[1]["features_file"] == str(out / "sub" / "b.features.parquet")
+        assert rows[1]["features_file"] == str(Path("sub") / "b.features.parquet")  # from out/
         assert int(rows[0]["n_frames"]) > 100
         assert (out / "a.features.parquet").exists()
 
@@ -173,4 +173,4 @@ class TestBatchAudioFeatures:
         assert result.exit_code == 0, result.output
         tables = [r["features_file"] for r in csv.DictReader((out / "meta.csv").open())]
         assert len(set(tables)) == 3
-        assert all(Path(t).exists() for t in tables)
+        assert all((out / t).exists() for t in tables)  # relative to the written CSV

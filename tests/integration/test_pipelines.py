@@ -258,3 +258,121 @@ class TestArbimon:
 
         back = bioamla("annotation", "convert", str(combined), str(tmp_path / "sel.txt"))
         assert back["from_format"] == "arbimon" and back["to_format"] == "raven"
+
+
+@pytest.fixture(scope="session")
+def tiny_ast(tmp_path_factory) -> Path:
+    """A randomly initialised AST, about 130 KB, built in a temp dir: no download and
+    nothing committed. Its embeddings mean nothing; the hand-offs are what's tested."""
+    torch = pytest.importorskip("torch")
+    transformers = pytest.importorskip("transformers")
+    torch.manual_seed(0)
+    config = transformers.ASTConfig(
+        hidden_size=32,
+        num_hidden_layers=2,
+        num_attention_heads=2,
+        intermediate_size=64,
+        num_mel_bins=128,
+        max_length=128,
+        num_labels=2,
+        id2label={0: "a", 1: "b"},
+        label2id={"a": 0, "b": 1},
+    )
+    path = tmp_path_factory.mktemp("tiny-ast")
+    transformers.ASTForAudioClassification(config).save_pretrained(path)
+    transformers.ASTFeatureExtractor(num_mel_bins=128, max_length=128).save_pretrained(path)
+    return path
+
+
+class TestEmbedToCluster:
+    @pytest.fixture
+    def tones(self, tmp_path) -> Path:
+        folder = tmp_path / "in"
+        (folder / "b").mkdir(parents=True)
+        t = np.arange(16000 * 2) / 16000
+        for name, freq in (
+            ("a1.wav", 1000),
+            ("a2.wav", 1100),
+            ("b/a1.wav", 4000),
+            ("b2.wav", 4100),
+        ):
+            sf.write(folder / name, 0.5 * np.sin(2 * np.pi * freq * t), 16000)
+        return folder
+
+    def test_directory_mode(self, tiny_ast, tones, tmp_path) -> None:
+        pytest.importorskip("sklearn")
+        emb = bioamla(
+            "batch", "models", "embed", "--input-dir", str(tones),
+            "--output-dir", str(tmp_path / "emb"), "-m", str(tiny_ast),
+        )  # fmt: skip
+        assert emb["successful"] == 4
+        written = sorted(p.relative_to(emb["output_dir"]).as_posix()
+                         for p in Path(emb["output_dir"]).rglob("*.npy"))  # fmt: skip
+        assert written == ["a1_embeddings.npy", "a2_embeddings.npy", "b/a1_embeddings.npy",
+                           "b2_embeddings.npy"]  # fmt: skip
+        clusters = bioamla(
+            "batch", "cluster", "--input-dir", emb["output_dir"],
+            "--output-dir", str(tmp_path / "cl"), "--method", "kmeans", "--n-clusters", "2",
+        )  # fmt: skip
+        assignments = json.loads(Path(clusters["results_file"]).read_text())
+        assert assignments["n_samples"] == 4
+        assert sum(assignments["cluster_sizes"].values()) == 4
+
+    def test_csv_mode_across_output_dirs(self, tiny_ast, tones, tmp_path) -> None:
+        """embed -> cluster -> audio info, each writing the CSV to a new folder."""
+        pytest.importorskip("sklearn")
+        meta = tones / "meta.csv"
+        meta.write_text("file_name,site\na1.wav,A\na2.wav,A\nb/a1.wav,B\nb2.wav,B\n")
+
+        bioamla(
+            "batch", "models", "embed", "--input-file", str(meta),
+            "--output-dir", str(tmp_path / "emb"), "-m", str(tiny_ast),
+        )  # fmt: skip
+        emb_csv = tmp_path / "emb" / "meta.csv"
+        rows = read_csv(emb_csv)
+        assert len({r["embedding_file"] for r in rows}) == 4  # a1.wav twice, two files
+        for row in rows:  # every path resolves from the CSV's new folder
+            assert (emb_csv.parent / row["file_name"]).is_file()
+            assert (emb_csv.parent / row["embedding_file"]).is_file()
+
+        bioamla(
+            "batch", "cluster", "--input-file", str(emb_csv), "--output-dir",
+            str(tmp_path / "cl"), "--method", "kmeans", "--n-clusters", "2",
+        )  # fmt: skip
+        cl_csv = tmp_path / "cl" / "meta.csv"
+        rows = read_csv(cl_csv)
+        assert {r["cluster"] for r in rows} <= {"0", "1"} and all(r["cluster"] for r in rows)
+
+        bioamla("batch", "audio", "info", "--input-file", str(cl_csv), "--output-dir",
+                str(tmp_path / "info"))  # fmt: skip
+        info_csv = tmp_path / "info" / "meta.csv"
+        for row in read_csv(info_csv):
+            assert row["site"] in ("A", "B") and row["cluster"] and row["sample_rate"] == "16000"
+            assert (info_csv.parent / row["file_name"]).is_file()
+            assert (info_csv.parent / row["embedding_file"]).is_file()
+
+    def test_failed_rows_neither_keep_stale_embeddings_nor_reach_cluster(
+        self, tiny_ast, tones, tmp_path
+    ) -> None:
+        pytest.importorskip("sklearn")
+        meta = tones / "meta.csv"
+        meta.write_text("file_name\na1.wav\na2.wav\nb2.wav\n")
+        out = tmp_path / "emb"
+        bioamla("batch", "models", "embed", "--input-file", str(meta), "--output-dir", str(out),
+                "-m", str(tiny_ast))  # fmt: skip
+        assert all(r["embedding_file"] for r in read_csv(out / "meta.csv"))
+
+        (tones / "a2.wav").write_bytes(b"not audio")  # this file now fails
+        bioamla("batch", "models", "embed", "--input-file", str(out / "meta.csv"),
+                "--output-dir", str(tmp_path / "emb2"), "-m", str(tiny_ast))  # fmt: skip
+        rows = {Path(r["file_name"]).name: r for r in read_csv(tmp_path / "emb2" / "meta.csv")}
+        assert rows["a2.wav"]["embedding_file"] == ""  # not the first run's file
+        assert rows["a1.wav"]["embedding_file"] and rows["b2.wav"]["embedding_file"]
+
+        result = bioamla(
+            "batch", "cluster", "--input-file", str(tmp_path / "emb2" / "meta.csv"),
+            "--output-dir", str(tmp_path / "cl"), "--method", "kmeans", "--n-clusters", "2",
+        )  # fmt: skip
+        assert result["total_files"] == 2 and result["failed"] == 0  # the .wav isn't tried
+        rows = {Path(r["file_name"]).name: r for r in read_csv(tmp_path / "cl" / "meta.csv")}
+        assert rows["a2.wav"]["cluster"] == ""
