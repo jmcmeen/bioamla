@@ -150,8 +150,8 @@ def dump_recorder_metadata(filepath: str | Path) -> dict:
 # accepts PCM. To redact recorder positions in datasets of long or float
 # recordings, these helpers walk the RIFF chunk list themselves, read only the
 # metadata chunks, and stream everything else across. riffy still parses and
-# re-serializes the GUANO and WAMD payloads. (Backlog BIO-48/BIO-49: move this
-# into riffy.)
+# re-serializes the GUANO and WAMD payloads. Once riffy can read and rewrite
+# metadata without loading the audio, this should move there.
 
 _MAX_U32 = 0xFFFFFFFF
 _RF64_FORMS = (b"RF64", b"BW64")
