@@ -147,6 +147,7 @@ class TestRavenBranches:
         )
         anns = load_raven_selection_table(str(path))
         assert anns[0].label == "Robin"
+        assert anns[0].confidence is None
 
     def test_skips_rows_with_missing_times(self, tmp_path) -> None:
         path = tmp_path / "sel.txt"
@@ -386,6 +387,73 @@ class TestRavenKeepsDetail:
         path = tmp_path / "sel.txt"
         save_raven_selection_table([Annotation(start_time=0, end_time=1, label="x")], str(path))
         assert "Confidence" not in path.read_text().splitlines()[0]
+
+    def test_mixed_numeric_and_text_confidence_has_one_column(self, tmp_path) -> None:
+        source = tmp_path / "mixed.txt"
+        source.write_text(
+            "Selection\tBegin Time (s)\tEnd Time (s)\tConfidence\tsite\n"
+            "1\t0\t1\t0\tnorth\n"
+            "2\t2\t3\thigh\tsouth\n"
+            "3\t4\t5\t\twest\n"
+        )
+        output = tmp_path / "out.txt"
+        save_raven_selection_table(load_raven_selection_table(str(source)), str(output))
+        with output.open(newline="") as stream:
+            reader = csv.DictReader(stream, delimiter="\t")
+            rows = list(reader)
+        assert reader.fieldnames.count("Confidence") == 1
+        assert [row["Confidence"] for row in rows] == ["0.0", "high", ""]
+        assert [row["site"] for row in rows] == ["north", "south", "west"]
+        loaded = load_raven_selection_table(str(output))
+        assert [ann.confidence for ann in loaded] == [0.0, None, None]
+        assert loaded[1].custom_fields["Confidence"] == "high"
+
+    @pytest.mark.parametrize("confidence", [0.0, 0.812345678901])
+    def test_canonical_confidence_overrides_stale_custom_value(self, tmp_path, confidence) -> None:
+        ann = Annotation(0, 1, confidence=confidence, custom_fields={"Confidence": "high"})
+        output = tmp_path / "out.txt"
+        save_raven_selection_table([ann], str(output))
+        (loaded,) = load_raven_selection_table(str(output))
+        assert loaded.confidence == confidence
+        assert "Confidence" not in loaded.custom_fields
+        assert ann.custom_fields == {"Confidence": "high"}
+
+    @pytest.mark.parametrize("include_custom_fields", [True, False])
+    def test_missing_and_zero_confidence_with_band_precision(
+        self, tmp_path, include_custom_fields
+    ) -> None:
+        anns = [
+            Annotation(0, 1, low_freq=8343.75, high_freq=12345.6789),
+            Annotation(
+                2,
+                3,
+                low_freq=0,
+                high_freq=100.125,
+                confidence=0.0,
+                custom_fields={"site": "north"},
+            ),
+            Annotation(4, 5, confidence=0.812345678901),
+        ]
+        output = tmp_path / "out.txt"
+        save_raven_selection_table(anns, str(output), include_custom_fields=include_custom_fields)
+        with output.open(newline="") as stream:
+            reader = csv.DictReader(stream, delimiter="\t")
+            rows = list(reader)
+        assert reader.fieldnames.count("Confidence") == 1
+        assert [row["Confidence"] for row in rows] == ["", "0.0", "0.812345678901"]
+        assert rows[0]["Low Freq (Hz)"] == "8343.750"
+        assert rows[0]["High Freq (Hz)"] == "12345.679"
+        assert rows[1]["Low Freq (Hz)"] == "0.000"
+        assert rows[2]["Low Freq (Hz)"] == rows[2]["High Freq (Hz)"] == ""
+        assert ("site" in reader.fieldnames) is include_custom_fields
+        loaded = load_raven_selection_table(str(output))
+        assert [ann.confidence for ann in loaded] == [None, 0.0, 0.812345678901]
+
+    def test_empty_table_has_no_confidence_column(self, tmp_path) -> None:
+        output = tmp_path / "empty.txt"
+        save_raven_selection_table([], str(output))
+        assert "Confidence" not in output.read_text().splitlines()[0].split("\t")
+        assert load_raven_selection_table(str(output)) == []
 
 
 class TestArbimonEdgeCases:

@@ -62,6 +62,57 @@ def _needs_audio_extra() -> None:
     pytest.importorskip("librosa")
 
 
+class TestRavenConfidenceRoundTrip:
+    @pytest.mark.parametrize("source_format", ["csv", "raven"])
+    def test_confidence_custom_fields_and_band_survive(self, tmp_path, source_format) -> None:
+        if source_format == "csv":
+            source = tmp_path / "in.csv"
+            source.write_text(
+                "start_time,end_time,low_freq,high_freq,label,channel,confidence,Confidence,site\n"
+                "0.123456,1.234567,8343.75,12345.679,bird,2,0,stale,north\n"
+                "2,3,0,100.125,frog,1,0.812345678901,,south\n"
+                "4,5,100,200,call,1,,high,east\n"
+                "6,7,,,noise,1,,,west\n"
+            )
+            middle, target = tmp_path / "sel.txt", tmp_path / "back.csv"
+        else:
+            source = tmp_path / "in.txt"
+            source.write_text(
+                "Selection\tChannel\tBegin Time (s)\tEnd Time (s)\tLow Freq (Hz)\t"
+                "High Freq (Hz)\tAnnotation\tConfidence\tsite\n"
+                "1\t2\t0.123456\t1.234567\t8343.750\t12345.679\tbird\t0\tnorth\n"
+                "2\t1\t2\t3\t0.000\t100.125\tfrog\t0.812345678901\tsouth\n"
+                "3\t1\t4\t5\t100.000\t200.000\tcall\thigh\teast\n"
+                "4\t1\t6\t7\t\t\tnoise\t\twest\n"
+            )
+            middle, target = tmp_path / "ann.csv", tmp_path / "back.txt"
+
+        first = bioamla("annotation", "convert", str(source), str(middle))
+        second = bioamla("annotation", "convert", first["output"], str(target))
+        assert first["count"] == second["count"] == 4
+
+        csv_path = second["output"] if source_format == "csv" else first["output"]
+        rows = read_csv(csv_path)
+        assert [row["confidence"] for row in rows] == ["0.0", "0.812345678901", "", ""]
+        assert [row["site"] for row in rows] == ["north", "south", "east", "west"]
+        assert float(rows[0]["low_freq"]) == 8343.75
+        assert float(rows[0]["high_freq"]) == 12345.679
+        assert float(rows[0]["start_time"]) == 0.123456
+        assert float(rows[0]["end_time"]) == 1.234567
+        assert rows[0]["channel"] == "2"
+        assert rows[2]["Confidence"] == "high"
+
+        raven_path = first["output"] if source_format == "csv" else second["output"]
+        with open(raven_path, newline="") as stream:
+            reader = csv.DictReader(stream, delimiter="\t")
+            selections = list(reader)
+        assert reader.fieldnames.count("Confidence") == 1
+        assert [row["Confidence"] for row in selections] == ["0.0", "0.812345678901", "high", ""]
+        assert selections[0]["Low Freq (Hz)"] == "8343.750"
+        assert selections[0]["High Freq (Hz)"] == "12345.679"
+        assert selections[3]["Low Freq (Hz)"] == selections[3]["High Freq (Hz)"] == ""
+
+
 class TestDetectionsToDataset:
     @pytest.mark.parametrize("fmt", ["csv", "json"])
     def test_detections_become_clips_with_their_band(self, recording, tmp_path, fmt) -> None:
