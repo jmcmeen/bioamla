@@ -103,7 +103,7 @@ def _run(*args: str) -> subprocess.CompletedProcess:
 @pytest.mark.parametrize(
     ("args", "error_type", "code"),
     [
-        (["--json", "annotation", "summary", "missing.csv"], "ClickException", 1),
+        (["--json", "annotation", "summary", "missing.csv"], "BadParameter", 2),
         (["--json", "dataset", "stats", "no_such_dir"], "NotFoundError", 1),
         (["--json", "detect", "energy"], "MissingParameter", 2),
     ],
@@ -139,13 +139,21 @@ def test_per_command_flag_through_main_stays_bare(tmp_path) -> None:
     assert "deprecated" in proc.stderr
 
 
-def test_bare_system_exit_still_gets_an_envelope(tmp_path) -> None:
-    # annotation template prints an error and raises SystemExit(1) for a missing file.
-    proc = _run(
-        "--json", "annotation", "template", str(tmp_path / "nope.wav"), str(tmp_path / "o.csv")
-    )
-    assert proc.returncode == 1
-    envelope = json.loads(proc.stdout)
+def test_bare_system_exit_still_gets_an_envelope() -> None:
+    import click
+
+    @click.command("bare-exit")
+    def bare_exit() -> None:
+        click.echo("Error: something", err=True)
+        raise SystemExit(1)
+
+    cli.add_command(bare_exit)
+    try:
+        result = CliRunner().invoke(cli, ["--json", "bare-exit"])
+    finally:
+        cli.commands.pop("bare-exit")
+    assert result.exit_code == 1
+    envelope = json.loads(result.stdout)
     assert envelope["ok"] is False and envelope["error"]["type"] == "Exit"
 
 

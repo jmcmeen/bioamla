@@ -20,11 +20,27 @@ All notable changes to this project are documented here. The format is based on
   `evaluate` (the metrics), `embed` (output path and shape; the vectors stay in the file) and
   `info` (every class label), and for `cluster reduce|fit|analyze|novelty` (shapes, cluster sizes,
   quality scores, novel sample indices).
+- `--json` results for the `annotation` commands (`template`, `convert`, `remap`, `filter`,
+  `generate-labels`, `generate-frame-labels`: counts, labels, output paths) and the `dataset`
+  commands (`merge`, `extract-clips`, `manifest`, `partition`, `build`, `license`, `augment`,
+  `remix`: their stats as returned by the library).
 - `get_model_info()` returns `labels`, every class label in class-index order. `classes` is still
   the first 10.
 
 ### Fixed
 
+- The `annotation` and `dataset` commands that printed an error and exited now raise a regular
+  CLI error: the same `Error: ...` line for people, and the actual message (not "exited with
+  status 1") in a `--json` failure envelope. `dataset license --batch` with failed datasets now
+  names them in the error, and its `--json` envelope carries the per-dataset results in
+  `error.details`.
+- `annotation generate-labels` miscounted clips through float error (0.3 s of audio in 0.1 s
+  clips gave 2, not 3), reported a negative count when the clip was longer than the audio, and
+  crashed on `--hop-length 0`. Those inputs are now errors, and the count is right. With
+  `--format numpy`, both label commands report the `.npy` and `.labels.csv` files they actually
+  write, and a failed write is an error, not a traceback.
+- `dataset augment` range options accept negative ranges written with a dash (`-2-2`,
+  `-6--1`) and report unusable input as a bad option value instead of a traceback.
 - The `cluster` commands report an unreadable `.npy` input (missing, empty or the wrong shape)
   as `InvalidInputError` and a failed write as an error, instead of a traceback;
   `models ast predict|evaluate|embed` do the same for a failed write.
@@ -32,6 +48,12 @@ All notable changes to this project are documented here. The format is based on
   often string order ("0", "1", "10", "2", ...); they now follow the class index.
 - `models ast evaluate --format csv|txt -o FILE` wrote a Python dict repr. `csv` now writes a
   header and one row of the scalar metrics; `txt` one `name: value` line per metric.
+
+### Changed
+
+- The `annotation` commands check that their input file exists through Click, so a missing
+  file is a usage error (exit status 2, `Error: Invalid value for 'INPUT_FILE': ... does not
+  exist`) instead of exit status 1.
 
 ### Deprecated
 

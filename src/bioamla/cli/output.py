@@ -29,7 +29,7 @@ import json
 import math
 import sys
 from pathlib import PurePath
-from typing import IO, Any
+from typing import IO, Any, NoReturn
 
 _real_stdout: IO[str] | None = None
 _installed: IO[str] | None = None  # the stream we put on sys.stdout
@@ -179,10 +179,16 @@ def emit_file_result(file: str, **fields: Any) -> bool:
     return True
 
 
-def emit_result(result: Any) -> None:
-    """Report a command's result. Writes the success envelope in JSON mode only."""
-    if json_mode():
-        _write(_envelope(current_command(), ok=True, result=to_jsonable(result)))
+def emit_result(result: Any) -> bool:
+    """Report a command's result: the success envelope, in JSON mode only.
+
+    Returns True if it reported, so a command can skip its human output:
+    ``if emit_result({...}): return``.
+    """
+    if not json_mode():
+        return False
+    _write(_envelope(current_command(), ok=True, result=to_jsonable(result)))
+    return True
 
 
 def legacy_json(data: Any) -> None:
@@ -203,10 +209,29 @@ def legacy_json(data: Any) -> None:
     click.echo(json.dumps(data, indent=2))  # exactly what these flags printed before
 
 
-def emit_error(command: str | None, error_type: str, message: str) -> None:
-    """Write the failure envelope (JSON mode only)."""
+def emit_error(command: str | None, error_type: str, message: str, details: Any = None) -> None:
+    """Write the failure envelope (JSON mode only).
+
+    ``details`` (optional) goes in ``error.details``: structured data about the
+    failure, such as which items of a batch failed and why.
+    """
     if json_mode():
-        _write(_envelope(command, ok=False, error={"type": error_type, "message": message}))
+        error = {"type": error_type, "message": message}
+        if details is not None:
+            error["details"] = to_jsonable(details)
+        _write(_envelope(command, ok=False, error=error))
+
+
+def fail(message: str, error_type: str, details: Any = None) -> NoReturn:
+    """End the command with an error that carries structured ``details`` in JSON mode.
+
+    People see ``Error: <message>`` as usual; a ``--json`` caller also gets
+    ``error.details``.
+    """
+    import click
+
+    emit_error(current_command(), error_type, message, details)
+    raise click.ClickException(message)
 
 
 def emit_failure(command: str | None, exc: BaseException) -> None:
@@ -292,6 +317,7 @@ __all__ = [
     "disable_json_mode",
     "emit_error",
     "emit_result",
+    "fail",
     "enable_json_mode",
     "finish",
     "json_mode",

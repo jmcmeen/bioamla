@@ -82,7 +82,7 @@ def test_annotation_template_missing_audio(runner: CliRunner, tmp_path) -> None:
         cli, ["annotation", "template", str(tmp_path / "no.wav"), str(tmp_path / "out.json")]
     )
     assert result.exit_code != 0
-    assert "not found" in result.output
+    assert "does not exist" in result.output  # click.Path(exists=True)
 
 
 def test_annotation_template_error(runner: CliRunner, test_audio_path, tmp_path) -> None:
@@ -119,7 +119,7 @@ def test_annotation_convert_missing(runner: CliRunner, tmp_path) -> None:
         cli, ["annotation", "convert", str(tmp_path / "no.csv"), str(tmp_path / "o.json")]
     )
     assert result.exit_code != 0
-    assert "not found" in result.output
+    assert "does not exist" in result.output  # click.Path(exists=True)
 
 
 def test_annotation_convert_error(runner: CliRunner, tmp_path) -> None:
@@ -181,7 +181,7 @@ def test_annotation_summary_json(runner: CliRunner, tmp_path) -> None:
 def test_annotation_summary_missing(runner: CliRunner, tmp_path) -> None:
     result = runner.invoke(cli, ["annotation", "summary", str(tmp_path / "no.json")])
     assert result.exit_code != 0
-    assert "not found" in result.output
+    assert "does not exist" in result.output  # click.Path(exists=True)
 
 
 def test_annotation_summary_error(runner: CliRunner, tmp_path) -> None:
@@ -231,7 +231,7 @@ def test_annotation_remap_missing(runner: CliRunner, tmp_path) -> None:
         ],
     )
     assert result.exit_code != 0
-    assert "not found" in result.output
+    assert "does not exist" in result.output  # click.Path(exists=True)
 
 
 def test_annotation_remap_error(runner: CliRunner, tmp_path) -> None:
@@ -287,7 +287,7 @@ def test_annotation_filter_missing(runner: CliRunner, tmp_path) -> None:
         cli, ["annotation", "filter", str(tmp_path / "no.csv"), str(tmp_path / "o.csv")]
     )
     assert result.exit_code != 0
-    assert "not found" in result.output
+    assert "does not exist" in result.output  # click.Path(exists=True)
 
 
 def test_annotation_filter_error(runner: CliRunner, tmp_path) -> None:
@@ -373,7 +373,7 @@ def test_annotation_generate_labels_missing(runner: CliRunner, tmp_path) -> None
         ],
     )
     assert result.exit_code != 0
-    assert "not found" in result.output
+    assert "does not exist" in result.output  # click.Path(exists=True)
 
 
 def test_annotation_generate_labels_no_duration(runner: CliRunner, tmp_path) -> None:

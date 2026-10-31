@@ -21,7 +21,10 @@ On failure the command exits with status 1 (2 for a usage error) and prints:
 ```
 
 `error.type` is the bioamla exception name (`NotFoundError`, `InvalidInputError`,
-`DependencyError`, ...) or a Click error name (`UsageError`, `MissingParameter`, ...).
+`DependencyError`, ...) or a Click error name (`UsageError`, `MissingParameter`,
+`BadParameter`, ...). Some failures also carry `error.details` with structured data,
+for example the per-dataset results when `dataset license --batch` fails for some
+datasets.
 In `result`, paths are strings, NaN and infinity are `null`, and keys are snake_case.
 Commands not yet converted report `"result": null`. The older per-command `--json`
 flags (`annotation summary`, `audio metadata`, `dataset stats`) still print bare
