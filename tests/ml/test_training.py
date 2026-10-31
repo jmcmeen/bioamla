@@ -494,25 +494,42 @@ class TestTrainingHelpers:
         assert "Could not end the MLflow run after training: tracking server down" in caplog.text
 
     @pytest.mark.parametrize(
-        ("report_to", "adds_mlflow"),
-        [("tensorboard", False), (["tensorboard", "mlflow"], True), ("all", True), ("none", False)],
+        ("report_to", "adds_mlflow", "left"),
+        [
+            ("tensorboard", False, ["tensorboard"]),
+            (["tensorboard", "mlflow"], True, ["tensorboard"]),
+            ("none", False, ["none"]),
+            ("mlflow", True, ["none"]),
+        ],
     )
-    def test_report_to_mlflow_adds_an_mlflow_tracker(self, report_to, adds_mlflow) -> None:
+    def test_mlflow_has_one_writer(self, report_to, adds_mlflow, left) -> None:
         from bioamla.ml.trackers import MLflowTracker
         from bioamla.ml.training import _run_trackers
 
-        trackers = _run_trackers(None, report_to)._trackers
-        assert [type(t) for t in trackers] == ([MLflowTracker] if adds_mlflow else [])
-        if adds_mlflow:
-            # transformers' callback already logs the metrics into the same run.
-            assert trackers[0]._send_metrics is False
+        trackers, remaining = _run_trackers(None, report_to)
+        assert [type(t) for t in trackers._trackers] == ([MLflowTracker] if adds_mlflow else [])
+        assert remaining == left  # transformers never gets "mlflow"
 
-    def test_callers_mlflow_tracker_is_not_duplicated(self) -> None:
+    @pytest.mark.parametrize("installed", [["mlflow", "tensorboard"], ["tensorboard"]])
+    def test_all_expands_to_installed_integrations(self, installed) -> None:
+        from bioamla.ml.training import _run_trackers
+
+        with patch(
+            "transformers.integrations.get_available_reporting_integrations",
+            return_value=installed,
+        ):
+            trackers, remaining = _run_trackers(None, "all")
+        assert bool(trackers) is ("mlflow" in installed)  # no warning without mlflow
+        assert remaining == ["tensorboard"]
+
+    def test_callers_mlflow_tracker_is_the_only_writer(self) -> None:
         from bioamla.ml.trackers import MLflowTracker
         from bioamla.ml.training import _run_trackers
 
         mine = MLflowTracker(experiment="x")
-        assert _run_trackers([mine], "mlflow")._trackers == [mine]
+        trackers, remaining = _run_trackers([mine], ["mlflow", "tensorboard"])
+        assert trackers._trackers == [mine]
+        assert remaining == ["tensorboard"]
 
     def test_failing_tracker_only_warns(self, caplog) -> None:
         from bioamla.ml.training import _Trackers
@@ -522,7 +539,7 @@ class TestTrainingHelpers:
         with caplog.at_level("WARNING", logger="bioamla"):
             _Trackers([broken, fine]).call("start_run", "run", {})
         fine.start_run.assert_called_once_with("run", {})
-        assert "start_run failed: server down" in caplog.text
+        assert "Could not call MagicMock.start_run: server down" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -766,3 +783,33 @@ class TestTrainAst:
                 )
         tracker.end_run.assert_called_once_with(outcome)
         tracker.log_artifact.assert_not_called()
+
+    @pytest.mark.usefixtures("requires_torchcodec")
+    def test_failed_summary_write_keeps_the_run_finished(self, tmp_path, caplog) -> None:
+        from pathlib import Path
+
+        from bioamla.ml.training import train_ast
+
+        fake_trainer = MagicMock()
+        fake_trainer.state = SimpleNamespace(log_history=[])
+        fake_trainer.accelerator = None
+        tracker = MagicMock()
+        real_write = Path.write_text
+
+        def write_text(self, *args, **kwargs):
+            if self.name == "bioamla_run.json":
+                raise OSError("disk full")
+            return real_write(self, *args, **kwargs)
+
+        with self._mocks(fake_trainer), patch.object(Path, "write_text", write_text):
+            result = train_ast(
+                train_dataset="owner/ds",
+                training_dir=str(tmp_path),
+                dataloader_num_workers=1,
+                report_to="none",
+                tracker=tracker,
+            )
+        assert result.run_id
+        assert "disk full" in caplog.text
+        tracker.log_artifact.assert_not_called()
+        tracker.end_run.assert_called_once_with("finished")

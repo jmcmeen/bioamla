@@ -241,12 +241,17 @@ def _load_directory_dataset(
     )
 
 
-def _cleanup_step(what: str, step: Callable[..., object], *args: Any) -> None:
-    """Run one post-training cleanup step, logging (not raising) any failure."""
+def _warn_on_failure(what: str, step: Callable[..., object], *args: Any) -> None:
+    """Run ``step``, logging (not raising) any failure as "Could not {what}: ..."."""
     try:
         step(*args)
-    except Exception as e:  # noqa: BLE001 - cleanup must not mask the training outcome
-        logger.warning(f"Could not {what} after training: {e}")
+    except Exception as e:  # noqa: BLE001 - bookkeeping must not change the training outcome
+        logger.warning(f"Could not {what}: {e}")
+
+
+def _cleanup_step(what: str, step: Callable[..., object], *args: Any) -> None:
+    """Run one post-training cleanup step, logging (not raising) any failure."""
+    _warn_on_failure(f"{what} after training", step, *args)
 
 
 def _free_trainer(trainer: Any) -> None:
@@ -269,23 +274,23 @@ class _Trackers:
 
     def call(self, method: str, *args: Any) -> None:
         for tracker in self._trackers:
-            try:
-                getattr(tracker, method)(*args)
-            except Exception as e:  # noqa: BLE001 - tracking must never stop training
-                logger.warning(
-                    "Experiment tracker %s.%s failed: %s", type(tracker).__name__, method, e
-                )
+            _warn_on_failure(
+                f"call {type(tracker).__name__}.{method}", getattr(tracker, method), *args
+            )
 
 
 def _run_trackers(
     tracker: ExperimentTracker | Sequence[ExperimentTracker] | None,
     report_to: str | list[str],
-) -> _Trackers:
-    """The caller's trackers, plus an MLflow one when ``report_to`` includes MLflow.
+) -> tuple[_Trackers, list[str]]:
+    """The run's trackers, and the ``report_to`` list left for transformers.
 
-    transformers' MLflow callback logs the metrics into the active run, but marks a
-    run it started itself FINISHED even when training was cancelled. The
-    ``MLflowTracker`` starts the run first and ends it with the real outcome.
+    MLflow gets one writer: an :class:`~bioamla.ml.trackers.MLflowTracker`. When
+    ``report_to`` asks for MLflow (by name, or ``"all"`` with MLflow installed) and
+    the caller didn't pass one, one is added; either way ``"mlflow"`` is removed from
+    transformers' list. transformers' own MLflow callback would log the same metrics
+    a second time, and it marks a run it started FINISHED even when training was
+    cancelled.
     """
     from bioamla.ml.trackers import MLflowTracker
 
@@ -295,12 +300,20 @@ def _run_trackers(
         trackers = list(tracker)
     else:
         trackers = [tracker]
+
     names = report_to if isinstance(report_to, list) else [report_to]
-    if ("mlflow" in names or "all" in names) and not any(
-        isinstance(t, MLflowTracker) for t in trackers
-    ):
-        trackers.append(MLflowTracker(log_metrics=False))
-    return _Trackers(trackers)
+    if "all" in names:
+        from transformers.integrations import get_available_reporting_integrations
+
+        names = get_available_reporting_integrations()
+    names = [n for n in names if n != "none"]
+
+    has_mlflow_tracker = any(isinstance(t, MLflowTracker) for t in trackers)
+    if "mlflow" in names and not has_mlflow_tracker:
+        trackers.append(MLflowTracker())
+    if "mlflow" in names or has_mlflow_tracker:
+        names = [n for n in names if n != "mlflow"]
+    return _Trackers(trackers), names or ["none"]
 
 
 # Timing counters transformers adds to evaluation metrics; not model metrics.
@@ -482,8 +495,9 @@ def train_ast(
             run's parameters, every logged metric, the ``bioamla_run.json``
             summary written next to the best model, and the final status
             (finished, cancelled or failed). ``report_to`` still drives
-            transformers' own reporting; with MLflow in it, an
-            ``MLflowTracker`` is added so the MLflow run ends with the real status.
+            transformers' own reporting, except MLflow: with ``"mlflow"`` in it
+            (or ``"all"`` with MLflow installed), an ``MLflowTracker`` is added and
+            is the run's only MLflow writer, so the run ends with the real status.
 
     Returns:
         A :class:`~bioamla.ml.ast_service.TrainResult` with the best-model path,
@@ -546,6 +560,7 @@ def train_ast(
 
     if isinstance(report_to, str) and "," in report_to:
         report_to = [r.strip() for r in report_to.split(",")]
+    trackers, report_to = _run_trackers(tracker, report_to)
 
     def _check_stop(phase: str) -> None:
         if should_stop is not None and should_stop():
@@ -834,7 +849,6 @@ def train_ast(
         raise TrainingError("Expected DatasetDict for trainer setup")
 
     _check_stop("training")
-    trackers = _run_trackers(tracker, report_to)
     progress = _progress_callback(
         on_progress,
         should_stop,
@@ -898,21 +912,21 @@ def train_ast(
                     final_loss = float(entry["eval_loss"])
                 if final_accuracy is not None and final_loss is not None:
                     break
-            summary_path = Path(best_model_path) / "bioamla_run.json"
-            summary_path.write_text(
-                json.dumps(
-                    {
-                        "run_id": run_id,
-                        "params": run_params,
-                        "result": {"final_accuracy": final_accuracy, "final_loss": final_loss},
-                    },
-                    indent=2,
-                    default=str,
-                )
-                + "\n"
-            )
-            trackers.call("log_artifact", str(summary_path))
             status = "finished"
+            # The model is saved, so the run has finished; a failed summary write
+            # only warns.
+            summary_path = Path(best_model_path) / "bioamla_run.json"
+            summary = {
+                "run_id": run_id,
+                "params": run_params,
+                "result": {"final_accuracy": final_accuracy, "final_loss": final_loss},
+            }
+            try:
+                summary_path.write_text(json.dumps(summary, indent=2, default=str) + "\n")
+            except OSError as e:
+                logger.warning(f"Could not write {summary_path}: {e}")
+            else:
+                trackers.call("log_artifact", str(summary_path))
     finally:
         # Cleanup to prevent hanging from dataloader workers, whether the run
         # finished, was cancelled, or failed. Each step is guarded so one

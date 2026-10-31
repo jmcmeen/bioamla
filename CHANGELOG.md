@@ -38,8 +38,17 @@ All notable changes to this project are documented here. The format is based on
   augmentation config and label list), every logged metric, a `bioamla_run.json` summary written
   next to the best model, and the final status: finished, cancelled or failed. `MLflowTracker`
   and `TensorBoardTracker` are included in `bioamla.ml`. A tracker that fails only logs a
-  warning. `report_to` works as before; with MLflow in it, the MLflow run now ends through an
-  `MLflowTracker`, still as `KILLED` for a cancelled run and `FAILED` for a failed one.
+  warning.
+
+### Changed
+
+- With MLflow in `report_to` (or `"all"` with MLflow installed), `train_ast` now reports to
+  MLflow through an `MLflowTracker` instead of transformers' MLflow callback, so each run has one
+  MLflow writer. Runs still end `KILLED` when cancelled and `FAILED` on error. The run's params
+  are now bioamla's (dataset, base model, hyperparameters, augmentation, labels, run id) rather
+  than transformers' full `TrainingArguments` dump, and training inside an already-active MLflow
+  run (e.g. a sweep) gets its own nested run. Param values longer than MLflow allows are
+  truncated.
 
 ### Deprecated
 

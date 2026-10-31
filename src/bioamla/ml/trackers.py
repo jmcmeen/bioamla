@@ -32,34 +32,35 @@ def flatten_params(params: dict[str, Any], prefix: str = "") -> dict[str, str]:
     return flat
 
 
+def _mlflow_param_limit() -> int:
+    """MLflow's maximum param value length (6000 today; 500 in older versions)."""
+    try:
+        from mlflow.utils.validation import MAX_PARAM_VAL_LENGTH
+    except ImportError:
+        return 500
+    return MAX_PARAM_VAL_LENGTH
+
+
 class MLflowTracker:
     """Report a training run to MLflow.
 
     The run ends with the real outcome: ``KILLED`` for a cancelled run and
     ``FAILED`` for a failed one, where transformers' own MLflow callback would mark
     any run it started ``FINISHED``. If an MLflow run is already active when
-    training starts, the tracker logs into it and leaves it open for its owner.
+    training starts (e.g. a sweep's parent run), each training run gets its own
+    nested run inside it, so runs don't collide on MLflow's write-once params.
+    Param values longer than MLflow accepts are truncated.
 
     Args:
         tracking_uri: MLflow tracking URI; default: MLflow's own configuration.
         experiment: Experiment name; default: MLflow's active experiment.
-        log_metrics: Send metrics. ``train_ast(report_to="mlflow")`` turns this
-            off for the tracker it creates, because transformers' callback
-            already logs them into the same run.
     """
 
-    def __init__(
-        self,
-        tracking_uri: str | None = None,
-        experiment: str | None = None,
-        *,
-        log_metrics: bool = True,
-    ) -> None:
+    def __init__(self, tracking_uri: str | None = None, experiment: str | None = None) -> None:
         self.tracking_uri = tracking_uri
         self.experiment = experiment
-        self._send_metrics = log_metrics
         self._mlflow: Any = None
-        self._owns_run = False
+        self._in_run = False
 
     def start_run(self, name: str | None, params: dict[str, Any]) -> None:
         import mlflow
@@ -69,13 +70,18 @@ class MLflowTracker:
             mlflow.set_tracking_uri(self.tracking_uri)
         if self.experiment:
             mlflow.set_experiment(self.experiment)
-        if mlflow.active_run() is None:
-            mlflow.start_run(run_name=name)
-            self._owns_run = True
-        mlflow.log_params(flatten_params(params))
+        mlflow.start_run(run_name=name, nested=mlflow.active_run() is not None)
+        self._in_run = True
+        limit = _mlflow_param_limit()
+        mlflow.log_params(
+            {
+                k: v if len(v) <= limit else v[: limit - 3] + "..."
+                for k, v in flatten_params(params).items()
+            }
+        )
 
     def log_metrics(self, step: int, metrics: dict[str, float]) -> None:
-        if self._send_metrics and self._mlflow is not None:
+        if self._mlflow is not None:
             self._mlflow.log_metrics(metrics, step=step)
 
     def log_artifact(self, path: str) -> None:
@@ -83,9 +89,9 @@ class MLflowTracker:
             self._mlflow.log_artifact(path)
 
     def end_run(self, status: RunStatus) -> None:
-        if self._mlflow is not None and self._owns_run:
+        if self._mlflow is not None and self._in_run:
             self._mlflow.end_run(status=_MLFLOW_STATUS[status])
-            self._owns_run = False
+            self._in_run = False
 
 
 class TensorBoardTracker:

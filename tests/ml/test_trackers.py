@@ -40,30 +40,34 @@ def test_mlflow_run_ends_with_the_real_status(status, mlflow_status) -> None:
         tracker.end_run(status)
     fake.set_tracking_uri.assert_called_once_with("file:/tmp/mlruns")
     fake.set_experiment.assert_called_once_with("frogs")
-    fake.start_run.assert_called_once_with(run_name="run-1")
+    fake.start_run.assert_called_once_with(run_name="run-1", nested=False)
     fake.log_params.assert_called_once_with({"lr": "0.0001", "aug.gain": "True"})
     fake.log_metrics.assert_called_once_with({"loss": 0.4}, step=3)
     fake.log_artifact.assert_called_once_with("/m/bioamla_run.json")
     fake.end_run.assert_called_once_with(status=mlflow_status)
 
 
-def test_mlflow_leaves_the_callers_run_alone() -> None:
-    fake = _fake_mlflow(active="caller-run")
+def test_mlflow_nests_inside_an_active_run() -> None:
+    fake = _fake_mlflow(active="sweep-parent")
     with patch.dict("sys.modules", {"mlflow": fake}):
         tracker = MLflowTracker()
         tracker.start_run("run-1", {})
         tracker.end_run("failed")
-    fake.start_run.assert_not_called()
-    fake.end_run.assert_not_called()
+    # Its own child run, so two runs in one sweep don't collide on params.
+    fake.start_run.assert_called_once_with(run_name="run-1", nested=True)
+    fake.end_run.assert_called_once_with(status="FAILED")
 
 
-def test_mlflow_metrics_can_be_left_to_transformers() -> None:
+def test_mlflow_truncates_long_param_values() -> None:
     fake = _fake_mlflow()
-    with patch.dict("sys.modules", {"mlflow": fake}):
-        tracker = MLflowTracker(log_metrics=False)
-        tracker.start_run(None, {})
-        tracker.log_metrics(1, {"loss": 1.0})
-    fake.log_metrics.assert_not_called()
+    with (
+        patch.dict("sys.modules", {"mlflow": fake}),
+        patch("bioamla.ml.trackers._mlflow_param_limit", return_value=20),
+    ):
+        MLflowTracker().start_run(None, {"labels": [f"species-{i}" for i in range(50)], "lr": 1})
+    sent = fake.log_params.call_args.args[0]
+    assert len(sent["labels"]) == 20 and sent["labels"].endswith("...")
+    assert sent["lr"] == "1"
 
 
 def test_tensorboard_writes_scalars_text_and_closes(tmp_path) -> None:
