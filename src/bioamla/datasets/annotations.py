@@ -331,6 +331,8 @@ def save_raven_selection_table(
     """Save annotations to a Raven Pro selection table file.
 
     Creates a tab-delimited text file compatible with Raven Pro software.
+    An annotation's numeric confidence takes precedence over a custom
+    ``Confidence`` field; custom values are kept when no numeric score is set.
 
     Args:
         annotations: List of Annotation objects to save
@@ -364,6 +366,8 @@ def save_raven_selection_table(
         custom_cols = set()
         for ann in annotations:
             custom_cols.update(ann.custom_fields.keys())
+        if "Confidence" in columns:
+            custom_cols.discard("Confidence")
         columns.extend(sorted(custom_cols))
 
     try:
@@ -382,10 +386,10 @@ def save_raven_selection_table(
                     "High Freq (Hz)": f"{ann.high_freq:.3f}" if ann.high_freq is not None else "",
                     "Annotation": ann.label,
                 }
-                if "Confidence" in columns:
-                    row["Confidence"] = "" if ann.confidence is None else f"{ann.confidence}"
                 if include_custom_fields:
                     row.update(ann.custom_fields)
+                if ann.confidence is not None:
+                    row["Confidence"] = f"{ann.confidence}"
                 writer.writerow(row)
     except OSError as e:
         raise AnnotationError(f"Failed to write Raven selection table {filepath}: {e}") from e

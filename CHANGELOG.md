@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Raven selection tables with numeric scores and custom `Confidence` values share one column.
+  An explicit numeric score, including zero, takes precedence over a custom value on the same
+  annotation; text values are kept when no numeric score is set.
+
 ## [0.3.5] - 2026-10-31
 
 ### Added
