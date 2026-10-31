@@ -139,5 +139,5 @@ class TestMockedTorchaudio:
         fake_ta = MagicMock()
         fake_ta.load.side_effect = RuntimeError("decode fail")
         with patch("bioamla.audio.torchaudio._import_torchaudio", return_value=fake_ta):
-            with pytest.raises(ValueError):
+            with pytest.raises(AudioLoadError):
                 load_audio_from_bytes(b"bad")

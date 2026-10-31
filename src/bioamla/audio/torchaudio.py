@@ -168,7 +168,7 @@ def load_audio_from_bytes(
         Tuple of (audio_array, sample_rate).
 
     Raises:
-        ValueError: If the audio bytes cannot be processed.
+        AudioLoadError: If the audio bytes cannot be processed.
     """
     torch = _import_torch()
     torchaudio = _import_torchaudio()
@@ -186,7 +186,7 @@ def load_audio_from_bytes(
         audio_array = waveform.squeeze().numpy()
         return audio_array, target_sr
     except Exception as e:
-        raise ValueError("Could not process audio bytes") from e
+        raise AudioLoadError("Could not process audio bytes") from e
 
 
 __all__ = [
