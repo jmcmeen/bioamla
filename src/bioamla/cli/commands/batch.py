@@ -1005,8 +1005,10 @@ def audio_visualize(
 ) -> None:
     """Batch generate audio visualizations."""
     from bioamla.cli.console import print_header, print_success, print_warning
+    from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.viz import batch_generate_spectrograms
 
+    configure_cli_logging()
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
         in_dir = _require_input_dir(config)
@@ -1296,6 +1298,7 @@ def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursi
 
     from bioamla.audio.discovery import list_audio_files
     from bioamla.cli.console import echo, print_header, print_success, print_warning
+    from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.indices import batch_compute_indices, compute_indices_from_file
 
     try:
@@ -1317,6 +1320,7 @@ def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursi
             return
 
         filepaths = list_audio_files(_require_input_dir(config), recursive=recursive)
+        configure_cli_logging()
         results = batch_compute_indices(filepaths, verbose=not quiet)
 
         if output_dir and results:

@@ -276,7 +276,7 @@ def analyze_audio_batch(
     Args:
         filepaths: List of paths to audio files.
         silence_threshold_db: Threshold for silence detection in dBFS.
-        verbose: Print progress.
+        verbose: Log progress at INFO level.
 
     Returns:
         List of :class:`AudioAnalysis` objects for the files that succeeded.
@@ -288,11 +288,9 @@ def analyze_audio_batch(
             analysis = analyze_audio(filepath, silence_threshold_db)
             results.append(analysis)
             if verbose:
-                print(f"[{i + 1}/{len(filepaths)}] Analyzed: {filepath}")
+                logger.info(f"[{i + 1}/{len(filepaths)}] Analyzed: {filepath}")
         except Exception as e:
             logger.warning(f"Error analyzing {filepath}: {e}")
-            if verbose:
-                print(f"[{i + 1}/{len(filepaths)}] Error: {filepath} - {e}")
 
     return results
 

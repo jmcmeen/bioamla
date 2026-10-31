@@ -323,7 +323,7 @@ def download_file(url: str, output_path: str | Path, show_progress: bool = True)
     Args:
         url: URL to download from
         output_path: Path to save the downloaded file
-        show_progress: If True, print download progress
+        show_progress: If True, log the download at INFO level
 
     Returns:
         Path to the downloaded file
@@ -334,12 +334,12 @@ def download_file(url: str, output_path: str | Path, show_progress: bool = True)
         ensure_directory(output_path.parent)
 
     if show_progress:
-        print(f"Downloading {url} to {output_path}")
+        logger.info(f"Downloading {url} to {output_path}")
 
     urlretrieve(url, output_path)
 
     if show_progress:
-        print(f"Download complete: {output_path}")
+        logger.info(f"Download complete: {output_path}")
 
     return output_path
 

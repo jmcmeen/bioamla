@@ -66,7 +66,7 @@ def merge_datasets(
         skip_existing: Skip files that already exist in the output.
         organize_by_category: Organize files into per-category subdirectories.
         target_format: Convert all audio to this format during merge.
-        verbose: Print progress information.
+        verbose: Log progress at INFO level.
 
     Returns:
         Dict of summary stats: ``datasets_merged``, ``total_files``,
@@ -123,7 +123,7 @@ def merge_datasets(
                 if category:
                     all_categories.add(category)
             if verbose:
-                print(f"Found {len(existing_rows)} existing entries in output metadata.")
+                logger.info(f"Found {len(existing_rows)} existing entries in output metadata.")
 
         for dataset_path in dataset_paths:
             source_path = Path(dataset_path)
@@ -133,12 +133,11 @@ def merge_datasets(
 
             source_metadata_path = source_path / metadata_filename
             if not source_metadata_path.exists():
-                if verbose:
-                    print(f"Warning: No {metadata_filename} found in {dataset_path}, skipping.")
+                logger.warning(f"No {metadata_filename} found in {dataset_path}, skipping.")
                 continue
 
             if verbose:
-                print(f"Processing dataset: {dataset_path}")
+                logger.info(f"Processing dataset: {dataset_path}")
 
             source_rows, source_fieldnames = read_metadata_csv(source_metadata_path)
             all_fieldnames.update(source_fieldnames)
@@ -183,8 +182,7 @@ def merge_datasets(
                 dest_file_path.parent.mkdir(parents=True, exist_ok=True)
 
                 if not source_file_path.exists():
-                    if verbose:
-                        print(f"  Warning: Source file not found: {source_file_path}")
+                    logger.warning(f"Source file not found: {source_file_path}")
                     continue
 
                 if needs_conversion:
@@ -200,16 +198,14 @@ def merge_datasets(
                                 all_metadata_rows.append(updated_row)
                                 existing_filenames.add(dest_filename)
                             if verbose:
-                                print(f"  Converted: {source_filename} -> {dest_filename}")
+                                logger.info(f"  Converted: {source_filename} -> {dest_filename}")
                         except Exception as e:  # noqa: BLE001 - per-file conversion failure
-                            if verbose:
-                                print(f"  Error converting {source_filename}: {e}")
+                            logger.warning(f"Error converting {source_filename}: {e}")
                     else:
-                        if verbose:
-                            print(
-                                f"  Warning: No converter for {source_ext} -> "
-                                f"{target_format}, copying: {source_filename}"
-                            )
+                        logger.warning(
+                            f"No converter for {source_ext} -> {target_format}, "
+                            f"copying: {source_filename}"
+                        )
                         shutil.copy2(source_file_path, dest_file_path)
                         files_copied_from_source += 1
                         if dest_filename not in existing_filenames:
@@ -235,7 +231,7 @@ def merge_datasets(
                 msg = f"  Copied: {files_copied_from_source}, Skipped: {files_skipped_from_source}"
                 if target_format:
                     msg += f", Converted: {files_converted_from_source}"
-                print(msg)
+                logger.info(msg)
 
         if all_metadata_rows:
             write_metadata_csv(
@@ -252,14 +248,14 @@ def merge_datasets(
     stats["total_files"] = len(all_metadata_rows)
 
     if verbose:
-        print("\nMerge complete!")
-        print(f"  Datasets merged: {stats['datasets_merged']}")
-        print(f"  Total files: {stats['total_files']}")
-        print(f"  Files copied: {stats['files_copied']}")
+        logger.info("Merge complete!")
+        logger.info(f"  Datasets merged: {stats['datasets_merged']}")
+        logger.info(f"  Total files: {stats['total_files']}")
+        logger.info(f"  Files copied: {stats['files_copied']}")
         if target_format:
-            print(f"  Files converted: {stats['files_converted']}")
-        print(f"  Files skipped: {stats['files_skipped']}")
-        print(f"  Output directory: {stats['output_dir']}")
-        print(f"  Metadata file: {stats['metadata_file']}")
+            logger.info(f"  Files converted: {stats['files_converted']}")
+        logger.info(f"  Files skipped: {stats['files_skipped']}")
+        logger.info(f"  Output directory: {stats['output_dir']}")
+        logger.info(f"  Metadata file: {stats['metadata_file']}")
 
     return stats

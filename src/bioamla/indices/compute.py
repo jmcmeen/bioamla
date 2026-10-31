@@ -810,7 +810,7 @@ def batch_compute_indices(
 
     Args:
         filepaths: List of paths to audio files.
-        verbose: Print progress.
+        verbose: Log progress at INFO level.
         **kwargs: Additional arguments passed to compute_all_indices.
 
     Returns:
@@ -826,7 +826,7 @@ def batch_compute_indices(
 
     for i, filepath in enumerate(filepaths, 1):
         if verbose:
-            print(f"[{i}/{len(filepaths)}] Processing {filepath}")
+            logger.info(f"[{i}/{len(filepaths)}] Processing {filepath}")
 
         try:
             indices = compute_indices_from_file(filepath, **kwargs)
@@ -836,8 +836,7 @@ def batch_compute_indices(
             result["success"] = True
             results.append(result)
         except Exception as e:
-            if verbose:
-                print(f"  Error: {e}")
+            logger.warning(f"Error processing {filepath}: {e}")
             results.append(
                 {
                     "filepath": str(filepath),

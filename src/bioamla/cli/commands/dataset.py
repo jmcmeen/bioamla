@@ -40,8 +40,10 @@ def dataset_merge(
 ) -> None:
     """Merge multiple audio datasets into a single dataset."""
     from bioamla.cli.console import print_success
+    from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.datasets import merge_datasets
 
+    configure_cli_logging()
     try:
         stats = merge_datasets(
             dataset_paths=list(dataset_paths),
@@ -667,6 +669,7 @@ def dataset_augment(
         bioamla dataset augment ./clips -o ./aug --time-stretch 0.9-1.1
     """
     from bioamla.cli.console import echo, print_error, print_success
+    from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.datasets import AugmentationConfig, batch_augment
 
     noise_enabled = add_noise is not None
@@ -703,6 +706,7 @@ def dataset_augment(
         gain_max_db=gain_max,
     )
 
+    configure_cli_logging()
     try:
         stats = batch_augment(
             input_dir=input_dir,

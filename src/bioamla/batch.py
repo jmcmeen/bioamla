@@ -22,7 +22,7 @@ Public surface:
 
 import csv
 import io
-import sys
+import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
@@ -31,6 +31,8 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from bioamla.exceptions import InvalidInputError, NotFoundError
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 I = TypeVar("I")  # noqa: E741 - item type
@@ -484,7 +486,7 @@ def run_csv_batch(
         max_workers: Reserved for parity; CSV rows are processed sequentially
             because ``process_row`` typically mutates shared state.
         continue_on_error: Collect per-row errors and keep going if True.
-        quiet: Suppress per-error stderr prints.
+        quiet: Suppress the per-error warning log.
         on_progress: Optional ``(completed, total)`` progress callback.
 
     Returns:
@@ -512,7 +514,7 @@ def run_csv_batch(
             if not continue_on_error:
                 raise
             if not quiet:
-                print(f"Error processing {row.file_path}: {e}", file=sys.stderr)
+                logger.warning(f"Error processing {row.file_path}: {e}")
         completed += 1
         if on_progress:
             on_progress(completed, total)

@@ -241,7 +241,7 @@ def batch_augment(
         output_dir: Directory for augmented output (created if missing).
         config: Augmentation configuration.
         recursive: Whether to search subdirectories.
-        verbose: Whether to print progress messages.
+        verbose: Whether to log progress at INFO level.
 
     Returns:
         Dict with keys ``files_processed``, ``files_created``, ``files_failed``,
@@ -273,7 +273,7 @@ def batch_augment(
 
     if not audio_files:
         if verbose:
-            print(f"No audio files found in {input_path}")
+            logger.info(f"No audio files found in {input_path}")
         return {
             "files_processed": 0,
             "files_created": 0,
@@ -282,8 +282,8 @@ def batch_augment(
         }
 
     if verbose:
-        print(f"Found {len(audio_files)} audio files to process")
-        print(f"Creating {config.multiply} augmented copies per file")
+        logger.info(f"Found {len(audio_files)} audio files to process")
+        logger.info(f"Creating {config.multiply} augmented copies per file")
 
     files_processed = 0
     files_created = 0
@@ -319,16 +319,15 @@ def batch_augment(
                 files_created += 1
 
                 if verbose:
-                    print(f"  Created: {out_path}")
+                    logger.info(f"  Created: {out_path}")
 
             files_processed += 1
         except Exception as e:  # noqa: BLE001 - report per-file failures, continue batch
             files_failed += 1
-            if verbose:
-                print(f"  Failed: {audio_path} - {e}")
+            logger.warning(f"Failed: {audio_path} - {e}")
 
     if verbose:
-        print(
+        logger.info(
             f"Processed {files_processed} files, created {files_created} "
             f"augmented files, {files_failed} failed"
         )
