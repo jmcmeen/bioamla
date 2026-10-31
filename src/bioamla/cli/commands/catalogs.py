@@ -305,18 +305,46 @@ def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str) -
     default=True,
     help="Write a README.md dataset card from the manifest/metadata before pushing",
 )
+@click.option(
+    "--coordinates",
+    type=click.Choice(["keep", "round", "strip"]),
+    default="keep",
+    show_default=True,
+    help="Per-file latitude/longitude in the uploaded metadata: keep, round, or strip",
+)
+@click.option(
+    "--coordinate-decimals",
+    type=click.IntRange(0, 6),
+    default=2,
+    show_default=True,
+    help="Decimal places kept by --coordinates round (2 ~ 1 km, 1 ~ 11 km)",
+)
 def hf_push_dataset(
-    path: str, repo_id: str, private: bool, commit_message: str, card: bool
+    path: str,
+    repo_id: str,
+    private: bool,
+    commit_message: str,
+    card: bool,
+    coordinates: str,
+    coordinate_decimals: int,
 ) -> None:
     """Push a dataset folder to the HuggingFace Hub.
 
     When ``--card`` is set (default) and the folder has a ``dataset.json`` manifest
     or a ``metadata.csv``, a ``README.md`` dataset card is generated first; folders
     without either are pushed as-is.
+
+    ``--coordinates round`` or ``strip`` redacts recorder locations in what is
+    uploaded (metadata CSVs, manifest sites, generated card); the local folder
+    keeps full precision.
     """
     from bioamla.catalogs import huggingface as hf
     from bioamla.cli.console import echo, print_success, print_warning
-    from bioamla.datasets import write_dataset_card
+    from bioamla.datasets import (
+        has_location_columns,
+        unredacted_location_files,
+        write_dataset_card,
+    )
 
     echo(f"Pushing dataset folder {path} to HuggingFace Hub: {repo_id}...")
 
@@ -328,8 +356,29 @@ def hf_push_dataset(
         except BioamlaError as e:
             print_warning(f"Warning: could not generate dataset card ({e})")
 
+    if coordinates == "keep" and has_location_columns(path):
+        print_warning(
+            "The metadata includes per-file locations, which will be published as they are. "
+            "Use --coordinates round or --coordinates strip to redact them."
+        )
+    elif coordinates != "keep":
+        unredacted = unredacted_location_files(path)
+        if unredacted:
+            print_warning(
+                f"{len(unredacted)} file(s) may still carry a location that --coordinates "
+                f"does not change (embedded WAV metadata, JSON/text, Parquet), e.g. "
+                f"{unredacted[0]}."
+            )
+
     try:
-        result = hf.push_dataset(path, repo_id, private=private, commit_message=commit_message)
+        result = hf.push_dataset(
+            path,
+            repo_id,
+            private=private,
+            commit_message=commit_message,
+            coordinates=coordinates,
+            coordinate_decimals=coordinate_decimals,
+        )
     except BioamlaError as e:
         print_warning("Make sure you are logged in with 'huggingface-cli login'.")
         raise click.ClickException(str(e)) from e

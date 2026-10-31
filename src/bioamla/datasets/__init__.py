@@ -83,6 +83,16 @@ from bioamla.datasets.measurements import (
 from bioamla.datasets.merge import find_species_name, merge_datasets
 from bioamla.datasets.partition import partition_dataset
 from bioamla.datasets.recording import add_recording_metadata
+from bioamla.datasets.redact import (
+    COORDINATE_MODES,
+    check_coordinate_mode,
+    has_location_columns,
+    location_columns,
+    redact_rows,
+    redact_sites,
+    redacted_dataset_files,
+    unredacted_location_files,
+)
 from bioamla.datasets.remix import RemixRecipe, RemixSource, remix_dataset
 from bioamla.datasets.stats import get_dataset_stats
 from bioamla.exceptions import (
@@ -150,6 +160,14 @@ __all__ = [
     "add_recording_metadata",
     "build_dataset_card",
     "write_dataset_card",
+    "COORDINATE_MODES",
+    "check_coordinate_mode",
+    "has_location_columns",
+    "location_columns",
+    "redact_rows",
+    "redact_sites",
+    "redacted_dataset_files",
+    "unredacted_location_files",
     # Augmentation
     "AugmentationConfig",
     "create_augmentation_pipeline",

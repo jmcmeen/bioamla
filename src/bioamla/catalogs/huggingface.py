@@ -68,6 +68,30 @@ def _get_hf_api():
     return HfApi()
 
 
+def _require_dir(path: str) -> None:
+    if not Path(path).is_dir():
+        raise InvalidInputError(f"Path '{path}' does not exist or is not a directory")
+
+
+def _literal_patterns(replacements: dict[str, bytes]) -> list[str]:
+    """``ignore_patterns`` that match exactly the replaced paths.
+
+    The Hub client matches with ``fnmatch``, so names containing ``[``, ``*`` or
+    ``?`` are escaped. Each pattern is checked against its own path, because a
+    pattern that failed to match would upload the unredacted local file.
+    """
+    import fnmatch
+    import glob
+
+    patterns = []
+    for rel in sorted(replacements):
+        pattern = glob.escape(rel)
+        if not fnmatch.fnmatch(rel, pattern):
+            raise CatalogError(f"Can't exclude {rel!r} from the upload safely; rename it")
+        patterns.append(pattern)
+    return patterns
+
+
 def _push_folder(
     path: str,
     repo_id: str,
@@ -75,22 +99,42 @@ def _push_folder(
     private: bool,
     commit_message: str | None,
     url: str,
+    replacements: dict[str, bytes] | None = None,
 ) -> PushResult:
-    """Shared implementation for pushing a model or dataset folder."""
-    if not Path(path).is_dir():
-        raise InvalidInputError(f"Path '{path}' does not exist or is not a directory")
+    """Shared implementation for pushing a model or dataset folder.
+
+    ``replacements`` maps folder-relative paths to the content uploaded in place
+    of the local file; the local file itself is never uploaded. The replacements
+    are committed first, so if the folder upload then fails the repository still
+    never holds the local versions.
+    """
+    _require_dir(path)
+    patterns = _literal_patterns(replacements or {})
 
     api = _get_hf_api()
     default_message = f"Upload {repo_type}"
     try:
         api.create_repo(repo_id=repo_id, repo_type=repo_type, private=private, exist_ok=True)
-        upload = api.upload_large_folder if _is_large_folder(path) else api.upload_folder
-        upload(
-            folder_path=path,
-            repo_id=repo_id,
-            repo_type=repo_type,
-            commit_message=commit_message or default_message,
-        )
+        if replacements:
+            from huggingface_hub import CommitOperationAdd
+
+            api.create_commit(
+                repo_id=repo_id,
+                repo_type=repo_type,
+                operations=[
+                    CommitOperationAdd(path_in_repo=rel, path_or_fileobj=content)
+                    for rel, content in sorted(replacements.items())
+                ],
+                commit_message=f"{commit_message or default_message} (redacted metadata)",
+            )
+        large = _is_large_folder(path)
+        upload = api.upload_large_folder if large else api.upload_folder
+        kwargs: dict[str, Any] = {}
+        if not large:  # upload_large_folder makes its own commits and takes no message
+            kwargs["commit_message"] = commit_message or default_message
+        if patterns:
+            kwargs["ignore_patterns"] = patterns
+        upload(folder_path=path, repo_id=repo_id, repo_type=repo_type, **kwargs)
     except Exception as e:
         raise CatalogError(f"Push failed: {e}") from e
 
@@ -130,13 +174,40 @@ def push_dataset(
     repo_id: str,
     private: bool = False,
     commit_message: str | None = None,
+    *,
+    coordinates: str = "keep",
+    coordinate_decimals: int = 2,
 ) -> PushResult:
     """Push a dataset folder to the HuggingFace Hub.
 
+    Args:
+        path: Dataset folder.
+        repo_id: Hub repository id.
+        private: Create the repository as private.
+        commit_message: Commit message for the upload.
+        coordinates: ``keep`` uploads per-file locations as they are;
+            ``round`` rounds coordinate columns to ``coordinate_decimals``
+            places; ``strip`` removes them. Both drop free-text location
+            columns. Applies to the uploaded copies of CSV/TSV metadata, the
+            ``dataset.json`` sites and a bioamla-generated ``README.md``; the
+            local folder is not changed (see
+            :func:`bioamla.datasets.redacted_dataset_files`). Locations embedded
+            in audio files or other formats (see
+            :func:`bioamla.datasets.unredacted_location_files`), and earlier
+            commits in the repository's history, are not affected.
+        coordinate_decimals: Decimal places kept by ``round`` (2 is about 1 km).
+
     Raises:
-        InvalidInputError: if ``path`` is not a directory.
+        InvalidInputError: if ``path`` is not a directory, or for an unknown
+            ``coordinates`` mode or bad ``coordinate_decimals``.
+        DatasetError: if a file that may carry locations can't be read to redact.
         CatalogError: on upload failure.
     """
+    from bioamla.datasets.redact import check_coordinate_mode, redacted_dataset_files
+
+    check_coordinate_mode(coordinates, coordinate_decimals)
+    _require_dir(path)
+    replacements = redacted_dataset_files(path, coordinates, coordinate_decimals)
     return _push_folder(
         path=path,
         repo_id=repo_id,
@@ -144,6 +215,7 @@ def push_dataset(
         private=private,
         commit_message=commit_message,
         url=f"https://huggingface.co/datasets/{repo_id}",
+        replacements=replacements,
     )
 
 

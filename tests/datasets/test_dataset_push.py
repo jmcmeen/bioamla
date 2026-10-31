@@ -71,8 +71,8 @@ class TestPushDatasetCli:
         d = _write_dataset(tmp_path)
         calls = {}
 
-        def fake_push(path, repo_id, private=False, commit_message=None):
-            calls.update(path=path, repo_id=repo_id, private=private)
+        def fake_push(path, repo_id, private=False, commit_message=None, **kwargs):
+            calls.update(path=path, repo_id=repo_id, private=private, **kwargs)
             return PushResult(
                 repo_id=repo_id,
                 repo_type="dataset",
