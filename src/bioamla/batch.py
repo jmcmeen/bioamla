@@ -23,6 +23,7 @@ Public surface:
 import csv
 import io
 import logging
+import os
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
@@ -545,6 +546,24 @@ def update_row_path(row: MetadataRow, new_path: Path, csv_context: CSVBatchConte
             row.file_name = str(new_path)
 
 
+#: Columns that hold a path relative to the metadata CSV (besides ``file_name``),
+#: re-rooted like it when the CSV is written somewhere new.
+CSV_PATH_COLUMNS = ("features_file", "embedding_file", "parent_file")
+
+
+def _csv_relative(path: str | Path, base: Path) -> str:
+    """``path`` relative to ``base``, or absolute when no relative path reaches it.
+
+    Paths are made absolute without resolving symlinks, so a CSV that reaches its
+    audio through a linked folder keeps doing so.
+    """
+    target = os.path.abspath(path)
+    try:
+        return os.path.relpath(target, os.path.abspath(base))
+    except ValueError:  # another drive on Windows
+        return target
+
+
 def merge_analysis_results(row: MetadataRow, results: dict[str, Any]) -> None:
     """
     Merge analysis results into a row's metadata fields.
@@ -731,10 +750,29 @@ def write_csv(context: CSVBatchContext) -> Path:
     recorder = [f for f in RECORDING_METADATA_FIELDS if f in new_fields]
     all_fieldnames.extend(recorder + sorted(new_fields - set(recorder)))
 
+    # Paths in the CSV are relative to where it's written. A Path value (a file a
+    # command just wrote) is made relative to that; relative paths read from the
+    # input CSV are re-rooted when the CSV moves to output_dir.
+    base = output_csv_path.parent
+    moved = os.path.abspath(base) != os.path.abspath(context.csv_dir)
+
+    def reroot(value: str) -> str:
+        if not moved or not value or Path(value).is_absolute():
+            return value
+        return _csv_relative(context.csv_dir / value, base)
+
     rows_data = []
     for row in context.rows:
-        row_dict = {"file_name": row.file_name}
-        row_dict.update(row.metadata_fields)
+        file_name = row.file_name
+        if row.output_path is None:  # analysis rows keep the input's path, re-rooted
+            file_name = reroot(file_name)
+        row_dict: dict[str, Any] = {"file_name": file_name}
+        for key, value in row.metadata_fields.items():
+            if isinstance(value, Path):
+                value = _csv_relative(value, base)
+            elif key in CSV_PATH_COLUMNS and isinstance(value, str):
+                value = reroot(value)
+            row_dict[key] = value
         rows_data.append(row_dict)
 
     csv_buffer = io.StringIO()
@@ -755,6 +793,7 @@ __all__ = [
     "SegmentInfo",
     "MetadataRow",
     "CSVBatchContext",
+    "CSV_PATH_COLUMNS",
     # Discovery / runner
     "discover_files",
     "output_stems",

@@ -249,8 +249,11 @@ class TestPredictSegmentsCsvExpansion:
         assert rows[0]["prediction"] == "frog" and rows[1]["prediction"] == "bird"
         assert rows[0]["start_time"] == "0.0" and rows[1]["end_time"] == "6.0"
         assert "confidence" in rows[0]
-        # Source file_name is kept (segments are sub-spans, not new files).
-        assert rows[0]["file_name"] == "audio_0.wav"
+        # Source file_name points at the source audio (segments are sub-spans, not new
+        # files), relative to where the CSV was written.
+        assert (out_dir / rows[0]["file_name"]).resolve() == (
+            Path(test_audio_dir) / "audio_0.wav"
+        ).resolve()
 
     def test_min_confidence_filter_drops_segments(self, test_audio_dir, tmp_path):
         from bioamla.batch import BatchConfig
@@ -269,3 +272,71 @@ class TestPredictSegmentsCsvExpansion:
         rows = list(csv.DictReader((out_dir / "meta.csv").read_text(encoding="utf-8").splitlines()))
         assert len(rows) == 1
         assert rows[0]["prediction"] == "frog"
+
+
+class TestWriteCsvPaths:
+    """Paths in a written metadata CSV resolve from where the CSV is written."""
+
+    def _context(self, tmp_path, output_dir):
+        from bioamla.batch import load_csv
+
+        src = tmp_path / "in"
+        (src / "sub").mkdir(parents=True)
+        (src / "sub" / "a.wav").write_bytes(b"RIFF")
+        (src / "a.features.csv").write_text("x")
+        meta = src / "meta.csv"
+        meta.write_text("file_name,site,features_file\nsub/a.wav,A,a.features.csv\n")
+        return load_csv(meta, output_dir)
+
+    def test_moved_csv_reroots_relative_paths(self, tmp_path):
+        from bioamla.batch import write_csv
+
+        out = tmp_path / "out" / "deeper"
+        context = self._context(tmp_path, str(out))
+        new_file = (out / "emb.npy").resolve()
+        context.rows[0].metadata_fields["embedding_file"] = new_file  # a file just written
+        written = write_csv(context)
+        (row,) = list(csv.DictReader(written.open()))
+        for column in ("file_name", "features_file", "embedding_file"):
+            assert (written.parent / row[column]).resolve().name in (
+                "a.wav",
+                "a.features.csv",
+                "emb.npy",
+            )
+        assert (written.parent / row["file_name"]).resolve() == (
+            tmp_path / "in" / "sub" / "a.wav"
+        ).resolve()
+        assert row["embedding_file"] == "emb.npy"
+        assert row["site"] == "A"  # other columns untouched
+
+    def test_in_place_keeps_paths(self, tmp_path):
+        from bioamla.batch import write_csv
+
+        context = self._context(tmp_path, None)
+        written = write_csv(context)
+        (row,) = list(csv.DictReader(written.open()))
+        assert (row["file_name"], row["features_file"]) == ("sub/a.wav", "a.features.csv")
+
+    def test_symlinked_folder_is_kept(self, tmp_path):
+        from bioamla.batch import load_csv, write_csv
+
+        real = tmp_path / "vault" / "audio"
+        real.mkdir(parents=True)
+        (real / "a.wav").write_bytes(b"RIFF")
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        (proj / "audio").symlink_to(real)
+        (proj / "meta.csv").write_text("file_name\naudio/a.wav\n")
+        written = write_csv(load_csv(proj / "meta.csv", str(proj / "out")))
+        (row,) = list(csv.DictReader(written.open()))
+        assert row["file_name"] == "../audio/a.wav"  # through the link, not into the vault
+
+    def test_output_dir_equal_to_csv_folder_changes_nothing(self, tmp_path):
+        from bioamla.batch import load_csv, write_csv
+
+        self._context(tmp_path, None)  # lays out in/sub/a.wav
+        meta = tmp_path / "in" / "meta.csv"
+        meta.write_text("file_name,features_file\nsub/../sub/a.wav,a.features.csv\n")
+        written = write_csv(load_csv(meta, str(tmp_path / "in")))
+        (row,) = list(csv.DictReader(written.open()))
+        assert row["file_name"] == "sub/../sub/a.wav"  # left exactly as written

@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- CSV-mode batch commands run with `--output-dir` write the updated metadata CSV there, and its
+  paths now resolve from there: relative `file_name`, `parent_file`, `features_file` and
+  `embedding_file` entries are re-rooted instead of staying relative to the input CSV's folder,
+  so the next batch command can read the CSV.
+- CSV-mode `batch models embed` adds an `embedding_file` column, and `batch cluster
+  --input-file` reads it, so embed -> cluster works over one metadata CSV.
+- `batch models embed` no longer overwrites the embeddings of files that share a name
+  (`a1.wav` and `b/a1.wav`, or `rec.wav` and `rec.flac`) while reporting every file as done.
+- CSV mode: a row whose embedding or feature table fails this run gets a blank `embedding_file`
+  / `features_file` instead of keeping an earlier run's, and `batch cluster` skips rows with a
+  blank `embedding_file` instead of trying the audio file as an embedding.
+
+### Changed
+
+- `batch models embed` (directory mode) mirrors the input tree under `--output-dir`:
+  embeddings of files in subfolders land in matching subfolders instead of all at the top level.
+  `batch cluster --input-dir` searches subfolders by default, so embed -> cluster is unaffected;
+  scripts that expect every embedding at the top level need to look in subfolders.
+
 ### Added
 
 - Arbimon annotations: an `arbimon` format for the CSV layout of Arbimon's pattern-matching ROI
