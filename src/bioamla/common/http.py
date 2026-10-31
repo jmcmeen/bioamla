@@ -283,7 +283,7 @@ class APIClient:
         endpoint: str,
         params: dict[str, Any] | None = None,
         use_cache: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """
         Make a GET request.
@@ -337,7 +337,7 @@ class APIClient:
         endpoint: str,
         data: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """
         Make a POST request.
