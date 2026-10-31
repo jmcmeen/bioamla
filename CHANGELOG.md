@@ -25,6 +25,16 @@ All notable changes to this project are documented here. The format is based on
   the input tree, plus a `frame_features.csv` index; in CSV mode the `features_file` (relative to
   the CSV where possible) and `n_frames` columns are added. Library: `frame_features_file()`,
   `write_frame_table()`, `batch_frame_features_files()` and `frame_feature_table_paths()`.
+- `bioamla audio video -t trajectory` and `generate_trajectory_video()` (`bioamla.viz`): the
+  MFCC-PCA timbre trajectory drawn as the recording plays, in sync with its audio. The path is
+  coloured by spectral centroid and weighted by level, silent stretches break it, and the view
+  turns slowly (`--no-orbit` holds it); `--trail SECONDS` fades older path, and a scrolling mel
+  spectrogram strip runs along the bottom (`--no-spectrogram` drops it).
+
+### Changed
+
+- The ffmpeg encoding loop behind `generate_spectrogram_video()` is shared with the trajectory
+  video; spectrogram videos are unchanged.
 
 ## [0.3.3] - 2026-10-31
 

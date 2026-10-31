@@ -770,8 +770,8 @@ def audio_visualize(
     "-t",
     "viz_type",
     default="mel",
-    type=click.Choice(["mel", "stft", "waveform"]),
-    help="Spectrogram type, or a waveform-only video",
+    type=click.Choice(["mel", "stft", "waveform", "trajectory"]),
+    help="Spectrogram type, a waveform-only video, or the MFCC-PCA timbre trajectory",
 )
 @click.option(
     "--motion",
@@ -803,6 +803,20 @@ def audio_visualize(
 @click.option("--waveform/--no-waveform", default=True, help="Scrolling waveform strip")
 @click.option("--axes/--no-axes", default=True, help="Frequency ticks and time readout")
 @click.option("--audio/--no-audio", "include_audio", default=True, help="Mux the audio track")
+@click.option(
+    "--trail",
+    default=None,
+    type=float,
+    help="Trajectory: fade out path older than this many seconds (default: keep it all)",
+)
+@click.option(
+    "--orbit/--no-orbit", default=True, help="Trajectory: turn the view slowly (default: on)"
+)
+@click.option(
+    "--spectrogram/--no-spectrogram",
+    default=True,
+    help="Trajectory: scrolling mel spectrogram strip along the bottom (default: on)",
+)
 @click.option("--quiet", "-q", is_flag=True, help="Suppress the progress bar")
 def audio_video(
     path: str,
@@ -824,9 +838,12 @@ def audio_video(
     waveform: bool,
     axes: bool,
     include_audio: bool,
+    trail: float | None,
+    orbit: bool,
+    spectrogram: bool,
     quiet: bool,
 ) -> None:
-    """Render a spectrogram or waveform video of a single file, in sync with its audio.
+    """Render a spectrogram, waveform or trajectory video of a file, in sync with its audio.
 
     Needs the ffmpeg command on PATH.
 
@@ -844,10 +861,15 @@ def audio_video(
         bioamla audio video wren.wav -t waveform -m page -w 10
         # Just 1:30 to 2:00 of a long recording
         bioamla audio video night.wav -s 90 -e 120
+
+        # MFCC-PCA timbre trajectory, path fading after 4 seconds
+        bioamla audio video wren.wav -t trajectory --trail 4
+
+    With -t trajectory, --window sets the spectrogram strip's span and --cmap
+    colours the path (default plasma); the spectrogram-only options don't apply.
     """
     from bioamla.cli.console import ProgressBar, print_success
     from bioamla.cli.output import emit_file_result
-    from bioamla.viz import generate_spectrogram_video
 
     try:
         width, height = (int(v) for v in size.lower().split("x"))
@@ -857,36 +879,62 @@ def audio_video(
         ) from None
     output_path = output or f"{Path(path).stem}.mp4"
 
-    bar = ProgressBar(description="Rendering frames", disable=quiet)
+    ctx = click.get_current_context()
+    given = {
+        name
+        for name in ctx.params
+        if ctx.get_parameter_source(name) != click.core.ParameterSource.DEFAULT
+    }
+    common = {
+        "start": start, "end": end, "width": width, "height": height, "fps": fps,
+        "show_axes": axes, "include_audio": include_audio,
+    }  # fmt: skip
+    if viz_type == "trajectory":
+        _reject_options(given, _SPECTROGRAM_ONLY, "don't apply to -t trajectory")
+        if window <= 0:
+            raise click.BadParameter(
+                "-t trajectory needs a positive span for its spectrogram strip",
+                param_hint="--window",
+            )
+        from bioamla.viz import generate_trajectory_video
 
+        render = generate_trajectory_video
+        kwargs = {
+            **common,
+            "trail_seconds": trail,
+            "orbit": orbit,
+            "spectrogram": spectrogram,
+            "window_seconds": window,
+            "cmap": cmap if "cmap" in given else "plasma",
+        }
+    else:
+        _reject_options(given, ("trail", "orbit", "spectrogram"), "only apply to -t trajectory")
+        from bioamla.viz import generate_spectrogram_video
+
+        render = generate_spectrogram_video
+        kwargs = {
+            **common,
+            "viz_type": viz_type, "motion": motion, "n_fft": n_fft,
+            "hop_length": hop_length, "n_mels": n_mels, "fmax": fmax, "db_range": db_range,
+            "cmap": cmap, "window_seconds": window or None, "playhead": playhead,
+            "waveform": waveform,
+        }  # fmt: skip
+
+    bar = ProgressBar(description="Rendering frames", disable=quiet)
     try:
         with bar:
-            result = generate_spectrogram_video(
-                audio_path=path,
-                output_path=output_path,
-                viz_type=viz_type,
-                motion=motion,
-                start=start,
-                end=end,
-                n_fft=n_fft,
-                hop_length=hop_length,
-                n_mels=n_mels,
-                fmax=fmax,
-                db_range=db_range,
-                cmap=cmap,
-                width=width,
-                height=height,
-                fps=fps,
-                window_seconds=window or None,
-                playhead=playhead,
-                waveform=waveform,
-                show_axes=axes,
-                include_audio=include_audio,
-                on_progress=bar.on_progress,
+            result = render(
+                audio_path=path, output_path=output_path, on_progress=bar.on_progress, **kwargs
             )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    extra = {}
+    if viz_type == "trajectory":
+        extra = {
+            "active_frames": result.active_frames,
+            "explained_variance_ratio": result.explained_variance_ratio,
+        }
     if emit_file_result(
         path,
         output=result.output_path,
@@ -894,9 +942,35 @@ def audio_video(
         width=result.width,
         height=result.height,
         duration=result.duration,
+        **extra,
     ):
         return
-    print_success(
-        f"Video saved to: {result.output_path} "
-        f"({result.frames} frames, {result.width}x{result.height}, {result.duration:.1f}s)"
-    )
+    detail = f"{result.frames} frames, {result.width}x{result.height}, {result.duration:.1f}s"
+    if viz_type == "trajectory":
+        detail += "; axes " + ", ".join(f"{v:.0%}" for v in result.explained_variance_ratio)
+    print_success(f"Video saved to: {result.output_path} ({detail})")
+
+
+_SPECTROGRAM_ONLY = (
+    "motion",
+    "n_fft",
+    "hop_length",
+    "n_mels",
+    "fmax",
+    "db_range",
+    "playhead",
+    "waveform",
+)
+
+
+def _reject_options(given: set[str], names: tuple[str, ...], reason: str) -> None:
+    """UsageError naming the options in ``names`` that were set on the command line."""
+    misplaced = sorted(given & set(names))
+    if not misplaced:
+        return
+    flags = ", ".join("--" + n.replace("_", "-") for n in misplaced)
+    if len(misplaced) == 1:  # "doesn't apply" / "only applies"
+        reason = reason.replace("don't apply", "doesn't apply").replace(
+            "only apply", "only applies"
+        )
+    raise click.UsageError(f"{flags} {reason}")

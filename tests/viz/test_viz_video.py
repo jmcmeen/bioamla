@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 
 from bioamla.exceptions import DependencyError, InvalidInputError, NotFoundError
+from bioamla.viz._video_common import fmt_time as _fmt_time
 from bioamla.viz.video import (
     SpectrogramVideoResult,
-    _fmt_time,
     _FrameRenderer,
     generate_spectrogram_video,
 )
@@ -211,7 +211,7 @@ class TestValidation:
             generate_spectrogram_video(test_audio_path, tmp_path / "o.mp4", start=5)
 
     def test_missing_ffmpeg(self, test_audio_path: str, tmp_path, mocker) -> None:
-        mocker.patch("bioamla.viz.video.shutil.which", return_value=None)
+        mocker.patch("bioamla.viz._video_common.shutil.which", return_value=None)
         with pytest.raises(DependencyError, match="ffmpeg"):
             generate_spectrogram_video(test_audio_path, tmp_path / "out.mp4")
 
