@@ -39,7 +39,7 @@ class TestGetWavInfo:
         assert info["bit_depth"] == 16
         assert info["subtype"] == "PCM_16"
         assert info["format"] == "WAV"
-        assert info["codec"] == "pcm"
+        assert info["codec"] == "pcm_s16le"
 
     def test_pcm_stereo_24bit(self, tmp_path) -> None:
         path = tmp_path / "stereo.wav"
@@ -94,9 +94,16 @@ class TestGetWavInfo:
         with pytest.raises(AudioLoadError):
             get_wav_info(path)
 
-    def test_float_wav_raises_audio_load_error(self, tmp_path) -> None:
-        # scipy writes float32 as WAVE_FORMAT_IEEE_FLOAT (3); riffy is PCM-only.
+    def test_float_wav(self, tmp_path) -> None:
+        # scipy writes float32 as WAVE_FORMAT_IEEE_FLOAT (3).
         path = tmp_path / "float.wav"
         wavfile.write(str(path), 16000, np.zeros(1600, dtype=np.float32))
-        with pytest.raises(AudioLoadError):
-            get_wav_info(path)
+        info = get_wav_info(path)
+        assert (info["subtype"], info["codec"], info["bit_depth"]) == ("FLOAT", "pcm_f32le", 32)
+        assert info["samples"] == 1600
+
+    def test_compressed_wav_falls_back(self, ulaw_wav) -> None:
+        # riffy reads the header but can't measure mu-law, so the caller falls
+        # back to ffprobe.
+        with pytest.raises(AudioLoadError, match="Compressed WAV"):
+            get_wav_info(ulaw_wav)

@@ -4,9 +4,11 @@ riffy backend for WAV headers
 
 Header-only metadata for ``.wav`` files via `riffy <https://github.com/jmcmeen/riffy>`_,
 a pure-Python RIFF parser. It needs no FFmpeg, libsndfile, or torch, so it is the first
-thing :func:`bioamla.audio.get_audio_info` tries for WAV input. riffy only understands
-PCM; anything else raises :class:`AudioLoadError` and callers fall back to the pydub /
-ffprobe path.
+thing :func:`bioamla.audio.get_audio_info` tries for WAV input. Files are parsed without
+reading their audio (``read_audio=False``), so a multi-GB recording costs only its
+headers. :func:`get_wav_info` handles integer PCM and IEEE float (plain or extensible);
+compressed WAVs raise :class:`AudioLoadError` and callers fall back to the pydub /
+ffprobe path, which can measure them.
 
 This is the only module that imports riffy. Its exceptions are mapped to bioamla's
 hierarchy here and nowhere else.
@@ -19,6 +21,7 @@ import logging
 import warnings
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from bioamla.exceptions import AudioLoadError, InvalidInputError, NotFoundError
 
@@ -56,7 +59,7 @@ def get_wav_info(filepath: str | Path) -> dict:
     Raises:
         NotFoundError: If the file does not exist.
         InvalidInputError: If the path does not have a WAV suffix.
-        AudioLoadError: If riffy cannot parse the file, including non-PCM WAVs.
+        AudioLoadError: If riffy cannot parse the file, or its audio is compressed.
     """
     from riffy import WAVParser
     from riffy.exceptions import RiffyError
@@ -69,7 +72,7 @@ def get_wav_info(filepath: str | Path) -> dict:
 
     try:
         with _riffy_warnings_to_log(path):
-            parser = WAVParser(path)
+            parser = WAVParser(path, read_audio=False)
             info = parser.get_info()
     except RiffyError as e:
         raise AudioLoadError(f"Cannot read WAV header: {filepath}: {e}") from e
@@ -77,10 +80,16 @@ def get_wav_info(filepath: str | Path) -> dict:
     fmt = info["format"]
     bits = int(fmt["bits_per_sample"])
     is_pcm = bool(fmt["is_pcm"])
+    # Names match the ffprobe backend so the two stay interchangeable.
     if is_pcm:
         subtype = "PCM_U8" if bits == 8 else f"PCM_{bits}"
+        codec = "pcm_u8" if bits == 8 else f"pcm_s{bits}le"
+    elif fmt["is_float"]:
+        subtype = "FLOAT" if bits == 32 else "DOUBLE"
+        codec = f"pcm_f{bits}le"
     else:
-        subtype = None
+        # riffy can't measure compressed audio; ffprobe can.
+        raise AudioLoadError(f"Compressed WAV ({fmt['description']}): {filepath}")
 
     logger.debug(f"Extracted metadata via riffy: {filepath}")
     return {
@@ -89,7 +98,7 @@ def get_wav_info(filepath: str | Path) -> dict:
         "channels": int(fmt["channels"]),
         "samples": int(info["sample_count"]),
         "format": "WAV",
-        "codec": "pcm" if is_pcm else None,
+        "codec": codec,
         "bit_depth": bits,
         "subtype": subtype,
     }
@@ -143,20 +152,8 @@ def dump_recorder_metadata(filepath: str | Path) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Location redaction (streaming; see datasets.redact)
+# Location redaction (see datasets.redact)
 # ---------------------------------------------------------------------------
-#
-# riffy's WAVParser loads every chunk, audio included, into memory and only
-# accepts PCM. To redact recorder positions in datasets of long or float
-# recordings, these helpers walk the RIFF chunk list themselves, read only the
-# metadata chunks, and stream everything else across. riffy still parses and
-# re-serializes the GUANO and WAMD payloads. Once riffy can read and rewrite
-# metadata without loading the audio, this should move there.
-
-_MAX_U32 = 0xFFFFFFFF
-_RF64_FORMS = (b"RF64", b"BW64")
-_LOCATION_CHUNK_IDS = ("guan", "wamd", "junk", "JUNK")
-_COPY_BLOCK = 1 << 20
 
 # Words marking a GUANO field as positional. A field counts when one of the
 # strong words appears ("Loc Position", "GPS Fix", "Site Coords"), or when the
@@ -178,57 +175,7 @@ def is_location_field(key: str) -> bool:
     return bool(words) and words <= _WEAK_LOCATION_WORDS
 
 
-class _Chunk:
-    __slots__ = ("id", "offset", "size")
-
-    def __init__(self, chunk_id: str, size: int, offset: int) -> None:
-        self.id = chunk_id
-        self.size = size  # real payload size (from ds64 for RF64 placeholders)
-        self.offset = offset  # file offset of the payload
-
-
-def _walk_chunks(f) -> tuple[bytes, list[_Chunk], bytes | None]:
-    """Return ``(form, chunks, ds64_payload)`` without reading any payload but ds64."""
-    import struct
-
-    header = f.read(12)
-    if len(header) < 12 or header[8:12] != b"WAVE" or header[:4] not in (b"RIFF", *_RF64_FORMS):
-        raise AudioLoadError("not a RIFF/RF64 WAVE file")
-    form = header[:4]
-    chunks: list[_Chunk] = []
-    ds64: bytes | None = None
-    data_size64: int | None = None
-    table: dict[str, list[int]] = {}
-    while True:
-        head = f.read(8)
-        if len(head) < 8:
-            break
-        chunk_id = head[:4].decode("latin-1")
-        (size,) = struct.unpack("<I", head[4:])
-        offset = f.tell()
-        if chunk_id == "ds64":
-            ds64 = f.read(size)
-            data_size64 = struct.unpack_from("<Q", ds64, 8)[0]
-            count = struct.unpack_from("<I", ds64, 24)[0] if len(ds64) >= 28 else 0
-            for i in range(count):
-                entry = 28 + 12 * i
-                cid = ds64[entry : entry + 4].decode("latin-1")
-                table.setdefault(cid, []).append(struct.unpack_from("<Q", ds64, entry + 4)[0])
-            f.seek(offset)
-        if form in _RF64_FORMS and size == _MAX_U32:
-            if chunk_id == "data" and data_size64 is not None:
-                size = data_size64
-            elif table.get(chunk_id):
-                size = table[chunk_id].pop(0)
-        chunks.append(_Chunk(chunk_id, size, offset))
-        f.seek(offset + size + (size & 1))
-    return form, chunks, ds64
-
-
-def _redact_guano(payload: bytes, mode: str, decimals: int) -> bytes | None:
-    from riffy import GuanoMetadata
-
-    guano = GuanoMetadata.from_bytes(payload)
+def _redact_guano(guano, mode: str, decimals: int) -> bool:
     changed = False
     for namespace, key in list(guano.fields):
         if not is_location_field(key):
@@ -240,16 +187,12 @@ def _redact_guano(payload: bytes, mode: str, decimals: int) -> bytes | None:
         else:
             guano.remove(namespace, key)
         changed = True
-    return guano.to_chunk_bytes() if changed else None
+    return changed
 
 
-def _redact_wamd(payload: bytes, chunk_id: str, mode: str, decimals: int) -> bytes | None:
-    from riffy import WamdMetadata
-    from riffy.metadata.wamd import GPSFIRST_ID, GPSTRACK_ID, _looks_like_wamd
+def _redact_wamd(wamd, mode: str, decimals: int) -> bool:
+    from riffy.metadata.wamd import GPSFIRST_ID, GPSTRACK_ID
 
-    if chunk_id != "wamd" and not _looks_like_wamd(payload):
-        return None  # ordinary junk padding
-    wamd = WamdMetadata.from_bytes(payload, chunk_id=chunk_id)
     changed = False
     if wamd.get_raw(GPSTRACK_ID) is not None:
         wamd.remove(GPSTRACK_ID)  # a track is many fixes; nothing to round it to
@@ -265,49 +208,94 @@ def _redact_wamd(payload: bytes, chunk_id: str, mode: str, decimals: int) -> byt
         else:
             wamd.remove(GPSFIRST_ID)
         changed = True
-    return wamd.to_chunk_bytes() if changed else None
+    return changed
 
 
-def _redacted_payloads(f, chunks: list[_Chunk], mode: str, decimals: int) -> dict[int, bytes]:
-    """Map chunk index -> replacement payload for chunks that carry a location."""
-    out: dict[int, bytes] = {}
-    for i, chunk in enumerate(chunks):
-        if chunk.id not in _LOCATION_CHUNK_IDS:
-            continue
-        f.seek(chunk.offset)
-        payload = f.read(chunk.size)
-        if len(payload) < chunk.size:
-            # A cut-off metadata chunk can't be parsed reliably, so it can't be
-            # shown to be free of a location.
-            raise AudioLoadError(f"{chunk.id!r} chunk is truncated")
-        if chunk.id == "guan":
-            new = _redact_guano(payload, mode, decimals)
+def _location_chunks(parser) -> Iterator[tuple[str, int, Any]]:
+    """Yield ``(chunk_id, index, metadata)`` for every GUANO/WAMD-bearing chunk."""
+    from riffy import GuanoMetadata, WamdMetadata
+    from riffy.metadata.wamd import _looks_like_wamd
+
+    for chunk_id in ("guan", "wamd", "junk", "JUNK"):
+        for i, chunk in enumerate(parser.chunks.get(chunk_id, [])):
+            payload = parser.read_chunk_data(chunk)
+            if chunk_id == "guan":
+                yield chunk_id, i, GuanoMetadata.from_bytes(payload)
+            elif chunk_id == "wamd" or _looks_like_wamd(payload):
+                yield chunk_id, i, WamdMetadata.from_bytes(payload, chunk_id=chunk_id)
+
+
+def _has_location(chunk_id: str, meta: Any) -> bool:
+    from riffy.metadata.wamd import GPSFIRST_ID, GPSTRACK_ID
+
+    if chunk_id == "guan":
+        return any(is_location_field(key) for _, key in meta.fields)
+    return meta.get_raw(GPSFIRST_ID) is not None or meta.get_raw(GPSTRACK_ID) is not None
+
+
+def _redact_parser(parser, mode: str, decimals: int) -> bool:
+    """Redact the location in every GUANO, WAMD and WAMD-bearing junk chunk of ``parser``.
+
+    Edits the parser's chunks in memory. Every occurrence is handled, not just
+    the first one riffy's ``from_parser`` helpers read, so a duplicate chunk
+    can't carry an unredacted position through.
+    """
+    from riffy import WAVChunk
+
+    changed = False
+    for chunk_id, i, meta in list(_location_chunks(parser)):
+        if chunk_id == "guan":
+            edited = _redact_guano(meta, mode, decimals)
+            if edited and meta.version is None:
+                meta.version = "1.0"  # the spec requires it; some writers leave it out
         else:
-            new = _redact_wamd(payload, chunk.id, mode, decimals)
-        if new is not None:
-            out[i] = new
-    return out
+            edited = _redact_wamd(meta, mode, decimals)
+        if edited:
+            new = meta.to_chunk_bytes()
+            old = parser.chunks[chunk_id][i]
+            parser.chunks[chunk_id][i] = WAVChunk(
+                id=chunk_id, size=len(new), data=new, offset=old.offset
+            )
+            changed = True
+    return changed
+
+
+def _metadata_errors() -> tuple[type[BaseException], ...]:
+    import struct
+
+    from riffy.exceptions import RiffyError
+
+    # riffy's own errors, plus what its metadata codecs raise on malformed payloads.
+    return (RiffyError, OSError, ValueError, IndexError, struct.error)
+
+
+def _open_header_only(path: Path):
+    from riffy import WAVParser
+
+    return WAVParser(path, read_audio=False)
 
 
 def wav_has_location(filepath: str | Path) -> bool:
     """Whether a WAV's GUANO or WAMD metadata carries a location (audio is not read)."""
-    from riffy.exceptions import RiffyError
-
     path = _check_wav(filepath)
     try:
-        with _riffy_warnings_to_log(path), path.open("rb") as f:
-            _, chunks, _ = _walk_chunks(f)
-            return bool(_redacted_payloads(f, chunks, "strip", 0))
-    except (RiffyError, OSError, ValueError, IndexError) as e:
+        with _riffy_warnings_to_log(path):
+            return any(
+                _has_location(chunk_id, meta)
+                for chunk_id, _, meta in _location_chunks(_open_header_only(path))
+            )
+    except _metadata_errors() as e:
         raise AudioLoadError(f"Cannot read recorder metadata: {filepath}: {e}") from e
 
 
 def rewrite_wav_location(src: str | Path, dest: str | Path, mode: str, decimals: int = 2) -> bool:
     """Write ``src`` to ``dest`` with its GUANO/WAMD location rounded or stripped.
 
-    Streams the audio across, so memory use doesn't grow with file size, and
-    works for any audio format. Only the location-bearing metadata payloads
-    change; every other chunk is copied byte for byte.
+    The audio is streamed across by riffy, so memory use doesn't grow with file
+    size, and any audio format works. RF64/BW64 sources stay RF64/BW64. riffy
+    writes chunks in its own order (``fmt``, ``data``, then the rest by ID), so
+    the copy's layout can differ from the source's; every chunk's content other
+    than the redacted metadata is unchanged.
 
     Returns:
         True if ``src`` carried a location and ``dest`` was written.
@@ -315,57 +303,17 @@ def rewrite_wav_location(src: str | Path, dest: str | Path, mode: str, decimals:
     Raises:
         AudioLoadError: If ``src`` can't be parsed or the copy can't be written.
     """
-    import struct
-
-    from riffy.exceptions import RiffyError
-
     path = _check_wav(src)
     try:
-        with _riffy_warnings_to_log(path), path.open("rb") as f:
-            form, chunks, ds64 = _walk_chunks(f)
-            replaced = _redacted_payloads(f, chunks, mode, decimals)
-            if not replaced:
+        with _riffy_warnings_to_log(path):
+            parser = _open_header_only(path)
+            if not _redact_parser(parser, mode, decimals):
                 return False
-
-            def size_of(i: int) -> int:
-                return len(replaced[i]) if i in replaced else chunks[i].size
-
-            riff_size = 4 + sum(8 + size_of(i) + (size_of(i) & 1) for i in range(len(chunks)))
-            if form not in _RF64_FORMS and riff_size > _MAX_U32:
-                raise AudioLoadError("redacted file would exceed the 4 GB RIFF limit")
-
-            out_path = Path(dest)
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            with out_path.open("wb") as out:
-                header_size = _MAX_U32 if form in _RF64_FORMS else riff_size
-                out.write(form + struct.pack("<I", header_size) + b"WAVE")
-                for i, chunk in enumerate(chunks):
-                    size = size_of(i)
-                    if chunk.id == "ds64" and ds64 is not None:
-                        payload = struct.pack("<Q", riff_size) + ds64[8:]
-                        out.write(b"ds64" + struct.pack("<I", len(payload)) + payload)
-                        continue
-                    stored = _MAX_U32 if size > _MAX_U32 else size
-                    if form in _RF64_FORMS and chunk.id == "data":
-                        stored = _MAX_U32
-                    out.write(chunk.id.encode("latin-1") + struct.pack("<I", stored))
-                    if i in replaced:
-                        out.write(replaced[i])
-                    else:
-                        f.seek(chunk.offset)
-                        remaining = size
-                        while remaining:
-                            block = f.read(min(_COPY_BLOCK, remaining))
-                            if not block:
-                                raise AudioLoadError(f"{chunk.id!r} chunk is truncated")
-                            out.write(block)
-                            remaining -= len(block)
-                    if size & 1:
-                        out.write(b"\x00")
+            out = Path(dest)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            parser.write_wav(out, force_rf64=parser.is_rf64)
             return True
-    except AudioLoadError:
-        raise
-    except (RiffyError, OSError, ValueError, IndexError, struct.error) as e:
+    except _metadata_errors() as e:
         raise AudioLoadError(f"Cannot rewrite recorder metadata: {src}: {e}") from e
 
 

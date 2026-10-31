@@ -476,7 +476,7 @@ class TestRedactWavLocation:
         _pcm_wav(bad)
         with open(bad, "ab") as f:  # a guan chunk cut off mid-payload
             f.write(b"guan" + (400).to_bytes(4, "little") + b"GUANO|Version: 1.0\nLoc Posi")
-        with pytest.raises(DatasetError, match="bad.wav.*truncated"):
+        with pytest.raises(DatasetError, match="bad.wav.*[Ii]ncomplete chunk: guan"):
             redact_wav_location(bad, tmp_path / "out.wav", "strip")
 
     def test_not_a_wav_is_an_error(self, tmp_path) -> None:
@@ -594,3 +594,31 @@ class TestStreamingRewrite:
         _guano_wav(tmp_path / "ds" / "rec.wave")
         staged = redacted_audio_files(tmp_path / "ds", "strip", 2, tmp_path / "work")
         assert list(staged) == ["rec.wave"]
+
+
+class TestMalformedRecorderMetadata:
+    def test_guano_without_version_is_detected_and_redacted(self, tmp_path) -> None:
+        from bioamla.datasets import redact_wav_location, wavs_with_location
+
+        src = tmp_path / "a.wav"
+        _pcm_wav(src)
+        _append_chunk(src, "guan", b"Loc Position: 36.523456 -82.218765\nMake: X\n")
+
+        assert wavs_with_location(tmp_path) == ["a.wav"]
+        assert redact_wav_location(src, tmp_path / "out" / "a.wav", "round", 1)
+        guano = _guano(tmp_path / "out" / "a.wav")
+        assert guano.loc_position == (36.5, -82.2)
+        assert guano.version == "1.0"
+
+    @pytest.mark.parametrize("mode", ["round", "strip"])
+    def test_unreadable_wamd_waypoint_is_removed(self, tmp_path, mode) -> None:
+        from riffy import WamdMetadata
+        from riffy.metadata.wamd import GPSFIRST_ID
+
+        from bioamla.datasets import redact_wav_location
+
+        _wamd_wav(tmp_path / "a.wav", waypoint="garbage")
+        # Rounding can't read it, so it is removed rather than uploaded as-is.
+        assert redact_wav_location(tmp_path / "a.wav", tmp_path / "o.wav", mode)
+        wamd = WamdMetadata.from_bytes(_chunks(tmp_path / "o.wav")["wamd"])
+        assert wamd.get_raw(GPSFIRST_ID) is None

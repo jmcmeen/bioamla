@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -478,7 +478,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.28.0" },
     { name = "rich", marker = "extra == 'cli'" },
     { name = "rich", marker = "extra == 'dev'" },
-    { name = "riffy", specifier = ">=0.3.3" },
+    { name = "riffy", specifier = ">=0.3.9" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.17,<0.18" },
     { name = "scikit-learn", specifier = ">=1.0.0" },
     { name = "scipy" },
@@ -4596,11 +4596,11 @@ wheels = [
 
 [[package]]
 name = "riffy"
-version = "0.3.4"
+version = "0.3.9"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f1/e0/56ef4e135d6dbbc14a9971da06e223620d8c6c7986dc1c159f96cdd08e75/riffy-0.3.4.tar.gz", hash = "sha256:7ade375fec740541a22a607701596c4a81d3d1e2dd25357b74c9bc1a30f24ef0", size = 51004, upload-time = "2026-10-27T14:56:48.544Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/66/a68a710c50e281c44d61cb2047c78291bb70d496b24af684dde9f63eafbc/riffy-0.3.9.tar.gz", hash = "sha256:9f0635627df3d55a654d4b584054635a7af9f10c49f70f082f326dd560900307", size = 55993, upload-time = "2026-10-31T06:16:17.585Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/b9/5a0a35b693d3adb385f3d655f33c6ddb34629f55e060fd8c0e05a0529762/riffy-0.3.4-py3-none-any.whl", hash = "sha256:eff4a9d8804be84f3802d14a0ec38c81ef288bcdca369adc3856c6866f7380cc", size = 52931, upload-time = "2026-10-27T14:56:47.094Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/4c/1e65d80a426e58bedae9d7cd7c9a148f021417b735f31b2db055fa56f712/riffy-0.3.9-py3-none-any.whl", hash = "sha256:fd447ca56e409645903d10a23b4cf543e741b9e83b9d8a97505748483410c055", size = 56783, upload-time = "2026-10-31T06:16:16.055Z" },
 ]
 
 [[package]]
