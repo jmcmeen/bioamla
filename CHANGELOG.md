@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-31
+
 ### Added
 
 - `models ast evaluate` reports per-class precision, recall, F1 and support and the files it
@@ -427,7 +429,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/jmcmeen/bioamla/compare/v0.3.2...v0.3.3
 [0.3.1]: https://github.com/jmcmeen/bioamla/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/jmcmeen/bioamla/compare/v0.2.26...v0.3.0
 [0.2.15]: https://github.com/jmcmeen/bioamla/compare/v0.2.14...v0.2.15
