@@ -133,10 +133,10 @@ class TestBatchIndexFiles:
 
 class TestIndicesRow:
     def test_selection_keeps_companions_and_context(self, test_audio_dir: str) -> None:
-        from bioamla.indices import indices_row
+        from bioamla.indices.compute import _indices_row
 
         path = sorted(Path(test_audio_dir).glob("*.wav"))[0]
-        row = indices_row(path, ["ndsi", "h_temporal"])
+        row = _indices_row(path, ["ndsi", "h_temporal"])
         assert list(row) == [
             "filepath",
             "ndsi",
@@ -148,9 +148,23 @@ class TestIndicesRow:
             "success",
         ]
 
-    def test_unknown_index_rejected(self, test_audio_dir: str) -> None:
-        from bioamla.indices import indices_row
+    def test_entropy_conflict_rejected(self, test_audio_dir: str) -> None:
+        from bioamla.indices.compute import _indices_row
 
         path = sorted(Path(test_audio_dir).glob("*.wav"))[0]
-        with pytest.raises(InvalidInputError, match="Unknown indices: nope"):
-            indices_row(path, ["aci", "nope"])
+        with pytest.raises(InvalidInputError, match="include_entropy=False"):
+            _indices_row(path, ["h_spectral"], include_entropy=False)
+
+    @pytest.mark.parametrize(("names", "match"), [([], "at least one"), (["aci", "nope"], "nope")])
+    def test_check_index_names(self, names, match) -> None:
+        from bioamla.indices import check_index_names
+
+        with pytest.raises(InvalidInputError, match=match):
+            check_index_names(names)
+
+    def test_csv_columns_when_first_file_fails(self, test_audio_dir: str, tmp_path) -> None:
+        (Path(test_audio_dir) / "_broken.wav").write_bytes(b"not audio")  # sorts first
+        result = batch_index_files(test_audio_dir, tmp_path, indices=["aci"])
+        header = (tmp_path / "indices.csv").read_text().splitlines()[0]
+        assert header == "filepath,aci,sample_rate,duration,success,error"
+        assert result.failed == 1

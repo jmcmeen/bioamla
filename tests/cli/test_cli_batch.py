@@ -913,3 +913,31 @@ def test_indices_unknown_name_rejected(runner, test_audio_dir):
     )
     assert result.exit_code != 0
     assert "Unknown indices: bogus" in result.output
+
+
+def test_indices_default_columns_unchanged(runner, test_audio_dir, tmp_path):
+    out = tmp_path / "out"
+    result = runner.invoke(
+        cli, ["batch", "index", "--input-dir", test_audio_dir, "--output-dir", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    header = (out / "indices.csv").read_text().splitlines()[0].split(",")
+    assert header == [
+        "filepath",
+        "aci",
+        "adi",
+        "aei",
+        "bio",
+        "ndsi",
+        "anthrophony",
+        "biophony",
+        "sample_rate",
+        "duration",
+        "success",
+    ]
+
+
+def test_indices_empty_selection_rejected(runner, test_audio_dir):
+    result = runner.invoke(cli, ["batch", "index", "--input-dir", test_audio_dir, "--indices", ","])
+    assert result.exit_code != 0
+    assert "at least one index" in result.output

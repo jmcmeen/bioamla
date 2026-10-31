@@ -809,11 +809,15 @@ _ROW_CONTEXT = ("sample_rate", "duration")
 
 def check_index_names(indices: list[str]) -> None:
     """
-    Check that every name is in :data:`AVAILABLE_INDICES`.
+    Check an index selection: at least one name, each in :data:`AVAILABLE_INDICES`.
 
     Raises:
-        InvalidInputError: Naming the unknown indices.
+        InvalidInputError: If the selection is empty or names unknown indices.
     """
+    if not indices:
+        raise InvalidInputError(
+            f"Select at least one index. Available: {', '.join(AVAILABLE_INDICES)}"
+        )
     unknown = sorted(set(indices) - set(AVAILABLE_INDICES))
     if unknown:
         raise InvalidInputError(
@@ -821,11 +825,13 @@ def check_index_names(indices: list[str]) -> None:
         )
 
 
-def indices_row(
+def _indices_row(
     filepath: str | Path, indices: list[str] | None = None, **kwargs: Any
 ) -> dict[str, Any]:
     """
-    Compute one file's indices as a flat row: ``filepath``, the values, ``success``.
+    Compute one file's indices as a flat CSV row: ``filepath``, values, ``success``.
+
+    The caller validates ``indices`` with :func:`check_index_names` first.
 
     Args:
         filepath: Audio file path.
@@ -839,12 +845,13 @@ def indices_row(
         The row dict.
 
     Raises:
-        InvalidInputError: If ``indices`` names an unknown index.
+        InvalidInputError: If an entropy index is selected with
+            ``include_entropy=False``.
     """
-    if indices is not None:
-        check_index_names(indices)
-        if any(name.startswith("h_") for name in indices):
-            kwargs.setdefault("include_entropy", True)
+    if indices is not None and any(name.startswith("h_") for name in indices):
+        if kwargs.get("include_entropy") is False:
+            raise InvalidInputError("h_spectral/h_temporal were selected but include_entropy=False")
+        kwargs["include_entropy"] = True
 
     values = compute_indices_from_file(filepath, **kwargs).to_dict()
     if indices is not None:
@@ -857,8 +864,8 @@ def indices_row(
     return {"filepath": str(filepath), **values, "success": True}
 
 
-def failed_indices_row(filepath: str | Path, error: Exception) -> dict[str, Any]:
-    """The row :func:`indices_row` callers record for a file that failed."""
+def _failed_indices_row(filepath: str | Path, error: Exception) -> dict[str, Any]:
+    """The row :func:`_indices_row` callers record for a file that failed."""
     return {"filepath": str(filepath), "success": False, "error": str(error)}
 
 
@@ -902,9 +909,9 @@ def batch_compute_indices(
         if verbose:
             logger.info(f"[{position[filepath]}/{len(unique)}] Processing {filepath}")
         try:
-            by_path[filepath] = indices_row(filepath, **kwargs)
+            by_path[filepath] = _indices_row(filepath, **kwargs)
         except Exception as e:
-            by_path[filepath] = failed_indices_row(filepath, e)
+            by_path[filepath] = _failed_indices_row(filepath, e)
             raise
 
     run_batch(unique, _compute, max_workers=max_workers, on_progress=on_progress)
