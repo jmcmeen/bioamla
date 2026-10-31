@@ -497,7 +497,9 @@ def batch_process(
             logger.info(f"  Processed: {out_path}")
         return out_path
 
-    result = run_batch(files, _process, max_workers=max_workers, on_progress=on_progress)
+    result = run_batch(
+        files, _process, max_workers=max_workers, on_progress=on_progress, operation="process"
+    )
 
     return {
         "files_processed": result.successful,

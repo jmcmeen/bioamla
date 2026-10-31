@@ -914,7 +914,9 @@ def batch_compute_indices(
             by_path[filepath] = _failed_indices_row(filepath, e)
             raise
 
-    run_batch(unique, _compute, max_workers=max_workers, on_progress=on_progress)
+    run_batch(
+        unique, _compute, max_workers=max_workers, on_progress=on_progress, operation="indices"
+    )
     return [by_path[p] for p in paths]
 
 

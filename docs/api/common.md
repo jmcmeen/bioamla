@@ -40,6 +40,18 @@ this on the first line:
     options:
       show_root_heading: false
 
+## Logging
+
+Library records about files, batches and training runs carry structured fields
+(`operation`, `file`, `index`, `total`, `run_id`, `epoch`, `elapsed_s`, `status`,
+`error`). Per-item and per-step records are logged at DEBUG; a training run's start
+and end at INFO. From the command line, `bioamla --log-format json --log-level debug
+<command>` writes them to stderr as JSON lines.
+
+::: bioamla.common.log
+    options:
+      show_root_heading: false
+
 ## Files
 
 ::: bioamla.common.files

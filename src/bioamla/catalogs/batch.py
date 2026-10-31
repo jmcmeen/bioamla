@@ -40,6 +40,7 @@ def batch_download_xeno_canto(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="download-xeno-canto",
     )
 
 
@@ -70,6 +71,7 @@ def batch_download_macaulay(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="download-macaulay",
     )
 
 
@@ -95,4 +97,5 @@ def batch_lookup_species(
         max_workers=1,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="lookup-species",
     )

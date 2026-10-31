@@ -304,7 +304,9 @@ def analyze_audio_batch(
         if verbose:
             logger.info(f"[{position[filepath]}/{len(unique)}] Analyzed: {filepath}")
 
-    run_batch(unique, _analyze, max_workers=max_workers, on_progress=on_progress)
+    run_batch(
+        unique, _analyze, max_workers=max_workers, on_progress=on_progress, operation="analyze"
+    )
     return [by_path[p] for p in paths if p in by_path]
 
 

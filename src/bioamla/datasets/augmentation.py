@@ -326,7 +326,9 @@ def batch_augment(
             if verbose:
                 logger.info(f"  Created: {out_path}")
 
-    result = run_batch(files, _augment, max_workers=max_workers, on_progress=on_progress)
+    result = run_batch(
+        files, _augment, max_workers=max_workers, on_progress=on_progress, operation="augment"
+    )
 
     return {
         "files_processed": result.successful,

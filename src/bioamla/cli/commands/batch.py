@@ -63,6 +63,19 @@ def _build_config(
     )
 
 
+def _operation() -> str:
+    """The running command's path without the program name (e.g. ``batch audio info``),
+    used as the ``operation`` field on the batch engine's log records."""
+    ctx = click.get_current_context(silent=True)
+    if ctx is None:
+        return "batch"
+    names = []
+    while ctx.parent is not None:
+        names.append(ctx.info_name or "")
+        ctx = ctx.parent
+    return " ".join(reversed(names)) or "batch"
+
+
 def _require_input_dir(config: BatchConfig) -> str:
     """Return the input directory, or raise if it was not provided."""
     if not config.input_dir:
@@ -139,6 +152,7 @@ def _run_csv_merge(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
     out_csv = write_csv(context)
     if not config.quiet:
@@ -176,6 +190,7 @@ def _run_csv_transform(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
     out_csv = write_csv(context)
     if not config.quiet:
@@ -206,6 +221,7 @@ def _run_csv_process(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
     write_csv(context)
     return result
@@ -248,6 +264,7 @@ def _run_csv_segment(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
 
     # Expand rows BEFORE writing the CSV.
@@ -299,6 +316,7 @@ def _run_csv_predict_segments(
         _process,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
 
     new_rows = []
@@ -425,6 +443,7 @@ def _run_audio_transform(config: BatchConfig, processor, *, sample_rate=None) ->
         recursive=config.recursive,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
+        operation=_operation(),
     )
 
 
@@ -553,7 +572,13 @@ def audio_validate(input_dir, input_file, output_dir, max_workers, recursive, qu
                 raise AudioLoadError(f"{path}: {row['error']}")
             return str(path)
 
-        result = run_batch(files, _validate, max_workers=config.max_workers, continue_on_error=True)
+        result = run_batch(
+            files,
+            _validate,
+            max_workers=config.max_workers,
+            continue_on_error=True,
+            operation=_operation(),
+        )
         rows.sort(key=lambda r: r["file_name"])
         result.skipped = sum(1 for r in rows if r["valid"] == "skipped")
 
@@ -615,7 +640,13 @@ def audio_metadata(input_dir, input_file, output_dir, max_workers, recursive, qu
             rows.append(row)
             return str(path)
 
-        result = run_batch(files, _meta, max_workers=config.max_workers, continue_on_error=True)
+        result = run_batch(
+            files,
+            _meta,
+            max_workers=config.max_workers,
+            continue_on_error=True,
+            operation=_operation(),
+        )
         result.skipped = len(all_files) - len(files)
         rows.sort(key=lambda r: r["file_name"])
 

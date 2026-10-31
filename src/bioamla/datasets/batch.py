@@ -100,4 +100,5 @@ def batch_convert_annotations(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="convert-annotations",
     )

@@ -1486,5 +1486,6 @@ def batch_detect(
         max_workers=max_workers,
         continue_on_error=False,
         on_progress=on_progress,
+        operation="detect",
     )
     return {p: by_path[p] for p in unique}

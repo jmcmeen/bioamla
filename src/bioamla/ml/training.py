@@ -11,9 +11,12 @@ this module stays light.
 from __future__ import annotations
 
 import logging
+import time
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from bioamla.common.log import log_fields
 from bioamla.exceptions import TrainingCancelled, TrainingError
 from bioamla.ml.ast_service import TrainProgress, TrainResult
 
@@ -286,9 +289,18 @@ _EVAL_BOOKKEEPING = {"eval_runtime", "eval_samples_per_second", "eval_steps_per_
 def _progress_callback(
     on_progress: Callable[[TrainProgress], None] | None,
     should_stop: Callable[[], bool] | None,
+    run_id: str | None = None,
+    started: float | None = None,
 ) -> Any:
-    """Build the ``TrainerCallback`` behind ``train_ast``'s progress and cancel hooks."""
+    """Build the ``TrainerCallback`` behind ``train_ast``'s progress and cancel hooks.
+
+    It also logs each progress report at DEBUG, with the run's structured fields
+    (``run_id``, step as ``index``/``total``, ``epoch``, ``elapsed_s``).
+    """
     from transformers import TrainerCallback
+
+    if started is None:
+        started = time.monotonic()
 
     class _ProgressCallback(TrainerCallback):
         def __init__(self) -> None:
@@ -297,7 +309,24 @@ def _progress_callback(
             self.eval_metrics: dict[str, float] = {}
 
         def _report(self, state) -> None:
-            if on_progress is not None and state.is_world_process_zero:
+            if not state.is_world_process_zero:
+                return
+            logger.debug(
+                "Training step %d/%d (epoch %.2f, loss %s)",
+                state.global_step,
+                state.max_steps,
+                float(state.epoch or 0.0),
+                self.loss,
+                **log_fields(
+                    operation="train",
+                    run_id=run_id,
+                    index=state.global_step,
+                    total=state.max_steps,
+                    epoch=round(float(state.epoch or 0.0), 4),
+                    elapsed_s=round(time.monotonic() - started, 3),
+                ),
+            )
+            if on_progress is not None:
                 on_progress(
                     TrainProgress(
                         step=state.global_step,
@@ -443,6 +472,10 @@ def train_ast(
         describe_augmentation_pipeline,
     )
     from datasets import Audio, Dataset, DatasetDict
+
+    run_id = uuid.uuid4().hex[:12]
+    started = time.monotonic()
+    logger.info("Training run %s started", run_id, **log_fields(operation="train", run_id=run_id))
 
     if augmentation is not None:
         _validate_augmentation(augmentation)
@@ -763,18 +796,14 @@ def train_ast(
         raise TrainingError("Expected DatasetDict for trainer setup")
 
     _check_stop("training")
-    progress = (
-        _progress_callback(on_progress, should_stop)
-        if on_progress is not None or should_stop is not None
-        else None
-    )
+    progress = _progress_callback(on_progress, should_stop, run_id, started)
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_data,
         eval_dataset=eval_data,
         compute_metrics=compute_metrics,
-        callbacks=[progress] if progress is not None else None,
+        callbacks=[progress],
     )
 
     import multiprocessing
@@ -789,7 +818,7 @@ def train_ast(
     run_status = "FAILED"  # MLflow status unless training and saving complete
     try:
         trainer.train()
-        cancelled = progress is not None and progress.cancelled
+        cancelled = progress.cancelled
 
         if cancelled:
             run_status = "KILLED"
@@ -830,10 +859,24 @@ def train_ast(
         _cleanup_step("collect garbage", gc.collect)
         _cleanup_step("stop dataloader workers", _stop_workers)
 
+        status = {"FINISHED": "finished", "KILLED": "cancelled"}.get(run_status, "failed")
+        (logger.error if status == "failed" else logger.info)(
+            "Training run %s %s",
+            run_id,
+            status,
+            **log_fields(
+                operation="train",
+                run_id=run_id,
+                status=status,
+                elapsed_s=round(time.monotonic() - started, 3),
+            ),
+        )
+
     if cancelled:
         raise TrainingCancelled("Training cancelled; no model was saved")
 
     return TrainResult(
+        run_id=run_id,
         model_path=best_model_path,
         epochs=num_train_epochs,
         final_accuracy=final_accuracy,

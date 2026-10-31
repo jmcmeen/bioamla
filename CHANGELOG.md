@@ -20,6 +20,13 @@ All notable changes to this project are documented here. The format is based on
 - JSON Schema for every config: `bioamla system schema [NAME]`, `config_schema()` and
   `validate_config()` in `bioamla.common.config`. The schemas are also published under
   `docs/schemas/`, so editors can complete and check a training config file.
+- Structured fields on log records. The batch engine and every batch function attach
+  `operation`, `file`, `index`, `total`, `elapsed_s` (and `error` or `status`); `train_ast` attaches
+  `run_id`, the step as `index`/`total`, `epoch` and a final `status` (finished, cancelled or
+  failed). The names are documented in `bioamla.common.log.LOG_FIELDS`. `run_batch` and
+  `run_csv_batch` take an `operation` name, and `TrainResult` has the run's `run_id`.
+- `bioamla --log-format json` writes log records to stderr as JSON lines with those fields
+  (`bioamla.common.log.JsonFormatter`), and `--log-level` sets the level for any command.
 
 ### Deprecated
 

@@ -124,7 +124,9 @@ def batch_generate_spectrograms(
             logger.info(f"  Generated: {output_path}")
         return output_path
 
-    result = run_batch(files, _generate, max_workers=max_workers, on_progress=on_progress)
+    result = run_batch(
+        files, _generate, max_workers=max_workers, on_progress=on_progress, operation="spectrogram"
+    )
 
     return {
         "files_processed": result.successful,

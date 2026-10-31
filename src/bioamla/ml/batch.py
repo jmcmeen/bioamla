@@ -97,6 +97,7 @@ def batch_predict_files(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="predict",
     )
     result.metadata = {"predictions": predictions}
     return result
@@ -181,6 +182,7 @@ def batch_predict_segments(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="predict-segments",
     )
     result.metadata = {"segments": segments}
     return result
@@ -249,6 +251,7 @@ def batch_embed_files(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="embed",
     )
 
 

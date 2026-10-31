@@ -74,6 +74,7 @@ def batch_index_files(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="indices",
     )
     rows = [by_path[f] for f in files if f in by_path]
     result.metadata["rows"] = rows

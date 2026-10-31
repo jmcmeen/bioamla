@@ -143,6 +143,7 @@ def batch_detect_dir(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="detect",
     )
     # Input order, whichever order the workers finished in.
     aggregated = [by_path[f] for f in files if f in by_path]

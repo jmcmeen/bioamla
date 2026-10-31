@@ -83,6 +83,7 @@ def batch_transform_files(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="transform",
     )
 
 
@@ -167,6 +168,7 @@ def batch_convert_files(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="convert",
     )
 
 
@@ -300,6 +302,7 @@ def batch_info_files(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="info",
     )
     rows = [by_path[f] for f in files if f in by_path]
     result.metadata["rows"] = rows
@@ -375,6 +378,7 @@ def batch_segment_files(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
+        operation="segment",
     )
     result.output_files = [str(seg.segment_path) for f in files for seg in by_path.get(f, [])]
     return result

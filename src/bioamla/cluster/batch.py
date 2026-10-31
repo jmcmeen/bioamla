@@ -195,7 +195,13 @@ def cluster_embedding_files(
         loaded.append((str(path), load_embedding_file(path)))
         return None
 
-    result = run_batch(files, _load, continue_on_error=continue_on_error, on_progress=on_progress)
+    result = run_batch(
+        files,
+        _load,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+        operation="load-embeddings",
+    )
 
     if not loaded:
         return result
