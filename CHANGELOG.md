@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-10-31
+
 ### Added
 
 - Arbimon annotations: an `arbimon` format for the CSV layout of Arbimon's pattern-matching ROI
@@ -505,7 +507,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/jmcmeen/bioamla/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/jmcmeen/bioamla/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/jmcmeen/bioamla/compare/v0.3.2...v0.3.3
 [0.3.1]: https://github.com/jmcmeen/bioamla/compare/v0.3.0...v0.3.1
