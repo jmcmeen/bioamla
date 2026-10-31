@@ -129,8 +129,14 @@ def extract_audio_clips(
                 filename = f"{audio_stem}_{i:04d}.{format}"
             else:
                 dest_dir = output_path
-                if include_label_in_filename and ann.label:
-                    safe_label = ann.label.replace(" ", "_").replace("/", "-")
+                # Same cleaning as the label directories, but keeping case; a
+                # label with nothing usable left is simply left out.
+                safe_label = (
+                    sanitize_filename(ann.label, lowercase=False).strip("_")
+                    if include_label_in_filename and ann.label
+                    else ""
+                )
+                if safe_label:
                     filename = f"{audio_stem}_{i:04d}_{safe_label}.{format}"
                 else:
                     filename = f"{audio_stem}_{i:04d}.{format}"

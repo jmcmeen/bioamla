@@ -9,7 +9,7 @@ SRC := src
 TESTS := tests
 
 .PHONY: help install sync lock upgrade dev shell \
-        test test-fast cov bench \
+        test test-fast cov \
         lint fmt fmt-check check \
         docs docs-serve \
         clean
@@ -53,9 +53,6 @@ cov: ## Run tests with coverage report
 	# with the pytest-cov plugin disabled (-p no:cov) to avoid the same path.
 	COVERAGE_CORE=sysmon $(UV) run coverage run -m pytest -p no:cov
 	$(UV) run coverage report -m
-
-bench: ## Run benchmark tests only
-	$(UV) run pytest --benchmark-only
 
 ## --- Linting & formatting (ruff) ---
 

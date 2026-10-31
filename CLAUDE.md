@@ -13,8 +13,8 @@ clustering, species catalogs, dataset tooling, and AST-based ML inference.
 - **0.2.x is a ground-up rebuild.** The old layered architecture (core/services/models/
   repository) was torn out and replaced by flat, domain-oriented packages. APIs may still
   change. When in doubt, favor **removing/simplifying over adding** — keep the core lean.
-- Python **≥ 3.10**, `src/` layout, package `bioamla`, CLI entry point `bioamla` →
-  `bioamla.cli.cli:main`.
+- Python **≥ 3.10**, `src/` layout, package `bioamla`, console script `bioamla` →
+  `bioamla._cli_entry:main` (a shim that runs `bioamla.cli.cli:main`).
 - Tooling: **uv** for envs/deps, **ruff** for lint+format, **pytest** for tests, **mkdocs**
   for docs. Drive everything through the `Makefile`.
 
@@ -115,7 +115,7 @@ returned to a caller (e.g. `AcousticIndices`, `AudioData`, `AudioMetadata`).
   beside its domain.
 - Shared fixtures live in `tests/conftest.py` (e.g. `sample_audio_data`, `test_audio_path`,
   `test_audio_dir`) — reuse them; they generate synthetic sine-wave audio, no fixture files.
-- Markers (strict — `--strict-markers`): `slow`, `integration`, `requires_cuda`, `benchmark`.
+- Markers (strict — `--strict-markers`): `slow`, `integration`, `requires_cuda`.
   Mark accordingly. `make test-fast` deselects `slow`/`integration`.
 - Guard tests that need heavy/optional backends with `pytest.importorskip("torch")` so the
   suite stays green on a slim install **and** a full one.

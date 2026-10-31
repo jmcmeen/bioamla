@@ -278,3 +278,21 @@ def ulaw_wav(tmp_path):
         + b"\xff" * 800
     )
     return path
+
+
+@pytest.fixture
+def make_tone_wav(tmp_path):
+    """Factory: ``make_tone_wav(name, [(freq_hz, amplitude), ...], seconds=2.0)`` -> path.
+
+    Writes a 16 kHz, 16-bit WAV that is the sum of the given sine tones.
+    """
+    import scipy.io.wavfile as wav
+
+    def make(name: str, tones, seconds: float = 2.0, sample_rate: int = 16000) -> str:
+        t = np.arange(int(sample_rate * seconds)) / sample_rate
+        signal = sum(amp * np.sin(2 * np.pi * freq * t) for freq, amp in tones)
+        path = tmp_path / name
+        wav.write(str(path), sample_rate, (np.asarray(signal) * 32767).astype(np.int16))
+        return str(path)
+
+    return make
