@@ -9,9 +9,14 @@ bioamla uses [uv](https://docs.astral.sh/uv/) for environments and
 [ruff](https://docs.astral.sh/ruff/) + [pytest](https://docs.pytest.org/) for
 quality. Everything is driven through the `Makefile`.
 
+Only the maintainer can push to this repository, so contributions come in as pull
+requests from a fork. Fork [jmcmeen/bioamla](https://github.com/jmcmeen/bioamla) on
+GitHub, then clone your fork:
+
 ```bash
-git clone https://github.com/jmcmeen/bioamla
+git clone https://github.com/YOUR-USERNAME/bioamla.git   # your fork
 cd bioamla
+git remote add upstream https://github.com/jmcmeen/bioamla.git
 make install      # uv sync --extra dev — full runtime stack + tooling
 make check        # lint + format-check + tests (the gate before a PR)
 ```
@@ -21,11 +26,14 @@ You'll also need **ffmpeg** on your system for audio I/O
 
 ## Development workflow
 
-- Branch off `main` (development happens on `dev-*` branches).
+- In your fork, branch from an up-to-date `upstream/main`, named after the kind of
+  change (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`, ...):
+  `git fetch upstream && git switch -c fix/short-description --no-track upstream/main`.
 - Make your change with a test that covers it.
 - Run `make fmt` to auto-format, then `make check` — it must pass.
-- Open a PR against `main`. CI runs lint, format-check, and the test matrix
-  (Python 3.10–3.14) on pull requests.
+- Push the branch to your fork and open a PR against `main` here. CI runs lint,
+  format-check, and the test matrix (Python 3.10–3.14) on the PR, and the
+  maintainer reviews and merges it.
 
 ```bash
 make test         # pytest
