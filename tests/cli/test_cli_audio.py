@@ -219,7 +219,8 @@ def test_metadata_json(runner, mocker):
     )
     result = runner.invoke(cli, ["audio", "metadata", "file.wav", "--json"])
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output)["guano"] == {"Make": "X"}
+    assert json.loads(result.stdout)["guano"] == {"Make": "X"}  # unchanged bare JSON
+    assert "deprecated" in result.stderr
     dump.assert_called_once_with("file.wav")
 
 

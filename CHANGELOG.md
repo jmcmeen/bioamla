@@ -39,6 +39,10 @@ All notable changes to this project are documented here. The format is based on
   next to the best model, and the final status: finished, cancelled or failed. `MLflowTracker`
   and `TensorBoardTracker` are included in `bioamla.ml`. A tracker that fails only logs a
   warning.
+- `bioamla --json <command>`: machine-readable output for scripts and agents. stdout gets
+  exactly one JSON envelope (`{"bioamla", "command", "ok", "result"}`, or `"error": {"type",
+  "message"}` on failure), and everything meant for people goes to stderr. `annotation summary`,
+  `audio metadata` and `dataset stats` report results so far; the other commands follow.
 
 ### Changed
 
@@ -52,6 +56,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Deprecated
 
+- The per-command `--json` flags of `annotation summary`, `audio metadata` and `dataset stats`.
+  They still print bare JSON (now with a note on stderr); use `bioamla --json <command>`.
 - `bioamla.datasets.AugmentationConfig` is renamed `WaveformAugmentationConfig`, and
   `bioamla.ml.AugmentationConfig` is renamed `SpectrogramAugmentationConfig`. The two were
   unrelated classes with the same name. The old names still work and emit a

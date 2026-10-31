@@ -92,23 +92,35 @@ def audio_info(path: str, show_metadata: bool) -> None:
     "--json",
     "output_json",
     is_flag=True,
-    help="Dump every field of every standard as JSON instead of the flat summary.",
+    help="Deprecated: bare JSON of every field. Use `bioamla --json audio metadata` instead.",
 )
 def audio_metadata(path: str, output_json: bool) -> None:
     """Show recorder metadata embedded in a WAV file.
 
     Prints the flattened view (when, where, which device) that bioamla datasets use.
-    With --json, prints everything riffy decoded, per standard. For chunk-level
+    With `bioamla --json`, the result holds the flattened view (``summary``) and
+    everything riffy decoded, per standard (``standards``). For chunk-level
     inspection and editing use the `riffy` command directly.
     """
-    import json as json_lib
-
     from bioamla.audio import dump_recording_metadata, get_recording_metadata
     from bioamla.cli.console import print_kv, print_warning
+    from bioamla.cli.output import emit_result, json_mode, legacy_json
 
     try:
+        if json_mode():
+            # Both reads are header-only. The flat summary is what datasets use;
+            # "standards" has every decoded field, per standard.
+            standards = dump_recording_metadata(path)
+            emit_result(
+                {
+                    "file": standards.pop("file", path),
+                    "summary": get_recording_metadata(path).to_dict(),
+                    "standards": standards,
+                }
+            )
+            return
         if output_json:
-            click.echo(json_lib.dumps(dump_recording_metadata(path), indent=2))
+            legacy_json(dump_recording_metadata(path))
             return
         meta = get_recording_metadata(path)
     except BioamlaError as e:
