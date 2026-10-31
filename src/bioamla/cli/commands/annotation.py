@@ -169,19 +169,22 @@ def annotation_convert(
     default=None,
     help="Annotation format (auto-detected from extension if not specified)",
 )
-@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
-def annotation_summary(path: str, file_format: str, output_json: str) -> None:
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    help="Deprecated: bare JSON. Use `bioamla --json annotation summary` instead.",
+)
+def annotation_summary(path: str, file_format: str, output_json: bool) -> None:
     """Display summary statistics for an annotation file."""
-    import json
-
-    from bioamla.cli.console import echo, print_error, print_header, print_kv
+    from bioamla.cli.console import echo, print_header, print_kv
+    from bioamla.cli.output import emit_result, json_mode, legacy_json
     from bioamla.datasets import summarize_annotations
 
     input_path = Path(path)
 
     if not input_path.exists():
-        print_error(f"File not found: {path}")
-        raise SystemExit(1)
+        raise click.ClickException(f"File not found: {path}")
 
     file_format = _detect_format(input_path, file_format)
 
@@ -192,8 +195,10 @@ def annotation_summary(path: str, file_format: str, output_json: str) -> None:
 
     summary = summarize_annotations(annotations)
 
-    if output_json:
-        click.echo(json.dumps(summary, indent=2))
+    if json_mode():
+        emit_result(summary)
+    elif output_json:
+        legacy_json(summary)
     else:
         print_header(f"\nAnnotation Summary: {path}")
         echo("=" * 50)

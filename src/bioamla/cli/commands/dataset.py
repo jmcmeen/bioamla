@@ -171,12 +171,16 @@ def dataset_extract_clips(
 @click.option(
     "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
 )
-@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    help="Deprecated: bare JSON. Use `bioamla --json dataset stats` instead.",
+)
 def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -> None:
     """Show summary statistics for a dataset's metadata.csv."""
-    import json as json_lib
-
     from bioamla.cli.console import echo, print_header, print_kv
+    from bioamla.cli.output import emit_result, json_mode, legacy_json
     from bioamla.datasets import get_dataset_stats
 
     try:
@@ -184,8 +188,11 @@ def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if json_mode():
+        emit_result(stats)
+        return
     if output_json:
-        click.echo(json_lib.dumps(stats, indent=2))
+        legacy_json(stats)
         return
 
     print_header(f"\nDataset Statistics: {dataset_dir}")
