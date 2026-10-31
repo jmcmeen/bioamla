@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `bioamla --json <command>`: machine-readable output for scripts and agents. stdout gets
+  exactly one JSON envelope (`{"bioamla", "command", "ok", "result"}`, or `"error": {"type",
+  "message"}` on failure), and everything meant for people goes to stderr. `annotation summary`,
+  `audio metadata` and `dataset stats` report results so far; the other commands follow.
+
+### Deprecated
+
+- The per-command `--json` flags of `annotation summary`, `audio metadata` and `dataset stats`.
+  They still print bare JSON (now with a note on stderr); use `bioamla --json <command>`.
+
 ## [0.3.1] - 2026-10-31
 
 ### Added
