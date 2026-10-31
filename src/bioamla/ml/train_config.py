@@ -24,7 +24,9 @@ from bioamla.common.config import config_dataclass
 from bioamla.exceptions import InvalidInputError
 
 Probability = Annotated[float, Field(ge=0.0, le=1.0)]
-Strategy = Literal["epoch", "steps", "no"]
+# transformers' IntervalStrategy and SaveStrategy values.
+EvalStrategy = Literal["epoch", "steps", "no"]
+SaveStrategy = Literal["epoch", "steps", "no", "best"]
 
 
 # Every key is optional: a key left out falls back to the command-line value.
@@ -46,8 +48,8 @@ class AstTrainingSection:
     learning_rate: Annotated[float, Field(gt=0.0)] | None = None
     epochs: Annotated[int, Field(ge=1)] | None = None
     batch_size: Annotated[int, Field(ge=1)] | None = None
-    eval_strategy: Strategy | None = None
-    save_strategy: Strategy | None = None
+    eval_strategy: EvalStrategy | None = None
+    save_strategy: SaveStrategy | None = None
     eval_steps: Annotated[int, Field(ge=1)] | None = None
     save_steps: Annotated[int, Field(ge=1)] | None = None
     logging_steps: Annotated[int, Field(ge=1)] | None = None
@@ -121,7 +123,7 @@ learning_rate = 5.0e-5       # Initial learning rate
 epochs = 1                   # Number of training epochs
 batch_size = 8               # Per-device training batch size
 eval_strategy = "epoch"      # "epoch", "steps", or "no"
-save_strategy = "epoch"      # "epoch", "steps", or "no"
+save_strategy = "epoch"      # "epoch", "steps", "best", or "no"
 eval_steps = 1               # Steps between evals (only when eval_strategy = "steps")
 save_steps = 1               # Steps between checkpoints (only when save_strategy = "steps")
 logging_steps = 100          # Steps between log lines

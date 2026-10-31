@@ -21,6 +21,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from bioamla.exceptions import InvalidInputError
+
 #: Structured fields bioamla attaches to log records: name -> meaning.
 LOG_FIELDS: dict[str, str] = {
     "operation": (
@@ -47,11 +49,11 @@ def log_fields(**fields: Any) -> dict[str, dict[str, Any]]:
         >>> logger.info("Segmented %s", path, **log_fields(file=str(path), index=3, total=10))
 
     Raises:
-        ValueError: If a name isn't in :data:`LOG_FIELDS` (a bug in the caller).
+        InvalidInputError: If a name isn't in :data:`LOG_FIELDS` (a bug in the caller).
     """
     unknown = sorted(set(fields) - set(LOG_FIELDS))
     if unknown:
-        raise ValueError(f"Unknown log fields {unknown}; add them to LOG_FIELDS first")
+        raise InvalidInputError(f"Unknown log fields {unknown}; add them to LOG_FIELDS first")
     return {"extra": {k: v for k, v in fields.items() if v is not None}}
 
 

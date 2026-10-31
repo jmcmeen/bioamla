@@ -455,3 +455,16 @@ def test_train_config_template_matches_schema_and_flag_map() -> None:
     assert template_keys == schema_keys
     # Every schema key overlays exactly one CLI flag.
     assert set(_TRAIN_CONFIG_MAP.values()) == schema_keys
+
+
+def test_train_config_accepts_transformers_strategies() -> None:
+    pytest.importorskip("torch")
+    from transformers.trainer_utils import IntervalStrategy, SaveStrategy
+
+    from bioamla.common.config import validate_config
+    from bioamla.ml.train_config import AstTrainConfigFile
+
+    for save in SaveStrategy:
+        validate_config(AstTrainConfigFile, {"training": {"save_strategy": save.value}})
+    for interval in IntervalStrategy:
+        validate_config(AstTrainConfigFile, {"training": {"eval_strategy": interval.value}})
