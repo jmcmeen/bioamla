@@ -159,22 +159,26 @@ def discover_files(
     return sorted(files)
 
 
-def write_rows_csv(path: str | Path, rows: list[dict[str, Any]]) -> Path:
+def write_rows_csv(
+    path: str | Path, rows: list[dict[str, Any]], fieldnames: list[str] | None = None
+) -> Path:
     """
-    Write dict rows to a CSV whose columns are every key, in first-seen order.
+    Write dict rows to a CSV.
 
     Args:
         path: Destination CSV path (parent directories are created).
         rows: Rows to write; they may have different keys.
+        fieldnames: Column order. Defaults to every key, in first-seen order.
 
     Returns:
         The written path.
     """
-    fieldnames: list[str] = []
-    for row in rows:
-        for key in row:
-            if key not in fieldnames:
-                fieldnames.append(key)
+    if fieldnames is None:
+        fieldnames = []
+        for row in rows:
+            for key in row:
+                if key not in fieldnames:
+                    fieldnames.append(key)
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="", encoding="utf-8") as f:
@@ -213,10 +217,23 @@ def output_stems(files: list[str], root: str | Path) -> dict[str, Path]:
     counts: dict[Path, int] = {}
     for stem in plain.values():
         counts[stem] = counts.get(stem, 0) + 1
-    return {
-        f: plain[f] if counts[plain[f]] == 1 else r.parent / f"{r.stem}_{r.suffix.lstrip('.')}"
-        for f, r in rel.items()
-    }
+
+    # Unique stems keep their plain name; colliding ones take their extension,
+    # plus a counter if that name is taken too (a.wav + a.mp3 + a_wav.flac).
+    stems: dict[str, Path] = {}
+    taken = {stem for stem in plain.values() if counts[stem] == 1}
+    for f, r in rel.items():
+        if counts[plain[f]] == 1:
+            stems[f] = plain[f]
+            continue
+        candidate = r.parent / f"{r.stem}_{r.suffix.lstrip('.')}"
+        n = 2
+        while candidate in taken:
+            candidate = r.parent / f"{r.stem}_{r.suffix.lstrip('.')}_{n}"
+            n += 1
+        taken.add(candidate)
+        stems[f] = candidate
+    return stems
 
 
 # =============================================================================

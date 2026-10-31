@@ -194,6 +194,8 @@ def segment_audio_file(
     Raises:
         InvalidInputError: If ``duration`` is not positive or ``overlap`` is not
             smaller than ``duration``.
+
+    If writing fails partway, the segments already written are removed.
     """
     if duration <= 0:
         raise InvalidInputError("--duration must be positive.")
@@ -213,22 +215,28 @@ def segment_audio_file(
     segments: list[SegmentInfo] = []
     count = 0
     start_idx = 0
-    while start_idx < n:
-        end_idx = min(start_idx + seg_samples, n)
-        chunk = audio[..., start_idx:end_idx] if audio.ndim > 1 else audio[start_idx:end_idx]
-        seg_out = out_dir / f"{stem}_seg{count:04d}.wav"
-        save_audio(str(seg_out), chunk, sr)
-        segments.append(
-            SegmentInfo(
-                segment_path=seg_out,
-                segment_id=count,
-                start_time=start_idx / sr,
-                end_time=end_idx / sr,
-                duration=(end_idx - start_idx) / sr,
+    try:
+        while start_idx < n:
+            end_idx = min(start_idx + seg_samples, n)
+            chunk = audio[..., start_idx:end_idx] if audio.ndim > 1 else audio[start_idx:end_idx]
+            seg_out = out_dir / f"{stem}_seg{count:04d}.wav"
+            save_audio(str(seg_out), chunk, sr)
+            segments.append(
+                SegmentInfo(
+                    segment_path=seg_out,
+                    segment_id=count,
+                    start_time=start_idx / sr,
+                    end_time=end_idx / sr,
+                    duration=(end_idx - start_idx) / sr,
+                )
             )
-        )
-        count += 1
-        start_idx += step
+            count += 1
+            start_idx += step
+    except Exception:
+        # Don't leave a partial set behind for a later run to mix with.
+        for seg in segments:
+            seg.segment_path.unlink(missing_ok=True)
+        raise
 
     return segments
 
@@ -343,6 +351,7 @@ def batch_segment_files(
     if not in_dir.exists():
         raise NotFoundError(f"Input directory not found: {in_dir}")
 
+    out_dir.mkdir(parents=True, exist_ok=True)
     files = [str(f) for f in list_audio_files(str(in_dir), recursive=recursive)]
     stems = output_stems(files, in_dir)
     by_path: dict[str, list[SegmentInfo]] = {}

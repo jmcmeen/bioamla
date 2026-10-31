@@ -710,11 +710,6 @@ def audio_video(
 
     bar = ProgressBar(description="Rendering frames", disable=quiet)
 
-    def on_progress(done: int, total: int) -> None:
-        if bar.total is None:
-            bar.set_total(total)
-        bar.advance()
-
     try:
         with bar:
             result = generate_spectrogram_video(
@@ -738,7 +733,7 @@ def audio_video(
                 waveform=waveform,
                 show_axes=axes,
                 include_audio=include_audio,
-                on_progress=on_progress,
+                on_progress=bar.on_progress,
             )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e

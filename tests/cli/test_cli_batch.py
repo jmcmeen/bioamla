@@ -654,7 +654,7 @@ def test_indices_calculate_dir(runner, test_audio_dir, tmp_path, mocker):
             raise ProcessingError("boom")
         return mocker.Mock(to_dict=lambda: {"aci": 1.0})
 
-    mocker.patch("bioamla.indices.batch.compute_indices_from_file", side_effect=fake_compute)
+    mocker.patch("bioamla.indices.compute.compute_indices_from_file", side_effect=fake_compute)
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
@@ -875,3 +875,41 @@ def test_cluster_csv(runner, csv_with_audio, tmp_path, mocker):
         ],
     )
     assert result.exit_code == 0
+
+
+def test_indices_selection_applies(runner, test_audio_dir, tmp_path):
+    out = tmp_path / "out"
+    result = runner.invoke(
+        cli,
+        [
+            "batch",
+            "index",
+            "--input-dir",
+            test_audio_dir,
+            "--output-dir",
+            str(out),
+            "--indices",
+            "aci,ndsi,h_spectral",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    header = (out / "indices.csv").read_text().splitlines()[0].split(",")
+    assert header == [
+        "filepath",
+        "aci",
+        "ndsi",
+        "anthrophony",
+        "biophony",
+        "sample_rate",
+        "duration",
+        "h_spectral",
+        "success",
+    ]
+
+
+def test_indices_unknown_name_rejected(runner, test_audio_dir):
+    result = runner.invoke(
+        cli, ["batch", "index", "--input-dir", test_audio_dir, "--indices", "aci,bogus"]
+    )
+    assert result.exit_code != 0
+    assert "Unknown indices: bogus" in result.output

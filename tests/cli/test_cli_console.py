@@ -28,6 +28,14 @@ def test_progressbar_context_and_advance():
     assert pb.completed == 3
 
 
+def test_progressbar_on_progress_callback():
+    with ProgressBar(description="Test", disable=True) as pb:
+        pb.on_progress(1, 4)
+        pb.on_progress(3, 4)
+        assert pb.total == 4
+        assert pb.completed == 3
+
+
 def test_progressbar_update_and_set_total():
     with ProgressBar(total=10, disable=True) as pb:
         pb.update(completed=5, description="halfway")

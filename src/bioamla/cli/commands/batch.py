@@ -33,6 +33,7 @@ from bioamla.batch import (
     run_csv_batch,
     update_row_path,
     write_csv,
+    write_rows_csv,
 )
 from bioamla.cli.batch_options import batch_input_options, batch_output_options
 from bioamla.cli.options import max_workers_option, quiet_option, recursive_option
@@ -85,20 +86,6 @@ def _report(result, output_dir: str | None, quiet: bool, saved_hint: str | None 
         print_success(summary)
     if output_dir and saved_hint:
         print_success(f"Results saved to {output_dir}/{saved_hint}")
-
-
-def _progress(description: str, quiet: bool):
-    """Return a :class:`ProgressBar` and the ``on_progress`` callback that drives it."""
-    from bioamla.cli.console import ProgressBar
-
-    bar = ProgressBar(description=description, disable=quiet)
-
-    def on_progress(done: int, total: int) -> None:
-        if bar.total is None:
-            bar.set_total(total)
-        bar.update(completed=done)
-
-    return bar, on_progress
 
 
 def _stty_sane() -> None:
@@ -458,7 +445,7 @@ def audio_info(input_dir, input_file, output_dir, max_workers, recursive, quiet)
     """Extract audio file metadata (duration, sample rate, channels, format, etc.)."""
     from bioamla.audio.batch import batch_info_files
     from bioamla.audio.info import get_audio_info
-    from bioamla.cli.console import print_header
+    from bioamla.cli.console import ProgressBar, print_header
 
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
@@ -480,32 +467,20 @@ def audio_info(input_dir, input_file, output_dir, max_workers, recursive, quiet)
             _report(result, None, quiet)
             return
 
-        bar, on_progress = _progress("Reading metadata", quiet)
+        bar = ProgressBar(description="Reading metadata", disable=quiet)
         with bar:
             result = batch_info_files(
                 _require_input_dir(config),
                 output_dir or None,
                 recursive=recursive,
                 max_workers=config.max_workers,
-                on_progress=on_progress,
+                on_progress=bar.on_progress,
             )
         _report(result, output_dir if result.output_files else None, quiet, "audio_info.csv")
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
     finally:
         _stty_sane()
-
-
-def _write_rows_csv(output_dir: str, name: str, rows: list[dict], fieldnames: list[str]) -> None:
-    """Write ``rows`` to ``output_dir/name`` with a fixed column order."""
-    import csv
-
-    out_path = Path(output_dir) / name
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 @audio.command("validate")
@@ -573,8 +548,8 @@ def audio_validate(input_dir, input_file, output_dir, max_workers, recursive, qu
         result.skipped = sum(1 for r in rows if r["valid"] == "skipped")
 
         if output_dir:
-            _write_rows_csv(
-                output_dir, "validation_report.csv", rows, ["file_name", "valid", "error"]
+            write_rows_csv(
+                Path(output_dir) / "validation_report.csv", rows, ["file_name", "valid", "error"]
             )
         _report(result, output_dir, quiet, saved_hint="validation_report.csv")
         if result.failed:
@@ -635,9 +610,8 @@ def audio_metadata(input_dir, input_file, output_dir, max_workers, recursive, qu
         rows.sort(key=lambda r: r["file_name"])
 
         if output_dir and rows:
-            _write_rows_csv(
-                output_dir,
-                "recorder_metadata.csv",
+            write_rows_csv(
+                Path(output_dir) / "recorder_metadata.csv",
                 rows,
                 ["file_name", *RECORDING_METADATA_FIELDS],
             )
@@ -934,7 +908,7 @@ def audio_segment(
 ) -> None:
     """Batch segment audio files into fixed-duration chunks."""
     from bioamla.audio.batch import batch_segment_files, segment_audio_file
-    from bioamla.cli.console import print_header
+    from bioamla.cli.console import ProgressBar, print_header
 
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
@@ -958,7 +932,7 @@ def audio_segment(
         if not output_dir:
             raise InvalidInputError("--output-dir is required for this command.")
 
-        bar, on_progress = _progress("Segmenting", quiet)
+        bar = ProgressBar(description="Segmenting", disable=quiet)
         with bar:
             result = batch_segment_files(
                 in_dir,
@@ -967,11 +941,13 @@ def audio_segment(
                 overlap=overlap,
                 recursive=recursive,
                 max_workers=config.max_workers,
-                on_progress=on_progress,
+                on_progress=bar.on_progress,
             )
         _report(result, output_dir, quiet)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+    finally:
+        _stty_sane()
 
 
 @audio.command("visualize")
@@ -1052,16 +1028,21 @@ def _run_detect(config: BatchConfig, method: str, output_dir, quiet, recursive, 
         _report(result, None, quiet)
         return
 
+    from bioamla.cli.console import ProgressBar
+
     in_dir = _require_input_dir(config)
     out_dir = output_dir or in_dir
-    result = batch_detect_dir(
-        in_dir,
-        out_dir,
-        method=method,
-        recursive=recursive,
-        max_workers=config.max_workers,
-        **params,
-    )
+    bar = ProgressBar(description=f"Detecting ({method})", disable=quiet)
+    with bar:
+        result = batch_detect_dir(
+            in_dir,
+            out_dir,
+            method=method,
+            recursive=recursive,
+            max_workers=config.max_workers,
+            on_progress=bar.on_progress,
+            **params,
+        )
     _report(result, output_dir, quiet, saved_hint=f"detections_{method}.json")
 
 
@@ -1283,37 +1264,40 @@ def detect_accelerating(
 @quiet_option
 def batch_index(input_dir, input_file, output_dir, indices, max_workers, recursive, quiet) -> None:
     """Batch calculate acoustic indices for audio files."""
-    from bioamla.cli.console import print_header
+    from bioamla.cli.console import ProgressBar, print_header
     from bioamla.cli.logging_setup import configure_cli_logging
-    from bioamla.indices import batch_index_files, compute_indices_from_file
+    from bioamla.indices import batch_index_files, check_index_names, indices_row
 
     configure_cli_logging()
     try:
         config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        selected = [name.strip() for name in indices.split(",") if name.strip()]
+        check_index_names(selected)
         if not quiet:
             print_header("Calculating acoustic indices...")
 
         if config.input_file:
 
             def _analyze(path: Path) -> dict:
-                result = compute_indices_from_file(path).to_dict()
-                # Drop redundant filename/path-ish keys before merge.
-                result.pop("filepath", None)
-                result.pop("filename", None)
+                result = indices_row(path, selected)
+                # Drop the bookkeeping columns before merging into the CSV row.
+                for key in ("filepath", "success"):
+                    result.pop(key, None)
                 return result
 
             result = _run_csv_merge(config, _analyze)
             _report(result, None, quiet)
             return
 
-        bar, on_progress = _progress("Calculating indices", quiet)
+        bar = ProgressBar(description="Calculating indices", disable=quiet)
         with bar:
             result = batch_index_files(
                 _require_input_dir(config),
                 output_dir or None,
+                indices=selected,
                 recursive=recursive,
                 max_workers=config.max_workers,
-                on_progress=on_progress,
+                on_progress=bar.on_progress,
             )
         _report(result, output_dir if result.output_files else None, quiet, "indices.csv")
     except BioamlaError as e:
@@ -1581,7 +1565,7 @@ def cluster_batch(
     quiet,
 ) -> None:
     """Batch cluster embedding files from a directory or a metadata CSV."""
-    from bioamla.cli.console import print_header
+    from bioamla.cli.console import ProgressBar, print_header
     from bioamla.cluster import cluster_batch_files
 
     try:
@@ -1596,27 +1580,33 @@ def cluster_batch(
 
             context = _csv_context(config)
             embedding_paths = [str(row.file_path) for row in context.rows]
-            result = cluster_embedding_files(
-                embedding_paths,
+            bar = ProgressBar(description="Loading embeddings", disable=quiet)
+            with bar:
+                result = cluster_embedding_files(
+                    embedding_paths,
+                    output_dir,
+                    method=method,
+                    n_clusters=n_clusters,
+                    min_cluster_size=min_cluster_size,
+                    min_samples=min_samples,
+                    on_progress=bar.on_progress,
+                )
+            write_csv(context)
+            _report(result, output_dir, quiet, saved_hint="cluster_assignments.json")
+            return
+
+        bar = ProgressBar(description="Loading embeddings", disable=quiet)
+        with bar:
+            result = cluster_batch_files(
+                input_dir,
                 output_dir,
                 method=method,
                 n_clusters=n_clusters,
                 min_cluster_size=min_cluster_size,
                 min_samples=min_samples,
+                recursive=recursive,
+                on_progress=bar.on_progress,
             )
-            write_csv(context)
-            _report(result, output_dir, quiet, saved_hint="cluster_assignments.json")
-            return
-
-        result = cluster_batch_files(
-            input_dir,
-            output_dir,
-            method=method,
-            n_clusters=n_clusters,
-            min_cluster_size=min_cluster_size,
-            min_samples=min_samples,
-            recursive=recursive,
-        )
         _report(result, output_dir, quiet, saved_hint="cluster_assignments.json")
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
