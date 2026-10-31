@@ -1,0 +1,653 @@
+"""Frame-level spectral descriptors, log-mel spectrogram, MFCCs and timbre trajectory.
+
+:func:`frame_features` describes a recording one short frame at a time, so you can
+follow how a call's pitch, bandwidth or tonality moves rather than summarising the
+whole clip (which :func:`~bioamla.audio.get_frequency_stats` does).
+
+The analysis:
+
+1. A Hann-windowed STFT (``n_fft`` 1024, or 2048 above 60 kHz; hop ``n_fft / 4``).
+2. Optional stationary noise-floor subtraction: for each frequency bin, a low
+   percentile of its magnitude over (up to) 300 evenly spaced frames, scaled up a
+   little, is subtracted from every frame. Wind, hiss and hum stay out of the
+   descriptors; transient calls come through.
+3. Per-frame descriptors over the ``f_min``–``f_max`` band, from the denoised
+   magnitude spectrum (flatness from the raw one, where silence is still noise-like):
+
+   | Descriptor | Meaning |
+   | --- | --- |
+   | `level_db` | frame power in dB relative to the loudest frame |
+   | `centroid_hz` | magnitude-weighted mean frequency |
+   | `spread_hz` | magnitude-weighted standard deviation around the centroid |
+   | `flatness` | geometric / arithmetic mean of the magnitudes (1 = noise-like) |
+   | `crest` | peak / mean magnitude (high = tonal) |
+   | `rolloff_hz` | frequency below which 85% of the magnitude lies |
+   | `flux` | change from the previous frame, normalised by both frames' level (0 for the first frame) |
+   | `peak_hz` | frequency of the strongest bin |
+   | `low_hz` | lowest frequency within 20 dB of the frame's peak |
+   | `high_hz` | highest frequency within 20 dB of the frame's peak |
+
+4. A log-mel spectrogram (triangular filters over ``f_min``–``f_max``, power in dB
+   relative to the loudest band, floored at -40 dB so leftover noise can't swing the
+   cepstrum) and MFCCs (an unnormalised DCT-II of the log-mel frames).
+
+:func:`mfcc_trajectory` then follows the recording through timbre space: the
+MFCCs of the frames above a level gate are projected onto their principal axes.
+
+Only numpy is needed, so this works on the base install.
+"""
+
+from __future__ import annotations
+
+import logging
+import math
+from dataclasses import asdict, dataclass, field, replace
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal
+
+import numpy as np
+
+from bioamla.common.config import config_dataclass
+from bioamla.exceptions import InvalidInputError, NotFoundError
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+#: Descriptor names, in the column order of :meth:`FrameFeatures.to_dataframe`.
+DESCRIPTORS: tuple[str, ...] = (
+    "level_db",
+    "centroid_hz",
+    "spread_hz",
+    "flatness",
+    "crest",
+    "rolloff_hz",
+    "flux",
+    "peak_hz",
+    "low_hz",
+    "high_hz",
+)
+
+_MIN_FRAMES = 8
+_EQUALIZE_SPAN = 2.2  # "equalize" scaling: puts most frames within about +-1
+
+
+@config_dataclass
+class FrameFeatureConfig:
+    """Settings for :func:`frame_features`.
+
+    ``n_fft``, ``hop`` and ``f_max`` default to values derived from the sample rate:
+    ``n_fft`` 1024 (2048 above 60 kHz), ``hop`` ``n_fft // 4``, and ``f_max`` the
+    lower of 92% of Nyquist and 16 kHz.
+
+    Attributes:
+        n_fft: FFT size in samples.
+        hop: Samples between frame starts.
+        n_mels: Number of mel bands.
+        n_mfcc: Number of MFCCs, including c0.
+        f_min: Lower edge of the analysis band in Hz.
+        f_max: Upper edge of the analysis band in Hz.
+        denoise: Subtract the stationary noise floor before measuring.
+        noise_percentile: Percentile (0-1) of each bin's magnitude taken as its noise floor.
+        noise_scale: Factor applied to that percentile before subtracting.
+    """
+
+    n_fft: int | None = None
+    hop: int | None = None
+    n_mels: int = 40
+    n_mfcc: int = 13
+    f_min: float = 250.0
+    f_max: float | None = None
+    denoise: bool = True
+    noise_percentile: float = 0.2
+    noise_scale: float = 1.8
+
+    def __post_init__(self) -> None:
+        checks = [
+            (
+                self.n_fft is None or self.n_fft >= 16,
+                f"n_fft must be at least 16, got {self.n_fft}",
+            ),
+            (self.hop is None or self.hop >= 1, f"hop must be at least 1, got {self.hop}"),
+            (self.n_mels >= 2, f"n_mels must be at least 2, got {self.n_mels}"),
+            (
+                1 <= self.n_mfcc <= self.n_mels,
+                f"n_mfcc must be between 1 and n_mels ({self.n_mels}), got {self.n_mfcc}",
+            ),
+            (self.f_min >= 0, f"f_min must not be negative, got {self.f_min}"),
+            (
+                self.f_max is None or self.f_max > self.f_min,
+                f"f_max must be above f_min ({self.f_min:g}), got {self.f_max}",
+            ),
+            (
+                0 <= self.noise_percentile <= 1,
+                f"noise_percentile must be between 0 and 1, got {self.noise_percentile}",
+            ),
+            (self.noise_scale >= 0, f"noise_scale must not be negative, got {self.noise_scale}"),
+        ]
+        for ok, message in checks:
+            if not ok:
+                raise InvalidInputError(message)
+
+
+@dataclass
+class FrameFeatures:
+    """Per-frame analysis of a recording, from :func:`frame_features`.
+
+    Attributes:
+        sample_rate: Sample rate of the analysed audio in Hz.
+        n_fft: FFT size used.
+        hop: Hop between frames in samples.
+        f_min: Lower edge of the analysis band in Hz.
+        f_max: Upper edge of the analysis band in Hz.
+        duration: Length of the audio in seconds.
+        times: Centre time of each frame in seconds, shape ``(frames,)``.
+        descriptors: Descriptor name -> per-frame values, see :data:`DESCRIPTORS`.
+        mel_db: Log-mel spectrogram in dB, shape ``(frames, n_mels)``.
+        mfcc: MFCCs, shape ``(frames, n_mfcc)``.
+        config: The settings used, with derived values filled in.
+    """
+
+    sample_rate: float
+    n_fft: int
+    hop: int
+    f_min: float
+    f_max: float
+    duration: float
+    times: np.ndarray
+    descriptors: dict[str, np.ndarray]
+    mel_db: np.ndarray
+    mfcc: np.ndarray
+    config: FrameFeatureConfig = field(repr=False)
+
+    @property
+    def n_frames(self) -> int:
+        """Number of frames."""
+        return len(self.times)
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """One row per frame: ``time``, the descriptors, then ``mfcc_0``..``mfcc_<n-1>``."""
+        import pandas as pd
+
+        columns: dict[str, np.ndarray] = {"time": self.times}
+        columns.update({name: self.descriptors[name] for name in DESCRIPTORS})
+        for k in range(self.mfcc.shape[1]):
+            columns[f"mfcc_{k}"] = self.mfcc[:, k]
+        return pd.DataFrame(columns)
+
+    def to_dict(self) -> dict[str, Any]:
+        """The analysis settings (``config`` included) plus per-frame values as lists."""
+        return {
+            "sample_rate": self.sample_rate,
+            "n_fft": self.n_fft,
+            "hop": self.hop,
+            "f_min": self.f_min,
+            "f_max": self.f_max,
+            "duration": self.duration,
+            "n_frames": self.n_frames,
+            "times": self.times.tolist(),
+            "descriptors": {k: v.tolist() for k, v in self.descriptors.items()},
+            "mel_db": self.mel_db.tolist(),
+            "mfcc": self.mfcc.tolist(),
+            "config": asdict(self.config),
+        }
+
+
+def _resolve(config: FrameFeatureConfig, sample_rate: float) -> FrameFeatureConfig:
+    """Fill in the sample-rate dependent defaults and check them against Nyquist."""
+    if not (math.isfinite(sample_rate) and sample_rate > 0):
+        raise InvalidInputError(f"sample_rate must be a positive number, got {sample_rate}")
+    n_fft = config.n_fft if config.n_fft is not None else (2048 if sample_rate > 60000 else 1024)
+    hop = config.hop if config.hop is not None else n_fft // 4
+    f_max = config.f_max if config.f_max is not None else min(sample_rate / 2 * 0.92, 16000.0)
+    if not config.f_min < f_max <= sample_rate / 2:
+        raise InvalidInputError(
+            f"need f_min < f_max <= Nyquist ({sample_rate / 2:g} Hz), "
+            f"got f_min={config.f_min:g}, f_max={f_max:g}"
+        )
+    return replace(config, n_fft=n_fft, hop=hop, f_max=float(f_max))
+
+
+def _mel_filterbank(n_mels: int, bin_idx: np.ndarray, bin_hz: float, f_min: float, f_max: float):
+    """Triangular mel filters over the given FFT bins, shape ``(n_mels, len(bin_idx))``."""
+    lo, hi = (2595 * np.log10(1 + f / 700) for f in (f_min, f_max))
+    mels = lo + (hi - lo) * np.arange(n_mels + 2) / (n_mels + 1)
+    edges = 700 * (10 ** (mels / 2595) - 1) / bin_hz  # in bins
+    a, c, b = edges[:-2, None], edges[1:-1, None], edges[2:, None]
+    k = bin_idx[None, :]
+    return np.clip(np.minimum((k - a) / (c - a), (b - k) / (b - c)), 0, None)
+
+
+def _to_mono(audio: np.ndarray) -> np.ndarray:
+    """1-D float64 samples; 2-D input is averaged over its channel axis.
+
+    ``(samples, channels)`` is the usual layout; a short first axis (at most 8, and
+    shorter than the second) is read as ``(channels, samples)``.
+    """
+    audio = np.asarray(audio, dtype=np.float64)
+    if audio.ndim == 1:
+        return audio
+    if audio.ndim == 2:
+        channels_first = audio.shape[0] <= 8 and audio.shape[0] < audio.shape[1]
+        return audio.mean(axis=0 if channels_first else 1)
+    raise InvalidInputError(f"audio must be 1-D or 2-D (samples x channels), got {audio.shape}")
+
+
+_CHUNK_FRAMES = 2048  # frames transformed at a time, to bound memory on long recordings
+
+
+def frame_features(
+    audio: np.ndarray, sample_rate: float, config: FrameFeatureConfig | None = None
+) -> FrameFeatures:
+    """Spectral descriptors, log-mel spectrogram and MFCCs for every frame.
+
+    See the module docstring for what is measured and how. The recording is
+    processed in blocks of frames, so memory stays bounded on long files.
+
+    Args:
+        audio: Samples, shape ``(samples,)``. 2-D input (``(samples, channels)``, or
+            ``(channels, samples)`` with at most 8 channels) is averaged to mono.
+        sample_rate: Sample rate in Hz.
+        config: Analysis settings. ``None`` uses the defaults.
+
+    Returns:
+        :class:`FrameFeatures`.
+
+    Raises:
+        InvalidInputError: If the audio is too short (fewer than 8 frames), the
+            sample rate is not positive, or a setting is out of range.
+
+    Example:
+        >>> from bioamla.audio import frame_features, load_audio
+        >>> audio, sr = load_audio("wren.wav")
+        >>> features = frame_features(audio, sr)
+        >>> features.to_dataframe()[["time", "centroid_hz", "flatness"]].head()
+    """
+    config = _resolve(config or FrameFeatureConfig(), sample_rate)
+    audio = _to_mono(audio)
+    n_fft, hop, f_max = config.n_fft, config.hop, config.f_max
+    assert n_fft is not None and hop is not None and f_max is not None  # resolved
+
+    n_frames = (len(audio) - n_fft) // hop + 1 if len(audio) >= n_fft else 0
+    if n_frames < _MIN_FRAMES:
+        raise InvalidInputError(
+            f"audio is too short to analyze: {len(audio) / sample_rate:.3f} s gives "
+            f"{n_frames} frames of {n_fft} samples, need at least {_MIN_FRAMES}"
+        )
+
+    bins = n_fft // 2 + 1
+    bin_hz = sample_rate / n_fft
+    b_lo = max(1, math.ceil(config.f_min / bin_hz))
+    b_hi = min(bins - 1, math.floor(f_max / bin_hz))
+    if b_hi < b_lo:
+        raise InvalidInputError(
+            f"the band {config.f_min:g}-{f_max:g} Hz holds no FFT bins at n_fft={n_fft}"
+        )
+    band = slice(b_lo, b_hi + 1)
+    bin_idx = np.arange(b_lo, b_hi + 1, dtype=np.float64)
+    count = len(bin_idx)
+
+    window = np.hanning(n_fft)  # symmetric: 0.5 - 0.5 cos(2 pi i / (N - 1))
+    framed = np.lib.stride_tricks.sliding_window_view(audio, n_fft)[::hop][:n_frames]  # a view
+
+    def band_magnitude(rows: np.ndarray) -> np.ndarray:
+        return np.abs(np.fft.rfft(rows * window, axis=1))[:, band]
+
+    if config.denoise:
+        probes = min(n_frames, 300)
+        idx = (np.arange(probes) * (n_frames - 1)) // max(1, probes - 1)
+        rank = min(int(probes * config.noise_percentile), probes - 1)
+        noise = np.sort(band_magnitude(framed[idx]), axis=0)[rank] * config.noise_scale
+    else:
+        noise = np.zeros(count)
+
+    filters = _mel_filterbank(config.n_mels, bin_idx, bin_hz, config.f_min, f_max)
+    out = {name: np.empty(n_frames) for name in DESCRIPTORS}
+    power = np.empty(n_frames)
+    mel = np.empty((n_frames, config.n_mels))
+    prev = np.zeros(count)
+    prev_level = 0.0
+
+    for lo in range(0, n_frames, _CHUNK_FRAMES):
+        hi = min(lo + _CHUNK_FRAMES, n_frames)
+        raw = band_magnitude(framed[lo:hi])
+        m = np.maximum(raw - noise, 0.0)
+
+        total = m.sum(axis=1)
+        pw = (m * m).sum(axis=1)
+        peak = m.max(axis=1)
+        peak_bin = np.where(peak > 0, b_lo + m.argmax(axis=1), b_lo)
+        has = total > 0
+        safe_total = np.where(has, total, 1.0)
+        centroid = np.where(has, (m * bin_idx).sum(axis=1) / safe_total, peak_bin)
+        spread = np.where(
+            has, np.sqrt((m * (bin_idx - centroid[:, None]) ** 2).sum(axis=1) / safe_total), 0.0
+        )
+        # Flatness from the raw spectrum, where silence still looks like noise.
+        raw_mean = raw.mean(axis=1)
+        flatness = np.where(
+            raw_mean > 0,
+            np.exp(np.log(raw + 1e-9).mean(axis=1)) / np.where(raw_mean > 0, raw_mean, 1.0),
+            0.0,
+        )
+        mean = total / count
+        crest = np.where(mean > 0, peak / np.where(mean > 0, mean, 1.0), 0.0)
+        rolloff = b_lo + np.argmax(np.cumsum(m, axis=1) >= (total * 0.85)[:, None], axis=1)
+        above = m > (peak * 0.1)[:, None]  # within 20 dB of the frame's peak magnitude
+        any_above = above.any(axis=1)
+        low = np.where(any_above, b_lo + above.argmax(axis=1), peak_bin)
+        high = np.where(any_above, b_hi - above[:, ::-1].argmax(axis=1), peak_bin)
+
+        before = np.vstack([prev[None, :], m[:-1]])
+        level = np.sqrt(pw)
+        level_before = np.concatenate([[prev_level], level[:-1]])
+        flux = np.sqrt(((m - before) ** 2).sum(axis=1)) / (level + level_before + 1e-9)
+
+        out["centroid_hz"][lo:hi] = centroid * bin_hz
+        out["spread_hz"][lo:hi] = spread * bin_hz
+        out["flatness"][lo:hi] = flatness
+        out["crest"][lo:hi] = crest
+        out["rolloff_hz"][lo:hi] = rolloff * bin_hz
+        out["flux"][lo:hi] = flux
+        out["peak_hz"][lo:hi] = peak_bin * bin_hz
+        out["low_hz"][lo:hi] = low * bin_hz
+        out["high_hz"][lo:hi] = high * bin_hz
+        power[lo:hi] = pw
+        mel[lo:hi] = (m * m) @ filters.T
+        prev, prev_level = m[-1], level[-1]
+
+    out["flux"][0] = 0.0  # the first frame has nothing before it to change from
+    out["level_db"] = 10 * np.log10(power / (power.max() or 1.0) + 1e-10)
+    mel_db = 10 * np.log10(mel / (mel.max() or 1.0) + 1e-4)
+    k = np.arange(config.n_mfcc)[:, None]
+    n = np.arange(config.n_mels)[None, :]
+    mfcc = mel_db @ np.cos(np.pi * k * (n + 0.5) / config.n_mels).T
+
+    logger.debug("Analyzed %d frames (n_fft=%d, hop=%d)", n_frames, n_fft, hop)
+    return FrameFeatures(
+        sample_rate=sample_rate,
+        n_fft=n_fft,
+        hop=hop,
+        f_min=float(config.f_min),
+        f_max=float(f_max),
+        duration=len(audio) / sample_rate,
+        times=(np.arange(n_frames) * hop + n_fft / 2) / sample_rate,
+        descriptors=out,
+        mel_db=mel_db,
+        mfcc=mfcc,
+        config=config,
+    )
+
+
+@dataclass
+class Trajectory:
+    """A recording's path through timbre space, from :func:`mfcc_trajectory`.
+
+    Attributes:
+        times: Centre time of each frame in seconds, shape ``(frames,)``.
+        coords: Each frame's position on the principal axes, shape
+            ``(frames, n_components)``; NaN for frames below the level gate.
+        active: Which frames passed the gate, shape ``(frames,)``.
+        explained_variance_ratio: Share of the MFCC variance each axis carries.
+        components: The principal axes in MFCC 1..n space, shape
+            ``(n_components, n_mfcc - 1)``.
+        mean: Mean of MFCC 1..n over the active frames, shape ``(n_mfcc - 1,)``.
+        gate_db: The level gate used, in dB below the loudest frame.
+        scale: The axis scaling applied (``None`` or ``"equalize"``).
+    """
+
+    times: np.ndarray
+    coords: np.ndarray
+    active: np.ndarray
+    explained_variance_ratio: np.ndarray
+    components: np.ndarray
+    mean: np.ndarray
+    gate_db: float
+    scale: Literal["equalize"] | None = None
+
+    @property
+    def n_components(self) -> int:
+        """Number of axes."""
+        return self.coords.shape[1]
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """One row per frame: ``time``, ``active``, then ``pc1``..``pc<n>``."""
+        import pandas as pd
+
+        columns: dict[str, Any] = {"time": self.times, "active": self.active}
+        for k in range(self.n_components):
+            columns[f"pc{k + 1}"] = self.coords[:, k]
+        return pd.DataFrame(columns)
+
+    def to_dict(self) -> dict[str, Any]:
+        """All fields as lists; gated frames' coordinates are ``None``."""
+        return {
+            "times": self.times.tolist(),
+            "coords": [[None if np.isnan(v) else float(v) for v in row] for row in self.coords],
+            "active": self.active.tolist(),
+            "explained_variance_ratio": self.explained_variance_ratio.tolist(),
+            "components": self.components.tolist(),
+            "mean": self.mean.tolist(),
+            "gate_db": self.gate_db,
+            "scale": self.scale,
+        }
+
+
+def mfcc_trajectory(
+    features: FrameFeatures,
+    gate_db: float = 38.0,
+    n_components: int = 3,
+    scale: Literal["equalize"] | None = None,
+) -> Trajectory:
+    """Project each frame's timbre onto the principal axes of the recording's MFCCs.
+
+    Frames quieter than ``gate_db`` below the loudest frame are left out (silence
+    would otherwise dominate the fit). PCA runs on MFCC 1..n of the remaining
+    frames; c0 is left out because it tracks level, not timbre. Frames that sound
+    alike land close together, so a song traces a path whose shape follows its
+    structure. Each axis's sign is fixed (its largest loading is positive), so the
+    output is deterministic. If the active frames vary in fewer directions than
+    ``n_components`` (a steady tone, say), the extra axes carry no variance and
+    their direction is arbitrary.
+
+    Args:
+        features: Output of :func:`frame_features`.
+        gate_db: Level gate in dB below the loudest frame.
+        n_components: Number of axes to keep.
+        scale: ``None`` keeps raw PCA coordinates. ``"equalize"`` divides each axis
+            by ``2.2 * (var_1 * var_k) ** 0.25`` (``var_1`` the first axis's variance,
+            ``var_k`` this axis's, floored at ``1e-4 * var_1``). That evens the axes
+            out for display while keeping their order, and puts most frames within
+            about +-1.
+
+    Returns:
+        :class:`Trajectory`.
+
+    Raises:
+        InvalidInputError: If ``n_components`` is out of range, ``scale`` is unknown,
+            or too few frames pass the gate to fit the axes.
+
+    Example:
+        >>> from bioamla.audio import frame_features, load_audio, mfcc_trajectory
+        >>> traj = mfcc_trajectory(frame_features(*load_audio("wren.wav")))
+        >>> traj.explained_variance_ratio
+    """
+    mfcc = features.mfcc[:, 1:]
+    d = mfcc.shape[1]
+    if isinstance(n_components, bool) or not isinstance(n_components, (int, np.integer)):
+        raise InvalidInputError(f"n_components must be an integer, got {n_components!r}")
+    if not 1 <= n_components <= d:
+        raise InvalidInputError(
+            f"n_components must be between 1 and {d} (n_mfcc - 1), got {n_components}"
+        )
+    if scale not in (None, "equalize"):
+        raise InvalidInputError(f"scale must be None or 'equalize', got {scale!r}")
+    if not (math.isfinite(gate_db) and gate_db > 0):
+        raise InvalidInputError(f"gate_db must be a positive number, got {gate_db}")
+
+    active = features.descriptors["level_db"] > -gate_db
+    n = int(active.sum())
+    needed = max(4, n_components + 1)
+    if n < needed:
+        raise InvalidInputError(
+            f"only {n} frames are within {gate_db:g} dB of the loudest; "
+            f"need at least {needed} to fit {n_components} axes"
+        )
+
+    x = mfcc[active]
+    mean = x.mean(axis=0)
+    centred = x - mean
+    values, vectors = np.linalg.eigh(centred.T @ centred / n)
+    values = values.clip(min=0.0)  # round-off can leave tiny negatives
+    order = np.argsort(values)[::-1][:n_components]
+    variances = values[order]
+    components = vectors[:, order].T
+    signs = np.sign(components[np.arange(n_components), np.abs(components).argmax(axis=1)])
+    components *= np.where(signs == 0, 1.0, signs)[:, None]
+
+    projected = centred @ components.T
+    if scale == "equalize":
+        top = max(variances[0], 1e-12)
+        projected /= _EQUALIZE_SPAN * np.sqrt(np.sqrt(top * np.maximum(variances, top * 1e-4)))
+    coords = np.full((len(active), n_components), np.nan)
+    coords[active] = projected
+    total = values.sum()
+    return Trajectory(
+        times=features.times.copy(),
+        coords=coords,
+        active=active,
+        explained_variance_ratio=variances / total if total > 0 else np.zeros(n_components),
+        components=components,
+        mean=mean,
+        gate_db=float(gate_db),
+        scale=scale,
+    )
+
+
+_TABLE_FORMATS = (".csv", ".parquet")
+
+
+@dataclass
+class FrameFeaturesFileResult:
+    """Output of :func:`frame_features_file`.
+
+    Attributes:
+        file: The audio file analysed.
+        output_path: Where the per-frame table was written, or ``None``.
+        features: The frame features.
+        trajectory: The timbre trajectory, when requested.
+        table: One row per frame: ``time``, the descriptors, the MFCCs, and
+            ``pc1``..``pcN`` when a trajectory was computed.
+    """
+
+    file: str
+    output_path: str | None
+    features: FrameFeatures = field(repr=False)
+    trajectory: Trajectory | None = field(repr=False)
+    table: pd.DataFrame = field(repr=False)
+
+    def to_dict(self) -> dict[str, Any]:
+        """A summary: file, output, frame count, duration, settings and explained variance."""
+        return {
+            "file": self.file,
+            "output_path": self.output_path,
+            "n_frames": self.features.n_frames,
+            "duration": self.features.duration,
+            "sample_rate": self.features.sample_rate,
+            "config": asdict(self.features.config),
+            "explained_variance_ratio": (
+                None
+                if self.trajectory is None
+                else self.trajectory.explained_variance_ratio.tolist()
+            ),
+        }
+
+
+def _table_suffix(path: Path) -> str:
+    """The table format from ``path``'s extension; raises for anything but csv/parquet."""
+    suffix = path.suffix.lower()
+    if suffix not in _TABLE_FORMATS:
+        raise InvalidInputError(f"output must end in .csv or .parquet, got {path.name!r}")
+    return suffix
+
+
+def write_frame_table(table: pd.DataFrame, path: str | Path) -> Path:
+    """Write a per-frame table as CSV or Parquet, chosen by the file extension.
+
+    Raises:
+        InvalidInputError: If the extension is not ``.csv`` or ``.parquet``.
+    """
+    path = Path(path)
+    suffix = _table_suffix(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if suffix == ".csv":
+        table.to_csv(path, index=False)
+    else:
+        table.to_parquet(path, index=False)
+    return path
+
+
+def frame_features_file(
+    audio_path: str | Path,
+    output_path: str | Path | None = None,
+    *,
+    config: FrameFeatureConfig | None = None,
+    trajectory: bool = False,
+    gate_db: float = 38.0,
+    n_components: int = 3,
+) -> FrameFeaturesFileResult:
+    """Frame features of an audio file, optionally with its trajectory, as a table.
+
+    Args:
+        audio_path: Audio file (any format bioamla can load).
+        output_path: Write the table here (``.csv`` or ``.parquet``). ``None`` writes nothing.
+        config: Analysis settings for :func:`frame_features`.
+        trajectory: Also compute :func:`mfcc_trajectory` and add ``pc1``..``pcN`` columns.
+        gate_db: Level gate for the trajectory.
+        n_components: Trajectory axes.
+
+    Returns:
+        :class:`FrameFeaturesFileResult`.
+
+    Raises:
+        NotFoundError: If the file does not exist.
+        InvalidInputError: If the audio is too short, a setting is out of range, or
+            the output extension is not supported.
+        AudioLoadError: If the file cannot be read.
+    """
+    from bioamla.audio.io import load_audio
+
+    audio_path = Path(audio_path)
+    if not audio_path.is_file():
+        raise NotFoundError(f"Audio file not found: {audio_path}")
+    if output_path is not None:
+        _table_suffix(Path(output_path))  # fail before the (slow) analysis
+    audio, sr = load_audio(str(audio_path))
+    features = frame_features(audio, sr, config)
+    traj = mfcc_trajectory(features, gate_db, n_components) if trajectory else None
+    table = features.to_dataframe()
+    if traj is not None:
+        for k in range(traj.n_components):
+            table[f"pc{k + 1}"] = traj.coords[:, k]
+    written = None if output_path is None else str(write_frame_table(table, output_path))
+    return FrameFeaturesFileResult(
+        file=str(audio_path),
+        output_path=written,
+        features=features,
+        trajectory=traj,
+        table=table,
+    )
+
+
+__all__ = [
+    "DESCRIPTORS",
+    "FrameFeatureConfig",
+    "FrameFeatures",
+    "FrameFeaturesFileResult",
+    "Trajectory",
+    "frame_features",
+    "frame_features_file",
+    "mfcc_trajectory",
+    "write_frame_table",
+]

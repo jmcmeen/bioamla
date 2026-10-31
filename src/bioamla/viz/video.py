@@ -30,8 +30,6 @@ Example:
 from __future__ import annotations
 
 import logging
-import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -40,8 +38,17 @@ import librosa
 import numpy as np
 
 from bioamla.audio.data import ToDictMixin
-from bioamla.exceptions import DependencyError, InvalidInputError, NotFoundError, ProcessingError
+from bioamla.exceptions import InvalidInputError, NotFoundError
 from bioamla.protocols import OnProgress
+from bioamla.viz._video_common import (
+    MARGIN,
+    check_frame_args,
+    draw_time_stamp,
+    encode_video,
+    label_font,
+    load_clip,
+    require_ffmpeg,
+)
 from bioamla.viz.core import WindowType, compute_mel_spectrogram, compute_stft, spectrogram_to_db
 
 logger = logging.getLogger(__name__)
@@ -53,7 +60,6 @@ VideoMotion = Literal["scroll", "page"]
 _WAVEFORM_FRACTION = 0.18  # share of the height given to the waveform strip under a spectrogram
 _PLAYHEAD_WIDTH = 2
 _AXIS_TICKS = 6
-_MARGIN = 8
 
 
 @dataclass
@@ -167,34 +173,10 @@ def generate_spectrogram_video(
     output_path = Path(output_path)
     if not audio_path.is_file():
         raise NotFoundError(f"Audio file not found: {audio_path}")
-    _validate(viz_type, motion, width, height, fps, window_seconds, playhead, db_range)
-    if start < 0:
-        raise InvalidInputError(f"start must not be negative, got {start}")
-    if end is not None and end <= start:
-        raise InvalidInputError(f"end ({end}) must be after start ({start})")
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        raise DependencyError(
-            "ffmpeg is required to encode video but was not found on PATH. "
-            "Install it (e.g. brew install ffmpeg / apt install ffmpeg) and retry."
-        )
-
-    from bioamla.viz.core import _load_audio_for_viz
-
-    if sample_rate is None:
-        from bioamla.audio import load_audio
-
-        audio, sample_rate = load_audio(str(audio_path))
-    else:
-        audio = _load_audio_for_viz(str(audio_path), sample_rate)
-
-    file_duration = len(audio) / sample_rate
-    if start >= file_duration:
-        raise InvalidInputError(
-            f"start ({start} s) is beyond the end of the file ({file_duration:.2f} s)"
-        )
-    end = file_duration if end is None else min(end, file_duration)
-    audio = audio[int(round(start * sample_rate)) : int(round(end * sample_rate))]
+    _validate(viz_type, motion, window_seconds, playhead, db_range)
+    check_frame_args(width, height, fps, start, end)
+    ffmpeg = require_ffmpeg()
+    audio, sample_rate, end = load_clip(audio_path, start, end, sample_rate)
 
     renderer = _FrameRenderer(
         audio,
@@ -218,51 +200,15 @@ def generate_spectrogram_video(
         show_axes=show_axes,
         backend=backend,
     )
-    total_frames = max(1, int(np.ceil(renderer.duration * fps)))
-
-    cmd = [
-        ffmpeg,
-        "-y",
-        "-loglevel",
-        "error",
-        "-f",
-        "rawvideo",
-        "-pix_fmt",
-        "rgb24",
-        "-s",
-        f"{renderer.width}x{renderer.height}",
-        "-r",
-        str(fps),
-        "-i",
-        "-",
-    ]
-    if include_audio:
-        cmd += ["-ss", f"{start:.6f}", "-t", f"{renderer.duration:.6f}", "-i", str(audio_path)]
-        cmd += ["-map", "0:v", "-map", "1:a", "-c:a", "aac", "-shortest"]
-    cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(output_path)]
-
-    logger.info("Rendering %d frames at %d fps to %s", total_frames, fps, output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-    assert proc.stdin is not None
-    try:
-        for i in range(total_frames):
-            frame = renderer.frame(i / fps)
-            try:
-                proc.stdin.write(frame.tobytes())
-            except BrokenPipeError:
-                break  # ffmpeg died; its stderr is reported below
-            if on_progress is not None:
-                on_progress(i + 1, total_frames)
-        proc.stdin.close()
-        stderr = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
-        returncode = proc.wait()
-    finally:
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait()
-    if returncode != 0:
-        raise ProcessingError(f"ffmpeg failed (exit {returncode}): {stderr.strip()[-2000:]}")
+    total_frames = encode_video(
+        renderer,
+        ffmpeg=ffmpeg,
+        output_path=output_path,
+        fps=fps,
+        audio_path=audio_path if include_audio else None,
+        start=start,
+        on_progress=on_progress,
+    )
 
     return SpectrogramVideoResult(
         output_path=str(output_path),
@@ -280,9 +226,6 @@ def generate_spectrogram_video(
 def _validate(
     viz_type: str,
     motion: str,
-    width: int,
-    height: int,
-    fps: int,
     window_seconds: float | None,
     playhead: float,
     db_range: float,
@@ -291,10 +234,6 @@ def _validate(
         raise InvalidInputError(f"viz_type must be 'mel', 'stft' or 'waveform', got {viz_type!r}")
     if motion not in ("scroll", "page"):
         raise InvalidInputError(f"motion must be 'scroll' or 'page', got {motion!r}")
-    if width < 64 or height < 64:
-        raise InvalidInputError(f"width and height must be at least 64 px, got {width}x{height}")
-    if fps < 1:
-        raise InvalidInputError(f"fps must be at least 1, got {fps}")
     if window_seconds is None:
         if motion != "page":
             raise InvalidInputError("window_seconds=None (whole recording) needs motion='page'")
@@ -542,32 +481,21 @@ class _FrameRenderer:
         return ticks
 
     def _draw_labels(self, frame: np.ndarray, t: float) -> np.ndarray:
-        from PIL import Image, ImageDraw, ImageFont
+        from PIL import Image, ImageDraw
 
         if self._font is None:
-            size = max(10, self.height // 45)
-            try:
-                self._font = ImageFont.load_default(size=size)
-            except TypeError:  # Pillow < 10.1 has no size argument
-                self._font = ImageFont.load_default()
+            self._font = label_font(self.height)
         image = Image.fromarray(frame)
         draw = ImageDraw.Draw(image)
         fg, shadow = (255, 255, 255), (0, 0, 0)
 
         for row, label in self._ticks:
-            y = min(max(row, _MARGIN), self.spec_h - _MARGIN)
+            y = min(max(row, MARGIN), self.spec_h - MARGIN)
             draw.line([(0, row), (6, row)], fill=fg, width=1)
-            draw.text((_MARGIN + 2, y + 1), label, font=self._font, fill=shadow, anchor="lm")
-            draw.text((_MARGIN + 1, y), label, font=self._font, fill=fg, anchor="lm")
+            draw.text((MARGIN + 2, y + 1), label, font=self._font, fill=shadow, anchor="lm")
+            draw.text((MARGIN + 1, y), label, font=self._font, fill=fg, anchor="lm")
 
-        stamp = f"{_fmt_time(self.time_offset + t)} / {_fmt_time(self.time_offset + self.duration)}"
-        x, y = self.width - _MARGIN, _MARGIN
-        draw.text((x + 1, y + 1), stamp, font=self._font, fill=shadow, anchor="rt")
-        draw.text((x, y), stamp, font=self._font, fill=fg, anchor="rt")
+        draw_time_stamp(
+            draw, self._font, self.width, self.time_offset + t, self.time_offset + self.duration
+        )
         return np.asarray(image)
-
-
-def _fmt_time(seconds: float) -> str:
-    seconds = max(0.0, seconds)
-    minutes, secs = divmod(seconds, 60)
-    return f"{int(minutes):02d}:{secs:04.1f}"

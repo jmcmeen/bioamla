@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 
+from bioamla.cli.options import frame_feature_options
 from bioamla.exceptions import BioamlaError
 
 
@@ -216,6 +217,77 @@ def audio_play(path: str, loop: bool) -> None:
         return
 
     print_success("Done.")
+
+
+@audio.command("features")
+@click.argument("path")
+@click.option(
+    "--output", "-o", default=None, help="Write the per-frame table here (.csv or .parquet)"
+)
+@frame_feature_options
+def audio_features(
+    path: str,
+    output: str | None,
+    trajectory: bool,
+    gate_db: float,
+    no_denoise: bool,
+    n_fft: int | None,
+    hop: int | None,
+    n_mels: int,
+    n_mfcc: int,
+    f_min: float,
+    f_max: float | None,
+) -> None:
+    """Frame-level spectral descriptors and MFCCs, one row per frame.
+
+    Each frame gets its level, spectral centroid, spread, flatness, crest,
+    rolloff, flux, peak frequency, band edges and MFCCs; --trajectory adds its
+    position on the recording's three main timbre axes. Without --output, a
+    summary of each descriptor is shown; with --json and no --output, the
+    per-frame records are in the result.
+
+    \b
+    Examples:
+        bioamla audio features wren.wav -o wren.features.csv
+        bioamla audio features wren.wav -o wren.parquet --trajectory
+        bioamla --json audio features wren.wav --trajectory
+    """
+    from bioamla.audio import DESCRIPTORS, frame_features_file
+    from bioamla.cli.options import frame_feature_config
+    from bioamla.cli.output import emit_file_result
+
+    try:
+        config = frame_feature_config(no_denoise, n_fft, hop, n_mels, n_mfcc, f_min, f_max)
+        result = frame_features_file(
+            path, output, config=config, trajectory=trajectory, gate_db=gate_db
+        )
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+
+    summary = result.to_dict()
+    extra = {k: v for k, v in summary.items() if k not in ("file", "output_path")}
+    if output is None:
+        extra["frames"] = result.table.to_dict("records")
+    if emit_file_result(path, output=result.output_path, **extra):
+        return
+
+    from bioamla.cli.console import print_kv, print_success, print_table
+
+    print_kv("File", path)
+    print_kv("Frames", f"{summary['n_frames']} ({summary['duration']:.2f}s)")
+    if result.trajectory is not None:
+        ratio = ", ".join(f"{v:.0%}" for v in summary["explained_variance_ratio"])
+        print_kv("Trajectory", f"{int(result.trajectory.active.sum())} frames, variance {ratio}")
+    if output is not None:
+        print_success(f"Per-frame table saved to: {result.output_path}")
+        return
+    table = result.table
+    rows = []
+    for name in DESCRIPTORS:
+        q = table[name].quantile([0.1, 0.5, 0.9])
+        rows.append([name, *(f"{v:.4g}" for v in q)])
+    print_table("Descriptors over frames", ["descriptor", "p10", "median", "p90"], rows)
+    print_kv("Hint", "use --output to save every frame (.csv or .parquet)")
 
 
 @audio.command("convert")
@@ -698,8 +770,8 @@ def audio_visualize(
     "-t",
     "viz_type",
     default="mel",
-    type=click.Choice(["mel", "stft", "waveform"]),
-    help="Spectrogram type, or a waveform-only video",
+    type=click.Choice(["mel", "stft", "waveform", "trajectory"]),
+    help="Spectrogram type, a waveform-only video, or the MFCC-PCA timbre trajectory",
 )
 @click.option(
     "--motion",
@@ -731,6 +803,20 @@ def audio_visualize(
 @click.option("--waveform/--no-waveform", default=True, help="Scrolling waveform strip")
 @click.option("--axes/--no-axes", default=True, help="Frequency ticks and time readout")
 @click.option("--audio/--no-audio", "include_audio", default=True, help="Mux the audio track")
+@click.option(
+    "--trail",
+    default=None,
+    type=float,
+    help="Trajectory: fade out path older than this many seconds (default: keep it all)",
+)
+@click.option(
+    "--orbit/--no-orbit", default=True, help="Trajectory: turn the view slowly (default: on)"
+)
+@click.option(
+    "--spectrogram/--no-spectrogram",
+    default=True,
+    help="Trajectory: scrolling mel spectrogram strip along the bottom (default: on)",
+)
 @click.option("--quiet", "-q", is_flag=True, help="Suppress the progress bar")
 def audio_video(
     path: str,
@@ -752,9 +838,12 @@ def audio_video(
     waveform: bool,
     axes: bool,
     include_audio: bool,
+    trail: float | None,
+    orbit: bool,
+    spectrogram: bool,
     quiet: bool,
 ) -> None:
-    """Render a spectrogram or waveform video of a single file, in sync with its audio.
+    """Render a spectrogram, waveform or trajectory video of a file, in sync with its audio.
 
     Needs the ffmpeg command on PATH.
 
@@ -772,10 +861,15 @@ def audio_video(
         bioamla audio video wren.wav -t waveform -m page -w 10
         # Just 1:30 to 2:00 of a long recording
         bioamla audio video night.wav -s 90 -e 120
+
+        # MFCC-PCA timbre trajectory, path fading after 4 seconds
+        bioamla audio video wren.wav -t trajectory --trail 4
+
+    With -t trajectory, --window sets the spectrogram strip's span and --cmap
+    colours the path (default plasma); the spectrogram-only options don't apply.
     """
     from bioamla.cli.console import ProgressBar, print_success
     from bioamla.cli.output import emit_file_result
-    from bioamla.viz import generate_spectrogram_video
 
     try:
         width, height = (int(v) for v in size.lower().split("x"))
@@ -785,36 +879,62 @@ def audio_video(
         ) from None
     output_path = output or f"{Path(path).stem}.mp4"
 
-    bar = ProgressBar(description="Rendering frames", disable=quiet)
+    ctx = click.get_current_context()
+    given = {
+        name
+        for name in ctx.params
+        if ctx.get_parameter_source(name) != click.core.ParameterSource.DEFAULT
+    }
+    common = {
+        "start": start, "end": end, "width": width, "height": height, "fps": fps,
+        "show_axes": axes, "include_audio": include_audio,
+    }  # fmt: skip
+    if viz_type == "trajectory":
+        _reject_options(given, _SPECTROGRAM_ONLY, "don't apply to -t trajectory")
+        if window <= 0:
+            raise click.BadParameter(
+                "-t trajectory needs a positive span for its spectrogram strip",
+                param_hint="--window",
+            )
+        from bioamla.viz import generate_trajectory_video
 
+        render = generate_trajectory_video
+        kwargs = {
+            **common,
+            "trail_seconds": trail,
+            "orbit": orbit,
+            "spectrogram": spectrogram,
+            "window_seconds": window,
+            "cmap": cmap if "cmap" in given else "plasma",
+        }
+    else:
+        _reject_options(given, ("trail", "orbit", "spectrogram"), "only apply to -t trajectory")
+        from bioamla.viz import generate_spectrogram_video
+
+        render = generate_spectrogram_video
+        kwargs = {
+            **common,
+            "viz_type": viz_type, "motion": motion, "n_fft": n_fft,
+            "hop_length": hop_length, "n_mels": n_mels, "fmax": fmax, "db_range": db_range,
+            "cmap": cmap, "window_seconds": window or None, "playhead": playhead,
+            "waveform": waveform,
+        }  # fmt: skip
+
+    bar = ProgressBar(description="Rendering frames", disable=quiet)
     try:
         with bar:
-            result = generate_spectrogram_video(
-                audio_path=path,
-                output_path=output_path,
-                viz_type=viz_type,
-                motion=motion,
-                start=start,
-                end=end,
-                n_fft=n_fft,
-                hop_length=hop_length,
-                n_mels=n_mels,
-                fmax=fmax,
-                db_range=db_range,
-                cmap=cmap,
-                width=width,
-                height=height,
-                fps=fps,
-                window_seconds=window or None,
-                playhead=playhead,
-                waveform=waveform,
-                show_axes=axes,
-                include_audio=include_audio,
-                on_progress=bar.on_progress,
+            result = render(
+                audio_path=path, output_path=output_path, on_progress=bar.on_progress, **kwargs
             )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    extra = {}
+    if viz_type == "trajectory":
+        extra = {
+            "active_frames": result.active_frames,
+            "explained_variance_ratio": result.explained_variance_ratio,
+        }
     if emit_file_result(
         path,
         output=result.output_path,
@@ -822,9 +942,35 @@ def audio_video(
         width=result.width,
         height=result.height,
         duration=result.duration,
+        **extra,
     ):
         return
-    print_success(
-        f"Video saved to: {result.output_path} "
-        f"({result.frames} frames, {result.width}x{result.height}, {result.duration:.1f}s)"
-    )
+    detail = f"{result.frames} frames, {result.width}x{result.height}, {result.duration:.1f}s"
+    if viz_type == "trajectory":
+        detail += "; axes " + ", ".join(f"{v:.0%}" for v in result.explained_variance_ratio)
+    print_success(f"Video saved to: {result.output_path} ({detail})")
+
+
+_SPECTROGRAM_ONLY = (
+    "motion",
+    "n_fft",
+    "hop_length",
+    "n_mels",
+    "fmax",
+    "db_range",
+    "playhead",
+    "waveform",
+)
+
+
+def _reject_options(given: set[str], names: tuple[str, ...], reason: str) -> None:
+    """UsageError naming the options in ``names`` that were set on the command line."""
+    misplaced = sorted(given & set(names))
+    if not misplaced:
+        return
+    flags = ", ".join("--" + n.replace("_", "-") for n in misplaced)
+    if len(misplaced) == 1:  # "doesn't apply" / "only applies"
+        reason = reason.replace("don't apply", "doesn't apply").replace(
+            "only apply", "only applies"
+        )
+    raise click.UsageError(f"{flags} {reason}")

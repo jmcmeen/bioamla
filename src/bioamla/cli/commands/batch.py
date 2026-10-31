@@ -27,7 +27,12 @@ from typing import TYPE_CHECKING
 import click
 
 from bioamla.cli.batch_options import batch_input_options, batch_output_options
-from bioamla.cli.options import max_workers_option, quiet_option, recursive_option
+from bioamla.cli.options import (
+    frame_feature_options,
+    max_workers_option,
+    quiet_option,
+    recursive_option,
+)
 from bioamla.exceptions import BioamlaError, InvalidInputError
 
 if TYPE_CHECKING:
@@ -720,6 +725,105 @@ def audio_metadata(input_dir, input_file, output_dir, max_workers, recursive, qu
                 ["file_name", *RECORDING_METADATA_FIELDS],
             )
         _report(result, output_dir, quiet, saved_hint="recorder_metadata.csv")
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    finally:
+        _stty_sane()
+
+
+@audio.command("features")
+@batch_input_options
+@batch_output_options
+@click.option(
+    "--format",
+    "-f",
+    "out_format",
+    default="csv",
+    show_default=True,
+    type=click.Choice(["csv", "parquet"]),
+    help="Format of each per-frame table",
+)
+@frame_feature_options
+@max_workers_option
+@recursive_option
+@quiet_option
+def audio_features(
+    input_dir,
+    input_file,
+    output_dir,
+    out_format,
+    trajectory,
+    gate_db,
+    no_denoise,
+    n_fft,
+    hop,
+    n_mels,
+    n_mfcc,
+    f_min,
+    f_max,
+    max_workers,
+    recursive,
+    quiet,
+) -> None:
+    """Write a per-frame feature table (<name>.features.csv) for every file.
+
+    Directory mode mirrors the input tree under --output-dir and writes an
+    index, frame_features.csv. CSV mode writes each table under --output-dir
+    (mirroring the CSV's folder) or next to its audio, and adds the
+    features_file (relative to the CSV where possible) and n_frames columns.
+    """
+    from bioamla.audio import batch_frame_features_files, frame_features_file
+    from bioamla.audio.batch import frame_feature_table_paths
+    from bioamla.cli.console import ProgressBar, print_header
+    from bioamla.cli.options import frame_feature_config
+
+    try:
+        config = _build_config(input_dir, input_file, output_dir, recursive, max_workers, quiet)
+        analysis = frame_feature_config(no_denoise, n_fft, hop, n_mels, n_mfcc, f_min, f_max)
+        if not quiet:
+            print_header("Computing frame features...")
+
+        if config.input_file:
+            context = _csv_context(config)
+            listed = [str(row.file_path) for row in context.rows]
+            tables = frame_feature_table_paths(
+                listed, context.csv_dir, context.output_dir, out_format
+            )
+
+            def _analyze(path: Path) -> dict:
+                result = frame_features_file(
+                    path, tables[str(path)], config=analysis, trajectory=trajectory,
+                    gate_db=gate_db,
+                )  # fmt: skip
+                table = Path(result.output_path)
+                try:  # relative to the CSV, like its file_name column
+                    shown = str(table.relative_to(context.csv_dir))
+                except ValueError:
+                    shown = str(table)
+                return {"features_file": shown, "n_frames": result.features.n_frames}
+
+            result = _run_csv_merge(config, _analyze)
+            _report(result, config.output_dir or None, quiet)
+            return
+
+        _require_input_dir(config)
+        if not output_dir:
+            raise InvalidInputError("--output-dir is required for this command.")
+        bar = ProgressBar(description="Computing features", disable=quiet)
+        with bar:
+            result = batch_frame_features_files(
+                input_dir,
+                output_dir,
+                config=analysis,
+                trajectory=trajectory,
+                gate_db=gate_db,
+                file_format=out_format,
+                recursive=recursive,
+                max_workers=config.max_workers,
+                continue_on_error=config.continue_on_error,
+                on_progress=bar.on_progress,
+            )
+        _report(result, output_dir, quiet, "frame_features.csv")
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
     finally:
