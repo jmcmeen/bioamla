@@ -131,6 +131,53 @@ def current_command() -> str | None:
     return " ".join(reversed(names)) or None
 
 
+def command_options(exclude: tuple[str, ...] = ()) -> dict[str, Any]:
+    """The running command's option values, keyed by their long option name.
+
+    ``--threshold-db`` becomes ``threshold_db`` (the option name with ``-`` as
+    ``_``, not the Python parameter name), so each key names an option a script can
+    find in ``--help``. Unset options are ``None``. Arguments and the parameters
+    named in ``exclude`` are left out.
+    """
+    import click
+
+    ctx = click.get_current_context()
+    options: dict[str, Any] = {}
+    for param in ctx.command.params:
+        if not isinstance(param, click.Option) or param.name in exclude:
+            continue
+        if param.name not in ctx.params:
+            continue
+        longs = [o for o in param.opts if o.startswith("--")]
+        key = (longs[0][2:] if longs else param.name or "").replace("-", "_")
+        options[key] = ctx.params[param.name]
+    return options
+
+
+def emit_file_result(file: str, **fields: Any) -> bool:
+    """Report a per-file command's result: the file, its options and ``fields``.
+
+    The result is ``{"file", "params", **fields}``, plus ``"output"`` (the ``-o``
+    path or ``None``) for commands that have an ``--output`` option. Returns True in
+    JSON mode, so the caller can skip its human output:
+    ``if emit_file_result(file, count=n): return``.
+    """
+    import click
+
+    if not json_mode():
+        return False
+    ctx = click.get_current_context()
+    result: dict[str, Any] = {
+        "file": file,
+        "params": command_options(exclude=("output", "output_format")),
+        **fields,
+    }
+    if "output" in ctx.params:
+        result["output"] = ctx.params["output"]
+    emit_result(result)
+    return True
+
+
 def emit_result(result: Any) -> None:
     """Report a command's result. Writes the success envelope in JSON mode only."""
     if json_mode():
@@ -236,7 +283,9 @@ def command_from_args(group: Any, args: list[str]) -> str | None:
 
 __all__ = [
     "command_from_args",
+    "command_options",
     "emit_failure",
+    "emit_file_result",
     "json_flag_given",
     "current_command",
     "disable_json_mode",

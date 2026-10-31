@@ -40,6 +40,7 @@ def detect_energy(
     import json as json_lib
 
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.detect import BandLimitedEnergyDetector, export_detections
 
     try:
@@ -54,11 +55,17 @@ def detect_energy(
         if output:
             fmt = "json" if output.endswith(".json") else "csv"
             export_detections(detections, output, format=fmt)
+            if emit_file_result(
+                file, count=len(detections), detections=[d.to_dict() for d in detections]
+            ):
+                return
             print_success(f"Saved {len(detections)} detections to {output}")
             return
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(file, count=len(detections), detections=[d.to_dict() for d in detections]):
+        return
     if output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
     elif output_format == "csv":
@@ -121,6 +128,7 @@ def detect_ribbit(
     import json as json_lib
 
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.detect import RibbitDetector, export_detections
 
     try:
@@ -137,11 +145,17 @@ def detect_ribbit(
         if output:
             fmt = "json" if output.endswith(".json") else "csv"
             export_detections(detections, output, format=fmt)
+            if emit_file_result(
+                file, count=len(detections), detections=[d.to_dict() for d in detections]
+            ):
+                return
             print_success(f"Saved {len(detections)} detections to {output}")
             return
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(file, count=len(detections), detections=[d.to_dict() for d in detections]):
+        return
     if output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
     elif output_format == "csv":
@@ -196,6 +210,7 @@ def detect_peaks(
     import json as json_lib
 
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.detect import CWTPeakDetector
 
     try:
@@ -225,13 +240,20 @@ def detect_peaks(
         from pathlib import Path
 
         out_path = Path(output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            for p in peaks:
-                writer.writerow(_row(p))
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(out_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                for p in peaks:
+                    writer.writerow(_row(p))
+        except OSError as e:
+            raise click.ClickException(f"Failed to write {output}: {e}") from e
+        if emit_file_result(file, count=len(peaks), detections=[_row(p) for p in peaks]):
+            return
         print_success(f"Saved {len(peaks)} peaks to {output}")
+    elif emit_file_result(file, count=len(peaks), detections=[_row(p) for p in peaks]):
+        return
     elif output_format == "json":
         click.echo(json_lib.dumps([p.to_dict() for p in peaks], indent=2))
     elif output_format == "csv":
@@ -295,6 +317,7 @@ def detect_accelerating(
     import json as json_lib
 
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.detect import AcceleratingPatternDetector, export_detections
 
     try:
@@ -311,11 +334,17 @@ def detect_accelerating(
         if output:
             fmt = "json" if output.endswith(".json") else "csv"
             export_detections(detections, output, format=fmt)
+            if emit_file_result(
+                file, count=len(detections), detections=[d.to_dict() for d in detections]
+            ):
+                return
             print_success(f"Saved {len(detections)} detections to {output}")
             return
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(file, count=len(detections), detections=[d.to_dict() for d in detections]):
+        return
     if output_format == "json":
         click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
     elif output_format == "csv":
