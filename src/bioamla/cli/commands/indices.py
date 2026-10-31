@@ -65,6 +65,7 @@ def indices_compute(
 
     from bioamla.audio import load_audio_data
     from bioamla.cli.console import print_header, print_kv, print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.indices import compute_all_indices
 
     try:
@@ -84,8 +85,8 @@ def indices_compute(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
-    output_dict = {"filepath": file}
-    output_dict.update(result.to_dict())
+    indices_dict = result.to_dict()
+    output_dict = {"filepath": file, **indices_dict}
 
     if output:
         from pathlib import Path
@@ -95,7 +96,11 @@ def indices_compute(
             Path(output).write_text(json_lib.dumps(output_dict, indent=2))
         except OSError as e:
             raise click.ClickException(f"Failed to write {output}: {e}") from e
+        if emit_file_result(file, indices=indices_dict):
+            return
         print_success(f"Results saved to {output}")
+    elif emit_file_result(file, indices=indices_dict):
+        return
     elif output_format == "json":
         click.echo(json_lib.dumps(output_dict, indent=2))
     elif output_format == "csv":
@@ -135,6 +140,7 @@ def indices_temporal(file: str, segment_duration: float, output: str, n_fft: int
 
     from bioamla.audio import load_audio_data
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.indices import temporal_indices
 
     try:
@@ -149,35 +155,38 @@ def indices_temporal(file: str, segment_duration: float, output: str, n_fft: int
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    rows = [
+        {
+            "segment": i,
+            "start_time": w.get("start_time", i * segment_duration),
+            "aci": w["aci"],
+            "adi": w["adi"],
+            "aei": w["aei"],
+            "bio": w["bio"],
+            "ndsi": w["ndsi"],
+        }
+        for i, w in enumerate(windows)
+    ]
     if output:
         from pathlib import Path
 
-        rows = [
-            {
-                "segment": i,
-                "start_time": w.get("start_time", i * segment_duration),
-                "aci": w["aci"],
-                "adi": w["adi"],
-                "aei": w["aei"],
-                "bio": w["bio"],
-                "ndsi": w["ndsi"],
-            }
-            for i, w in enumerate(windows)
-        ]
         try:
             Path(output).parent.mkdir(parents=True, exist_ok=True)
             Path(output).write_text(json_lib.dumps(rows, indent=2))
         except OSError as e:
             raise click.ClickException(f"Failed to write {output}: {e}") from e
+        if emit_file_result(file, segments=rows):
+            return
         print_success(f"Temporal indices saved to {output}")
+    elif emit_file_result(file, segments=rows):
+        return
     else:
         print_header(f"\n{file} - Temporal indices ({segment_duration}s segments):")
-        for i, w in enumerate(windows[:10]):
-            start_time = w.get("start_time", i * segment_duration)
+        for row in rows[:10]:
             echo(
-                f"  Segment {i} ({start_time:.1f}s): "
-                f"ACI={w['aci']:.2f}, ADI={w['adi']:.3f}, "
-                f"AEI={w['aei']:.3f}, BIO={w['bio']:.2f}, NDSI={w['ndsi']:.3f}"
+                f"  Segment {row['segment']} ({row['start_time']:.1f}s): "
+                f"ACI={row['aci']:.2f}, ADI={row['adi']:.3f}, "
+                f"AEI={row['aei']:.3f}, BIO={row['bio']:.2f}, NDSI={row['ndsi']:.3f}"
             )
         if len(windows) > 10:
             echo(f"  ... and {len(windows) - 10} more segments", style=DIM_STYLE)
@@ -193,6 +202,7 @@ def indices_aci(file: str, min_freq: float, max_freq: float, n_fft: int) -> None
     """Compute Acoustic Complexity Index (ACI) only."""
     from bioamla.audio import load_audio_data
     from bioamla.cli.console import print_kv
+    from bioamla.cli.output import emit_file_result
     from bioamla.indices import compute_index
 
     try:
@@ -207,6 +217,8 @@ def indices_aci(file: str, min_freq: float, max_freq: float, n_fft: int) -> None
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+    if emit_file_result(file, index="aci", value=value):
+        return
     print_kv("ACI", f"{value:.2f}")
 
 
@@ -218,6 +230,7 @@ def indices_adi(file: str, db_threshold: float, n_fft: int) -> None:
     """Compute Acoustic Diversity Index (ADI) only."""
     from bioamla.audio import load_audio_data
     from bioamla.cli.console import print_kv
+    from bioamla.cli.output import emit_file_result
     from bioamla.indices import compute_index
 
     try:
@@ -227,6 +240,8 @@ def indices_adi(file: str, db_threshold: float, n_fft: int) -> None:
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+    if emit_file_result(file, index="adi", value=value):
+        return
     print_kv("ADI", f"{value:.3f}")
 
 
@@ -238,6 +253,7 @@ def indices_aei(file: str, db_threshold: float, n_fft: int) -> None:
     """Compute Acoustic Evenness Index (AEI) only."""
     from bioamla.audio import load_audio_data
     from bioamla.cli.console import print_kv
+    from bioamla.cli.output import emit_file_result
     from bioamla.indices import compute_index
 
     try:
@@ -247,6 +263,8 @@ def indices_aei(file: str, db_threshold: float, n_fft: int) -> None:
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+    if emit_file_result(file, index="aei", value=value):
+        return
     print_kv("AEI", f"{value:.3f}")
 
 
@@ -261,6 +279,7 @@ def indices_bio(file: str, min_freq: float, max_freq: float, n_fft: int) -> None
     """Compute Bioacoustic Index (BIO) only."""
     from bioamla.audio import load_audio_data
     from bioamla.cli.console import print_kv
+    from bioamla.cli.output import emit_file_result
     from bioamla.indices import compute_index
 
     try:
@@ -275,6 +294,8 @@ def indices_bio(file: str, min_freq: float, max_freq: float, n_fft: int) -> None
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+    if emit_file_result(file, index="bio", value=value):
+        return
     print_kv("BIO", f"{value:.2f}")
 
 
@@ -285,6 +306,7 @@ def indices_ndsi(file: str, n_fft: int) -> None:
     """Compute Normalized Difference Soundscape Index (NDSI) only."""
     from bioamla.audio import load_audio_data
     from bioamla.cli.console import print_kv
+    from bioamla.cli.output import emit_file_result
     from bioamla.indices import compute_index
 
     try:
@@ -292,6 +314,8 @@ def indices_ndsi(file: str, n_fft: int) -> None:
         value = compute_index(audio.samples, audio.sample_rate, "ndsi", n_fft=n_fft)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+    if emit_file_result(file, index="ndsi", value=value):
+        return
     print_kv("NDSI", f"{value:.3f}")
 
 
@@ -302,6 +326,7 @@ def indices_entropy(file: str, n_fft: int) -> None:
     """Compute spectral and temporal entropy indices only."""
     from bioamla.audio import load_audio_data
     from bioamla.cli.console import print_kv
+    from bioamla.cli.output import emit_file_result
     from bioamla.indices import compute_index
 
     try:
@@ -310,5 +335,7 @@ def indices_entropy(file: str, n_fft: int) -> None:
         h_temporal = compute_index(audio.samples, audio.sample_rate, "h_temporal", n_fft=n_fft)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+    if emit_file_result(file, indices={"h_spectral": h_spectral, "h_temporal": h_temporal}):
+        return
     print_kv("H (spectral)", f"{h_spectral:.3f}")
     print_kv("H (temporal)", f"{h_temporal:.3f}")

@@ -41,6 +41,7 @@ def dataset_merge(
     """Merge multiple audio datasets into a single dataset."""
     from bioamla.cli.console import print_success
     from bioamla.cli.logging_setup import configure_cli_logging
+    from bioamla.cli.output import emit_result
     from bioamla.datasets import merge_datasets
 
     configure_cli_logging()
@@ -56,6 +57,9 @@ def dataset_merge(
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if emit_result(stats):
+        return
 
     if quiet:
         msg = f"Merged {stats['datasets_merged']} datasets: {stats['total_files']} total files"
@@ -123,6 +127,7 @@ def dataset_extract_clips(
     traceable to their original recordings.
     """
     from bioamla.cli.console import echo, print_kv, print_success
+    from bioamla.cli.output import emit_result
     from bioamla.datasets import extract_labeled_dataset
 
     try:
@@ -143,6 +148,9 @@ def dataset_extract_clips(
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if emit_result(result):
+        return
 
     if not quiet:
         print_success(
@@ -171,12 +179,16 @@ def dataset_extract_clips(
 @click.option(
     "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
 )
-@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    help="Deprecated: bare JSON. Use `bioamla --json dataset stats` instead.",
+)
 def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -> None:
     """Show summary statistics for a dataset's metadata.csv."""
-    import json as json_lib
-
     from bioamla.cli.console import echo, print_header, print_kv
+    from bioamla.cli.output import emit_result, json_mode, legacy_json
     from bioamla.datasets import get_dataset_stats
 
     try:
@@ -184,8 +196,11 @@ def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if json_mode():
+        emit_result(stats)
+        return
     if output_json:
-        click.echo(json_lib.dumps(stats, indent=2))
+        legacy_json(stats)
         return
 
     print_header(f"\nDataset Statistics: {dataset_dir}")
@@ -240,6 +255,7 @@ def dataset_manifest(
     from pathlib import Path
 
     from bioamla.cli.console import echo, print_success
+    from bioamla.cli.output import emit_result
     from bioamla.datasets import build_manifest_from_metadata, save_dataset_manifest
 
     dataset_path = Path(dataset_dir)
@@ -258,6 +274,9 @@ def dataset_manifest(
         save_dataset_manifest(manifest, output_path)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if emit_result({"output": str(output_path), "manifest": manifest}):
+        return
 
     if not quiet:
         print_success(f"Wrote manifest: {output_path}")
@@ -321,6 +340,7 @@ def dataset_partition(
         bioamla dataset partition ./dataset --mode subdirs --group-by source_file
     """
     from bioamla.cli.console import print_kv, print_success
+    from bioamla.cli.output import emit_result
     from bioamla.datasets import partition_dataset
 
     try:
@@ -337,6 +357,9 @@ def dataset_partition(
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if emit_result(result):
+        return
 
     if not quiet:
         split_str = ", ".join(f"{k}={v}" for k, v in sorted(result["splits"].items()))
@@ -423,6 +446,7 @@ def dataset_build(
     from pathlib import Path
 
     from bioamla.cli.console import echo, print_success
+    from bioamla.cli.output import emit_result
     from bioamla.datasets import (
         build_manifest_from_metadata,
         extract_labeled_dataset,
@@ -480,6 +504,18 @@ def dataset_build(
         except BioamlaError:
             attributions_path = None  # no provenance to attribute — skip silently
 
+    if emit_result(
+        {
+            "output_dir": output_dir,
+            "extract": extract,
+            "partition": partition_result,
+            "manifest": manifest,
+            "manifest_path": str(output_path / "dataset.json"),
+            "attributions": attributions_path,
+        }
+    ):
+        return
+
     if not quiet:
         print_success(f"Built dataset at {output_dir}")
         echo(f"  clips: {extract['clips_written']}  classes: {len(manifest.label2id)}")
@@ -527,7 +563,8 @@ def dataset_license(
     """Generate license/attribution file from dataset metadata."""
     from pathlib import Path
 
-    from bioamla.cli.console import echo, print_error, print_header, print_success
+    from bioamla.cli.console import echo, print_header, print_success
+    from bioamla.cli.output import emit_result
     from bioamla.datasets import (
         generate_license_for_dataset,
         generate_licenses_for_directory,
@@ -537,13 +574,11 @@ def dataset_license(
     template_path = Path(template) if template else None
 
     if template_path and not template_path.exists():
-        print_error(f"Template file '{template}' not found.")
-        raise SystemExit(1)
+        raise click.ClickException(f"Template file '{template}' not found.")
 
     if batch:
         if not path_obj.is_dir():
-            print_error(f"Path '{path}' is not a directory.")
-            raise SystemExit(1)
+            raise click.ClickException(f"Path '{path}' is not a directory.")
 
         if not quiet:
             echo(f"Scanning directory for datasets: {path}")
@@ -560,8 +595,10 @@ def dataset_license(
             raise click.ClickException(str(e)) from e
 
         if stats["datasets_found"] == 0:
-            print_error("No datasets found (no directories with metadata.csv)")
-            raise SystemExit(1)
+            raise click.ClickException("No datasets found (no directories with metadata.csv)")
+        failed = [r["dataset_name"] for r in stats["results"] if r["status"] != "success"]
+        if not failed and emit_result(stats):
+            return
 
         if not quiet:
             print_header(f"\nProcessed {stats['datasets_found']} dataset(s):")
@@ -578,18 +615,23 @@ def dataset_license(
         else:
             print_success(f"Generated {stats['datasets_processed']} license files")
 
-        if stats["datasets_failed"] > 0:
-            raise SystemExit(1)
+        if failed:
+            from bioamla.cli.output import fail
+
+            fail(
+                f"License generation failed for {len(failed)} of {stats['datasets_found']} "
+                f"dataset(s): {', '.join(failed)}",
+                "DatasetError",
+                details=stats,
+            )
 
     else:
         if not path_obj.is_dir():
-            print_error(f"Path '{path}' is not a directory.")
-            raise SystemExit(1)
+            raise click.ClickException(f"Path '{path}' is not a directory.")
 
         csv_path = path_obj / metadata_filename
         if not csv_path.exists():
-            print_error(f"Metadata file '{csv_path}' not found.")
-            raise SystemExit(1)
+            raise click.ClickException(f"Metadata file '{csv_path}' not found.")
 
         if not quiet:
             echo(f"Generating license file for: {path}")
@@ -605,6 +647,8 @@ def dataset_license(
         except BioamlaError as e:
             raise click.ClickException(str(e)) from e
 
+        if emit_result(stats):
+            return
         if not quiet:
             print_success(f"License file generated: {stats['output_path']}")
             echo(f"  Attributions: {stats['attributions_count']}")
@@ -615,16 +659,22 @@ def dataset_license(
 
 
 def _parse_range(value: str) -> tuple[float, float]:
-    """Parse a range string like '0.8-1.2' or '-2,2' into (min, max)."""
-    if "-" in value and not value.startswith("-"):
-        parts = value.split("-")
-        return float(parts[0]), float(parts[1])
-    elif "," in value:
-        parts = value.split(",")
-        return float(parts[0]), float(parts[1])
-    else:
-        val = float(value)
-        return val, val
+    """Parse ``MIN,MAX``, ``MIN-MAX`` or a single number into ``(min, max)``.
+
+    Negative bounds work in either form (``-2,2``, ``-2-2``, ``-6--1``). Anything
+    else raises :class:`click.BadParameter`.
+    """
+    import re
+
+    number = r"-?\d+(?:\.\d+)?"
+    match = re.fullmatch(rf"\s*({number})\s*(?:,|-)\s*({number})\s*", value)
+    if match:
+        return float(match.group(1)), float(match.group(2))
+    if re.fullmatch(rf"\s*{number}\s*", value):
+        return float(value), float(value)
+    raise click.BadParameter(
+        f"{value!r} is not a range; use MIN,MAX (e.g. -2,2), MIN-MAX (e.g. 0.8-1.2) or one number"
+    )
 
 
 @dataset.command("augment")
@@ -668,8 +718,9 @@ def dataset_augment(
         # Time-stretch only
         bioamla dataset augment ./clips -o ./aug --time-stretch 0.9-1.1
     """
-    from bioamla.cli.console import echo, print_error, print_success, print_warning
+    from bioamla.cli.console import print_success, print_warning
     from bioamla.cli.logging_setup import configure_cli_logging
+    from bioamla.cli.output import emit_result
     from bioamla.datasets import WaveformAugmentationConfig, batch_augment
 
     noise_enabled = add_noise is not None
@@ -685,9 +736,9 @@ def dataset_augment(
     gain_min, gain_max = _parse_range(gain) if gain else (-12.0, 12.0)
 
     if not any([noise_enabled, stretch_enabled, pitch_enabled, gain_enabled]):
-        print_error("At least one augmentation option must be specified")
-        echo("Use --help for available options")
-        raise SystemExit(1)
+        raise click.ClickException(
+            "At least one augmentation option must be specified (see --help)"
+        )
 
     config = WaveformAugmentationConfig(
         sample_rate=sample_rate,
@@ -717,6 +768,9 @@ def dataset_augment(
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if emit_result(stats):
+        return
 
     summary = (
         f"Created {stats['files_created']} augmented files from "
@@ -773,6 +827,7 @@ def dataset_remix(
     from dataclasses import replace
 
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_result
     from bioamla.datasets import RemixRecipe, remix_dataset
 
     if keep and drop:
@@ -806,6 +861,9 @@ def dataset_remix(
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if emit_result(stats):
+        return
 
     if not quiet:
         click.echo(f"Remix: {stats['name']}")

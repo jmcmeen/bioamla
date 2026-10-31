@@ -6,6 +6,108 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `models ast evaluate` reports per-class precision, recall, F1 and support and the files it
+  couldn't evaluate (on screen, in every `--format` report and in `--json`), and the confusion
+  matrix with its label order (in the `txt` and `json` reports and `--json`). `--format csv` writes
+  an overall row and one row per class. `EvaluationResult` gains `labels`, `per_class` and
+  `skipped`, and its `confusion_matrix` is now filled in.
+- `batch_detect_files()` (`bioamla.detect`): detection over an explicit list of files, writing
+  the same `detections_<method>.json` as `batch_detect_dir()` and returning per-file counts.
+- `bioamla --json <command>`: machine-readable output for scripts and agents. stdout gets
+  exactly one JSON envelope (`{"bioamla", "command", "ok", "result"}`, or `"error": {"type",
+  "message"}` on failure), and everything meant for people goes to stderr. `annotation summary`,
+  `audio metadata` and `dataset stats` report results so far; the other commands follow.
+- `--json` results for `detect energy|ribbit|peaks|accelerating` (`detections`, `count`, the
+  options used and any `-o` path), `indices compute|temporal|aci|adi|aei|bio|ndsi|entropy`,
+  `audio info` and `audio list`. Reported options are keyed by option name (`--threshold-db` as
+  `threshold_db`), not by internal parameter name.
+- `--json` results for `models ast predict` (predictions with times, label and confidence),
+  `evaluate` (the metrics), `embed` (output path and shape; the vectors stay in the file) and
+  `info` (every class label), and for `cluster reduce|fit|analyze|novelty` (shapes, cluster sizes,
+  quality scores, novel sample indices).
+- `--json` results for the `annotation` commands (`template`, `convert`, `remap`, `filter`,
+  `generate-labels`, `generate-frame-labels`: counts, labels, output paths) and the `dataset`
+  commands (`merge`, `extract-clips`, `manifest`, `partition`, `build`, `license`, `augment`,
+  `remix`: their stats as returned by the library).
+- `--json` results for the 19 `batch` commands: counts, timing, output files and each failure's
+  file and error, the output directory, `results_file` (the aggregate file the command wrote,
+  only if it exists) and, in CSV mode, `metadata_csv`, the updated metadata CSV. `batch audio
+  validate` with invalid files is a failure envelope with the batch result in `error.details`.
+- `batch_generate_spectrograms()` also returns `output_files` and `errors`.
+- `--json` results for the rest of the CLI: the `audio` transforms, `segment`, `visualize`
+  and `video` (input, output, options), `system version|devices|deps|schema`,
+  `util download|unzip|zip`, `models ast init-config|train` (the `TrainResult`) and all 15
+  `catalogs` commands (search results, downloads, Hub pushes and pulls, cache contents). Every
+  command now reports a result; `audio play` refuses `--json`, and `system deps --install` and
+  `catalogs hf cache --purge` need `--yes` with it (a purge that fails for some repos is a
+  failure envelope with the details). Per-file results all use `file`/`output`, and
+  `inat search` reports the same rows it saves to CSV. A test walks the command tree so a new
+  command can't skip the contract.
+- `get_model_info()` returns `labels`, every class label in class-index order. `classes` is still
+  the first 10.
+
+### Fixed
+
+- `models ast evaluate --batch-size` was accepted and ignored; `evaluate_directory()` now takes
+  `batch_size` and classifies files in batches. Files that can't be loaded are listed instead of
+  silently dropped from the sample count.
+- AST feature extraction passed multi-channel audio to the feature extractor as several inputs,
+  so a stereo file failed or was misread in `predict`, segmented predict, embeddings and evaluate.
+  Channels are now averaged to mono first (`bioamla.ml.ast.mono_waveform`).
+- CSV-mode `batch detect` ran every detector and threw the detections away. Each row now gains
+  a `num_detections` column (blank for a file that failed), and the detections are written to the
+  same `detections_<method>.json` as in directory mode, beside the output CSV.
+- CSV-mode `batch cluster` wrote its input CSV back without the cluster labels. Each row now gains
+  `cluster` and `cluster_labels` (`;`-separated; both blank for a file that wasn't clustered).
+- `batch cluster` exited 0 when clustering failed or no embedding could be loaded; it now fails
+  with a `ClusteringError`.
+- A batch command's `results_file` no longer names a file left over from an earlier run when
+  this run wrote nothing.
+- `catalogs inat search --project-id` was accepted but never passed on, so it searched without
+  the project filter; `inat.search()` now takes `project_id`.
+- `models ast init-config` on an existing file and a failed `system deps --install` printed
+  an error and exited; they raise a regular CLI error now, so `--json` gets the message.
+  `system deps`'s help examples named a `bioamla config deps` command that doesn't exist.
+- The `annotation` and `dataset` commands that printed an error and exited now raise a regular
+  CLI error: the same `Error: ...` line for people, and the actual message (not "exited with
+  status 1") in a `--json` failure envelope. `dataset license --batch` with failed datasets now
+  names them in the error, and its `--json` envelope carries the per-dataset results in
+  `error.details`.
+- `annotation generate-labels` miscounted clips through float error (0.3 s of audio in 0.1 s
+  clips gave 2, not 3), reported a negative count when the clip was longer than the audio, and
+  crashed on `--hop-length 0`. Those inputs are now errors, and the count is right. With
+  `--format numpy`, both label commands report the `.npy` and `.labels.csv` files they actually
+  write, and a failed write is an error, not a traceback.
+- `dataset augment` range options accept negative ranges written with a dash (`-2-2`,
+  `-6--1`) and report unusable input as a bad option value instead of a traceback.
+- The `cluster` commands report an unreadable `.npy` input (missing, empty or the wrong shape)
+  as `InvalidInputError` and a failed write as an error, instead of a traceback;
+  `models ast predict|evaluate|embed` do the same for a failed write.
+- `get_model_info()` listed classes in the config's key order, which for more than 10 classes is
+  often string order ("0", "1", "10", "2", ...); they now follow the class index.
+- `models ast evaluate --format csv|txt -o FILE` wrote a Python dict repr. `csv` now writes a
+  header and one row of the scalar metrics; `txt` one `name: value` line per metric.
+
+### Changed
+
+- `cluster_embedding_files()` and `cluster_batch_files()` raise `ClusteringError` when clustering
+  fails or no embedding file can be loaded, instead of returning a result with the error in
+  `errors`. They cluster a file listed twice only once, and each entry in
+  `metadata["file_assignments"]` (and `cluster_assignments.json`) has a `cluster`: the most
+  common non-noise label, ties to the smallest.
+- The `annotation` commands check that their input file exists through Click, so a missing
+  file is a usage error (exit status 2, `Error: Invalid value for 'INPUT_FILE': ... does not
+  exist`) instead of exit status 1.
+
+### Deprecated
+
+- `catalogs inat search --has-sounds`: it never had an effect; the search only returns
+  observations with sounds.
+- The per-command `--json` flags of `annotation summary`, `audio metadata` and `dataset stats`.
+  They still print bare JSON (now with a note on stderr); use `bioamla --json <command>`.
+
 ## [0.3.1] - 2026-10-31
 
 ### Added

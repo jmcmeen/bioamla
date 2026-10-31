@@ -167,8 +167,12 @@ def search(
     place_id: int | None = None,
     quality_grade: str | None = "research",
     per_page: int = 30,
+    project_id: int | str | None = None,
 ) -> INaturalistSearchResult:
     """Search for iNaturalist observations with sounds.
+
+    ``project_id`` (a project's numeric id or slug) limits the search to that
+    project's observations.
 
     Raises:
         CatalogError: on API failure.
@@ -179,6 +183,7 @@ def search(
             taxon_id=taxon_id,
             taxon_name=taxon_name,
             place_id=place_id,
+            project_id=project_id,
             quality_grade=quality_grade,
             per_page=per_page,
         )
@@ -190,6 +195,7 @@ def search(
                 "taxon_id": taxon_id,
                 "taxon_name": taxon_name,
                 "place_id": place_id,
+                "project_id": project_id,
                 "quality_grade": quality_grade,
             },
         )

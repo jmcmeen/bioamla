@@ -595,8 +595,9 @@ def get_ast_model_info(model_path: str) -> dict[str, Any]:
         model_path: Path to model or HuggingFace identifier.
 
     Returns:
-        A dict with ``path``, ``model_type``, ``num_classes``, ``classes``,
-        ``has_more_classes``, and ``hidden_size``.
+        A dict with ``path``, ``model_type``, ``num_classes``, ``classes`` (the
+        first 10, for display), ``has_more_classes``, ``labels`` (all class labels,
+        in output order) and ``hidden_size``.
 
     Raises:
         ModelError: If the config cannot be loaded.
@@ -609,7 +610,9 @@ def get_ast_model_info(model_path: str) -> dict[str, Any]:
         raise ModelError(f"Failed to load model config from {model_path}: {e}") from e
 
     id2label = getattr(config, "id2label", {})
-    classes = list(id2label.values()) if id2label else []
+    # By class index, not dict order: configs often store the keys as sorted
+    # strings ("0", "1", "10", "2", ...), which from_pretrained keeps.
+    classes = [id2label[k] for k in sorted(id2label, key=int)] if id2label else []
 
     return {
         "path": model_path,
@@ -617,5 +620,6 @@ def get_ast_model_info(model_path: str) -> dict[str, Any]:
         "num_classes": len(classes) if classes else getattr(config, "num_labels", 0),
         "classes": classes[:10] if classes else [],
         "has_more_classes": len(classes) > 10 if classes else False,
+        "labels": classes,
         "hidden_size": getattr(config, "hidden_size", None),
     }

@@ -294,15 +294,13 @@ def test_ast_train_error(runner: CliRunner) -> None:
 
 
 def test_ast_evaluate(runner: CliRunner, test_audio_dir, tmp_path) -> None:
+    pytest.importorskip("torch")
+    from bioamla.ml.ast_service import EvaluationResult
+
     gt = tmp_path / "gt.csv"
     gt.write_text("file_name,label\na.wav,frog\n")
-    eval_result = SimpleNamespace(
-        accuracy=0.9,
-        precision=0.88,
-        recall=0.91,
-        f1_score=0.89,
-        total_samples=10,
-        to_dict=lambda: {"accuracy": 0.9},
+    eval_result = EvaluationResult(
+        accuracy=0.9, precision=0.88, recall=0.91, f1_score=0.89, total_samples=10
     )
     with patch("bioamla.ml.evaluate_directory", return_value=eval_result):
         result = runner.invoke(cli, ["models", "ast", "evaluate", test_audio_dir, "-g", str(gt)])
@@ -311,16 +309,14 @@ def test_ast_evaluate(runner: CliRunner, test_audio_dir, tmp_path) -> None:
 
 
 def test_ast_evaluate_output_json(runner: CliRunner, test_audio_dir, tmp_path) -> None:
+    pytest.importorskip("torch")
+    from bioamla.ml.ast_service import EvaluationResult
+
     gt = tmp_path / "gt.csv"
     gt.write_text("file_name,label\na.wav,frog\n")
     out = tmp_path / "res.json"
-    eval_result = SimpleNamespace(
-        accuracy=0.9,
-        precision=0.8,
-        recall=0.8,
-        f1_score=0.8,
-        total_samples=5,
-        to_dict=lambda: {"accuracy": 0.9},
+    eval_result = EvaluationResult(
+        accuracy=0.9, precision=0.8, recall=0.8, f1_score=0.8, total_samples=5
     )
     with patch("bioamla.ml.evaluate_directory", return_value=eval_result):
         result = runner.invoke(

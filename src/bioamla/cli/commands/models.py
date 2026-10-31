@@ -120,13 +120,15 @@ def ast_init_config(output: str, force: bool) -> None:
     try:
         path = write_train_config(output, force=force)
     except InvalidInputError as e:
-        click.echo(str(e), err=True)
-        if "already exists" in str(e):
-            click.echo("Use --force to overwrite.")
-        raise SystemExit(1) from e
+        hint = " Use --force to overwrite." if "already exists" in str(e) else ""
+        raise click.ClickException(f"{e}{hint}") from e
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result({"output": str(path)}):
+        return
     print_success(f"Created training config: {path}")
 
 
@@ -175,6 +177,7 @@ def ast_predict(
     from pathlib import Path
 
     from bioamla.cli.console import echo, print_success
+    from bioamla.cli.output import emit_file_result, json_mode
     from bioamla.ml import ASTInference
 
     try:
@@ -192,14 +195,40 @@ def ast_predict(
 
     if output:
         out_path = Path(output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with out_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["filepath", "start", "stop", "prediction", "confidence"])
-            for r in results:
-                writer.writerow(
-                    [r.filepath, r.start_time, r.end_time, r.predicted_label, f"{r.confidence:.6f}"]
-                )
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            with out_path.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["filepath", "start", "stop", "prediction", "confidence"])
+                for r in results:
+                    writer.writerow(
+                        [
+                            r.filepath,
+                            r.start_time,
+                            r.end_time,
+                            r.predicted_label,
+                            f"{r.confidence:.6f}",
+                        ]
+                    )
+        except OSError as e:
+            raise click.ClickException(f"Failed to write {output}: {e}") from e
+
+    if json_mode():
+        emit_file_result(
+            file,
+            count=len(results),
+            predictions=[
+                {
+                    "start_time": r.start_time,
+                    "end_time": r.end_time,
+                    "label": r.predicted_label,
+                    "confidence": r.confidence,
+                }
+                for r in results
+            ],
+        )
+        return
+    if output:
         print_success(f"Wrote {len(results)} prediction(s) to {output}")
         return
 
@@ -617,11 +646,68 @@ def ast_train(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(result):
+        return
     print_success(f"Training complete. Best model saved to: {result.model_path}")
     if result.final_accuracy is not None:
         print_kv("Final eval accuracy", f"{result.final_accuracy:.4f}")
     if result.final_loss is not None:
         print_kv("Final eval loss", f"{result.final_loss:.4f}")
+
+
+def _per_class_lines(per_class: dict) -> list[str]:
+    """Per-class precision/recall/F1/support as aligned plain-text rows."""
+    width = max(len("label"), *(len(label) for label in per_class))
+    lines = [f"{'label':<{width}}  precision  recall  f1     support"]
+    for label, m in per_class.items():
+        lines.append(
+            f"{label:<{width}}  {m['precision']:<9.3f}  {m['recall']:<6.3f}  "
+            f"{m['f1_score']:<5.3f}  {m['support']}"
+        )
+    return lines
+
+
+def _evaluation_text(result) -> str:
+    """The ``--format txt`` report: overall metrics, per-class table, confusion
+    matrix (rows true, columns predicted) and skipped files."""
+    lines = [
+        f"accuracy: {result.accuracy}",
+        f"precision: {result.precision}",
+        f"recall: {result.recall}",
+        f"f1_score: {result.f1_score}",
+        f"total_samples: {result.total_samples}",
+    ]
+    if result.per_class:
+        lines += ["", *_per_class_lines(result.per_class)]
+    if result.confusion_matrix and result.labels:
+        width = max(len(label) for label in result.labels)
+        lines += ["", "confusion matrix (rows: true, columns: predicted)"]
+        lines.append(" " * width + "  " + "  ".join(result.labels))
+        for label, row in zip(result.labels, result.confusion_matrix, strict=True):
+            cells = "  ".join(f"{n:>{len(col)}}" for n, col in zip(row, result.labels, strict=True))
+            lines.append(f"{label:<{width}}  {cells}")
+    if result.skipped:
+        lines += ["", "skipped:", *(f"  {s}" for s in result.skipped)]
+    return "\n".join(lines) + "\n"
+
+
+def _evaluation_csv_rows(result) -> list[dict]:
+    """``--format csv``: one overall row (with accuracy), then one row per class."""
+    rows = [
+        {
+            "label": "(overall)",
+            "accuracy": result.accuracy,
+            "precision": result.precision,
+            "recall": result.recall,
+            "f1_score": result.f1_score,
+            "support": result.total_samples,
+        }
+    ]
+    for label, m in (result.per_class or {}).items():
+        rows.append({"label": label, "accuracy": "", **m})
+    return rows
 
 
 @ast.command("evaluate")
@@ -672,7 +758,15 @@ def ast_evaluate(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.cli.console import echo, print_header, print_kv, print_success
+    from bioamla.cli.console import (
+        echo,
+        print_header,
+        print_kv,
+        print_success,
+        print_table,
+        print_warning,
+    )
+    from bioamla.cli.output import command_options, emit_result, json_mode
     from bioamla.ml import evaluate_directory
 
     try:
@@ -684,9 +778,41 @@ def ast_evaluate(
             label_column=label_column,
             resample_freq=resample_freq,
             use_fp16=fp16,
+            batch_size=batch_size,
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if output:
+        out_path = PathLib(output)
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            metrics = eval_result.to_dict()
+            if output_format == "json":
+                out_path.write_text(json_lib.dumps(metrics, indent=2), encoding="utf-8")
+            elif output_format == "csv":
+                import csv
+
+                rows = _evaluation_csv_rows(eval_result)
+                with out_path.open("w", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+                    writer.writeheader()
+                    writer.writerows(rows)
+            else:
+                out_path.write_text(_evaluation_text(eval_result), encoding="utf-8")
+        except OSError as e:
+            raise click.ClickException(f"Failed to write {output}: {e}") from e
+
+    if json_mode():
+        emit_result(
+            {
+                "path": path,
+                "params": command_options(exclude=("output", "output_format")),
+                "metrics": eval_result.to_dict(),
+                "output": output,
+            }
+        )
+        return
 
     if not quiet:
         print_header("\nEvaluation Results:")
@@ -696,14 +822,28 @@ def ast_evaluate(
     print_kv("Recall", f"{eval_result.recall:.4f}")
     print_kv("F1 Score", f"{eval_result.f1_score:.4f}")
     print_kv("Total Samples", eval_result.total_samples)
-
+    if eval_result.per_class:
+        print_table(
+            "Per class",
+            ["Label", "Precision", "Recall", "F1", "Support"],
+            [
+                [
+                    label,
+                    f"{m['precision']:.3f}",
+                    f"{m['recall']:.3f}",
+                    f"{m['f1_score']:.3f}",
+                    m["support"],
+                ]
+                for label, m in eval_result.per_class.items()
+            ],
+        )
+    if eval_result.skipped:
+        print_warning(f"Skipped {len(eval_result.skipped)} file(s):")
+        for skipped in eval_result.skipped[:10]:
+            echo(f"  {skipped}")
+        if len(eval_result.skipped) > 10:
+            echo(f"  ... and {len(eval_result.skipped) - 10} more (all in --format txt/json)")
     if output:
-        out_path = PathLib(output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        if output_format == "json":
-            out_path.write_text(json_lib.dumps(eval_result.to_dict(), indent=2), encoding="utf-8")
-        else:
-            out_path.write_text(str(eval_result.to_dict()), encoding="utf-8")
         print_success(f"Results saved to: {output}")
 
 
@@ -724,6 +864,7 @@ def ast_embed(file: str, model_path: str, output: str, layer: str, sample_rate: 
     import numpy as np
 
     from bioamla.cli.console import print_info, print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.ml import extract_embeddings_file
 
     print_info(f"Loading AST model from {model_path}...")
@@ -739,8 +880,14 @@ def ast_embed(file: str, model_path: str, output: str, layer: str, sample_rate: 
         raise click.ClickException(str(e)) from e
 
     embeddings = result["embeddings"]
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    np.save(output, embeddings)
+    try:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        np.save(output, embeddings)
+    except OSError as e:
+        raise click.ClickException(f"Failed to write {output}: {e}") from e
+    # The vectors stay in the .npy file; the result says where and what shape.
+    if emit_file_result(file, shape=list(embeddings.shape), dtype=str(embeddings.dtype)):
+        return
     print_success(f"Embeddings saved to {output} (shape: {embeddings.shape})")
 
 
@@ -753,12 +900,25 @@ def ast_info(model_path: str) -> None:
         bioamla models ast info bioamla/scp-frogs
     """
     from bioamla.cli.console import print_kv
+    from bioamla.cli.output import emit_result, json_mode
     from bioamla.ml import get_model_info
 
     try:
         info = get_model_info(model_path)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if json_mode():
+        emit_result(
+            {
+                "model": info["path"],
+                "model_type": info["model_type"],
+                "num_classes": info["num_classes"],
+                "labels": info["labels"],
+                "hidden_size": info["hidden_size"],
+            }
+        )
+        return
 
     print_kv("Model", info["path"])
     print_kv("Type", info["model_type"])

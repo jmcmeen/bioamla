@@ -16,7 +16,7 @@ from bioamla._extras import require_extra
 # Fail early, with the install command, if the [detect] extra is missing.
 require_extra("detect", "bioamla.detect")
 
-from bioamla.detect.batch import batch_detect_dir
+from bioamla.detect.batch import batch_detect_dir, batch_detect_files
 from bioamla.detect.core import (
     AcceleratingPatternDetector,
     BandLimitedEnergyDetector,
@@ -49,6 +49,7 @@ __all__ = [
     "export_detections",
     "batch_detect",
     "batch_detect_dir",
+    "batch_detect_files",
     # Exceptions
     "AudioLoadError",
     "DependencyError",

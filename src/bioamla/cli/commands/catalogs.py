@@ -39,7 +39,11 @@ def catalogs_inat() -> None:
 @click.option(
     "--quality-grade", default="research", help="Quality grade: research, needs_id, or casual"
 )
-@click.option("--has-sounds", is_flag=True, help="Only show observations with sounds")
+@click.option(
+    "--has-sounds",
+    is_flag=True,
+    help="Deprecated: has no effect; this search only returns observations with sounds.",
+)
 @click.option("--limit", type=int, default=20, help="Maximum number of results")
 @click.option("--output", "-o", default=None, help="Output file path for CSV (optional)")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
@@ -71,70 +75,71 @@ def inat_search(
             taxon_id=taxon_id,
             taxon_name=species,
             place_id=place_id,
+            project_id=project_id,
             quality_grade=quality_grade,
             per_page=limit,
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
-    observations = result.observations
-    if not observations:
+    from bioamla.cli.output import emit_result
+
+    rows = _observation_rows(result.observations)
+    if not rows:
+        if emit_result({"count": 0, "observations": [], "output": None}):
+            return
         echo("No observations found matching the search criteria.", style=DIM_STYLE)
         return
 
     if output:
         from pathlib import Path
 
-        rows = []
-        for obs in observations:
-            taxon = obs.get("taxon", {})
-            observed_on_raw = obs.get("observed_on", "")
-            if hasattr(observed_on_raw, "strftime"):
-                observed_on = observed_on_raw.strftime("%Y-%m-%d")
-            else:
-                observed_on = str(observed_on_raw) if observed_on_raw else ""
-            rows.append(
-                {
-                    "observation_id": obs.get("id"),
-                    "scientific_name": taxon.get("name", ""),
-                    "common_name": taxon.get("preferred_common_name", ""),
-                    "sound_count": len(obs.get("sounds", [])),
-                    "observed_on": observed_on,
-                    "location": obs.get("place_guess", ""),
-                    "url": f"https://www.inaturalist.org/observations/{obs.get('id')}",
-                }
-            )
-        fieldnames = [
-            "observation_id",
-            "scientific_name",
-            "common_name",
-            "sound_count",
-            "observed_on",
-            "location",
-            "url",
-        ]
-        Path(output).parent.mkdir(parents=True, exist_ok=True)
-        with open(output, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-        print_success(f"Saved {len(observations)} observations to {output}")
-    else:
-        print_header(f"\nFound {len(observations)} observations with sounds:\n")
-        echo(f"{'ID':<12} {'Species':<30} {'Sounds':<8} {'Date':<12} {'Location':<30}")
-        echo("-" * 95)
-        for obs in observations:
-            taxon = obs.get("taxon", {})
-            obs_id = obs.get("id", "")
-            name = taxon.get("name", "Unknown")[:28]
-            sound_count = len(obs.get("sounds", []))
-            observed_on_raw = obs.get("observed_on", "")
-            if hasattr(observed_on_raw, "strftime"):
-                observed_on = observed_on_raw.strftime("%Y-%m-%d")
-            else:
-                observed_on = str(observed_on_raw)[:10] if observed_on_raw else ""
-            location = (obs.get("place_guess", "") or "")[:28]
-            echo(f"{obs_id:<12} {name:<30} {sound_count:<8} {observed_on:<12} {location:<30}")
+        try:
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+            with open(output, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+        except OSError as e:
+            raise click.ClickException(f"Failed to write {output}: {e}") from e
+
+    if emit_result({"count": len(rows), "observations": rows, "output": output}):
+        return
+    if output:
+        print_success(f"Saved {len(rows)} observations to {output}")
+        return
+
+    print_header(f"\nFound {len(rows)} observations with sounds:\n")
+    echo(f"{'ID':<12} {'Species':<30} {'Sounds':<8} {'Date':<12} {'Location':<30}")
+    echo("-" * 95)
+    for row in rows:
+        echo(
+            f"{row['observation_id'] or '':<12} {(row['scientific_name'] or 'Unknown')[:28]:<30} "
+            f"{row['sound_count']:<8} {row['observed_on'][:10]:<12} "
+            f"{(row['location'] or '')[:28]:<30}"
+        )
+
+
+def _observation_rows(observations: list[dict]) -> list[dict]:
+    """iNaturalist observations as the rows the search command shows, saves and reports."""
+    rows = []
+    for obs in observations:
+        taxon = obs.get("taxon") or {}
+        observed_on = obs.get("observed_on") or ""
+        if hasattr(observed_on, "strftime"):
+            observed_on = observed_on.strftime("%Y-%m-%d")
+        rows.append(
+            {
+                "observation_id": obs.get("id"),
+                "scientific_name": taxon.get("name", ""),
+                "common_name": taxon.get("preferred_common_name", ""),
+                "sound_count": len(obs.get("sounds") or []),
+                "observed_on": str(observed_on),
+                "location": obs.get("place_guess", "") or "",
+                "url": f"https://www.inaturalist.org/observations/{obs.get('id')}",
+            }
+        )
+    return rows
 
 
 @catalogs_inat.command("stats")
@@ -153,11 +158,19 @@ def inat_stats(project_id: str, output: str, quiet: bool) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
     if output:
         from pathlib import Path
 
-        Path(output).parent.mkdir(parents=True, exist_ok=True)
-        Path(output).write_text(json.dumps(stats.to_dict(), indent=2))
+        try:
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+            Path(output).write_text(json.dumps(stats.to_dict(), indent=2))
+        except OSError as e:
+            raise click.ClickException(f"Failed to write {output}: {e}") from e
+    if emit_result({"stats": stats.to_dict(), "output": output}):
+        return
+    if output:
         print_success(f"Saved project stats to {output}")
     elif quiet:
         click.echo(json.dumps(stats.to_dict(), indent=2))
@@ -239,6 +252,10 @@ def inat_download(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(download_result):
+        return
     if not quiet:
         print_header("\nDownload complete:")
         print_kv("  Observations", download_result.total_observations)
@@ -290,6 +307,10 @@ def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str) -
         print_warning("Make sure you are logged in with 'huggingface-cli login'.")
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(result):
+        return
     print_success(f"Successfully pushed model to: {result.url}")
 
 
@@ -389,6 +410,10 @@ def hf_push_dataset(
         print_warning("Make sure you are logged in with 'huggingface-cli login'.")
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(result):
+        return
     print_success(f"Successfully pushed dataset to: {result.url}")
 
 
@@ -446,6 +471,10 @@ def hf_pull_dataset(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(result):
+        return
     print_success(
         f"Wrote {result.files_written} clips across {len(result.labels)} labels to {result.dest}"
     )
@@ -485,10 +514,28 @@ def hf_cache(models: bool, datasets: bool, target_all: bool, do_purge: bool, yes
     if target_all or (not models and not datasets):
         models = datasets = True
 
+    from bioamla.cli.output import emit_result, fail, json_mode
+
+    if json_mode() and do_purge and not yes:
+        raise click.UsageError("--purge with --json needs --yes (there is no prompt).")
+
     try:
         repos = hf.scan_cache(models=models, datasets=datasets)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+    if json_mode():
+        report = {"repos": repos, "total_bytes": sum(r.size_bytes for r in repos), "purged": None}
+        if do_purge and repos:
+            report["purged"] = hf.purge_cache(models=models, datasets=datasets)
+            if report["purged"].failures:
+                fail(
+                    f"Could not purge {len(report['purged'].failures)} cached repo(s)",
+                    "CatalogError",
+                    details=report,
+                )
+        emit_result(report)
+        return
 
     if not repos:
         echo("No cached data found.", style=DIM_STYLE)
@@ -575,6 +622,10 @@ def xc_search(
         raise click.ClickException(str(e)) from e
 
     recordings = result.recordings
+    from bioamla.cli.output import emit_result
+
+    if emit_result({"count": len(recordings), "recordings": [r.to_dict() for r in recordings]}):
+        return
     if not recordings:
         echo("No recordings found.", style=DIM_STYLE)
         return
@@ -636,6 +687,10 @@ def xc_download(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(download_result):
+        return
     if download_result.total == 0:
         echo("No recordings found.", style=DIM_STYLE)
         return
@@ -717,6 +772,10 @@ def ml_search(
         raise click.ClickException(str(e)) from e
 
     recordings = result.recordings
+    from bioamla.cli.output import emit_result
+
+    if emit_result({"count": len(recordings), "recordings": [r.to_dict() for r in recordings]}):
+        return
     if not recordings:
         echo("No recordings found.", style=DIM_STYLE)
         return
@@ -784,6 +843,10 @@ def ml_download(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(download_result):
+        return
     if download_result.total == 0:
         echo("No recordings found.", style=DIM_STYLE)
         return
@@ -820,6 +883,10 @@ def ebird_species(name: str) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(info):
+        return
     print_kv("Scientific name", info.scientific_name)
     print_kv("Common name", info.common_name)
     print_kv("Species code", info.species_code)
@@ -840,6 +907,10 @@ def ebird_search(query: str, limit: int) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result({"query": query, "count": len(matches), "matches": matches}):
+        return
     if not matches:
         echo(f"No species found matching: {query}", style=DIM_STYLE)
         return
@@ -877,6 +948,10 @@ def ebird_validate(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result
+
+    if emit_result(validation):
+        return
     if validation.is_valid:
         print_success(f"{species_code} is expected at this location")
         echo(f"  Found {validation.nearby_observations} nearby observations")
@@ -917,31 +992,39 @@ def ebird_nearby(
         raise click.ClickException(str(e)) from e
 
     observations = result.observations
+    from bioamla.cli.output import emit_result, json_mode
 
-    print_header(f"Found {len(observations)} recent observations:")
-    for obs in observations[:10]:
-        count_str = f" (x{obs.how_many})" if obs.how_many else ""
-        echo(f"  {obs.common_name}{count_str} - {obs.location_name}")
-
-    if len(observations) > 10:
-        echo(f"  ... and {len(observations) - 10} more", style=DIM_STYLE)
+    if not json_mode():
+        print_header(f"Found {len(observations)} recent observations:")
+        for obs in observations[:10]:
+            count_str = f" (x{obs.how_many})" if obs.how_many else ""
+            echo(f"  {obs.common_name}{count_str} - {obs.location_name}")
+        if len(observations) > 10:
+            echo(f"  ... and {len(observations) - 10} more", style=DIM_STYLE)
 
     if output:
         import csv
         from pathlib import Path
 
-        Path(output).parent.mkdir(parents=True, exist_ok=True)
-        fieldnames = [
-            "species_code",
-            "common_name",
-            "scientific_name",
-            "location_name",
-            "observation_date",
-            "how_many",
-        ]
-        with open(output, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            for obs in observations:
-                writer.writerow(obs.to_dict())
+        try:
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+            fieldnames = [
+                "species_code",
+                "common_name",
+                "scientific_name",
+                "location_name",
+                "observation_date",
+                "how_many",
+            ]
+            with open(output, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+                writer.writeheader()
+                for obs in observations:
+                    writer.writerow(obs.to_dict())
+        except OSError as e:
+            raise click.ClickException(f"Failed to write {output}: {e}") from e
+
+    if emit_result({"count": len(observations), "observations": observations, "output": output}):
+        return
+    if output:
         print_success(f"Saved to: {output}")

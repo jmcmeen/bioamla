@@ -23,7 +23,9 @@ class TestBatchGenerateSpectrograms:
         par = tmp_path / "par"
         batch_generate_spectrograms(test_audio_dir, str(seq), verbose=False)
         stats = batch_generate_spectrograms(test_audio_dir, str(par), verbose=False, max_workers=3)
-        assert stats == {"files_processed": 3, "files_failed": 0, "output_dir": str(par)}
+        assert stats["files_processed"] == 3 and stats["files_failed"] == 0
+        assert stats["output_dir"] == str(par) and stats["errors"] == []
+        assert len(stats["output_files"]) == 3
         for image in seq.glob("*.png"):
             # Same pixels whichever thread drew it: no pyplot state is shared.
             assert (par / image.name).read_bytes() == image.read_bytes()

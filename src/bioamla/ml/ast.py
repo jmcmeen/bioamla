@@ -26,6 +26,7 @@ from bioamla.common.config import config_dataclass
 from bioamla.exceptions import ModelError
 
 if TYPE_CHECKING:
+    import numpy as np
     import torch
     from transformers import ASTFeatureExtractor, AutoModelForAudioClassification
 
@@ -133,6 +134,18 @@ def load_pretrained_ast_model(
     return model
 
 
+def mono_waveform(waveform_tensor: "torch.Tensor") -> "np.ndarray":
+    """A waveform tensor as a 1-D numpy array, averaging channels to mono.
+
+    ``(channels, samples)`` input is downmixed; ``(samples,)`` and
+    ``(1, samples)`` pass through. The AST feature extractor treats a 2-D array as
+    a batch, so a stereo file would otherwise become two inputs.
+    """
+    if waveform_tensor.ndim == 2 and waveform_tensor.shape[0] > 1:
+        waveform_tensor = waveform_tensor.mean(dim=0)
+    return waveform_tensor.squeeze().numpy()
+
+
 def extract_features(
     waveform_tensor: "torch.Tensor",
     sample_rate: int,
@@ -154,7 +167,7 @@ def extract_features(
     """
     torch = _require_torch()
 
-    waveform_np = waveform_tensor.squeeze().numpy()
+    waveform_np = mono_waveform(waveform_tensor)
 
     if feature_extractor is None:
         feature_extractor = get_cached_feature_extractor()

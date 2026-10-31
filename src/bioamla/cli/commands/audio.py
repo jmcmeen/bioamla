@@ -59,6 +59,32 @@ def audio_info(path: str, show_metadata: bool) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    # Recorder metadata, read once for both output modes: None when not asked for,
+    # "not_wav" for a non-WAV file, else the (possibly empty) RecordingMetadata.
+    meta = None
+    if show_metadata:
+        from bioamla.audio import get_recording_metadata
+        from bioamla.exceptions import InvalidInputError
+
+        try:
+            meta = get_recording_metadata(path)
+        except InvalidInputError:
+            meta = "not_wav"
+        except BioamlaError as e:
+            raise click.ClickException(str(e)) from e
+
+    from bioamla.cli.output import emit_result, json_mode
+
+    if json_mode():
+        result = {"file": path, "info": info}
+        if show_metadata:
+            # null: not a WAV file; {}: a WAV with no recorder metadata.
+            result["recording_metadata"] = (
+                None if meta == "not_wav" else ({} if meta.is_empty else meta.to_dict())
+            )
+        emit_result(result)
+        return
+
     print_kv("File", path)
     print_kv("Format", info.format)
     print_kv("Duration", f"{info.duration:.2f}s")
@@ -70,20 +96,11 @@ def audio_info(path: str, show_metadata: bool) -> None:
     if info.subtype:
         print_kv("Subtype", info.subtype)
 
-    if show_metadata:
-        from bioamla.audio import get_recording_metadata
+    if meta is not None and meta != "not_wav" and not meta.is_empty:
         from bioamla.cli.console import print_header
-        from bioamla.exceptions import InvalidInputError
 
-        try:
-            meta = get_recording_metadata(path)
-        except InvalidInputError:
-            return  # not a WAV; nothing to show
-        except BioamlaError as e:
-            raise click.ClickException(str(e)) from e
-        if not meta.is_empty:
-            print_header("\nRecorder metadata")
-            _print_recording_metadata(meta.to_dict())
+        print_header("\nRecorder metadata")
+        _print_recording_metadata(meta.to_dict())
 
 
 @audio.command("metadata")
@@ -92,23 +109,35 @@ def audio_info(path: str, show_metadata: bool) -> None:
     "--json",
     "output_json",
     is_flag=True,
-    help="Dump every field of every standard as JSON instead of the flat summary.",
+    help="Deprecated: bare JSON of every field. Use `bioamla --json audio metadata` instead.",
 )
 def audio_metadata(path: str, output_json: bool) -> None:
     """Show recorder metadata embedded in a WAV file.
 
     Prints the flattened view (when, where, which device) that bioamla datasets use.
-    With --json, prints everything riffy decoded, per standard. For chunk-level
+    With `bioamla --json`, the result holds the flattened view (``summary``) and
+    everything riffy decoded, per standard (``standards``). For chunk-level
     inspection and editing use the `riffy` command directly.
     """
-    import json as json_lib
-
     from bioamla.audio import dump_recording_metadata, get_recording_metadata
     from bioamla.cli.console import print_kv, print_warning
+    from bioamla.cli.output import emit_result, json_mode, legacy_json
 
     try:
+        if json_mode():
+            # Both reads are header-only. The flat summary is what datasets use;
+            # "standards" has every decoded field, per standard.
+            standards = dump_recording_metadata(path)
+            emit_result(
+                {
+                    "file": standards.pop("file", path),
+                    "summary": get_recording_metadata(path).to_dict(),
+                    "standards": standards,
+                }
+            )
+            return
         if output_json:
-            click.echo(json_lib.dumps(dump_recording_metadata(path), indent=2))
+            legacy_json(dump_recording_metadata(path))
             return
         meta = get_recording_metadata(path)
     except BioamlaError as e:
@@ -139,6 +168,13 @@ def audio_list(path: str, recursive: bool) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result, json_mode
+
+    if json_mode():
+        emit_result(
+            {"path": path, "recursive": recursive, "count": len(audio_files), "files": audio_files}
+        )
+        return
     if not audio_files:
         echo("No audio files found", style=DIM_STYLE)
         return
@@ -160,6 +196,10 @@ def audio_play(path: str, loop: bool) -> None:
 
     from bioamla.audio import play_audio
     from bioamla.cli.console import echo, print_success
+    from bioamla.cli.output import json_mode
+
+    if json_mode():
+        raise click.ClickException("audio play has no --json output (it plays sound)")
 
     try:
         player = play_audio(path, loop=loop, block=False)
@@ -204,6 +244,7 @@ def audio_convert(
 
     from bioamla.audio import load_audio_data, save_audio_data_as
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
 
     try:
         audio_data = load_audio_data(input_path)
@@ -229,6 +270,8 @@ def audio_convert(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_path):
+        return
     print_success(f"Converted: {output_path}")
 
 
@@ -271,6 +314,7 @@ def audio_segment(
     """Segment audio file into fixed-duration clips."""
     from bioamla.audio import load_audio, save_audio
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.exceptions import InvalidInputError
 
     try:
@@ -300,6 +344,8 @@ def audio_segment(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_dir, segments=segments_created):
+        return
     print_success(f"Created {segments_created} segments in {output_dir}")
 
 
@@ -317,6 +363,7 @@ def audio_trim(
     """Trim audio file to specified time range."""
     from bioamla.audio import load_audio, save_audio, trim_audio
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
 
     if end is not None and duration is not None:
         raise click.ClickException("Cannot specify both --end and --duration")
@@ -332,6 +379,8 @@ def audio_trim(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_path):
+        return
     print_success(f"Trimmed audio saved to: {output_path}")
 
 
@@ -349,6 +398,7 @@ def audio_normalize(input_path: str, output_path: str, target_db: float, method:
         save_audio,
     )
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
 
     try:
         audio, sr = load_audio(input_path)
@@ -363,6 +413,8 @@ def audio_normalize(input_path: str, output_path: str, target_db: float, method:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_path):
+        return
     print_success(f"Normalized audio saved to: {output_path}")
 
 
@@ -374,6 +426,7 @@ def audio_resample(input_path: str, output_path: str, sample_rate: int) -> None:
     """Resample audio to a different sample rate."""
     from bioamla.audio import load_audio, resample_audio, save_audio
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
 
     try:
         audio, sr = load_audio(input_path)
@@ -382,6 +435,8 @@ def audio_resample(input_path: str, output_path: str, sample_rate: int) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_path):
+        return
     print_success(f"Resampled audio saved to: {output_path}")
 
 
@@ -411,6 +466,7 @@ def audio_filter(
         save_audio,
     )
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
 
     # Validate filter options
     if not any([lowpass, highpass, bandpass_low]):
@@ -440,6 +496,8 @@ def audio_filter(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_path):
+        return
     print_success(f"Applied {desc} to: {output_path}")
 
 
@@ -453,6 +511,7 @@ def audio_denoise(input_path: str, output_path: str, strength: float) -> None:
     """Apply spectral noise reduction to audio file."""
     from bioamla.audio import load_audio, save_audio, spectral_denoise
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
 
     try:
         audio, sr = load_audio(input_path)
@@ -461,6 +520,8 @@ def audio_denoise(input_path: str, output_path: str, strength: float) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_path):
+        return
     print_success(f"Denoised audio saved to: {output_path}")
 
 
@@ -474,6 +535,7 @@ def audio_pitch_shift(input_path: str, output_path: str, steps: float) -> None:
     """Shift pitch up/down without changing duration."""
     from bioamla.audio import load_audio, pitch_shift, save_audio
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
 
     try:
         audio, sr = load_audio(input_path)
@@ -482,6 +544,8 @@ def audio_pitch_shift(input_path: str, output_path: str, steps: float) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_path):
+        return
     print_success(f"Pitch-shifted audio ({steps:+g} semitones) saved to: {output_path}")
 
 
@@ -495,6 +559,7 @@ def audio_time_stretch(input_path: str, output_path: str, rate: float) -> None:
     """Time-stretch audio without changing pitch."""
     from bioamla.audio import load_audio, save_audio, time_stretch
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
 
     try:
         audio, sr = load_audio(input_path)
@@ -503,6 +568,8 @@ def audio_time_stretch(input_path: str, output_path: str, rate: float) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_path):
+        return
     print_success(f"Time-stretched audio (rate {rate:g}) saved to: {output_path}")
 
 
@@ -515,6 +582,7 @@ def audio_add_noise(input_path: str, output_path: str, snr_db: float, seed: int)
     """Add Gaussian white noise at a target SNR."""
     from bioamla.audio import add_noise, load_audio, save_audio
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
 
     try:
         audio, sr = load_audio(input_path)
@@ -523,6 +591,8 @@ def audio_add_noise(input_path: str, output_path: str, snr_db: float, seed: int)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_path):
+        return
     print_success(f"Noisy audio (SNR {snr_db:g} dB) saved to: {output_path}")
 
 
@@ -534,6 +604,7 @@ def audio_gain(input_path: str, output_path: str, gain_db: float) -> None:
     """Apply a fixed gain (dB) to audio."""
     from bioamla.audio import apply_gain, load_audio, save_audio
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
 
     try:
         audio, sr = load_audio(input_path)
@@ -542,6 +613,8 @@ def audio_gain(input_path: str, output_path: str, gain_db: float) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(input_path, output=output_path):
+        return
     print_success(f"Gain-adjusted audio ({gain_db:+g} dB) saved to: {output_path}")
 
 
@@ -591,6 +664,7 @@ def audio_visualize(
         bioamla audio visualize rec.wav --type waveform -o wave.png
     """
     from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.viz import generate_spectrogram
 
     output_path = output or f"{Path(path).stem}_{viz_type}.png"
@@ -611,6 +685,8 @@ def audio_visualize(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(path, output=output_path):
+        return
     print_success(f"Visualization saved to: {output_path}")
 
 
@@ -698,6 +774,7 @@ def audio_video(
         bioamla audio video night.wav -s 90 -e 120
     """
     from bioamla.cli.console import ProgressBar, print_success
+    from bioamla.cli.output import emit_file_result
     from bioamla.viz import generate_spectrogram_video
 
     try:
@@ -738,6 +815,15 @@ def audio_video(
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    if emit_file_result(
+        path,
+        output=result.output_path,
+        frames=result.frames,
+        width=result.width,
+        height=result.height,
+        duration=result.duration,
+    ):
+        return
     print_success(
         f"Video saved to: {result.output_path} "
         f"({result.frames} frames, {result.width}x{result.height}, {result.duration:.1f}s)"

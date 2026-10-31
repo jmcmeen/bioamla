@@ -2,6 +2,8 @@
 BioAMLA CLI - Bioacoustic Machine Learning Applications
 """
 
+import sys
+
 import click
 
 from bioamla import __version__
@@ -70,7 +72,9 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
     if not value or ctx.resilient_parsing:
         return
     from bioamla.cli.console import console
+    from bioamla.cli.output import emit_result
 
+    emit_result({"version": __version__})
     console.print()
     console.print(_gradient_banner(_BANNER, _BANNER_GRADIENT), highlight=False)
     console.print("\n  Bioacoustic & Machine Learning Applications", highlight=False)
@@ -78,7 +82,49 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
     ctx.exit()
 
 
-@click.group()
+class BioamlaGroup(click.Group):
+    """The root group. It runs the ``--json`` contract (:mod:`bioamla.cli.output`).
+
+    Implemented in :meth:`main`, which both the console script and in-process
+    callers (``CliRunner``, embedders) go through: JSON mode is switched on and off
+    around the whole run, and every way a command can end, including a bare
+    ``SystemExit`` or an unexpected exception, yields exactly one envelope.
+    """
+
+    def main(self, args=None, prog_name=None, complete_var=None, standalone_mode=True, **extra):
+        from bioamla.cli import output
+
+        args = list(sys.argv[1:] if args is None else args)
+        if not output.json_flag_given(self, args):
+            return super().main(args, prog_name, complete_var, standalone_mode, **extra)
+
+        command = output.command_from_args(self, args)
+        output.enable_json_mode()
+        try:
+            try:
+                rv = super().main(args, prog_name, complete_var, standalone_mode=False, **extra)
+            except BaseException as exc:
+                output.emit_failure(command, exc)
+                if standalone_mode and isinstance(exc, (BioamlaError, click.ClickException)):
+                    # The JSON is out; show the error for people on stderr, as usual.
+                    if isinstance(exc, click.ClickException):
+                        exc.show()
+                        sys.exit(exc.exit_code)
+                    handle_cli_error(exc)
+                if standalone_mode and isinstance(exc, (click.exceptions.Abort, KeyboardInterrupt)):
+                    sys.exit(1)
+                raise
+            if isinstance(rv, int) and not isinstance(rv, bool) and rv != 0:  # a ctx.exit() code
+                output.emit_failure(command, SystemExit(rv))
+            output.finish(command)
+            if standalone_mode:
+                sys.exit(rv if isinstance(rv, int) and not isinstance(rv, bool) else 0)
+            return rv
+        finally:
+            output.disable_json_mode()
+
+
+@click.group(cls=BioamlaGroup)
 @click.option(
     "--version",
     is_flag=True,
@@ -86,6 +132,12 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
     expose_value=False,
     callback=_print_version,
     help="Show the version and exit.",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    help="Machine-readable output: one JSON document on stdout, everything else on stderr.",
 )
 @click.option(
     "--log-format",
@@ -100,11 +152,13 @@ def _print_version(ctx: click.Context, param: click.Parameter, value: bool) -> N
     default=None,
     help="Log level for library messages (default: each command's own).",
 )
-def cli(log_format: str, log_level: str | None) -> None:
+def cli(json_output: bool, log_format: str, log_level: str | None) -> None:
     """BioAMLA - Bioacoustic & Machine Learning Applications
 
     Use 'bioamla COMMAND --help' for more information on a command.
     """
+    # --json is handled by BioamlaGroup.main, before parsing; the option is here so
+    # it parses and shows in --help.
     set_cli_logging(log_format, log_level)
 
 
@@ -131,7 +185,7 @@ def main() -> None:
     exit codes.
     """
     try:
-        cli.main(standalone_mode=False)
+        rv = cli.main(standalone_mode=False)
     except BioamlaError as e:
         handle_cli_error(e)
     except click.ClickException as e:
@@ -150,6 +204,9 @@ def main() -> None:
             raise
         print_error(f"{e}. {hint}")
         raise SystemExit(1) from e
+    # In non-standalone mode Click returns a ctx.exit() code instead of exiting.
+    if isinstance(rv, int) and not isinstance(rv, bool) and rv != 0:
+        raise SystemExit(rv)
 
 
 if __name__ == "__main__":

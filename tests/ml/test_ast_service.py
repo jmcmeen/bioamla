@@ -180,7 +180,10 @@ class TestEvaluateDirectory:
                 return_value=torch.zeros(1, 16000),
             ),
             patch("bioamla.ml.ast.extract_features", return_value=torch.zeros(1, 4, 8)),
-            patch("bioamla.ml.ast.ast_predict", return_value="a"),
+            patch(
+                "bioamla.ml.ast.ast_predict_batch",
+                side_effect=lambda batch, model: ["a"] * batch.shape[0],
+            ),
             patch.object(torch.cuda, "is_available", return_value=False),
         ):
             result = evaluate_directory(test_audio_dir, "hub/model", str(gt))
