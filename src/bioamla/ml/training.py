@@ -234,6 +234,51 @@ def _load_directory_dataset(
     )
 
 
+def _cleanup_step(what: str, step: Callable[..., object], *args: Any) -> None:
+    """Run one post-training cleanup step, logging (not raising) any failure."""
+    try:
+        step(*args)
+    except Exception as e:  # noqa: BLE001 - cleanup must not mask the training outcome
+        logger.warning(f"Could not {what} after training: {e}")
+
+
+def _free_trainer(trainer: Any) -> None:
+    """Release a trainer's accelerator memory and dataloaders (and their workers)."""
+    if getattr(trainer, "accelerator", None) is not None:
+        trainer.accelerator.free_memory()
+    for attr in ("_train_dataloader", "_eval_dataloader"):
+        if hasattr(trainer, attr):
+            delattr(trainer, attr)
+
+
+def _start_mlflow_run(report_to: str | list[str], run_name: str | None) -> Any:
+    """Start an MLflow run for training when MLflow reporting is on.
+
+    transformers' MLflow callback ends a run it started itself as FINISHED,
+    even when training was cancelled. Starting the run here makes the callback
+    log into it instead, so ``train_ast`` can end it with the real outcome.
+
+    Returns:
+        The ``mlflow`` module when this call started the run (the caller ends
+        it), or None when MLflow is off, missing, or a run is already active.
+    """
+    names = report_to if isinstance(report_to, list) else [report_to]
+    if "mlflow" not in names and "all" not in names:
+        return None
+    try:
+        import mlflow
+    except ImportError:
+        return None
+    try:
+        if mlflow.active_run() is not None:
+            return None
+        mlflow.start_run(run_name=run_name)
+    except Exception as e:  # noqa: BLE001 - fall back to transformers' own run handling
+        logger.warning(f"Could not start an MLflow run: {e}")
+        return None
+    return mlflow
+
+
 # Timing counters transformers adds to evaluation metrics; not model metrics.
 _EVAL_BOOKKEEPING = {"eval_runtime", "eval_samples_per_second", "eval_steps_per_second"}
 
@@ -252,7 +297,7 @@ def _progress_callback(
             self.eval_metrics: dict[str, float] = {}
 
         def _report(self, state) -> None:
-            if on_progress is not None:
+            if on_progress is not None and state.is_world_process_zero:
                 on_progress(
                     TrainProgress(
                         step=state.global_step,
@@ -369,7 +414,8 @@ def train_ast(
             evaluation or checkpoint and without saving ``best_model``, shuts
             down its workers, and raises
             :class:`~bioamla.exceptions.TrainingCancelled`. A phase already
-            under way (e.g. a download) finishes first.
+            under way (e.g. a download) finishes first. The hooks assume a
+            single training process, which is how bioamla runs ``train_ast``.
 
     Returns:
         A :class:`~bioamla.ml.ast_service.TrainResult` with the best-model path,
@@ -731,16 +777,23 @@ def train_ast(
         callbacks=[progress] if progress is not None else None,
     )
 
+    import multiprocessing
+
+    # Child processes that exist before training aren't ours to terminate.
+    children_before = set(multiprocessing.active_children())
+    mlflow_run = _start_mlflow_run(report_to, mlflow_run_name)
+
     final_accuracy = None
     final_loss = None
     cancelled = False
-    run_status = "FAILED"  # MLflow status if train() raises
+    run_status = "FAILED"  # MLflow status unless training and saving complete
     try:
         trainer.train()
         cancelled = progress is not None and progress.cancelled
-        run_status = "KILLED" if cancelled else "FINISHED"
 
-        if not cancelled:
+        if cancelled:
+            run_status = "KILLED"
+        else:
             Path(best_model_path).mkdir(parents=True, exist_ok=True)
             trainer.save_model(best_model_path)
 
@@ -752,38 +805,30 @@ def train_ast(
                     final_loss = float(entry["eval_loss"])
                 if final_accuracy is not None and final_loss is not None:
                     break
+            run_status = "FINISHED"
     finally:
         # Cleanup to prevent hanging from dataloader workers, whether the run
-        # finished, was cancelled, or failed.
-        if hasattr(trainer, "accelerator") and trainer.accelerator is not None:
-            trainer.accelerator.free_memory()
-        if hasattr(trainer, "_train_dataloader"):
-            del trainer._train_dataloader
-        if hasattr(trainer, "_eval_dataloader"):
-            del trainer._eval_dataloader
+        # finished, was cancelled, or failed. Each step is guarded so one
+        # failure neither skips the rest nor replaces the training error.
+        def _end_mlflow_run() -> None:
+            if mlflow_run is not None:
+                mlflow_run.end_run(status=run_status)
 
+        def _stop_workers() -> None:
+            for child in set(multiprocessing.active_children()) - children_before:
+                child.terminate()
+                child.join(timeout=1)
+
+        _cleanup_step("free trainer resources", _free_trainer, trainer)
         del trainer
         del model
         if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        try:
-            import mlflow
-
-            if mlflow.active_run():
-                mlflow.end_run(status=run_status)
-        except ImportError:
-            pass
-
+            _cleanup_step("empty the CUDA cache", torch.cuda.empty_cache)
+        _cleanup_step("end the MLflow run", _end_mlflow_run)
         import gc
 
-        gc.collect()
-
-        import multiprocessing
-
-        for child in multiprocessing.active_children():
-            child.terminate()
-            child.join(timeout=1)
+        _cleanup_step("collect garbage", gc.collect)
+        _cleanup_step("stop dataloader workers", _stop_workers)
 
     if cancelled:
         raise TrainingCancelled("Training cancelled; no model was saved")

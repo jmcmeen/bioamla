@@ -410,7 +410,9 @@ class TestLoadTrainDatasetRouting:
 class TestProgressCallback:
     @staticmethod
     def _state(step: int) -> SimpleNamespace:
-        return SimpleNamespace(global_step=step, max_steps=10, epoch=step / 5)
+        return SimpleNamespace(
+            global_step=step, max_steps=10, epoch=step / 5, is_world_process_zero=True
+        )
 
     def test_reports_steps_loss_and_eval(self) -> None:
         from transformers import TrainerControl
@@ -474,9 +476,53 @@ class TestProgressCallback:
 
         cb = _progress_callback(None, lambda: True)
         control = TrainerControl()
-        cb.on_step_end(None, SimpleNamespace(global_step=10, max_steps=10, epoch=2.0), control)
+        state = SimpleNamespace(global_step=10, max_steps=10, epoch=2.0, is_world_process_zero=True)
+        cb.on_step_end(None, state, control)
         assert not cb.cancelled
         assert control.should_training_stop is False
+
+
+class TestTrainingHelpers:
+    def test_cleanup_step_logs_instead_of_raising(self, caplog) -> None:
+        from bioamla.ml.training import _cleanup_step
+
+        def boom() -> None:
+            raise RuntimeError("tracking server down")
+
+        with caplog.at_level("WARNING", logger="bioamla"):
+            _cleanup_step("end the MLflow run", boom)
+        assert "Could not end the MLflow run after training: tracking server down" in caplog.text
+
+    @pytest.mark.parametrize(
+        ("report_to", "active", "starts"),
+        [
+            ("tensorboard", None, False),
+            (["tensorboard", "mlflow"], None, True),
+            ("all", None, True),
+            ("mlflow", "caller-run", False),  # never take over the caller's run
+        ],
+    )
+    def test_start_mlflow_run(self, report_to, active, starts) -> None:
+        from bioamla.ml.training import _start_mlflow_run
+
+        fake = MagicMock()
+        fake.active_run.return_value = active
+        with patch.dict("sys.modules", {"mlflow": fake}):
+            run = _start_mlflow_run(report_to, "my-run")
+        assert (run is fake) is starts
+        if starts:
+            fake.start_run.assert_called_once_with(run_name="my-run")
+        else:
+            fake.start_run.assert_not_called()
+
+    def test_start_mlflow_run_failure_falls_back(self) -> None:
+        from bioamla.ml.training import _start_mlflow_run
+
+        fake = MagicMock()
+        fake.active_run.return_value = None
+        fake.start_run.side_effect = ConnectionError("tracking server down")
+        with patch.dict("sys.modules", {"mlflow": fake}):
+            assert _start_mlflow_run("mlflow", None) is None
 
 
 # ---------------------------------------------------------------------------
@@ -571,7 +617,9 @@ class TestTrainAst:
         def make_trainer(*args, callbacks=None, **kwargs):
             def train():
                 training["started"] = True
-                state = SimpleNamespace(global_step=1, max_steps=8, epoch=0.25)
+                state = SimpleNamespace(
+                    global_step=1, max_steps=8, epoch=0.25, is_world_process_zero=True
+                )
                 callbacks[0].on_step_end(None, state, TrainerControl())
 
             fake_trainer.train.side_effect = train
