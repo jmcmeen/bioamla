@@ -527,6 +527,8 @@ class TestDatasetStats:
         assert stats["num_categories"] == 2
         assert stats["categories"]["robin"] == 2
         assert stats["num_licenses"] == 2
+        # The metadata CSV's own path works too.
+        assert get_dataset_stats(str(ds / "metadata.csv")) == stats
 
     def test_get_stats_missing(self, tmp_path) -> None:
         with pytest.raises(NotFoundError):

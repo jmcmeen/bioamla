@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import logging
 from collections import Counter
-from pathlib import Path
 from typing import Any
 
 from bioamla.exceptions import DatasetError, NotFoundError
@@ -20,7 +19,8 @@ def get_dataset_stats(
     """Compute statistics for a dataset from its metadata CSV.
 
     Args:
-        dataset_path: Path to the dataset directory.
+        dataset_path: Path to the dataset directory, or to its metadata CSV
+            (then ``metadata_filename`` is ignored).
         metadata_filename: Name of the metadata CSV file.
 
     Returns:
@@ -32,7 +32,9 @@ def get_dataset_stats(
         NotFoundError: If the metadata CSV is missing.
         DatasetError: If the metadata cannot be read.
     """
-    metadata_path = Path(dataset_path) / metadata_filename
+    from bioamla.datasets._metadata import resolve_metadata_path
+
+    metadata_path = resolve_metadata_path(dataset_path, metadata_filename)
     if not metadata_path.exists():
         raise NotFoundError(f"Metadata file not found: {metadata_path}")
 

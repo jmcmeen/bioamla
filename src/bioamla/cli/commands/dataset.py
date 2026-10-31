@@ -186,7 +186,10 @@ def dataset_extract_clips(
     help="Deprecated: bare JSON. Use `bioamla --json dataset stats` instead.",
 )
 def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -> None:
-    """Show summary statistics for a dataset's metadata.csv."""
+    """Show summary statistics for a dataset's metadata.csv.
+
+    DATASET_DIR is the dataset directory, or the path of its metadata CSV.
+    """
     from bioamla.cli.console import echo, print_header, print_kv
     from bioamla.cli.output import emit_result, json_mode, legacy_json
     from bioamla.datasets import get_dataset_stats
@@ -301,12 +304,15 @@ def dataset_manifest(
     "--mode",
     type=click.Choice(["subdirs", "column"]),
     default="subdirs",
+    show_default=True,
     help="Reorganize into train/val/test/<label>/ (subdirs) or populate a split column",
 )
 @click.option(
     "--group-by",
     default="source_file",
-    help="Keep rows sharing this column's value in one split (prevents clip leakage)",
+    show_default=True,
+    help="Keep rows sharing this column's value in one split (prevents clip leakage); "
+    '"" to split row by row',
 )
 @click.option(
     "--background-label",
@@ -332,12 +338,17 @@ def dataset_partition(
 ) -> None:
     """Partition a dataset into train/val/test (stratified, grouped, reproducible).
 
+    DATASET_DIR is the dataset directory, or the path of its metadata CSV.
+
     \b
     Examples:
-        # Default 80/10/10 split, writing a `split` column into metadata.csv
+        # Default: 80/10/10, clips from one recording kept together, files
+        # moved into train/val/test/<label>/ (and a split column written)
         bioamla dataset partition ./dataset
-        # Reorganize into train/val/test/<label>/ subdirs, grouped by recording
-        bioamla dataset partition ./dataset --mode subdirs --group-by source_file
+        # Leave the files where they are; only write the split column
+        bioamla dataset partition ./dataset --mode column
+        # Split clip by clip, ignoring which recording each came from
+        bioamla dataset partition ./dataset --group-by ""
     """
     from bioamla.cli.console import print_kv, print_success
     from bioamla.cli.output import emit_result

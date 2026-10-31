@@ -35,6 +35,7 @@ from bioamla.viz._video_common import (
     check_frame_args,
     draw_time_stamp,
     encode_video,
+    fmt_time,
     label_font,
     load_clip,
     require_ffmpeg,
@@ -50,6 +51,10 @@ _STRIP_FRACTION = 0.22  # share of the height given to the spectrogram strip
 _TILT_DEGREES = 18.0  # camera elevation above the PC1-PC3 plane
 _RECENT_SECONDS = 1.5  # the last moments are drawn brighter than older history
 _BACKGROUND = np.array([6, 6, 10], dtype=np.uint8)
+_TITLES = (  # longest first; the first that fits is drawn
+    "MFCC-PCA timbre trajectory · colour: spectral centroid",
+    "MFCC-PCA trajectory",
+)
 
 
 @dataclass
@@ -265,10 +270,10 @@ class _TrajectoryRenderer:
                 backend="auto",
             )
 
-        # Centre on the middle of each axis's 2-98th percentile range and scale so
+        # Centre on the middle of each axis's 1-99th percentile range and scale so
         # that range fills the view; a few outlying frames may leave it.
         xyz = np.nan_to_num(trajectory.coords)
-        lo, hi = np.percentile(xyz[self.active], [2, 98], axis=0)
+        lo, hi = np.percentile(xyz[self.active], [1, 99], axis=0)
         span = float(((hi - lo) / 2).max()) or 1.0
         self.xyz = (xyz - (lo + hi) / 2) / span
         # A turning unit cube reaches sqrt(3) from the centre at its corners; keep
@@ -288,6 +293,7 @@ class _TrajectoryRenderer:
         self.dot_radius = max(3, self.plot_h // 140)
         self.stroke = 1 if self.plot_h < 900 else 2
         self._font = None
+        self._title: tuple[str, int] | None = None  # text and top edge, set on first draw
         self._sample_path()
 
     # -- projection ----------------------------------------------------------
@@ -405,9 +411,31 @@ class _TrajectoryRenderer:
         draw_time_stamp(
             draw, self._font, self.width, self.time_offset + t, self.time_offset + self.duration
         )
-        title = "MFCC-PCA timbre trajectory · colour: spectral centroid"
-        draw.text((MARGIN, MARGIN), title, font=self._font, fill=dim, anchor="lt")
+        if self._title is None:
+            self._title = self._title_layout(draw)
+        text, y = self._title
+        if text:
+            draw.text((MARGIN, y), text, font=self._font, fill=dim, anchor="lt")
         return np.asarray(image)
+
+    def _title_layout(self, draw) -> tuple[str, int]:
+        """The title and its top edge: beside the time if both fit, else below it.
+
+        The time is measured at its widest (total / total). A title too wide even
+        for its own line is shortened, then dropped.
+        """
+        total = self.time_offset + self.duration
+        stamp = f"{fmt_time(total)} / {fmt_time(total)}"
+        stamp_w = draw.textlength(stamp, font=self._font)
+        line_h = draw.textbbox((0, 0), "Ag", font=self._font)[3]
+        room = self.width - 2 * MARGIN
+        for text in _TITLES:
+            width = draw.textlength(text, font=self._font)
+            if width + stamp_w + MARGIN <= room:
+                return text, MARGIN
+            if width <= room:
+                return text, MARGIN + int(line_h * 1.4)  # the line below the time
+        return "", MARGIN
 
 
 __all__ = ["TrajectoryVideoResult", "generate_trajectory_video"]

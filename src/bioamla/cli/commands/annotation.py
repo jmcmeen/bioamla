@@ -24,6 +24,28 @@ def _load(*args, **kwargs):
     return load_annotations(*args, **kwargs)
 
 
+def _one_recording(annotations, recording: str | None, source: str):
+    """The rows for one recording: ``--recording``, or the file's only one.
+
+    Labels laid on one timeline from several recordings would be meaningless, so a
+    file naming more than one recording needs ``--recording``.
+    """
+    from bioamla.datasets._io import annotations_for_recording, recordings_named
+
+    names = recordings_named(annotations)
+    if recording is not None:
+        kept = annotations_for_recording(annotations, recording)
+        if names and not kept:
+            raise click.ClickException(f"No rows in {source} are for recording {recording!r}")
+        return kept
+    if len(names) > 1:
+        shown = ", ".join(sorted(names)[:3]) + (", ..." if len(names) > 3 else "")
+        raise click.ClickException(
+            f"{source} covers {len(names)} recordings ({shown}); pick one with --recording"
+        )
+    return annotations
+
+
 def _save(*args, **kwargs):
     from bioamla.datasets._io import save_annotations
 
@@ -176,6 +198,12 @@ def annotation_template(
     help="Output format (auto-detected from extension if not specified)",
 )
 @click.option("--label-column", default=None, help="Column name for labels in input file")
+@click.option(
+    "--recording",
+    default=None,
+    help="arbimon output: recording name for rows that don't carry one "
+    "(default: the audio_file of a bioamla .json input)",
+)
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def annotation_convert(
     input_file: str,
@@ -183,21 +211,35 @@ def annotation_convert(
     from_format: str,
     to_format: str,
     label_column: str,
+    recording: str | None,
     quiet: bool,
 ) -> None:
-    """Convert annotation files between formats."""
+    """Convert annotation files between formats.
+
+    Formats: raven (.txt selection table), csv, bioamla (.json), and arbimon (the
+    CSV layout of Arbimon's pattern-matching ROI export: x1/x2 seconds, y1/y2 Hz,
+    species, songtype, recording, ...). An arbimon input is recognized from its
+    header; for arbimon output pass --to arbimon.
+
+    \b
+    Examples:
+        bioamla annotation convert rec.Table.1.selections.txt rois.csv --to arbimon --recording rec.wav
+        bioamla annotation convert pattern_matching_rois.csv labels.txt
+    """
     from bioamla.cli.console import print_success
     from bioamla.cli.output import emit_result
 
     input_path = Path(input_file)
     output_path = Path(output_file)
 
-    from_format = _detect_format(input_path, from_format)
+    from_format = _detect_format(input_path, from_format, read_header=True)
     to_format = _detect_format(output_path, to_format)
 
+    if recording is not None and to_format != "arbimon":
+        raise click.UsageError("--recording only applies to --to arbimon")
     try:
         annotations, metadata = _load(input_path, from_format, label_column=label_column)
-        _save(annotations, output_path, to_format, metadata=metadata)
+        _save(annotations, output_path, to_format, metadata=metadata, recording=recording)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
@@ -240,7 +282,7 @@ def annotation_summary(path: str, file_format: str, output_json: bool) -> None:
 
     input_path = Path(path)
 
-    file_format = _detect_format(input_path, file_format)
+    file_format = _detect_format(input_path, file_format, read_header=True)
 
     try:
         annotations, metadata = _load(input_path, file_format)
@@ -295,8 +337,10 @@ def annotation_remap(
     input_path = Path(input_file)
     output_path = Path(output_file)
 
-    in_format = _detect_format(input_path)
-    out_format = _detect_format(output_path) if output_path.suffix else in_format
+    in_format = _detect_format(input_path, read_header=True)
+    # Same extension (or none): keep the input's format, so an Arbimon CSV stays one.
+    same = not output_path.suffix or output_path.suffix.lower() == input_path.suffix.lower()
+    out_format = in_format if same else _detect_format(output_path)
 
     try:
         label_mapping = load_label_mapping(mapping)
@@ -347,8 +391,10 @@ def annotation_filter(
     input_path = Path(input_file)
     output_path = Path(output_file)
 
-    in_format = _detect_format(input_path)
-    out_format = _detect_format(output_path) if output_path.suffix else in_format
+    in_format = _detect_format(input_path, read_header=True)
+    # Same extension (or none): keep the input's format, so an Arbimon CSV stays one.
+    same = not output_path.suffix or output_path.suffix.lower() == input_path.suffix.lower()
+    out_format = in_format if same else _detect_format(output_path)
 
     try:
         annotations, metadata = _load(input_path, in_format)
@@ -413,6 +459,11 @@ def annotation_filter(
     default="csv",
     help="Output format for labels",
 )
+@click.option(
+    "--recording",
+    default=None,
+    help="For a file covering several recordings (e.g. an Arbimon export): the one to label",
+)
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def annotation_generate_labels(
     annotation_file: str,
@@ -423,6 +474,7 @@ def annotation_generate_labels(
     min_overlap: float,
     multi_label: bool,
     output_format: str,
+    recording: str | None,
     quiet: bool,
 ) -> None:
     """Generate clip-level labels from annotations."""
@@ -439,10 +491,11 @@ def annotation_generate_labels(
 
     input_path = Path(annotation_file)
 
-    in_format = _detect_format(input_path)
+    in_format = _detect_format(input_path, read_header=True)
 
     try:
         annotations, metadata = _load(input_path, in_format)
+        annotations = _one_recording(annotations, recording, annotation_file)
 
         if not annotations:
             raise click.ClickException("No annotations found in file")
@@ -543,6 +596,11 @@ def annotation_generate_labels(
     default="csv",
     help="Output format for labels",
 )
+@click.option(
+    "--recording",
+    default=None,
+    help="For a file covering several recordings (e.g. an Arbimon export): the one to label",
+)
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
 def annotation_generate_frame_labels(
     annotation_file: str,
@@ -551,6 +609,7 @@ def annotation_generate_frame_labels(
     hop_length: float,
     audio_duration: float,
     output_format: str,
+    recording: str | None,
     quiet: bool,
 ) -> None:
     """Generate frame-level multi-hot labels from annotations (for SED-style models)."""
@@ -565,10 +624,11 @@ def annotation_generate_frame_labels(
 
     input_path = Path(annotation_file)
 
-    in_format = _detect_format(input_path)
+    in_format = _detect_format(input_path, read_header=True)
 
     try:
         annotations, metadata = _load(input_path, in_format)
+        annotations = _one_recording(annotations, recording, annotation_file)
 
         if not annotations:
             raise click.ClickException("No annotations found in file")

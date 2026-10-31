@@ -247,8 +247,9 @@ def ast_predict(
     "config_path",
     type=click.Path(exists=True, dir_okay=False),
     default=None,
-    help="TOML config file (e.g. from 'bioamla config init'). Explicit flags override "
-    "its values; its values override defaults. Reads [training] and [models].",
+    help="TOML config file (e.g. from 'bioamla models ast init-config'). Explicit flags "
+    "override its values; its values override defaults. Reads [models], [training] and "
+    "[augmentation].",
 )
 @click.option("--training-dir", default=".", help="Directory to save training outputs")
 @click.option(

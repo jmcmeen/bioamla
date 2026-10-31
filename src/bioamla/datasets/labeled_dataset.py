@@ -15,7 +15,11 @@ from pathlib import Path
 from typing import Any
 
 from bioamla.audio import get_audio_files
-from bioamla.datasets._io import detect_annotation_format, load_annotations
+from bioamla.datasets._io import (
+    annotations_for_recording,
+    detect_annotation_format,
+    load_annotations,
+)
 from bioamla.datasets._metadata import read_metadata_csv, write_metadata_csv
 from bioamla.datasets.annotation_utils import create_label_map, filter_labels
 from bioamla.datasets.annotations import Annotation
@@ -95,10 +99,20 @@ def _resolve_pairs(source: str, annotations: str | None) -> list[tuple[Path, Pat
     return [(source_path, ann_file)]
 
 
-def _load_pair_annotations(ann_file: Path) -> list[Annotation]:
-    fmt = detect_annotation_format(ann_file)
+def _load_pair_annotations(ann_file: Path, audio_file: Path) -> list[Annotation]:
+    """The annotations for ``audio_file`` from ``ann_file``.
+
+    A file that names each row's recording (a ``recording`` column, as Arbimon
+    exports have) can cover many recordings; only the rows for this one are kept.
+    """
+    fmt = detect_annotation_format(ann_file, read_header=True)
     anns, _ = load_annotations(ann_file, fmt)
-    return anns
+    kept = annotations_for_recording(anns, audio_file)
+    if not kept and anns:
+        logger.warning(f"No rows in {ann_file} name the recording {audio_file.name}")
+    elif len(kept) < len(anns):
+        logger.info(f"{ann_file}: {len(kept)} of {len(anns)} rows are for {audio_file.name}")
+    return kept
 
 
 def _resolve_source_metadata(source: str, source_metadata: str | None) -> Path | None:
@@ -223,7 +237,7 @@ def extract_labeled_dataset(
     # First pass: load + filter annotations per file.
     per_file: list[tuple[Path, list[Annotation]]] = []
     for audio_file, ann_file in pairs:
-        anns = _load_pair_annotations(ann_file)
+        anns = _load_pair_annotations(ann_file, audio_file)
         anns = filter_labels(anns, include_labels=include_labels, exclude_labels=exclude_labels)
         if min_duration is not None:
             anns = [a for a in anns if a.duration >= min_duration]

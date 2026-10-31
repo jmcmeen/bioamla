@@ -121,7 +121,10 @@ returned to a caller (e.g. `AcousticIndices`, `AudioData`, `AudioMetadata`).
 - Shared fixtures live in `tests/conftest.py` (e.g. `sample_audio_data`, `test_audio_path`,
   `test_audio_dir`) — reuse them; they generate synthetic sine-wave audio, no fixture files.
 - Markers (strict — `--strict-markers`): `slow`, `integration`, `requires_cuda`.
-  Mark accordingly. `make test-fast` deselects `slow`/`integration`.
+  Mark accordingly. `make test-fast` deselects `slow`/`integration`; CI runs everything.
+- `tests/integration/` chains real commands through `bioamla --json`, each step reading the
+  previous envelope's outputs. When a change touches what one command writes and another reads
+  (annotation columns, metadata CSVs, config files), add or extend a pipeline there.
 - Guard tests that need heavy/optional backends with `pytest.importorskip("torch")` so the
   suite stays green on a slim install **and** a full one.
 - Add a test with every behavior change. `make cov` for coverage.

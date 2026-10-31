@@ -6,6 +6,49 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Arbimon annotations: an `arbimon` format for the CSV layout of Arbimon's pattern-matching ROI
+  export (`x1`/`x2` seconds, `y1`/`y2` Hz, `species`, `songtype`, `recording`, `validated`,
+  `score`, ...). An input file is recognized from its header wherever annotations are read
+  (`annotation convert|summary|filter|remap|generate-labels|generate-frame-labels`, `dataset
+  extract-clips`), and `filter`/`remap` keep it in Arbimon layout. Write it with `annotation
+  convert ... --to arbimon`, naming the recording with `--recording` (or from a bioamla `.json`
+  input's `audio_file`). Library: `load_arbimon_annotations()`, `save_arbimon_annotations()`,
+  `ARBIMON_COLUMNS`.
+- Annotation files that name each row's recording (a `recording` column, as Arbimon exports
+  have) can cover many recordings. `dataset extract-clips` uses only the rows for the audio file
+  being cut (matched by name, case-insensitively, with or without the extension), and
+  `annotation generate-labels|generate-frame-labels` take `--recording` and refuse a file that
+  covers several recordings without it.
+
+### Fixed
+
+- Raven selection tables keep confidence (a `Confidence` column, written when any annotation has
+  one and read back when numeric; text values such as `high` stay a custom column) and write
+  frequencies to three decimals instead of rounding to 0.1 Hz.
+
+- `audio video -t trajectory`: on narrow frames (e.g. `--size 1080x1920`) the title no longer
+  overprints the time: it moves to the line below, and is shortened or left out when even that
+  is too narrow. The view is fitted to the 1-99th percentile of the path instead of the 2-98th,
+  so far less of a dense, loud passage runs off the frame.
+- Detections used as annotations keep their frequency band: the annotation readers accept the
+  `frequency_low` / `frequency_high` columns `bioamla detect -o` writes, so `dataset
+  extract-clips --annotations det.csv` fills `low_freq` / `high_freq` and `--bandpass` works.
+- Detections saved as JSON (`bioamla detect ... -o det.json`, a JSON list) are accepted wherever
+  annotations are read. Records without `start_time` / `end_time` (peak detections are points in
+  time) are rejected with a clear error rather than read as empty annotations.
+- `dataset partition` warns when a split it was asked to fill comes out empty (too few groups to
+  go round), and lists those splits as `empty_splits` in its result; its help no longer claims
+  the default only writes a `split` column (the default reorganizes into subdirs).
+- `dataset stats` and `dataset partition` accept the path of the metadata CSV as well as the
+  dataset directory.
+- `dataset partition` sizes splits from the fractions without rounding a zero split up: with
+  `--test 0` no group goes to test (round-half-to-even could put one there), and split sizes
+  can differ by one group from before for the same seed.
+- `models ast train --config` help names `models ast init-config`, which creates the file, and
+  all three sections it reads.
+
 ## [0.3.4] - 2026-10-31
 
 ### Added

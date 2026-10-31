@@ -104,6 +104,50 @@ class TestFrames:
         labelled = renderer(spectrogram=False, show_axes=True).frame(1.0)
         assert not np.array_equal(plain, labelled)
 
+    def test_path_stays_in_view_as_it_turns(self) -> None:
+        r = renderer(spectrogram=False, width=320, height=240, orbit_seconds=4.0)
+        for t in np.linspace(0, 4, 9):
+            x, y = r._project(r.points, t)  # the sampled path, as drawn
+            inside = (x >= 0) & (x < r.width) & (y >= 0) & (y < r.plot_h)
+            assert inside.mean() >= 0.95
+
+    @pytest.mark.parametrize("size", [(1280, 720), (1080, 1920), (320, 240), (96, 400)])
+    def test_title_never_overlaps_the_time_or_leaves_the_frame(self, size) -> None:
+        from PIL import Image, ImageDraw
+
+        from bioamla.viz._video_common import MARGIN, fmt_time, label_font
+
+        width, height = size
+        r = renderer(spectrogram=False, show_axes=True, width=width, height=height)
+        r.frame(0.0)  # lays the title out
+        text, y = r._title
+        draw = ImageDraw.Draw(Image.new("RGB", (width, height)))
+        font = label_font(r.height)
+        total = r.time_offset + r.duration
+        stamp = draw.textbbox(
+            (r.width - MARGIN, MARGIN), f"{fmt_time(total)} / {fmt_time(total)}",
+            font=font, anchor="rt",
+        )  # fmt: skip
+        if not text:
+            return
+        title = draw.textbbox((MARGIN, y), text, font=font, anchor="lt")
+        assert title[2] <= r.width - MARGIN  # inside the frame
+        overlaps = (
+            title[0] < stamp[2]
+            and stamp[0] < title[2]
+            and title[1] < stamp[3]
+            and stamp[1] < title[3]
+        )
+        assert not overlaps
+
+    def test_long_recordings_measure_the_wider_time(self) -> None:
+        short = renderer(spectrogram=False, show_axes=True, width=640, height=360)
+        long = renderer(
+            spectrogram=False, show_axes=True, width=640, height=360, time_offset=6000.0
+        )
+        short.frame(0.0), long.frame(0.0)
+        assert long._title[1] >= short._title[1]  # "100:00.0" is wider; the title may move down
+
     def test_unknown_colormap(self) -> None:
         with pytest.raises(InvalidInputError, match="colormap"):
             renderer(cmap="no-such-map")
