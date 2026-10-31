@@ -5,6 +5,7 @@ inside the command bodies, so we patch the symbols there. Heavy audio/ML work is
 mocked; tests exercise arg-parsing, branching and output formatting only.
 """
 
+from datetime import UTC
 from unittest.mock import MagicMock, PropertyMock
 
 import numpy as np
@@ -126,7 +127,7 @@ def _fake_info():
 
 
 def test_info_metadata_flag(runner, mocker):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from bioamla.audio import RecordingMetadata
 
@@ -134,7 +135,7 @@ def test_info_metadata_flag(runner, mocker):
     mocker.patch(
         "bioamla.audio.metadata.get_recording_metadata",
         return_value=RecordingMetadata(
-            recorded_at=datetime(2021, 11, 12, 19, 30, tzinfo=timezone.utc),
+            recorded_at=datetime(2021, 11, 12, 19, 30, tzinfo=UTC),
             device_model="AudioMoth",
             device_id="248D9B045EC9EE79",
             gain="medium",

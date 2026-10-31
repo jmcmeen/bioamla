@@ -2,7 +2,7 @@
 
 import csv
 import wave
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from riffy import GuanoMetadata, WAVParser
@@ -113,7 +113,7 @@ class TestAddRecordingMetadata:
         assert third["updated"] == 3
 
     def test_absolute_paths(self, tmp_path) -> None:
-        tz = timezone.utc
+        tz = UTC
         wav = tmp_path / "elsewhere" / "x.wav"
         wav.parent.mkdir()
         _guano_wav(wav, serial="S1", when=datetime(2024, 1, 1, tzinfo=tz))

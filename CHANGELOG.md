@@ -177,6 +177,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Removed
 
+- **Python 3.10 support.** bioamla now requires Python 3.11 or newer. 3.10 reached end of life in
+  October 2026, and the security fixes for pillow and filelock need 3.11. The `tomli`
+  dependency is gone (`tomllib` is in the standard library from 3.11).
+
 These were deprecated in 0.3.x and are breaking changes:
 
 - The old `AugmentationConfig` names: `bioamla.datasets.AugmentationConfig` (use

@@ -1,7 +1,7 @@
 # bioamla
 
 [![PyPI version](https://img.shields.io/pypi/v/bioamla.svg)](https://pypi.org/project/bioamla/)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jmcmeen/bioamla/blob/main/LICENSE)
 [![CI](https://github.com/jmcmeen/bioamla/actions/workflows/ci.yml/badge.svg)](https://github.com/jmcmeen/bioamla/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-mkdocs--material-blue.svg)](https://jmcmeen.github.io/bioamla)
@@ -45,7 +45,7 @@ Two conventions matter for consumers:
 
 ## Install
 
-Requires Python ≥ 3.10. Install into a **virtual environment** so bioamla's dependencies stay
+Requires Python ≥ 3.11. Install into a **virtual environment** so bioamla's dependencies stay
 isolated from other projects and your system Python:
 
 ```bash

@@ -18,7 +18,7 @@ The ``bioamla`` command does this with ``bioamla --log-format json``.
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from bioamla.exceptions import InvalidInputError
@@ -68,7 +68,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         out: dict[str, Any] = {
-            "time": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(
+            "time": datetime.fromtimestamp(record.created, tz=UTC).isoformat(
                 timespec="milliseconds"
             ),
             "level": record.levelname,
