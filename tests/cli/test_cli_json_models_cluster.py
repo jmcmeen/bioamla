@@ -56,19 +56,17 @@ def test_predict_with_output_reports_path(wav, tmp_path) -> None:
 
 
 def test_evaluate(tmp_path) -> None:
-    metrics = SimpleNamespace(
-        accuracy=0.9,
-        precision=0.8,
-        recall=0.7,
-        f1_score=0.75,
-        total_samples=10,
-        to_dict=lambda: {"accuracy": 0.9, "total_samples": 10},
+    pytest.importorskip("torch")
+    from bioamla.ml.ast_service import EvaluationResult
+
+    metrics = EvaluationResult(
+        accuracy=0.9, precision=0.8, recall=0.7, f1_score=0.75, total_samples=10
     )
     gt = tmp_path / "gt.csv"
     gt.write_text("file_name,label\n")
     with patch("bioamla.ml.evaluate_directory", return_value=metrics):
         result = _json("models", "ast", "evaluate", str(tmp_path), "-g", str(gt))
-    assert result["metrics"] == {"accuracy": 0.9, "total_samples": 10}
+    assert result["metrics"]["accuracy"] == 0.9 and result["metrics"]["total_samples"] == 10
     assert "quiet" not in result["params"]
 
 
@@ -150,15 +148,13 @@ def test_model_labels_follow_class_index_order() -> None:
 
 
 def test_evaluate_csv_report_is_csv(tmp_path) -> None:
+    pytest.importorskip("torch")
     import csv
 
-    metrics = SimpleNamespace(
-        accuracy=0.9,
-        precision=0.8,
-        recall=0.7,
-        f1_score=0.75,
-        total_samples=10,
-        to_dict=lambda: {"accuracy": 0.9, "total_samples": 10, "confusion_matrix": [[1]]},
+    from bioamla.ml.ast_service import EvaluationResult
+
+    metrics = EvaluationResult(
+        accuracy=0.9, precision=0.8, recall=0.7, f1_score=0.75, total_samples=10
     )
     gt = tmp_path / "gt.csv"
     gt.write_text("file_name,label\n")
@@ -181,4 +177,14 @@ def test_evaluate_csv_report_is_csv(tmp_path) -> None:
         )
     assert result.exit_code == 0, result.output
     rows = list(csv.DictReader(out.open()))
-    assert rows == [{"accuracy": "0.9", "total_samples": "10"}]
+    # Long format: the overall row, then one row per class (none in this result).
+    assert rows == [
+        {
+            "label": "(overall)",
+            "accuracy": "0.9",
+            "precision": "0.8",
+            "recall": "0.7",
+            "f1_score": "0.75",
+            "support": "10",
+        }
+    ]

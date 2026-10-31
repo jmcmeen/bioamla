@@ -14,7 +14,7 @@ Heavy deps (torch / transformers / torchaudio / pandas) are imported lazily for
 fast startup.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +23,7 @@ from bioamla.exceptions import (
     ModelError,
     NotFoundError,
 )
+from bioamla.ml.ast import mono_waveform
 
 if TYPE_CHECKING:
     from bioamla.ml.inference import ASTPredictionResult
@@ -37,20 +38,22 @@ class EvaluationResult:
     recall: float
     f1_score: float
     total_samples: int
+    #: Rows are true labels, columns predicted labels, both in ``labels`` order.
     confusion_matrix: list[list[int]] | None = None
+    #: Every label among the evaluated files' true and predicted labels, sorted.
+    labels: list[str] | None = None
+    #: label -> ``precision``, ``recall``, ``f1_score`` (floats) and ``support``
+    #: (int, the number of evaluated files with that true label).
+    per_class: dict[str, dict[str, float | int]] | None = None
+    #: Files that matched the ground truth but couldn't be evaluated, with the error.
+    skipped: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to a plain dict."""
-        d = {
-            "accuracy": self.accuracy,
-            "precision": self.precision,
-            "recall": self.recall,
-            "f1_score": self.f1_score,
-            "total_samples": self.total_samples,
+        # Every field, leaving out optional ones that weren't computed.
+        return {
+            f.name: getattr(self, f.name) for f in fields(self) if getattr(self, f.name) is not None
         }
-        if self.confusion_matrix is not None:
-            d["confusion_matrix"] = self.confusion_matrix
-        return d
 
 
 @dataclass
@@ -190,7 +193,7 @@ def extract_embeddings_file(
     model.eval()
 
     inputs = feature_extractor(
-        waveform.squeeze().numpy(),
+        mono_waveform(waveform),
         sampling_rate=sample_rate,
         padding="max_length",
         return_tensors="pt",
@@ -244,9 +247,15 @@ def evaluate_directory(
     label_column: str = "label",
     resample_freq: int = 16000,
     use_fp16: bool = False,
+    batch_size: int = 8,
 ) -> EvaluationResult:
     """
     Evaluate an AST model over a directory of audio files with ground truth.
+
+    Files are classified ``batch_size`` at a time (multi-channel audio is
+    downmixed to mono). A file that can't be loaded, or that fails inference on
+    its own after its batch fails, is listed in ``skipped`` and left out of the
+    metrics.
 
     Args:
         audio_dir: Directory containing audio files.
@@ -256,9 +265,11 @@ def evaluate_directory(
         label_column: Column name for labels in the CSV.
         resample_freq: Target sample rate.
         use_fp16: Use half-precision inference.
+        batch_size: Files per inference batch.
 
     Returns:
-        An :class:`EvaluationResult`.
+        An :class:`EvaluationResult`, with per-class metrics and the confusion
+        matrix.
 
     Raises:
         NotFoundError: If a required path or matching audio is missing.
@@ -274,11 +285,14 @@ def evaluate_directory(
 
     from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
     from bioamla.ml.ast import (
-        ast_predict,
+        ast_predict_batch,
         extract_features,
         get_cached_feature_extractor,
         load_pretrained_ast_model,
     )
+
+    if batch_size < 1:
+        raise InvalidInputError(f"batch_size must be at least 1, got {batch_size}")
 
     audio_path = Path(audio_dir)
     ground_truth = _load_ground_truth(ground_truth_csv, file_column, label_column)
@@ -296,25 +310,62 @@ def evaluate_directory(
     feature_extractor = get_cached_feature_extractor(model_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    y_true = []
-    y_pred = []
+    y_true: list[str] = []
+    y_pred: list[str] = []
+    skipped: list[str] = []
+    pending: list[tuple[Path, Any, str]] = []  # (file, features, true label)
+
+    def _predict(features: list[Any]) -> list[str]:
+        batch = torch.cat(features, dim=0)
+        if use_fp16 and device.type == "cuda":
+            batch = batch.half()
+        predictions = ast_predict_batch(batch, model)
+        if len(predictions) != len(features):
+            raise ModelError(
+                f"The model returned {len(predictions)} prediction(s) for {len(features)} input(s)"
+            )
+        return predictions
+
+    def _flush() -> None:
+        try:
+            predictions = _predict([features for _, features, _ in pending])
+        except ModelError:
+            # Retry one file at a time, so one bad input (or a batch too big for
+            # the device) costs only that file, not the run.
+            predictions = []
+            for audio_file, features, _ in pending:
+                try:
+                    predictions.extend(_predict([features]))
+                except ModelError as e:
+                    skipped.append(f"{audio_file}: {e}")
+                    predictions.append(None)
+        for (_, _, true_label), prediction in zip(pending, predictions, strict=True):
+            if prediction is not None:
+                y_true.append(true_label)
+                y_pred.append(prediction)
+        pending.clear()
 
     for audio_file, true_label in matched_files:
         try:
             waveform, orig_freq = load_waveform_tensor(str(audio_file))
             waveform = resample_waveform_tensor(waveform, orig_freq, resample_freq)
-            input_values = extract_features(waveform, resample_freq, feature_extractor, device)
-            if use_fp16 and device.type == "cuda":
-                input_values = input_values.half()
-            prediction = ast_predict(input_values, model)
-            y_true.append(true_label)
-            y_pred.append(prediction)
-        except Exception:
-            # Skip files that fail to process.
-            pass
+            features = extract_features(waveform, resample_freq, feature_extractor, device)
+            if features.shape[0] != 1:
+                raise ModelError(f"expected one input per file, got {features.shape[0]}")
+        except Exception as e:  # noqa: BLE001 - an unreadable file is reported, not fatal
+            skipped.append(f"{audio_file}: {e}")
+            continue
+        pending.append((audio_file, features, true_label))
+        if len(pending) == batch_size:
+            _flush()
+    if pending:
+        _flush()
 
     if not y_true:
-        raise ModelError("No predictions were generated")
+        raise ModelError(
+            f"No predictions were generated ({len(skipped)} file(s) skipped; first: "
+            f"{skipped[0] if skipped else 'none'})"
+        )
 
     metrics = _compute_metrics(y_true, y_pred)
     return EvaluationResult(
@@ -323,6 +374,10 @@ def evaluate_directory(
         recall=metrics["recall"],
         f1_score=metrics["f1_score"],
         total_samples=metrics["total_samples"],
+        confusion_matrix=metrics["confusion_matrix"],
+        labels=metrics["labels"],
+        per_class=metrics["per_class"],
+        skipped=skipped,
     )
 
 
@@ -373,6 +428,7 @@ def _compute_metrics(y_true: list[str], y_pred: list[str]) -> dict[str, Any]:
     precisions = []
     recalls = []
     f1_scores = []
+    per_class: dict[str, dict[str, float]] = {}
     for idx in range(n_classes):
         tp = confusion[idx, idx]
         fp = confusion[:, idx].sum() - tp
@@ -381,6 +437,12 @@ def _compute_metrics(y_true: list[str], y_pred: list[str]) -> dict[str, Any]:
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+        per_class[labels[idx]] = {
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1_score": float(f1),
+            "support": int(confusion[idx, :].sum()),
+        }
 
         if confusion[idx, :].sum() > 0:
             precisions.append(precision)
@@ -394,4 +456,7 @@ def _compute_metrics(y_true: list[str], y_pred: list[str]) -> dict[str, Any]:
         "f1_score": float(np.mean(f1_scores)) if f1_scores else 0.0,
         "total_samples": total_samples,
         "correct_predictions": correct,
+        "labels": labels,
+        "per_class": per_class,
+        "confusion_matrix": confusion.tolist(),
     }

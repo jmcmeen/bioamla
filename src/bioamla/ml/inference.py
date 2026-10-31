@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Union
 
 from bioamla.exceptions import ModelError
+from bioamla.ml.ast import mono_waveform
 
 if TYPE_CHECKING:
     import torch
@@ -314,7 +315,7 @@ class ASTInference:
 
     def _extract_features(self, waveform: "torch.Tensor") -> "torch.Tensor":
         """Extract feature-extractor input values from a waveform tensor."""
-        waveform_np = waveform.squeeze().numpy()
+        waveform_np = mono_waveform(waveform)
         inputs = self.feature_extractor(
             waveform_np, sampling_rate=self.sample_rate, padding="max_length", return_tensors="pt"
         )

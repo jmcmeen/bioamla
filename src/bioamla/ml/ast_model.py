@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Union
 import numpy as np
 
 from bioamla.exceptions import ModelError
+from bioamla.ml.ast import mono_waveform
 from bioamla.ml.base import (
     BaseAudioModel,
     ModelBackend,
@@ -202,7 +203,7 @@ class ASTModel(BaseAudioModel):
 
         results = []
         for segment, start_sample, end_sample in segments:
-            waveform_np = segment.squeeze().numpy()
+            waveform_np = mono_waveform(segment)
             inputs = self.feature_extractor(
                 waveform_np,
                 sampling_rate=self.config.sample_rate,
@@ -275,7 +276,7 @@ class ASTModel(BaseAudioModel):
         if sample_rate != self.config.sample_rate:
             waveform = resample_waveform_tensor(waveform, sample_rate, self.config.sample_rate)
 
-        waveform_np = waveform.squeeze().numpy()
+        waveform_np = mono_waveform(waveform)
         inputs = self.feature_extractor(
             waveform_np,
             sampling_rate=self.config.sample_rate,
@@ -340,7 +341,7 @@ class ASTModel(BaseAudioModel):
         if sample_rate != self.config.sample_rate:
             waveform = resample_waveform_tensor(waveform, sample_rate, self.config.sample_rate)
 
-        waveform_np = waveform.squeeze().numpy()
+        waveform_np = mono_waveform(waveform)
         inputs = self.feature_extractor(
             waveform_np,
             sampling_rate=self.config.sample_rate,

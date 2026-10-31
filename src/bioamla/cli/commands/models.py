@@ -657,6 +657,59 @@ def ast_train(
         print_kv("Final eval loss", f"{result.final_loss:.4f}")
 
 
+def _per_class_lines(per_class: dict) -> list[str]:
+    """Per-class precision/recall/F1/support as aligned plain-text rows."""
+    width = max(len("label"), *(len(label) for label in per_class))
+    lines = [f"{'label':<{width}}  precision  recall  f1     support"]
+    for label, m in per_class.items():
+        lines.append(
+            f"{label:<{width}}  {m['precision']:<9.3f}  {m['recall']:<6.3f}  "
+            f"{m['f1_score']:<5.3f}  {m['support']}"
+        )
+    return lines
+
+
+def _evaluation_text(result) -> str:
+    """The ``--format txt`` report: overall metrics, per-class table, confusion
+    matrix (rows true, columns predicted) and skipped files."""
+    lines = [
+        f"accuracy: {result.accuracy}",
+        f"precision: {result.precision}",
+        f"recall: {result.recall}",
+        f"f1_score: {result.f1_score}",
+        f"total_samples: {result.total_samples}",
+    ]
+    if result.per_class:
+        lines += ["", *_per_class_lines(result.per_class)]
+    if result.confusion_matrix and result.labels:
+        width = max(len(label) for label in result.labels)
+        lines += ["", "confusion matrix (rows: true, columns: predicted)"]
+        lines.append(" " * width + "  " + "  ".join(result.labels))
+        for label, row in zip(result.labels, result.confusion_matrix, strict=True):
+            cells = "  ".join(f"{n:>{len(col)}}" for n, col in zip(row, result.labels, strict=True))
+            lines.append(f"{label:<{width}}  {cells}")
+    if result.skipped:
+        lines += ["", "skipped:", *(f"  {s}" for s in result.skipped)]
+    return "\n".join(lines) + "\n"
+
+
+def _evaluation_csv_rows(result) -> list[dict]:
+    """``--format csv``: one overall row (with accuracy), then one row per class."""
+    rows = [
+        {
+            "label": "(overall)",
+            "accuracy": result.accuracy,
+            "precision": result.precision,
+            "recall": result.recall,
+            "f1_score": result.f1_score,
+            "support": result.total_samples,
+        }
+    ]
+    for label, m in (result.per_class or {}).items():
+        rows.append({"label": label, "accuracy": "", **m})
+    return rows
+
+
 @ast.command("evaluate")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--model-path", default="bioamla/scp-frogs", help="AST model to use for evaluation")
@@ -705,7 +758,14 @@ def ast_evaluate(
     import json as json_lib
     from pathlib import Path as PathLib
 
-    from bioamla.cli.console import echo, print_header, print_kv, print_success
+    from bioamla.cli.console import (
+        echo,
+        print_header,
+        print_kv,
+        print_success,
+        print_table,
+        print_warning,
+    )
     from bioamla.cli.output import command_options, emit_result, json_mode
     from bioamla.ml import evaluate_directory
 
@@ -718,6 +778,7 @@ def ast_evaluate(
             label_column=label_column,
             resample_freq=resample_freq,
             use_fp16=fp16,
+            batch_size=batch_size,
         )
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
@@ -732,15 +793,13 @@ def ast_evaluate(
             elif output_format == "csv":
                 import csv
 
-                scalars = {k: v for k, v in metrics.items() if not isinstance(v, (list, dict))}
+                rows = _evaluation_csv_rows(eval_result)
                 with out_path.open("w", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(f, fieldnames=list(scalars))
+                    writer = csv.DictWriter(f, fieldnames=list(rows[0]))
                     writer.writeheader()
-                    writer.writerow(scalars)
+                    writer.writerows(rows)
             else:
-                out_path.write_text(
-                    "".join(f"{k}: {v}\n" for k, v in metrics.items()), encoding="utf-8"
-                )
+                out_path.write_text(_evaluation_text(eval_result), encoding="utf-8")
         except OSError as e:
             raise click.ClickException(f"Failed to write {output}: {e}") from e
 
@@ -763,6 +822,27 @@ def ast_evaluate(
     print_kv("Recall", f"{eval_result.recall:.4f}")
     print_kv("F1 Score", f"{eval_result.f1_score:.4f}")
     print_kv("Total Samples", eval_result.total_samples)
+    if eval_result.per_class:
+        print_table(
+            "Per class",
+            ["Label", "Precision", "Recall", "F1", "Support"],
+            [
+                [
+                    label,
+                    f"{m['precision']:.3f}",
+                    f"{m['recall']:.3f}",
+                    f"{m['f1_score']:.3f}",
+                    m["support"],
+                ]
+                for label, m in eval_result.per_class.items()
+            ],
+        )
+    if eval_result.skipped:
+        print_warning(f"Skipped {len(eval_result.skipped)} file(s):")
+        for skipped in eval_result.skipped[:10]:
+            echo(f"  {skipped}")
+        if len(eval_result.skipped) > 10:
+            echo(f"  ... and {len(eval_result.skipped) - 10} more (all in --format txt/json)")
     if output:
         print_success(f"Results saved to: {output}")
 

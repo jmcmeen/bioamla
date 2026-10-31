@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `models ast evaluate` reports per-class precision, recall, F1 and support and the files it
+  couldn't evaluate (on screen, in every `--format` report and in `--json`), and the confusion
+  matrix with its label order (in the `txt` and `json` reports and `--json`). `--format csv` writes
+  an overall row and one row per class. `EvaluationResult` gains `labels`, `per_class` and
+  `skipped`, and its `confusion_matrix` is now filled in.
 - `batch_detect_files()` (`bioamla.detect`): detection over an explicit list of files, writing
   the same `detections_<method>.json` as `batch_detect_dir()` and returning per-file counts.
 - `bioamla --json <command>`: machine-readable output for scripts and agents. stdout gets
@@ -45,6 +50,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- `models ast evaluate --batch-size` was accepted and ignored; `evaluate_directory()` now takes
+  `batch_size` and classifies files in batches. Files that can't be loaded are listed instead of
+  silently dropped from the sample count.
+- AST feature extraction passed multi-channel audio to the feature extractor as several inputs,
+  so a stereo file failed or was misread in `predict`, segmented predict, embeddings and evaluate.
+  Channels are now averaged to mono first (`bioamla.ml.ast.mono_waveform`).
 - CSV-mode `batch detect` ran every detector and threw the detections away. Each row now gains
   a `num_detections` column (blank for a file that failed), and the detections are written to the
   same `detections_<method>.json` as in directory mode, beside the output CSV.
