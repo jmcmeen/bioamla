@@ -28,6 +28,8 @@ nav:
   - Home: index.md
   - CLI Reference: cli.md
   - Recorder metadata: recorder-metadata.md
+  - Architecture:
+      - Workspaces, remote work and skills: architecture/workspaces-and-remote.md
   - API Reference:
       - audio: api/audio.md
       - viz: api/viz.md
