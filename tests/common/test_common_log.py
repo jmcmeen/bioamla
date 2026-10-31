@@ -20,7 +20,9 @@ def test_log_fields_drops_none_and_wraps_in_extra() -> None:
 
 
 def test_log_fields_rejects_unknown_names() -> None:
-    with pytest.raises(ValueError, match="fiel"):
+    from bioamla.exceptions import InvalidInputError
+
+    with pytest.raises(InvalidInputError, match="fiel"):
         log_fields(fiel="a.wav")
 
 

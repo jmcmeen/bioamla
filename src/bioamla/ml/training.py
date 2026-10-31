@@ -333,21 +333,22 @@ def _progress_callback(
         def _report(self, state) -> None:
             if not state.is_world_process_zero:
                 return
-            logger.debug(
-                "Training step %d/%d (epoch %.2f, loss %s)",
-                state.global_step,
-                state.max_steps,
-                float(state.epoch or 0.0),
-                self.loss,
-                **log_fields(
-                    operation="train",
-                    run_id=run_id,
-                    index=state.global_step,
-                    total=state.max_steps,
-                    epoch=round(float(state.epoch or 0.0), 4),
-                    elapsed_s=round(time.monotonic() - started, 3),
-                ),
-            )
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Training step %d/%d (epoch %.2f, loss %s)",
+                    state.global_step,
+                    state.max_steps,
+                    float(state.epoch or 0.0),
+                    self.loss,
+                    **log_fields(
+                        operation="train",
+                        run_id=run_id,
+                        index=state.global_step,
+                        total=state.max_steps,
+                        epoch=round(float(state.epoch or 0.0), 4),
+                        elapsed_s=round(time.monotonic() - started, 3),
+                    ),
+                )
             if on_progress is not None:
                 on_progress(
                     TrainProgress(
@@ -513,7 +514,6 @@ def train_ast(
 
     run_id = uuid.uuid4().hex[:12]
     started = time.monotonic()
-    logger.info("Training run %s started", run_id, **log_fields(operation="train", run_id=run_id))
 
     if augmentation is not None:
         _validate_augmentation(augmentation)
@@ -876,6 +876,10 @@ def train_ast(
     final_loss = None
     cancelled = False
     status: RunStatus = "failed"  # unless training and saving complete
+    # The start and end records bracket the same try block, so every run that logs
+    # "started" also logs its status. Preprocessing failures and cancellations raise
+    # before either.
+    logger.info("Training run %s started", run_id, **log_fields(operation="train", run_id=run_id))
     try:
         trainer.train()
         cancelled = progress.cancelled

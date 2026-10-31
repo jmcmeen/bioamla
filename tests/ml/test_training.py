@@ -641,7 +641,7 @@ class TestTrainAst:
         assert not (tmp_path / "best_model").exists()
 
     @pytest.mark.usefixtures("requires_torchcodec")
-    def test_cancel_before_training_builds_no_trainer(self, tmp_path) -> None:
+    def test_cancel_before_training_builds_no_trainer(self, tmp_path, caplog) -> None:
         from bioamla.exceptions import TrainingCancelled
         from bioamla.ml.training import train_ast
 
@@ -655,6 +655,8 @@ class TestTrainAst:
                     should_stop=lambda: True,
                 )
         trainer_cls.assert_not_called()
+        # No "started" record, so no run is left without a status record.
+        assert "Training run" not in caplog.text
 
     @pytest.mark.usefixtures("requires_torchcodec")
     def test_full_loop_mocked(self, tmp_path) -> None:
