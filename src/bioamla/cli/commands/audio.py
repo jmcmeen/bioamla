@@ -59,6 +59,32 @@ def audio_info(path: str, show_metadata: bool) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    # Recorder metadata, read once for both output modes: None when not asked for,
+    # "not_wav" for a non-WAV file, else the (possibly empty) RecordingMetadata.
+    meta = None
+    if show_metadata:
+        from bioamla.audio import get_recording_metadata
+        from bioamla.exceptions import InvalidInputError
+
+        try:
+            meta = get_recording_metadata(path)
+        except InvalidInputError:
+            meta = "not_wav"
+        except BioamlaError as e:
+            raise click.ClickException(str(e)) from e
+
+    from bioamla.cli.output import emit_result, json_mode
+
+    if json_mode():
+        result = {"file": path, "info": info}
+        if show_metadata:
+            # null: not a WAV file; {}: a WAV with no recorder metadata.
+            result["recording_metadata"] = (
+                None if meta == "not_wav" else ({} if meta.is_empty else meta.to_dict())
+            )
+        emit_result(result)
+        return
+
     print_kv("File", path)
     print_kv("Format", info.format)
     print_kv("Duration", f"{info.duration:.2f}s")
@@ -70,20 +96,11 @@ def audio_info(path: str, show_metadata: bool) -> None:
     if info.subtype:
         print_kv("Subtype", info.subtype)
 
-    if show_metadata:
-        from bioamla.audio import get_recording_metadata
+    if meta is not None and meta != "not_wav" and not meta.is_empty:
         from bioamla.cli.console import print_header
-        from bioamla.exceptions import InvalidInputError
 
-        try:
-            meta = get_recording_metadata(path)
-        except InvalidInputError:
-            return  # not a WAV; nothing to show
-        except BioamlaError as e:
-            raise click.ClickException(str(e)) from e
-        if not meta.is_empty:
-            print_header("\nRecorder metadata")
-            _print_recording_metadata(meta.to_dict())
+        print_header("\nRecorder metadata")
+        _print_recording_metadata(meta.to_dict())
 
 
 @audio.command("metadata")
@@ -151,6 +168,13 @@ def audio_list(path: str, recursive: bool) -> None:
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
+    from bioamla.cli.output import emit_result, json_mode
+
+    if json_mode():
+        emit_result(
+            {"path": path, "recursive": recursive, "count": len(audio_files), "files": audio_files}
+        )
+        return
     if not audio_files:
         echo("No audio files found", style=DIM_STYLE)
         return
