@@ -29,3 +29,18 @@ def test_write_rows_csv_unions_columns(tmp_path) -> None:
 
     out = write_rows_csv(tmp_path / "sub" / "rows.csv", [{"a": 1}, {"a": 2, "b": 3}])
     assert out.read_text().splitlines() == ["a,b", "1,", "2,3"]
+
+
+def test_renamed_stem_never_clashes_with_a_real_one(tmp_path) -> None:
+    files = [str(tmp_path / n) for n in ("a.wav", "a.mp3", "a_wav.flac")]
+    stems = output_stems(files, tmp_path)
+    assert len(set(stems.values())) == 3
+    assert stems[files[2]] == Path("a_wav")
+    assert stems[files[0]] == Path("a_wav_2")
+
+
+def test_write_rows_csv_fixed_columns(tmp_path) -> None:
+    from bioamla.batch import write_rows_csv
+
+    out = write_rows_csv(tmp_path / "rows.csv", [{"b": 2, "a": 1}], ["a", "b"])
+    assert out.read_text().splitlines() == ["a,b", "1,2"]

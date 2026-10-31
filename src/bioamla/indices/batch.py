@@ -13,13 +13,14 @@ from typing import Any
 from bioamla.audio.discovery import list_audio_files
 from bioamla.batch import BatchResult, run_batch, write_rows_csv
 from bioamla.exceptions import NotFoundError
-from bioamla.indices.compute import compute_indices_from_file
+from bioamla.indices.compute import check_index_names, failed_indices_row, indices_row
 
 
 def batch_index_files(
     input_dir: str | Path,
     output_dir: str | Path | None = None,
     *,
+    indices: list[str] | None = None,
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
@@ -32,6 +33,8 @@ def batch_index_files(
     Args:
         input_dir: Directory containing audio files.
         output_dir: If given, ``indices.csv`` is written here.
+        indices: Indices to keep; None keeps everything computed (see
+            :func:`bioamla.indices.indices_row`).
         recursive: Search subdirectories.
         max_workers: Number of worker threads (1 = sequential).
         continue_on_error: Collect per-file errors and keep going if True.
@@ -47,7 +50,10 @@ def batch_index_files(
 
     Raises:
         NotFoundError: If the input directory does not exist.
+        InvalidInputError: If ``indices`` names an unknown index.
     """
+    if indices is not None:
+        check_index_names(indices)  # fail once up front, not once per file
     in_dir = Path(input_dir)
     if not in_dir.exists():
         raise NotFoundError(f"Input directory not found: {in_dir}")
@@ -57,15 +63,10 @@ def batch_index_files(
 
     def _index(path: str) -> None:
         try:
-            indices = compute_indices_from_file(path, **kwargs)
+            by_path[path] = indices_row(path, indices, **kwargs)
         except Exception as e:
-            by_path[path] = {"filepath": path, "success": False, "error": str(e)}
+            by_path[path] = failed_indices_row(path, e)
             raise
-        # filepath first, success last, for a readable CSV column order
-        row: dict[str, Any] = {"filepath": path}
-        row.update(indices.to_dict())
-        row["success"] = True
-        by_path[path] = row
 
     result = run_batch(
         files,

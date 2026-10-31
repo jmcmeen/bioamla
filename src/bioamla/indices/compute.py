@@ -801,6 +801,67 @@ def compute_indices_from_file(
     return compute_all_indices(audio, sample_rate, **kwargs)
 
 
+# Columns that travel with an index when it is selected.
+_INDEX_COMPANIONS = {"ndsi": ("anthrophony", "biophony")}
+# File context kept in every row, whatever the selection.
+_ROW_CONTEXT = ("sample_rate", "duration")
+
+
+def check_index_names(indices: list[str]) -> None:
+    """
+    Check that every name is in :data:`AVAILABLE_INDICES`.
+
+    Raises:
+        InvalidInputError: Naming the unknown indices.
+    """
+    unknown = sorted(set(indices) - set(AVAILABLE_INDICES))
+    if unknown:
+        raise InvalidInputError(
+            f"Unknown indices: {', '.join(unknown)}. Available: {', '.join(AVAILABLE_INDICES)}"
+        )
+
+
+def indices_row(
+    filepath: str | Path, indices: list[str] | None = None, **kwargs: Any
+) -> dict[str, Any]:
+    """
+    Compute one file's indices as a flat row: ``filepath``, the values, ``success``.
+
+    Args:
+        filepath: Audio file path.
+        indices: Indices to keep (names from :data:`AVAILABLE_INDICES`); None
+            keeps everything computed. Selecting ``h_spectral`` or
+            ``h_temporal`` turns on entropy. ``ndsi`` brings ``anthrophony`` and
+            ``biophony``; ``sample_rate`` and ``duration`` are always kept.
+        **kwargs: Passed to :func:`compute_indices_from_file`.
+
+    Returns:
+        The row dict.
+
+    Raises:
+        InvalidInputError: If ``indices`` names an unknown index.
+    """
+    if indices is not None:
+        check_index_names(indices)
+        if any(name.startswith("h_") for name in indices):
+            kwargs.setdefault("include_entropy", True)
+
+    values = compute_indices_from_file(filepath, **kwargs).to_dict()
+    if indices is not None:
+        keep = set(indices) | set(_ROW_CONTEXT)
+        for name in indices:
+            keep.update(_INDEX_COMPANIONS.get(name, ()))
+        values = {k: v for k, v in values.items() if k in keep}
+
+    # filepath first, success last, for a readable CSV column order
+    return {"filepath": str(filepath), **values, "success": True}
+
+
+def failed_indices_row(filepath: str | Path, error: Exception) -> dict[str, Any]:
+    """The row :func:`indices_row` callers record for a file that failed."""
+    return {"filepath": str(filepath), "success": False, "error": str(error)}
+
+
 def batch_compute_indices(
     filepaths: list[str | Path],
     verbose: bool = True,
@@ -841,15 +902,10 @@ def batch_compute_indices(
         if verbose:
             logger.info(f"[{position[filepath]}/{len(unique)}] Processing {filepath}")
         try:
-            indices = compute_indices_from_file(filepath, **kwargs)
+            by_path[filepath] = indices_row(filepath, **kwargs)
         except Exception as e:
-            by_path[filepath] = {"filepath": filepath, "success": False, "error": str(e)}
+            by_path[filepath] = failed_indices_row(filepath, e)
             raise
-        # Build result with filepath first, success last for better CSV column order
-        result = {"filepath": filepath}
-        result.update(indices.to_dict())
-        result["success"] = True
-        by_path[filepath] = result
 
     run_batch(unique, _compute, max_workers=max_workers, on_progress=on_progress)
     return [by_path[p] for p in paths]

@@ -129,3 +129,28 @@ class TestBatchIndexFiles:
         assert result.failed == 1
         assert calls[-1] == (4, 4)
         assert (tmp_path / "out" / "indices.csv").exists()
+
+
+class TestIndicesRow:
+    def test_selection_keeps_companions_and_context(self, test_audio_dir: str) -> None:
+        from bioamla.indices import indices_row
+
+        path = sorted(Path(test_audio_dir).glob("*.wav"))[0]
+        row = indices_row(path, ["ndsi", "h_temporal"])
+        assert list(row) == [
+            "filepath",
+            "ndsi",
+            "anthrophony",
+            "biophony",
+            "sample_rate",
+            "duration",
+            "h_temporal",
+            "success",
+        ]
+
+    def test_unknown_index_rejected(self, test_audio_dir: str) -> None:
+        from bioamla.indices import indices_row
+
+        path = sorted(Path(test_audio_dir).glob("*.wav"))[0]
+        with pytest.raises(InvalidInputError, match="Unknown indices: nope"):
+            indices_row(path, ["aci", "nope"])

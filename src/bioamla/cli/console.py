@@ -167,6 +167,15 @@ class ProgressBar:
             self._progress.update(self._task_id, total=total)
             self.total = total
 
+    def on_progress(self, done: int, total: int) -> None:
+        """An ``on_progress(done, total)`` callback for library functions.
+
+        Sets the total on the first call, then moves the bar to ``done``.
+        """
+        if self.total is None:
+            self.set_total(total)
+        self.update(completed=done)
+
     @property
     def completed(self) -> int:
         """Get the number of completed items."""

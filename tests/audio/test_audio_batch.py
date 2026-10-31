@@ -133,7 +133,36 @@ class TestBatchInfoFiles:
             batch_info_files(tmp_path / "nope")
 
 
+class TestSegmentCleanup:
+    def test_failed_write_removes_partial_segments(
+        self, test_audio_path_3s: str, tmp_path, monkeypatch
+    ) -> None:
+        import bioamla.audio.batch as audio_batch
+
+        real_save = audio_batch.save_audio
+        calls = {"n": 0}
+
+        def flaky_save(path, chunk, sr):
+            calls["n"] += 1
+            if calls["n"] == 3:
+                raise OSError("disk full")
+            return real_save(path, chunk, sr)
+
+        monkeypatch.setattr(audio_batch, "save_audio", flaky_save)
+        out = tmp_path / "segments"
+        with pytest.raises(OSError, match="disk full"):
+            segment_audio_file(test_audio_path_3s, str(out), duration=1.0)
+        assert list(out.glob("*.wav")) == []
+
+
 class TestBatchSegmentFiles:
+    def test_creates_output_dir_with_no_inputs(self, tmp_path) -> None:
+        (tmp_path / "in").mkdir()
+        out = tmp_path / "out"
+        result = batch_segment_files(tmp_path / "in", out, duration=1.0)
+        assert result.total_files == 0
+        assert out.is_dir()
+
     def test_segments_in_input_order(self, test_audio_dir: str, tmp_path) -> None:
         calls: list[tuple[int, int]] = []
         result = batch_segment_files(
