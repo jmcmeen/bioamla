@@ -61,6 +61,7 @@ from bioamla.audio.io import (
     save_audio,
     save_audio_data,
     save_audio_data_as,
+    stream_audio_data,
 )
 from bioamla.audio.metadata import (
     RECORDING_METADATA_FIELDS,
@@ -108,6 +109,7 @@ __all__ = [
     "ProcessedAudio",
     # File I/O (AudioData-level)
     "load_audio_data",
+    "stream_audio_data",
     "save_audio_data",
     "save_audio_data_as",
     "create_temp_audio_file",

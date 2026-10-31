@@ -15,13 +15,21 @@ Design notes:
 
 import json
 import logging
+import shutil
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
 from pydub import AudioSegment
 
-from bioamla.exceptions import AudioLoadError, AudioSaveError, NotFoundError
+from bioamla.exceptions import (
+    AudioLoadError,
+    AudioSaveError,
+    DependencyError,
+    InvalidInputError,
+    NotFoundError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +146,14 @@ def _load_via_pydub(filepath: str) -> tuple[np.ndarray, int]:
         raise AudioLoadError(f"Error opening '{filepath}': {e}") from e
 
 
+# Formats soundfile reads natively (and can seek in without decoding the rest).
+_NATIVE_EXTENSIONS = {".wav", ".flac", ".ogg"}
+
+
+def _to_mono(audio: np.ndarray) -> np.ndarray:
+    return audio.mean(axis=1) if audio.ndim > 1 else audio
+
+
 def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     """Load audio file using the fastest available backend.
 
@@ -162,15 +178,13 @@ def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     ext = path.suffix.lower()
 
     # Fast path: soundfile for native formats
-    if ext in {".wav", ".flac", ".ogg"}:
+    if ext in _NATIVE_EXTENSIONS:
         try:
             import soundfile as sf
 
             audio, sample_rate = sf.read(str(path), dtype="float32", always_2d=False)
 
-            # Convert to mono if stereo/multichannel
-            if audio.ndim > 1:
-                audio = audio.mean(axis=1)
+            audio = _to_mono(audio)
 
             logger.debug(
                 f"Loaded {ext} file via soundfile (fast): {path.name} "
@@ -184,6 +198,178 @@ def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     # Slow path: pydub for M4A, MP3, or if soundfile failed
     logger.debug(f"Loading {ext} file via pydub (slow): {path.name}")
     return _load_via_pydub(str(path))
+
+
+def load_audio_window(
+    filepath: str, start: float = 0.0, duration: float | None = None
+) -> tuple[np.ndarray, int]:
+    """Load part of an audio file without decoding the rest.
+
+    WAV/FLAC/OGG seek straight to ``start`` and read only the requested frames
+    via soundfile. Other formats, and native files soundfile can't read, are
+    decoded by ffmpeg seeking on the input (``-ss`` before ``-i``), so only the
+    window is decoded.
+
+    Args:
+        filepath: Path to audio file.
+        start: Window start in seconds.
+        duration: Window length in seconds; None reads to the end of the file.
+
+    Returns:
+        Tuple of (audio_array, sample_rate), mono float32 [-1.0, 1.0]. The array
+        is shorter than ``duration`` when the window runs past the end, and
+        empty when ``start`` is beyond it.
+
+    Raises:
+        NotFoundError: If file doesn't exist.
+        DependencyError: If the format needs ffmpeg/ffprobe and they're missing.
+        AudioLoadError: If the window cannot be decoded.
+    """
+    path = Path(filepath)
+    if not path.exists():
+        raise NotFoundError(f"Audio file not found: {filepath}")
+
+    if path.suffix.lower() in _NATIVE_EXTENSIONS:
+        try:
+            import soundfile as sf
+
+            with sf.SoundFile(str(path)) as f:
+                sample_rate = f.samplerate
+                f.seek(min(round(start * sample_rate), f.frames))
+                frames = -1 if duration is None else round(duration * sample_rate)
+                audio = f.read(frames, dtype="float32", always_2d=False)
+            return _to_mono(audio), sample_rate
+        except Exception as e:
+            logger.debug(f"soundfile window read failed for {filepath}, using ffmpeg: {e}")
+
+    return _ffmpeg_window(path, start, duration)
+
+
+# Seconds decoded and discarded before an ffmpeg window, so lossy decoders have
+# settled by the window's first sample (MP3 needs ~2 frames, AAC a little more).
+_FFMPEG_PREROLL = 0.25
+
+
+def _ffmpeg_window(path: Path, start: float, duration: float | None) -> tuple[np.ndarray, int]:
+    """Decode ``[start, start + duration)`` of ``path`` with ffmpeg, mono float32."""
+    if shutil.which("ffmpeg") is None:
+        raise DependencyError(
+            f"ffmpeg is required to read {path.suffix or 'this'} files but was not found on PATH."
+        )
+    meta = _get_metadata_ffprobe(str(path))
+    if not meta or not meta.get("sample_rate") or not meta.get("channels"):
+        raise AudioLoadError(f"Error opening '{path}': ffprobe could not read the stream format")
+    sample_rate = int(meta["sample_rate"])
+    channels = int(meta["channels"])
+
+    # -ss before -i seeks the input, so ffmpeg skips (not decodes) what precedes it.
+    # Lossy decoders (MP3, AAC) need a few frames to settle after a seek, so decode
+    # a short pre-roll before the window and drop it.
+    # Near the start there is nothing to seek past: decode from the beginning
+    # without -ss, which also keeps ffmpeg's handling of the encoder's leading
+    # padding identical to a full decode.
+    preroll = start if start <= _FFMPEG_PREROLL else _FFMPEG_PREROLL
+    seek = start - preroll
+    cmd = ["ffmpeg", "-nostdin", "-v", "error"]
+    if seek > 0:
+        cmd += ["-ss", f"{seek:.6f}"]
+    cmd += ["-i", str(path)]
+    if duration is not None:
+        cmd += ["-t", f"{duration + preroll:.6f}"]
+    cmd += ["-map", "0:a:0", "-f", "f32le", "-acodec", "pcm_f32le", "-"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, check=False)
+    except OSError as e:
+        raise AudioLoadError(f"Error opening '{path}': {e}") from e
+    if result.returncode != 0:
+        detail = result.stderr.decode(errors="replace").strip()
+        raise AudioLoadError(f"Error opening '{path}': {detail}")
+
+    audio = np.frombuffer(result.stdout, dtype=np.float32)
+    audio = audio[: len(audio) - len(audio) % channels].reshape(-1, channels)
+    audio = audio[round(preroll * sample_rate) :]
+    if duration is not None:
+        audio = audio[: round(duration * sample_rate)]
+    return _to_mono(audio).astype(np.float32, copy=False), sample_rate
+
+
+def iter_audio_blocks(
+    filepath: str, block_duration: float, overlap: float = 0.0
+) -> Iterator[tuple[np.ndarray, int, float]]:
+    """Yield consecutive fixed-length blocks of an audio file.
+
+    Only one block is held in memory at a time. WAV/FLAC/OGG are streamed with
+    soundfile; other formats decode one window per block through ffmpeg,
+    reading until the file runs out (header durations of VBR or truncated
+    files aren't trusted).
+
+    Args:
+        filepath: Path to audio file.
+        block_duration: Block length in seconds.
+        overlap: Seconds each block shares with the previous one.
+
+    Yields:
+        Tuples of (audio_array, sample_rate, start_time) where audio is mono
+        float32 and ``start_time`` is the block's offset in seconds. The last
+        block may be shorter.
+
+    Raises:
+        NotFoundError: If file doesn't exist.
+        InvalidInputError: If a block, or the step between blocks, is shorter
+            than one sample at the file's rate.
+        DependencyError: If the format needs ffmpeg/ffprobe and they're missing.
+        AudioLoadError: If the file cannot be decoded.
+    """
+    path = Path(filepath)
+    if not path.exists():
+        raise NotFoundError(f"Audio file not found: {filepath}")
+
+    if path.suffix.lower() in _NATIVE_EXTENSIONS:
+        import soundfile as sf
+
+        try:
+            f = sf.SoundFile(str(path))
+        except Exception as e:
+            logger.debug(f"soundfile can't stream {filepath}, using ffmpeg: {e}")
+        else:
+            with f:
+                sample_rate = f.samplerate
+                block = round(block_duration * sample_rate)
+                step = block - round(overlap * sample_rate)
+                _check_block_samples(block, step, sample_rate)
+                position = 0
+                while position < f.frames:
+                    f.seek(position)
+                    audio = f.read(block, dtype="float32", always_2d=False)
+                    yield _to_mono(audio), sample_rate, position / sample_rate
+                    if position + block >= f.frames:
+                        return
+                    position += step
+            return
+
+    step = block_duration - overlap
+    index = 0
+    while True:
+        start = index * step  # multiply, don't accumulate: no float drift
+        audio, sample_rate = _ffmpeg_window(path, start, block_duration)
+        if index == 0:
+            _check_block_samples(
+                round(block_duration * sample_rate), round(step * sample_rate), sample_rate
+            )
+        if len(audio) == 0:
+            return
+        yield audio, sample_rate, start
+        if len(audio) < round(block_duration * sample_rate):
+            return  # a short block is the end of the file
+        index += 1
+
+
+def _check_block_samples(block: int, step: int, sample_rate: int) -> None:
+    if block < 1 or step < 1:
+        raise InvalidInputError(
+            "block_duration and block_duration - overlap must each be at least one "
+            f"sample ({1 / sample_rate:.6g} s at {sample_rate} Hz)"
+        )
 
 
 def save_audio(

@@ -15,42 +15,152 @@ Heavy/optional backends (pydub/ffmpeg) are imported lazily inside the functions.
 
 import logging
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import numpy as np
 
 from bioamla.audio.data import AudioData
 from bioamla.common.files import prepare_output_path, require_exists
-from bioamla.exceptions import AudioLoadError, AudioSaveError
+from bioamla.exceptions import AudioLoadError, AudioSaveError, DependencyError
 
 logger = logging.getLogger(__name__)
 
 
-def load_audio_data(filepath: str | Path, *, sample_rate: int | None = None) -> AudioData:
+def load_audio_data(
+    filepath: str | Path,
+    *,
+    sample_rate: int | None = None,
+    start: float | None = None,
+    duration: float | None = None,
+) -> AudioData:
     """
-    Load an audio file into an :class:`AudioData`.
+    Load an audio file, or a window of it, into an :class:`AudioData`.
+
+    Passing ``start`` and/or ``duration`` reads only that part of the file,
+    so a few seconds of a multi-hour recording never decode the rest. For
+    walking through a whole long file, see :func:`stream_audio_data`.
 
     Args:
         filepath: Path to the audio file.
         sample_rate: If given, resample the loaded audio to this rate.
+        start: Window start in seconds (default: the beginning).
+        duration: Window length in seconds (default: to the end).
 
     Returns:
-        The loaded :class:`AudioData`.
+        The loaded :class:`AudioData`. A window records its offset in
+        ``metadata["start_time"]``; it is shorter than ``duration`` if it runs
+        past the end of the file.
 
     Raises:
         NotFoundError: If the file does not exist.
+        InvalidInputError: If ``start`` is negative or ``duration`` not positive.
         AudioLoadError: If decoding fails.
     """
-    from bioamla.audio._pydub import load_audio
+    from bioamla.audio._pydub import load_audio, load_audio_window
 
     path = require_exists(filepath)
+    windowed = start is not None or duration is not None
+    if windowed:
+        _check_window(start or 0.0, duration)
 
     try:
-        audio, sr = load_audio(str(path))
+        if windowed:
+            audio, sr = load_audio_window(str(path), start or 0.0, duration)
+        else:
+            audio, sr = load_audio(str(path))
+    except DependencyError:
+        raise
     except Exception as e:
         raise AudioLoadError(f"Failed to open audio file: {e}") from e
 
+    metadata: dict = {"start_time": start or 0.0} if windowed else {}
+    return _to_audio_data(audio, sr, path, sample_rate, metadata)
+
+
+def stream_audio_data(
+    filepath: str | Path,
+    *,
+    block_duration: float,
+    overlap: float = 0.0,
+    sample_rate: int | None = None,
+) -> Iterator[AudioData]:
+    """
+    Stream an audio file as consecutive fixed-length blocks.
+
+    Only one block is in memory at a time, so this works on recordings far
+    larger than RAM. WAV, FLAC and OGG are read straight from disk; other
+    formats decode one block at a time through ffmpeg.
+
+    Arguments and the file's existence are checked when this is called, before
+    the first block is read.
+
+    Args:
+        filepath: Path to the audio file.
+        block_duration: Block length in seconds.
+        overlap: Seconds each block shares with the previous one (for analyses
+            that need context across block edges).
+        sample_rate: If given, resample each block to this rate. Blocks are
+            resampled independently, so use some ``overlap`` if edge effects
+            matter.
+
+    Returns:
+        An iterator of :class:`AudioData` blocks, each with its offset into the
+        file in ``metadata["start_time"]``. The last block may be shorter.
+
+    Raises:
+        NotFoundError: If the file does not exist.
+        InvalidInputError: If ``block_duration`` is not positive or ``overlap``
+            is negative or not smaller than ``block_duration`` (on the call), or
+            either spans less than one sample at the file's rate (on the first
+            block).
+        DependencyError: If the format needs ffmpeg and it isn't installed.
+        AudioLoadError: If decoding fails.
+    """
+    from bioamla.exceptions import InvalidInputError
+
+    if block_duration <= 0:
+        raise InvalidInputError(f"block_duration must be positive, got {block_duration}")
+    if overlap < 0 or overlap >= block_duration:
+        raise InvalidInputError(
+            f"overlap must be at least 0 and less than block_duration, got {overlap}"
+        )
+    path = require_exists(filepath)
+    return _stream_blocks(path, block_duration, overlap, sample_rate)
+
+
+def _stream_blocks(
+    path: Path, block_duration: float, overlap: float, sample_rate: int | None
+) -> Iterator[AudioData]:
+    from bioamla.audio._pydub import iter_audio_blocks
+    from bioamla.exceptions import BioamlaError
+
+    blocks = iter_audio_blocks(str(path), block_duration, overlap)
+    while True:
+        try:
+            audio, sr, block_start = next(blocks)
+        except StopIteration:
+            return
+        except BioamlaError:
+            raise
+        except Exception as e:
+            raise AudioLoadError(f"Failed to stream audio file: {e}") from e
+        yield _to_audio_data(audio, sr, path, sample_rate, {"start_time": block_start})
+
+
+def _check_window(start: float, duration: float | None) -> None:
+    from bioamla.exceptions import InvalidInputError
+
+    if start < 0:
+        raise InvalidInputError(f"start must not be negative, got {start}")
+    if duration is not None and duration <= 0:
+        raise InvalidInputError(f"duration must be positive, got {duration}")
+
+
+def _to_audio_data(
+    audio: np.ndarray, sr: int, path: Path, sample_rate: int | None, metadata: dict
+) -> AudioData:
+    """Wrap decoded samples in an :class:`AudioData`, resampling if asked."""
     # Ensure 1D for mono
     if audio.ndim == 1:
         channels = 1
@@ -65,7 +175,7 @@ def load_audio_data(filepath: str | Path, *, sample_rate: int | None = None) -> 
         channels=channels,
         source_path=str(path.resolve()),
         is_modified=False,
-        metadata={"original_duration": len(audio) / sr},
+        metadata={"original_duration": len(audio) / sr, **metadata},
     )
 
     if sample_rate is not None and sample_rate != audio_data.sample_rate:
