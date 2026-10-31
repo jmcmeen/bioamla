@@ -11,6 +11,7 @@ Example:
     >>> print(idx.aci, idx.ndsi)
 """
 
+from bioamla.indices.batch import batch_index_files
 from bioamla.indices.compute import (
     AVAILABLE_INDICES,
     INDEX_DESCRIPTIONS,
@@ -41,6 +42,7 @@ __all__ = [
     "compute_index",
     "compute_indices_from_file",
     "batch_compute_indices",
+    "batch_index_files",
     "temporal_indices",
     "spectral_entropy",
     "temporal_entropy",

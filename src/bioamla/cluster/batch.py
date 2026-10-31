@@ -15,6 +15,7 @@ direct ``pathlib`` I/O.
 
 import json
 import pickle
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -108,6 +109,7 @@ def cluster_batch_files(
     min_samples: int = 3,
     recursive: bool = True,
     continue_on_error: bool = True,
+    on_progress: Callable[[int, int], None] | None = None,
     **kwargs: Any,
 ) -> BatchResult:
     """
@@ -125,6 +127,7 @@ def cluster_batch_files(
         min_samples: Minimum samples per cluster.
         recursive: Whether to recurse into subdirectories.
         continue_on_error: Keep going when an individual file fails to load.
+        on_progress: Optional ``(completed, total)`` callback for the loading phase.
         **kwargs: Additional arguments forwarded to the clusterer.
 
     Returns:
@@ -144,6 +147,7 @@ def cluster_batch_files(
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
         continue_on_error=continue_on_error,
+        on_progress=on_progress,
         **kwargs,
     )
 
@@ -157,6 +161,7 @@ def cluster_embedding_files(
     min_cluster_size: int = 5,
     min_samples: int = 3,
     continue_on_error: bool = True,
+    on_progress: Callable[[int, int], None] | None = None,
     **kwargs: Any,
 ) -> BatchResult:
     """
@@ -175,6 +180,7 @@ def cluster_embedding_files(
         min_cluster_size: Minimum cluster size (for HDBSCAN).
         min_samples: Minimum samples per cluster.
         continue_on_error: Keep going when an individual file fails to load.
+        on_progress: Optional ``(completed, total)`` callback for the loading phase.
         **kwargs: Additional arguments forwarded to the clusterer.
 
     Returns:
@@ -189,7 +195,7 @@ def cluster_embedding_files(
         loaded.append((str(path), load_embedding_file(path)))
         return None
 
-    result = run_batch(files, _load, continue_on_error=continue_on_error)
+    result = run_batch(files, _load, continue_on_error=continue_on_error, on_progress=on_progress)
 
     if not loaded:
         return result

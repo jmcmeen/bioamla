@@ -1,6 +1,7 @@
 """Tests for the detect domain (flattened, exception-based API)."""
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -259,6 +260,25 @@ class TestBatchDetectDir:
         assert out_file.exists()
         data = json.loads(out_file.read_text())
         assert len(data) == 3
+
+    def test_batch_dir_parallel_progress_and_order(self, test_audio_dir, tmp_path) -> None:
+        calls: list[tuple[int, int]] = []
+        batch_detect_dir(
+            test_audio_dir,
+            tmp_path,
+            method="energy",
+            max_workers=3,
+            on_progress=lambda done, total: calls.append((done, total)),
+            low_freq=300,
+            high_freq=5000,
+        )
+        data = json.loads((tmp_path / "detections_energy.json").read_text())
+        assert [Path(d["filepath"]).name for d in data] == [
+            "audio_0.wav",
+            "audio_1.wav",
+            "audio_2.wav",
+        ]
+        assert calls[-1] == (3, 3)
 
     def test_batch_dir_unknown_method(self, test_audio_dir, tmp_path) -> None:
         with pytest.raises(InvalidDetectionParams):

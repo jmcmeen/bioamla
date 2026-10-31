@@ -159,6 +159,31 @@ def discover_files(
     return sorted(files)
 
 
+def write_rows_csv(path: str | Path, rows: list[dict[str, Any]]) -> Path:
+    """
+    Write dict rows to a CSV whose columns are every key, in first-seen order.
+
+    Args:
+        path: Destination CSV path (parent directories are created).
+        rows: Rows to write; they may have different keys.
+
+    Returns:
+        The written path.
+    """
+    fieldnames: list[str] = []
+    for row in rows:
+        for key in row:
+            if key not in fieldnames:
+                fieldnames.append(key)
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    return out
+
+
 def output_stems(files: list[str], root: str | Path) -> dict[str, Path]:
     """
     Map each input file to its output stem: its path under ``root`` minus the suffix.
@@ -624,6 +649,7 @@ __all__ = [
     "discover_files",
     "output_stems",
     "run_batch",
+    "write_rows_csv",
     "run_csv_batch",
     # CSV helpers
     "load_csv",

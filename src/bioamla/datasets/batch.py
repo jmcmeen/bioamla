@@ -48,7 +48,7 @@ def batch_convert_annotations(
         to_format: Target format ('raven' or 'csv').
         from_format: Source format ('raven' or 'csv'); auto-detected if None.
         recursive: Recurse into subdirectories.
-        max_workers: Worker processes for parallel conversion.
+        max_workers: Worker threads for parallel conversion.
         continue_on_error: Keep going past per-file failures.
         on_progress: Optional ``(completed, total)`` progress callback.
 

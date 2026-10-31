@@ -202,7 +202,15 @@ class TestBatchClustering:
         np.save(in_dir / "f1.npy", rng.normal(5.0, 0.1, size=(15, 6)))
 
         out_dir = tmp_path / "out"
-        result = cluster_batch_files(in_dir, out_dir, method="kmeans", n_clusters=2)
+        calls: list[tuple[int, int]] = []
+        result = cluster_batch_files(
+            in_dir,
+            out_dir,
+            method="kmeans",
+            n_clusters=2,
+            on_progress=lambda done, total: calls.append((done, total)),
+        )
+        assert calls == [(1, 2), (2, 2)]
 
         assignments_path = out_dir / "cluster_assignments.json"
         assert assignments_path.exists()

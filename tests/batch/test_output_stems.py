@@ -22,3 +22,10 @@ def test_same_stem_different_extension_kept_apart(tmp_path) -> None:
 def test_file_outside_root_uses_its_name(tmp_path) -> None:
     outside = str(tmp_path.parent / "elsewhere.wav")
     assert output_stems([outside], tmp_path / "root") == {outside: Path("elsewhere")}
+
+
+def test_write_rows_csv_unions_columns(tmp_path) -> None:
+    from bioamla.batch import write_rows_csv
+
+    out = write_rows_csv(tmp_path / "sub" / "rows.csv", [{"a": 1}, {"a": 2, "b": 3}])
+    assert out.read_text().splitlines() == ["a,b", "1,", "2,3"]
