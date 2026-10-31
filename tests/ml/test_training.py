@@ -494,35 +494,35 @@ class TestTrainingHelpers:
         assert "Could not end the MLflow run after training: tracking server down" in caplog.text
 
     @pytest.mark.parametrize(
-        ("report_to", "active", "starts"),
-        [
-            ("tensorboard", None, False),
-            (["tensorboard", "mlflow"], None, True),
-            ("all", None, True),
-            ("mlflow", "caller-run", False),  # never take over the caller's run
-        ],
+        ("report_to", "adds_mlflow"),
+        [("tensorboard", False), (["tensorboard", "mlflow"], True), ("all", True), ("none", False)],
     )
-    def test_start_mlflow_run(self, report_to, active, starts) -> None:
-        from bioamla.ml.training import _start_mlflow_run
+    def test_report_to_mlflow_adds_an_mlflow_tracker(self, report_to, adds_mlflow) -> None:
+        from bioamla.ml.trackers import MLflowTracker
+        from bioamla.ml.training import _run_trackers
 
-        fake = MagicMock()
-        fake.active_run.return_value = active
-        with patch.dict("sys.modules", {"mlflow": fake}):
-            run = _start_mlflow_run(report_to, "my-run")
-        assert (run is fake) is starts
-        if starts:
-            fake.start_run.assert_called_once_with(run_name="my-run")
-        else:
-            fake.start_run.assert_not_called()
+        trackers = _run_trackers(None, report_to)._trackers
+        assert [type(t) for t in trackers] == ([MLflowTracker] if adds_mlflow else [])
+        if adds_mlflow:
+            # transformers' callback already logs the metrics into the same run.
+            assert trackers[0]._send_metrics is False
 
-    def test_start_mlflow_run_failure_falls_back(self) -> None:
-        from bioamla.ml.training import _start_mlflow_run
+    def test_callers_mlflow_tracker_is_not_duplicated(self) -> None:
+        from bioamla.ml.trackers import MLflowTracker
+        from bioamla.ml.training import _run_trackers
 
-        fake = MagicMock()
-        fake.active_run.return_value = None
-        fake.start_run.side_effect = ConnectionError("tracking server down")
-        with patch.dict("sys.modules", {"mlflow": fake}):
-            assert _start_mlflow_run("mlflow", None) is None
+        mine = MLflowTracker(experiment="x")
+        assert _run_trackers([mine], "mlflow")._trackers == [mine]
+
+    def test_failing_tracker_only_warns(self, caplog) -> None:
+        from bioamla.ml.training import _Trackers
+
+        broken, fine = MagicMock(), MagicMock()
+        broken.start_run.side_effect = ConnectionError("server down")
+        with caplog.at_level("WARNING", logger="bioamla"):
+            _Trackers([broken, fine]).call("start_run", "run", {})
+        fine.start_run.assert_called_once_with("run", {})
+        assert "start_run failed: server down" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -681,3 +681,86 @@ class TestTrainAst:
         assert result.final_loss == 0.3
         fake_trainer.train.assert_called_once()
         fake_trainer.save_model.assert_called_once()
+
+    @pytest.mark.usefixtures("requires_torchcodec")
+    def test_tracker_sees_a_finished_run(self, tmp_path) -> None:
+        import json
+
+        from bioamla.ml.training import train_ast
+
+        fake_trainer = MagicMock()
+        fake_trainer.state = SimpleNamespace(
+            log_history=[{"eval_accuracy": 0.75, "eval_loss": 0.3}]
+        )
+        fake_trainer.accelerator = None
+
+        def make_trainer(*args, callbacks=None, **kwargs):
+            def train():
+                state = SimpleNamespace(
+                    global_step=4, max_steps=8, epoch=0.5, is_world_process_zero=True
+                )
+                callbacks[0].on_log(
+                    None, state, None, logs={"loss": 0.5, "epoch": 0.5, "note": "x"}
+                )
+
+            fake_trainer.train.side_effect = train
+            return fake_trainer
+
+        tracker = MagicMock()
+        with self._mocks(fake_trainer, trainer_cls=MagicMock(side_effect=make_trainer)):
+            result = train_ast(
+                train_dataset="owner/ds",
+                training_dir=str(tmp_path),
+                dataloader_num_workers=1,
+                report_to="none",
+                tracker=tracker,
+            )
+
+        name, params = tracker.start_run.call_args.args
+        assert name == f"bioamla-{result.run_id}"
+        assert params["run_id"] == result.run_id and params["labels"]
+        tracker.log_metrics.assert_called_once_with(4, {"loss": 0.5, "epoch": 0.5})
+        summary = tmp_path / "best_model" / "bioamla_run.json"
+        tracker.log_artifact.assert_called_once_with(str(summary))
+        assert json.loads(summary.read_text())["result"]["final_accuracy"] == 0.75
+        tracker.end_run.assert_called_once_with("finished")
+
+    @pytest.mark.usefixtures("requires_torchcodec")
+    @pytest.mark.parametrize("outcome", ["cancelled", "failed"])
+    def test_tracker_sees_the_real_end_status(self, tmp_path, outcome) -> None:
+        from transformers import TrainerControl
+
+        from bioamla.exceptions import TrainingCancelled
+        from bioamla.ml.training import train_ast
+
+        fake_trainer = MagicMock()
+        fake_trainer.accelerator = None
+        training = {"started": False}
+
+        def make_trainer(*args, callbacks=None, **kwargs):
+            def train():
+                if outcome == "failed":
+                    raise RuntimeError("out of memory")
+                training["started"] = True
+                state = SimpleNamespace(
+                    global_step=1, max_steps=8, epoch=0.1, is_world_process_zero=True
+                )
+                callbacks[0].on_step_end(None, state, TrainerControl())
+
+            fake_trainer.train.side_effect = train
+            return fake_trainer
+
+        tracker = MagicMock()
+        expected = TrainingCancelled if outcome == "cancelled" else RuntimeError
+        with self._mocks(fake_trainer, trainer_cls=MagicMock(side_effect=make_trainer)):
+            with pytest.raises(expected):
+                train_ast(
+                    train_dataset="owner/ds",
+                    training_dir=str(tmp_path),
+                    dataloader_num_workers=1,
+                    report_to="none",
+                    tracker=tracker,
+                    should_stop=lambda: training["started"],
+                )
+        tracker.end_run.assert_called_once_with(outcome)
+        tracker.log_artifact.assert_not_called()

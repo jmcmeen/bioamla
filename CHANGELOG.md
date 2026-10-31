@@ -33,6 +33,13 @@ All notable changes to this project are documented here. The format is based on
   `ShouldStop`, `OnDownloadProgress` and `AudioModel`. Function signatures now use them, and
   `common.progress.ProgressCallback` and `catalogs.inat.ProgressCallback` are aliases of them.
   The module imports only the standard library.
+- Experiment-tracker hook for `train_ast`: `tracker=` takes one or more
+  `bioamla.protocols.ExperimentTracker`s, which receive the run's parameters (including the
+  augmentation config and label list), every logged metric, a `bioamla_run.json` summary written
+  next to the best model, and the final status: finished, cancelled or failed. `MLflowTracker`
+  and `TensorBoardTracker` are included in `bioamla.ml`. A tracker that fails only logs a
+  warning. `report_to` works as before; with MLflow in it, the MLflow run now ends through an
+  `MLflowTracker`, still as `KILLED` for a cancelled run and `FAILED` for a failed one.
 
 ### Deprecated
 

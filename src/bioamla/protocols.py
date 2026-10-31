@@ -16,11 +16,13 @@ base install, with no extras.
 - :class:`OnDownloadProgress`: the per-file hook of the iNaturalist downloader.
 - :class:`AudioModel`: what an audio classification model provides.
   :class:`bioamla.ml.base.BaseAudioModel` subclasses satisfy it.
+- :class:`ExperimentTracker`: where :func:`bioamla.ml.train_ast` reports a run.
+  :mod:`bioamla.ml.trackers` has adapters for MLflow and TensorBoard.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from bioamla.common.progress import BatchProgress
@@ -104,11 +106,45 @@ class AudioModel(Protocol):
         ...
 
 
+#: How a run ended, as passed to :meth:`ExperimentTracker.end_run`.
+RunStatus = Literal["finished", "cancelled", "failed"]
+
+
+@runtime_checkable
+class ExperimentTracker(Protocol):
+    """Receives a training run's parameters, metrics, artifacts and outcome.
+
+    :func:`bioamla.ml.train_ast` calls :meth:`start_run` once before training,
+    :meth:`log_metrics` each time the trainer logs, :meth:`log_artifact` for files
+    it writes on success, and :meth:`end_run` exactly once, with the real outcome,
+    including a cancelled or failed run. A tracker that raises is logged as a
+    warning and doesn't stop training.
+    """
+
+    def start_run(self, name: str | None, params: dict[str, Any]) -> None:
+        """Begin a run. ``params`` are the run's settings; values may be nested."""
+        ...
+
+    def log_metrics(self, step: int, metrics: dict[str, float]) -> None:
+        """Record metrics (``loss``, ``eval_accuracy``, ...) at an optimizer step."""
+        ...
+
+    def log_artifact(self, path: str) -> None:
+        """Record a file the run produced."""
+        ...
+
+    def end_run(self, status: RunStatus) -> None:
+        """Close the run as ``finished``, ``cancelled`` or ``failed``."""
+        ...
+
+
 __all__ = [
     "AudioModel",
+    "ExperimentTracker",
     "OnBatchProgress",
     "OnDownloadProgress",
     "OnProgress",
     "OnTrainProgress",
+    "RunStatus",
     "ShouldStop",
 ]

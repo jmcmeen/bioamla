@@ -21,10 +21,12 @@ def test_imports_only_the_standard_library() -> None:
 def test_exports() -> None:
     assert set(protocols.__all__) == {
         "AudioModel",
+        "ExperimentTracker",
         "OnBatchProgress",
         "OnDownloadProgress",
         "OnProgress",
         "OnTrainProgress",
+        "RunStatus",
         "ShouldStop",
     }
 
