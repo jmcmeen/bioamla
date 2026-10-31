@@ -136,6 +136,13 @@ class TestAnalyzeBatch:
         )
         assert len(results) == 1
 
+    def test_parallel_keeps_input_order(
+        self, test_audio_path: str, test_audio_path_3s: str, tmp_path
+    ) -> None:
+        paths = [test_audio_path_3s, str(tmp_path / "missing.wav"), test_audio_path]
+        results = analyze_audio_batch(paths, verbose=False, max_workers=3)
+        assert [r.file_path for r in results] == [test_audio_path_3s, test_audio_path]
+
 
 class TestSummarizeAnalysis:
     def test_empty(self) -> None:

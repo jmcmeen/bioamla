@@ -9,6 +9,7 @@ does not exist and :class:`AudioLoadError` when decoding fails.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -266,6 +267,9 @@ def analyze_audio_batch(
     filepaths: list[str],
     silence_threshold_db: float = -40,
     verbose: bool = True,
+    *,
+    max_workers: int = 1,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> list[AudioAnalysis]:
     """
     Analyze multiple audio files.
@@ -277,22 +281,26 @@ def analyze_audio_batch(
         filepaths: List of paths to audio files.
         silence_threshold_db: Threshold for silence detection in dBFS.
         verbose: Log progress at INFO level.
+        max_workers: Worker threads; 1 runs sequentially.
+        on_progress: Optional ``(completed, total)`` progress callback.
 
     Returns:
-        List of :class:`AudioAnalysis` objects for the files that succeeded.
+        List of :class:`AudioAnalysis` objects for the files that succeeded, in
+        input order.
     """
-    results = []
+    from bioamla.batch import run_batch
 
-    for i, filepath in enumerate(filepaths):
-        try:
-            analysis = analyze_audio(filepath, silence_threshold_db)
-            results.append(analysis)
-            if verbose:
-                logger.info(f"[{i + 1}/{len(filepaths)}] Analyzed: {filepath}")
-        except Exception as e:
-            logger.warning(f"Error analyzing {filepath}: {e}")
+    paths = [str(p) for p in filepaths]
+    position = {p: i for i, p in reversed(list(enumerate(paths, 1)))}
+    by_path: dict[str, AudioAnalysis] = {}
 
-    return results
+    def _analyze(filepath: str) -> None:
+        by_path[filepath] = analyze_audio(filepath, silence_threshold_db)
+        if verbose:
+            logger.info(f"[{position[filepath]}/{len(paths)}] Analyzed: {filepath}")
+
+    run_batch(paths, _analyze, max_workers=max_workers, on_progress=on_progress)
+    return [by_path[p] for p in paths if p in by_path]
 
 
 def summarize_analysis(analyses: list[AudioAnalysis]) -> dict[str, Any]:

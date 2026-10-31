@@ -39,6 +39,7 @@ Example:
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -1433,6 +1434,9 @@ def batch_detect(
     | CWTPeakDetector
     | AcceleratingPatternDetector,
     verbose: bool = True,
+    *,
+    max_workers: int = 1,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, list[Detection]]:
     """
     Run detection on multiple files.
@@ -1444,30 +1448,30 @@ def batch_detect(
         filepaths: List of audio file paths.
         detector: Detector instance to use.
         verbose: Log progress at INFO level.
+        max_workers: Worker threads; 1 runs sequentially.
+        on_progress: Optional ``(completed, total)`` progress callback.
 
     Returns:
-        Dictionary mapping filepath to list of detections.
+        Dictionary mapping filepath to list of detections, in input order.
     """
-    results: dict[str, list[Detection]] = {}
+    from bioamla.batch import run_batch
 
-    for i, filepath in enumerate(filepaths, 1):
+    paths = [str(p) for p in filepaths]
+    position = {p: i for i, p in reversed(list(enumerate(paths, 1)))}
+    by_path: dict[str, list[Detection]] = {}
+
+    def _detect(filepath: str) -> None:
         if verbose:
-            logger.info(f"[{i}/{len(filepaths)}] Processing {filepath}")
+            logger.info(f"[{position[filepath]}/{len(paths)}] Processing {filepath}")
+        by_path[filepath] = []
+        if hasattr(detector, "detect_from_file"):
+            detections = detector.detect_from_file(filepath)
+        else:
+            audio, sr = _load_audio_file(filepath)
+            detections = detector.detect(audio, sr)
+        by_path[filepath] = detections
+        if verbose:
+            logger.info(f"  Found {len(detections)} detections in {filepath}")
 
-        try:
-            if hasattr(detector, "detect_from_file"):
-                detections = detector.detect_from_file(filepath)
-            else:
-                audio, sr = _load_audio_file(filepath)
-                detections = detector.detect(audio, sr)
-
-            results[str(filepath)] = detections
-
-            if verbose:
-                logger.info(f"  Found {len(detections)} detections")
-
-        except (AudioLoadError, DetectionError) as e:
-            logger.warning(f"Error processing {filepath}: {e}")
-            results[str(filepath)] = []
-
-    return results
+    run_batch(paths, _detect, max_workers=max_workers, on_progress=on_progress)
+    return {p: by_path[p] for p in paths}

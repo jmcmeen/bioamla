@@ -328,6 +328,9 @@ def batch_process(
     sample_rate: int | None = None,
     recursive: bool = True,
     verbose: bool = True,
+    *,
+    max_workers: int = 1,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict:
     """
     Process all audio files in a directory.
@@ -342,6 +345,8 @@ def batch_process(
         sample_rate: Optional target sample rate for the output.
         recursive: Search subdirectories.
         verbose: Log progress at INFO level.
+        max_workers: Worker threads; 1 runs sequentially.
+        on_progress: Optional ``(completed, total)`` progress callback.
 
     Returns:
         Statistics dict with ``files_processed``, ``files_failed``, ``output_dir``.
@@ -350,6 +355,7 @@ def batch_process(
         NotFoundError: If the input directory does not exist.
     """
     from bioamla.audio.discovery import get_audio_files
+    from bioamla.batch import run_batch
     from bioamla.exceptions import NotFoundError
 
     in_dir = Path(input_dir)
@@ -370,34 +376,32 @@ def batch_process(
     if verbose:
         logger.info(f"Found {len(audio_files)} audio files to process")
 
-    files_processed = 0
-    files_failed = 0
-
-    for audio_path in audio_files:
-        audio_path = Path(audio_path)
-
+    def _process(audio_path: str) -> Path:
+        path = Path(audio_path)
         try:
-            rel_path = audio_path.relative_to(in_dir)
+            rel_path = path.relative_to(in_dir)
         except ValueError:
-            rel_path = Path(audio_path.name)
+            rel_path = Path(path.name)
 
         out_path = out_dir / rel_path.with_suffix(".wav")
+        process_file(str(path), str(out_path), processor_fn, sample_rate)
+        if verbose:
+            logger.info(f"  Processed: {out_path}")
+        return out_path
 
-        try:
-            process_file(str(audio_path), str(out_path), processor_fn, sample_rate)
-            files_processed += 1
-            if verbose:
-                logger.info(f"  Processed: {out_path}")
-        except Exception as e:
-            files_failed += 1
-            logger.warning(f"Failed: {audio_path} - {e}")
+    result = run_batch(
+        [str(f) for f in audio_files],
+        _process,
+        max_workers=max_workers,
+        on_progress=on_progress,
+    )
 
     if verbose:
-        logger.info(f"Processed {files_processed} files, {files_failed} failed")
+        logger.info(f"Processed {result.successful} files, {result.failed} failed")
 
     return {
-        "files_processed": files_processed,
-        "files_failed": files_failed,
+        "files_processed": result.successful,
+        "files_failed": result.failed,
         "output_dir": str(out_dir),
     }
 

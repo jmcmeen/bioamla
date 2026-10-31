@@ -216,6 +216,13 @@ class TestBatchDetect:
         results = batch_detect(["/nope/missing.wav"], detector, verbose=False)
         assert results["/nope/missing.wav"] == []
 
+    def test_parallel_keeps_input_order(self, test_audio_path_3s, test_audio_path) -> None:
+        detector = BandLimitedEnergyDetector(low_freq=500, high_freq=5000)
+        paths = [test_audio_path_3s, "/nope/missing.wav", test_audio_path]
+        results = batch_detect(paths, detector, verbose=False, max_workers=3)
+        assert list(results) == paths
+        assert results["/nope/missing.wav"] == []
+
 
 class TestBatchDetectDir:
     def test_batch_dir_energy(self, test_audio_dir, tmp_path) -> None:

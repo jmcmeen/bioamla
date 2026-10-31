@@ -143,16 +143,18 @@ def generate_spectrogram(
 
     resolved_backend = select_backend(backend)
 
-    plt = _get_pyplot()
-
     # Load and resample audio
     audio = _load_audio_for_viz(str(audio_path), sample_rate)
 
     # Get window function
     win_func = _get_window_function(window, n_fft)
 
-    # Generate the appropriate plot
-    fig, ax = plt.subplots(figsize=figsize)
+    # A standalone Figure, not pyplot: pyplot keeps global state, and batch
+    # generation calls this from worker threads.
+    from matplotlib.figure import Figure
+
+    fig = Figure(figsize=figsize)
+    ax = fig.subplots()
 
     if title is None:
         title = audio_path.name
@@ -207,10 +209,10 @@ def generate_spectrogram(
 
     # Only use tight_layout when legend is shown, otherwise use full canvas
     if show_colorbar:
-        plt.tight_layout()
+        fig.tight_layout()
     else:
         # Remove all margins for borderless output
-        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
         fig.tight_layout(pad=0)
 
     output_path = Path(output_path)
@@ -236,8 +238,6 @@ def generate_spectrogram(
         fig.savefig(output_path, **save_kwargs)
     except Exception as e:
         raise ProcessingError(f"Failed to save visualization: {e}") from e
-    finally:
-        plt.close(fig)
 
     return str(output_path)
 

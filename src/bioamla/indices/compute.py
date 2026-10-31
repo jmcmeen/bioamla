@@ -30,6 +30,7 @@ Example:
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -803,6 +804,9 @@ def compute_indices_from_file(
 def batch_compute_indices(
     filepaths: list[str | Path],
     verbose: bool = True,
+    *,
+    max_workers: int = 1,
+    on_progress: Callable[[int, int], None] | None = None,
     **kwargs: Any,
 ) -> list[dict[str, Any]]:
     """
@@ -811,10 +815,13 @@ def batch_compute_indices(
     Args:
         filepaths: List of paths to audio files.
         verbose: Log progress at INFO level.
+        max_workers: Worker threads; 1 runs sequentially.
+        on_progress: Optional ``(completed, total)`` progress callback.
         **kwargs: Additional arguments passed to compute_all_indices.
 
     Returns:
-        List of dictionaries with indices and file information.
+        List of dictionaries with indices and file information, in input order.
+        A file that fails gets ``success: False`` and its ``error``.
 
     Example:
         >>> files = ["file1.wav", "file2.wav", "file3.wav"]
@@ -822,30 +829,28 @@ def batch_compute_indices(
         >>> for r in results:
         ...     print(f"{r['filepath']}: NDSI={r['ndsi']:.3f}")
     """
-    results = []
+    from bioamla.batch import run_batch
 
-    for i, filepath in enumerate(filepaths, 1):
+    paths = [str(p) for p in filepaths]
+    position = {p: i for i, p in reversed(list(enumerate(paths, 1)))}
+    by_path: dict[str, dict[str, Any]] = {}
+
+    def _compute(filepath: str) -> None:
         if verbose:
-            logger.info(f"[{i}/{len(filepaths)}] Processing {filepath}")
-
+            logger.info(f"[{position[filepath]}/{len(paths)}] Processing {filepath}")
         try:
             indices = compute_indices_from_file(filepath, **kwargs)
-            # Build result with filepath first, success last for better CSV column order
-            result = {"filepath": str(filepath)}
-            result.update(indices.to_dict())
-            result["success"] = True
-            results.append(result)
         except Exception as e:
-            logger.warning(f"Error processing {filepath}: {e}")
-            results.append(
-                {
-                    "filepath": str(filepath),
-                    "success": False,
-                    "error": str(e),
-                }
-            )
+            by_path[filepath] = {"filepath": filepath, "success": False, "error": str(e)}
+            raise
+        # Build result with filepath first, success last for better CSV column order
+        result = {"filepath": filepath}
+        result.update(indices.to_dict())
+        result["success"] = True
+        by_path[filepath] = result
 
-    return results
+    run_batch(paths, _compute, max_workers=max_workers, on_progress=on_progress)
+    return [by_path[p] for p in paths]
 
 
 def temporal_indices(

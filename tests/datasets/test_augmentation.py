@@ -136,6 +136,26 @@ class TestBatchAugment:
         assert (out_dir / "a_aug.wav").exists()
 
     @pytest.mark.usefixtures("requires_torchcodec")
+    def test_parallel_counts_every_copy(self, tmp_path) -> None:
+        in_dir = tmp_path / "in"
+        in_dir.mkdir()
+        for name in ("a", "b", "c"):
+            _write_wav(in_dir / f"{name}.wav")
+        calls: list[tuple[int, int]] = []
+
+        stats = batch_augment(
+            str(in_dir),
+            str(tmp_path / "out"),
+            AugmentationConfig(gain=True, sample_rate=16000, multiply=2),
+            verbose=False,
+            max_workers=3,
+            on_progress=lambda done, total: calls.append((done, total)),
+        )
+        assert stats["files_processed"] == 3
+        assert stats["files_created"] == 6
+        assert calls[-1] == (3, 3)
+
+    @pytest.mark.usefixtures("requires_torchcodec")
     def test_multiple_copies_with_resample(self, tmp_path) -> None:
         in_dir = tmp_path / "in"
         in_dir.mkdir()
