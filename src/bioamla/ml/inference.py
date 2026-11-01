@@ -82,6 +82,13 @@ class ASTPredictionResult:
         scores = self.top_k_scores or []
         return scores[0] - scores[1] if len(scores) >= 2 else None
 
+    def ranked_cells(self) -> dict[str, str]:
+        """The ranked labels as CSV cells: ``margin`` and ``top``
+        (``label:confidence;...``, best first), empty without them."""
+        margin = "" if self.margin is None else f"{self.margin:.6f}"
+        ranked = ";".join(f"{t['label']}:{t['confidence']:.6f}" for t in self.top() or [])
+        return {"margin": margin, "top": ranked}
+
     def top(self) -> list[dict[str, float | str]] | None:
         """The ranked labels as ``[{"label", "confidence"}, ...]`` (``None`` without them)."""
         if self.top_k_labels is None:

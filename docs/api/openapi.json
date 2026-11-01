@@ -10455,7 +10455,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "BatchPredictRequest",
-        "description": "AST classification over a batch, whole files or in segments.\n\nAttributes:\n    model: Model (Hugging Face ID or local path).\n    top_k: Top predictions per file.\n    min_confidence: Leave out predictions below this confidence.\n    segment_duration: Classify N-second segments (0: whole files).\n    overlap: Overlap between segments (s)."
+        "description": "AST classification over a batch, whole files or in segments.\n\nAttributes:\n    model: Model (Hugging Face ID or local path).\n    top_k: Rank each prediction's ``top_k`` most likely labels (``top`` and\n        ``margin``; 0 leaves them out).\n    min_confidence: Leave out predictions below this confidence.\n    segment_duration: Classify N-second segments (0: whole files).\n    overlap: Overlap between segments (s)."
       },
       "BatchRequest": {
         "properties": {

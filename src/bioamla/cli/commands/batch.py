@@ -801,7 +801,14 @@ def models() -> None:
     required=True,
     help="Model path (HuggingFace ID or local path)",
 )
-@click.option("--top-k", default=5, type=int, help="Number of top predictions to return")
+@click.option(
+    "--top-k",
+    default=5,
+    show_default=True,
+    type=click.IntRange(min=0),
+    help="Rank each prediction's K most likely labels (top and margin, as `models ast "
+    "predict --top-k` reports them; 0: don't)",
+)
 @click.option("--min-confidence", default=0.0, type=float, help="Minimum confidence threshold")
 @click.option(
     "--segment-seconds",

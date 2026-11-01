@@ -125,9 +125,8 @@ def classify_file(
                     row = [r.filepath, r.start_time, r.end_time, r.predicted_label,
                            f"{r.confidence:.6f}"]  # fmt: skip
                     if top_k:
-                        margin = "" if r.margin is None else f"{r.margin:.6f}"
-                        ranked = ";".join(f"{t['label']}:{t['confidence']:.6f}" for t in r.top())
-                        row += [margin, ranked]
+                        cells = r.ranked_cells()
+                        row += [cells["margin"], cells["top"]]
                     writer.writerow(row)
 
         _write_output(Path(output), _write)

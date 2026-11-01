@@ -1052,9 +1052,9 @@ def run_csv_predict_segments(
     """CSV mode for per-segment predictions: each row becomes one row per span.
 
     ``predict_file(input_path)`` returns one dict per span (``start_time``,
-    ``end_time``, ``prediction``, ``confidence``). Each parent row is replaced by one
-    row per span, keeping its ``file_name`` and adding ``segment_id`` and those
-    columns. No files are written; the rows describe parts of the original file.
+    ``end_time``, ``prediction``, ``confidence``, and any further columns, e.g. ranked
+    labels). Each parent row is replaced by one row per span, keeping its
+    ``file_name`` and adding ``segment_id`` and the span's columns. No files are written; the rows describe parts of the original file.
 
     Returns:
         The run's result; ``metadata["metadata_csv"]`` is the CSV written.
@@ -1084,15 +1084,7 @@ def run_csv_predict_segments(
             continue
         for seg_id, span in enumerate(spans):
             fields = row.metadata_fields.copy()
-            fields.update(
-                {
-                    "segment_id": seg_id,
-                    "start_time": span["start_time"],
-                    "end_time": span["end_time"],
-                    "prediction": span["prediction"],
-                    "confidence": span["confidence"],
-                }
-            )
+            fields.update({"segment_id": seg_id, **span})
             new_rows.append(
                 MetadataRow(
                     file_name=row.file_name,
@@ -1102,7 +1094,10 @@ def run_csv_predict_segments(
                 )
             )
     context.rows = new_rows
-    for name in ("segment_id", "start_time", "end_time", "prediction", "confidence"):
+    names = ["segment_id", "start_time", "end_time", "prediction", "confidence"]
+    for spans in span_mapping.values():
+        names += [k for span in spans for k in span if k not in names]
+    for name in names:
         if name not in context.fieldnames:
             context.fieldnames.append(name)
     return _finish(context, result)

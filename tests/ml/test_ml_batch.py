@@ -33,13 +33,16 @@ class TestBatchPredictFiles:
 
     def test_wires_predictions(self, test_audio_dir) -> None:
         fake_inf = MagicMock()
-        fake_inf.predict_topk.return_value = SimpleNamespace(
-            predicted_label="a",
-            confidence=0.9,
+        from bioamla.ml.inference import ASTPredictionResult
+
+        fake_inf.predict_topk.return_value = ASTPredictionResult(
+            filepath="x.wav",
             start_time=0.0,
             end_time=1.0,
-            top_k_labels=["a"],
-            top_k_scores=[0.9],
+            predicted_label="a",
+            confidence=0.9,
+            top_k_labels=["a", "b"],
+            top_k_scores=[0.9, 0.08],
         )
         with patch("bioamla.ml.inference.ASTInference", return_value=fake_inf):
             result = batch_predict_files(test_audio_dir, model_path="hub/model")
@@ -47,6 +50,12 @@ class TestBatchPredictFiles:
         preds = result.metadata["predictions"]
         assert len(preds) == 3
         assert preds[0]["predicted_label"] == "a"
+        assert "top_k_labels" not in preds[0]
+        assert preds[0]["top"] == [
+            {"label": "a", "confidence": 0.9},
+            {"label": "b", "confidence": 0.08},
+        ]
+        assert preds[0]["margin"] == pytest.approx(0.82)
 
 
 class TestBatchPredictSegments:

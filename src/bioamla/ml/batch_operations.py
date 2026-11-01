@@ -15,7 +15,8 @@ class BatchPredictRequest(BatchRequest):
 
     Attributes:
         model: Model (Hugging Face ID or local path).
-        top_k: Top predictions per file.
+        top_k: Rank each prediction's ``top_k`` most likely labels (``top`` and
+            ``margin``; 0 leaves them out).
         min_confidence: Leave out predictions below this confidence.
         segment_duration: Classify N-second segments (0: whole files).
         overlap: Overlap between segments (s).
@@ -30,6 +31,8 @@ class BatchPredictRequest(BatchRequest):
     def __post_init__(self) -> None:
         if not self.model:
             raise InvalidInputError("model is required")
+        if self.top_k < 0:
+            raise InvalidInputError(f"top_k must be 0 or more, got {self.top_k}")
 
 
 @operation("batch.models.predict", request=BatchPredictRequest, kind="job")

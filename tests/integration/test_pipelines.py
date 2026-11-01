@@ -506,6 +506,33 @@ class TestModelBatchLibraryParity:
             cli_text = (cli_out / name).read_text().replace(str(cli_out), "")
             assert cli_text == (lib_out / name).read_text().replace(str(lib_out), "")
 
+    def test_ranked_labels_match_models_ast_predict(self, tiny_ast, folder, tmp_path) -> None:
+        single = bioamla("models", "ast", "predict", str(folder / "a.wav"),
+                         "--model-path", str(tiny_ast), "--top-k", "2")  # fmt: skip
+        bioamla("batch", "models", "predict", "--input-dir", str(folder),
+                "--output-dir", str(tmp_path / "whole"), "-m", str(tiny_ast), "--top-k", "2")  # fmt: skip
+        batch = json.loads((tmp_path / "whole" / "predictions.json").read_text())
+        row = next(p for p in batch if Path(p["filepath"]).name == "a.wav")
+        assert set(row) >= {"top", "margin"} and "top_k_labels" not in row
+        assert row["top"] == single["predictions"][0]["top"]
+        assert row["margin"] == single["predictions"][0]["margin"]
+
+        bioamla("models", "ast", "predict", str(folder / "a.wav"), "--model-path",
+                str(tiny_ast), "--segment-seconds", "1", "--top-k", "2",
+                "-o", str(tmp_path / "single.csv"))  # fmt: skip
+        bioamla("batch", "models", "predict", "--input-dir", str(folder),
+                "--output-dir", str(tmp_path / "segs"), "-m", str(tiny_ast),
+                "--segment-seconds", "1", "--top-k", "2")  # fmt: skip
+        want = [(r["margin"], r["top"]) for r in read_csv(tmp_path / "single.csv")]
+        got = [(r["margin"], r["top"]) for r in read_csv(tmp_path / "segs" / "predictions.csv")
+               if Path(r["filepath"]).name == "a.wav"]  # fmt: skip
+        assert got == want and all(top for _, top in got)
+
+        plain = bioamla("batch", "models", "predict", "--input-dir", str(folder),
+                        "--output-dir", str(tmp_path / "plain"), "-m", str(tiny_ast),
+                        "--segment-seconds", "1", "--top-k", "0")  # fmt: skip
+        assert "top" not in read_csv(plain["results_file"])[0]
+
     def test_embed_csv_mode(self, tiny_ast, folder, tmp_path) -> None:
         from bioamla.batch import BatchConfig
         from bioamla.ml import batch_embed

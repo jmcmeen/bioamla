@@ -56,7 +56,8 @@ def batch_predict_files(
     Run AST prediction over every audio file in a directory.
 
     The model is loaded once and reused across files (sequential mode). Each
-    file's structured prediction (top-k labels/scores) is collected into
+    file's structured prediction (with its ranked labels, ``top`` and ``margin``, as
+    :func:`bioamla.ml.classify_file` reports them) is collected into
     ``result.metadata["predictions"]`` so callers can write a structured
     ``predictions.json``; ``result.output_files`` holds human-readable summaries.
 
@@ -98,8 +99,7 @@ def batch_predict_files(
                 "confidence": pred.confidence,
                 "start_time": pred.start_time,
                 "end_time": pred.end_time,
-                "top_k_labels": pred.top_k_labels,
-                "top_k_scores": pred.top_k_scores,
+                **_ranked(pred),
             }
         )
         return f"{audio_path}: {pred.predicted_label} ({pred.confidence:.4f})"
@@ -122,6 +122,7 @@ def batch_predict_segments(
     *,
     segment_duration: int,
     overlap: int = 0,
+    top_k: int = 0,
     min_confidence: float = 0.0,
     resample_freq: int = 16000,
     recursive: bool = True,
@@ -144,6 +145,8 @@ def batch_predict_segments(
         model_path: Path to model or HuggingFace identifier.
         segment_duration: Duration of each segment in seconds.
         overlap: Overlap between consecutive segments in seconds.
+        top_k: Also rank each segment's ``top_k`` most likely labels (``margin`` and
+            ``top`` columns, as ``models ast predict --top-k`` writes them).
         min_confidence: Drop segments whose prediction is below this probability.
         resample_freq: Target sample rate.
         recursive: Search subdirectories.
@@ -171,7 +174,7 @@ def batch_predict_segments(
 
     def _process_one(audio_path: Path) -> str:
         results = inference.predict_segments(
-            str(audio_path), clip_length=segment_duration, overlap=overlap
+            str(audio_path), clip_length=segment_duration, overlap=overlap, top_k=top_k
         )
         kept = 0
         for r in results:
@@ -184,6 +187,7 @@ def batch_predict_segments(
                     "end_time": r.end_time,
                     "predicted_label": r.predicted_label,
                     "confidence": r.confidence,
+                    **(r.ranked_cells() if top_k else {}),
                 }
             )
             kept += 1
@@ -287,6 +291,14 @@ __all__ = [
 _SEGMENT_COLUMNS = ["filepath", "start_time", "end_time", "predicted_label", "confidence"]
 
 
+def _ranked(pred: object) -> dict[str, object]:
+    """A prediction's ranked labels as JSON reports them (``top``, ``margin``), as
+    :func:`bioamla.ml.classify_file` does; nothing when it wasn't ranked."""
+    if pred.top_k_labels is None:  # type: ignore[attr-defined]
+        return {}
+    return {"top": pred.top(), "margin": pred.margin}  # type: ignore[attr-defined]
+
+
 def _write_json(path: Path, data: object) -> str:
     import json
 
@@ -319,7 +331,10 @@ def batch_predict(
     Args:
         config: The batch input and output.
         model_path: AST model (Hugging Face ID or local path).
-        top_k: Top predictions per file.
+        top_k: Rank each prediction's ``top_k`` most likely labels: ``top`` (``[{label,
+            confidence}]``) and ``margin`` (top-1 minus top-2) in ``predictions.json``;
+            ``margin`` and ``top`` (``label:confidence;...``) columns per segment. 0
+            leaves them out.
         min_confidence: Leave out predictions below this confidence.
         segment_duration: Classify N-second segments (0: whole files).
         overlap: Overlap between segments (s).
@@ -341,7 +356,7 @@ def batch_predict(
 
             def _predict_segments(path: Path) -> list[dict]:
                 results = inference.predict_segments(
-                    str(path), clip_length=segment_duration, overlap=overlap
+                    str(path), clip_length=segment_duration, overlap=overlap, top_k=top_k
                 )
                 return [
                     {
@@ -349,6 +364,7 @@ def batch_predict(
                         "end_time": r.end_time,
                         "prediction": r.predicted_label,
                         "confidence": r.confidence,
+                        **(r.ranked_cells() if top_k else {}),
                     }
                     for r in results
                     if r.confidence >= min_confidence
@@ -367,6 +383,7 @@ def batch_predict(
             model_path=model_path,
             segment_duration=segment_duration,
             overlap=overlap,
+            top_k=top_k,
             min_confidence=min_confidence,
             recursive=config.recursive,
             max_workers=config.max_workers,
@@ -376,7 +393,8 @@ def batch_predict(
         segments = result.metadata.get("segments", [])
         if segments:
             out = out_dir / "predictions.csv"
-            write_rows_csv(out, segments, _SEGMENT_COLUMNS)
+            columns = _SEGMENT_COLUMNS + (["margin", "top"] if top_k else [])
+            write_rows_csv(out, segments, columns)
             result.metadata["output_file"] = str(out)
         return result
 
@@ -393,8 +411,7 @@ def batch_predict(
                 "filepath": str(path),
                 "predicted_label": pred.predicted_label,
                 "confidence": pred.confidence,
-                "top_k_labels": pred.top_k_labels,
-                "top_k_scores": pred.top_k_scores,
+                **_ranked(pred),
             }
 
         result = run_csv_process(
