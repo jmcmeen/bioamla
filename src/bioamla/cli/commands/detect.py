@@ -40,44 +40,35 @@ def detect_energy(
     import json as json_lib
 
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_file_result
-    from bioamla.detect import BandLimitedEnergyDetector, export_detections
 
-    try:
-        detector = BandLimitedEnergyDetector(
-            low_freq=low_freq,
-            high_freq=high_freq,
-            threshold_db=threshold,
-            min_duration=min_duration,
-        )
-        detections = detector.detect_from_file(file)
-
-        if output:
-            fmt = "json" if output.endswith(".json") else "csv"
-            export_detections(detections, output, format=fmt)
-            if emit_file_result(
-                file, count=len(detections), detections=[d.to_dict() for d in detections]
-            ):
-                return
-            print_success(f"Saved {len(detections)} detections to {output}")
-            return
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    if emit_file_result(file, count=len(detections), detections=[d.to_dict() for d in detections]):
+    found = run_operation(
+        "detect.energy",
+        file=file,
+        low_freq=low_freq,
+        high_freq=high_freq,
+        threshold_db=threshold,
+        min_duration=min_duration,
+        output=output,
+    )
+    detections = found.detections
+    rows = [d.to_dict() for d in detections]
+    if emit_file_result(file, count=found.count, detections=rows):
+        return
+    if output:
+        print_success(f"Saved {found.count} detections to {output}")
         return
     if output_format == "json":
-        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        click.echo(json_lib.dumps(rows, indent=2))
     elif output_format == "csv":
         import csv
         import sys
 
-        if detections:
-            fieldnames = list(detections[0].to_dict().keys())
-            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+        if rows:
+            writer = csv.DictWriter(sys.stdout, fieldnames=list(rows[0]))
             writer.writeheader()
-            for d in detections:
-                writer.writerow(d.to_dict())
+            writer.writerows(rows)
         else:
             echo("No detections found.", style=DIM_STYLE)
     else:

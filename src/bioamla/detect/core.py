@@ -69,8 +69,10 @@ __all__ = [
     "AcceleratingPatternDetector",
     # Convenience functions
     "detect_all",
+    "detect_file",
     "export_detections",
     "batch_detect",
+    "FileDetections",
 ]
 
 
@@ -1425,6 +1427,69 @@ def export_detections(
         raise DetectionError(f"Failed to export detections: {e}") from e
 
     return output_path
+
+
+@dataclass
+class FileDetections:
+    """The detections found in one file, and where they were saved.
+
+    Attributes:
+        file: The audio file.
+        detections: The detections, in time order.
+        output: The file they were written to, or ``None`` if not saved.
+    """
+
+    file: str
+    detections: list[Detection]
+    output: str | None = None
+
+    @property
+    def count(self) -> int:
+        """The number of detections."""
+        return len(self.detections)
+
+    def to_dict(self) -> dict[str, Any]:
+        """``{"file", "count", "detections", "output"}``, with each detection as a dict."""
+        return {
+            "file": self.file,
+            "count": self.count,
+            "detections": [d.to_dict() for d in self.detections],
+            "output": self.output,
+        }
+
+
+def detect_file(
+    detector: BandLimitedEnergyDetector | RibbitDetector | AcceleratingPatternDetector,
+    file: str | Path,
+    output: str | Path | None = None,
+) -> FileDetections:
+    """Run ``detector`` on one audio file and optionally save what it finds.
+
+    Args:
+        detector: A configured detector.
+        file: The audio file.
+        output: Where to save the detections: JSON if the name ends in ``.json``,
+            otherwise CSV (see :func:`export_detections`). ``None`` saves nothing.
+
+    Returns:
+        The file's detections, and the output path if saved.
+
+    Raises:
+        AudioLoadError: If the file can't be read.
+        DetectionError: If detection or writing the output fails.
+
+    Example:
+        >>> from bioamla.detect import BandLimitedEnergyDetector, detect_file
+        >>> found = detect_file(BandLimitedEnergyDetector(low_freq=1000), "rec.wav", "rec.csv")
+        >>> found.count
+    """
+    detections = detector.detect_from_file(file)
+    if output is not None:
+        fmt = "json" if str(output).endswith(".json") else "csv"
+        export_detections(detections, output, format=fmt)
+    return FileDetections(
+        file=str(file), detections=detections, output=None if output is None else str(output)
+    )
 
 
 def batch_detect(

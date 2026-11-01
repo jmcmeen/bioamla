@@ -57,6 +57,18 @@ All notable changes to this project are documented here. The format is based on
   resolve inside the workspace root or a folder allowed with `--allow-link`, and a workspace's
   `.bioamla` metadata can't link outside it. The server doesn't need the CLI.
   Library: `bioamla.server`; `to_jsonable` now lives in `bioamla.common.jsonable`.
+- `bioamla.operations`: a registry of operations, the shared contract the CLI and the server
+  call. Each operation has a typed request (a validated config whose path fields are marked
+  `PathStr` and appear in its JSON Schema with `"format": "path"`), a function declared in its
+  domain package, and a result. `operations.run(name, request, context)` validates the request,
+  passes every path through the context's check, and runs it; `OperationContext` carries the
+  workspace, progress and cancel hooks. Domains load on first use, and `all_operations()` lists
+  what's available and which domains need an extra. Request paths also accept `pathlib.Path`
+  and `list[PathStr]`; a path hidden where it can't be checked is refused at registration. `detect energy` is the first command run
+  through one (`detect.energy`), with unchanged output.
+- `bioamla.detect.detect_file(detector, file, output=None)`: run any detector on one file and
+  optionally save the detections (JSON for `.json`, otherwise CSV), returning `FileDetections`
+  (`file`, `detections`, `count`, `output`, `to_dict()`).
 
 ## [0.3.8] - 2026-10-31
 

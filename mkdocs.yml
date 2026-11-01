@@ -41,6 +41,7 @@ nav:
       - datasets: api/datasets.md
       - ml: api/ml.md
       - batch: api/batch.md
+      - operations: api/operations.md
       - system: api/system.md
       - workspace: api/workspace.md
       - server: api/server.md
