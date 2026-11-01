@@ -83,13 +83,7 @@ def audio_info(path: str, show_metadata: bool) -> None:
 
 @audio.command("metadata")
 @click.argument("path")
-@click.option(
-    "--json",
-    "output_json",
-    is_flag=True,
-    help="Deprecated: bare JSON of every field. Use `bioamla --json audio metadata` instead.",
-)
-def audio_metadata(path: str, output_json: bool) -> None:
+def audio_metadata(path: str) -> None:
     """Show recorder metadata embedded in a WAV file.
 
     Prints the flattened view (when, where, which device) that bioamla datasets use.
@@ -99,7 +93,7 @@ def audio_metadata(path: str, output_json: bool) -> None:
     """
     from bioamla.cli.console import print_kv, print_warning
     from bioamla.cli.operations import run_operation
-    from bioamla.cli.output import emit_result, json_mode, legacy_json
+    from bioamla.cli.output import emit_result, json_mode
 
     # Both reads are header-only. The flat summary is what datasets use;
     # "standards" has every decoded field, per standard.
@@ -107,10 +101,6 @@ def audio_metadata(path: str, output_json: bool) -> None:
     if json_mode():
         emit_result(report.to_dict())
         return
-    if output_json:
-        legacy_json({"file": report.file, **report.standards})
-        return
-
     meta = report.summary
     print_kv("File", path)
     if meta.is_empty:

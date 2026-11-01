@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 
 from bioamla._extras import import_extra
 from bioamla.common.config import config_dataclass
-from bioamla.common.deprecation import deprecated_aliases
 from bioamla.exceptions import AugmentationError, NotFoundError
 from bioamla.protocols import OnProgress
 
@@ -348,9 +347,3 @@ def _load_waveform(path: str) -> tuple[np.ndarray, int]:
     else:
         audio = audio.squeeze()
     return audio, orig_sr
-
-
-# Renamed so it isn't confused with bioamla.ml's SpectrogramAugmentationConfig.
-__getattr__ = deprecated_aliases(
-    __name__, globals(), {"AugmentationConfig": "WaveformAugmentationConfig"}
-)

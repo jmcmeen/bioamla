@@ -171,7 +171,7 @@ def test_annotation_summary_json(runner: CliRunner, tmp_path) -> None:
         patch.object(ann_mod, "load_annotations", return_value=([_ann()], {})),
         patch("bioamla.datasets.annotation_files.summarize_annotations", return_value=_summary()),
     ):
-        result = runner.invoke(cli, ["annotation", "summary", str(src), "--json"])
+        result = runner.invoke(cli, ["--json", "annotation", "summary", str(src)])
     assert result.exit_code == 0
     assert '"total_annotations": 2' in result.output
 

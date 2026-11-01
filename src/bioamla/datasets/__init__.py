@@ -21,7 +21,6 @@ Example:
     >>> save_raven_selection_table(anns, "selections.txt")
 """
 
-from bioamla.common.deprecation import deprecated_aliases
 from bioamla.datasets.annotation_files import (
     AnnotationFileSummary,
     AnnotationTemplate,
@@ -240,7 +239,3 @@ __all__ = [
     "RemixError",
     "AnnotationError",
 ]
-
-__getattr__ = deprecated_aliases(
-    __name__, globals(), {"AugmentationConfig": "WaveformAugmentationConfig"}
-)

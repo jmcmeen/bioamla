@@ -230,10 +230,9 @@ def test_metadata_json(runner, mocker):
         "bioamla.audio.metadata.dump_recording_metadata",
         return_value={"file": "file.wav", "sources": ["guano"], "guano": {"Make": "X"}},
     )
-    result = runner.invoke(cli, ["audio", "metadata", "file.wav", "--json"])
+    result = runner.invoke(cli, ["--json", "audio", "metadata", "file.wav"])
     assert result.exit_code == 0, result.output
-    assert json.loads(result.stdout)["guano"] == {"Make": "X"}  # unchanged bare JSON
-    assert "deprecated" in result.stderr
+    assert json.loads(result.stdout)["result"]["standards"]["guano"] == {"Make": "X"}
     dump.assert_called_once_with("file.wav")
 
 

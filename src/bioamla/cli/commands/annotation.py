@@ -146,25 +146,17 @@ def annotation_convert(
     default=None,
     help="Annotation format (auto-detected from extension if not specified)",
 )
-@click.option(
-    "--json",
-    "output_json",
-    is_flag=True,
-    help="Deprecated: bare JSON. Use `bioamla --json annotation summary` instead.",
-)
-def annotation_summary(path: str, file_format: str, output_json: bool) -> None:
+def annotation_summary(path: str, file_format: str) -> None:
     """Display summary statistics for an annotation file."""
     from bioamla.cli.console import echo, print_header, print_kv
     from bioamla.cli.operations import run_operation
-    from bioamla.cli.output import emit_result, json_mode, legacy_json
+    from bioamla.cli.output import emit_result, json_mode
 
     result = run_operation("annotation.summary", file=path, format=file_format)
     summary, metadata = result.summary, result.metadata
 
     if json_mode():
         emit_result(summary)
-    elif output_json:
-        legacy_json(summary)
     else:
         print_header(f"\nAnnotation Summary: {path}")
         echo("=" * 50)

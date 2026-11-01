@@ -175,6 +175,21 @@ All notable changes to this project are documented here. The format is based on
   through the path check, including when they come from the config file, and a model name
   that fails the check is refused rather than retried as a Hugging Face ID.
 
+### Removed
+
+These were deprecated in 0.3.x and are breaking changes:
+
+- The old `AugmentationConfig` names: `bioamla.datasets.AugmentationConfig` (use
+  `WaveformAugmentationConfig`) and `bioamla.ml.AugmentationConfig` (use
+  `SpectrogramAugmentationConfig`), with their aliases in `bioamla.datasets.augmentation`
+  and `bioamla.ml.preprocessing`.
+- The per-command `--json` flag of `annotation summary`, `audio metadata` and
+  `dataset stats`, which printed bare JSON. Use `bioamla --json <command>`; a `--json`
+  after the command is now a usage error.
+- `inat search --has-sounds`, which did nothing (searches only return observations with
+  sounds).
+- `bioamla.cli.output.legacy_json`, the helper behind those flags.
+
 ### Fixed
 
 - `audio list` of a folder that doesn't exist (and `list_audio_files()`) raises

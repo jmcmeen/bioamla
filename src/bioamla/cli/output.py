@@ -193,24 +193,6 @@ def emit_result(result: Any) -> bool:
     return True
 
 
-def legacy_json(data: Any) -> None:
-    """Old per-command ``--json`` output: bare JSON, no envelope, with a deprecation note.
-
-    ``annotation summary``, ``audio metadata`` and ``dataset stats`` had their own
-    ``--json`` before the root flag. They keep printing what they always printed;
-    ``bioamla --json <command>`` gives the envelope.
-    """
-    import click
-
-    click.echo(
-        "Note: the command's own --json is deprecated and will be removed in a future minor "
-        "release; use `bioamla --json "
-        f"{current_command() or '<command>'}` for the standard JSON envelope.",
-        err=True,
-    )
-    click.echo(json.dumps(data, indent=2))  # exactly what these flags printed before
-
-
 def emit_error(command: str | None, error_type: str, message: str, details: Any = None) -> None:
     """Write the failure envelope (JSON mode only).
 
@@ -277,8 +259,8 @@ def emit_failure(command: str | None, exc: BaseException) -> None:
 def json_flag_given(group: Any, args: list[str]) -> bool:
     """True if the root ``--json`` flag appears before the first subcommand.
 
-    A ``--json`` after the subcommand belongs to that command (the older
-    per-command flags), not to the root.
+    A ``--json`` after the subcommand isn't the root flag (no command has its own, so
+    Click reports it as an unknown option).
     """
     for arg in args:
         if arg == "--json":
@@ -330,6 +312,5 @@ __all__ = [
     "note_workspace",
     "reset_run_record",
     "run_workspace",
-    "legacy_json",
     "to_jsonable",
 ]

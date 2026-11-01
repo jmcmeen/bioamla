@@ -1,7 +1,6 @@
 """Validated config objects: construction, validate_config, JSON Schema export, aliases."""
 
 import json
-import warnings
 from dataclasses import asdict, field, replace
 from pathlib import Path
 
@@ -118,35 +117,22 @@ class TestSchemas:
         assert names == set(CONFIG_CLASSES)
 
 
-class TestDeprecatedAliases:
+class TestRemovedAliases:
+    """The old ``AugmentationConfig`` names were removed in 0.4.0."""
+
     @pytest.mark.parametrize(
-        ("module", "new"),
+        "module",
         [
-            ("bioamla.datasets", "WaveformAugmentationConfig"),
-            ("bioamla.datasets.augmentation", "WaveformAugmentationConfig"),
-            ("bioamla.ml", "SpectrogramAugmentationConfig"),
-            ("bioamla.ml.preprocessing", "SpectrogramAugmentationConfig"),
+            "bioamla.datasets",
+            "bioamla.datasets.augmentation",
+            "bioamla.ml",
+            "bioamla.ml.preprocessing",
         ],
     )
-    def test_old_name_warns_and_returns_new_class(self, module: str, new: str) -> None:
+    def test_old_name_is_gone(self, module: str) -> None:
         if module.startswith("bioamla.ml"):
             pytest.importorskip("torch")
         import importlib
 
-        mod = importlib.import_module(module)
-        with pytest.warns(DeprecationWarning, match=f"use {module}.{new}"):
-            old = mod.AugmentationConfig
-        assert old is getattr(mod, new)
-
-    def test_new_names_do_not_warn(self) -> None:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
-            from bioamla.datasets import WaveformAugmentationConfig
-
-            WaveformAugmentationConfig()
-
-    def test_unknown_attribute_still_raises(self) -> None:
-        import bioamla.datasets
-
         with pytest.raises(AttributeError):
-            bioamla.datasets.NoSuchThing  # noqa: B018
+            getattr(importlib.import_module(module), "AugmentationConfig")  # noqa: B009

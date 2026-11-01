@@ -84,12 +84,16 @@ def test_envelope_on_stdout(tmp_path) -> None:
     assert envelope["result"]["total_annotations"] == 2
 
 
-def test_old_per_command_flag_keeps_bare_json(tmp_path) -> None:
-    ann = tmp_path / "a.csv"
-    ann.write_text("start_time,end_time,label\n0.0,1.0,frog\n")
-    result = CliRunner().invoke(cli, ["annotation", "summary", str(ann), "--json"])
-    assert json.loads(result.stdout)["total_annotations"] == 1
-    assert "deprecated" in result.stderr
+@pytest.mark.parametrize(
+    "command", [["annotation", "summary"], ["dataset", "stats"], ["audio", "metadata"]]
+)
+def test_per_command_json_flags_are_gone(tmp_path, command) -> None:
+    # Removed in 0.4.0: --json goes before the command (bioamla --json ...).
+    target = tmp_path / "x.csv"
+    target.write_text("start_time,end_time,label\n0.0,1.0,frog\n")
+    result = CliRunner().invoke(cli, [*command, str(target), "--json"])
+    assert result.exit_code == 2
+    assert "No such option '--json'" in result.output
 
 
 def _run(*args: str) -> subprocess.CompletedProcess:
@@ -140,16 +144,6 @@ def test_human_output_goes_to_stderr_and_missing_result_is_null() -> None:
 # --- Regressions from review -------------------------------------------------
 
 
-def test_per_command_flag_through_main_stays_bare(tmp_path) -> None:
-    # A --json after the subcommand is the command's own (deprecated) flag.
-    ann = tmp_path / "a.csv"
-    ann.write_text("start_time,end_time,label\n0.0,1.0,frog\n")
-    proc = _run("annotation", "summary", str(ann), "--json")
-    assert proc.returncode == 0
-    assert json.loads(proc.stdout)["total_annotations"] == 1
-    assert "deprecated" in proc.stderr
-
-
 def test_bare_system_exit_still_gets_an_envelope() -> None:
     import click
 
@@ -175,8 +169,8 @@ def test_json_mode_is_switched_off_after_each_in_process_run(tmp_path) -> None:
     first = runner.invoke(cli, ["--json", "annotation", "summary", str(ann)])
     second = runner.invoke(cli, ["--json", "annotation", "summary", str(ann)])
     assert json.loads(first.stdout) == json.loads(second.stdout)
-    plain = runner.invoke(cli, ["annotation", "summary", str(ann), "--json"])
-    assert json.loads(plain.stdout)["total_annotations"] == 1  # back to non-JSON mode
+    plain = runner.invoke(cli, ["annotation", "summary", str(ann)])
+    assert plain.stdout.lstrip()[:1] != "{"  # back to non-JSON mode
 
 
 def test_unexpected_exception_gets_an_envelope(monkeypatch, tmp_path) -> None:
