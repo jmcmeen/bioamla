@@ -31,7 +31,8 @@ All notable changes to this project are documented here. The format is based on
   (time, duration, command line, working folder, host, user, bioamla version, success, exit
   code, error, and the output files its result names). Values of secret-looking options are
   hidden; `--help`/`--version` runs aren't recorded, and a problem writing the file never fails
-  the command. `bioamla workspace history [-n N] [--failed] [--all]` shows it. Library:
+  the command. `bioamla workspace history [-n N] [--failed] [--all]` shows it, and
+  `workspace status` shows the last 5 runs (`last_runs` in its `--json` result). Library:
   `Workspace.record_run()` and `Workspace.history()`.
 
 ## [0.3.8] - 2026-10-31

@@ -192,3 +192,21 @@ def test_recording_problems_never_fail_the_command(ws, monkeypatch) -> None:
     monkeypatch.setattr("bioamla.cli.history.record_run", boom)
     result = run("workspace", "status")
     assert result.exit_code == 0
+
+
+def test_status_shows_the_last_runs(ws) -> None:
+    first = run("workspace", "status")
+    assert "Last runs" in first.output and "none" in first.output
+
+    for _ in range(6):
+        run("workspace", "list")
+    run("workspace", "config", "get", "nope.x")  # fails
+    result = CliRunner().invoke(cli, ["--json", "workspace", "status"])
+    last = json.loads(result.stdout)["result"]["last_runs"]
+    assert len(last) == 5
+    assert last == records(ws)[-6:-1]  # the --json status run itself is recorded after
+    assert last[-1]["ok"] is False and last[0]["command"] == "workspace list"
+
+    human = run("workspace", "status").output
+    assert "Last runs" in human and "workspace config get nope.x" in human
+    assert "exit 1" in human

@@ -75,11 +75,14 @@ def workspace_init(ctx: click.Context, directory: str, name: str | None) -> None
     print_kv("Root", ws.root)
 
 
+_STATUS_RUNS = 5
+
+
 @workspace.command("status")
 @click.pass_context
 def workspace_status(ctx: click.Context) -> None:
-    """Show the workspace: name, location and what it holds."""
-    from bioamla.cli.console import print_kv
+    """Show the workspace: name, location, what it holds and its last few runs."""
+    from bioamla.cli.console import print_kv, print_table
     from bioamla.cli.output import emit_result
 
     ws = _current(ctx)
@@ -87,7 +90,8 @@ def workspace_status(ctx: click.Context) -> None:
         info = ws.to_dict()
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
-    if emit_result(info):
+    runs = ws.history(limit=_STATUS_RUNS)
+    if emit_result({**info, "last_runs": runs}):
         return
     print_kv("Workspace", info["name"])
     print_kv("Root", info["root"])
@@ -97,6 +101,10 @@ def workspace_status(ctx: click.Context) -> None:
         "Artifacts",
         ", ".join(f"{n} {kind}" for kind, n in sorted(counts.items())) if counts else "none",
     )
+    if not runs:
+        print_kv("Last runs", "none")
+        return
+    print_table("Last runs", _RUN_COLUMNS, [_run_row(run) for run in runs])
 
 
 _KIND_CHOICE = click.Choice(["audio_file", "folder", "dataset", "model", "file"])
@@ -232,15 +240,21 @@ def workspace_history(ctx: click.Context, limit: int, failed: bool, show_all: bo
     if not runs:
         click.echo("No runs recorded yet." if not failed else "No failed runs.")
         return
-    rows = []
-    for run in runs:  # hand-edited records may lack fields or hold odd types
-        status = "ok" if run.get("ok") else f"exit {run.get('exit_code')}"
-        argv = run.get("argv")
-        command = " ".join(map(str, argv)) if isinstance(argv, list) else str(run.get("command"))
-        duration = run.get("duration")
-        took = f"{duration:.1f}s" if isinstance(duration, (int, float)) else "?"
-        rows.append([str(run.get("time", ""))[:19].replace("T", " "), command, status, took])
-    print_table(f"History of {ws.name}", ["time (UTC)", "command", "result", "took"], rows)
+    print_table(f"History of {ws.name}", _RUN_COLUMNS, [_run_row(run) for run in runs])
+
+
+_RUN_COLUMNS = ["time (UTC)", "command", "result", "took"]
+
+
+def _run_row(run: dict) -> list[str]:
+    """A history record as a table row (hand-edited records may lack fields or hold
+    odd types)."""
+    status = "ok" if run.get("ok") else f"exit {run.get('exit_code')}"
+    argv = run.get("argv")
+    command = " ".join(map(str, argv)) if isinstance(argv, list) else str(run.get("command"))
+    duration = run.get("duration")
+    took = f"{duration:.1f}s" if isinstance(duration, (int, float)) else "?"
+    return [str(run.get("time", ""))[:19].replace("T", " "), command, status, took]
 
 
 @workspace.group("config")
