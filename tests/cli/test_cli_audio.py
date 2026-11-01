@@ -37,8 +37,8 @@ def _fake_audio_data(channels=1):
 def mock_load_save(mocker):
     """Patch load_audio/save_audio used by the processing commands."""
     audio = np.zeros(16000, dtype=np.float32)
-    load = mocker.patch("bioamla.audio.load_audio", return_value=(audio, 16000))
-    save = mocker.patch("bioamla.audio.save_audio")
+    load = mocker.patch("bioamla.audio.files.load_audio", return_value=(audio, 16000))
+    save = mocker.patch("bioamla.audio.files.save_audio")
     return load, save
 
 
@@ -96,8 +96,9 @@ def test_info(runner, mocker):
         format="WAV",
         subtype="PCM_16",
     )
-    get_info = mocker.patch("bioamla.audio.get_audio_info", return_value=info)
+    get_info = mocker.patch("bioamla.audio.files.get_audio_info", return_value=info)
     load = mocker.patch("bioamla.audio.load_audio_data")
+    decode = mocker.patch("bioamla.audio.files.load_audio")
     result = runner.invoke(cli, ["audio", "info", "file.wav"])
     assert result.exit_code == 0
     assert "Format: WAV" in result.output
@@ -107,6 +108,7 @@ def test_info(runner, mocker):
     assert "Subtype: PCM_16" in result.output
     get_info.assert_called_once_with("file.wav")
     load.assert_not_called()
+    decode.assert_not_called()
 
 
 def _fake_info():
@@ -128,9 +130,9 @@ def test_info_metadata_flag(runner, mocker):
 
     from bioamla.audio import RecordingMetadata
 
-    mocker.patch("bioamla.audio.get_audio_info", return_value=_fake_info())
+    mocker.patch("bioamla.audio.files.get_audio_info", return_value=_fake_info())
     mocker.patch(
-        "bioamla.audio.get_recording_metadata",
+        "bioamla.audio.metadata.get_recording_metadata",
         return_value=RecordingMetadata(
             recorded_at=datetime(2021, 11, 12, 19, 30, tzinfo=timezone.utc),
             device_model="AudioMoth",
@@ -155,8 +157,8 @@ def test_info_metadata_flag(runner, mocker):
 def test_info_metadata_flag_empty(runner, mocker):
     from bioamla.audio import RecordingMetadata
 
-    mocker.patch("bioamla.audio.get_audio_info", return_value=_fake_info())
-    mocker.patch("bioamla.audio.get_recording_metadata", return_value=RecordingMetadata())
+    mocker.patch("bioamla.audio.files.get_audio_info", return_value=_fake_info())
+    mocker.patch("bioamla.audio.metadata.get_recording_metadata", return_value=RecordingMetadata())
     result = runner.invoke(cli, ["audio", "info", "file.wav", "--metadata"])
     assert result.exit_code == 0
     assert "Recorder metadata" not in result.output
@@ -165,15 +167,17 @@ def test_info_metadata_flag_empty(runner, mocker):
 def test_info_metadata_flag_non_wav(runner, mocker):
     from bioamla.exceptions import InvalidInputError
 
-    mocker.patch("bioamla.audio.get_audio_info", return_value=_fake_info())
-    mocker.patch("bioamla.audio.get_recording_metadata", side_effect=InvalidInputError("no"))
+    mocker.patch("bioamla.audio.files.get_audio_info", return_value=_fake_info())
+    mocker.patch(
+        "bioamla.audio.metadata.get_recording_metadata", side_effect=InvalidInputError("no")
+    )
     result = runner.invoke(cli, ["audio", "info", "file.flac", "--metadata"])
     assert result.exit_code == 0
     assert "Duration: 1.00s" in result.output
 
 
 def test_info_error(runner, mocker):
-    mocker.patch("bioamla.audio.get_audio_info", side_effect=AudioLoadError("bad"))
+    mocker.patch("bioamla.audio.files.get_audio_info", side_effect=AudioLoadError("bad"))
     result = runner.invoke(cli, ["audio", "info", "file.wav"])
     assert result.exit_code != 0
     assert "bad" in result.output
@@ -185,10 +189,13 @@ def test_info_error(runner, mocker):
 
 
 def test_metadata(runner, mocker):
+    mocker.patch(
+        "bioamla.audio.metadata.dump_recording_metadata", return_value={"file": "file.wav"}
+    )
     from bioamla.audio import RecordingMetadata
 
     mocker.patch(
-        "bioamla.audio.get_recording_metadata",
+        "bioamla.audio.metadata.get_recording_metadata",
         return_value=RecordingMetadata(
             latitude=36.52, longitude=-82.21, device_make="Wildlife Acoustics", sources=("guano",)
         ),
@@ -202,9 +209,12 @@ def test_metadata(runner, mocker):
 
 
 def test_metadata_empty(runner, mocker):
+    mocker.patch(
+        "bioamla.audio.metadata.dump_recording_metadata", return_value={"file": "file.wav"}
+    )
     from bioamla.audio import RecordingMetadata
 
-    mocker.patch("bioamla.audio.get_recording_metadata", return_value=RecordingMetadata())
+    mocker.patch("bioamla.audio.metadata.get_recording_metadata", return_value=RecordingMetadata())
     result = runner.invoke(cli, ["audio", "metadata", "file.wav"])
     assert result.exit_code == 0
     assert "No recorder metadata" in result.output
@@ -213,8 +223,11 @@ def test_metadata_empty(runner, mocker):
 def test_metadata_json(runner, mocker):
     import json
 
+    from bioamla.audio import RecordingMetadata
+
+    mocker.patch("bioamla.audio.metadata.get_recording_metadata", return_value=RecordingMetadata())
     dump = mocker.patch(
-        "bioamla.audio.dump_recording_metadata",
+        "bioamla.audio.metadata.dump_recording_metadata",
         return_value={"file": "file.wav", "sources": ["guano"], "guano": {"Make": "X"}},
     )
     result = runner.invoke(cli, ["audio", "metadata", "file.wav", "--json"])
@@ -225,7 +238,10 @@ def test_metadata_json(runner, mocker):
 
 
 def test_metadata_error(runner, mocker):
-    mocker.patch("bioamla.audio.get_recording_metadata", side_effect=AudioLoadError("bad"))
+    mocker.patch(
+        "bioamla.audio.metadata.dump_recording_metadata", return_value={"file": "file.wav"}
+    )
+    mocker.patch("bioamla.audio.metadata.get_recording_metadata", side_effect=AudioLoadError("bad"))
     result = runner.invoke(cli, ["audio", "metadata", "file.wav"])
     assert result.exit_code != 0
     assert "bad" in result.output
@@ -237,7 +253,7 @@ def test_metadata_error(runner, mocker):
 
 
 def test_list_found(runner, mocker):
-    mocker.patch("bioamla.audio.list_audio_files", return_value=["a.wav", "b.wav"])
+    mocker.patch("bioamla.audio.operations.list_audio_files", return_value=["a.wav", "b.wav"])
     result = runner.invoke(cli, ["audio", "list", "somedir"])
     assert result.exit_code == 0
     assert "Found 2 audio file(s)" in result.output
@@ -245,7 +261,7 @@ def test_list_found(runner, mocker):
 
 
 def test_list_empty(runner, mocker):
-    mocker.patch("bioamla.audio.list_audio_files", return_value=[])
+    mocker.patch("bioamla.audio.operations.list_audio_files", return_value=[])
     result = runner.invoke(cli, ["audio", "list", "somedir", "--no-recursive"])
     assert result.exit_code == 0
     assert "No audio files found" in result.output
@@ -254,7 +270,7 @@ def test_list_empty(runner, mocker):
 def test_list_error(runner, mocker):
     from bioamla.exceptions import NotFoundError
 
-    mocker.patch("bioamla.audio.list_audio_files", side_effect=NotFoundError("nope"))
+    mocker.patch("bioamla.audio.operations.list_audio_files", side_effect=NotFoundError("nope"))
     result = runner.invoke(cli, ["audio", "list", "somedir"])
     assert result.exit_code != 0
 
@@ -274,7 +290,7 @@ def _fake_player():
 
 def test_play(runner, mocker):
     player = _fake_player()
-    play = mocker.patch("bioamla.audio.play_audio", return_value=player)
+    play = mocker.patch("bioamla.audio.playback.play_audio", return_value=player)
     result = runner.invoke(cli, ["audio", "play", "file.wav"])
     assert result.exit_code == 0
     assert "Playing file.wav (1.40s)" in result.output
@@ -284,7 +300,7 @@ def test_play(runner, mocker):
 
 def test_play_loop_flag(runner, mocker):
     player = _fake_player()
-    play = mocker.patch("bioamla.audio.play_audio", return_value=player)
+    play = mocker.patch("bioamla.audio.playback.play_audio", return_value=player)
     result = runner.invoke(cli, ["audio", "play", "file.wav", "--loop"])
     assert result.exit_code == 0
     assert "[loop]" in result.output
@@ -295,7 +311,7 @@ def test_play_interrupt(runner, mocker):
     player = MagicMock()
     player.duration = 1.4
     type(player).is_playing = PropertyMock(side_effect=KeyboardInterrupt)
-    mocker.patch("bioamla.audio.play_audio", return_value=player)
+    mocker.patch("bioamla.audio.playback.play_audio", return_value=player)
     result = runner.invoke(cli, ["audio", "play", "file.wav"])
     assert result.exit_code == 0
     assert "Stopped." in result.output
@@ -303,7 +319,7 @@ def test_play_interrupt(runner, mocker):
 
 
 def test_play_error(runner, mocker):
-    mocker.patch("bioamla.audio.play_audio", side_effect=AudioLoadError("bad"))
+    mocker.patch("bioamla.audio.playback.play_audio", side_effect=AudioLoadError("bad"))
     result = runner.invoke(cli, ["audio", "play", "missing.wav"])
     assert result.exit_code != 0
     assert "bad" in result.output
@@ -315,37 +331,61 @@ def test_play_error(runner, mocker):
 
 
 def test_convert(runner, tmp_path, mocker):
-    mocker.patch("bioamla.audio.load_audio_data", return_value=_fake_audio_data())
-    save = mocker.patch("bioamla.audio.save_audio_data_as")
+    mocker.patch(
+        "bioamla.audio.convert.load_audio", return_value=(np.zeros(16000, np.float32), 16000)
+    )
+    save = mocker.patch("bioamla.audio.convert.save_audio", return_value="out.flac")
     out = tmp_path / "out.flac"
     result = runner.invoke(
         cli, ["audio", "convert", "in.wav", str(out), "-r", "8000", "-f", "flac"]
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     assert "Converted" in result.output
     save.assert_called_once()
+    samples, rate = save.call_args.args[1:3]
+    assert rate == 8000 and len(samples) == 8000
+    assert save.call_args.kwargs["format"] == "flac"
 
 
 def test_convert_stereo_to_mono(runner, tmp_path, mocker):
-    mocker.patch("bioamla.audio.load_audio_data", return_value=_fake_audio_data(channels=2))
-    mocker.patch("bioamla.audio.save_audio_data_as")
+    mocker.patch(
+        "bioamla.audio.convert.load_audio",
+        return_value=(np.zeros((16000, 2), np.float32), 16000),
+    )
+    save = mocker.patch("bioamla.audio.convert.save_audio", return_value="out.wav")
     out = tmp_path / "out.wav"
     result = runner.invoke(cli, ["audio", "convert", "in.wav", str(out), "-c", "1"])
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
+    assert save.call_args.args[1].ndim == 1
 
 
 def test_convert_mono_to_stereo(runner, tmp_path, mocker):
-    mocker.patch("bioamla.audio.load_audio_data", return_value=_fake_audio_data(channels=1))
-    mocker.patch("bioamla.audio.save_audio_data_as")
+    mocker.patch(
+        "bioamla.audio.convert.load_audio", return_value=(np.zeros(16000, np.float32), 16000)
+    )
+    save = mocker.patch("bioamla.audio.convert.save_audio", return_value="out.wav")
     out = tmp_path / "out.wav"
     result = runner.invoke(cli, ["audio", "convert", "in.wav", str(out), "-c", "2"])
+    assert result.exit_code == 0, result.output
+    assert save.call_args.args[1].shape == (16000, 2)
+    assert save.call_args.kwargs["format"] is None  # from the file name
+
+
+def test_convert_bit_depth_is_ignored_with_a_warning(runner, tmp_path, mocker):
+    mocker.patch(
+        "bioamla.audio.convert.load_audio", return_value=(np.zeros(16000, np.float32), 16000)
+    )
+    mocker.patch("bioamla.audio.convert.save_audio", return_value="out.wav")
+    result = runner.invoke(cli, ["audio", "convert", "in.wav", str(tmp_path / "o.wav"), "-b", "24"])
     assert result.exit_code == 0
+    assert "--bit-depth is not supported" in result.stderr
 
 
 def test_convert_error(runner, tmp_path, mocker):
-    mocker.patch("bioamla.audio.load_audio_data", side_effect=AudioLoadError("x"))
+    mocker.patch("bioamla.audio.convert.load_audio", side_effect=AudioLoadError("broken"))
     result = runner.invoke(cli, ["audio", "convert", "in.wav", str(tmp_path / "o.wav")])
     assert result.exit_code != 0
+    assert "broken" in result.output
 
 
 # --------------------------------------------------------------------------- #
@@ -355,8 +395,8 @@ def test_convert_error(runner, tmp_path, mocker):
 
 def test_segment(runner, tmp_path, mocker):
     audio = np.zeros(16000 * 3, dtype=np.float32)
-    mocker.patch("bioamla.audio.load_audio", return_value=(audio, 16000))
-    mocker.patch("bioamla.audio.save_audio")
+    mocker.patch("bioamla.audio.batch.load_audio", return_value=(audio, 16000))
+    mocker.patch("bioamla.audio.batch.save_audio")
     out_dir = tmp_path / "segs"
     result = runner.invoke(cli, ["audio", "segment", "in.wav", str(out_dir), "-d", "1.0"])
     assert result.exit_code == 0
@@ -365,8 +405,8 @@ def test_segment(runner, tmp_path, mocker):
 
 def test_segment_overlap_too_large(runner, tmp_path, mocker):
     audio = np.zeros(16000 * 3, dtype=np.float32)
-    mocker.patch("bioamla.audio.load_audio", return_value=(audio, 16000))
-    mocker.patch("bioamla.audio.save_audio")
+    mocker.patch("bioamla.audio.batch.load_audio", return_value=(audio, 16000))
+    mocker.patch("bioamla.audio.batch.save_audio")
     out_dir = tmp_path / "segs"
     result = runner.invoke(
         cli, ["audio", "segment", "in.wav", str(out_dir), "-d", "1.0", "-o", "2.0"]
@@ -380,7 +420,9 @@ def test_segment_overlap_too_large(runner, tmp_path, mocker):
 
 
 def test_trim(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.trim_audio", return_value=np.zeros(8000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.trim_audio", return_value=np.zeros(8000, dtype=np.float32)
+    )
     out = tmp_path / "t.wav"
     result = runner.invoke(cli, ["audio", "trim", "in.wav", str(out), "-s", "0.1", "-e", "0.5"])
     assert result.exit_code == 0
@@ -388,7 +430,9 @@ def test_trim(runner, tmp_path, mock_load_save, mocker):
 
 
 def test_trim_with_duration(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.trim_audio", return_value=np.zeros(8000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.trim_audio", return_value=np.zeros(8000, dtype=np.float32)
+    )
     out = tmp_path / "t.wav"
     result = runner.invoke(cli, ["audio", "trim", "in.wav", str(out), "-s", "0.0", "-d", "0.5"])
     assert result.exit_code == 0
@@ -407,7 +451,9 @@ def test_trim_end_and_duration_conflict(runner, tmp_path):
 
 
 def test_normalize_peak(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.peak_normalize", return_value=np.zeros(16000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.peak_normalize", return_value=np.zeros(16000, dtype=np.float32)
+    )
     out = tmp_path / "n.wav"
     result = runner.invoke(cli, ["audio", "normalize", "in.wav", str(out), "-m", "peak"])
     assert result.exit_code == 0
@@ -430,7 +476,9 @@ def test_normalize_rms(runner, tmp_path, mock_load_save, mocker):
 
 
 def test_resample(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.resample_audio", return_value=np.zeros(8000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.resample_audio", return_value=np.zeros(8000, dtype=np.float32)
+    )
     out = tmp_path / "r.wav"
     result = runner.invoke(cli, ["audio", "resample", "in.wav", str(out), "-r", "8000"])
     assert result.exit_code == 0
@@ -449,7 +497,9 @@ def test_denoise(runner, tmp_path, mock_load_save, mocker):
 
 
 def test_pitch_shift(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.pitch_shift", return_value=np.zeros(16000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.pitch_shift", return_value=np.zeros(16000, dtype=np.float32)
+    )
     out = tmp_path / "p.wav"
     result = runner.invoke(cli, ["audio", "pitch-shift", "in.wav", str(out), "-n", "2"])
     assert result.exit_code == 0
@@ -457,7 +507,9 @@ def test_pitch_shift(runner, tmp_path, mock_load_save, mocker):
 
 
 def test_time_stretch(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.time_stretch", return_value=np.zeros(16000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.time_stretch", return_value=np.zeros(16000, dtype=np.float32)
+    )
     out = tmp_path / "s.wav"
     result = runner.invoke(cli, ["audio", "time-stretch", "in.wav", str(out), "-r", "1.5"])
     assert result.exit_code == 0
@@ -465,7 +517,9 @@ def test_time_stretch(runner, tmp_path, mock_load_save, mocker):
 
 
 def test_add_noise(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.add_noise", return_value=np.zeros(16000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.add_noise", return_value=np.zeros(16000, dtype=np.float32)
+    )
     out = tmp_path / "an.wav"
     result = runner.invoke(
         cli, ["audio", "add-noise", "in.wav", str(out), "--snr-db", "10", "--seed", "1"]
@@ -475,7 +529,9 @@ def test_add_noise(runner, tmp_path, mock_load_save, mocker):
 
 
 def test_gain(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.apply_gain", return_value=np.zeros(16000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.apply_gain", return_value=np.zeros(16000, dtype=np.float32)
+    )
     out = tmp_path / "g.wav"
     result = runner.invoke(cli, ["audio", "gain", "in.wav", str(out), "--gain-db", "3"])
     assert result.exit_code == 0
@@ -483,7 +539,7 @@ def test_gain(runner, tmp_path, mock_load_save, mocker):
 
 
 def test_resample_error(runner, tmp_path, mocker):
-    mocker.patch("bioamla.audio.load_audio", side_effect=AudioLoadError("boom"))
+    mocker.patch("bioamla.audio.files.load_audio", side_effect=AudioLoadError("boom"))
     out = tmp_path / "r.wav"
     result = runner.invoke(cli, ["audio", "resample", "in.wav", str(out), "-r", "8000"])
     assert result.exit_code != 0
@@ -495,7 +551,9 @@ def test_resample_error(runner, tmp_path, mocker):
 
 
 def test_filter_lowpass(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.lowpass_filter", return_value=np.zeros(16000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.lowpass_filter", return_value=np.zeros(16000, dtype=np.float32)
+    )
     out = tmp_path / "f.wav"
     result = runner.invoke(cli, ["audio", "filter", "in.wav", str(out), "--lowpass", "4000"])
     assert result.exit_code == 0
@@ -503,7 +561,9 @@ def test_filter_lowpass(runner, tmp_path, mock_load_save, mocker):
 
 
 def test_filter_highpass(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.highpass_filter", return_value=np.zeros(16000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.highpass_filter", return_value=np.zeros(16000, dtype=np.float32)
+    )
     out = tmp_path / "f.wav"
     result = runner.invoke(cli, ["audio", "filter", "in.wav", str(out), "--highpass", "200"])
     assert result.exit_code == 0
@@ -511,7 +571,9 @@ def test_filter_highpass(runner, tmp_path, mock_load_save, mocker):
 
 
 def test_filter_bandpass(runner, tmp_path, mock_load_save, mocker):
-    mocker.patch("bioamla.audio.bandpass_filter", return_value=np.zeros(16000, dtype=np.float32))
+    mocker.patch(
+        "bioamla.audio.processing.bandpass_filter", return_value=np.zeros(16000, dtype=np.float32)
+    )
     out = tmp_path / "f.wav"
     result = runner.invoke(
         cli,

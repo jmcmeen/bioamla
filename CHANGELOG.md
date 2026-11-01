@@ -22,9 +22,34 @@ All notable changes to this project are documented here. The format is based on
     `FileIndices`, `FileTemporalIndices`, `FileIndexValues` and `SEGMENT_COLUMNS`.
   - An empty output path saves nothing, as the commands always treated it.
 
+- Every `audio` command runs through an operation (`audio.info|metadata|list|play|features|
+  convert|segment|trim|normalize|resample|filter|denoise|pitch-shift|time-stretch|add-noise|
+  gain|visualize|video`), with unchanged output. Reading a header or listing a folder is
+  `quick`; anything that decodes audio is a `job`; `audio.play` is local-only. `audio.video`
+  reports progress through the operation context and stops when cancelled.
+- Library functions behind those commands, in `bioamla.audio`: `trim_audio_file()`,
+  `normalize_audio_file()`, `resample_audio_file()`, `filter_audio_file()`,
+  `denoise_audio_file()`, `pitch_shift_audio_file()`, `time_stretch_audio_file()`,
+  `add_noise_audio_file()`, `gain_audio_file()` (each returns a `ProcessedFile`),
+  `describe_audio_file()`, `recording_metadata_report()`, and the result types
+  `AudioFileDescription`, `RecordingMetadataReport`, `AudioFileList` and `SegmentedFile`.
+- `segment_audio_file()` takes `format`, `include_partial` and `label`, and
+  `convert_audio_file()` takes `target_format=None` (format from the output name), so
+  `audio segment` and `audio convert` use them instead of their own copies.
+
 ### Changed
 
 - `detect.energy` is declared a `job` rather than `quick`, like the other per-file analyses.
+- `audio convert --bit-depth` prints a warning that it's ignored; it always was (#239).
+- `audio filter`, `audio trim` and `audio segment` report bad option combinations as
+  `InvalidInputError` in the `--json` envelope, naming the parameters (`end`, `duration`,
+  `bandpass_low`, ...) rather than the flags. `audio trim` refuses a negative `--start` or a
+  non-positive `--duration`; `audio filter` treats a 0 Hz cutoff as given.
+- `segment_audio_file()` (so `audio segment` and `batch audio segment`) refuses a `prefix`
+  containing a path, so clips stay inside the output folder, and creates the output folder
+  only after the audio loads.
+- `audio video --cmap` has no fixed default in `--help`: each renderer picks its own (magma,
+  or plasma for `-t trajectory`), as before.
 
 ### Fixed
 
