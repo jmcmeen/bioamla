@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import csv
 import json
+import subprocess
+import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
 import soundfile as sf
 
-from tests.skills.conftest import SR, tone, write_wav
+from tests.skills.conftest import SR, skill_script, tone, write_wav
 
 pytestmark = pytest.mark.integration
 
@@ -104,6 +107,25 @@ def test_crops_cut_a_clip_and_image_per_candidate(run_skill, loud_and_faint, tin
         assert c["box"]["start"] == pytest.approx(0.25, abs=0.01)
         assert c["image"].startswith(run_dir)
     assert crops[1]["clip_start"] == pytest.approx(2.75, abs=0.1)
+    # The event's box is drawn: the image differs from the plain spectrogram of its clip.
+    plain = loud_and_faint / "plain.png"
+    subprocess.run([str(Path(sys.executable).parent / "bioamla"), "audio", "visualize",
+                    crops[0]["clip"], "--type", "stft", "--output", str(plain)],
+                   cwd=loud_and_faint, check=True, capture_output=True)  # fmt: skip
+    assert plain.read_bytes() != (loud_and_faint / crops[0]["image"]).read_bytes()
+
+
+def test_box_option_formats_the_box_for_audio_visualize() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("crops", skill_script("label", "crops"))
+    crops = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(skill_script("label", "crops").parent))
+    spec.loader.exec_module(crops)
+    box = {"start": 0.25, "end": 0.75, "low_freq": 500.0, "high_freq": 5000.0}
+    assert crops.box_option(box, "frog") == "0.25,0.75,500,5000,frog"
+    assert crops.box_option({**box, "low_freq": None}) == "0.25,0.75"
+    assert crops.box_option(box, "a,b") == "0.25,0.75,500,5000"
 
 
 def read_rows(path) -> list[dict]:

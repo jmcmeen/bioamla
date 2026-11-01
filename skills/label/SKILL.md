@@ -41,8 +41,9 @@ to the next step.
    python <skill>/scripts/crops.py <run_dir> --pad 0.5
    ```
 
-   Writes `<run_dir>/crops/<id>.wav` and `.png`, and `crops.json` with each event's box
-   in the clip (seconds and Hz). The box isn't drawn on the image.
+   Writes `<run_dir>/crops/<id>.wav` and `.png` (the event's box outlined on the
+   spectrogram, with the suggested label), and `crops.json` with each event's box in the
+   clip (seconds and Hz).
 
 4. **Annotate**: accept the candidates that clear every threshold and merge them into
    the annotations CSV.

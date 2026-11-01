@@ -191,6 +191,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- The labeling skill's crop step outlines each candidate's box, with its suggested label, on
+  the spectrogram image (`audio visualize --box`); `crops.json` still records the box.
+
 - **Breaking:** `batch models predict` reports ranked labels the way `models ast predict
   --top-k` does, and only when asked: `--top-k K` (default 0, was 5) adds `top` (`[{label,
   confidence}]`) and `margin` (top-1 minus top-2) to each whole-file prediction in
