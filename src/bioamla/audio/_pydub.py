@@ -68,12 +68,12 @@ def _audiosegment_to_numpy(
         array = array.astype(np.int32)
         audio = array.astype(np.float32) / 8388608.0
     elif sample_width == 4:
-        # 32-bit: could be int32 or float32
-        if array.dtype == np.float32 or (len(array) > 0 and np.max(np.abs(array)) <= 1.0):
+        # 32-bit: float samples stay as they are; integer PCM is scaled. Decided by
+        # the array's type, never by the values (a near-silent int file is not float).
+        if np.issubdtype(array.dtype, np.floating):
             audio = array.astype(np.float32)
         else:
-            array = array.astype(np.int32)
-            audio = array.astype(np.float32) / 2147483648.0
+            audio = array.astype(np.int32).astype(np.float32) / 2147483648.0
     else:
         raise AudioLoadError(
             f"Unsupported sample width: {sample_width} bytes. "
@@ -163,8 +163,8 @@ def _to_mono(audio: np.ndarray) -> np.ndarray:
 
 def load_audio_channels(filepath: str) -> tuple[np.ndarray, int]:
     """Load an audio file keeping its channels: 1-D for mono, ``(n_samples,
-    n_channels)`` otherwise, float32 in [-1.0, 1.0]. soundfile for WAV/FLAC/OGG,
-    pydub (ffmpeg) for the rest.
+    n_channels)`` otherwise, float32 in [-1.0, 1.0]. soundfile (native C, ~10-30x
+    faster) for WAV/FLAC/OGG, pydub (ffmpeg) for the rest or when soundfile fails.
 
     Raises:
         NotFoundError: If file doesn't exist.
@@ -185,49 +185,15 @@ def load_audio_channels(filepath: str) -> tuple[np.ndarray, int]:
 
 
 def load_audio(filepath: str) -> tuple[np.ndarray, int]:
-    """Load audio file using the fastest available backend.
-
-    Routes to optimal loader:
-    - soundfile (native C via libsndfile) for WAV/FLAC/OGG: ~10-30x faster
-    - pydub (ffmpeg subprocess) for M4A/MP3: slower but wider format support
-
-    Args:
-        filepath: Path to audio file.
-
-    Returns:
-        Tuple of (audio_array, sample_rate) where audio is mono float32 [-1.0, 1.0].
+    """Load an audio file as mono float32 in [-1.0, 1.0] (channels averaged), using
+    the fastest backend (see :func:`load_audio_channels`).
 
     Raises:
         NotFoundError: If file doesn't exist.
         AudioLoadError: If file cannot be loaded.
     """
-    path = Path(filepath)
-    if not path.exists():
-        raise NotFoundError(f"Audio file not found: {filepath}")
-
-    ext = path.suffix.lower()
-
-    # Fast path: soundfile for native formats
-    if ext in _NATIVE_EXTENSIONS:
-        try:
-            import soundfile as sf
-
-            audio, sample_rate = sf.read(str(path), dtype="float32", always_2d=False)
-
-            audio = _to_mono(audio)
-
-            logger.debug(
-                f"Loaded {ext} file via soundfile (fast): {path.name} "
-                f"({sample_rate}Hz, {len(audio)} samples)"
-            )
-            return audio, sample_rate
-
-        except Exception as e:
-            logger.debug(f"soundfile failed for {filepath}, using pydub fallback: {e}")
-
-    # Slow path: pydub for M4A, MP3, or if soundfile failed
-    logger.debug(f"Loading {ext} file via pydub (slow): {path.name}")
-    return _load_via_pydub(str(path))
+    audio, sample_rate = load_audio_channels(filepath)
+    return _to_mono(audio).astype(np.float32, copy=False), sample_rate
 
 
 def load_audio_window(

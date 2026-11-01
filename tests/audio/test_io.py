@@ -117,10 +117,10 @@ class TestArrayLevelIO:
                 load_audio(test_audio_path)
 
     def test_load_stereo_downmixes(self, test_audio_path: str) -> None:
-        stereo = np.zeros((2, 100), dtype=np.float32)
-        with patch("bioamla.audio._pydub.load_audio", return_value=(stereo, 16000)):
+        stereo = np.column_stack([np.ones(100), np.zeros(100)]).astype(np.float32)
+        with patch("bioamla.audio._pydub.load_audio_channels", return_value=(stereo, 16000)):
             audio, sr = load_audio(test_audio_path)
-        assert audio.ndim == 1
+        assert audio.shape == (100,) and np.allclose(audio, 0.5)  # channels averaged
 
     def test_save_failure_raises(self, tmp_path) -> None:
         with patch("bioamla.audio._pydub.save_audio", side_effect=RuntimeError("fail")):
@@ -205,3 +205,14 @@ class TestBatchProcess:
         levels = {r.levelname for r in caplog.records}
         assert levels == {"INFO", "WARNING"}
         assert sum(r.levelname == "WARNING" for r in caplog.records) == 3
+
+
+def test_quiet_32_bit_pcm_is_scaled_as_integers():
+    from pydub import AudioSegment
+
+    from bioamla.audio._pydub import _audiosegment_to_numpy
+
+    raw = np.array([1, -1, 0, 1], dtype=np.int32).tobytes()  # all |x| <= 1
+    segment = AudioSegment(raw, frame_rate=8000, sample_width=4, channels=1)
+    audio, _ = _audiosegment_to_numpy(segment)
+    assert np.abs(audio).max() < 1e-8  # tiny, not full scale

@@ -318,7 +318,7 @@ def create_temp_audio_file(audio: AudioData, suffix: str = ".wav") -> Path:
 
 def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     """
-    Load an audio file as a mono ``numpy`` array.
+    Load an audio file as a mono ``numpy`` array (channels averaged).
 
     Args:
         filepath: Path to the audio file.
@@ -327,20 +327,11 @@ def load_audio(filepath: str) -> tuple[np.ndarray, int]:
         Tuple of (audio array, sample rate). The array is mono float32.
 
     Raises:
-        AudioLoadError: If decoding fails.
+        AudioLoadError: If the file is missing or decoding fails.
     """
-    from bioamla.audio._pydub import load_audio as _pydub_load_audio
+    from bioamla.audio._pydub import load_audio as _load
 
-    try:
-        audio, sr = _pydub_load_audio(filepath)
-    except Exception as e:
-        raise AudioLoadError(f"Failed to load audio file: {e}") from e
-
-    # Convert to mono if stereo
-    if audio.ndim > 1:
-        audio = audio.mean(axis=0) if audio.shape[0] <= 2 else audio.mean(axis=1)
-
-    return audio.astype(np.float32), sr
+    return _loaded(_load, filepath)
 
 
 def load_audio_channels(filepath: str | Path) -> tuple[np.ndarray, int]:
@@ -356,17 +347,19 @@ def load_audio_channels(filepath: str | Path) -> tuple[np.ndarray, int]:
         ``(n_samples, n_channels)`` otherwise.
 
     Raises:
-        NotFoundError: If the file doesn't exist.
-        AudioLoadError: If decoding fails.
+        AudioLoadError: If the file is missing or decoding fails.
     """
-    from bioamla.audio._pydub import load_audio_channels as _load_channels
-    from bioamla.exceptions import NotFoundError
+    from bioamla.audio._pydub import load_audio_channels as _load
 
+    return _loaded(_load, filepath)
+
+
+def _loaded(load: Callable[[str], tuple[np.ndarray, int]], filepath: str | Path):
     try:
-        audio, sr = _load_channels(str(filepath))
-    except NotFoundError:
-        raise
-    except Exception as e:
+        audio, sr = load(str(filepath))
+    except AudioLoadError:
+        raise  # already says what failed
+    except Exception as e:  # a missing file too: reported as a load failure
         raise AudioLoadError(f"Failed to load audio file: {e}") from e
     return audio.astype(np.float32, copy=False), sr
 

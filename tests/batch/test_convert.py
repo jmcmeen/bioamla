@@ -88,6 +88,25 @@ class TestConvertKeepsChannels:
         convert_audio_file(mp3, out, target_format="wav")
         assert sf.info(out).channels == 2
 
+    def test_channel_counts_are_checked_first(self, stereo, tmp_path):
+        from bioamla.exceptions import InvalidInputError
+
+        with pytest.raises(InvalidInputError, match="1 or 2"):
+            convert_audio_file(stereo, tmp_path / "x.wav", target_channels=4)
+
+    def test_more_channels_than_mp3_holds(self, tmp_path):
+        import numpy as np
+        import soundfile as sf
+
+        from bioamla.exceptions import InvalidInputError
+
+        quad = tmp_path / "quad.wav"
+        sf.write(quad, np.zeros((800, 4)), 8000)
+        with pytest.raises(InvalidInputError, match="MP3 holds at most 2"):
+            convert_audio_file(quad, tmp_path / "q.mp3", target_format="mp3")
+        convert_audio_file(quad, tmp_path / "q.wav", target_format="wav")
+        assert sf.info(tmp_path / "q.wav").channels == 4  # kept where the format can
+
     def test_load_audio_channels(self, stereo, test_audio_path):
         from bioamla.audio import load_audio_channels
 

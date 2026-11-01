@@ -167,7 +167,8 @@ All notable changes to this project are documented here. The format is based on
 - **Behavior change:** `audio convert` and `batch audio convert` keep a file's channels: a
   stereo file stays stereo (each channel as it was) unless `--channels` says otherwise.
   They used to downmix every file to mono, and `-c 2` duplicated that downmix into both
-  channels (#238).
+  channels (#238). A file with more than two channels converted to MP3 (which holds two)
+  needs `--channels 1` or `2`; a channel count other than 1 or 2 is refused up front.
 
 - `cluster reduce|fit` say "Reducing embeddings to 2D using pca..." / "Clustering embeddings
   using hdbscan..." (the input size is read inside the operation now).
@@ -203,6 +204,9 @@ These were deprecated in 0.3.x and are breaking changes:
 - `bioamla.cli.output.legacy_json`, the helper behind those flags.
 
 ### Fixed
+
+- A 32-bit PCM file read through ffmpeg (formats soundfile can't read) that was nearly
+  silent was taken for float audio and came out at full scale; it is scaled as integers.
 
 - `audio list` of a folder that doesn't exist (and `list_audio_files()`) raises
   `NotFoundError` instead of reporting an empty folder (#262).
