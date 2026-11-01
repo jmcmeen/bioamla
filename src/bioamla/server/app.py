@@ -76,7 +76,7 @@ def _error(status: int, error_type: str, message: str) -> JSONResponse:
     )  # fmt: skip
 
 
-_HTTP_ERROR_TYPES = {404: "NotFoundError", 405: "MethodNotAllowed"}
+_HTTP_ERROR_TYPES = {404: "NotFoundError", 405: "MethodNotAllowed", 501: "NotImplemented"}
 
 
 def create_app(config: ServerConfig) -> FastAPI:
@@ -159,6 +159,15 @@ def create_app(config: ServerConfig) -> FastAPI:
     @app.get(f"/{API_VERSION}/openapi.json", include_in_schema=False)
     def openapi(who: Identity = Depends(identity)) -> dict[str, Any]:
         return app.openapi()
+
+    def submit_job(ws_dir: Path, name: str, request: Any, who: Identity) -> dict[str, Any]:
+        raise StarletteHTTPException(501, f"{name} runs as a job; this server can't run jobs yet")
+
+    app.state.submit_job = submit_job  # replaced by the job runner
+
+    from bioamla.server.operations_api import add_operation_routes
+
+    app.state.operations = add_operation_routes(app, API_VERSION, envelope)
 
     @app.get(f"/{API_VERSION}/version", tags=["service"])
     def version(who: Identity = Depends(identity)) -> dict[str, Any]:

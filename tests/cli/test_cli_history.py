@@ -75,10 +75,10 @@ def test_outputs_come_from_the_result(ws) -> None:
     (ws.root / "a.wav").write_bytes(b"RIFF")
     run("workspace", "import", "a.wav")
     assert records(ws)[-1]["outputs"] == []  # import reports artifacts, not output files
-    from bioamla.cli.history import _outputs
-
-    assert _outputs({"output": ws.root / "d.csv", "output_files": ["/elsewhere/x"]},
-                    ws) == ["d.csv", "/elsewhere/x"]  # fmt: skip
+    assert ws.output_paths({"output": ws.root / "d.csv", "output_files": ["/elsewhere/x"]}) == [
+        "d.csv",
+        "/elsewhere/x",
+    ]
 
 
 def test_history_command(ws) -> None:

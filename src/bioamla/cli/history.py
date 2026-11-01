@@ -30,7 +30,6 @@ from bioamla.workspace._core import HISTORY_RECORD_VERSION as RECORD_VERSION  # 
 
 _NOT_RECORDED = {"workspace history"}
 _SECRET = re.compile(r"(key|token|password|passwd|secret)", re.IGNORECASE)
-_OUTPUT_KEYS = ("output", "output_path", "output_dir", "metadata_file", "results_file")
 
 
 def should_record(group: Any, args: list[str]) -> bool:
@@ -85,20 +84,6 @@ def _flag_names(group: Any, argv: list[str]) -> set[str]:
     return names
 
 
-def _outputs(result: Any, ws: Any) -> list[str]:
-    """The paths a command's result says it wrote, relative to the workspace."""
-    if not isinstance(result, dict):
-        return []
-    paths: list[str] = []
-    for key in _OUTPUT_KEYS:
-        if isinstance(result.get(key), (str, os.PathLike)) and str(result[key]):
-            paths.append(str(result[key]))
-    files = result.get("output_files")
-    if isinstance(files, (list, tuple)):
-        paths += [str(f) for f in files if isinstance(f, (str, os.PathLike))]
-    return [ws.relative(p) for p in dict.fromkeys(paths)]
-
-
 def record_run(
     group: Any,
     args: list[str],
@@ -141,7 +126,7 @@ def record_run(
             "ok": ok,
             "exit_code": exit_code,
             "error": error,
-            "outputs": _outputs(last_result(), ws),
+            "outputs": ws.output_paths(last_result()),
         })  # fmt: skip
     except (OSError, BioamlaError) as e:
         logger.warning("Couldn't record this run in the workspace history: %s", e)

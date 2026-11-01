@@ -342,7 +342,8 @@ def test_server_doesnt_need_the_cli() -> None:
         "from bioamla.server import ServerConfig, create_app; "
         "c = TestClient(create_app(ServerConfig(root=Path('.'), token='t'))); "
         "c.get('/v1/version', headers={'Authorization': 'Bearer t'}); "
-        "print(sorted(m for m in ('click', 'rich', 'bioamla.cli') if m in sys.modules))"
+        "print(sorted(m for m in ('click', 'bioamla.cli') if m in sys.modules))"
     )
+    # (rich may load: pyinaturalist, a base dependency of the catalogs, imports it.)
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "[]"

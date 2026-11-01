@@ -111,6 +111,10 @@ def _guess_kind(path: Path) -> str:
     return "file"
 
 
+#: Result keys that name a file a run wrote (see :meth:`Workspace.output_paths`).
+OUTPUT_KEYS = ("output", "output_path", "output_dir", "metadata_file", "results_file")
+
+
 class Workspace:
     """An open workspace: its root directory and the contents of ``.bioamla/``.
 
@@ -445,6 +449,21 @@ class Workspace:
                     records.append(record)
         records = list(records)
         return records[-limit:] if limit else records
+
+    def output_paths(self, result: Any) -> list[str]:
+        """The files a run's result says it wrote (its ``output``, ``output_dir``,
+        ``metadata_file``, ``results_file``, ``output_path`` and ``output_files``),
+        relative to the workspace where they're inside it."""
+        if not isinstance(result, dict):
+            return []
+        paths: list[str] = []
+        for key in OUTPUT_KEYS:
+            if isinstance(result.get(key), (str, os.PathLike)) and str(result[key]):
+                paths.append(str(result[key]))
+        files = result.get("output_files")
+        if isinstance(files, (list, tuple)):
+            paths += [str(f) for f in files if isinstance(f, (str, os.PathLike))]
+        return [self.relative(p) for p in dict.fromkeys(paths)]
 
     def artifact_row(self, artifact: Artifact) -> dict[str, Any]:
         """``artifact`` as a dict, with where it resolves to and whether it's there

@@ -43,6 +43,15 @@ All notable changes to this project are documented here. The format is based on
   and `zip_path()`; `bioamla.common.config.config_schema_report()` and
   `export_config_schemas()`; `bioamla.system.dependency.install_missing()`.
 
+- Server: one endpoint per remote-safe operation, generated from the registry:
+  `POST /v1/workspaces/{ws}/operations/{name}` with the operation's request as the body (its
+  schema is in the OpenAPI spec). Every path in a request is relative to the workspace and
+  must resolve inside the server's allowed folders; quick operations answer with the result
+  envelope; local-only operations have no route. `GET /v1/operations` lists them with their
+  request schemas and the domains a missing extra makes unavailable. Each run is recorded in
+  the workspace history (`via: "server"`, with the operation and request).
+- `Workspace.output_paths()`: the files a run's result says it wrote (what history records).
+
 ### Changed
 
 - `cluster reduce|fit` say "Reducing embeddings to 2D using pca..." / "Clustering embeddings
