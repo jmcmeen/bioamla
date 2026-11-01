@@ -7,6 +7,7 @@ UV ?= uv
 PKG := bioamla
 SRC := src
 TESTS := tests
+SKILLS := skills
 
 .PHONY: help install sync lock upgrade dev shell \
         test test-fast cov \
@@ -57,14 +58,14 @@ cov: ## Run tests with coverage report
 ## --- Linting & formatting (ruff) ---
 
 lint: ## Lint with ruff
-	$(UV) run ruff check $(SRC) $(TESTS)
+	$(UV) run ruff check $(SRC) $(TESTS) $(SKILLS)
 
 fmt: ## Auto-format and apply lint fixes
-	$(UV) run ruff format $(SRC) $(TESTS)
-	$(UV) run ruff check --fix $(SRC) $(TESTS)
+	$(UV) run ruff format $(SRC) $(TESTS) $(SKILLS)
+	$(UV) run ruff check --fix $(SRC) $(TESTS) $(SKILLS)
 
 fmt-check: ## Check formatting without modifying files
-	$(UV) run ruff format --check $(SRC) $(TESTS)
+	$(UV) run ruff format --check $(SRC) $(TESTS) $(SKILLS)
 
 check: lint fmt-check test ## Run lint, format check, and tests
 

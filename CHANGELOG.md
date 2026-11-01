@@ -8,6 +8,33 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Agent skills: a convention for skills that let an AI agent drive bioamla
+  (`skills/<name>/SKILL.md` and `scripts/`). Scripts run `bioamla --json` and act on the
+  JSON (so a skill works locally or against a server), decide by thresholds on objective
+  measurements, send anything below threshold to a person, write to
+  `runs/<skill>/<timestamp>/`, and use only the standard library. A test harness runs each
+  skill's scripts in a synthetic workspace as a pass/fail eval. The first skill,
+  `inventory`, lists a folder's recordings and flags short or unreadable files. See the new
+  "Agent skills" docs page.
+- The `label` agent skill, for a first pass of labeling, one script per step. `candidates.py`
+  detects events in a frequency band (`detect energy`) and pairs each with the AST
+  prediction of the segment it overlaps most, flagging labels outside the given
+  vocabulary. `evidence.py` measures each candidate: signal-to-noise ratio in the
+  detector's band (from `audio features`), detector score, model confidence, band and
+  duration. `crops.py` cuts a clip and a spectrogram image around each candidate,
+  recording the event's box in the clip. `annotate.py` accepts the candidates that clear
+  confidence, SNR and detector-score thresholds and merges them into an annotations CSV
+  with `confidence`, `method` and `labeled_by=agent`; rows a person made are never
+  changed, and earlier agent rows for the same recordings are replaced. `review.py`
+  queues every candidate below a threshold, with its reasons, evidence, clip and image,
+  in `review_queue.json`. An end-to-end eval runs the five steps on synthetic recordings with
+  known events and checks what is annotated, what is queued, and that a person's row is
+  untouched.
+
+- "Running the server" docs page: installing and starting `bioamla serve`, the token file,
+  reaching it over an SSH tunnel or a VPN, a systemd unit, and linking recordings already on
+  the machine with `--allow-link`.
+
 - `audio visualize --box START,END[,LOW,HIGH][,LABEL]` (repeatable) and `--annotations FILE`
   outline regions on the picture: a box spans its band on the STFT and mel spectrograms, and
   the full height without one (and on MFCC and waveform plots); labels are written at its
@@ -149,6 +176,9 @@ All notable changes to this project are documented here. The format is based on
   that fails the check is refused rather than retried as a Hugging Face ID.
 
 ### Fixed
+
+- `audio list` of a folder that doesn't exist (and `list_audio_files()`) raises
+  `NotFoundError` instead of reporting an empty folder (#262).
 
 - A server request can no longer read or write a workspace's metadata (its `.bioamla`
   folder and the files directly in it) through an operation's path fields; the path
