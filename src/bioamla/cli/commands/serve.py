@@ -62,7 +62,8 @@ def _write_openapi(ctx: click.Context, param: click.Parameter, value: str | None
     type=click.FloatRange(min=1),
     default=None,
     metavar="SECONDS",
-    help="Stop a job that runs longer than this (default: no limit)",
+    help="Stop a job that reports nothing (no progress or output) for this long "
+    "(default: no limit)",
 )
 @click.option(
     "--openapi",

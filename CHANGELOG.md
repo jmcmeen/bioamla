@@ -8,8 +8,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
-- `bioamla serve --job-timeout SECONDS` (`ServerConfig.job_timeout`): a job running longer
-  is stopped and fails with `JobTimeout`, so a hung worker can't hold a slot forever.
+- `bioamla serve --job-timeout SECONDS` (`ServerConfig.job_timeout`): a running job that
+  sends nothing (no progress, notice, log line or result) for that long is stopped like a
+  cancel and fails with `JobTimeout`, so a hung worker can't hold a slot forever, while a
+  long job that keeps reporting progress runs on.
 
 - `models ast predict --top-k K` ranks each prediction's K most likely labels: the JSON
   gains `top` (`[{label, confidence}, ...]`, best first) and `margin` (top-1 minus top-2

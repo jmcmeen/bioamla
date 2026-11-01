@@ -12,6 +12,11 @@ this package imports fast. Training runs can report to any
 :class:`TensorBoardTracker` are included. Load / inference
 failures raise :class:`~bioamla.exceptions.ModelError`.
 
+Importing it sets ``HF_DEACTIVATE_ASYNC_LOAD=1`` in the process environment unless
+it's already set, so transformers loads model weights serially (its threaded loading
+can deadlock); this applies to every transformers model the process loads. Set the
+variable to ``0`` before importing to keep threaded loading.
+
 Example:
     >>> from bioamla.ml import ASTInference
     >>> inference = ASTInference(model_path="bioamla/scp-frogs")
