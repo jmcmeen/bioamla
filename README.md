@@ -121,8 +121,8 @@ person. See [Agent skills](https://jmcmeen.github.io/bioamla/skills/).
 ## API keys
 
 The catalog commands read `EBIRD_API_KEY`, `XC_API_KEY` (Xeno-canto) and `HF_TOKEN`
-(Hugging Face) from the environment or a `.env` file in the working directory. Nothing
-else needs a key.
+(Hugging Face) from the environment, or from a `.env` file in the working directory or a
+parent (only those three keys, and an exported variable wins). Nothing else needs a key.
 
 ## More
 

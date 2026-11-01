@@ -3,9 +3,13 @@ BioAmla - Bioacoustics & Machine Learning Applications
 ======================================================
 
 A flat, domain-oriented library for bioacoustic analysis. The public surface is
-organized into domain subpackages. The heavy runtime deps (torch/transformers,
-umap/hdbscan/sklearn, sounddevice) ship in the base install but are imported
-lazily inside the functions that need them, so ``import bioamla`` stays fast.
+organized into domain subpackages. Heavy dependencies (torch/transformers,
+umap/hdbscan/sklearn, librosa, sounddevice) come with extras and are imported
+only inside the functions that need them, so ``import bioamla`` stays fast.
+
+On import, the catalog keys (``EBIRD_API_KEY``, ``XC_API_KEY``, ``HF_TOKEN``) are
+read from the nearest ``.env`` file in the working directory or a parent, unless
+they're already set. Nothing else in the file is loaded.
 
 Domains:
 - :mod:`bioamla.audio` — audio I/O, analysis, signal processing, playback.
@@ -23,8 +27,6 @@ Domains:
 import importlib
 from importlib.metadata import PackageNotFoundError, version
 
-from dotenv import find_dotenv, load_dotenv
-
 # Exception hierarchy base — catch the whole family with a single except.
 from bioamla.exceptions import BioamlaError
 
@@ -33,14 +35,32 @@ try:
 except PackageNotFoundError:  # package not installed (e.g. source checkout)
     __version__ = "0.0.0"
 
-# Load API keys (EBIRD_API_KEY, XC_API_KEY, HF_TOKEN, ...) from a .env file in
-# the current working directory or any parent. Catalog access (xeno-canto,
-# eBird) can't function without these, so we load on import so both the CLI and
-# library-import usage "just work". override=False means a real exported
-# environment variable always wins over the file (important for CI / shells).
-# Keys are read lazily at call time, so this only needs to run before first use.
-# usecwd: look from the current directory up, not from where bioamla is installed.
-load_dotenv(find_dotenv(usecwd=True), override=False)
+#: The keys read from a ``.env`` file on import (see :func:`_load_dotenv_keys`).
+_DOTENV_KEYS = ("EBIRD_API_KEY", "XC_API_KEY", "HF_TOKEN")
+
+
+def _load_dotenv_keys() -> None:
+    """Set the catalog keys from the nearest ``.env`` in the working directory or a
+    parent, unless they're already set. Only these keys: a ``.env`` of another
+    project's secrets, or one setting ``BIOAMLA_*`` options, is left alone. A working
+    directory that no longer exists means there's no file to read."""
+    import os
+
+    from dotenv import dotenv_values, find_dotenv
+
+    try:
+        path = find_dotenv(usecwd=True)  # from the working directory, not the package
+    except OSError:
+        return
+    if not path:
+        return
+    values = dotenv_values(path)
+    for key in _DOTENV_KEYS:
+        if values.get(key) and key not in os.environ:
+            os.environ[key] = values[key]
+
+
+_load_dotenv_keys()
 
 # Domain subpackages are loaded LAZILY (PEP 562) so that `import bioamla` and
 # `bioamla --help` stay fast: accessing e.g. ``bioamla.audio`` imports it on first

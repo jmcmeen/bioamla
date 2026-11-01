@@ -123,9 +123,10 @@ returned to a caller (e.g. `AcousticIndices`, `AudioData`, `AudioMetadata`).
   Attributes/Args; many modules cite literature references (keep that for indices/detect).
 - Use `logging.getLogger(__name__)`, not `print`, in library code. The CLI uses
   `click.echo` / `rich` for user output.
-- **Config / secrets**: `.env` in CWD (or a parent) is auto-loaded on import (`override=False`,
-  so real env vars win). Catalog keys: `EBIRD_API_KEY`, `XC_API_KEY`, `HF_TOKEN`. Read keys at
-  call time; never hardcode or commit them.
+- **Config / secrets**: on import, only the catalog keys (`EBIRD_API_KEY`, `XC_API_KEY`,
+  `HF_TOKEN`) are read from the nearest `.env` in the CWD or a parent, never overriding a real
+  env var; nothing else in the file is loaded. Read keys at call time; never hardcode or
+  commit them.
 
 ## Testing
 
