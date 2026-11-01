@@ -26,10 +26,11 @@ class _PipeHandler(logging.Handler):
     def __init__(self, send: Any) -> None:
         super().__init__(logging.INFO)
         self._send = send
+        self.setFormatter(logging.Formatter("%(message)s"))  # adds any traceback
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            self._send(("log", record.levelname.lower(), record.getMessage()))
+            self._send(("log", record.levelname.lower(), self.format(record)))
         except Exception:  # noqa: BLE001 - a lost log line must not fail the job
             pass
 
@@ -56,13 +57,23 @@ def run_job(
             every path the operation touches must be inside one of them.
         user: Who the job runs as.
     """
+    import threading
+
     from bioamla import operations
     from bioamla.common.jsonable import to_jsonable
     from bioamla.server._security import Identity, PathPolicy
     from bioamla.server.operations_api import result_data
     from bioamla.workspace import open_workspace
 
-    logging.basicConfig(level=logging.INFO, handlers=[_PipeHandler(conn.send)], force=True)
+    if hasattr(os, "setsid"):
+        os.setsid()  # its own process group, so a cancel also ends its children
+    lock = threading.Lock()  # a batch's worker threads log while the main thread reports
+
+    def send(message: tuple) -> None:
+        with lock:
+            conn.send(message)
+
+    logging.basicConfig(level=logging.INFO, handlers=[_PipeHandler(send)], force=True)
     # Anything that resolves a bare name against the current folder (a model id that
     # might be a local folder, say) sees the workspace, not the server's folder.
     os.chdir(ws_dir)
@@ -71,20 +82,20 @@ def run_job(
     base = Path(ws_dir)
     context = operations.OperationContext(
         workspace=open_workspace(base),
-        on_progress=lambda done, total: conn.send(("progress", int(done), int(total))),
+        on_progress=lambda done, total: send(("progress", int(done), int(total))),
         cancelled=cancel.is_set,
-        path_check=lambda p: str(policy.authorize(who, p, base=base)),
-        on_notice=lambda level, message: conn.send(("notice", level, message)),
+        path_check=policy.path_check(who, base),
+        on_notice=lambda level, message: send(("notice", level, message)),
     )
     try:
         result = operations.run(name, request, context)
-        conn.send(("result", to_jsonable(result_data(result))))
+        send(("result", to_jsonable(result_data(result))))
     except Exception as e:  # noqa: BLE001 - every failure is reported to the server
         if isinstance(e, BioamlaError):
             error = {"type": type(e).__name__, "message": str(e)}
         else:
             logging.getLogger(__name__).exception("Job %s failed unexpectedly", name)
             error = {"type": "InternalError", "message": f"{type(e).__name__}: {e}"}
-        conn.send(("error", error))
+        send(("error", error))
     finally:
         conn.close()

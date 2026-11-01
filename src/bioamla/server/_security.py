@@ -12,6 +12,7 @@ import os
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from bioamla.exceptions import BioamlaError, ConfigError, InvalidInputError, NotFoundError
 
@@ -169,6 +170,11 @@ class PathPolicy:
         if not any(resolved == a or resolved.is_relative_to(a) for a in self.allowed):
             raise AccessDenied(f"{path} is outside the folders this server may use")
         return resolved
+
+    def path_check(self, identity: Identity, base: str | Path) -> Any:
+        """``check(path) -> str``: :meth:`authorize` for ``identity``, relative paths
+        against ``base``, as an operation context's ``path_check``."""
+        return lambda path: str(self.authorize(identity, path, base=base))
 
     def workspace_dir(self, identity: Identity, name: str) -> Path:
         """The directory of the workspace called ``name`` under the root.

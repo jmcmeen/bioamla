@@ -129,6 +129,9 @@ def test_bad_requests_are_refused_before_queueing(server, tmp_path):
     )
     assert got.status_code == 403
     assert client.app.state.jobs.jobs == {}
+    record = open_workspace(client.app.state.policy.root / "ws").history()[-1]
+    assert record["operation"] == "detect.energy" and record["ok"] is False
+    assert record["error"]["type"] == "AccessDenied"
 
 
 def test_unknown_jobs_and_tokens(server):
@@ -161,3 +164,52 @@ def _job(name, ws_dir):
     from bioamla.server.jobs import Job
 
     return Job(id=name, operation=name, workspace="ws", user="owner", request={}, ws_dir=ws_dir)
+
+
+def test_a_bad_message_fails_that_job_and_the_runner_goes_on(tmp_path):
+    from bioamla.server.jobs import JobRunner
+
+    runner = JobRunner(tmp_path)
+    job = _job("detect.energy", tmp_path)
+    job.status = "running"
+
+    class Conn:
+        def __init__(self):
+            self.sent = [("bogus",)]
+
+        def poll(self):
+            return bool(self.sent)
+
+        def recv(self):
+            return self.sent.pop()
+
+        def close(self):
+            pass
+
+    class Proc:
+        pid = None
+
+        def is_alive(self):
+            return True
+
+        def kill(self):
+            pass
+
+    job._conn, job._process = Conn(), Proc()
+    runner.jobs[job.id] = job
+    assert runner._tick() == [job]
+    assert job.status == "failed" and job.error["type"] == "WorkerError"
+    assert job.events[-1]["status"] == "failed"
+
+
+def test_old_finished_jobs_are_forgotten(tmp_path):
+    from bioamla.server.jobs import JobRunner
+
+    runner = JobRunner(tmp_path, keep_jobs=2)
+    for i in range(4):
+        job = _job(f"j{i}", tmp_path)
+        job.status, job.finished = "succeeded", float(i)
+        runner.jobs[job.id] = job
+    queued = runner.jobs.setdefault("q", _job("q", tmp_path))
+    runner._prune()
+    assert set(runner.jobs) == {"j2", "j3", queued.id}

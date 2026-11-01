@@ -92,6 +92,7 @@ class Job:
     ws_dir: Path | None = field(default=None, repr=False)
     request_obj: Any = field(default=None, repr=False)
     cancel_requested: float | None = field(default=None, repr=False)
+    _signalled: int = field(default=0, repr=False)
     _process: Any = field(default=None, repr=False)
     _conn: Any = field(default=None, repr=False)
     _cancel: Any = field(default=None, repr=False)
@@ -125,8 +126,13 @@ class JobRunner:
         root: The server's workspace root.
         linkable: Folders outside ``root`` that operations may use.
         max_jobs: How many jobs may run at once.
-        cancel_grace: Seconds a cancelled job gets to stop before its worker is ended.
+        cancel_grace: Seconds a cancelled job gets to stop before its worker is ended
+            (and as long again before it is killed).
         poll: Seconds between checks on the workers.
+        keep_jobs: Finished jobs kept for the job routes; older ones are forgotten
+            (their history records stay in their workspaces).
+        max_events: Events kept per job; past that, further progress and log events
+            are dropped (status events and the latest progress are always kept).
     """
 
     def __init__(
@@ -137,6 +143,8 @@ class JobRunner:
         max_jobs: int = 2,
         cancel_grace: float = 5.0,
         poll: float = 0.05,
+        keep_jobs: int = 200,
+        max_events: int = 5000,
     ) -> None:
         import multiprocessing
 
@@ -145,6 +153,8 @@ class JobRunner:
         self.max_jobs = max(1, max_jobs)
         self.cancel_grace = cancel_grace
         self.poll = poll
+        self.keep_jobs = keep_jobs
+        self.max_events = max_events
         self.jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._mp = multiprocessing.get_context("spawn")  # no fork of a threaded server
@@ -188,9 +198,14 @@ class JobRunner:
         return job
 
     def events_after(self, job: Job, after: int) -> tuple[list[dict[str, Any]], bool]:
-        """The job's events with ids above ``after``, and whether it has finished."""
-        with self._lock:
-            return [e for e in job.events if e["id"] > after], job.status in FINISHED
+        """The job's events with ids above ``after``, and whether it has finished.
+
+        Takes no lock, so it never waits on the runner (event ids are positions in the
+        list, which only grows, and a job's final event is added before its status
+        changes).
+        """
+        finished = job.status in FINISHED
+        return job.events[max(after, 0) :], finished
 
     def cancel(self, job_id: str) -> Job:
         """Ask the job to stop: a queued job is dropped, a running one asked to stop.
@@ -212,11 +227,17 @@ class JobRunner:
         """Stop the runner: queued jobs are dropped and running workers ended."""
         self._stop.set()
         with self._lock:
+            finished = []
             for job in self.jobs.values():
                 if job.status == RUNNING and job._process is not None:
-                    job._process.terminate()
+                    _signal(job._process, kill=False)
+                    job._process.join(timeout=self.cancel_grace)
+                    if job._process.is_alive():
+                        _signal(job._process, kill=True)
                 if job.status in (QUEUED, RUNNING):
                     self._finish(job, CANCELLED, error=_cancelled("The server stopped"))
+                    finished.append(job)
+        self._record(finished)
         if self._thread is not None:
             self._thread.join(timeout=5)
 
@@ -224,37 +245,62 @@ class JobRunner:
 
     def _pump(self) -> None:
         while not self._stop.is_set():
+            finished: list[Job] = []
             try:
                 with self._lock:
-                    self._tick()
+                    finished = self._tick()
+                    self._prune()
             except Exception:  # noqa: BLE001 - keep the runner alive
                 logger.exception("Job runner error")
+            self._record(finished)  # history I/O outside the lock
             self._stop.wait(self.poll)
 
-    def _tick(self) -> None:
-        running = [j for j in self.jobs.values() if j.status == RUNNING]
-        for job in running:
+    def _tick(self) -> list[Job]:
+        """Check every running job, start queued ones; the jobs that finished."""
+        finished = []
+        for job in [j for j in self.jobs.values() if j.status == RUNNING]:
+            try:
+                self._check(job)
+            except Exception as e:  # noqa: BLE001 - one bad job mustn't stop the rest
+                logger.exception("Job %s broke the runner's protocol", job.id)
+                _signal(job._process, kill=True)
+                self._finish(job, FAILED, error={"type": "WorkerError", "message": str(e)})
+            if job.status != RUNNING:
+                finished.append(job)
+        self._start_queued()
+        return finished
+
+    def _check(self, job: Job) -> None:
+        self._drain(job)
+        if job.status != RUNNING:
+            return
+        if not job._process.is_alive():
+            job._process.join()
             self._drain(job)
             if job.status != RUNNING:
-                continue
-            if not job._process.is_alive():
-                job._process.join()
-                self._drain(job)
-                if job.status == RUNNING:  # ended without a result
-                    if job.cancel_requested is not None:
-                        self._finish(job, CANCELLED, error=_cancelled())
-                    else:
-                        code = job._process.exitcode
-                        self._finish(job, FAILED, error={
-                            "type": "WorkerError",
-                            "message": f"The worker exited with code {code} before finishing",
-                        })  # fmt: skip
-            elif (
-                job.cancel_requested is not None
-                and time.time() - job.cancel_requested > self.cancel_grace
-            ):
-                job._process.terminate()
-        self._start_queued()
+                return
+            if job.cancel_requested is not None:  # ended without a result
+                self._finish(job, CANCELLED, error=_cancelled())
+            else:
+                code = job._process.exitcode
+                self._finish(job, FAILED, error={
+                    "type": "WorkerError",
+                    "message": f"The worker exited with code {code} before finishing",
+                })  # fmt: skip
+        elif job.cancel_requested is not None:
+            waited = time.time() - job.cancel_requested
+            if waited > 2 * self.cancel_grace and job._signalled < 2:
+                _signal(job._process, kill=True)
+                job._signalled = 2
+            elif waited > self.cancel_grace and job._signalled < 1:
+                _signal(job._process, kill=False)
+                job._signalled = 1
+
+    def _prune(self) -> None:
+        done = sorted((j for j in self.jobs.values() if j.status in FINISHED),
+                      key=lambda j: j.finished or 0)  # fmt: skip
+        for job in done[: max(0, len(done) - self.keep_jobs)]:
+            del self.jobs[job.id]
 
     def _start_queued(self) -> None:
         running = [j for j in self.jobs.values() if j.status == RUNNING]
@@ -278,7 +324,9 @@ class JobRunner:
             args=(send, job._cancel, job.operation, job.request, str(job.ws_dir),
                   str(self.root), [str(p) for p in self.linkable], job.user),
             name=f"bioamla-job-{job.id[:8]}",
-            daemon=True,
+            # Not a daemon: a daemonic process can't start its own (e.g. a torch
+            # DataLoader's workers). close() ends workers when the server stops.
+            daemon=False,
         )  # fmt: skip
         job._process.start()
         send.close()  # the worker holds the only sending end, so EOF means it's gone
@@ -294,50 +342,76 @@ class JobRunner:
                 if job.status != RUNNING:
                     return
         except (EOFError, OSError):
-            pass
+            pass  # the worker is gone; _check decides how it ended
 
     def _handle(self, job: Job, message: tuple) -> None:
         kind, *rest = message
         if kind == "progress":
             done, total = rest
             job.progress = {"done": done, "total": total}
-            self._event(job, "progress", done=done, total=total)
+            if len(job.events) < self.max_events:
+                self._event(job, "progress", done=done, total=total)
         elif kind in ("notice", "log"):
             level, text = rest
-            self._event(job, kind, level=level, message=text)
+            if kind == "notice" or len(job.events) < self.max_events:
+                self._event(job, kind, level=level, message=text)
         elif kind == "result":
             self._finish(job, SUCCEEDED, result=rest[0])
         elif kind == "error":
             error = rest[0]
             status = CANCELLED if error.get("type") == "OperationCancelled" else FAILED
             self._finish(job, status, error=error)
+        else:
+            raise ValueError(f"Unexpected message from the worker: {kind!r}")
 
     def _finish(
         self, job: Job, status: str, *, result: Any = None, error: dict | None = None
     ) -> None:
+        # Result and final event first, status last: a reader that sees the job
+        # finished also sees its result and its last event.
+        job.result, job.error, job.finished = result, error, time.time()
+        if job._conn is not None:
+            job._conn.close()
+        self._event(job, "status", status=status, result=result, error=error)
+        job.status = status
+
+    def _record(self, jobs: list[Job]) -> None:
+        """Add the finished ``jobs`` that ran to their workspaces' history."""
         from bioamla.server.operations_api import record_server_run
         from bioamla.workspace import open_workspace
 
-        job.status, job.finished = status, time.time()
-        job.result, job.error = result, error
-        if job._conn is not None:
-            job._conn.close()
-        payload = {"status": status, "result": result, "error": error}
-        self._event(job, "status", **payload)
-        if job.started is None:
-            return  # never ran: nothing to record
-        try:
-            ws = open_workspace(job.ws_dir)
-        except Exception:  # noqa: BLE001 - history must never fail a job
-            logger.warning("Couldn't open %s to record job %s", job.ws_dir, job.id, exc_info=True)
-            return
-        record_server_run(
-            ws, job.operation, job.request_obj, user=job.user, started=job.started,
-            ok=status == SUCCEEDED, error=error, result=result, job_id=job.id,
-        )  # fmt: skip
+        for job in jobs:
+            if job.started is None:
+                continue  # never ran: nothing to record
+            try:
+                ws = open_workspace(job.ws_dir)
+            except Exception:  # noqa: BLE001 - history must never fail a job
+                logger.warning("Couldn't open %s to record job %s", job.ws_dir, job.id,
+                               exc_info=True)  # fmt: skip
+                continue
+            record_server_run(
+                ws, job.operation, job.request_obj, user=job.user, started=job.started,
+                ok=job.status == SUCCEEDED, error=job.error, result=job.result, job_id=job.id,
+            )  # fmt: skip
 
     def _event(self, job: Job, kind: str, **data: Any) -> None:
         job.events.append({"id": len(job.events) + 1, "event": kind, "time": time.time(), **data})
+
+
+def _signal(process: Any, kill: bool) -> None:
+    """Ask a worker to stop (SIGTERM), or kill it, with its own child processes."""
+    import os
+    import signal
+
+    if process is None or process.pid is None:
+        return
+    if hasattr(os, "killpg"):
+        try:  # the worker leads its own process group (see run_job)
+            os.killpg(process.pid, signal.SIGKILL if kill else signal.SIGTERM)
+            return
+        except OSError:
+            pass
+    process.kill() if kill else process.terminate()
 
 
 def _cancelled(message: str = "Cancelled") -> dict[str, str]:
@@ -353,10 +427,19 @@ def add_job_routes(app: Any, api_version: str, envelope: Any, runner: JobRunner)
 
     def submit_job(ws_dir: Path, name: str, request: Any, who: Any) -> JSONResponse:
         from bioamla import operations
-        from bioamla.server.operations_api import operation_context
+        from bioamla.server.operations_api import operation_context, record_server_run
 
         # Check the request's paths now, so a bad one is a 403 rather than a failed job.
-        operations.prepare(name, request, operation_context(app, who, ws_dir))
+        # The worker gets the request as sent and checks it again.
+        context = operation_context(app, who, ws_dir)
+        started = time.time()
+        try:
+            operations.prepare(name, request, context)
+        except Exception as e:
+            error = {"type": type(e).__name__, "message": str(e)}
+            record_server_run(context.workspace, name, request, user=who.user,
+                              started=started, ok=False, error=error)  # fmt: skip
+            raise
         job = runner.submit(ws_dir, ws_dir.name, name, request, who.user)
         return JSONResponse(status_code=202, content=envelope(job.to_dict()))
 
