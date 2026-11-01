@@ -191,6 +191,33 @@ class PathPolicy:
             AccessDenied: If the workspace, or its metadata, resolves outside the root.
             NotFoundError: If there's no such workspace.
         """
+        path = self._workspace_path(identity, name)
+        from bioamla.workspace import WORKSPACE_DIR, is_workspace
+
+        if not is_workspace(path):
+            raise NotFoundError(f"No workspace {name!r}")
+        meta = path / WORKSPACE_DIR
+        for item in (meta, meta / "workspace.toml"):
+            if not item.resolve().is_relative_to(path / WORKSPACE_DIR):
+                raise AccessDenied(f"Workspace {name!r} has metadata outside the workspace")
+        return path
+
+    def new_workspace_dir(self, identity: Identity, name: str) -> Path:
+        """Where a new workspace called ``name`` goes: a folder directly under the root.
+
+        Raises:
+            InvalidInputError: If ``name`` isn't a plain folder name.
+            AccessDenied: If it would resolve outside the root.
+            WorkspaceError: If something already exists there.
+        """
+        from bioamla.exceptions import WorkspaceError
+
+        path = self._workspace_path(identity, name)
+        if path.exists() or path.is_symlink():
+            raise WorkspaceError(f"{name!r} already exists on this server")
+        return path
+
+    def _workspace_path(self, identity: Identity, name: str) -> Path:
         if (
             not name
             or name in (".", "..")
@@ -202,12 +229,4 @@ class PathPolicy:
         path = self.authorize(identity, name)
         if path.parent != self.root:  # e.g. a symlink under the root pointing elsewhere
             raise AccessDenied(f"Workspace {name!r} is not inside the workspace root")
-        from bioamla.workspace import WORKSPACE_DIR, is_workspace
-
-        if not is_workspace(path):
-            raise NotFoundError(f"No workspace {name!r}")
-        meta = path / WORKSPACE_DIR
-        for item in (meta, meta / "workspace.toml"):
-            if not item.resolve().is_relative_to(path / WORKSPACE_DIR):
-                raise AccessDenied(f"Workspace {name!r} has metadata outside the workspace")
         return path

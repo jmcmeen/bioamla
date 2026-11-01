@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Server workspace and file routes: list the workspaces under the server root and create
+  one (`GET`/`POST /v1/workspaces`), a workspace's status (`GET /v1/workspaces/{ws}`), its
+  settings (`GET .../config`, `PUT`/`DELETE .../config/{key}`, keys checked against the
+  operations' request fields), and its files: list a folder (`GET .../files?path=&recursive=`),
+  download (`GET .../files/{path}`) and upload (`PUT .../files/{path}`, streamed to disk,
+  `?overwrite=true` to replace). Every path must stay inside the workspace root or a
+  linkable folder, and uploads can't touch a workspace's `.bioamla` folder.
+- `Workspace.settings()`, `set_setting()`, `unset_setting()` and `list_files()`.
+
 - Server jobs: a job-kind operation posted to the server is queued and answered at once
   (`202`, with the job), then runs in its own worker process, so a crash or a cancel can't
   take the server down. `GET /v1/jobs` and `/v1/jobs/{id}` report status, progress and the

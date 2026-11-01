@@ -534,6 +534,96 @@ class Workspace:
         """:meth:`to_dict` plus the last ``last_runs`` run records (``last_runs``)."""
         return {**self.to_dict(), "last_runs": self.history(limit=last_runs)}
 
+    def settings(self) -> dict[str, Any]:
+        """This workspace's own settings (``config.toml``) as dotted keys, e.g.
+        ``{"detect.energy.threshold_db": -25}``.
+
+        Raises:
+            ConfigError: If the file can't be read.
+        """
+        from bioamla.common.settings import flatten, read_settings_file
+
+        path = self.config_path
+        return flatten(read_settings_file(path)) if path.is_file() else {}
+
+    def set_setting(self, key: str, value: Any) -> None:
+        """Set the dotted ``key`` to ``value`` in this workspace's ``config.toml``.
+
+        The value is stored as given (no conversion to an option's type; the CLI's
+        ``workspace config set`` does that). Comments in the file are not kept.
+
+        Raises:
+            ConfigError: If the file can't be read, or ``key`` or ``value`` can't be
+                stored (e.g. a key that is also a table).
+        """
+        from bioamla.common.settings import dump_toml, read_settings_file, set_dotted
+
+        with self._locked():
+            settings = read_settings_file(self.config_path) if self.config_path.is_file() else {}
+            set_dotted(settings, key, value)
+            write_text_atomic(self.config_path, dump_toml(settings))
+
+    def unset_setting(self, key: str) -> bool:
+        """Remove the dotted ``key`` from this workspace's ``config.toml``.
+
+        Returns:
+            Whether it was set.
+        """
+        from bioamla.common.settings import dump_toml, read_settings_file, unset_dotted
+
+        with self._locked():
+            if not self.config_path.is_file():
+                return False
+            settings = read_settings_file(self.config_path)
+            removed = unset_dotted(settings, key)
+            if removed:
+                write_text_atomic(self.config_path, dump_toml(settings))
+        return removed
+
+    def list_files(self, path: str | Path = ".", recursive: bool = False) -> list[dict[str, Any]]:
+        """The files and folders in ``path`` (relative to the workspace, or absolute),
+        sorted, leaving out the workspace's ``.bioamla`` folder. Links to folders are
+        listed but not followed.
+
+        Returns:
+            One ``{"path", "type", "size", "modified"}`` per entry: ``path`` relative
+            to the workspace where it's inside it, ``type`` ``"file"``, ``"dir"`` or
+            ``"link"`` (a link to a folder), ``size`` in bytes for files and
+            ``modified`` as epoch seconds.
+
+        Raises:
+            NotFoundError: If ``path`` isn't a folder.
+        """
+        start = Path(path)
+        if not start.is_absolute():
+            start = self.root / start
+        if not start.is_dir():
+            raise NotFoundError(f"No folder {path}")
+        meta = self.dir.resolve()
+        entries: list[dict[str, Any]] = []
+
+        def visit(folder: Path) -> None:
+            for child in sorted(folder.iterdir()):
+                if child.resolve() == meta:
+                    continue
+                try:
+                    stat = child.stat()
+                except OSError:
+                    continue  # a broken link
+                is_link_dir = child.is_symlink() and child.is_dir()
+                kind = "link" if is_link_dir else "dir" if child.is_dir() else "file"
+                entries.append({
+                    "path": self.relative(child),
+                    "type": kind,
+                    "size": stat.st_size if kind == "file" else None,
+                    "modified": stat.st_mtime,
+                })  # fmt: skip
+                if recursive and kind == "dir":
+                    visit(child)
+
+        visit(start)
+        return entries
+
     def to_dict(self) -> dict[str, Any]:
         """Workspace metadata and a count of artifacts per kind."""
         counts: dict[str, int] = {}

@@ -78,7 +78,7 @@ def _error(status: int, error_type: str, message: str) -> JSONResponse:
     )  # fmt: skip
 
 
-_HTTP_ERROR_TYPES = {404: "NotFoundError", 405: "MethodNotAllowed"}
+_HTTP_ERROR_TYPES = {404: "NotFoundError", 405: "MethodNotAllowed", 409: "Conflict"}
 
 
 def create_app(config: ServerConfig) -> FastAPI:
@@ -177,6 +177,9 @@ def create_app(config: ServerConfig) -> FastAPI:
     from bioamla.server.operations_api import add_operation_routes
 
     add_job_routes(app, API_VERSION, envelope, runner)
+    from bioamla.server.workspaces_api import add_workspace_routes
+
+    add_workspace_routes(app, API_VERSION, envelope)
 
     app.state.operations = add_operation_routes(app, API_VERSION, envelope)
 
