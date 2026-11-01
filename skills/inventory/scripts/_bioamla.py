@@ -16,7 +16,7 @@ import json
 import os
 import shlex
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +58,7 @@ def run(*args: str, cwd: str | Path | None = None) -> Any:
 
 def run_dir(skill: str, root: str | Path = ".") -> Path:
     """A new ``runs/<skill>/<UTC timestamp>/`` folder under ``root`` (the workspace)."""
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     base = Path(root) / "runs" / skill
     path = base / stamp
     n = 1

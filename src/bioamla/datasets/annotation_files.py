@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -110,7 +110,7 @@ def annotation_template(
         "sample_rate": info.sample_rate,
         "duration": round(info.duration, 6),
         "channels": info.channels,
-        "created": datetime.now(timezone.utc).isoformat(),
+        "created": datetime.now(UTC).isoformat(),
     }
     save_annotations(annotations, output_path, fmt, metadata=metadata)
     return AnnotationTemplate(

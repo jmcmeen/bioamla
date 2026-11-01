@@ -179,10 +179,8 @@ def dump_toml(settings: dict[str, Any]) -> str:
 def parse_value(text: str) -> Any:
     """A command-line value as TOML would read it (``-25`` -> int, ``true`` -> bool,
     ``[1, 2]`` -> list); anything that isn't a TOML literal is a string."""
-    from bioamla.common.config import tomllib
+    import tomllib
 
-    if tomllib is None:  # pragma: no cover - Python < 3.11 without tomli
-        return text
     try:
         return tomllib.loads(f"v = {text}")["v"]
     except tomllib.TOMLDecodeError:
