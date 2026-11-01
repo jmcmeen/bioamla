@@ -277,8 +277,10 @@ These were deprecated in 0.3.x and are breaking changes:
   `datasets` decoded the training audio through torchcodec. Training audio is now decoded
   by bioamla's own loader (`bioamla.ml.training.decode_example_audio`), local datasets keep
   plain file paths, and a Hub dataset's audio column is left undecoded for it (#256). A
-  folder of class subfolders is read by bioamla too, so its classes keep their folder
-  names as labels. Training with DataLoader workers on macOS and Windows (spawned workers)
+  folder of class subfolders is read by bioamla too (labels are the folder names, audio may
+  sit in nested folders), as is one split into `train/` and `test/` (or `val/`) folders of
+  class folders, which becomes a fixed split. A missing decoder (no ffmpeg for MP3) is
+  reported instead of every file being dropped as unreadable. Training with DataLoader workers on macOS and Windows (spawned workers)
   failed to pickle the dataset's transform; it is now a module-level
   `bioamla.ml.training.BatchPreprocessor`.
 

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from bioamla.common.log import log_fields
-from bioamla.exceptions import TrainingCancelled, TrainingError
+from bioamla.exceptions import DependencyError, TrainingCancelled, TrainingError
 from bioamla.ml.ast_service import TrainProgress, TrainResult
 from bioamla.protocols import ExperimentTracker, OnTrainProgress, RunStatus, ShouldStop
 
@@ -49,8 +49,9 @@ _SPLIT_ALIAS = {
 }
 
 
-def decode_example_audio(audio: str | dict[str, Any], sampling_rate: int) -> Any:
-    """A training example's audio as a mono float32 array at ``sampling_rate``.
+def decode_example_audio(audio: str | dict[str, Any], sampling_rate: int | None) -> Any:
+    """A training example's audio as a mono float32 array at ``sampling_rate`` (``None``:
+    as stored).
 
     ``audio`` is a file path (local datasets), or a ``datasets`` audio value left
     undecoded (``{"path", "bytes"}``): the file at ``path``, or the encoded ``bytes``
@@ -60,6 +61,7 @@ def decode_example_audio(audio: str | dict[str, Any], sampling_rate: int) -> Any
 
     Raises:
         AudioLoadError: If the audio can't be decoded.
+        DependencyError: If decoding needs something that isn't installed (ffmpeg).
     """
     import io
     import os
@@ -93,7 +95,7 @@ def decode_example_audio(audio: str | dict[str, Any], sampling_rate: int) -> Any
         wave, sr = load_audio(path)
     else:
         raise AudioLoadError("A training example has no audio (no path or bytes)")
-    if sr != sampling_rate:
+    if sampling_rate is not None and sr != sampling_rate:
         wave = resample_audio(wave, sr, sampling_rate)
     return np.asarray(wave, dtype=np.float32)
 
@@ -120,7 +122,7 @@ class BatchPreprocessor:
         return {name: inputs.get(name), "labels": list(batch["labels"])}
 
 
-def _dataframe_to_ast_dataset(df, label_column, sampling_rate=SAMPLING_RATE):
+def _dataframe_to_ast_dataset(df, label_column):
     """Build an HF ``Dataset`` (or ``DatasetDict`` when a usable ``split`` column exists).
 
     When every row carries a recognized split value, a ``DatasetDict`` is returned
@@ -136,16 +138,12 @@ def _dataframe_to_ast_dataset(df, label_column, sampling_rate=SAMPLING_RATE):
 
     cols = ["audio", label_column]
 
-    def _flat():
-        ds = Dataset.from_pandas(df[cols], preserve_index=False)
-        return ds
-
     if "split" not in df.columns:
-        return _flat(), False
+        return Dataset.from_pandas(df[cols], preserve_index=False), False
 
     normalized = df["split"].astype(str).str.strip().str.lower().map(_SPLIT_ALIAS)
     if normalized.isna().any():
-        return _flat(), False
+        return Dataset.from_pandas(df[cols], preserve_index=False), False
 
     splits: dict = {}
     for split_key, group in df.groupby(normalized):
@@ -184,10 +182,10 @@ def _validate_augmentation(aug: WaveformAugmentationConfig) -> None:
 
 
 def _load_train_dataset(train_dataset: str, split: str, category_label_column: str):
-    """Resolve ``train_dataset`` (CSV / audiofolder dir / HF id) into a dataset.
+    """Resolve ``train_dataset`` (CSV / folder of class folders / HF id) into a dataset.
 
     Returns ``(dataset, category_label_column)`` — the label column may be
-    rewritten (e.g. ``"label"`` for an audiofolder, or the detected CSV column).
+    rewritten (``"label"`` for a folder of class folders, or the detected CSV column).
     """
     from datasets import load_dataset
 
@@ -201,7 +199,7 @@ def _load_train_dataset(train_dataset: str, split: str, category_label_column: s
             # extract-clips`/`partition` or `catalogs hf pull-dataset`) is loaded
             # via that CSV, so a populated `split` column and the reorganized
             # `train/val/test/<label>/` layout from `partition --mode subdirs` are
-            # both honored. Otherwise fall back to the AudioFolder convention.
+            # both honored. Otherwise the folder's class subfolders are the labels.
             metadata_csv = train_path / "metadata.csv"
             if metadata_csv.exists():
                 return _load_csv_dataset(metadata_csv, category_label_column)
@@ -279,28 +277,41 @@ def _load_csv_dataset(train_path: Path, category_label_column: str):
 def _load_directory_dataset(
     train_path: Path, train_dataset: str, split: str, category_label_column: str
 ):
-    """Load an audiofolder-style directory (class-named subdirectories)."""
+    """Load a folder of class subfolders (``<dir>/<label>/**/*.wav``), or one split into
+    split folders (``<dir>/train/<label>/...``, ``<dir>/test/<label>/...``).
 
-    subdirs = [d for d in train_path.iterdir() if d.is_dir()]
+    The labels are the class folders' names; audio stays as file paths, decoded by
+    :func:`decode_example_audio`. Split folders become a fixed split (as a CSV's
+    ``split`` column does), so ``split`` is not used here.
+    """
+    import pandas as pd
+
     audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
 
-    if subdirs:
-        has_audio_in_subdirs = any(
-            any(f.suffix.lower() in audio_extensions for f in subdir.iterdir() if f.is_file())
-            for subdir in subdirs
+    def audio_files(folder: Path) -> list[Path]:
+        return sorted(
+            f for f in folder.rglob("*") if f.is_file() and f.suffix.lower() in audio_extensions
         )
-        if has_audio_in_subdirs:
-            import pandas as pd
 
-            logger.info(f"Loading from class directories: {train_dataset}")
-            logger.info(f"Found class directories: {[d.name for d in subdirs]}")
-            rows = [
-                {"audio": str(f), "label": subdir.name}
-                for subdir in sorted(subdirs)
-                for f in sorted(subdir.rglob("*"))
-                if f.is_file() and f.suffix.lower() in audio_extensions
-            ]
-            dataset, _ = _dataframe_to_ast_dataset(pd.DataFrame(rows), "label")
+    subdirs = sorted(d for d in train_path.iterdir() if d.is_dir())
+    if subdirs:
+        split_dirs = [d for d in subdirs if d.name.lower() in _SPLIT_ALIAS]
+        rows = []
+        if split_dirs and len(split_dirs) == len(subdirs):
+            for split_dir in split_dirs:
+                for class_dir in sorted(d for d in split_dir.iterdir() if d.is_dir()):
+                    rows += [{"audio": str(f), "label": class_dir.name, "split": split_dir.name}
+                             for f in audio_files(class_dir)]  # fmt: skip
+            layout = "split folders"
+        else:
+            for class_dir in subdirs:
+                rows += [{"audio": str(f), "label": class_dir.name} for f in audio_files(class_dir)]
+            layout = "class folders"
+        if rows:
+            df = pd.DataFrame(rows)
+            logger.info(f"Loading from {layout}: {train_dataset}")
+            logger.info(f"Found classes: {sorted(df['label'].unique())}")
+            dataset, _ = _dataframe_to_ast_dataset(df, "label")
             return dataset, "label"
         raise TrainingError(
             f"Directory {train_dataset} has subdirectories but they don't contain audio files. "
@@ -685,10 +696,6 @@ def train_ast(
     pretrained_model = base_model
     feature_extractor = ASTFeatureExtractor.from_pretrained(pretrained_model)
     model_input_name = feature_extractor.model_input_names[0]
-    sampling_rate = feature_extractor.sampling_rate
-
-    def waves(batch) -> list:
-        return [decode_example_audio(audio, sampling_rate) for audio in batch["input_values"]]
 
     preprocess_audio = BatchPreprocessor(feature_extractor)
 
@@ -755,8 +762,10 @@ def train_ast(
 
     def is_valid_audio(example):
         try:
-            decode_example_audio(example["input_values"], sampling_rate)
+            decode_example_audio(example["input_values"], None)  # readable? (no resampling)
             return True
+        except DependencyError:
+            raise  # e.g. no ffmpeg for MP3: say so instead of dropping every file
         except Exception:  # noqa: BLE001 - any unreadable file is filtered out
             return False
 
@@ -787,9 +796,7 @@ def train_ast(
             raise TrainingError("No valid audio samples found in training dataset after filtering")
 
         def compute_stats(batch):
-            wavs = waves(batch)
-            inputs = feature_extractor(wavs, sampling_rate=sampling_rate, return_tensors="pt")
-            values = inputs.get(model_input_name)
+            values = preprocess_audio(batch)[model_input_name]
             means = [float(torch.mean(values[i])) for i in range(values.shape[0])]
             stds = [float(torch.std(values[i])) for i in range(values.shape[0])]
             return {"_mean": means, "_std": stds}

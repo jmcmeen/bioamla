@@ -286,6 +286,27 @@ class TestLoadDirectoryDataset:
         assert [Path(p).name for p in ds["audio"]] == ["a.wav", "b.flac", "c.wav"]
         assert ds.features["audio"].dtype == "string"
 
+    def test_class_folders_with_only_nested_audio(self, tmp_path) -> None:
+        from bioamla.ml.training import _load_directory_dataset
+
+        for label in ("frog", "toad"):
+            (tmp_path / label / "site1").mkdir(parents=True)
+            (tmp_path / label / "site1" / "a.wav").write_bytes(b"RIFF....")
+        ds, _ = _load_directory_dataset(tmp_path, str(tmp_path), "train", "category")
+        assert ds["label"] == ["frog", "toad"]
+
+    def test_split_folders_become_a_fixed_split(self, tmp_path) -> None:
+        from bioamla.ml.training import _load_directory_dataset
+        from datasets import DatasetDict
+
+        for split, label, name in (("train", "frog", "a"), ("train", "toad", "b"),
+                                   ("test", "frog", "c"), ("test", "toad", "d")):  # fmt: skip
+            (tmp_path / split / label).mkdir(parents=True, exist_ok=True)
+            (tmp_path / split / label / f"{name}.wav").write_bytes(b"RIFF....")
+        ds, col = _load_directory_dataset(tmp_path, str(tmp_path), "train", "category")
+        assert isinstance(ds, DatasetDict) and set(ds) == {"train", "test"}
+        assert ds["train"]["label"] == ["frog", "toad"] and len(ds["test"]) == 2
+
     def test_csv_in_directory_hint(self, tmp_path) -> None:
         from bioamla.ml.training import _load_directory_dataset
 
@@ -543,18 +564,15 @@ class TestTrainingHelpers:
 # ---------------------------------------------------------------------------
 
 
-def _real_dataset_dict():
+def _real_dataset_dict(folder):
     """A tiny DatasetDict of real (silent, synthetic) WAV files, as local datasets hold
     them: paths, decoded by bioamla. Real ``Dataset``/``DatasetDict`` objects keep
     train_ast's ``isinstance`` checks happy, and nothing touches the network."""
-    import tempfile
-
     import numpy as np
     import soundfile as sf
 
     from datasets import Dataset, DatasetDict
 
-    folder = tempfile.mkdtemp(prefix="bioamla-train-")
     for c in "abcd":
         sf.write(f"{folder}/{c}.wav", np.zeros(16000, dtype=np.float32), 16000)
 
@@ -578,7 +596,7 @@ class TestTrainAst:
             train_ast(train_dataset="owner/ds", augmentation=bad)
 
     @staticmethod
-    def _mocks(fake_trainer, trainer_cls=None):
+    def _mocks(fake_trainer, folder, trainer_cls=None):
         """The heavy-dependency patches shared by the mocked full-loop tests."""
         from contextlib import ExitStack
 
@@ -595,7 +613,7 @@ class TestTrainAst:
         fake_config = SimpleNamespace(num_labels=2, label2id={}, id2label={})
         stack = ExitStack()
         for target, value in [
-            ("bioamla.ml.training._load_train_dataset", (_real_dataset_dict(), "category")),
+            ("bioamla.ml.training._load_train_dataset", (_real_dataset_dict(folder), "category")),
             ("transformers.ASTFeatureExtractor.from_pretrained", _FE()),
             ("transformers.ASTConfig.from_pretrained", fake_config),
             ("transformers.ASTForAudioClassification.from_pretrained", MagicMock()),
@@ -631,7 +649,7 @@ class TestTrainAst:
             fake_trainer.train.side_effect = train
             return fake_trainer
 
-        with self._mocks(fake_trainer, trainer_cls=MagicMock(side_effect=make_trainer)):
+        with self._mocks(fake_trainer, tmp_path, trainer_cls=MagicMock(side_effect=make_trainer)):
             with pytest.raises(TrainingCancelled):
                 train_ast(
                     train_dataset="owner/ds",
@@ -651,7 +669,7 @@ class TestTrainAst:
         from bioamla.ml.training import train_ast
 
         trainer_cls = MagicMock()
-        with self._mocks(MagicMock(), trainer_cls=trainer_cls):
+        with self._mocks(MagicMock(), tmp_path, trainer_cls=trainer_cls):
             with pytest.raises(TrainingCancelled, match="before loading the dataset"):
                 train_ast(
                     train_dataset="owner/ds",
@@ -663,6 +681,19 @@ class TestTrainAst:
         # No "started" record, so no run is left without a status record.
         assert "Training run" not in caplog.text
 
+    def test_a_missing_decoder_is_reported_not_filtered(self, tmp_path) -> None:
+        from bioamla.exceptions import DependencyError
+        from bioamla.ml.training import train_ast
+
+        missing = DependencyError("ffmpeg is missing")
+        with (
+            self._mocks(MagicMock(), tmp_path),
+            patch("bioamla.ml.training.decode_example_audio", side_effect=missing),
+            pytest.raises(DependencyError, match="ffmpeg"),
+        ):
+            train_ast(train_dataset="owner/ds", training_dir=str(tmp_path),
+                      dataloader_num_workers=1)  # fmt: skip
+
     def test_full_loop_mocked(self, tmp_path) -> None:
         from bioamla.ml.training import train_ast
 
@@ -672,7 +703,7 @@ class TestTrainAst:
         )
         fake_trainer.accelerator = None
 
-        with self._mocks(fake_trainer):
+        with self._mocks(fake_trainer, tmp_path):
             result = train_ast(
                 train_dataset="owner/ds",
                 training_dir=str(tmp_path),
@@ -712,7 +743,7 @@ class TestTrainAst:
             return fake_trainer
 
         tracker = MagicMock()
-        with self._mocks(fake_trainer, trainer_cls=MagicMock(side_effect=make_trainer)):
+        with self._mocks(fake_trainer, tmp_path, trainer_cls=MagicMock(side_effect=make_trainer)):
             result = train_ast(
                 train_dataset="owner/ds",
                 training_dir=str(tmp_path),
@@ -756,7 +787,7 @@ class TestTrainAst:
 
         tracker = MagicMock()
         expected = TrainingCancelled if outcome == "cancelled" else RuntimeError
-        with self._mocks(fake_trainer, trainer_cls=MagicMock(side_effect=make_trainer)):
+        with self._mocks(fake_trainer, tmp_path, trainer_cls=MagicMock(side_effect=make_trainer)):
             with pytest.raises(expected):
                 train_ast(
                     train_dataset="owner/ds",
@@ -785,7 +816,7 @@ class TestTrainAst:
                 raise OSError("disk full")
             return real_write(self, *args, **kwargs)
 
-        with self._mocks(fake_trainer), patch.object(Path, "write_text", write_text):
+        with self._mocks(fake_trainer, tmp_path), patch.object(Path, "write_text", write_text):
             result = train_ast(
                 train_dataset="owner/ds",
                 training_dir=str(tmp_path),
@@ -821,6 +852,11 @@ class TestDecodeExampleAudio:
         from_dict = decode_example_audio({"path": str(tone), "bytes": None}, 16000)
         from_bytes = decode_example_audio({"path": "tone.wav", "bytes": tone.read_bytes()}, 16000)
         assert len(from_dict) == len(from_bytes) == 16000
+
+    def test_without_a_rate_the_audio_is_not_resampled(self, tone) -> None:
+        from bioamla.ml.training import decode_example_audio
+
+        assert len(decode_example_audio(str(tone), None)) == 8000
 
     def test_missing_audio_is_an_error(self, tmp_path) -> None:
         from bioamla.exceptions import AudioLoadError
