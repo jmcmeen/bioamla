@@ -33,10 +33,11 @@ def skill_script(skill: str, script: str) -> Path:
 
 @pytest.fixture
 def run_skill():
-    """``run_skill(skill, script, *args, cwd=workspace)`` -> (exit code, parsed stdout)."""
-    env = {**os.environ, "BIOAMLA_BIN": bioamla_bin()}
+    """``run_skill(skill, script, *args, cwd=workspace)`` -> (exit code, parsed stdout).
+    The script gets this process's environment as it is at the call."""
 
     def run(skill: str, script: str, *args: str, cwd: Path) -> tuple[int, dict]:
+        env = {**os.environ, "BIOAMLA_BIN": bioamla_bin()}
         proc = subprocess.run(
             [sys.executable, str(skill_script(skill, script)), *map(str, args)],
             cwd=cwd,

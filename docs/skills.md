@@ -30,6 +30,11 @@ order, and what to report.
   rows are marked `labeled_by=agent`.
 - **Paths are relative to the workspace root**, and each run writes into its own folder,
   `runs/<skill>/<timestamp>/`.
+- **Files belong to the workspace the commands run in.** With a remote set
+  (`BIOAMLA_REMOTE`, a workspace's `remote` setting, or a script's `--remote`), bioamla
+  commands run on the server, so a script's own files go there too: `_bioamla.py`'s
+  `save_json()` and `publish()` upload what a step writes, and `fetch()` brings a server
+  file down to merge into (`bioamla remote current` says which remote is in effect).
 - **Print a JSON summary** on standard output (and `{"error": ...}` with a non-zero exit
   when a bioamla command fails), so the agent reads results, not prose.
 - **Standard library only.** A script needs Python and `bioamla` on the `PATH`

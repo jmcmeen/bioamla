@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _bioamla import read_json, write_json  # noqa: E402
+from _bioamla import BioamlaCommandError, read_json, save_json, use_remote  # noqa: E402
 
 KINDS = {
     "label": "vocabulary",
@@ -64,13 +64,14 @@ def queue(run_folder: str, root: str = ".") -> dict:
                 "box": crop.get("box"),
             }
         )
-    write_json(
-        folder / "review_queue.json",
+    save_json(
+        (Path(run_folder) / "review_queue.json").as_posix(),
         {
             "annotations": decided["annotations"],
             "thresholds": decided["thresholds"],
             "items": items,
         },
+        root,
     )
     reasons = Counter(kind(r) for item in items for r in item["reasons"])
     return {
@@ -86,11 +87,18 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("run_dir", help="The run folder (after annotate.py)")
     p.add_argument("--root", default=".", help="Workspace root (default: here)")
+    p.add_argument("--remote", default=None, metavar="NAME:WORKSPACE",
+                   help="Run on this server workspace (default: $BIOAMLA_REMOTE or the "
+                   "workspace's settings)")  # fmt: skip
     args = p.parse_args(argv)
+    use_remote(args.remote)
     try:
         summary = queue(args.run_dir, args.root)
     except FileNotFoundError as e:
         print(json.dumps({"error": f"Run the earlier steps first: {e}"}))
+        return 1
+    except BioamlaCommandError as e:
+        print(json.dumps({"error": str(e)}))
         return 1
     print(json.dumps(summary, indent=2))
     return 0

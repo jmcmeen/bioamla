@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _bioamla import BioamlaCommandError, read_json, run, write_json  # noqa: E402
+from _bioamla import BioamlaCommandError, read_json, run, save_json, use_remote  # noqa: E402
 
 
 def _num(value: float) -> str:
@@ -83,7 +83,7 @@ def crop(run_folder: str, pad: float = 0.5, kind: str = "stft", root: str = ".")
                 "box_drawn": boxed,
             }
         )
-    write_json(Path(root) / folder / "crops.json", {"pad": pad, "type": kind, "crops": crops})
+    save_json((folder / "crops.json").as_posix(), {"pad": pad, "type": kind, "crops": crops}, root)
     return {"run_dir": run_folder, "crops": len(crops), "folder": (folder / "crops").as_posix()}
 
 
@@ -94,7 +94,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--type", dest="kind", choices=["stft", "mel"], default="stft",
                    help="Spectrogram type")  # fmt: skip
     p.add_argument("--root", default=".", help="Workspace root (default: here)")
+    p.add_argument("--remote", default=None, metavar="NAME:WORKSPACE",
+                   help="Run on this server workspace (default: $BIOAMLA_REMOTE or the "
+                   "workspace's settings)")  # fmt: skip
     args = p.parse_args(argv)
+    use_remote(args.remote)
     try:
         summary = crop(args.run_dir, args.pad, args.kind, args.root)
     except BioamlaCommandError as e:

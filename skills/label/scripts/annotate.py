@@ -14,6 +14,12 @@ annotations CSV (one row per event, with a ``file`` column):
 Every decision, with its reasons, goes to ``decisions.json`` in the run folder; the
 review step reads it.
 
+The merge happens on a copy in the run folder (``<run_dir>/workspace/<annotations>``),
+which then replaces the workspace's file. With a remote (``--remote``,
+``BIOAMLA_REMOTE``, or the workspace's ``remote`` setting) the copy is the server
+workspace's file, downloaded first and uploaded after, so the annotations land on the
+server and a local file of the same name is left alone.
+
 Usage (from the workspace root):
     python scripts/annotate.py runs/label/<timestamp> --annotations annotations.csv
 """
@@ -29,7 +35,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _bioamla import read_json, write_json  # noqa: E402
+from _bioamla import (  # noqa: E402
+    BioamlaCommandError,
+    fetch,
+    publish,
+    read_json,
+    remote,
+    save_json,
+    use_remote,
+)
 
 COLUMNS = [
     "file",
@@ -99,7 +113,9 @@ def annotate(args: argparse.Namespace) -> dict:
     folder = root / args.run_dir
     run = read_json(folder / "candidates.json")
     evidence = {e["id"]: e for e in read_json(folder / "evidence.json")["candidates"]}
-    path = root / args.annotations
+    # Merge on a copy of the workspace's file (the server's, with a remote).
+    copy = Path(args.run_dir) / "workspace"
+    path = fetch(args.annotations, copy, root)
     columns, existing = read_rows(path)
 
     covered = set(run["files"])
@@ -135,14 +151,16 @@ def annotate(args: argparse.Namespace) -> dict:
         decisions.append(decision)
 
     write_rows(path, columns, human + kept_agent + new_rows)
+    publish(path, args.annotations, root)
     thresholds = {
         "min_confidence": args.min_confidence,
         "min_snr": args.min_snr,
         "min_score": args.min_score,
     }
-    write_json(
-        folder / "decisions.json",
+    save_json(
+        (Path(args.run_dir) / "decisions.json").as_posix(),
         {"annotations": args.annotations, "thresholds": thresholds, "decisions": decisions},
+        root,
     )
     accepted = sum(d["accepted"] for d in decisions)
     return {
@@ -154,6 +172,7 @@ def annotate(args: argparse.Namespace) -> dict:
         "skipped_overlapping_person": accepted - len(new_rows),
         "not_accepted": len(decisions) - accepted,
         "person_rows_kept": len(human),
+        "remote": remote(root),
     }
 
 
@@ -166,15 +185,22 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--min-snr", type=float, default=10.0, help="Lowest SNR (dB)")
     p.add_argument("--min-score", type=float, default=0.0, help="Lowest detector score")
     p.add_argument("--root", default=".", help="Workspace root (default: here)")
+    p.add_argument("--remote", default=None, metavar="NAME:WORKSPACE",
+                   help="Run on this server workspace (default: $BIOAMLA_REMOTE or the "
+                   "workspace's settings)")  # fmt: skip
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    use_remote(args.remote)
     try:
         summary = annotate(args)
     except FileNotFoundError as e:
         print(json.dumps({"error": f"Run the candidates and evidence steps first: {e}"}))
+        return 1
+    except BioamlaCommandError as e:
+        print(json.dumps({"error": str(e)}))
         return 1
     except (OSError, csv.Error) as e:
         print(json.dumps({"error": f"Could not update {args.annotations}: {e}"}))

@@ -9,6 +9,17 @@ Turns a folder of recordings into draft annotations for a person to check. Every
 decision is a threshold on an objective measurement; you run the steps and report what
 they say. You never decide a label yourself, and you never change a label a person made.
 
+## Where it runs
+
+The steps run wherever bioamla commands run. With a remote set (pass
+`--remote NAME:WORKSPACE` to every step, or set `BIOAMLA_REMOTE`, or `remote` and
+`workspace` in the local workspace's settings), the recordings, the model path, the
+annotations file and every output are the server workspace's: the steps upload what
+they write (run files, crops index, review queue), and the annotate step downloads the
+server's annotations file, merges into it with the same rules, and uploads it back. A
+local file with the same name is left alone. The run folder's JSON files are also kept
+locally, so you can read them without fetching.
+
 ## Steps
 
 Run from the workspace root, in order. Each prints a JSON summary; pass its `run_dir`

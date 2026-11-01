@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _bioamla import BioamlaCommandError, read_json, run, write_json  # noqa: E402
+from _bioamla import BioamlaCommandError, read_json, run, save_json, use_remote  # noqa: E402
 
 
 def snr_db(frames: list[dict], start: float, end: float, events: list[tuple]) -> float | None:
@@ -72,7 +72,7 @@ def measure(run_folder: str, root: str = ".") -> dict:
                 }
             )
     evidence.sort(key=lambda e: e["id"])
-    write_json(folder / "evidence.json", {"candidates": evidence})
+    save_json((Path(run_folder) / "evidence.json").as_posix(), {"candidates": evidence}, root)
     snrs = [e["snr_db"] for e in evidence if e["snr_db"] is not None]
     return {
         "run_dir": run_folder,
@@ -86,7 +86,11 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("run_dir", help="The run folder from candidates.py")
     p.add_argument("--root", default=".", help="Workspace root (default: here)")
+    p.add_argument("--remote", default=None, metavar="NAME:WORKSPACE",
+                   help="Run on this server workspace (default: $BIOAMLA_REMOTE or the "
+                   "workspace's settings)")  # fmt: skip
     args = p.parse_args(argv)
+    use_remote(args.remote)
     try:
         summary = measure(args.run_dir, args.root)
     except BioamlaCommandError as e:

@@ -8,6 +8,18 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- The labeling skill works on a server workspace: with a remote set (each step's `--remote
+  NAME:WORKSPACE`, `BIOAMLA_REMOTE`, or the workspace's `remote` and `workspace`
+  settings), the annotate step downloads the server's annotations file, merges into it with
+  the same rules (a person's rows are never changed) and uploads it back, and every step
+  uploads what it writes (run files, crops index, review queue). A local file of the same
+  name is left alone. Its eval runs against a real server too. Skill scripts get
+  `fetch()`, `publish()` and `save_json()` in `_bioamla.py`.
+- `bioamla remote current`: the remote and workspace commands run on from here (from
+  `BIOAMLA_REMOTE` or the local workspace's settings), or null.
+- The typed wire form (`bioamla.common.wire`) carries pandas DataFrames, with their column
+  dtypes and index, so a remote `audio features` gives the same frames table as a local run.
+
 - `bioamla serve --job-timeout SECONDS` (`ServerConfig.job_timeout`): a running job that
   sends nothing (no progress, notice, log line or result) for that long is stopped like a
   cancel and fails with `JobTimeout`, so a hung worker can't hold a slot forever, while a

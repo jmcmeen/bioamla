@@ -57,6 +57,7 @@ UNRECORDED_COMMANDS = frozenset({
     "workspace status",
     "workspace list",
     # Reads of another machine's state, not work in this workspace:
+    "remote current",
     "remote list",
     "remote ping",
     "remote workspaces",
