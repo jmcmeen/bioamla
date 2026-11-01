@@ -11,7 +11,8 @@ All notable changes to this project are documented here. The format is based on
 - `bioamla --remote NAME:WORKSPACE <command>` runs the command on a server: the CLI builds
   the operation's request as usual, the server runs it, progress and notices stream back,
   and the command prints exactly what a local run prints (`--json` included; parity is
-  tested). The remote can also come from `BIOAMLA_REMOTE`, or from top-level `remote` and
+  tested; paths in results come back relative to the remote workspace, as a local run
+  reports them). The remote can also come from `BIOAMLA_REMOTE`, or from top-level `remote` and
   `workspace` settings in a local workspace. Paths are the server's (local existence checks
   are skipped). Local-only commands refuse an explicit `--remote`; command-line credentials
   are never sent; remote runs are recorded in the server's history, not locally.
@@ -19,7 +20,8 @@ All notable changes to this project are documented here. The format is based on
   the same objects (bioamla dataclasses and enums, paths, NumPy arrays, tuples, NaN, ...);
   rebuilding only constructs bioamla types. The server sends it with `?wire=true` (operation
   routes and `GET /v1/jobs/{id}`), and `Client.run(typed=True)` returns the rebuilt objects
-  (`UntypedResult` when this machine can't load the result's type).
+  (`UntypedResult` when this machine can't load the result's type); with
+  `workspace_relative=True`, paths inside the workspace come back relative to it.
 
 - `bioamla.client`: work on a server from another machine. `Client(url, token)` lists and
   creates workspaces, reads and changes their settings, lists, uploads and downloads files,

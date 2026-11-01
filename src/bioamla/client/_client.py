@@ -236,6 +236,7 @@ class Client:
         on_progress: Callable[[int, int], None] | None = None,
         on_event: Callable[[dict[str, Any]], None] | None = None,
         typed: bool = False,
+        workspace_relative: bool = False,
     ) -> Any:
         """Run the operation ``name`` in ``ws`` and return its result, waiting for a
         job to finish (streaming its events to ``on_event`` and its progress to
@@ -245,6 +246,9 @@ class Client:
             typed: Return the same objects a local run returns (rebuilt from the
                 server's wire form, see :mod:`bioamla.common.wire`) instead of the
                 result's JSON.
+            workspace_relative: Report paths inside the workspace relative to it (as
+                a local run given relative paths reports them) instead of the
+                server's absolute paths.
 
         Raises:
             UntypedResult: With ``typed``, if the result can't be rebuilt here (its
@@ -257,6 +261,11 @@ class Client:
         if is_job:
             body = self._wait(answer["id"], on_progress, on_event, typed=typed)
             answer = body["result"]["result"]
+        if workspace_relative:
+            root = self._workspace_root(ws)
+            answer = _relative_paths(answer, root)
+            if "wire" in body:
+                body = {**body, "wire": _relative_paths(body["wire"], root)}
         if not typed:
             return answer
         if "wire" not in body:
@@ -268,6 +277,12 @@ class Client:
             return from_wire(body["wire"])
         except WireError as e:
             raise UntypedResult(f"Can't rebuild the result of {name}: {e}", answer) from e
+
+    def _workspace_root(self, ws: str) -> str:
+        cache = self.__dict__.setdefault("_roots", {})
+        if ws not in cache:
+            cache[ws] = self.status(ws, last_runs=0)["root"]
+        return cache[ws]
 
     def wait(
         self,
@@ -375,6 +390,21 @@ class Client:
                         yield json.loads(line[len("data: ") :])
             except requests.RequestException as e:
                 raise RemoteError(f"Lost the connection to {self.url}: {e}") from e
+
+
+def _relative_paths(data: Any, root: str) -> Any:
+    """``data`` (JSON or wire data) with strings naming ``root`` or a path inside it
+    made relative to it."""
+    prefix = root.rstrip("/") + "/"
+    if isinstance(data, str):
+        if data == root.rstrip("/"):
+            return "."
+        return data[len(prefix) :] if data.startswith(prefix) else data
+    if isinstance(data, list):
+        return [_relative_paths(v, root) for v in data]
+    if isinstance(data, dict):
+        return {k: _relative_paths(v, root) for k, v in data.items()}
+    return data
 
 
 def _json(response: Any, url: str) -> dict[str, Any]:

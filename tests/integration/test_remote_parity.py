@@ -47,6 +47,16 @@ def relative(value, ws):
     return value
 
 
+def untimed(value):
+    """``value`` without its timings, which differ from run to run."""
+    if isinstance(value, dict):
+        return {k: untimed(v) for k, v in value.items()
+                if k not in ("duration_seconds", "start_time", "end_time")}  # fmt: skip
+    if isinstance(value, list):
+        return [untimed(v) for v in value]
+    return value
+
+
 # Each command runs in the workspace folder, once here and once on the server, with
 # the same relative paths.
 COMMANDS = [
@@ -66,7 +76,8 @@ def test_same_json_locally_and_remotely(remote, monkeypatch, args):
     rcode, there = run_json(["--remote", "lab:ws", *args])
     assert rcode == 0, there
     assert there["command"] == local["command"]
-    assert relative(there["result"], remote) == relative(local["result"], remote)
+    # Paths come back relative to the remote workspace, as a local run reports them.
+    assert untimed(there["result"]) == untimed(local["result"])
 
 
 def test_same_human_output(remote, monkeypatch):
@@ -82,14 +93,14 @@ def test_remote_from_environment_and_workspace_config(remote, tmp_path, monkeypa
 
     monkeypatch.setenv("BIOAMLA_REMOTE", "lab:ws")
     code, body = run_json(["audio", "info", "rec.wav"])  # rec.wav exists only there
-    assert code == 0 and body["result"]["file"] == str(remote / "rec.wav")
+    assert code == 0 and body["result"]["file"] == "rec.wav"  # relative to the workspace
     monkeypatch.delenv("BIOAMLA_REMOTE")
 
     local_ws = create_workspace(tmp_path / "laptop")
     local_ws.config_path.write_text('remote = "lab"\nworkspace = "ws"\n')
     monkeypatch.chdir(local_ws.root)
     code, body = run_json(["audio", "info", "rec.wav"])
-    assert code == 0 and body["result"]["file"] == str(remote / "rec.wav")
+    assert code == 0 and body["result"]["file"] == "rec.wav"  # relative to the workspace
     assert local_ws.history() == []  # recorded on the server, not here
 
 

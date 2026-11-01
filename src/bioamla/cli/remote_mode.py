@@ -12,7 +12,8 @@ With a remote, a command builds its operation's request from its options as usua
 and :func:`run` sends it to the server (``bioamla.client``) instead of running it:
 progress and notices stream back, and the result comes back as the same objects a
 local run returns, so the command prints exactly what it prints locally. Paths are the
-server's, relative to the remote workspace, so local existence checks are skipped.
+server's, relative to the remote workspace, so local existence checks are skipped;
+paths in results come back relative to the remote workspace too.
 
 A command goes to the server when the operation of the same name (``detect energy``
 runs ``detect.energy``) may run remotely. Commands with no operation (``serve``,
@@ -186,7 +187,8 @@ def run(
         client = connect(target.name)
         _used = True
         return client.run(target.workspace, name, _jsonable_request(name, request),
-                          on_progress=on_progress, on_event=on_event, typed=True)  # fmt: skip
+                          on_progress=on_progress, on_event=on_event, typed=True,
+                          workspace_relative=True)  # fmt: skip
     except UntypedResult as e:
         _report_untyped(name, e.result)
     except BioamlaError as e:
