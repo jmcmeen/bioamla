@@ -12,14 +12,10 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-def remote(live_server, tmp_path, monkeypatch, test_audio_path):
-    """A remote ``lab`` for the live server, with ``rec.wav`` (and a copy in ``more/``)
-    in its workspace ``ws``; yields the workspace folder."""
-    url, token, root = live_server
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-    monkeypatch.setenv("BIOAMLA_LAB_TOKEN", token)
-    monkeypatch.delenv("BIOAMLA_REMOTE", raising=False)
-    assert CliRunner().invoke(cli, ["remote", "add", "lab", url]).exit_code == 0
+def remote(lab, test_audio_path):
+    """The remote ``lab`` with ``rec.wav`` (and two copies in ``more/``) in its
+    workspace ``ws``; yields the workspace folder."""
+    _, _, root = lab
     ws = root / "ws"
     shutil.copy(test_audio_path, ws / "rec.wav")
     (ws / "more").mkdir()

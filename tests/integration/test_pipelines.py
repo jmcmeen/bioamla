@@ -19,21 +19,27 @@ from bioamla.cli.cli import cli
 
 pytestmark = pytest.mark.integration
 
-SR = 22050
+
+def _envelope(args: tuple[str, ...]) -> dict:
+    run = CliRunner().invoke(cli, ["--json", *args])
+    try:
+        return json.loads(run.stdout)
+    except json.JSONDecodeError:
+        raise AssertionError(
+            f"bioamla {' '.join(args)} printed no envelope (exit {run.exit_code}): {run.output!r}"
+        ) from run.exception
 
 
 def bioamla(*args: str) -> dict:
     """Run ``bioamla --json <args>``; return the result, failing on an error envelope."""
-    run = CliRunner().invoke(cli, ["--json", *args])
-    envelope = json.loads(run.stdout)
+    envelope = _envelope(args)
     assert envelope["ok"], envelope.get("error")
     return envelope["result"]
 
 
 def bioamla_error(*args: str) -> dict:
     """Run ``bioamla --json <args>`` expecting failure; return the error."""
-    run = CliRunner().invoke(cli, ["--json", *args])
-    envelope = json.loads(run.stdout)
+    envelope = _envelope(args)
     assert not envelope["ok"]
     return envelope["error"]
 
@@ -41,26 +47,6 @@ def bioamla_error(*args: str) -> dict:
 def read_csv(path: str | Path) -> list[dict]:
     with open(path, newline="") as f:
         return list(csv.DictReader(f))
-
-
-@pytest.fixture
-def recording(tmp_path: Path) -> Path:
-    """Eight seconds: seven chirped calls, alternating low and high, over a faint hum."""
-    t = np.arange(SR * 8) / SR
-    x = 0.003 * np.sin(2 * np.pi * 60 * t)
-    for i, start in enumerate(np.arange(0.5, 7.5, 1.0)):
-        m = (t >= start) & (t < start + 0.4)
-        tt = t[m] - start
-        f0 = 2000 if i % 2 else 4000
-        x[m] += 0.5 * np.sin(2 * np.pi * (f0 * tt + 3000 * tt**2)) * np.hanning(m.sum())
-    path = tmp_path / "calls.wav"
-    sf.write(path, x, SR)
-    return path
-
-
-@pytest.fixture(autouse=True)
-def _needs_audio_extra() -> None:
-    pytest.importorskip("librosa")
 
 
 class TestRavenConfidenceRoundTrip:
