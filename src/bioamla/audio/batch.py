@@ -157,7 +157,12 @@ def batch_convert_files(
 
     Raises:
         NotFoundError: If the input directory does not exist.
+        InvalidInputError: If ``bit_depth`` doesn't apply to ``target_format``
+            (before anything is written).
     """
+    from bioamla.audio._pydub import check_bit_depth, output_format
+
+    check_bit_depth(output_format("", target_format), bit_depth)
     in_dir = Path(input_dir)
     out_dir = Path(output_dir)
 
@@ -1004,7 +1009,14 @@ def batch_convert(
 
     Directory mode writes into ``config.output_dir`` (required); CSV mode writes in
     place or under ``config.output_dir`` and updates each row's ``file_name``.
+
+    Raises:
+        InvalidInputError: If ``bit_depth`` doesn't apply to ``target_format`` (before
+            anything is written).
     """
+    from bioamla.audio._pydub import check_bit_depth, output_format
+
+    check_bit_depth(output_format("", target_format), bit_depth)
     if config.input_file:
         from bioamla.batch import run_csv_transform
 

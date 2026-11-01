@@ -131,11 +131,12 @@ class TestSaveAudio:
             gc.collect()
         assert not [w for w in caught if issubclass(w.category, ResourceWarning)]
 
-    def test_save_wav(self, tmp_path) -> None:
-        seg = MagicMock()
-        with patch.object(_pydub, "_numpy_to_audiosegment", return_value=seg):
-            _pydub.save_audio(str(tmp_path / "out.wav"), np.zeros(10, dtype=np.float32), 16000)
-            seg.export.assert_called_once()
+    def test_save_wav_and_flac_through_soundfile(self, tmp_path) -> None:
+        import soundfile as sf
+
+        for name in ("out.wav", "out.flac"):
+            _pydub.save_audio(str(tmp_path / name), np.zeros(10, dtype=np.float32), 16000)
+            assert sf.info(tmp_path / name).subtype == "PCM_16"
 
     def test_save_m4a_uses_ipod(self, tmp_path) -> None:
         seg = MagicMock()
@@ -145,18 +146,18 @@ class TestSaveAudio:
             assert kwargs["format"] == "ipod"
 
     def test_save_explicit_format(self, tmp_path) -> None:
-        seg = MagicMock()
-        with patch.object(_pydub, "_numpy_to_audiosegment", return_value=seg):
-            _pydub.save_audio(
-                str(tmp_path / "out.dat"), np.zeros(10, dtype=np.float32), 16000, format="flac"
-            )
-            _, kwargs = seg.export.call_args
-            assert kwargs["format"] == "flac"
+        import soundfile as sf
+
+        for fmt in ("flac", "FLAC", ".flac"):  # any case, with or without a dot
+            path = tmp_path / f"out-{fmt.strip('.')}.dat"
+            _pydub.save_audio(str(path), np.zeros(10, dtype=np.float32), 16000, format=fmt,
+                              bit_depth=24)  # fmt: skip
+            assert sf.info(path).format == "FLAC" and sf.info(path).subtype == "PCM_24"
 
     def test_save_error_wrapped(self, tmp_path) -> None:
         with patch.object(_pydub, "_numpy_to_audiosegment", side_effect=RuntimeError("boom")):
             with pytest.raises(AudioSaveError, match="Failed to save"):
-                _pydub.save_audio(str(tmp_path / "out.wav"), np.zeros(10, dtype=np.float32), 16000)
+                _pydub.save_audio(str(tmp_path / "out.mp3"), np.zeros(10, dtype=np.float32), 16000)
 
     def test_save_unwritable_parent_wrapped(self, tmp_path) -> None:
         blocker = tmp_path / "file"

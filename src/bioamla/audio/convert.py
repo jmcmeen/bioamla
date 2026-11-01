@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
+from bioamla.audio._pydub import BIT_DEPTH_SUBTYPES, check_bit_depth, output_format
 from bioamla.audio.io import load_audio_channels, save_audio
 from bioamla.audio.processing import resample_audio
 from bioamla.exceptions import InvalidInputError
@@ -47,11 +48,23 @@ def _rechannel(audio: np.ndarray, current_channels: int, target_channels: int) -
     raise InvalidInputError(f"Unsupported target channel count: {target_channels}")
 
 
+def _source_bit_depth(path: Path, out_fmt: str) -> int | None:
+    """The source's bits per sample if ``out_fmt`` can hold them (PCM sources only)."""
+    try:
+        import soundfile as sf
+
+        subtype = sf.info(str(path)).subtype
+    except Exception:  # noqa: BLE001 - not a soundfile format (MP3, ...): no bit depth
+        return None
+    bits = {"PCM_S8": 8, "PCM_U8": 8, "PCM_16": 16, "PCM_24": 24, "PCM_32": 32}.get(subtype)
+    return bits if bits in BIT_DEPTH_SUBTYPES.get(out_fmt, {}) else None
+
+
 def convert_audio_file(
     input_path: str | Path,
     output_path: str | Path,
     *,
-    target_format: str | None = "wav",
+    target_format: str | None = None,
     target_sample_rate: int | None = None,
     target_channels: int | None = None,
     target_bit_depth: int | None = None,
@@ -61,15 +74,15 @@ def convert_audio_file(
 
     Args:
         input_path: Source audio file.
-        output_path: Destination file path (its suffix should match
-            ``target_format``).
-        target_format: Output container/codec ("wav", "mp3", "flac", "ogg"), or
-            ``None`` to choose it from ``output_path``'s extension.
+        output_path: Destination file path.
+        target_format: Output container/codec ("wav", "mp3", "flac", "ogg"); by
+            default from ``output_path``'s extension (WAV for an unknown one).
         target_sample_rate: Resample to this rate before saving (optional).
         target_channels: Output channel count (1 = mono, 2 = stereo); by default
             the file keeps its own channels.
         target_bit_depth: Bits per sample for WAV (8, 16, 24, 32) or FLAC (8, 16,
-            24); default 16. Lossy formats take none.
+            24). By default the source's, when it has one the output format can hold
+            (a 24-bit WAV stays 24-bit), else 16. Lossy formats take none.
         delete_original: Delete the source file after a successful conversion
             (only when the output path differs from the input path).
 
@@ -93,15 +106,8 @@ def convert_audio_file(
         raise InvalidInputError(f"Unsupported target channel count: {target_channels} (1 or 2)")
     in_path = Path(input_path)
     out_path = Path(output_path)
-    out_fmt = fmt or out_path.suffix.lower().lstrip(".") or "wav"
-    if target_bit_depth is not None:
-        from bioamla.audio._pydub import BIT_DEPTH_SUBTYPES
-
-        if target_bit_depth not in BIT_DEPTH_SUBTYPES.get(out_fmt, {}):
-            raise InvalidInputError(
-                f"A bit depth of {target_bit_depth} can't be written as {out_fmt.upper()} "
-                "(WAV: 8, 16, 24, 32; FLAC: 8, 16, 24; lossy formats have none)"
-            )
+    out_fmt = output_format(out_path, fmt)
+    check_bit_depth(out_fmt, target_bit_depth)
 
     audio, sr = load_audio_channels(in_path)
     current_channels = 1 if audio.ndim == 1 else audio.shape[1]
@@ -122,7 +128,8 @@ def convert_audio_file(
     if target_channels is not None:
         audio = _rechannel(audio, current_channels, target_channels)
 
-    saved = save_audio(str(out_path), audio, sr, format=fmt, bit_depth=target_bit_depth)
+    bit_depth = target_bit_depth or _source_bit_depth(in_path, out_fmt)
+    saved = save_audio(str(out_path), audio, sr, format=fmt, bit_depth=bit_depth)
 
     if delete_original and out_path.resolve() != in_path.resolve():
         in_path.unlink(missing_ok=True)

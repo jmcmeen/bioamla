@@ -396,8 +396,8 @@ def save_audio(
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         _pydub_save_audio(str(path), audio, sample_rate, format=format, bit_depth=bit_depth)
-    except InvalidInputError:
-        raise
+    except (InvalidInputError, AudioSaveError):
+        raise  # already says what failed
     except Exception as e:
         raise AudioSaveError(f"Failed to save audio: {e}") from e
     return str(path)

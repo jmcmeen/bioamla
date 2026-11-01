@@ -10,7 +10,8 @@ Design notes:
 - All audio loading returns mono float32 in [-1.0, 1.0]
 - Uses soundfile for WAV/FLAC/OGG (fast native C) with pydub fallback
 - Uses ffprobe for fast metadata extraction without full file decode
-- Saving outputs 16-bit audio unless a bit depth is given (WAV and FLAC only)
+- Saving writes WAV and FLAC through soundfile (16-bit unless a bit depth is given),
+  other formats through pydub at 16 bits
 """
 
 import json
@@ -374,6 +375,35 @@ BIT_DEPTH_SUBTYPES = {
     "flac": {8: "PCM_S8", 16: "PCM_16", 24: "PCM_24"},
 }
 
+# Extension -> the format ``save_audio`` writes (pydub calls M4A/AAC "ipod").
+_EXTENSION_FORMATS = {".wav": "wav", ".flac": "flac", ".ogg": "ogg", ".mp3": "mp3", ".m4a": "ipod"}
+
+
+def output_format(path: str | Path, format: str | None = None) -> str:
+    """The format :func:`save_audio` writes ``path`` in: ``format`` (any case, with or
+    without a leading dot), else from the extension, else WAV."""
+    if format:
+        return format.lower().lstrip(".")
+    return _EXTENSION_FORMATS.get(Path(path).suffix.lower(), "wav")
+
+
+def check_bit_depth(format: str, bit_depth: int | None) -> None:
+    """Raise unless ``format`` (as :func:`output_format` gives it) can hold ``bit_depth``
+    (``None`` always passes).
+
+    Raises:
+        InvalidInputError: If it can't (lossy formats hold no bit depth).
+    """
+    if bit_depth is None or bit_depth in BIT_DEPTH_SUBTYPES.get(format, {}):
+        return
+    choices = "; ".join(
+        f"{fmt.upper()}: {', '.join(map(str, bits))}" for fmt, bits in BIT_DEPTH_SUBTYPES.items()
+    )
+    raise InvalidInputError(
+        f"A bit depth of {bit_depth} can't be written as {format.upper()} "
+        f"({choices}; lossy formats have none)"
+    )
+
 
 def save_audio(
     filepath: str,
@@ -384,9 +414,12 @@ def save_audio(
 ) -> None:
     """Save numpy audio array to file.
 
+    WAV and FLAC are written by soundfile, at ``bit_depth`` bits (default 16); other
+    formats by pydub (ffmpeg), at 16 bits.
+
     Args:
         filepath: Destination file path.
-        audio: Audio data as numpy array (float32).
+        audio: Audio data as numpy array (float32), 1-D or ``(n_samples, n_channels)``.
         sample_rate: Sample rate in Hz.
         format: Output format (auto-detected from extension if None).
         bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24); default 16.
@@ -396,42 +429,18 @@ def save_audio(
         AudioSaveError: If file cannot be saved.
     """
     path = Path(filepath)
-
-    format_to_use = format
-    if format_to_use is None:
-        ext = path.suffix.lower()
-        format_map = {
-            ".wav": "wav",
-            ".flac": "flac",
-            ".ogg": "ogg",
-            ".mp3": "mp3",
-            ".m4a": "ipod",  # pydub uses "ipod" for M4A/AAC
-        }
-        format_to_use = format_map.get(ext, "wav")
-
-    if bit_depth is not None:
-        subtypes = BIT_DEPTH_SUBTYPES.get(format_to_use)
-        if subtypes is None or bit_depth not in subtypes:
-            choices = ", ".join(
-                f"{fmt.upper()}: {', '.join(map(str, bits))}"
-                for fmt, bits in BIT_DEPTH_SUBTYPES.items()
-            )
-            raise InvalidInputError(
-                f"A bit depth of {bit_depth} can't be written as {format_to_use.upper()} "
-                f"({choices}; lossy formats have none)"
-            )
-        try:
-            import soundfile as sf
-
-            path.parent.mkdir(parents=True, exist_ok=True)
-            sf.write(str(path), np.clip(audio, -1.0, 1.0), sample_rate,
-                     subtype=subtypes[bit_depth], format=format_to_use.upper())  # fmt: skip
-        except Exception as e:
-            raise AudioSaveError(f"Failed to save audio to '{filepath}': {e}") from e
-        return
+    format_to_use = output_format(path, format)
+    check_bit_depth(format_to_use, bit_depth)
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
+        if format_to_use in BIT_DEPTH_SUBTYPES:
+            import soundfile as sf
+
+            subtype = BIT_DEPTH_SUBTYPES[format_to_use][bit_depth or 16]
+            sf.write(str(path), np.clip(audio, -1.0, 1.0), sample_rate,
+                     subtype=subtype, format=format_to_use.upper())  # fmt: skip
+            return
         channels = 1 if audio.ndim == 1 else audio.shape[1]
         segment = _numpy_to_audiosegment(audio, sample_rate, channels)
         # export() returns the open output file; close it rather than leak it.

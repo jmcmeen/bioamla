@@ -136,6 +136,30 @@ class TestConvertBitDepth:
         assert {sf.info(p).subtype for p in (tmp_path / "b").rglob("*.wav")} == {"PCM_24"}
 
 
+class TestConvertBitDepthDefaultsAndChecks:
+    def test_keeps_the_source_depth_when_the_format_can(self, tmp_path):
+        import numpy as np
+        import soundfile as sf
+
+        src = tmp_path / "in24.wav"
+        sf.write(src, np.zeros(800), 8000, subtype="PCM_24")
+        out = convert_audio_file(src, tmp_path / "o.flac")  # format from the extension
+        assert (sf.info(out).format, sf.info(out).subtype) == ("FLAC", "PCM_24")
+        src32 = tmp_path / "in32.wav"
+        sf.write(src32, np.zeros(800), 8000, subtype="PCM_32")
+        # FLAC can't hold 32 bits: the default falls back to 16
+        assert sf.info(convert_audio_file(src32, tmp_path / "o32.flac")).subtype == "PCM_16"
+
+    def test_batch_refuses_a_bad_depth_before_writing(self, test_audio_dir, tmp_path):
+        from bioamla.audio.batch import batch_convert_files
+        from bioamla.exceptions import InvalidInputError
+
+        out = tmp_path / "never"
+        with pytest.raises(InvalidInputError, match="MP3"):
+            batch_convert_files(test_audio_dir, str(out), target_format="mp3", bit_depth=24)
+        assert not out.exists()
+
+
 class TestConvertCli:
     @pytest.mark.usefixtures("requires_ffmpeg_cli")
     def test_directory_mode_produces_target_format(self, test_audio_dir, tmp_path):

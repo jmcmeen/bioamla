@@ -9,11 +9,14 @@ All notable changes to this project are documented here. The format is based on
 ### Added
 
 - `audio convert --bit-depth` and the new `batch audio convert --bit-depth` write that many bits
-  per sample: 8, 16, 24 or 32 for WAV, 8, 16 or 24 for FLAC (default 16, as before). A
-  depth the format can't hold, or any depth for MP3 or OGG, is refused before anything is
-  written; the option used to be accepted and ignored (#239). The library gains
-  `save_audio(bit_depth=...)` and `convert_audio_file(target_bit_depth=...)`, and the
-  `audio.convert` and `batch.audio.convert` requests a `bit_depth` field.
+  per sample: 8, 16, 24 or 32 for WAV, 8, 16 or 24 for FLAC. A depth the format can't hold,
+  or any depth for MP3 or OGG, is refused before anything is written; the option used to be
+  accepted and ignored (#239). **Behavior change:** without it, a conversion keeps the
+  source's bit depth when the output format can hold it (a 24-bit WAV to FLAC stays 24-bit;
+  it used to drop to 16), else writes 16 bits. The library gains `save_audio(bit_depth=...)`
+  and `convert_audio_file(target_bit_depth=...)`; the `audio.convert` and
+  `batch.audio.convert` requests gain a `bit_depth` field. WAV and FLAC are now always
+  written through soundfile, so FLAC output no longer needs ffmpeg.
 
 - `bioamla.audio.load_audio_channels()`: load a file keeping its channels (1-D for mono,
   `(n_samples, n_channels)` otherwise), where `load_audio()` downmixes to mono.
@@ -211,6 +214,9 @@ These were deprecated in 0.3.x and are breaking changes:
 - `bioamla.cli.output.legacy_json`, the helper behind those flags.
 
 ### Fixed
+
+- `convert_audio_file()` called without `target_format` wrote WAV data whatever the output's
+  extension (a `.flac` path got a WAV file); it now takes the format from the extension.
 
 - A 32-bit PCM file read through ffmpeg (formats soundfile can't read) that was nearly
   silent was taken for float audio and came out at full scale; it is scaled as integers.
