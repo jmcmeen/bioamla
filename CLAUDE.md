@@ -54,6 +54,11 @@ clustering, species catalogs, dataset tooling, and AST-based ML inference.
 6. **No TUI here.** The TUI ("magpy-lite", `textual`) was extracted to a separate repo. Do
    not add `textual` or TUI code back.
 7. **ruff-clean and tests green before declaring done.** `make check` must pass.
+8. **The library is the API; operations are thin adapters over it.** Every capability is a
+   public, documented library function first (explicit arguments, exported from its domain's
+   `__init__`). An operation only maps a typed request onto those calls and wraps the result;
+   if an operation (or a command) grows real logic, move it into a library function. Anything
+   the CLI or the server can do must be doable, and tested, by importing bioamla directly.
 
 ## Architecture
 
@@ -104,8 +109,9 @@ returned to a caller (e.g. `AcousticIndices`, `AudioData`, `AudioMetadata`).
   in the domain, the command just parses args, calls, and prints.
 - **Commands are front ends to operations** (0.4.0, being converted group by group): a command
   builds the operation's request from its options, runs the operation, and prints the result.
-  Anything a command does beyond that (CSV-mode merging, writing outputs) belongs in the
-  operation, because the server runs the same operation without the CLI.
+  Anything a command does beyond that (CSV-mode merging, writing outputs) moves into public
+  library functions that the operation calls, because the server runs the same operation
+  without the CLI, and scripts use the library without either.
 
 ## Conventions
 

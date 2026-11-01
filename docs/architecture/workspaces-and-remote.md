@@ -37,8 +37,16 @@ front ends to it:
   OpenAPI spec always matches), running long operations as jobs.
 
 Operations live in their domain packages (`bioamla.detect` declares the detection operations,
-and so on); the registry is an index, not a separate layer. Library functions below them keep
-taking explicit arguments.
+and so on); the registry is an index, not a separate layer.
+
+**The library stays the API.** Operations sit on top of the library; they never replace it.
+The domain functions (`frame_features`, `batch_detect_files`, ...) remain the public API
+anyone can import, with explicit arguments, documentation and exports from each domain's
+`__init__`. An operation is a thin adapter: it turns a typed request into calls to public
+library functions and wraps the result, adding only what the front ends need (a name, path
+checks, progress and cancel). Logic that moves out of a command today (CSV-mode merging,
+writing outputs) moves into public library functions first, and the operation calls those. So
+anything the CLI or the server can do, a script can do by importing bioamla, and that's tested.
 
 An operation runs with an **operation context** supplied by its front end: where it runs (a
 workspace), progress and cancel hooks, and the check every path in the request goes through.
