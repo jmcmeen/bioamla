@@ -266,30 +266,6 @@ class TestArbimon:
         assert back["from_format"] == "arbimon" and back["to_format"] == "raven"
 
 
-@pytest.fixture(scope="session")
-def tiny_ast(tmp_path_factory) -> Path:
-    """A randomly initialised AST, about 130 KB, built in a temp dir: no download and
-    nothing committed. Its embeddings mean nothing; the hand-offs are what's tested."""
-    torch = pytest.importorskip("torch")
-    transformers = pytest.importorskip("transformers")
-    torch.manual_seed(0)
-    config = transformers.ASTConfig(
-        hidden_size=32,
-        num_hidden_layers=2,
-        num_attention_heads=2,
-        intermediate_size=64,
-        num_mel_bins=128,
-        max_length=128,
-        num_labels=2,
-        id2label={0: "a", 1: "b"},
-        label2id={"a": 0, "b": 1},
-    )
-    path = tmp_path_factory.mktemp("tiny-ast")
-    transformers.ASTForAudioClassification(config).save_pretrained(path)
-    transformers.ASTFeatureExtractor(num_mel_bins=128, max_length=128).save_pretrained(path)
-    return path
-
-
 class TestEmbedToCluster:
     @pytest.fixture
     def tones(self, tmp_path) -> Path:
