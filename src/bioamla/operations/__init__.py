@@ -36,7 +36,9 @@ from bioamla.exceptions import BioamlaError, DependencyError, NotFoundError
 #: Name prefix -> the module that declares those operations. Each domain adds its
 #: module here when its commands are converted.
 OPERATION_MODULES: dict[str, str] = {
+    "audio": "bioamla.audio.operations",
     "detect": "bioamla.detect.operations",
+    "indices": "bioamla.indices.operations",
 }
 
 OperationKind = Literal["quick", "job"]

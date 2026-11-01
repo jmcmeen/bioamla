@@ -6,6 +6,51 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Every `detect` and `indices` command runs through an operation (`detect.energy|ribbit|peaks|
+  accelerating`, `indices.compute|temporal|aci|adi|aei|bio|ndsi|entropy`), so the server can run
+  them without the CLI. Output and `--json` results are unchanged. Each is declared a `job`,
+  since its cost grows with the recording's length.
+- Library functions behind those commands, for use without the CLI:
+  - `bioamla.detect`: `detect_peaks_file()` and `FilePeaks`, `export_peaks()`,
+    `PeakDetection.to_event()` and `PEAK_EVENT_COLUMNS` (the peak rows the command reports and
+    saves).
+  - `bioamla.indices`: `index_file()` (every index of one file, optionally saved as JSON),
+    `temporal_index_file()` (indices over consecutive windows), `index_values_file()` (selected
+    indices, loading the file once; index parameters only with a single index), with
+    `FileIndices`, `FileTemporalIndices`, `FileIndexValues` and `SEGMENT_COLUMNS`.
+  - An empty output path saves nothing, as the commands always treated it.
+
+- Every `audio` command runs through an operation (`audio.info|metadata|list|play|features|
+  convert|segment|trim|normalize|resample|filter|denoise|pitch-shift|time-stretch|add-noise|
+  gain|visualize|video`), with unchanged output. Reading a header or listing a folder is
+  `quick`; anything that decodes audio is a `job`; `audio.play` is local-only. `audio.video`
+  reports progress through the operation context and stops when cancelled.
+- Library functions behind those commands, in `bioamla.audio`: `trim_audio_file()`,
+  `normalize_audio_file()`, `resample_audio_file()`, `filter_audio_file()`,
+  `denoise_audio_file()`, `pitch_shift_audio_file()`, `time_stretch_audio_file()`,
+  `add_noise_audio_file()`, `gain_audio_file()` (each returns a `ProcessedFile`),
+  `describe_audio_file()`, `recording_metadata_report()`, and the result types
+  `AudioFileDescription`, `RecordingMetadataReport`, `AudioFileList` and `SegmentedFile`.
+- `segment_audio_file()` takes `format`, `include_partial` and `label`, and
+  `convert_audio_file()` takes `target_format=None` (format from the output name), so
+  `audio segment` and `audio convert` use them instead of their own copies.
+
+### Changed
+
+- `detect.energy` is declared a `job` rather than `quick`, like the other per-file analyses.
+- `audio convert --bit-depth` prints a warning that it's ignored; it always was (#239).
+- `audio filter`, `audio trim` and `audio segment` report bad option combinations as
+  `InvalidInputError` in the `--json` envelope, naming the parameters (`end`, `duration`,
+  `bandpass_low`, ...) rather than the flags. `audio trim` refuses a negative `--start` or a
+  non-positive `--duration`; `audio filter` treats a 0 Hz cutoff as given.
+- `segment_audio_file()` (so `audio segment` and `batch audio segment`) refuses a `prefix`
+  containing a path, so clips stay inside the output folder, and creates the output folder
+  only after the audio loads.
+- `audio video --cmap` has no fixed default in `--help`: each renderer picks its own (magma,
+  or plasma for `-t trajectory`), as before.
+
 ### Fixed
 
 - `batch audio resample|normalize|trim|filter|denoise --input-dir` crashed before processing
@@ -13,6 +58,11 @@ All notable changes to this project are documented here. The format is based on
   `batch_transform_files()` takes `operation` for its log records like the other batch runners.
 - Spectral denoising (`audio denoise`, `batch audio denoise`, `spectral_denoise()`) no longer
   drops the last few milliseconds of the audio.
+- `indices ndsi --n-fft` (and `compute_index(..., "ndsi", n_fft=...)`) is used instead of being
+  ignored; NDSI's default stays 1024, so default results don't change.
+- `temporal_indices` (and `indices temporal`) raises `InvalidInputError` for a window or hop
+  shorter than one sample instead of looping forever.
+- `detect peaks -o name.json` writes JSON, as the other detectors do, instead of CSV.
 
 ## [0.3.9] - 2026-11-01
 

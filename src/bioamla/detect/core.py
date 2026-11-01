@@ -70,9 +70,13 @@ __all__ = [
     # Convenience functions
     "detect_all",
     "detect_file",
+    "detect_peaks_file",
     "export_detections",
+    "export_peaks",
     "batch_detect",
     "FileDetections",
+    "FilePeaks",
+    "PEAK_EVENT_COLUMNS",
 ]
 
 
@@ -177,6 +181,21 @@ class PeakDetection:
             "prominence": self.prominence,
             "frequency": self.frequency,
         }
+
+    def to_event(self) -> dict[str, Any]:
+        """The peak as an event row with the :data:`PEAK_EVENT_COLUMNS`: it starts at
+        ``time``, lasts ``width``, and its ``confidence`` is the prominence."""
+        return {
+            "start_time": self.time,
+            "end_time": self.time + self.width,
+            "confidence": self.prominence,
+            "amplitude": self.amplitude,
+            "width": self.width,
+        }
+
+
+#: The columns of :meth:`PeakDetection.to_event` rows and of :func:`export_peaks` files.
+PEAK_EVENT_COLUMNS = ("start_time", "end_time", "confidence", "amplitude", "width")
 
 
 # =============================================================================
@@ -1469,7 +1488,8 @@ def detect_file(
         detector: A configured detector.
         file: The audio file.
         output: Where to save the detections: JSON if the name ends in ``.json``,
-            otherwise CSV (see :func:`export_detections`). ``None`` saves nothing.
+            otherwise CSV (see :func:`export_detections`). ``None`` or an empty string
+            saves nothing.
 
     Returns:
         The file's detections, and the output path if saved.
@@ -1484,12 +1504,105 @@ def detect_file(
         >>> found.count
     """
     detections = detector.detect_from_file(file)
-    if output is not None:
+    if output:
         fmt = "json" if str(output).endswith(".json") else "csv"
         export_detections(detections, output, format=fmt)
     return FileDetections(
-        file=str(file), detections=detections, output=None if output is None else str(output)
+        file=str(file), detections=detections, output=str(output) if output else None
     )
+
+
+def export_peaks(peaks: list[PeakDetection], output_path: str | Path) -> Path:
+    """Write peaks to a file, one :meth:`PeakDetection.to_event` row each.
+
+    The file is JSON (a list of rows) if its name ends in ``.json``, otherwise CSV.
+
+    Args:
+        peaks: The peaks.
+        output_path: The file to write (its folder is created).
+
+    Returns:
+        The path written.
+
+    Raises:
+        DetectionError: If the file can't be written.
+    """
+    import csv
+    import json
+
+    output_path = Path(output_path)
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if output_path.suffix.lower() == ".json":
+            output_path.write_text(
+                json.dumps([p.to_event() for p in peaks], indent=2), encoding="utf-8"
+            )
+        else:
+            with open(output_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=PEAK_EVENT_COLUMNS)
+                writer.writeheader()
+                writer.writerows(p.to_event() for p in peaks)
+    except OSError as e:
+        raise DetectionError(f"Failed to write {output_path}: {e}") from e
+    return output_path
+
+
+@dataclass
+class FilePeaks:
+    """The peaks found in one file, and where they were saved.
+
+    Attributes:
+        file: The audio file.
+        peaks: The peaks, in time order.
+        output: The file they were written to, or ``None`` if not saved.
+    """
+
+    file: str
+    peaks: list[PeakDetection]
+    output: str | None = None
+
+    @property
+    def count(self) -> int:
+        """The number of peaks."""
+        return len(self.peaks)
+
+    def to_dict(self) -> dict[str, Any]:
+        """``{"file", "count", "detections", "output"}``, each peak as an event row."""
+        return {
+            "file": self.file,
+            "count": self.count,
+            "detections": [p.to_event() for p in self.peaks],
+            "output": self.output,
+        }
+
+
+def detect_peaks_file(
+    detector: CWTPeakDetector, file: str | Path, output: str | Path | None = None
+) -> FilePeaks:
+    """Find peaks in one audio file and optionally save them as CSV.
+
+    Args:
+        detector: A configured peak detector.
+        file: The audio file.
+        output: The file to save the peaks to (JSON if the name ends in ``.json``,
+            otherwise CSV; see :func:`export_peaks`), or ``None`` or an empty string
+            to save nothing.
+
+    Returns:
+        The file's peaks, and the output path if saved.
+
+    Raises:
+        AudioLoadError: If the file can't be read.
+        DetectionError: If detection or writing the output fails.
+
+    Example:
+        >>> from bioamla.detect import CWTPeakDetector, detect_peaks_file
+        >>> found = detect_peaks_file(CWTPeakDetector(snr_threshold=3), "rec.wav", "peaks.csv")
+    """
+    peaks = detector.detect_from_file(file)
+    if output:
+        export_peaks(peaks, output)
+    return FilePeaks(file=str(file), peaks=peaks, output=str(output) if output else None)
 
 
 def batch_detect(

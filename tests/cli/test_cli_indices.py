@@ -1,7 +1,9 @@
 """CLI tests for `bioamla indices` single-file commands.
 
-Domain functions are imported lazily from `bioamla.audio` and `bioamla.indices`
-inside the command bodies, so we patch the symbols there.
+Each command runs its `indices.*` operation, which calls the file-level functions
+in `bioamla.indices.files`; those load audio through `bioamla.audio` and compute
+with the functions they import, so the tests patch `bioamla.audio.load_audio_data`
+and the compute functions in `bioamla.indices.files`.
 """
 
 from unittest.mock import MagicMock
@@ -65,7 +67,7 @@ def test_indices_subcommand_help(runner, cmd):
 
 
 def test_compute_table(runner, test_audio_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.compute_all_indices", return_value=_indices())
+    mocker.patch("bioamla.indices.files.compute_all_indices", return_value=_indices())
     result = runner.invoke(cli, ["indices", "compute", test_audio_path])
     assert result.exit_code == 0
     assert "ACI:" in result.output
@@ -73,14 +75,16 @@ def test_compute_table(runner, test_audio_path, mock_audio, mocker):
 
 
 def test_compute_table_no_entropy(runner, test_audio_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.compute_all_indices", return_value=_indices(with_entropy=False))
+    mocker.patch(
+        "bioamla.indices.files.compute_all_indices", return_value=_indices(with_entropy=False)
+    )
     result = runner.invoke(cli, ["indices", "compute", test_audio_path])
     assert result.exit_code == 0
     assert "H (spectral)" not in result.output
 
 
 def test_compute_json(runner, test_audio_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.compute_all_indices", return_value=_indices())
+    mocker.patch("bioamla.indices.files.compute_all_indices", return_value=_indices())
     result = runner.invoke(cli, ["indices", "compute", test_audio_path, "--format", "json"])
     assert result.exit_code == 0
     assert '"aci"' in result.output
@@ -88,14 +92,14 @@ def test_compute_json(runner, test_audio_path, mock_audio, mocker):
 
 
 def test_compute_csv(runner, test_audio_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.compute_all_indices", return_value=_indices())
+    mocker.patch("bioamla.indices.files.compute_all_indices", return_value=_indices())
     result = runner.invoke(cli, ["indices", "compute", test_audio_path, "--format", "csv"])
     assert result.exit_code == 0
     assert "aci" in result.output
 
 
 def test_compute_output_file(runner, test_audio_path, tmp_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.compute_all_indices", return_value=_indices())
+    mocker.patch("bioamla.indices.files.compute_all_indices", return_value=_indices())
     out = tmp_path / "sub" / "indices.json"
     result = runner.invoke(cli, ["indices", "compute", test_audio_path, "-o", str(out)])
     assert result.exit_code == 0
@@ -104,14 +108,14 @@ def test_compute_output_file(runner, test_audio_path, tmp_path, mock_audio, mock
 
 
 def test_compute_with_aci_max_freq(runner, test_audio_path, mock_audio, mocker):
-    m = mocker.patch("bioamla.indices.compute_all_indices", return_value=_indices())
+    m = mocker.patch("bioamla.indices.files.compute_all_indices", return_value=_indices())
     result = runner.invoke(cli, ["indices", "compute", test_audio_path, "--aci-high-freq", "8000"])
     assert result.exit_code == 0
     assert m.call_args.kwargs["aci_max_freq"] == 8000.0
 
 
 def test_compute_error(runner, test_audio_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.compute_all_indices", side_effect=ProcessingError("bad"))
+    mocker.patch("bioamla.indices.files.compute_all_indices", side_effect=ProcessingError("bad"))
     result = runner.invoke(cli, ["indices", "compute", test_audio_path])
     assert result.exit_code != 0
     assert "bad" in result.output
@@ -142,7 +146,7 @@ def _windows(n=2):
 
 
 def test_temporal_table(runner, test_audio_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.temporal_indices", return_value=_windows())
+    mocker.patch("bioamla.indices.files.temporal_indices", return_value=_windows())
     result = runner.invoke(cli, ["indices", "temporal", test_audio_path])
     assert result.exit_code == 0
     assert "Temporal indices" in result.output
@@ -150,14 +154,14 @@ def test_temporal_table(runner, test_audio_path, mock_audio, mocker):
 
 
 def test_temporal_table_truncates(runner, test_audio_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.temporal_indices", return_value=_windows(15))
+    mocker.patch("bioamla.indices.files.temporal_indices", return_value=_windows(15))
     result = runner.invoke(cli, ["indices", "temporal", test_audio_path])
     assert result.exit_code == 0
     assert "5 more segments" in result.output
 
 
 def test_temporal_output_file(runner, test_audio_path, tmp_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.temporal_indices", return_value=_windows())
+    mocker.patch("bioamla.indices.files.temporal_indices", return_value=_windows())
     out = tmp_path / "temporal.json"
     result = runner.invoke(cli, ["indices", "temporal", test_audio_path, "-o", str(out)])
     assert result.exit_code == 0
@@ -166,7 +170,7 @@ def test_temporal_output_file(runner, test_audio_path, tmp_path, mock_audio, moc
 
 
 def test_temporal_error(runner, test_audio_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.temporal_indices", side_effect=ProcessingError("tfail"))
+    mocker.patch("bioamla.indices.files.temporal_indices", side_effect=ProcessingError("tfail"))
     result = runner.invoke(cli, ["indices", "temporal", test_audio_path])
     assert result.exit_code != 0
 
@@ -187,7 +191,7 @@ def test_temporal_error(runner, test_audio_path, mock_audio, mocker):
     ],
 )
 def test_single_index(runner, test_audio_path, mock_audio, mocker, cmd, label):
-    mocker.patch("bioamla.indices.compute_index", return_value=1.234)
+    mocker.patch("bioamla.indices.files.compute_index", return_value=1.234)
     result = runner.invoke(cli, ["indices", cmd, test_audio_path])
     assert result.exit_code == 0
     assert label in result.output
@@ -195,13 +199,13 @@ def test_single_index(runner, test_audio_path, mock_audio, mocker, cmd, label):
 
 @pytest.mark.parametrize("cmd", ["aci", "adi", "aei", "bio", "ndsi"])
 def test_single_index_error(runner, test_audio_path, mock_audio, mocker, cmd):
-    mocker.patch("bioamla.indices.compute_index", side_effect=ProcessingError("x"))
+    mocker.patch("bioamla.indices.files.compute_index", side_effect=ProcessingError("x"))
     result = runner.invoke(cli, ["indices", cmd, test_audio_path])
     assert result.exit_code != 0
 
 
 def test_entropy(runner, test_audio_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.compute_index", side_effect=[0.9, 0.8])
+    mocker.patch("bioamla.indices.files.compute_index", side_effect=[0.9, 0.8])
     result = runner.invoke(cli, ["indices", "entropy", test_audio_path])
     assert result.exit_code == 0
     assert "H (spectral): 0.900" in result.output
@@ -209,6 +213,6 @@ def test_entropy(runner, test_audio_path, mock_audio, mocker):
 
 
 def test_entropy_error(runner, test_audio_path, mock_audio, mocker):
-    mocker.patch("bioamla.indices.compute_index", side_effect=ProcessingError("e"))
+    mocker.patch("bioamla.indices.files.compute_index", side_effect=ProcessingError("e"))
     result = runner.invoke(cli, ["indices", "entropy", test_audio_path])
     assert result.exit_code != 0
