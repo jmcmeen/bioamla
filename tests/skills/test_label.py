@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 
 import numpy as np
@@ -102,3 +103,68 @@ def test_crops_cut_a_clip_and_image_per_candidate(run_skill, loud_and_faint, tin
         assert c["box"]["start"] == pytest.approx(0.25, abs=0.01)
         assert c["image"].startswith(run_dir)
     assert crops[1]["clip_start"] == pytest.approx(2.75, abs=0.1)
+
+
+def read_rows(path) -> list[dict]:
+    with open(path, newline="") as f:
+        return list(csv.DictReader(f))
+
+
+PERSON_ROWS = (
+    "file,start_time,end_time,low_freq,high_freq,label,reviewer,labeled_by\n"
+    'rec/two.wav,2.9,3.6,500,5000,"frog, faint",jm,\n'
+    "rec/other.wav,0.5,1.0,500,5000,bird,jm,jm\n"
+    "rec/elsewhere.wav,0.1,0.2,500,5000,a,,agent\n"
+)
+
+
+def evidence_run(run_skill, workspace, model) -> str:
+    run_dir = candidates_run(
+        run_skill, workspace, model, "--threshold-db", "-40", "--labels", "a,b"
+    )
+    code, out = run_skill("label", "evidence", run_dir, cwd=workspace)
+    assert code == 0, out
+    return run_dir
+
+
+def test_annotate_never_touches_rows_a_person_made(run_skill, loud_and_faint, tiny_ast) -> None:
+    ws = loud_and_faint
+    (ws / "annotations.csv").write_text(PERSON_ROWS)
+    person = [r for r in read_rows(ws / "annotations.csv") if r["labeled_by"] != "agent"]
+    for _ in range(2):
+        run_dir = evidence_run(run_skill, ws, tiny_ast)
+        code, out = run_skill(
+            "label", "annotate", run_dir, "--min-confidence", "0", "--min-snr", "0", cwd=ws
+        )
+        assert code == 0, out
+        assert out["accepted"] == 2 and out["written"] == 1
+        assert out["skipped_overlapping_person"] == 1 and out["person_rows_kept"] == 2
+        rows = read_rows(ws / "annotations.csv")
+        # Same values in every original column (new columns are added empty).
+        assert [{k: r[k] for k in person[0]} for r in rows if r["labeled_by"] != "agent"] == person
+        assert all(r[k] == "" for r in rows[:2] for k in r.keys() - person[0].keys())
+        agent = [r for r in rows if r["labeled_by"] == "agent"]
+        # The other recording's agent row stays; this run's replaces the last run's.
+        assert [r["file"] for r in agent] == ["rec/elsewhere.wav", "rec/two.wav"]
+    (row,) = [r for r in agent if r["file"] == "rec/two.wav"]
+    assert float(row["start_time"]) == pytest.approx(1.0, abs=0.1)
+    assert row["method"].startswith("energy+ast:") and row["label"] in {"a", "b"}
+    assert 0 < float(row["confidence"]) <= 1
+    decisions = json.loads((ws / run_dir / "decisions.json").read_text())["decisions"]
+    assert decisions[1]["reasons"] == ["overlaps a row a person labeled"]
+
+
+def test_annotate_holds_back_candidates_below_threshold(
+    run_skill, loud_and_faint, tiny_ast
+) -> None:
+    run_dir = evidence_run(run_skill, loud_and_faint, tiny_ast)
+    code, out = run_skill(
+        "label", "annotate", run_dir, "--min-confidence", "0", "--min-snr", "30",
+        cwd=loud_and_faint,
+    )  # fmt: skip
+    assert code == 0, out
+    assert out["accepted"] == 1 and out["not_accepted"] == 1
+    decisions = json.loads((loud_and_faint / run_dir / "decisions.json").read_text())
+    faint = decisions["decisions"][1]
+    assert not faint["accepted"] and faint["reasons"][0].startswith("SNR 1")
+    assert len(read_rows(loud_and_faint / "annotations.csv")) == 1

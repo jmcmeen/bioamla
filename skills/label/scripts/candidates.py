@@ -82,6 +82,7 @@ def find_candidates(args: argparse.Namespace, root: str = ".") -> dict:
         out / "candidates.json",
         {
             "folder": args.folder,
+            "files": files,
             "model": args.model,
             "labels": args.labels,
             "detector": {

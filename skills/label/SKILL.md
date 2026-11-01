@@ -42,7 +42,25 @@ to the next step.
    Writes `<run_dir>/crops/<id>.wav` and `.png`, and `crops.json` with each event's box
    in the clip (seconds and Hz). The box isn't drawn on the image.
 
+4. **Annotate**: accept the candidates that clear every threshold and merge them into
+   the annotations CSV.
+
+   ```
+   python <skill>/scripts/annotate.py <run_dir> --annotations annotations.csv \
+       --min-confidence 0.8 --min-snr 10
+   ```
+
+   A candidate is accepted when its label is in the vocabulary and its model
+   confidence, SNR and detector score (`--min-score`) are all at or above the
+   thresholds. Use the thresholds the person gives you; don't loosen them to accept
+   more. Rows a person made (`labeled_by` empty or anything but `agent`) are never
+   changed, and an accepted candidate that overlaps one is skipped. Agent rows from an
+   earlier run on the same recordings are replaced. A person who corrects an agent row
+   should set its `labeled_by` to their name, so later runs keep it. Every decision
+   and its reasons go to `decisions.json`.
+
 ## Report
 
-Tell the person how many candidates were found, and where the run folder is. If a step
+Tell the person how many candidates were found, how many were written as annotations,
+and how many were held back, and where the run folder is. If a step
 prints `{"error": ...}`, report the error as it is and stop.
