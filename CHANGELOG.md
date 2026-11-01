@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- "Running the server" docs page: installing and starting `bioamla serve`, the token file,
+  reaching it over an SSH tunnel or a VPN, a systemd unit, and linking recordings already on
+  the machine with `--allow-link`.
+
 - `audio visualize --box START,END[,LOW,HIGH][,LABEL]` (repeatable) and `--annotations FILE`
   outline regions on the picture: a box spans its band on the STFT and mel spectrograms, and
   the full height without one (and on MFCC and waveform plots); labels are written at its

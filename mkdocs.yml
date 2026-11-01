@@ -29,6 +29,7 @@ nav:
   - CLI Reference: cli.md
   - Settings: settings.md
   - Recorder metadata: recorder-metadata.md
+  - Running the server: server.md
   - Architecture:
       - Workspaces, remote work and skills: architecture/workspaces-and-remote.md
   - API Reference:
