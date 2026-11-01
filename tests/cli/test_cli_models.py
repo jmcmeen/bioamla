@@ -483,3 +483,9 @@ def test_ast_predict_top_k_lists_ranked_labels(runner: CliRunner, test_audio_pat
     assert "[frog 0.9000, toad 0.0600]  margin 0.8400" in result.output
     bad = runner.invoke(cli, ["models", "ast", "predict", test_audio_path, "--top-k", "-1"])
     assert bad.exit_code == 2
+
+
+def test_ast_train_has_no_id_column_option(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["models", "ast", "train", "--train-dataset", "x", "--id-column",
+                                 "target"])  # fmt: skip
+    assert result.exit_code == 2 and "No such option" in result.output

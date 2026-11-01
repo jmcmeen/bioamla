@@ -158,12 +158,6 @@ def ast_predict(
 )
 @click.option("--split", default="train", help="Dataset split to use (for HuggingFace datasets)")
 @click.option(
-    "--id-column",
-    "category_id_column",
-    default="target",
-    help="Column name for category/target IDs",
-)
-@click.option(
     "--label-column", "category_label_column", default="category", help="Column name for labels"
 )
 @click.option(
@@ -322,7 +316,6 @@ def ast_train(
     base_model: str,
     train_dataset: str,
     split: str,
-    category_id_column: str,
     category_label_column: str,
     report_to: str,
     learning_rate: float,
@@ -387,18 +380,16 @@ def ast_train(
     """
     from click.core import ParameterSource
 
-    from bioamla.cli.console import print_kv, print_success, print_warning
+    from bioamla.cli.console import print_kv, print_success
     from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.cli.operations import run_operation
 
     # Surface the library's INFO progress messages (and warnings) on the console.
     configure_cli_logging()
-    if ctx.get_parameter_source("category_id_column") != ParameterSource.DEFAULT:
-        print_warning("--id-column is not used by training and is ignored (see issue #254)")
 
     # Only the flags given on the command line are passed: they win over the config
     # file, which wins over the library's defaults.
-    not_options = {"config_path", "train_dataset", "training_dir", "category_id_column"}
+    not_options = {"config_path", "train_dataset", "training_dir"}
     options = {
         name: value
         for name, value in ctx.params.items()

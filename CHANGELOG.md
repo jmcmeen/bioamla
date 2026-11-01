@@ -239,6 +239,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Removed
 
+- `models ast train --id-column`, which training never used (labels are numbered from
+  the sorted `--label-column` values). Passing it is now a usage error.
+
 - **Python 3.10 support.** bioamla now requires Python 3.11 or newer. 3.10 reached end of life in
   October 2026, and the security fixes for pillow and filelock need 3.11. The `tomli`
   dependency is gone (`tomllib` is in the standard library from 3.11).
