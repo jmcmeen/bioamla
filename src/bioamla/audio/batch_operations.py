@@ -31,6 +31,14 @@ from bioamla.audio.features import FrameFeatureConfig
 from bioamla.audio.operations import AudioFormat
 from bioamla.batch import BatchRequest, BatchResult
 from bioamla.common.config import config_dataclass
+from bioamla.common.constants import (
+    DEFAULT_CMAP,
+    DEFAULT_DPI,
+    DEFAULT_HOP_LENGTH,
+    DEFAULT_N_FFT,
+    DEFAULT_N_MELS,
+    DEFAULT_N_MFCC,
+)
 from bioamla.operations import OperationContext, operation
 
 
@@ -302,13 +310,28 @@ def batch_audio_segment_op(request: BatchSegmentRequest, context: OperationConte
 class BatchVisualizeRequest(BatchRequest):
     """A spectrogram, MFCC or waveform image of every file (directory mode).
 
+    The drawing settings and their defaults are ``audio.visualize``'s, so both draw
+    the same picture of a file.
+
     Attributes:
         plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.
+        n_fft: FFT window size.
+        hop_length: Hop length.
+        n_mels: Mel bands.
+        n_mfcc: MFCCs.
+        cmap: Colormap name.
+        dpi: Image DPI.
         legend: Show axes, title and colorbar.
         verbose: Log each file at INFO level.
     """
 
     plot_type: Literal["mel", "stft", "mfcc", "waveform"] = "mel"
+    n_fft: int = DEFAULT_N_FFT
+    hop_length: int = DEFAULT_HOP_LENGTH
+    n_mels: int = DEFAULT_N_MELS
+    n_mfcc: int = DEFAULT_N_MFCC
+    cmap: str = DEFAULT_CMAP
+    dpi: int = DEFAULT_DPI
     legend: bool = True
     verbose: bool = True
 
@@ -321,6 +344,12 @@ def batch_audio_visualize_op(
     return batch_visualize(
         request.to_config(),
         viz_type=request.plot_type,
+        n_fft=request.n_fft,
+        hop_length=request.hop_length,
+        n_mels=request.n_mels,
+        n_mfcc=request.n_mfcc,
+        cmap=request.cmap,
+        dpi=request.dpi,
         legend=request.legend,
         verbose=request.verbose,
         on_progress=context.progress,

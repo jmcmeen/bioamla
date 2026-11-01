@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from bioamla.cli.options import frame_feature_options, segment_options
+from bioamla.cli.options import frame_feature_options, picture_options, segment_options
 from bioamla.exceptions import BioamlaError
 
 
@@ -529,17 +529,7 @@ def audio_gain(input_path: str, output_path: str, gain_db: float) -> None:
     type=click.Choice(["mel", "stft", "mfcc", "waveform"]),
     help="Visualization type",
 )
-@click.option("--n-fft", default=2048, type=int, help="FFT window size")
-@click.option("--hop-length", default=512, type=int, help="Hop length")
-@click.option("--n-mels", default=128, type=int, help="Number of mel bands")
-@click.option("--n-mfcc", default=20, type=int, help="Number of MFCCs")
-@click.option("--cmap", default="viridis", help="Colormap name")
-@click.option("--dpi", default=100, type=int, help="Output DPI")
-@click.option(
-    "--legend/--no-legend",
-    default=True,
-    help="Show axes, title, and colorbar (default: True)",
-)
+@picture_options
 @click.option(
     "--box",
     "boxes",

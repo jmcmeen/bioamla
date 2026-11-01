@@ -177,6 +177,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- **Behavior change:** `audio visualize` and `batch audio visualize` draw the same picture
+  of a file: one set of defaults (150 dpi, the `magma` colormap, 40 MFCCs, as `bioamla.viz`
+  already used), so `audio visualize` pictures are larger (was 100 dpi) and use another
+  colormap (was `viridis`) and MFCC count (was 20). `batch audio visualize` gains the single
+  command's drawing options (`--n-fft`, `--hop-length`, `--n-mels`, `--n-mfcc`, `--cmap`,
+  `--dpi`), as does its request; the defaults live in `bioamla.common.constants`
+  (`DEFAULT_N_MELS`, `DEFAULT_N_MFCC`, `DEFAULT_CMAP`, `DEFAULT_DPI`).
+
 - **Behavior change:** `audio trim`, `audio resample` and `audio gain`, `batch audio
   resample` and `batch audio trim` by time range keep a file's channels; they mixed every
   file down to mono. `batch audio trim --trim-silence` still mixes down, so every channel is

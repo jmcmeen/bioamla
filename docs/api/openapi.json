@@ -9279,17 +9279,17 @@
           "n_mfcc": {
             "type": "integer",
             "title": "N Mfcc",
-            "default": 20
+            "default": 40
           },
           "cmap": {
             "type": "string",
             "title": "Cmap",
-            "default": "viridis"
+            "default": "magma"
           },
           "dpi": {
             "type": "integer",
             "title": "Dpi",
-            "default": 100
+            "default": 150
           },
           "legend": {
             "type": "boolean",
@@ -10909,6 +10909,36 @@
             "title": "Plot Type",
             "default": "mel"
           },
+          "n_fft": {
+            "type": "integer",
+            "title": "N Fft",
+            "default": 2048
+          },
+          "hop_length": {
+            "type": "integer",
+            "title": "Hop Length",
+            "default": 512
+          },
+          "n_mels": {
+            "type": "integer",
+            "title": "N Mels",
+            "default": 128
+          },
+          "n_mfcc": {
+            "type": "integer",
+            "title": "N Mfcc",
+            "default": 40
+          },
+          "cmap": {
+            "type": "string",
+            "title": "Cmap",
+            "default": "magma"
+          },
+          "dpi": {
+            "type": "integer",
+            "title": "Dpi",
+            "default": 150
+          },
           "legend": {
             "type": "boolean",
             "title": "Legend",
@@ -10923,7 +10953,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "BatchVisualizeRequest",
-        "description": "A spectrogram, MFCC or waveform image of every file (directory mode).\n\nAttributes:\n    plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.\n    legend: Show axes, title and colorbar.\n    verbose: Log each file at INFO level."
+        "description": "A spectrogram, MFCC or waveform image of every file (directory mode).\n\nThe drawing settings and their defaults are ``audio.visualize``'s, so both draw\nthe same picture of a file.\n\nAttributes:\n    plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.\n    n_fft: FFT window size.\n    hop_length: Hop length.\n    n_mels: Mel bands.\n    n_mfcc: MFCCs.\n    cmap: Colormap name.\n    dpi: Image DPI.\n    legend: Show axes, title and colorbar.\n    verbose: Log each file at INFO level."
       },
       "BioIndexRequest": {
         "properties": {

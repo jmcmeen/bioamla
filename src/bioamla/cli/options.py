@@ -71,6 +71,34 @@ def segment_options(f: Callable) -> Callable:
     return f
 
 
+def picture_options(f: Callable) -> Callable:
+    """The drawing options ``audio visualize`` and ``batch audio visualize`` share, with
+    the same defaults as :mod:`bioamla.viz`, so both draw the same picture of a file:
+    ``--n-fft``, ``--hop-length``, ``--n-mels``, ``--n-mfcc``, ``--cmap``, ``--dpi``,
+    ``--legend/--no-legend``."""
+    from bioamla.common import constants as c
+
+    options = [
+        click.option("--n-fft", default=c.DEFAULT_N_FFT, show_default=True, type=int,
+                     help="FFT window size"),
+        click.option("--hop-length", default=c.DEFAULT_HOP_LENGTH, show_default=True,
+                     type=int, help="Hop length"),
+        click.option("--n-mels", default=c.DEFAULT_N_MELS, show_default=True, type=int,
+                     help="Number of mel bands"),
+        click.option("--n-mfcc", default=c.DEFAULT_N_MFCC, show_default=True, type=int,
+                     help="Number of MFCCs"),
+        click.option("--cmap", default=c.DEFAULT_CMAP, show_default=True,
+                     help="Colormap name"),
+        click.option("--dpi", default=c.DEFAULT_DPI, show_default=True, type=int,
+                     help="Output DPI"),
+        click.option("--legend/--no-legend", default=True,
+                     help="Show axes, title, and colorbar (default: True)"),
+    ]  # fmt: skip
+    for option in reversed(options):
+        f = option(f)
+    return f
+
+
 def frame_feature_options(f: Callable) -> Callable:
     """Analysis options shared by ``audio features`` and ``batch audio features``."""
     options = [

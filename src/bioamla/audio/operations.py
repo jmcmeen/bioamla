@@ -33,6 +33,14 @@ from bioamla.audio.files import (
     trim_audio_file,
 )
 from bioamla.common.config import config_dataclass
+from bioamla.common.constants import (
+    DEFAULT_CMAP,
+    DEFAULT_DPI,
+    DEFAULT_HOP_LENGTH,
+    DEFAULT_N_FFT,
+    DEFAULT_N_MELS,
+    DEFAULT_N_MFCC,
+)
 from bioamla.operations import OperationContext, PathStr, operation
 
 AudioFormat = Literal["wav", "mp3", "flac", "ogg"]
@@ -505,12 +513,12 @@ class AudioVisualizeRequest:
     file: PathStr
     output: PathStr
     viz_type: Literal["mel", "stft", "mfcc", "waveform"] = "mel"
-    n_fft: int = 2048
-    hop_length: int = 512
-    n_mels: int = 128
-    n_mfcc: int = 20
-    cmap: str = "viridis"
-    dpi: int = 100
+    n_fft: int = DEFAULT_N_FFT
+    hop_length: int = DEFAULT_HOP_LENGTH
+    n_mels: int = DEFAULT_N_MELS
+    n_mfcc: int = DEFAULT_N_MFCC
+    cmap: str = DEFAULT_CMAP
+    dpi: int = DEFAULT_DPI
     legend: bool = True
     boxes: list[VisualizeBox] = field(default_factory=list)
     annotations: PathStr | None = None

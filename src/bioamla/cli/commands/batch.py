@@ -26,6 +26,7 @@ from bioamla.cli.batch_options import batch_input_options, batch_output_options
 from bioamla.cli.options import (
     frame_feature_options,
     max_workers_option,
+    picture_options,
     quiet_option,
     recursive_option,
     segment_options,
@@ -564,14 +565,16 @@ def audio_segment(
     type=click.Choice(["mel", "stft", "mfcc", "waveform"]),
     help="Visualization type",
 )
-@click.option("--legend/--no-legend", default=True, help="Show axes, title, and colorbar")
+@picture_options
 @max_workers_option
 @recursive_option
 @quiet_option
 def audio_visualize(
-    input_dir, input_file, output_dir, plot_type, legend, max_workers, recursive, quiet
-) -> None:
-    """Batch generate audio visualizations."""
+    input_dir, input_file, output_dir, plot_type, n_fft, hop_length, n_mels, n_mfcc, cmap, dpi,
+    legend, max_workers, recursive, quiet,
+) -> None:  # fmt: skip
+    """Batch generate audio visualizations, drawn as `audio visualize` draws them (same
+    options and defaults)."""
     from bioamla.cli.logging_setup import configure_cli_logging
 
     configure_cli_logging()
@@ -579,7 +582,8 @@ def audio_visualize(
         result = _run_batch_operation(
             "batch.audio.visualize", input_dir=input_dir, input_file=input_file, output_dir=output_dir, max_workers=max_workers, recursive=recursive, quiet=quiet,
             header=f"Generating {plot_type} visualizations...",
-            plot_type=plot_type, legend=legend, verbose=not quiet,
+            plot_type=plot_type, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels,
+            n_mfcc=n_mfcc, cmap=cmap, dpi=dpi, legend=legend, verbose=not quiet,
         )  # fmt: skip
         _report(result, output_dir, quiet)
     finally:

@@ -29,6 +29,14 @@ from bioamla.batch import (
 from bioamla.batch import config_csv_context as _csv_context
 from bioamla.batch import require_input_dir as _input_dir
 from bioamla.batch import require_output_dir as _output_dir
+from bioamla.common.constants import (
+    DEFAULT_CMAP,
+    DEFAULT_DPI,
+    DEFAULT_HOP_LENGTH,
+    DEFAULT_N_FFT,
+    DEFAULT_N_MELS,
+    DEFAULT_N_MFCC,
+)
 from bioamla.exceptions import InvalidInputError, NotFoundError
 from bioamla.protocols import OnProgress
 
@@ -740,12 +748,20 @@ def batch_visualize(
     config: "BatchConfig",
     *,
     viz_type: str = "mel",
+    n_fft: int = DEFAULT_N_FFT,
+    hop_length: int = DEFAULT_HOP_LENGTH,
+    n_mels: int = DEFAULT_N_MELS,
+    n_mfcc: int = DEFAULT_N_MFCC,
+    cmap: str = DEFAULT_CMAP,
+    dpi: int = DEFAULT_DPI,
     legend: bool = True,
     verbose: bool = True,
     on_progress: OnProgress | None = None,
 ) -> BatchResult:
     """Draw a spectrogram, MFCC or waveform image of every file in a folder, with axes,
-    title and colorbar unless ``legend`` is ``False``.
+    title and colorbar unless ``legend`` is ``False``. The drawing settings default to
+    :func:`bioamla.viz.generate_spectrogram`'s, so each picture matches ``audio
+    visualize``'s of the same file.
 
     Directory mode only; images mirror the input tree under ``config.output_dir``
     (required). See :func:`bioamla.viz.batch_generate_spectrograms`.
@@ -759,6 +775,12 @@ def batch_visualize(
         _input_dir(config),
         _output_dir(config),
         viz_type=viz_type,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        n_mels=n_mels,
+        n_mfcc=n_mfcc,
+        cmap=cmap,
+        dpi=dpi,
         show_colorbar=legend,
         recursive=config.recursive,
         verbose=verbose,

@@ -35,6 +35,14 @@ from typing import Any, Literal
 import librosa
 import numpy as np
 
+from bioamla.common.constants import (
+    DEFAULT_CMAP,
+    DEFAULT_DPI,
+    DEFAULT_HOP_LENGTH,
+    DEFAULT_N_FFT,
+    DEFAULT_N_MELS,
+    DEFAULT_N_MFCC,
+)
 from bioamla.exceptions import AudioLoadError, InvalidInputError, NotFoundError, ProcessingError
 from bioamla.viz._backend import Backend, mel_power, select_backend, stft_magnitude
 
@@ -90,17 +98,17 @@ def generate_spectrogram(
     output_path: str,
     viz_type: VisualizationType = "mel",
     sample_rate: int = 16000,
-    n_mels: int = 128,
-    n_mfcc: int = 40,
-    hop_length: int = 512,
-    n_fft: int = 2048,
+    n_mels: int = DEFAULT_N_MELS,
+    n_mfcc: int = DEFAULT_N_MFCC,
+    hop_length: int = DEFAULT_HOP_LENGTH,
+    n_fft: int = DEFAULT_N_FFT,
     window: WindowType = "hann",
     figsize: tuple[int, int] = (10, 4),
-    cmap: str = "magma",
+    cmap: str = DEFAULT_CMAP,
     title: str | None = None,
     db_min: float | None = None,
     db_max: float | None = None,
-    dpi: int = 150,
+    dpi: int = DEFAULT_DPI,
     format: str | None = None,
     show_colorbar: bool = True,
     backend: str = "auto",
