@@ -28,8 +28,8 @@ datasets.
 In `result`, paths are strings, NaN and infinity are `null`, and keys are snake_case.
 Every command reports a result except `audio play`, which refuses `--json`. Commands
 that would prompt (`system deps --install`, `catalogs hf cache --purge`) need `--yes`
-with `--json`. The older per-command `--json` flags (`annotation summary`,
-`audio metadata`, `dataset stats`) still print bare JSON but are deprecated.
+with `--json`. The flag goes before the command: the per-command `--json` of
+`annotation summary`, `audio metadata` and `dataset stats` was removed in 0.4.0.
 
 ### Progress events
 

@@ -37,11 +37,6 @@ def catalogs_inat() -> None:
 @click.option(
     "--quality-grade", default="research", help="Quality grade: research, needs_id, or casual"
 )
-@click.option(
-    "--has-sounds",
-    is_flag=True,
-    help="Deprecated: has no effect; this search only returns observations with sounds.",
-)
 @click.option("--limit", type=int, default=20, help="Maximum number of results")
 @click.option("--output", "-o", default=None, help="Output file path for CSV (optional)")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")
@@ -51,7 +46,6 @@ def inat_search(
     place_id: int,
     project_id: str,
     quality_grade: str,
-    has_sounds: bool,
     limit: int,
     output: str,
     quiet: bool,

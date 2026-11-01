@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -115,9 +116,9 @@ def test_dataset_stats(runner: CliRunner, tmp_path) -> None:
 def test_dataset_stats_json(runner: CliRunner, tmp_path) -> None:
     stats = {"total_files": 1, "num_categories": 1, "categories": {"frog": 1}}
     with patch("bioamla.datasets.stats.get_dataset_stats", return_value=stats):
-        result = runner.invoke(cli, ["dataset", "stats", str(tmp_path), "--json"])
+        result = runner.invoke(cli, ["--json", "dataset", "stats", str(tmp_path)])
     assert result.exit_code == 0
-    assert '"total_files": 1' in result.output
+    assert json.loads(result.stdout)["result"]["total_files"] == 1
 
 
 def test_dataset_stats_error(runner: CliRunner, tmp_path) -> None:

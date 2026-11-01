@@ -171,20 +171,14 @@ def dataset_extract_clips(
 @click.option(
     "--metadata-filename", default="metadata.csv", help="Name of the metadata CSV in the dataset"
 )
-@click.option(
-    "--json",
-    "output_json",
-    is_flag=True,
-    help="Deprecated: bare JSON. Use `bioamla --json dataset stats` instead.",
-)
-def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -> None:
+def dataset_stats(dataset_dir: str, metadata_filename: str) -> None:
     """Show summary statistics for a dataset's metadata.csv.
 
     DATASET_DIR is the dataset directory, or the path of its metadata CSV.
     """
     from bioamla.cli.console import echo, print_header, print_kv
     from bioamla.cli.operations import run_operation
-    from bioamla.cli.output import emit_result, json_mode, legacy_json
+    from bioamla.cli.output import emit_result, json_mode
 
     stats = run_operation(
         "dataset.stats", dataset_dir=dataset_dir, metadata_filename=metadata_filename
@@ -192,10 +186,6 @@ def dataset_stats(dataset_dir: str, metadata_filename: str, output_json: bool) -
     if json_mode():
         emit_result(stats)
         return
-    if output_json:
-        legacy_json(stats)
-        return
-
     print_header(f"\nDataset Statistics: {dataset_dir}")
     echo("=" * 50)
     print_kv("Total files", stats["total_files"])

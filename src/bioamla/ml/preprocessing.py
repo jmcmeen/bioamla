@@ -16,7 +16,6 @@ import librosa
 import numpy as np
 
 from bioamla.common.config import config_dataclass
-from bioamla.common.deprecation import deprecated_aliases
 
 if TYPE_CHECKING:
     import torch
@@ -329,9 +328,3 @@ class BioamlaPreprocessor:
             "width": self.width,
             "augmentation_enabled": self.augmentation_enabled,
         }
-
-
-# Renamed so it isn't confused with bioamla.datasets' WaveformAugmentationConfig.
-__getattr__ = deprecated_aliases(
-    __name__, globals(), {"AugmentationConfig": "SpectrogramAugmentationConfig"}
-)
