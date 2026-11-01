@@ -61,14 +61,11 @@ def remote_add(name: str, url: str, token_env: str | None) -> None:
 @remote.command("list")
 def remote_list() -> None:
     """Show the remotes, and whether each one's token is set."""
-    import os
-
     from bioamla.cli.console import print_table
     from bioamla.cli.output import emit_result
     from bioamla.client import remotes
 
-    rows = [{**r.to_dict(), "token_set": bool(os.environ.get(r.token_env))}
-            for r in _call(remotes)]  # fmt: skip
+    rows = [r.to_dict() for r in _call(remotes)]
     if emit_result({"remotes": rows}):
         return
     if not rows:
@@ -159,7 +156,13 @@ def remote_upload(
     uploaded = []
     for file in files:
         target = f"{prefix}/{Path(file).name}" if prefix else Path(file).name
-        uploaded.append(_call(client.upload, workspace, file, target, overwrite))
+        try:
+            uploaded.append(client.upload(workspace, file, target, overwrite))
+        except BioamlaError as e:
+            done = ", ".join(u["path"] for u in uploaded)
+            raise click.ClickException(
+                f"{file}: {e}" + (f" (already uploaded: {done})" if done else "")
+            ) from e
     if emit_result({"uploaded": uploaded}):
         return
     for item in uploaded:
@@ -177,16 +180,26 @@ def remote_upload(
     type=click.Path(file_okay=False),
     help="Folder to save into (default: the current one)",
 )
-def remote_download(name: str, workspace: str, paths: tuple[str, ...], output: str) -> None:
-    """Download PATHS (files in WORKSPACE on NAME) into a local folder."""
-    from pathlib import Path
+@click.option("--overwrite", is_flag=True, help="Replace local files that exist")
+def remote_download(
+    name: str, workspace: str, paths: tuple[str, ...], output: str, overwrite: bool
+) -> None:
+    """Download PATHS (files in WORKSPACE on NAME) into a local folder, by name."""
+    from collections import Counter
+    from pathlib import Path, PurePosixPath
 
     from bioamla.cli.console import print_success
     from bioamla.cli.output import emit_result
 
+    clashes = [n for n, c in Counter(PurePosixPath(p).name for p in paths).items() if c > 1]
+    if clashes:
+        raise click.UsageError(
+            f"Several paths are named {', '.join(clashes)}; download them to separate folders"
+        )
     client = _client(name)
     Path(output).mkdir(parents=True, exist_ok=True)
-    saved = [str(_call(client.download, workspace, path, output)) for path in paths]
+    saved = [str(_call(client.download, workspace, path, Path(output), overwrite))
+             for path in paths]  # fmt: skip
     if emit_result({"downloaded": saved}):
         return
     for path in saved:
@@ -225,20 +238,7 @@ def remote_cancel(name: str, job_id: str) -> None:
     from bioamla.cli.console import print_success
     from bioamla.cli.output import emit_result
 
-    client = _client(name)
-    job = _call(client.cancel, _full_job_id(client, job_id))
+    job = _call(_client(name).cancel, job_id)
     if emit_result(job):
         return
     print_success(f"Job {job['id'][:12]}: {job['status']}")
-
-
-def _full_job_id(client, job_id: str) -> str:
-    """``job_id``, or the one job whose id starts with it (ids are listed shortened)."""
-    if len(job_id) >= 32:
-        return job_id
-    matches = [j["id"] for j in _call(client.jobs) if j["id"].startswith(job_id)]
-    if len(matches) != 1:
-        raise click.ClickException(
-            f"No job {job_id!r}" if not matches else f"{job_id!r} matches several jobs"
-        )
-    return matches[0]

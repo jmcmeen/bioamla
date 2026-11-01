@@ -11,7 +11,8 @@ All notable changes to this project are documented here. The format is based on
 - `bioamla.client`: work on a server from another machine. `Client(url, token)` lists and
   creates workspaces, reads and changes their settings, lists, uploads and downloads files,
   runs operations (`run()` waits for a job, following its events and progress; `submit()`
-  doesn't), and lists, follows and cancels jobs. A refusal raises `RemoteError` with the
+  doesn't; a dropped event stream is resumed after the last event), and lists, follows and
+  cancels jobs (by id or a unique prefix). A refusal raises `RemoteError` with the
   server's message (`RemoteNotFound`, `RemoteInvalidInput`; `JobFailed` for a failed or
   cancelled job). It needs only `requests`, so the base install can drive a server.
 - Named remotes in the user's settings file (`[remotes.NAME]` with `url` and `token_env`;

@@ -91,12 +91,7 @@ class Client:
         return response
 
     def _call(self, method: str, path: str, **kwargs: Any) -> Any:
-        response = self._request(method, path, **kwargs)
-        try:
-            body = response.json()
-        except ValueError as e:
-            raise RemoteError(f"{self.url} answered with something other than JSON") from e
-        return body.get("result")
+        return _json(self._request(method, path, **kwargs), self.url).get("result")
 
     # Service ---------------------------------------------------------------------
 
@@ -161,24 +156,42 @@ class Client:
             return self._call("PUT", f"/workspaces/{quote(ws)}/files/{_quote_path(remote or local.name)}",
                               params={"overwrite": overwrite}, data=f)  # fmt: skip
 
-    def download(self, ws: str, remote: str, local: str | Path | None = None) -> Path:
-        """Download ``remote`` from the workspace to ``local`` (default: its name in the
-        current folder; a folder means the file's name in it). Written whole or not at all.
+    def download(
+        self, ws: str, remote: str, local: str | Path | None = None, overwrite: bool = False
+    ) -> Path:
+        """Download ``remote`` from the workspace. ``local`` is the file to write, or a
+        folder to write it into by its name when it is an existing folder or ends in
+        ``/`` (default: the current folder). Written whole or not at all.
 
         Returns:
             The file written.
+
+        Raises:
+            InvalidInputError: If the file exists and ``overwrite`` is off.
+            RemoteError: If the server refuses, or the transfer breaks.
         """
+        import requests
+
         from bioamla.common.files import AtomicFileWriter
 
-        target = Path(local) if local else Path(Path(remote).name)
-        if target.is_dir():
-            target = target / Path(remote).name
+        name = Path(remote).name
+        if local is None:
+            target = Path(name)
+        elif str(local).endswith(("/", "\\")) or Path(local).is_dir():
+            target = Path(local) / name
+        else:
+            target = Path(local)
+        if target.exists() and not overwrite:
+            raise InvalidInputError(f"{target} exists; pass overwrite to replace it")
         response = self._request("GET", f"/workspaces/{quote(ws)}/files/{_quote_path(remote)}",
                                  stream=True)  # fmt: skip
-        with response, AtomicFileWriter(target, overwrite=True) as writer:
-            for chunk in response.iter_content(chunk_size=1 << 20):
-                writer.write(chunk)
-            writer.commit()
+        try:
+            with response, AtomicFileWriter(target, overwrite=True) as writer:
+                for chunk in response.iter_content(chunk_size=1 << 20):
+                    writer.write(chunk)
+                writer.commit()
+        except requests.RequestException as e:
+            raise RemoteError(f"Lost the connection to {self.url}: {e}") from e
         return target
 
     # Operations and jobs ---------------------------------------------------------
@@ -190,7 +203,16 @@ class Client:
             For a quick operation, its result; for a job, the job (``id``, ``status``).
             :meth:`run` waits for a job's result instead.
         """
-        return self._call("POST", f"/workspaces/{quote(ws)}/operations/{name}", json=request or {})
+        return self._submit(ws, name, request)[1]
+
+    def _submit(
+        self, ws: str, name: str, request: dict[str, Any] | None, **params: Any
+    ) -> tuple[bool, dict[str, Any], Any]:
+        """``(is_job, result_or_job, body)`` for posting the operation."""
+        response = self._request("POST", f"/workspaces/{quote(ws)}/operations/{name}",
+                                 json=request or {}, params=params or None)  # fmt: skip
+        body = _json(response, self.url)
+        return response.status_code == 202, body.get("result"), body
 
     def run(
         self,
@@ -209,16 +231,10 @@ class Client:
             JobFailed: If the job failed or was cancelled.
             RemoteError: If the server refused the request.
         """
-        kind = self._kinds().get(name)
-        answer = self.submit(ws, name, request)
-        if kind != "job":
+        is_job, answer, _ = self._submit(ws, name, request)
+        if not is_job:
             return answer
         return self.wait(answer["id"], on_progress=on_progress, on_event=on_event)["result"]
-
-    def _kinds(self) -> dict[str, str]:
-        if not hasattr(self, "_kind_cache"):
-            self._kind_cache = {op["name"]: op["kind"] for op in self.operations()["operations"]}
-        return self._kind_cache
 
     def wait(
         self,
@@ -226,18 +242,38 @@ class Client:
         *,
         on_progress: Callable[[int, int], None] | None = None,
         on_event: Callable[[dict[str, Any]], None] | None = None,
+        retries: int = 5,
     ) -> dict[str, Any]:
-        """Follow a job's events until it finishes; the finished job.
+        """Follow a job's events until it finishes; the finished job. A dropped
+        stream is resumed after the last event seen (up to ``retries`` times in a row).
 
         Raises:
             JobFailed: If it failed or was cancelled.
+            RemoteError: If the server can't be reached again.
         """
-        for event in self.events(job_id):
-            if on_event is not None:
-                on_event(event)
-            if on_progress is not None and event["event"] == "progress":
-                on_progress(event["done"], event["total"])
-        job = self.job(job_id)
+        import time
+
+        job_id = self.resolve_job_id(job_id)
+        after, failures = 0, 0
+        while True:
+            try:
+                for event in self.events(job_id, after=after):
+                    after, failures = event["id"], 0
+                    if on_event is not None:
+                        on_event(event)
+                    if on_progress is not None and event["event"] == "progress":
+                        on_progress(event["done"], event["total"])
+            except RemoteError as e:
+                if e.status is not None:  # the server answered: not a dropped stream
+                    raise
+                failures += 1
+                if failures > retries:
+                    raise
+                time.sleep(min(2**failures * 0.25, 5))
+                continue
+            job = self.job(job_id)
+            if job["status"] in FINISHED:
+                break
         if job["status"] != "succeeded":
             raise JobFailed(job)
         return job
@@ -246,28 +282,60 @@ class Client:
         """The server's jobs since it started, newest first."""
         return self._call("GET", "/jobs", params={"workspace": workspace} if workspace else None)
 
+    def resolve_job_id(self, job_id: str) -> str:
+        """The full id of the one job whose id starts with ``job_id`` (listings show
+        them shortened); a full id is returned as is.
+
+        Raises:
+            RemoteNotFound: If no job, or several, match.
+        """
+        if len(job_id) >= 32:
+            return job_id
+        matches = [j["id"] for j in self.jobs() if j["id"].startswith(job_id)]
+        if len(matches) != 1:
+            problem = "No job" if not matches else "Several jobs match"
+            raise RemoteNotFound(f"{problem} {job_id!r}", 404, "NotFoundError")
+        return matches[0]
+
     def job(self, job_id: str) -> dict[str, Any]:
-        """A job: status, progress, and its result or error once done."""
-        return self._call("GET", f"/jobs/{quote(job_id)}")
+        """A job (by id or a unique prefix): status, progress, and its result or error
+        once done."""
+        return self._call("GET", f"/jobs/{quote(self.resolve_job_id(job_id))}")
 
     def cancel(self, job_id: str) -> dict[str, Any]:
-        """Ask a job to stop; the job."""
-        return self._call("POST", f"/jobs/{quote(job_id)}/cancel")
+        """Ask a job (by id or a unique prefix) to stop; the job."""
+        return self._call("POST", f"/jobs/{quote(self.resolve_job_id(job_id))}/cancel")
 
     def log(self, job_id: str) -> str:
         """A job's notices and log lines."""
-        return self._request("GET", f"/jobs/{quote(job_id)}/log").text
+        return self._request("GET", f"/jobs/{quote(self.resolve_job_id(job_id))}/log").text
 
     def events(self, job_id: str, after: int = 0) -> Iterator[dict[str, Any]]:
         """A job's events (``status``, ``progress``, ``notice``, ``log``) as they
-        happen, from after event ``after``, until it finishes."""
+        happen, from after event ``after``, until it finishes.
+
+        Raises:
+            RemoteError: If the server can't be reached or the stream breaks.
+        """
+        import requests
+
         headers = {"Last-Event-ID": str(after)} if after else {}
         response = self._request("GET", f"/jobs/{quote(job_id)}/events", stream=True,
                                  headers=headers, timeout=(self.timeout, None))  # fmt: skip
         with response:
-            for line in response.iter_lines(decode_unicode=True):
-                if line and line.startswith("data: "):
-                    yield json.loads(line[len("data: ") :])
+            try:
+                for line in response.iter_lines(decode_unicode=True):
+                    if line and line.startswith("data: "):
+                        yield json.loads(line[len("data: ") :])
+            except requests.RequestException as e:
+                raise RemoteError(f"Lost the connection to {self.url}: {e}") from e
+
+
+def _json(response: Any, url: str) -> dict[str, Any]:
+    try:
+        return response.json()
+    except ValueError as e:
+        raise RemoteError(f"{url} answered with something other than JSON") from e
 
 
 def _error(response: Any) -> RemoteError:
