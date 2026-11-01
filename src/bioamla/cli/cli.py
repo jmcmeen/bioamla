@@ -107,8 +107,10 @@ class BioamlaGroup(click.Group):
         # Done here, inside main()'s error handling, so a malformed settings file
         # is reported like any other error (and as an envelope with --json).
         if parent is None:
+            from bioamla.cli import remote_mode
             from bioamla.cli.settings_map import settings_default_map
 
+            remote_mode.reset()  # nothing carries over from a previous run in this process
             self._run_args = list(args)  # for the root callback (which command runs)
             words = [a for a in args if not a.startswith("-")]
             # Commands that inspect or fix settings, or describe the CLI, still run
@@ -195,6 +197,21 @@ class BioamlaGroup(click.Group):
             return rv
         finally:
             output.disable_json_mode()
+
+
+def _without_option(args: list[str], name: str) -> list[str]:
+    """``args`` without the root option ``name`` and its value (so a value can't be
+    mistaken for a command)."""
+    out: list[str] = []
+    skip = False
+    for arg in args:
+        if skip:
+            skip = False
+        elif arg == name:
+            skip = True
+        elif not arg.startswith(f"{name}="):
+            out.append(arg)
+    return out
 
 
 def _describe_exit(exc: BaseException) -> tuple[int, dict | None]:
@@ -289,7 +306,7 @@ def cli(
     set_cli_logging(log_format, log_level)
     from bioamla.cli import output, remote_mode
 
-    args = getattr(ctx.command, "_run_args", [])
+    args = _without_option(getattr(ctx.command, "_run_args", []), "--remote")
     remote_mode.begin(
         remote_mode.resolve(remote_target), output.command_from_args(ctx.command, args)
     )

@@ -255,21 +255,19 @@ class Client:
         params = {"wire": "true"} if typed else {}
         is_job, answer, body = self._submit(ws, name, request, **params)
         if is_job:
-            done = self.wait(answer["id"], on_progress=on_progress, on_event=on_event)
-            answer = done["result"]
-            if typed:
-                body = self._request("GET", f"/jobs/{quote(done['id'])}",
-                                     params=params).json()  # fmt: skip
-        if typed and body.get("wire") is not None:
-            from bioamla.common.wire import WireError, from_wire
+            body = self._wait(answer["id"], on_progress, on_event, typed=typed)
+            answer = body["result"]["result"]
+        if not typed:
+            return answer
+        if "wire" not in body:
+            reason = body.get("wire_error") or "the server sent no typed result"
+            raise UntypedResult(f"{name}: {reason}", answer)
+        from bioamla.common.wire import WireError, from_wire
 
-            try:
-                return from_wire(body["wire"])
-            except WireError as e:
-                raise UntypedResult(f"Can't rebuild the result of {name}: {e}", answer) from e
-        if typed:
-            raise UntypedResult(f"The server sent no typed result for {name}", answer)
-        return answer
+        try:
+            return from_wire(body["wire"])
+        except WireError as e:
+            raise UntypedResult(f"Can't rebuild the result of {name}: {e}", answer) from e
 
     def wait(
         self,
@@ -286,6 +284,18 @@ class Client:
             JobFailed: If it failed or was cancelled.
             RemoteError: If the server can't be reached again.
         """
+        return self._wait(job_id, on_progress, on_event, retries=retries)["result"]
+
+    def _wait(
+        self,
+        job_id: str,
+        on_progress: Callable[[int, int], None] | None,
+        on_event: Callable[[dict[str, Any]], None] | None,
+        retries: int = 5,
+        typed: bool = False,
+    ) -> dict[str, Any]:
+        """:meth:`wait`, returning the final answer's whole body (with the typed
+        result when ``typed``)."""
         import time
 
         job_id = self.resolve_job_id(job_id)
@@ -306,12 +316,13 @@ class Client:
                     raise
                 time.sleep(min(2**failures * 0.25, 5))
                 continue
-            job = self.job(job_id)
-            if job["status"] in FINISHED:
+            body = _json(self._request("GET", f"/jobs/{quote(job_id)}",
+                                       params={"wire": "true"} if typed else None), self.url)  # fmt: skip
+            if body["result"]["status"] in FINISHED:
                 break
-        if job["status"] != "succeeded":
-            raise JobFailed(job)
-        return job
+        if body["result"]["status"] != "succeeded":
+            raise JobFailed(body["result"])
+        return body
 
     def jobs(self, workspace: str | None = None) -> list[dict[str, Any]]:
         """The server's jobs since it started, newest first."""

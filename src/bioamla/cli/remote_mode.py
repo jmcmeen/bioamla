@@ -14,10 +14,11 @@ progress and notices stream back, and the result comes back as the same objects 
 local run returns, so the command prints exactly what it prints locally. Paths are the
 server's, relative to the remote workspace, so local existence checks are skipped.
 
-Commands that only make sense here (``serve``, ``remote ...``, ``system commands``,
-``workspace config ...``) and operations that only run locally (``audio play``, ...)
-refuse an explicit ``--remote``; with a remote from the environment or a workspace's
-config they run locally as usual.
+A command goes to the server when the operation of the same name (``detect energy``
+runs ``detect.energy``) may run remotely. Commands with no operation (``serve``,
+``remote ...``, ``workspace config ...``) and local-only operations (``audio play``,
+...) refuse an explicit ``--remote``; with a remote from the environment or a
+workspace's config they run locally as usual, with their usual local checks.
 """
 
 from __future__ import annotations
@@ -32,9 +33,6 @@ import click
 from bioamla.exceptions import BioamlaError
 
 ENV = "BIOAMLA_REMOTE"
-
-#: Command paths that always run on this machine.
-LOCAL_COMMANDS = ("serve", "remote", "system commands", "workspace config")
 
 
 @dataclass(frozen=True)
@@ -101,19 +99,26 @@ def resolve(option: str | None, start: str | None = None) -> Target | None:
     return None
 
 
+def reset() -> None:
+    """Forget the previous run entirely (called as each run starts)."""
+    global _used
+    end()
+    _used = False
+
+
 def begin(target: Target | None, command: str | None) -> None:
     """Start a run with ``target`` for ``command`` (its path, e.g. ``detect energy``).
 
     Raises:
         click.UsageError: If ``command`` only runs here and ``--remote`` was given.
     """
-    global _current, _used
-    end()
-    if target is not None and command and _is_local(command):
+    global _current
+    reset()
+    if target is not None and not (command and runs_remotely(command)):
         if target.explicit:
             raise click.UsageError(f"`{command}` runs only on this machine; drop --remote")
         target = None
-    _current, _used = target, False
+    _current = target
     if target is not None:
         _relax_path_checks()
 
@@ -125,8 +130,19 @@ def end() -> None:
     _restore_path_checks()
 
 
-def _is_local(command: str) -> bool:
-    return any(command == c or command.startswith(c + " ") for c in LOCAL_COMMANDS)
+def runs_remotely(command: str) -> bool:
+    """Whether ``command`` (e.g. ``detect energy``) can run on a server: its operation
+    (``detect.energy``) exists and may run remotely. An operation this machine can't
+    load (a missing extra) is left for the server to decide."""
+    from bioamla import operations
+    from bioamla.exceptions import DependencyError, NotFoundError
+
+    try:
+        return operations.get(command.replace(" ", ".")).remote
+    except NotFoundError:
+        return False
+    except DependencyError:
+        return True
 
 
 def run(
@@ -148,6 +164,9 @@ def run(
     global _used
     from bioamla.client import UntypedResult, connect
 
+    # A key that came from this machine's environment stays here; the server uses its
+    # own. One given on the command line is refused rather than silently dropped.
+    secrets = {k: v for k, v in (secrets or {}).items() if v and v != os.environ.get(k)}
     if secrets:
         raise click.UsageError(
             f"Credentials given on the command line ({', '.join(sorted(secrets))}) aren't "
@@ -210,13 +229,17 @@ def _as_local_error(error: BioamlaError) -> Exception:
     """The error a local run would have raised for the server's ``error``, so the
     command reports it the same way (exit code, JSON ``error.type``)."""
     from bioamla import exceptions
+    from bioamla.client import JobFailed
     from bioamla.exceptions import OptionConflictError, RemoteError
 
     kind = getattr(error, "error_type", None)
+    message = str(error)
+    if isinstance(error, JobFailed):  # the job's own message, as a local run gives it
+        message = (error.job.get("error") or {}).get("message") or message
     cls = getattr(exceptions, kind, None) if kind else None
     if isinstance(cls, type) and issubclass(cls, BioamlaError) and not issubclass(cls, RemoteError):
         try:
-            local: BioamlaError = cls(str(error))
+            local: BioamlaError = cls(message)
         except TypeError:
             local = error
     else:
@@ -258,4 +281,15 @@ def _restore_path_checks() -> None:
         _original_convert = None
 
 
-__all__ = ["ENV", "LOCAL_COMMANDS", "Target", "begin", "current", "end", "resolve", "run", "used"]
+__all__ = [
+    "ENV",
+    "Target",
+    "begin",
+    "current",
+    "end",
+    "reset",
+    "resolve",
+    "run",
+    "runs_remotely",
+    "used",
+]

@@ -39,20 +39,33 @@ def _type_name(cls: type) -> str:
     return f"{cls.__module__}:{cls.__qualname__}"
 
 
-def _bioamla_type(name: str) -> type:
+def _is_bioamla(module: str) -> bool:
+    return module == "bioamla" or module.startswith("bioamla.")
+
+
+def _bioamla_type(name: str, kind: str) -> type:
+    """The class ``name`` (``module:QualName``), if it is a dataclass (``kind``
+    ``"dataclass"``) or an enum (``"enum"``) defined in bioamla. Nothing else is ever
+    looked up, so wire data can't reach other classes (e.g. one a bioamla module
+    imports)."""
     module, _, qualname = name.partition(":")
-    if not (module == "bioamla" or module.startswith("bioamla.")) or not qualname:
+    if not _is_bioamla(module) or not qualname:
         raise WireError(f"Not a bioamla type: {name!r}")
     try:
         obj: Any = importlib.import_module(module)
         for part in qualname.split("."):
             obj = getattr(obj, part)
+            if not isinstance(obj, type) or not _is_bioamla(obj.__module__):
+                raise WireError(f"Not a bioamla type: {name!r}")
     except (ImportError, AttributeError) as e:
         raise WireError(f"Unknown type {name!r}: {e}") from e
+    except WireError:
+        raise
     except BioamlaError as e:  # e.g. the module needs an extra that isn't installed
         raise WireError(f"Can't load {name!r} here: {e}") from e
-    if not isinstance(obj, type):
-        raise WireError(f"Not a type: {name!r}")
+    wanted = dataclasses.is_dataclass(obj) if kind == "dataclass" else issubclass(obj, enum.Enum)
+    if not wanted or f"{obj.__module__}:{obj.__qualname__}" != name:
+        raise WireError(f"Not a bioamla {kind}: {name!r}")
     return obj
 
 
@@ -98,10 +111,13 @@ def to_wire(value: Any) -> Any:
     numpy = _numpy()
     if numpy is not None:
         if isinstance(value, numpy.ndarray):
-            if value.dtype == object:
+            if value.dtype.hasobject:
                 raise WireError("Can't send an object array")
+            import base64
+
+            raw = numpy.ascontiguousarray(value).tobytes()
             return {_TAG: "ndarray", "dtype": value.dtype.str, "shape": list(value.shape),
-                    "data": [to_wire(v) for v in value.ravel().tolist()]}  # fmt: skip
+                    "b64": base64.b64encode(raw).decode("ascii")}  # fmt: skip
         if isinstance(value, numpy.generic):
             return {_TAG: "npscalar", "dtype": value.dtype.str, "value": to_wire(value.item())}
     raise WireError(f"Can't send a {type(value).__module__}.{type(value).__qualname__}")
@@ -134,7 +150,7 @@ def from_wire(data: Any) -> Any:
         if tag == "dict":
             return {_hashable(from_wire(k)): from_wire(v) for k, v in data["items"]}
         if tag == "enum":
-            return _bioamla_type(data["type"])(from_wire(data["value"]))
+            return _bioamla_type(data["type"], "enum")(from_wire(data["value"]))
         if tag == "dataclass":
             return _dataclass(data)
         if tag in ("ndarray", "npscalar"):
@@ -142,8 +158,13 @@ def from_wire(data: Any) -> Any:
 
             if tag == "npscalar":
                 return numpy.dtype(data["dtype"]).type(from_wire(data["value"]))
-            values = [from_wire(v) for v in data["data"]]
-            return numpy.array(values, dtype=numpy.dtype(data["dtype"])).reshape(data["shape"])
+            import base64
+
+            dtype = numpy.dtype(data["dtype"])
+            if dtype.hasobject:
+                raise WireError("Object arrays aren't sent")
+            raw = base64.b64decode(data["b64"], validate=True)
+            return numpy.frombuffer(raw, dtype=dtype).reshape(data["shape"]).copy()
     except WireError:
         raise
     except (KeyError, TypeError, ValueError) as e:
@@ -156,9 +177,7 @@ def _hashable(value: Any) -> Any:
 
 
 def _dataclass(data: dict[str, Any]) -> Any:
-    cls = _bioamla_type(data["type"])
-    if not dataclasses.is_dataclass(cls):
-        raise WireError(f"Not a dataclass: {data['type']!r}")
+    cls = _bioamla_type(data["type"], "dataclass")
     values = data["fields"]
     # Set the fields as the server's object had them, without running __init__ or
     # __post_init__ again (including init=False fields and frozen classes).

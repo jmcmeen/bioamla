@@ -5,8 +5,8 @@ workspace ``ws`` (a folder under the server root). The body is the operation's r
 (its JSON Schema is in the OpenAPI spec); every path in it is relative to the workspace
 and must resolve inside the server's allowed folders. A quick operation answers with
 the result envelope (with ``?wire=true``, also the result in the typed wire form, see
-:mod:`bioamla.common.wire`, as ``wire``); a job-kind operation is run by the job
-runner instead.
+:mod:`bioamla.common.wire`, as ``wire``, or why it has none as ``wire_error``); a
+job-kind operation is run by the job runner instead.
 
 ``GET /v1/operations`` lists them: name, kind, summary, path fields and request schema.
 Each run is recorded in the workspace's history, like a command run there (except the
@@ -27,16 +27,16 @@ from bioamla.exceptions import BioamlaError
 logger = logging.getLogger(__name__)
 
 
-def wire_result(result: Any) -> Any:
-    """``result`` in the wire form (:mod:`bioamla.common.wire`), which a client turns
-    back into the same objects; ``None`` if it can't be sent that way."""
+def wire_fields(result: Any) -> dict[str, Any]:
+    """What an answer carries for a typed request: ``{"wire": ...}``, the result in the
+    wire form (:mod:`bioamla.common.wire`), or ``{"wire_error": ...}`` saying why it
+    has none."""
     from bioamla.common.wire import WireError, to_wire
 
     try:
-        return to_wire(result)
-    except WireError:
-        logger.info("A %s result has no wire form", type(result).__name__, exc_info=True)
-        return None
+        return {"wire": to_wire(result)}
+    except WireError as e:
+        return {"wire_error": str(e)}
 
 
 def result_data(result: Any) -> Any:
@@ -151,7 +151,7 @@ def _add_route(app: FastAPI, api_version: str, envelope: Any, op: Any) -> None:
     def run(ws: str, request: Any, who: Any, wire: bool) -> dict[str, Any]:
         ws_dir = app.state.policy.workspace_dir(who, ws)
         if op.kind == "job":
-            return app.state.submit_job(ws_dir, op.name, request, who)
+            return app.state.submit_job(ws_dir, op.name, request, who, wire=wire)
         context = operation_context(app, who, ws_dir)
         started = time.time()
         try:
@@ -169,7 +169,7 @@ def _add_route(app: FastAPI, api_version: str, envelope: Any, op: Any) -> None:
                           started=started, ok=True, error=None, result=result)  # fmt: skip
         answer = envelope(result_data(result))
         if wire:
-            answer["wire"] = wire_result(result)
+            answer.update(wire_fields(result))
         return answer
 
     def endpoint(
@@ -200,5 +200,5 @@ __all__ = [
     "operation_context",
     "record_server_run",
     "result_data",
-    "wire_result",
+    "wire_fields",
 ]

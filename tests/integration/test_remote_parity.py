@@ -95,9 +95,16 @@ def test_remote_from_environment_and_workspace_config(remote, tmp_path, monkeypa
 
 def test_errors_match_a_local_run(remote, monkeypatch):
     monkeypatch.chdir(remote)
-    code, local = run_json(["audio", "info", "missing.wav"])
-    rcode, there = run_json(["--remote", "lab:ws", "audio", "info", "missing.wav"])
-    assert (rcode, there["error"]["type"]) == (code, local["error"]["type"])
+    (remote / "bad.wav").write_text("not audio")
+    for args in (["audio", "info", "missing.wav"], ["detect", "energy", "bad.wav"]):  # quick, job
+        code, local = run_json(args)
+        rcode, there = run_json(["--remote", "lab:ws", *args])
+        assert (rcode, there["error"]["type"]) == (code, local["error"]["type"]), args
+
+        def first_line(body):  # decoder details (addresses) differ from run to run
+            return relative(body["error"]["message"], remote).splitlines()[0]
+
+        assert first_line(there) == first_line(local), args
 
 
 def test_local_only_commands_refuse_an_explicit_remote(remote, monkeypatch):
@@ -115,3 +122,58 @@ def test_remote_needs_a_workspace_and_keeps_secrets_local(remote):
     result = CliRunner().invoke(cli, ["--remote", "lab:ws", "catalogs", "ebird", "nearby",
                                       "--lat", "1", "--lng", "1", "--api-key", "k"])  # fmt: skip
     assert result.exit_code == 2 and "aren't sent to a server" in result.output
+
+
+def test_local_commands_keep_their_checks_under_an_implicit_remote(remote):
+    import click
+
+    from bioamla.cli import remote_mode
+
+    strict = click.Path.convert
+    implicit = remote_mode.Target("lab", "ws", False, "$BIOAMLA_REMOTE")
+    remote_mode.begin(implicit, "audio play")  # local-only: runs here, checks intact
+    assert remote_mode.current() is None and click.Path.convert is strict
+    remote_mode.begin(implicit, "audio info")  # goes to the server: its paths
+    assert remote_mode.current() == implicit and click.Path.convert is not strict
+    remote_mode.reset()
+    assert click.Path.convert is strict
+
+
+def test_a_remote_named_like_a_command(remote, live_server):
+    url, _, _ = live_server
+    assert CliRunner().invoke(cli, ["remote", "add", "serve", url, "--token-env",
+                                    "BIOAMLA_LAB_TOKEN"]).exit_code == 0  # fmt: skip
+    code, body = run_json(["--remote", "serve:ws", "audio", "info", "rec.wav"])
+    assert code == 0, body
+
+
+def test_keys_from_the_environment_stay_here(remote, monkeypatch):
+    from bioamla.cli import remote_mode
+
+    sent = {}
+
+    class FakeClient:
+        def run(self, ws, name, request, **kwargs):
+            sent.update(request=request)
+            return "ok"
+
+    monkeypatch.setattr("bioamla.client.connect", lambda name: FakeClient())
+    monkeypatch.setenv("EBIRD_API_KEY", "from-env")
+    target = remote_mode.Target("lab", "ws", True, "--remote")
+    request = {"species_code": "amerob", "lat": 1.0, "lng": 1.0}
+    got = remote_mode.run(target, "catalogs.ebird.validate", request, on_progress=None,
+                          on_notice=print, secrets={"EBIRD_API_KEY": "from-env"})  # fmt: skip
+    assert got == "ok" and "from-env" not in json.dumps(sent)
+
+
+def test_a_remote_run_does_not_hide_the_next_local_one(remote, monkeypatch, tmp_path):
+    from bioamla.cli import remote_mode
+    from bioamla.workspace import create_workspace
+
+    assert run_json(["--remote", "lab:ws", "audio", "info", "rec.wav"])[0] == 0
+    assert remote_mode.used()
+    local = create_workspace(tmp_path / "here")
+    monkeypatch.chdir(local.root)
+    CliRunner().invoke(cli, ["audio", "info", "--no-such-flag"])  # fails while parsing
+    assert not remote_mode.used()
+    assert [r["command"] for r in local.history()] == ["audio info"]

@@ -183,10 +183,29 @@ def test_wait_resumes_a_dropped_event_stream(monkeypatch):
         yield from item
 
     states = iter(["running", "succeeded"])
+
+    class Answer:
+        def json(self):
+            return {"ok": True, "result": {"id": "x" * 32, "status": next(states)}}
+
     monkeypatch.setattr(client, "events", events)
-    monkeypatch.setattr(client, "job", lambda job_id: {"id": job_id, "status": next(states)})
+    monkeypatch.setattr(client, "_request", lambda *a, **k: Answer())
     monkeypatch.setattr("time.sleep", lambda s: None)
     progress = []
     job = client.wait("x" * 32, on_progress=lambda d, t: progress.append((d, t)))
     assert job["status"] == "succeeded"
     assert seen_after == [0, 1, 1] and progress == [(1, 1)]
+
+
+def test_a_none_result_is_a_typed_result(monkeypatch):
+    client = Client("http://server", "t")
+    monkeypatch.setattr(client, "_submit", lambda *a, **k: (False, None, {"result": None,
+                                                                         "wire": None}))  # fmt: skip
+    assert client.run("ws", "x.y", typed=True) is None
+    monkeypatch.setattr(client, "_submit", lambda *a, **k: (False, {"a": 1}, {
+        "result": {"a": 1}, "wire_error": "Can't send a Foo"}))  # fmt: skip
+    from bioamla.client import UntypedResult
+
+    with pytest.raises(UntypedResult, match="Can't send a Foo") as e:
+        client.run("ws", "x.y", typed=True)
+    assert e.value.result == {"a": 1}

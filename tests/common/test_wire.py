@@ -65,11 +65,25 @@ def test_only_bioamla_types_go_out_or_come_back():
         to_wire(NotOurs())
     with pytest.raises(WireError):
         to_wire(object())
-    for evil in ("os:system", "subprocess:Popen", "builtins:eval", "bioamla:nothing_here"):
-        with pytest.raises(WireError):
-            from_wire({"__wire__": "dataclass", "type": evil, "fields": {}})
+    evil = ("os:system", "subprocess:Popen", "builtins:eval", "bioamla:nothing_here",
+            # Classes a bioamla module imports are not bioamla's:
+            "bioamla.system.dependency:subprocess.Popen", "bioamla.common.wire:Path")  # fmt: skip
+    for name in evil:
+        for kind in ("dataclass", "enum"):
+            with pytest.raises(WireError):
+                from_wire({"__wire__": kind, "type": name, "fields": {}, "value": ["sh"]})
+    with pytest.raises(WireError):  # a bioamla dataclass is not an enum
+        from_wire({"__wire__": "enum", "type": "bioamla.workspace:Artifact", "value": "x"})
     with pytest.raises(WireError):  # a bioamla function, not a dataclass
         from_wire({"__wire__": "dataclass", "type": "bioamla.workspace:open_workspace",
                    "fields": {}})  # fmt: skip
     with pytest.raises(WireError):
         from_wire({"__wire__": "nope"})
+
+
+def test_arrays_travel_compactly():
+    arr = np.zeros((100, 100), dtype="float32")
+    wire = to_wire(arr)
+    assert "b64" in wire and len(json.dumps(wire)) < 60_000
+    with pytest.raises(WireError):
+        to_wire(np.array([object()], dtype=object))

@@ -73,7 +73,8 @@ class Job:
         result: The operation's result once it succeeded, as the routes report it.
         error: ``{"type", "message"}`` once it failed or was cancelled.
         events: Everything that happened, in order (each with an ``id``).
-        wire: The result in the typed wire form (:mod:`bioamla.common.wire`), if any.
+        want_wire: Whether the submitter asked for the typed result.
+        wire: ``{"wire"}`` or ``{"wire_error"}`` once it succeeded, if asked for.
     """
 
     id: str
@@ -89,7 +90,8 @@ class Job:
     result: Any = None
     error: dict[str, str] | None = None
     events: list[dict[str, Any]] = field(default_factory=list)
-    wire: Any = field(default=None, repr=False)
+    want_wire: bool = field(default=False, repr=False)
+    wire: dict[str, Any] | None = field(default=None, repr=False)
     # Not reported:
     ws_dir: Path | None = field(default=None, repr=False)
     request_obj: Any = field(default=None, repr=False)
@@ -165,8 +167,17 @@ class JobRunner:
 
     # Submitting and reading ------------------------------------------------------
 
-    def submit(self, ws_dir: Path, workspace: str, name: str, request: Any, user: str) -> Job:
-        """Queue the operation ``name`` on ``request`` (already validated) in ``ws_dir``."""
+    def submit(
+        self,
+        ws_dir: Path,
+        workspace: str,
+        name: str,
+        request: Any,
+        user: str,
+        wire: bool = False,
+    ) -> Job:
+        """Queue the operation ``name`` on ``request`` (already validated) in ``ws_dir``;
+        with ``wire``, its result is also kept in the typed wire form."""
         from bioamla.common.jsonable import to_jsonable
 
         job = Job(
@@ -177,6 +188,7 @@ class JobRunner:
             request=to_jsonable(asdict(request)),
             ws_dir=ws_dir,
             request_obj=request,
+            want_wire=wire,
         )
         with self._lock:
             self.jobs[job.id] = job
@@ -324,7 +336,7 @@ class JobRunner:
         job._process = self._mp.Process(
             target=run_job,
             args=(send, job._cancel, job.operation, job.request, str(job.ws_dir),
-                  str(self.root), [str(p) for p in self.linkable], job.user),
+                  str(self.root), [str(p) for p in self.linkable], job.user, job.want_wire),
             name=f"bioamla-job-{job.id[:8]}",
             # Not a daemon: a daemonic process can't start its own (e.g. a torch
             # DataLoader's workers). close() ends workers when the server stops.
@@ -428,7 +440,9 @@ def add_job_routes(app: Any, api_version: str, envelope: Any, runner: JobRunner)
 
     identity = app.state.identity
 
-    def submit_job(ws_dir: Path, name: str, request: Any, who: Any) -> JSONResponse:
+    def submit_job(
+        ws_dir: Path, name: str, request: Any, who: Any, wire: bool = False
+    ) -> JSONResponse:
         from bioamla import operations
         from bioamla.server.operations_api import operation_context, record_server_run
 
@@ -443,7 +457,7 @@ def add_job_routes(app: Any, api_version: str, envelope: Any, runner: JobRunner)
             record_server_run(context.workspace, name, request, user=who.user,
                               started=started, ok=False, error=error)  # fmt: skip
             raise
-        job = runner.submit(ws_dir, ws_dir.name, name, request, who.user)
+        job = runner.submit(ws_dir, ws_dir.name, name, request, who.user, wire=wire)
         return JSONResponse(status_code=202, content=envelope(job.to_dict()))
 
     app.state.submit_job = submit_job
@@ -469,8 +483,8 @@ def add_job_routes(app: Any, api_version: str, envelope: Any, runner: JobRunner)
         """A job's status and progress, and its result or error once it's done."""
         job = runner.get(job_id)
         answer = envelope(job.to_dict())
-        if wire:
-            answer["wire"] = job.wire
+        if wire and job.status == SUCCEEDED:
+            answer.update(job.wire or {"wire_error": "Not asked for when the job was submitted"})
         return answer
 
     @app.post(f"/{api_version}/jobs/{{job_id}}/cancel", tags=["jobs"])
