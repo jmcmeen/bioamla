@@ -126,6 +126,25 @@ class TestDetectionsToDataset:
         stats = bioamla("dataset", "stats", clips["metadata_file"])  # the CSV path itself
         assert stats["total_files"] == clips["clips_written"]
 
+    def test_detections_outlined_on_a_spectrogram(self, recording, tmp_path) -> None:
+        pytest.importorskip("matplotlib")
+        from PIL import Image
+
+        from bioamla.viz import annotation_boxes
+
+        detections = bioamla("detect", "energy", str(recording), "-o", str(tmp_path / "d.csv"))
+        boxes = annotation_boxes(detections["output"])
+        assert len(boxes) == detections["count"] == 7
+        assert {(b.low_freq, b.high_freq) for b in boxes} == {(500.0, 5000.0)}
+        plain = bioamla("audio", "visualize", str(recording), "-o", str(tmp_path / "plain.png"))
+        boxed = bioamla(
+            "audio", "visualize", str(recording), "-o", str(tmp_path / "boxed.png"),
+            "--annotations", detections["output"],
+        )  # fmt: skip
+        a = np.asarray(Image.open(plain["output"]))
+        b = np.asarray(Image.open(boxed["output"]))
+        assert a.shape == b.shape and (a != b).any()
+
     def test_partition_reports_splits_it_cannot_fill(self, recording, tmp_path) -> None:
         det = bioamla("detect", "energy", str(recording), "-o", str(tmp_path / "d.csv"))
         clips = bioamla(

@@ -140,3 +140,25 @@ def test_video(test_audio_path_3s, tmp_path):
         include_audio=False,
     )
     assert got["frames"] == result.frames and got["duration"] == result.duration
+
+
+def test_visualize_operation_outlines_boxes_and_annotations(test_audio_path_3s, tmp_path, mocker):
+    pytest.importorskip("matplotlib")
+    from bioamla import operations
+    from bioamla.viz import SpectrogramBox
+
+    ann = tmp_path / "det.csv"
+    ann.write_text("start_time,end_time,low_freq,high_freq,label\n0.5,1.0,500,5000,call\n")
+    gen = mocker.patch("bioamla.viz.generate_spectrogram", return_value=str(tmp_path / "o.png"))
+    request = {"file": test_audio_path_3s, "output": str(tmp_path / "o.png"),
+               "boxes": [{"start": 1, "end": 2, "label": "x"}], "annotations": str(ann)}  # fmt: skip
+    operations.run("audio.visualize", request)
+    assert gen.call_args.kwargs["boxes"] == [SpectrogramBox(1, 2, label="x"),
+                                             SpectrogramBox(0.5, 1.0, 500, 5000, "call")]  # fmt: skip
+    seen = []
+    context = operations.OperationContext(path_check=lambda p: seen.append(p) or p)
+    operations.run("audio.visualize", request, context)
+    assert str(ann) in seen  # the annotation file is a checked path
+    with pytest.raises(Exception, match="both low_freq and high_freq"):
+        operations.run("audio.visualize", {**request, "boxes": [{"start": 1, "end": 2,
+                                                                 "low_freq": 100}]})  # fmt: skip

@@ -23,9 +23,13 @@ Heavy backends are imported lazily:
   never required to generate a spectrogram.
 """
 
+from __future__ import annotations
+
 import threading
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import librosa
 import numpy as np
@@ -97,6 +101,7 @@ def generate_spectrogram(
     format: str | None = None,
     show_colorbar: bool = True,
     backend: str = "auto",
+    boxes: Sequence[SpectrogramBox | tuple] | None = None,
 ) -> str:
     """
     Generate a spectrogram visualization from an audio file.
@@ -121,6 +126,11 @@ def generate_spectrogram(
         show_colorbar: Whether to show axes/title/colorbar (default: True).
         backend: Spectrogram compute backend — 'auto' (GPU/torch if available,
             else librosa), 'librosa' (CPU), or 'torch' (force GPU/torch).
+        boxes: Regions to outline, as :class:`SpectrogramBox` or ``(start, end[,
+            low_freq, high_freq[, label]])`` tuples (seconds, Hz). On the STFT and mel
+            plots a box spans its band; one with no band, and every box on the MFCC
+            and waveform plots, spans the full height. Labels are written at the
+            top-left corner.
 
     Returns:
         Path to the saved output image (as a string).
@@ -145,6 +155,8 @@ def generate_spectrogram(
     if window not in valid_windows:
         raise InvalidInputError(f"Invalid window type: {window}. Must be one of {valid_windows}")
 
+    regions = [SpectrogramBox.of(b) for b in boxes or ()]
+    coords = bool(regions)
     resolved_backend = select_backend(backend)
 
     # Load and resample audio
@@ -179,6 +191,7 @@ def generate_spectrogram(
                 db_max=db_max,
                 show_legend=show_colorbar,
                 backend=resolved_backend,
+                coords=coords,
             )
         elif viz_type == "mel":
             _plot_mel_spectrogram(
@@ -195,6 +208,7 @@ def generate_spectrogram(
                 db_max=db_max,
                 show_legend=show_colorbar,
                 backend=resolved_backend,
+                coords=coords,
             )
         elif viz_type == "mfcc":
             _plot_mfcc(
@@ -209,9 +223,15 @@ def generate_spectrogram(
                 title=title,
                 show_legend=show_colorbar,
                 backend=resolved_backend,
+                coords=coords,
             )
         elif viz_type == "waveform":
             _plot_waveform(audio, sample_rate, ax, title=title, show_legend=show_colorbar)
+
+        if regions:
+            # White shows on the colormaps; the waveform plot is on white.
+            color = "tab:red" if viz_type == "waveform" else "white"
+            _draw_boxes(ax, regions, banded=viz_type in ("stft", "mel"), color=color)
 
         # Only use tight_layout when legend is shown, otherwise use full canvas
         if show_colorbar:
@@ -248,6 +268,110 @@ def generate_spectrogram(
     return str(output_path)
 
 
+@dataclass(frozen=True)
+class SpectrogramBox:
+    """A region to outline on a spectrogram.
+
+    Attributes:
+        start: Start (s).
+        end: End (s).
+        low_freq: Lower edge (Hz); ``None`` with ``high_freq`` for the full height.
+        high_freq: Upper edge (Hz).
+        label: Text written at its top-left corner.
+    """
+
+    start: float
+    end: float
+    low_freq: float | None = None
+    high_freq: float | None = None
+    label: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.end > self.start:
+            raise InvalidInputError(f"A box must end after it starts: {self.start}-{self.end}")
+        if (self.low_freq is None) != (self.high_freq is None):
+            raise InvalidInputError("A box needs both low_freq and high_freq, or neither")
+        if self.low_freq is not None and not self.high_freq > self.low_freq:
+            raise InvalidInputError(
+                f"A box's high_freq must be above its low_freq: {self.low_freq}-{self.high_freq}"
+            )
+
+    @property
+    def banded(self) -> bool:
+        """Whether it has a frequency band."""
+        return self.low_freq is not None
+
+    @classmethod
+    def of(cls, value: Any) -> SpectrogramBox:
+        """``value`` as a box: a box, an object with the same attributes (e.g. an
+        annotation's ``start_time``/``end_time``), or a tuple ``(start, end[, low_freq,
+        high_freq[, label]])``.
+
+        Raises:
+            InvalidInputError: If it can't be one.
+        """
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, (tuple, list)):
+            if len(value) not in (2, 4, 5):
+                raise InvalidInputError(
+                    f"A box is (start, end[, low_freq, high_freq[, label]]), got {value!r}"
+                )
+            return cls(*value)
+        start = getattr(value, "start", getattr(value, "start_time", None))
+        end = getattr(value, "end", getattr(value, "end_time", None))
+        if start is None or end is None:
+            raise InvalidInputError(f"Not a box: {value!r}")
+        return cls(
+            float(start),
+            float(end),
+            getattr(value, "low_freq", None),
+            getattr(value, "high_freq", None),
+            str(getattr(value, "label", "") or ""),
+        )
+
+
+def annotation_boxes(path: str | Path, label_column: str | None = None) -> list[SpectrogramBox]:
+    """The boxes of an annotation file, in any format bioamla reads (Raven ``.txt``,
+    bioamla ``.json``, Arbimon or flat CSV): each annotation's time span and band,
+    labelled with its label.
+
+    Raises:
+        NotFoundError: If the file doesn't exist.
+        InvalidInputError: If an annotation can't be a box (e.g. it ends before it starts).
+    """
+    from bioamla.datasets._io import detect_annotation_format, load_annotations
+
+    path = Path(path)
+    if not path.is_file():
+        raise NotFoundError(f"Annotation file not found: {path}")
+    fmt = detect_annotation_format(path, read_header=True)
+    annotations, _ = load_annotations(path, fmt, label_column=label_column)
+    return [SpectrogramBox.of(a) for a in annotations]
+
+
+def _draw_boxes(ax: Any, boxes: list[SpectrogramBox], banded: bool, color: str = "white") -> None:
+    """Outline ``boxes`` on ``ax`` (data coordinates: seconds, and Hz when ``banded``)."""
+    from matplotlib.patches import Rectangle
+
+    style = {"fill": False, "edgecolor": color, "linewidth": 1.2}
+    for box in boxes:
+        if banded and box.banded:
+            ax.add_patch(Rectangle((box.start, box.low_freq), box.end - box.start,
+                                   box.high_freq - box.low_freq, **style))  # fmt: skip
+            top = min(box.high_freq, max(ax.get_ylim()))  # keep the label in view
+            transform = ax.transData
+        else:
+            # Full height: x in data coordinates, y in axes coordinates (0 to 1).
+            transform = ax.get_xaxis_transform()
+            ax.add_patch(Rectangle((box.start, 0), box.end - box.start, 1,
+                                   transform=transform, **style))  # fmt: skip
+            top = 1
+        if box.label:
+            ax.text(box.start, top, f" {box.label}", transform=transform, color=color,
+                    fontsize=7, va="top", ha="left", clip_on=True)  # fmt: skip
+
+
 def _get_window_function(window: str, n_fft: int) -> np.ndarray:
     """Get a window function array for STFT."""
     if window == "hann":
@@ -280,8 +404,10 @@ def _plot_stft_spectrogram(
     db_max: float | None = None,
     show_legend: bool = True,
     backend: Backend = "librosa",
+    coords: bool = False,
 ) -> None:
-    """Plot an STFT spectrogram."""
+    """Plot an STFT spectrogram (in seconds and Hz with ``coords``, even without a
+    legend)."""
     import librosa.display
 
     mag = stft_magnitude(audio, n_fft, hop_length, window, backend)
@@ -298,8 +424,8 @@ def _plot_stft_spectrogram(
         stft_db,
         sr=sample_rate,
         hop_length=hop_length,
-        x_axis="time" if show_legend else None,
-        y_axis="hz" if show_legend else None,
+        x_axis="time" if show_legend or coords else None,
+        y_axis="hz" if show_legend or coords else None,
         ax=ax,
         cmap=cmap,
         vmin=vmin,
@@ -327,8 +453,10 @@ def _plot_mel_spectrogram(
     db_max: float | None = None,
     show_legend: bool = True,
     backend: Backend = "librosa",
+    coords: bool = False,
 ) -> None:
-    """Plot a mel spectrogram."""
+    """Plot a mel spectrogram (in seconds and Hz with ``coords``, even without a
+    legend)."""
     import librosa.display
 
     mel_spec = mel_power(audio, sample_rate, n_fft, hop_length, n_mels, window, backend=backend)
@@ -345,8 +473,8 @@ def _plot_mel_spectrogram(
         mel_spec_db,
         sr=sample_rate,
         hop_length=hop_length,
-        x_axis="time" if show_legend else None,
-        y_axis="mel" if show_legend else None,
+        x_axis="time" if show_legend or coords else None,
+        y_axis="mel" if show_legend or coords else None,
         ax=ax,
         cmap=cmap,
         vmin=vmin,
@@ -372,8 +500,9 @@ def _plot_mfcc(
     title: str,
     show_legend: bool = True,
     backend: Backend = "librosa",
+    coords: bool = False,
 ) -> None:
-    """Plot MFCCs."""
+    """Plot MFCCs (in seconds with ``coords``, even without a legend)."""
     import librosa.display
 
     mag = stft_magnitude(audio, n_fft, hop_length, window, backend)
@@ -384,7 +513,7 @@ def _plot_mfcc(
         mfccs,
         sr=sample_rate,
         hop_length=hop_length,
-        x_axis="time" if show_legend else None,
+        x_axis="time" if show_legend or coords else None,
         ax=ax,
         cmap=cmap,
     )

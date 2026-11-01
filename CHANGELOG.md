@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `audio visualize --box START,END[,LOW,HIGH[,LABEL]]` (repeatable) and `--annotations FILE`
+  outline regions on the picture: a box spans its band on the STFT and mel spectrograms, and
+  the full height without one (and on MFCC and waveform plots); labels are written at its
+  corner. `--annotations` reads any format bioamla reads (Raven, bioamla JSON, CSV,
+  Arbimon), so `detect ... -o det.csv` feeds it directly. The `audio.visualize` request
+  gains `boxes` and `annotations`; the library gains `generate_spectrogram(boxes=...)`,
+  `bioamla.viz.SpectrogramBox` and `bioamla.viz.annotation_boxes()`.
+
 - Integration tests run a pipeline on a real server in CI (upload, detect, annotation
   summary, clip extraction, dataset stats, download), once through `bioamla.client` and once
   through `bioamla --remote`, each step reading the paths the previous one reported, and
