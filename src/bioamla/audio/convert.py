@@ -50,7 +50,7 @@ def convert_audio_file(
     input_path: str | Path,
     output_path: str | Path,
     *,
-    target_format: str = "wav",
+    target_format: str | None = "wav",
     target_sample_rate: int | None = None,
     target_channels: int | None = None,
     delete_original: bool = False,
@@ -61,7 +61,8 @@ def convert_audio_file(
         input_path: Source audio file.
         output_path: Destination file path (its suffix should match
             ``target_format``).
-        target_format: Output container/codec ("wav", "mp3", "flac", "ogg").
+        target_format: Output container/codec ("wav", "mp3", "flac", "ogg"), or
+            ``None`` to choose it from ``output_path``'s extension.
         target_sample_rate: Resample to this rate before saving (optional).
         target_channels: Output channel count (1 = mono, 2 = stereo); optional.
         delete_original: Delete the source file after a successful conversion
@@ -74,8 +75,8 @@ def convert_audio_file(
         InvalidInputError: If ``target_format``/``target_channels`` is unsupported.
         AudioLoadError / AudioSaveError: On I/O failure.
     """
-    fmt = target_format.lower().lstrip(".")
-    if fmt not in SUPPORTED_FORMATS:
+    fmt = None if target_format is None else target_format.lower().lstrip(".")
+    if fmt is not None and fmt not in SUPPORTED_FORMATS:
         raise InvalidInputError(
             f"Unsupported target format: {target_format}. "
             f"Choose one of {sorted(SUPPORTED_FORMATS)}."

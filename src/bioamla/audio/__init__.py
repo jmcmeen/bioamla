@@ -51,6 +51,24 @@ from bioamla.audio.features import (
     mfcc_trajectory,
     write_frame_table,
 )
+from bioamla.audio.files import (
+    AudioFileDescription,
+    AudioFileList,
+    ProcessedFile,
+    RecordingMetadataReport,
+    SegmentedFile,
+    add_noise_audio_file,
+    denoise_audio_file,
+    describe_audio_file,
+    filter_audio_file,
+    gain_audio_file,
+    normalize_audio_file,
+    pitch_shift_audio_file,
+    recording_metadata_report,
+    resample_audio_file,
+    time_stretch_audio_file,
+    trim_audio_file,
+)
 from bioamla.audio.info import (
     AudioAnalysis,
     AudioInfo,
@@ -212,4 +230,21 @@ __all__ = [
     "segment_audio_file",
     # Conversion
     "convert_audio_file",
+    # One file: load, process, save (bioamla.audio.files)
+    "AudioFileDescription",
+    "AudioFileList",
+    "ProcessedFile",
+    "RecordingMetadataReport",
+    "SegmentedFile",
+    "add_noise_audio_file",
+    "denoise_audio_file",
+    "describe_audio_file",
+    "filter_audio_file",
+    "gain_audio_file",
+    "normalize_audio_file",
+    "pitch_shift_audio_file",
+    "recording_metadata_report",
+    "resample_audio_file",
+    "time_stretch_audio_file",
+    "trim_audio_file",
 ]

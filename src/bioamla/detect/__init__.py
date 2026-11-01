@@ -22,17 +22,21 @@ require_extra("detect", "bioamla.detect")
 
 from bioamla.detect.batch import batch_detect_dir, batch_detect_files
 from bioamla.detect.core import (
+    PEAK_EVENT_COLUMNS,
     AcceleratingPatternDetector,
     BandLimitedEnergyDetector,
     CWTPeakDetector,
     Detection,
     FileDetections,
+    FilePeaks,
     PeakDetection,
     RibbitDetector,
     batch_detect,
     detect_all,
     detect_file,
+    detect_peaks_file,
     export_detections,
+    export_peaks,
 )
 from bioamla.exceptions import (
     AudioLoadError,
@@ -45,7 +49,9 @@ __all__ = [
     # Data classes
     "Detection",
     "FileDetections",
+    "FilePeaks",
     "PeakDetection",
+    "PEAK_EVENT_COLUMNS",
     # Detector classes
     "BandLimitedEnergyDetector",
     "RibbitDetector",
@@ -54,7 +60,9 @@ __all__ = [
     # Convenience functions
     "detect_all",
     "detect_file",
+    "detect_peaks_file",
     "export_detections",
+    "export_peaks",
     "batch_detect",
     "batch_detect_dir",
     "batch_detect_files",
