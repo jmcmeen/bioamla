@@ -88,7 +88,7 @@ class ASTPredictionResult:
             return None
         return [
             {"label": label, "confidence": score}
-            for label, score in zip(self.top_k_labels, self.top_k_scores or [], strict=True)
+            for label, score in zip(self.top_k_labels, self.top_k_scores or [], strict=False)
         ]
 
 
@@ -167,43 +167,11 @@ class ASTInference:
         Raises:
             ModelError: If loading the audio or running inference fails.
         """
-        torch = _require_torch()
-        load_waveform_tensor, resample_waveform_tensor, _ = _torchaudio_helpers()
-
-        try:
-            waveform, orig_sr = load_waveform_tensor(audio_path)
-        except Exception as e:
-            raise ModelError(f"Failed to load audio {audio_path}: {e}") from e
-
-        if orig_sr != self.sample_rate:
-            waveform = resample_waveform_tensor(waveform, orig_sr, self.sample_rate)
-
-        inputs = self._extract_features(waveform)
-
-        try:
-            with torch.inference_mode():
-                outputs = self.model(inputs)
-        except Exception as e:
-            raise ModelError(f"AST inference failed for {audio_path}: {e}") from e
-
-        logits = outputs.logits[0]
-        probs = torch.softmax(logits, dim=-1)
-        predicted_idx = logits.argmax(-1).item()
-        confidence = probs[predicted_idx].item()
-        predicted_label = self.id2label[predicted_idx]
-        duration = waveform.shape[1] / self.sample_rate
-
-        top_labels, top_scores = self._rank(probs, top_k) if top_k > 0 else (None, None)
-        return ASTPredictionResult(
-            filepath=audio_path,
-            start_time=0.0,
-            end_time=duration,
-            predicted_label=predicted_label,
-            confidence=confidence,
-            logits=logits.cpu().tolist() if return_logits else None,
-            top_k_labels=top_labels,
-            top_k_scores=top_scores,
-        )
+        waveform = self._load(audio_path)
+        return self._classify(
+            waveform, audio_path, 0.0, waveform.shape[1] / self.sample_rate,
+            return_logits=return_logits, top_k=top_k,
+        )  # fmt: skip
 
     def predict_topk(
         self,
@@ -221,7 +189,7 @@ class ASTInference:
 
         Args:
             audio_path: Path to the audio file.
-            top_k: Number of top predictions to keep.
+            top_k: Number of top predictions to keep (at least 1).
             min_confidence: Drop predictions below this probability.
 
         Returns:
@@ -230,48 +198,17 @@ class ASTInference:
         Raises:
             ModelError: If loading the audio or running inference fails.
         """
-        torch = _require_torch()
-        load_waveform_tensor, resample_waveform_tensor, _ = _torchaudio_helpers()
-
-        try:
-            waveform, orig_sr = load_waveform_tensor(audio_path)
-        except Exception as e:
-            raise ModelError(f"Failed to load audio {audio_path}: {e}") from e
-
-        if orig_sr != self.sample_rate:
-            waveform = resample_waveform_tensor(waveform, orig_sr, self.sample_rate)
-
-        inputs = self._extract_features(waveform)
-
-        try:
-            with torch.inference_mode():
-                outputs = self.model(inputs)
-        except Exception as e:
-            raise ModelError(f"AST inference failed for {audio_path}: {e}") from e
-
-        logits = outputs.logits[0]
-        probs = torch.softmax(logits, dim=-1)
-        duration = waveform.shape[1] / self.sample_rate
-
-        k = min(max(top_k, 1), probs.shape[-1])
-        top_scores, top_indices = torch.topk(probs, k)
-        labels: list[str] = []
-        scores: list[float] = []
-        for score, idx in zip(top_scores.cpu().tolist(), top_indices.cpu().tolist(), strict=False):
-            if score >= min_confidence:
-                labels.append(self.id2label[idx])
-                scores.append(float(score))
-
-        predicted_idx = int(top_indices[0].item())
-        return ASTPredictionResult(
-            filepath=audio_path,
-            start_time=0.0,
-            end_time=duration,
-            predicted_label=self.id2label[predicted_idx],
-            confidence=float(top_scores[0].item()),
-            top_k_labels=labels,
-            top_k_scores=scores,
-        )
+        result = self.predict(audio_path, top_k=max(top_k, 1))
+        kept = [
+            (label, score)
+            for label, score in zip(
+                result.top_k_labels or [], result.top_k_scores or [], strict=True
+            )  # fmt: skip
+            if score >= min_confidence
+        ]
+        result.top_k_labels = [label for label, _ in kept]
+        result.top_k_scores = [score for _, score in kept]
+        return result
 
     def predict_segments(
         self,
@@ -298,58 +235,69 @@ class ASTInference:
         Raises:
             ModelError: If loading the audio or running inference fails.
         """
-        torch = _require_torch()
-        load_waveform_tensor, resample_waveform_tensor, split_waveform_tensor = (
-            _torchaudio_helpers()
-        )
+        _, _, split_waveform_tensor = _torchaudio_helpers()
+        waveform = self._load(audio_path)
+        segments = split_waveform_tensor(waveform, self.sample_rate, clip_length, overlap)
+        return [
+            self._classify(
+                segment,
+                audio_path,
+                start_sample / self.sample_rate,
+                end_sample / self.sample_rate,
+                return_logits=return_logits,
+                top_k=top_k,
+            )  # fmt: skip
+            for segment, start_sample, end_sample in segments
+        ]
 
+    def _load(self, audio_path: str) -> "torch.Tensor":
+        """The file's waveform at the model's sample rate."""
+        load_waveform_tensor, resample_waveform_tensor, _ = _torchaudio_helpers()
         try:
             waveform, orig_sr = load_waveform_tensor(audio_path)
         except Exception as e:
             raise ModelError(f"Failed to load audio {audio_path}: {e}") from e
-
         if orig_sr != self.sample_rate:
             waveform = resample_waveform_tensor(waveform, orig_sr, self.sample_rate)
+        return waveform
 
-        segments = split_waveform_tensor(waveform, self.sample_rate, clip_length, overlap)
-
-        results = []
-        for segment, start_sample, end_sample in segments:
-            inputs = self._extract_features(segment)
-
-            try:
-                with torch.inference_mode():
-                    outputs = self.model(inputs)
-            except Exception as e:
-                raise ModelError(f"AST inference failed for {audio_path}: {e}") from e
-
-            logits = outputs.logits[0]
-            probs = torch.softmax(logits, dim=-1)
-            predicted_idx = logits.argmax(-1).item()
-            confidence = probs[predicted_idx].item()
-            predicted_label = self.id2label[predicted_idx]
-            top_labels, top_scores = self._rank(probs, top_k) if top_k > 0 else (None, None)
-
-            results.append(
-                ASTPredictionResult(
-                    filepath=audio_path,
-                    start_time=start_sample / self.sample_rate,
-                    end_time=end_sample / self.sample_rate,
-                    predicted_label=predicted_label,
-                    confidence=confidence,
-                    logits=logits.cpu().tolist() if return_logits else None,
-                    top_k_labels=top_labels,
-                    top_k_scores=top_scores,
-                )
-            )
-
-        return results
+    def _classify(
+        self,
+        waveform: "torch.Tensor",
+        audio_path: str,
+        start: float,
+        end: float,
+        *,
+        return_logits: bool,
+        top_k: int,
+    ) -> ASTPredictionResult:
+        """Classify one clip. The predicted label is the first of the ranked labels,
+        so the two always agree (also on a tie)."""
+        torch = _require_torch()
+        inputs = self._extract_features(waveform)
+        try:
+            with torch.inference_mode():
+                outputs = self.model(inputs)
+        except Exception as e:
+            raise ModelError(f"AST inference failed for {audio_path}: {e}") from e
+        logits = outputs.logits[0]
+        probs = torch.softmax(logits, dim=-1)
+        labels, scores = self._rank(probs, max(top_k, 1))
+        return ASTPredictionResult(
+            filepath=audio_path,
+            start_time=start,
+            end_time=end,
+            predicted_label=labels[0],
+            confidence=scores[0],
+            logits=logits.cpu().tolist() if return_logits else None,
+            top_k_labels=labels if top_k > 0 else None,
+            top_k_scores=scores if top_k > 0 else None,
+        )
 
     def _rank(self, probs: "torch.Tensor", top_k: int) -> tuple[list[str], list[float]]:
         """The ``top_k`` most likely labels and their probabilities, best first."""
         torch = _require_torch()
-        k = min(max(top_k, 1), probs.shape[-1])
-        scores, indices = torch.topk(probs, k)
+        scores, indices = torch.topk(probs, min(top_k, probs.shape[-1]))
         return (
             [self.id2label[int(i)] for i in indices.cpu().tolist()],
             [float(v) for v in scores.cpu().tolist()],

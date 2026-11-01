@@ -192,3 +192,25 @@ def test_review_needs_the_decisions(run_skill, loud_and_faint, tiny_ast) -> None
     run_dir = evidence_run(run_skill, loud_and_faint, tiny_ast)
     code, out = run_skill("label", "review", run_dir, cwd=loud_and_faint)
     assert code == 1 and "decisions.json" in out["error"]
+
+
+def test_an_event_no_segment_covers_gets_no_label(monkeypatch) -> None:
+    import argparse
+    import importlib.util
+
+    from tests.skills.conftest import skill_script
+
+    spec = importlib.util.spec_from_file_location("candidates", skill_script("label", "candidates"))
+    candidates = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(candidates)
+    answers = {
+        "detect": {"detections": [{"start_time": 5.0, "end_time": 5.5, "frequency_low": 500,
+                                   "frequency_high": 5000, "confidence": 0.9}]},
+        "models": {"predictions": [{"start_time": 0.0, "end_time": 3.0, "label": "a",
+                                    "confidence": 0.99, "margin": 0.98}]},
+    }  # fmt: skip
+    monkeypatch.setattr(candidates, "run", lambda *args, **kw: answers[args[0]])
+    args = argparse.Namespace(low_freq=500, high_freq=5000, threshold_db=-20, min_duration=0.05,
+                              model="m", segment_seconds=3, labels=["a"])  # fmt: skip
+    (row,) = candidates.file_candidates("rec.wav", args, ".")
+    assert row["label"] is None and row["model_confidence"] is None and row["margin"] is None

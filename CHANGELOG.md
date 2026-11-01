@@ -13,8 +13,9 @@ All notable changes to this project are documented here. The format is based on
   confidence), the CSV gains `margin` and `top` columns, and the human output lists them.
   Without the option the output is unchanged. In the library: `classify_file(top_k=...)`,
   `ASTInference.predict(top_k=...)`/`predict_segments(top_k=...)`, and
-  `ASTPredictionResult.margin`/`top()`. The labeling skill now records each candidate's
-  `margin`.
+  `ASTPredictionResult.margin`/`top()`. A negative `top_k` is refused when the request
+  is checked. The labeling skill now records each candidate's `margin`, and gives no
+  label to an event that no prediction segment covers (it took the first segment's).
 
 - `batch_generate_spectrograms()` gains `show_colorbar` and `continue_on_error`,
   `batch_visualize()` gains `legend`, and the `batch.audio.visualize` request a `legend` field.

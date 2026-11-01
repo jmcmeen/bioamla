@@ -46,11 +46,14 @@ def file_candidates(path: str, args: argparse.Namespace, root: str) -> list[dict
     vocabulary = set(args.labels)
     rows = []
     for d in detected:
-        best = max(
-            predicted,
-            key=lambda p: overlap(d["start_time"], d["end_time"], p["start_time"], p["end_time"]),
-            default=None,
-        )
+        shared = [
+            (overlap(d["start_time"], d["end_time"], p["start_time"], p["end_time"]), p)
+            for p in predicted
+        ]
+        # The segment sharing the most of the event; none if no segment covers it (no
+        # label rather than a wrong one).
+        most = max(shared, key=lambda pair: pair[0], default=(0.0, None))
+        best = most[1] if most[0] > 0 else None
         label = best["label"] if best else None
         rows.append(
             {

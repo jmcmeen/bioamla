@@ -10,6 +10,8 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
+from pydantic import Field
+
 from bioamla.common.config import config_dataclass
 from bioamla.exceptions import InvalidInputError
 from bioamla.operations import OperationContext, PathStr, operation
@@ -59,7 +61,7 @@ class PredictRequest:
     min_confidence: float = 0.0
     output: PathStr | None = None
     resample_freq: int = 16000
-    top_k: int = 0
+    top_k: int = Field(default=0, ge=0)
 
 
 @operation("models.ast.predict", request=PredictRequest, kind="job")

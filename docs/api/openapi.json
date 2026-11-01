@@ -13145,6 +13145,7 @@
           },
           "top_k": {
             "type": "integer",
+            "minimum": 0.0,
             "title": "Top K",
             "default": 0
           }

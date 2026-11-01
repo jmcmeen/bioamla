@@ -253,7 +253,17 @@ class TestRankedLabels:
         with _patch_audio(waveform=torch.zeros(1, 16000 * 6)):
             results = inf.predict_segments("a.wav", clip_length=3, top_k=5)  # clamped to 3
         assert [r.top_k_labels for r in results] == [["a", "b", "c"]] * 2
-        assert all(r.margin > 0 for r in results)
+        expected = torch.softmax(torch.tensor([3.0, 1.0, 0.5]), dim=-1)
+        assert all(r.margin == pytest.approx(float(expected[0] - expected[1])) for r in results)
+
+    def test_the_prediction_is_the_first_ranked_label_on_a_tie(self) -> None:
+        inf = _make_inference()
+        inf.model.side_effect = lambda iv, **kw: SimpleNamespace(
+            logits=torch.tensor([[1.0, 2.0, 2.0]])
+        )
+        with _patch_audio():
+            res = inf.predict("a.wav", top_k=2)
+        assert res.predicted_label == res.top_k_labels[0] and res.margin == 0
 
     def test_without_top_k_nothing_changes(self) -> None:
         inf = _make_inference()
