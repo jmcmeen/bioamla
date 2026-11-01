@@ -243,3 +243,52 @@ class TestZipHelpers:
         assert (dest / "a.txt").exists()
         assert (dest / "sub" / "b.txt").exists()
         assert len(names) == 2
+
+
+class TestUnzipToIsConfined:
+    """unzip_to checks every entry before writing anything."""
+
+    def _zip(self, path, entries):
+        import zipfile
+
+        with zipfile.ZipFile(path, "w") as zf:
+            for name, data in entries.items():
+                zf.writestr(name, data)
+        return path
+
+    def test_extracts_inside_the_folder(self, tmp_path):
+        from bioamla.common.files import unzip_to
+
+        archive = self._zip(tmp_path / "a.zip", {"x/a.txt": "a", "b.txt": "b"})
+        unzip_to(archive, tmp_path / "out")
+        assert (tmp_path / "out" / "x" / "a.txt").read_text() == "a"
+
+    def test_refuses_writing_through_a_link(self, tmp_path):
+        import pytest
+
+        from bioamla.common.files import unzip_to
+        from bioamla.exceptions import InvalidInputError
+
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        out = tmp_path / "out"
+        out.mkdir()
+        (out / "data").symlink_to(elsewhere)
+        archive = self._zip(tmp_path / "a.zip", {"ok.txt": "fine", "data/x.wav": "bad"})
+        with pytest.raises(InvalidInputError, match="would leave"):
+            unzip_to(archive, out)
+        assert not (elsewhere / "x.wav").exists()
+        assert not (out / "ok.txt").exists()  # nothing written
+
+    def test_refuses_workspace_metadata_and_oversize(self, tmp_path):
+        import pytest
+
+        from bioamla.common.files import unzip_to
+        from bioamla.exceptions import InvalidInputError
+
+        meta = self._zip(tmp_path / "m.zip", {".bioamla/workspace.toml": "x"})
+        with pytest.raises(InvalidInputError, match="workspace metadata"):
+            unzip_to(meta, tmp_path / "out")
+        big = self._zip(tmp_path / "b.zip", {"a.txt": "x" * 100})
+        with pytest.raises(InvalidInputError, match="more than"):
+            unzip_to(big, tmp_path / "out", max_bytes=10)

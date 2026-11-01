@@ -79,6 +79,28 @@ def detect_annotation_format(
     return "csv"
 
 
+def load_recording_annotations(
+    path: Path, recording: str | Path | None = None, label_column: str | None = None
+) -> list[Annotation]:
+    """The annotations in ``path`` (format from its extension and header) for
+    ``recording``: a file whose rows name their recording (a ``recording`` column, as
+    Arbimon exports have) can cover many, and only this one's rows are kept. Without
+    ``recording``, every row.
+    """
+    path = Path(path)
+    fmt = detect_annotation_format(path, read_header=True)
+    anns, _ = load_annotations(path, fmt, label_column=label_column)
+    if recording is None:
+        return anns
+    kept = annotations_for_recording(anns, recording)
+    name = Path(recording).name
+    if not kept and anns:
+        logger.warning(f"No rows in {path} name the recording {name}")
+    elif len(kept) < len(anns):
+        logger.info(f"{path}: {len(kept)} of {len(anns)} rows are for {name}")
+    return kept
+
+
 def load_annotations(
     path: Path, fmt: str, label_column: str | None = None
 ) -> tuple[list[Annotation], dict[str, Any]]:

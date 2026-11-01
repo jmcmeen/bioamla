@@ -12,7 +12,8 @@ directory ``workspace init`` creates), else the one around the current directory
 ``outputs`` are relative to the workspace root when inside it.
 Values of options whose name suggests a secret (``--api-key``, ``--token``,
 ``--password``, ...) are replaced with ``***``. ``--help``/``--version`` runs and
-``workspace history`` itself aren't recorded. Recording never fails a command: a
+commands that only read the workspace (``workspace history``, ``status``, ``list``)
+aren't recorded. Recording never fails a command: a
 problem writing the file is logged as a warning.
 """
 
@@ -21,26 +22,25 @@ from __future__ import annotations
 import logging
 import os
 import re
-from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger("bioamla.cli")
 
 from bioamla.workspace._core import HISTORY_RECORD_VERSION as RECORD_VERSION  # noqa: E402
 
-_NOT_RECORDED = {"workspace history"}
 _SECRET = re.compile(r"(key|token|password|passwd|secret)", re.IGNORECASE)
-_OUTPUT_KEYS = ("output", "output_path", "output_dir", "metadata_file", "results_file")
 
 
 def should_record(group: Any, args: list[str]) -> bool:
-    """False for ``--help``/``--version`` runs, bare ``bioamla``, and ``workspace history``."""
+    """False for ``--help``/``--version`` runs, bare ``bioamla``, and commands that
+    only read the workspace (``workspace history``, ``status``, ``list``)."""
     from bioamla.cli.output import command_from_args
+    from bioamla.workspace import UNRECORDED_COMMANDS
 
     if any(a in ("--help", "--version") for a in args):
         return False
     command = command_from_args(group, args)
-    return bool(command) and command not in _NOT_RECORDED
+    return bool(command) and command not in UNRECORDED_COMMANDS
 
 
 def redact(argv: list[str], group: Any = None) -> list[str]:
@@ -85,20 +85,6 @@ def _flag_names(group: Any, argv: list[str]) -> set[str]:
     return names
 
 
-def _outputs(result: Any, ws: Any) -> list[str]:
-    """The paths a command's result says it wrote, relative to the workspace."""
-    if not isinstance(result, dict):
-        return []
-    paths: list[str] = []
-    for key in _OUTPUT_KEYS:
-        if isinstance(result.get(key), (str, os.PathLike)) and str(result[key]):
-            paths.append(str(result[key]))
-    files = result.get("output_files")
-    if isinstance(files, (list, tuple)):
-        paths += [str(f) for f in files if isinstance(f, (str, os.PathLike))]
-    return [ws.relative(p) for p in dict.fromkeys(paths)]
-
-
 def record_run(
     group: Any,
     args: list[str],
@@ -111,9 +97,7 @@ def record_run(
 ) -> None:
     """Append this run to the history of the workspace around the current directory."""
     import getpass
-    import socket
 
-    from bioamla import __version__
     from bioamla.cli.output import command_from_args, last_result, run_workspace
     from bioamla.exceptions import BioamlaError
     from bioamla.workspace import find_workspace
@@ -128,21 +112,20 @@ def record_run(
             user = getpass.getuser()
         except (KeyError, OSError):  # no user database entry (some containers)
             user = None
-        ws.record_run({
-            "v": RECORD_VERSION,
-            "time": datetime.fromtimestamp(started, timezone.utc).isoformat(timespec="seconds"),
-            "duration": round(ended - started, 3),
-            "command": command_from_args(group, args),
-            "argv": redact(args, group),
-            "cwd": ws.relative(os.getcwd()),
-            "host": socket.gethostname(),
-            "user": user,
-            "bioamla": __version__,
-            "ok": ok,
-            "exit_code": exit_code,
-            "error": error,
-            "outputs": _outputs(last_result(), ws),
-        })  # fmt: skip
+        ws.record_run(
+            ws.run_record(
+                command=command_from_args(group, args),
+                started=started,
+                ended=ended,
+                ok=ok,
+                exit_code=exit_code,
+                error=error,
+                result=last_result(),
+                user=user,
+                argv=redact(args, group),
+                cwd=ws.relative(os.getcwd()),
+            )
+        )
     except (OSError, BioamlaError) as e:
         logger.warning("Couldn't record this run in the workspace history: %s", e)
 

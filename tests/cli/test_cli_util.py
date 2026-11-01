@@ -8,7 +8,6 @@ import pytest
 from click.testing import CliRunner
 
 from bioamla.cli.cli import cli
-from bioamla.exceptions import DatasetError
 
 
 @pytest.fixture
@@ -38,16 +37,19 @@ def test_util_download_error(runner: CliRunner, tmp_path) -> None:
 
 
 def test_util_unzip(runner: CliRunner, tmp_path) -> None:
-    with patch("bioamla.common.files.extract_zip_file") as m:
-        result = runner.invoke(cli, ["util", "unzip", str(tmp_path / "a.zip"), str(tmp_path)])
+    import zipfile
+
+    with zipfile.ZipFile(tmp_path / "a.zip", "w") as zf:
+        zf.writestr("x/a.txt", "a")
+    result = runner.invoke(cli, ["util", "unzip", str(tmp_path / "a.zip"), str(tmp_path / "o")])
     assert result.exit_code == 0, result.output
     assert "Extracted to" in result.output
-    m.assert_called_once()
+    assert (tmp_path / "o" / "x" / "a.txt").read_text() == "a"
 
 
 def test_util_unzip_error(runner: CliRunner, tmp_path) -> None:
-    with patch("bioamla.common.files.extract_zip_file", side_effect=DatasetError("bad zip")):
-        result = runner.invoke(cli, ["util", "unzip", str(tmp_path / "a.zip"), str(tmp_path)])
+    (tmp_path / "a.zip").write_bytes(b"not a zip")
+    result = runner.invoke(cli, ["util", "unzip", str(tmp_path / "a.zip"), str(tmp_path)])
     assert result.exit_code != 0
 
 

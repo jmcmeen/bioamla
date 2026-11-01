@@ -52,6 +52,26 @@ runs: like any pipe, a reader that stops reading eventually blocks the command's
 stderr can also carry messages for people, so read the lines that are JSON objects with an
 `"event"` key. With `--json`, stdout is still exactly one envelope.
 
+## Running on a server
+
+Any command that runs an operation can run on a bioamla server instead
+(`bioamla serve`, see [the server guide](architecture/workspaces-and-remote.md)):
+
+```console
+$ bioamla remote add lab http://lab-server:8765
+$ export BIOAMLA_LAB_TOKEN=...            # from the server's token file
+$ bioamla remote upload lab costa-rica rec.wav --to raw
+$ bioamla --remote lab:costa-rica detect energy raw/rec.wav
+```
+
+The output, including `--json`, is the same as a local run's. Paths are the server's,
+relative to the remote workspace. The remote can also come from `BIOAMLA_REMOTE=lab:costa-rica`,
+or from `remote = "lab"` and `workspace = "costa-rica"` at the top of a local workspace's
+`.bioamla/config.toml`. Commands that only make sense here (`serve`, `remote ...`, `audio play`,
+...) refuse an explicit `--remote` and run locally under the other two. Credentials given on the
+command line (`--api-key`) are never sent; set them in the server's environment. A remote run is
+recorded in the server workspace's history, not a local one.
+
 ## Commands
 
 ::: mkdocs-click

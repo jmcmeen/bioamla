@@ -310,3 +310,37 @@ def make_tone_wav(tmp_path):
         return str(path)
 
     return make
+
+
+@pytest.fixture
+def live_server(tmp_path):
+    """A real bioamla server on a free localhost port, in a thread: yields
+    ``(url, token, root)``. The root holds one workspace, ``ws``."""
+    pytest.importorskip("fastapi")
+    uvicorn = pytest.importorskip("uvicorn")
+    import threading
+    import time
+
+    from bioamla.server import ServerConfig, create_app
+    from bioamla.workspace import create_workspace
+
+    root = tmp_path / "server-root"
+    create_workspace(root / "ws")
+    token = "live-token"
+    app = create_app(ServerConfig(root=root, token=token, max_jobs=2))
+    server = uvicorn.Server(
+        uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning", lifespan="on")
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.time() + 15
+    while not server.started:
+        if time.time() > deadline or not thread.is_alive():
+            raise RuntimeError("the test server didn't start")
+        time.sleep(0.02)
+    port = server.servers[0].sockets[0].getsockname()[1]
+    try:
+        yield f"http://127.0.0.1:{port}", token, root
+    finally:
+        server.should_exit = True
+        thread.join(timeout=15)

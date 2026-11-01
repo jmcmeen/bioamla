@@ -19,8 +19,10 @@ require_extra("viz", "bioamla.viz")
 
 from bioamla.viz.batch import batch_generate_spectrograms
 from bioamla.viz.core import (
+    SpectrogramBox,
     VisualizationType,
     WindowType,
+    annotation_boxes,
     compute_mel_spectrogram,
     compute_stft,
     generate_spectrogram,
@@ -31,6 +33,8 @@ from bioamla.viz.trajectory_video import TrajectoryVideoResult, generate_traject
 from bioamla.viz.video import SpectrogramVideoResult, generate_spectrogram_video
 
 __all__ = [
+    "SpectrogramBox",
+    "annotation_boxes",
     "generate_spectrogram",
     "generate_spectrogram_video",
     "SpectrogramVideoResult",

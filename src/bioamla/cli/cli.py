@@ -23,6 +23,7 @@ from .commands import (
     detect,
     indices,
     models,
+    remote,
     serve,
     system,
     util,
@@ -106,8 +107,11 @@ class BioamlaGroup(click.Group):
         # Done here, inside main()'s error handling, so a malformed settings file
         # is reported like any other error (and as an envelope with --json).
         if parent is None:
+            from bioamla.cli import remote_mode
             from bioamla.cli.settings_map import settings_default_map
 
+            remote_mode.reset()  # nothing carries over from a previous run in this process
+            self._run_args = list(args)  # for the root callback (which command runs)
             words = [a for a in args if not a.startswith("-")]
             # Commands that inspect or fix settings, or describe the CLI, still run
             # with a broken settings file (it's reported as a warning).
@@ -148,11 +152,14 @@ class BioamlaGroup(click.Group):
         finally:
             if error is None and not ok:
                 error = output.last_error()  # e.g. a --json run that already reported it
+            from bioamla.cli import remote_mode
+
             try:
-                history.record_run(
-                    self, args, started=started, ended=time.time(), ok=ok,
-                    exit_code=exit_code, error=error,
-                )  # fmt: skip
+                if not remote_mode.used():  # a remote run is in the server's history
+                    history.record_run(
+                        self, args, started=started, ended=time.time(), ok=ok,
+                        exit_code=exit_code, error=error,
+                    )  # fmt: skip
             except Exception as e:  # noqa: BLE001 - history must never fail a command
                 logging.getLogger("bioamla.cli").warning("Couldn't record this run: %s", e)
             output.reset_run_record()
@@ -190,6 +197,21 @@ class BioamlaGroup(click.Group):
             return rv
         finally:
             output.disable_json_mode()
+
+
+def _without_option(args: list[str], name: str) -> list[str]:
+    """``args`` without the root option ``name`` and its value (so a value can't be
+    mistaken for a command)."""
+    out: list[str] = []
+    skip = False
+    for arg in args:
+        if skip:
+            skip = False
+        elif arg == name:
+            skip = True
+        elif not arg.startswith(f"{name}="):
+            out.append(arg)
+    return out
 
 
 def _describe_exit(exc: BaseException) -> tuple[int, dict | None]:
@@ -258,7 +280,23 @@ def _finish_standalone_error(exc: BaseException, json_run: bool) -> None:
     default=None,
     help="Log level for library messages (default: each command's own).",
 )
-def cli(json_output: bool, log_format: str, log_level: str | None) -> None:
+@click.option(
+    "--remote",
+    "remote_target",
+    default=None,
+    metavar="NAME[:WORKSPACE]",
+    help="Run the command on a server (see `bioamla remote`), in its workspace "
+    "WORKSPACE; paths are the server's. Also $BIOAMLA_REMOTE, or `remote` and "
+    "`workspace` in a workspace's config.",
+)
+@click.pass_context
+def cli(
+    ctx: click.Context,
+    json_output: bool,
+    log_format: str,
+    log_level: str | None,
+    remote_target: str | None,
+) -> None:
     """BioAMLA - Bioacoustic & Machine Learning Applications
 
     Use 'bioamla COMMAND --help' for more information on a command.
@@ -266,6 +304,13 @@ def cli(json_output: bool, log_format: str, log_level: str | None) -> None:
     # --json is handled by BioamlaGroup.main, before parsing; the option is here so
     # it parses and shows in --help.
     set_cli_logging(log_format, log_level)
+    from bioamla.cli import output, remote_mode
+
+    args = _without_option(getattr(ctx.command, "_run_args", []), "--remote")
+    remote_mode.begin(
+        remote_mode.resolve(remote_target), output.command_from_args(ctx.command, args)
+    )
+    ctx.call_on_close(remote_mode.end)
 
 
 # Register command groups (alphabetical — Click lists them in registration order)
@@ -278,6 +323,7 @@ cli.add_command(dataset)
 cli.add_command(detect)
 cli.add_command(indices)
 cli.add_command(models)
+cli.add_command(remote)
 cli.add_command(serve)
 cli.add_command(system)
 cli.add_command(util)

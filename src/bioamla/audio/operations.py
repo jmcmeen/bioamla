@@ -459,6 +459,25 @@ def audio_gain(request: AudioGainRequest, context: OperationContext) -> Processe
 
 
 @config_dataclass
+class VisualizeBox:
+    """A region to outline on a picture (see :class:`bioamla.viz.SpectrogramBox`).
+
+    Attributes:
+        start: Start (s).
+        end: End (s).
+        low_freq: Lower edge (Hz); leave both edges out for the full height.
+        high_freq: Upper edge (Hz).
+        label: Text at its top-left corner.
+    """
+
+    start: float
+    end: float
+    low_freq: float | None = None
+    high_freq: float | None = None
+    label: str = ""
+
+
+@config_dataclass
 class AudioVisualizeRequest:
     """A spectrogram, MFCC or waveform image of a file.
 
@@ -473,6 +492,9 @@ class AudioVisualizeRequest:
         cmap: Colormap name.
         dpi: Image DPI.
         legend: Show axes, title and colorbar.
+        boxes: Regions to outline (seconds, Hz).
+        annotations: An annotation file (any format bioamla reads) whose
+            annotations are outlined too, labelled.
     """
 
     file: PathStr
@@ -485,13 +507,18 @@ class AudioVisualizeRequest:
     cmap: str = "viridis"
     dpi: int = 100
     legend: bool = True
+    boxes: list[VisualizeBox] = field(default_factory=list)
+    annotations: PathStr | None = None
 
 
 @operation("audio.visualize", request=AudioVisualizeRequest, kind="job")
 def audio_visualize(request: AudioVisualizeRequest, context: OperationContext) -> ProcessedFile:
-    """Draw a spectrogram, MFCC or waveform image of a file."""
-    from bioamla.viz import generate_spectrogram
+    """Draw a spectrogram, MFCC or waveform image of a file, with boxes outlined."""
+    from bioamla.viz import SpectrogramBox, annotation_boxes, generate_spectrogram
 
+    boxes = [SpectrogramBox.of(b) for b in request.boxes]
+    if request.annotations:
+        boxes += annotation_boxes(request.annotations, recording=request.file)
     saved = generate_spectrogram(
         audio_path=request.file,
         output_path=request.output,
@@ -503,6 +530,7 @@ def audio_visualize(request: AudioVisualizeRequest, context: OperationContext) -
         cmap=request.cmap,
         dpi=request.dpi,
         show_colorbar=request.legend,
+        boxes=boxes,
     )
     return ProcessedFile(file=request.file, output=str(saved), description=request.viz_type)
 

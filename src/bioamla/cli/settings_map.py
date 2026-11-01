@@ -51,7 +51,7 @@ def build_default_map(
 ) -> tuple[dict[str, Any], list[str]]:
     """``settings`` as a Click ``default_map`` for ``command``, plus the dotted keys
     that matched no command or option."""
-    from bioamla.common.settings import RESERVED_SECTIONS
+    from bioamla.common.settings import RESERVED_SECTIONS, WHERE_KEYS
 
     default_map: dict[str, Any] = {}
     unknown: list[str] = []
@@ -59,6 +59,8 @@ def build_default_map(
         dotted = f"{prefix}.{key}" if prefix else key
         if not prefix and key in RESERVED_SECTIONS:
             continue
+        if not prefix and key in WHERE_KEYS and isinstance(value, str):
+            continue  # where commands run (bioamla.cli.remote_mode), not an option
         sub = command.commands.get(key) if isinstance(command, click.Group) else None
         if sub is not None:
             if isinstance(value, dict):

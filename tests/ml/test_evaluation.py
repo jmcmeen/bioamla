@@ -151,11 +151,11 @@ def test_file_giving_more_than_one_input_is_skipped(tmp_path) -> None:
 
 
 def test_txt_report_has_the_confusion_matrix() -> None:
-    from bioamla.cli.commands.models import _evaluation_text
+    from bioamla.ml import evaluation_text
     from bioamla.ml.ast_service import EvaluationResult
 
     m = _compute_metrics(["frog", "bird"], ["frog", "frog"])
-    report = _evaluation_text(
+    report = evaluation_text(
         EvaluationResult(
             accuracy=m["accuracy"],
             precision=m["precision"],

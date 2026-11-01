@@ -554,6 +554,21 @@ def audio_gain(input_path: str, output_path: str, gain_db: float) -> None:
     default=True,
     help="Show axes, title, and colorbar (default: True)",
 )
+@click.option(
+    "--box",
+    "boxes",
+    multiple=True,
+    metavar="START,END[,LOW,HIGH][,LABEL]",
+    help="Outline a region: seconds, and optionally its band in Hz and a label "
+    "(repeatable). Without a band it spans the full height.",
+)
+@click.option(
+    "--annotations",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Outline every annotation in this file (Raven .txt, bioamla .json, CSV, Arbimon), "
+    "labelled",
+)
 def audio_visualize(
     path: str,
     output: str,
@@ -565,6 +580,8 @@ def audio_visualize(
     cmap: str,
     dpi: int,
     legend: bool,
+    boxes: tuple[str, ...],
+    annotations: str | None,
 ) -> None:
     """Generate audio visualization (spectrogram, waveform, MFCC) for a single file.
 
@@ -576,6 +593,8 @@ def audio_visualize(
         bioamla audio visualize rec.wav --type stft -o spec.png
         # Waveform plot
         bioamla audio visualize rec.wav --type waveform -o wave.png
+        # Outline detections, and one more region with its band
+        bioamla audio visualize rec.wav --annotations det.csv --box 1.5,2.0,1000,4000,frog
     """
     from bioamla.cli.console import print_success
     from bioamla.cli.operations import run_operation
@@ -594,10 +613,36 @@ def audio_visualize(
         cmap=cmap,
         dpi=dpi,
         legend=legend,
+        boxes=[_parse_box(b) for b in boxes],
+        annotations=annotations,
     )
     if emit_file_result(path, output=output_path):
         return
     print_success(f"Visualization saved to: {output_path}")
+
+
+def _parse_box(text: str) -> dict:
+    """``START,END[,LOW,HIGH][,LABEL]`` as a box request (the box itself is checked
+    when it's drawn). Empty band edges (``1,2,,,frog``) mean no band."""
+    parts = [p.strip() for p in text.split(",", 4)]  # a label may hold commas
+    try:
+        start, end = float(parts[0]), float(parts[1])
+        rest = parts[2:]
+        band = [float(p) if p else None for p in rest[:2]] if len(rest) >= 2 else []
+    except (ValueError, IndexError):
+        band = None
+    if band is None or len(parts) < 2:
+        raise click.BadParameter(
+            f"{text!r}: give START,END[,LOW,HIGH][,LABEL] (seconds, Hz)", param_hint="--box"
+        )
+    box: dict = {"start": start, "end": end}
+    if len(rest) == 1:  # START,END,LABEL
+        box["label"] = rest[0]
+    elif rest:
+        box.update(low_freq=band[0], high_freq=band[1])
+        if len(rest) > 2:
+            box["label"] = rest[2]
+    return box
 
 
 @audio.command("video")

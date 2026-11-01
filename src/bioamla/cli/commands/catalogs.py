@@ -11,8 +11,6 @@ Catalogs provide access to external bioacoustic databases and services:
 
 import click
 
-from bioamla.exceptions import BioamlaError
-
 
 @click.group()
 def catalogs() -> None:
@@ -59,51 +57,25 @@ def inat_search(
     quiet: bool,
 ) -> None:
     """Search for iNaturalist observations."""
-    import csv
-
-    from bioamla.catalogs import inat
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
-
-    if not species and not taxon_id and not place_id and not project_id:
-        raise click.UsageError(
-            "At least one search filter must be provided "
-            "(--species, --taxon-id, --place-id, or --project-id)"
-        )
-
-    try:
-        result = inat.search(
-            taxon_id=taxon_id,
-            taxon_name=species,
-            place_id=place_id,
-            project_id=project_id,
-            quality_grade=quality_grade,
-            per_page=limit,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
-    rows = _observation_rows(result.observations)
-    if not rows:
-        if emit_result({"count": 0, "observations": [], "output": None}):
-            return
-        echo("No observations found matching the search criteria.", style=DIM_STYLE)
+    found = run_operation(
+        "catalogs.inat.search",
+        species=species,
+        taxon_id=taxon_id,
+        place_id=place_id,
+        project_id=project_id,
+        quality_grade=quality_grade,
+        limit=limit,
+        output=output,
+    )
+    rows = found.observations
+    if emit_result(found.to_dict()):
         return
-
-    if output:
-        from pathlib import Path
-
-        try:
-            Path(output).parent.mkdir(parents=True, exist_ok=True)
-            with open(output, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=list(rows[0]))
-                writer.writeheader()
-                writer.writerows(rows)
-        except OSError as e:
-            raise click.ClickException(f"Failed to write {output}: {e}") from e
-
-    if emit_result({"count": len(rows), "observations": rows, "output": output}):
+    if not rows:
+        echo("No observations found matching the search criteria.", style=DIM_STYLE)
         return
     if output:
         print_success(f"Saved {len(rows)} observations to {output}")
@@ -120,28 +92,6 @@ def inat_search(
         )
 
 
-def _observation_rows(observations: list[dict]) -> list[dict]:
-    """iNaturalist observations as the rows the search command shows, saves and reports."""
-    rows = []
-    for obs in observations:
-        taxon = obs.get("taxon") or {}
-        observed_on = obs.get("observed_on") or ""
-        if hasattr(observed_on, "strftime"):
-            observed_on = observed_on.strftime("%Y-%m-%d")
-        rows.append(
-            {
-                "observation_id": obs.get("id"),
-                "scientific_name": taxon.get("name", ""),
-                "common_name": taxon.get("preferred_common_name", ""),
-                "sound_count": len(obs.get("sounds") or []),
-                "observed_on": str(observed_on),
-                "location": obs.get("place_guess", "") or "",
-                "url": f"https://www.inaturalist.org/observations/{obs.get('id')}",
-            }
-        )
-    return rows
-
-
 @catalogs_inat.command("stats")
 @click.argument("project_id")
 @click.option("--output", "-o", default=None, help="Output file path for JSON (optional)")
@@ -150,25 +100,13 @@ def inat_stats(project_id: str, output: str, quiet: bool) -> None:
     """Get statistics for an iNaturalist project."""
     import json
 
-    from bioamla.catalogs import inat
     from bioamla.cli.console import print_header, print_kv, print_success
-
-    try:
-        stats = inat.get_project_stats(project_id=project_id)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
-    if output:
-        from pathlib import Path
-
-        try:
-            Path(output).parent.mkdir(parents=True, exist_ok=True)
-            Path(output).write_text(json.dumps(stats.to_dict(), indent=2))
-        except OSError as e:
-            raise click.ClickException(f"Failed to write {output}: {e}") from e
-    if emit_result({"stats": stats.to_dict(), "output": output}):
+    report = run_operation("catalogs.inat.stats", project_id=project_id, output=output)
+    stats = report.stats
+    if emit_result(report.to_dict()):
         return
     if output:
         print_success(f"Saved project stats to {output}")
@@ -225,35 +163,29 @@ def inat_download(
     quiet: bool,
 ) -> None:
     """Download audio observations from iNaturalist."""
-    from bioamla.catalogs import inat
     from bioamla.cli.console import echo, print_header, print_kv
-
-    taxon_id_list = None
-    if taxon_ids:
-        taxon_id_list = [int(t.strip()) for t in taxon_ids.split(",")]
-
-    license_list = None
-    if license:
-        license_list = [lic.strip() for lic in license.split(",")]
-
-    try:
-        download_result = inat.download(
-            output_dir=output_dir,
-            taxon_ids=taxon_id_list,
-            taxon_name=taxon_name,
-            place_id=place_id,
-            project_id=project_id,
-            quality_grade=quality_grade if quality_grade != "any" else None,
-            sound_license=license_list,
-            d1=start_date,
-            d2=end_date,
-            obs_per_taxon=obs_per_taxon,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
+    try:
+        taxon_id_list = [int(t.strip()) for t in taxon_ids.split(",")] if taxon_ids else None
+    except ValueError:
+        raise click.BadParameter(
+            "expected comma-separated numbers", param_hint="--taxon-ids"
+        ) from None
+    download_result = run_operation(
+        "catalogs.inat.download",
+        output_dir=output_dir,
+        taxon_ids=taxon_id_list,
+        taxon_name=taxon_name,
+        place_id=place_id,
+        project_id=project_id,
+        quality_grade=quality_grade,
+        licenses=[lic.strip() for lic in license.split(",")] if license else None,
+        start_date=start_date,
+        end_date=end_date,
+        obs_per_taxon=obs_per_taxon,
+    )
     if emit_result(download_result):
         return
     if not quiet:
@@ -296,22 +228,36 @@ def catalogs_hf() -> None:
 @click.option("--commit-message", default=None, help="Custom commit message for the push")
 def hf_push_model(path: str, repo_id: str, private: bool, commit_message: str) -> None:
     """Push a model folder to the HuggingFace Hub."""
-    from bioamla.catalogs import huggingface as hf
-    from bioamla.cli.console import echo, print_success, print_warning
-
-    echo(f"Pushing model folder {path} to HuggingFace Hub: {repo_id}...")
-
-    try:
-        result = hf.push_model(path, repo_id, private=private, commit_message=commit_message)
-    except BioamlaError as e:
-        print_warning("Make sure you are logged in with 'huggingface-cli login'.")
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.console import echo, print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
+    echo(f"Pushing model folder {path} to HuggingFace Hub: {repo_id}...")
+    try:
+        result = run_operation(
+            "catalogs.hf.push-model",
+            path=path,
+            repo_id=repo_id,
+            private=private,
+            commit_message=commit_message,
+        )
+    except click.ClickException as e:
+        _login_hint(e)
+        raise
     if emit_result(result):
         return
     print_success(f"Successfully pushed model to: {result.url}")
+
+
+def _login_hint(error: click.ClickException) -> None:
+    """Suggest logging in when the push itself failed (not for a bad option)."""
+    from bioamla.cli.console import print_warning
+    from bioamla.exceptions import InvalidInputError
+
+    if not isinstance(error, click.UsageError) and not isinstance(
+        error.__cause__, InvalidInputError
+    ):
+        print_warning("Make sure you are logged in with 'huggingface-cli login'.")
 
 
 @catalogs_hf.command("push-dataset")
@@ -359,62 +305,30 @@ def hf_push_dataset(
     uploaded (metadata CSVs, manifest sites, generated card, and the position in
     WAV recorder metadata); the local folder keeps full precision.
     """
-    from bioamla.catalogs import huggingface as hf
-    from bioamla.cli.console import echo, print_success, print_warning
-    from bioamla.datasets import (
-        has_location_columns,
-        unredacted_location_files,
-        wavs_with_location,
-        write_dataset_card,
-    )
+    from bioamla.cli.console import echo, print_success
+    from bioamla.cli.operations import run_operation
+    from bioamla.cli.output import emit_result, json_mode
 
     echo(f"Pushing dataset folder {path} to HuggingFace Hub: {repo_id}...")
-
-    if card:
-        try:
-            card_path = write_dataset_card(path)
-            if card_path:
-                print_success(f"Wrote dataset card: {card_path}")
-        except BioamlaError as e:
-            print_warning(f"Warning: could not generate dataset card ({e})")
-
-    if coordinates == "keep":
-        where = []
-        if has_location_columns(path):
-            where.append("the metadata")
-        if wavs_with_location(path):
-            where.append("the WAV files' recorder metadata")
-        if where:
-            print_warning(
-                f"Per-file locations in {' and '.join(where)} will be published as they are. "
-                "Use --coordinates round or --coordinates strip to redact them."
-            )
-    else:
-        unredacted = unredacted_location_files(path)
-        if unredacted:
-            print_warning(
-                f"{len(unredacted)} file(s) may still carry a location that --coordinates "
-                f"does not change (JSON/text, Parquet), e.g. {unredacted[0]}."
-            )
-
+    # The card and any location warnings print as notices before the upload starts.
     try:
-        result = hf.push_dataset(
-            path,
-            repo_id,
+        pushed = run_operation(
+            "catalogs.hf.push-dataset",
+            path=path,
+            repo_id=repo_id,
             private=private,
             commit_message=commit_message,
+            card=card,
             coordinates=coordinates,
             coordinate_decimals=coordinate_decimals,
         )
-    except BioamlaError as e:
-        print_warning("Make sure you are logged in with 'huggingface-cli login'.")
-        raise click.ClickException(str(e)) from e
-
-    from bioamla.cli.output import emit_result
-
-    if emit_result(result):
+    except click.ClickException as e:
+        _login_hint(e)
+        raise
+    if json_mode():
+        emit_result(pushed.to_dict())
         return
-    print_success(f"Successfully pushed dataset to: {result.url}")
+    print_success(f"Successfully pushed dataset to: {pushed.result.url}")
 
 
 @catalogs_hf.command("pull-dataset")
@@ -450,29 +364,24 @@ def hf_pull_dataset(
     Materializes REPO_ID (e.g. ``ashraq/esc-50``) under DEST as label subdirs and
     a ``metadata.csv``, ready for ``dataset partition`` / ``models ast train``.
     """
-    from bioamla.catalogs import huggingface as hf
     from bioamla.cli.console import echo, print_kv, print_success
+    from bioamla.cli.operations import run_operation
+    from bioamla.cli.output import emit_result
 
     if not quiet:
         echo(f"Pulling dataset {repo_id} from HuggingFace Hub into {dest}...")
-
-    try:
-        result = hf.pull_dataset(
-            repo_id,
-            dest,
-            split=split,
-            config=config,
-            audio_column=audio_column,
-            label_column=label_column,
-            sample_rate=sample_rate or None,
-            layout=layout,
-            verbose=not quiet,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    from bioamla.cli.output import emit_result
-
+    result = run_operation(
+        "catalogs.hf.pull-dataset",
+        repo_id=repo_id,
+        dest=dest,
+        split=split,
+        config=config,
+        audio_column=audio_column,
+        label_column=label_column,
+        sample_rate=sample_rate,
+        layout=layout,
+        verbose=not quiet,
+    )
     if emit_result(result):
         return
     print_success(
@@ -507,27 +416,25 @@ def hf_cache(models: bool, datasets: bool, target_all: bool, do_purge: bool, yes
         bioamla catalogs hf cache                       # list everything cached
         bioamla catalogs hf cache --datasets --purge -y # free dataset cache
     """
-    from bioamla.catalogs import huggingface as hf
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success, print_warning
+    from bioamla.cli.operations import run_operation
+    from bioamla.cli.output import emit_result, fail, json_mode
 
     # Default to both types unless one is singled out.
     if target_all or (not models and not datasets):
         models = datasets = True
-
-    from bioamla.cli.output import emit_result, fail, json_mode
-
     if json_mode() and do_purge and not yes:
         raise click.UsageError("--purge with --json needs --yes (there is no prompt).")
 
-    try:
-        repos = hf.scan_cache(models=models, datasets=datasets)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
+    listing = run_operation("catalogs.hf.cache", models=models, datasets=datasets)
+    repos = listing["repos"]
 
     if json_mode():
-        report = {"repos": repos, "total_bytes": sum(r.size_bytes for r in repos), "purged": None}
+        report = {**listing, "purged": None}
         if do_purge and repos:
-            report["purged"] = hf.purge_cache(models=models, datasets=datasets)
+            report["purged"] = run_operation(
+                "catalogs.hf.cache-purge", models=models, datasets=datasets
+            )
             if report["purged"].failures:
                 fail(
                     f"Could not purge {len(report['purged'].failures)} cached repo(s)",
@@ -541,10 +448,9 @@ def hf_cache(models: bool, datasets: bool, target_all: bool, do_purge: bool, yes
         echo("No cached data found.", style=DIM_STYLE)
         return
 
-    total = sum(r.size_bytes for r in repos)
     for r in repos:
         echo(f"  {r.repo_type:>7}: {r.repo_id} ({_format_size(r.size_bytes)})")
-    print_header(f"Total: {_format_size(total)} across {len(repos)} repo(s)")
+    print_header(f"Total: {_format_size(listing['total_bytes'])} across {len(repos)} repo(s)")
 
     if not do_purge:
         echo("(run with --purge to delete)", style=DIM_STYLE)
@@ -554,7 +460,7 @@ def hf_cache(models: bool, datasets: bool, target_all: bool, do_purge: bool, yes
         echo("Aborted.", style=DIM_STYLE)
         return
 
-    result = hf.purge_cache(models=models, datasets=datasets)
+    result = run_operation("catalogs.hf.cache-purge", models=models, datasets=datasets)
     print_success(f"Purged {result.deleted} repo(s), freed {_format_size(result.freed_bytes)}.")
     for failure in result.failures:
         print_warning(f"  warning: {failure}")
@@ -606,24 +512,20 @@ def xc_search(
     """
     import json as json_lib
 
-    from bioamla.catalogs import xeno_canto as xc
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_kv
-
-    try:
-        result = xc.search(
-            species=species,
-            genus=genus,
-            country=country,
-            quality=quality,
-            sound_type=sound_type,
-            max_results=max_results,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    recordings = result.recordings
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
+    result = run_operation(
+        "catalogs.xc.search",
+        species=species,
+        genus=genus,
+        country=country,
+        quality=quality,
+        sound_type=sound_type,
+        max_results=max_results,
+    )
+    recordings = result.recordings
     if emit_result({"count": len(recordings), "recordings": [r.to_dict() for r in recordings]}):
         return
     if not recordings:
@@ -669,26 +571,21 @@ def xc_download(
     delay: float,
 ) -> None:
     """Download recordings from Xeno-canto."""
-    from bioamla.catalogs import xeno_canto as xc
     from bioamla.cli.console import DIM_STYLE, echo, print_success
-
-    echo("Searching Xeno-canto...")
-
-    try:
-        download_result = xc.download(
-            species=species,
-            genus=genus,
-            country=country,
-            quality=quality,
-            max_recordings=max_recordings,
-            output_dir=output_dir,
-            delay=delay,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
+    echo("Searching Xeno-canto...")
+    download_result = run_operation(
+        "catalogs.xc.download",
+        output_dir=output_dir,
+        species=species,
+        genus=genus,
+        country=country,
+        quality=quality,
+        max_recordings=max_recordings,
+        delay=delay,
+    )
     if emit_result(download_result):
         return
     if download_result.total == 0:
@@ -753,27 +650,23 @@ def ml_search(
     """
     import json as json_lib
 
-    from bioamla.catalogs import macaulay as ml
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_kv
-
-    try:
-        result = ml.search(
-            species_code=species_code,
-            scientific_name=scientific_name,
-            common_name=common_name,
-            region=region,
-            country=country,
-            taxon_code=taxon_code,
-            hotspot_code=hotspot_code,
-            min_rating=min_rating,
-            max_results=max_results,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    recordings = result.recordings
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
+    result = run_operation(
+        "catalogs.ml.search",
+        species_code=species_code,
+        scientific_name=scientific_name,
+        common_name=common_name,
+        region=region,
+        country=country,
+        taxon_code=taxon_code,
+        hotspot_code=hotspot_code,
+        min_rating=min_rating,
+        max_results=max_results,
+    )
+    recordings = result.recordings
     if emit_result({"count": len(recordings), "recordings": [r.to_dict() for r in recordings]}):
         return
     if not recordings:
@@ -822,29 +715,24 @@ def ml_download(
 
     Use 'catalogs ebird species <name>' to look up species codes.
     """
-    from bioamla.catalogs import macaulay as ml
     from bioamla.cli.console import DIM_STYLE, echo, print_success
-
-    echo("Searching Macaulay Library...")
-
-    try:
-        download_result = ml.download(
-            species_code=species_code,
-            scientific_name=scientific_name,
-            common_name=common_name,
-            region=region,
-            country=country,
-            taxon_code=taxon_code,
-            hotspot_code=hotspot_code,
-            min_rating=min_rating,
-            max_recordings=max_recordings,
-            output_dir=output_dir,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
+    echo("Searching Macaulay Library...")
+    download_result = run_operation(
+        "catalogs.ml.download",
+        species_code=species_code,
+        scientific_name=scientific_name,
+        common_name=common_name,
+        region=region,
+        country=country,
+        taxon_code=taxon_code,
+        hotspot_code=hotspot_code,
+        min_rating=min_rating,
+        max_recordings=max_recordings,
+        output_dir=output_dir,
+    )
     if emit_result(download_result):
         return
     if download_result.total == 0:
@@ -875,16 +763,11 @@ def ebird_species(name: str) -> None:
 
     NAME can be a common name, scientific name, or species code.
     """
-    from bioamla.catalogs import species
     from bioamla.cli.console import print_kv
-
-    try:
-        info = species.lookup(name, ebird_only=True)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
+    info = run_operation("catalogs.ebird.species", name=name)
     if emit_result(info):
         return
     print_kv("Scientific name", info.scientific_name)
@@ -899,17 +782,13 @@ def ebird_species(name: str) -> None:
 @click.option("--limit", "-n", default=10, type=int, help="Maximum results")
 def ebird_search(query: str, limit: int) -> None:
     """Fuzzy search eBird taxonomy for species."""
-    from bioamla.catalogs import species
     from bioamla.cli.console import DIM_STYLE, echo, print_header
-
-    try:
-        matches = species.search(query, limit=limit)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
-    if emit_result({"query": query, "count": len(matches), "matches": matches}):
+    result = run_operation("catalogs.ebird.search", query=query, limit=limit)
+    matches = result["matches"]
+    if emit_result(result):
         return
     if not matches:
         echo(f"No species found matching: {query}", style=DIM_STYLE)
@@ -934,22 +813,18 @@ def ebird_validate(
     species_code: str, lat: float, lng: float, api_key: str, distance: float
 ) -> None:
     """Validate if a species is expected at a location."""
-    from bioamla.catalogs.ebird import EBirdService
     from bioamla.cli.console import echo, print_kv, print_success, print_warning
-
-    try:
-        service = EBirdService(api_key=api_key)
-        validation = service.validate_species(
-            species_code=species_code,
-            lat=lat,
-            lng=lng,
-            distance_km=distance,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
+    validation = run_operation(
+        "catalogs.ebird.validate",
+        secrets={"EBIRD_API_KEY": api_key},
+        species_code=species_code,
+        lat=lat,
+        lng=lng,
+        distance=distance,
+    )
     if emit_result(validation):
         return
     if validation.is_valid:
@@ -976,24 +851,21 @@ def ebird_nearby(
     lat: float, lng: float, api_key: str, distance: float, days: int, limit: int, output: str
 ) -> None:
     """Get recent eBird observations near a location."""
-    from bioamla.catalogs.ebird import EBirdService
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
-
-    try:
-        service = EBirdService(api_key=api_key)
-        result = service.get_nearby(
-            lat=lat,
-            lng=lng,
-            distance_km=distance,
-            days=days,
-            limit=limit,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    observations = result.observations
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result, json_mode
 
+    result = run_operation(
+        "catalogs.ebird.nearby",
+        secrets={"EBIRD_API_KEY": api_key},
+        lat=lat,
+        lng=lng,
+        distance=distance,
+        days=days,
+        limit=limit,
+        output=output,
+    )
+    observations = result.observations
     if not json_mode():
         print_header(f"Found {len(observations)} recent observations:")
         for obs in observations[:10]:
@@ -1001,30 +873,7 @@ def ebird_nearby(
             echo(f"  {obs.common_name}{count_str} - {obs.location_name}")
         if len(observations) > 10:
             echo(f"  ... and {len(observations) - 10} more", style=DIM_STYLE)
-
-    if output:
-        import csv
-        from pathlib import Path
-
-        try:
-            Path(output).parent.mkdir(parents=True, exist_ok=True)
-            fieldnames = [
-                "species_code",
-                "common_name",
-                "scientific_name",
-                "location_name",
-                "observation_date",
-                "how_many",
-            ]
-            with open(output, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-                writer.writeheader()
-                for obs in observations:
-                    writer.writerow(obs.to_dict())
-        except OSError as e:
-            raise click.ClickException(f"Failed to write {output}: {e}") from e
-
-    if emit_result({"count": len(observations), "observations": observations, "output": output}):
+    if emit_result(result.to_dict()):
         return
     if output:
         print_success(f"Saved to: {output}")

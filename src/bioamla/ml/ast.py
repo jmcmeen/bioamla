@@ -182,6 +182,17 @@ def extract_features(
     return inputs.input_values
 
 
+def _on_model_device(input_values, model, torch):
+    """The input on the model's device and floating dtype. A model loaded with
+    ``device_map="auto"`` may sit on a GPU (CUDA or Apple MPS) while features are
+    made on the CPU."""
+    param = next(iter(model.parameters()), None)
+    if isinstance(param, torch.Tensor):
+        dtype = param.dtype if param.dtype.is_floating_point else None
+        return input_values.to(device=param.device, dtype=dtype)
+    return input_values
+
+
 def ast_predict(input_values: "torch.Tensor", model: "AutoModelForAudioClassification") -> str:
     """
     Run an AST model on preprocessed features and return the predicted label.
@@ -198,6 +209,7 @@ def ast_predict(input_values: "torch.Tensor", model: "AutoModelForAudioClassific
     """
     torch = _require_torch()
     try:
+        input_values = _on_model_device(input_values, model, torch)
         with torch.inference_mode():
             outputs = model(input_values)
         predicted_class_idx = outputs.logits.argmax(-1).item()
@@ -224,6 +236,7 @@ def ast_predict_batch(
     """
     torch = _require_torch()
     try:
+        input_values = _on_model_device(input_values, model, torch)
         with torch.inference_mode():
             outputs = model(input_values)
         predicted_indices = outputs.logits.argmax(dim=-1).cpu().tolist()

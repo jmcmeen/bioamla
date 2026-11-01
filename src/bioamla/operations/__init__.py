@@ -45,9 +45,15 @@ OPERATION_MODULES: dict[str, str] = {
     "batch.models": "bioamla.ml.batch_operations",
     "annotation": "bioamla.datasets.annotation_operations",
     "audio": "bioamla.audio.operations",
+    "catalogs": "bioamla.catalogs.operations",
+    "cluster": "bioamla.cluster.operations",
     "dataset": "bioamla.datasets.dataset_operations",
     "detect": "bioamla.detect.operations",
     "indices": "bioamla.indices.operations",
+    "models": "bioamla.ml.operations",
+    "system": "bioamla.system.operations",
+    "util": "bioamla.common.file_operations",
+    "workspace": "bioamla.workspace.operations",
 }
 
 OperationKind = Literal["quick", "job"]
@@ -100,12 +106,30 @@ class OperationContext:
         cancelled: Returns True when the caller wants the operation to stop.
         path_check: Maps a request path to the path to use, raising if it isn't
             allowed. The default (local runs) allows anything and returns it as given.
+        secrets: Credentials for this run (e.g. ``{"EBIRD_API_KEY": ...}`` from a
+            command-line flag). Never part of a request; an operation falls back to the
+            environment where it runs.
+        on_notice: ``on_notice(level, message)`` for things to tell the caller while
+            the operation runs (``"info"`` or ``"warning"``).
     """
 
     workspace: Any = None
     on_progress: Callable[[int, int], None] | None = None
     cancelled: Callable[[], bool] = field(default=lambda: False)
     path_check: Callable[[str], str] = field(default=lambda p: p)
+    secrets: dict[str, str] = field(default_factory=dict)
+    on_notice: Callable[[str, str], None] | None = None
+
+    def notice(self, level: str, message: str) -> None:
+        """Tell the caller something (a no-op without ``on_notice``)."""
+        if self.on_notice is not None:
+            self.on_notice(level, message)
+
+    def secret(self, name: str) -> str | None:
+        """The credential ``name`` from :attr:`secrets`, else the environment."""
+        import os
+
+        return self.secrets.get(name) or os.environ.get(name)
 
     def resolve_path(self, path: str | None) -> str | None:
         """``path`` after the context's check (``None`` stays ``None``)."""
@@ -293,15 +317,41 @@ def build_request(op: Operation, data: Any) -> Any:
     return validate_config(op.request, dict(data), source=f"operation {op.name}")
 
 
-def run(name: str, request: Any, context: OperationContext | None = None) -> Any:
-    """Run the operation ``name`` on ``request`` (a request object or a dict).
+def check_setting_key(key: str) -> str:
+    """``key`` if it names a request field of an operation (``detect.energy.threshold_db``),
+    the form a workspace setting takes.
 
-    Every path field goes through ``context.resolve_path`` first.
+    Raises:
+        InvalidInputError: If it doesn't (no such operation or field, or the
+            operation's domain needs an extra that isn't installed).
+    """
+    from bioamla.exceptions import InvalidInputError
+
+    parts = key.split(".")
+    if len(parts) < 2 or not all(parts):
+        raise InvalidInputError(f"Not a setting key: {key!r} (e.g. detect.energy.threshold_db)")
+    name, field_name = ".".join(parts[:-1]), parts[-1].replace("-", "_")
+    try:
+        op = get(name)
+    except NotFoundError:
+        raise InvalidInputError(f"Not a setting key: {key!r} (no operation {name!r})") from None
+    except DependencyError as e:
+        raise InvalidInputError(f"Not a setting key here: {key!r} ({e})") from None
+    if field_name not in {f.name for f in dataclasses.fields(op.request)}:
+        raise InvalidInputError(f"Not a setting key: {key!r} ({name} has no {field_name!r})")
+    return key
+
+
+def prepare(name: str, request: Any, context: OperationContext | None = None) -> Any:
+    """``request`` as the operation ``name`` would run it: validated, with every path
+    field through ``context.resolve_path``. :func:`run` does this first; a front end
+    that runs the operation later (e.g. as a job) can call it to reject a bad request
+    straight away.
 
     Raises:
         NotFoundError: If there's no such operation.
         ConfigValidationError: If the request is invalid.
-        BioamlaError: Whatever the operation raises.
+        BioamlaError: Whatever the context's path check raises.
     """
     op = get(name)
     context = context or OperationContext()
@@ -315,7 +365,21 @@ def run(name: str, request: Any, context: OperationContext | None = None) -> Any
             resolved[f] = context.resolve_path(value)
     if resolved:
         req = dataclasses.replace(req, **resolved)
-    return op.func(req, context)
+    return req
+
+
+def run(name: str, request: Any, context: OperationContext | None = None) -> Any:
+    """Run the operation ``name`` on ``request`` (a request object or a dict).
+
+    Every path field goes through ``context.resolve_path`` first.
+
+    Raises:
+        NotFoundError: If there's no such operation.
+        ConfigValidationError: If the request is invalid.
+        BioamlaError: Whatever the operation raises.
+    """
+    context = context or OperationContext()
+    return get(name).func(prepare(name, request, context), context)
 
 
 __all__ = [
@@ -327,8 +391,10 @@ __all__ = [
     "PathStr",
     "all_operations",
     "build_request",
+    "check_setting_key",
     "get",
     "operation",
     "path_fields",
+    "prepare",
     "run",
 ]

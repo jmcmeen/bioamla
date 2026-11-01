@@ -16,11 +16,12 @@ dataclass hierarchy.
 """
 
 import logging
+import os
 import zipfile
 from pathlib import Path
 from urllib.request import urlretrieve
 
-from bioamla.exceptions import NotFoundError
+from bioamla.exceptions import BioamlaError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,69 @@ def write_text(filepath: str | Path, content: str, encoding: str = "utf-8") -> i
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding=encoding)
     return len(content)
+
+
+class AtomicFileWriter:
+    """Write a file in pieces, so it appears whole or not at all.
+
+    The bytes go to a temporary file in the target's folder; :meth:`commit` moves it
+    into place (replacing an existing file only with ``overwrite``) and leaving the
+    ``with`` block without committing removes it.
+
+    Example:
+        >>> with AtomicFileWriter("rec.wav") as w:
+        ...     for chunk in chunks:
+        ...         w.write(chunk)
+        ...     w.commit()
+
+    Raises:
+        FileExistsError: From :meth:`commit`, if the file exists and ``overwrite`` is off
+            (checked as the file is put in place, so two writers can't both win).
+        OSError: If the folder can't be created or written.
+    """
+
+    def __init__(self, path: str | Path, overwrite: bool = False) -> None:
+        import tempfile
+
+        self.path = Path(path)
+        self.overwrite = overwrite
+        self.size = 0
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=f".{self.path.name}.",
+                                   suffix=".part")  # fmt: skip
+        self._tmp = Path(tmp)
+        self._file = os.fdopen(fd, "wb")
+        self._done = False
+
+    def write(self, data: bytes) -> None:
+        """Append ``data``."""
+        self._file.write(data)
+        self.size += len(data)
+
+    def commit(self) -> Path:
+        """Put the file in place."""
+        self._file.close()
+        if self.overwrite:
+            os.replace(self._tmp, self.path)
+        else:
+            try:
+                os.link(self._tmp, self.path)  # fails if it exists
+                self._tmp.unlink()
+            except FileExistsError:
+                raise
+            except OSError:  # no hard links here: claim the name, then fill it
+                os.close(os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+                os.replace(self._tmp, self.path)
+        self._done = True
+        return self.path
+
+    def __enter__(self) -> "AtomicFileWriter":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if not self._done:
+            self._file.close()
+            self._tmp.unlink(missing_ok=True)
 
 
 def write_text_atomic(filepath: str | Path, content: str, encoding: str = "utf-8") -> None:
@@ -501,7 +565,104 @@ def zip_directory(directory: str | Path, zip_path: str | Path) -> str:
     return str(zip_path)
 
 
+def download_to_dir(url: str, output_dir: str | Path = ".", show_progress: bool = True) -> str:
+    """Download ``url`` into ``output_dir``, named after the URL's last path part
+    (``downloaded_file`` if it has none).
+
+    Returns:
+        The file written.
+
+    Raises:
+        BioamlaError: If the download fails.
+    """
+    import os
+    from urllib.parse import urlparse
+
+    filename = os.path.basename(urlparse(url).path) or "downloaded_file"
+    output_path = Path(output_dir) / filename
+    try:
+        download_file(url, output_path, show_progress=show_progress)
+    except (OSError, ValueError) as e:  # ValueError: a malformed URL
+        raise BioamlaError(f"Download failed: {e}") from e
+    return str(output_path)
+
+
+#: The most :func:`unzip_to` extracts from one archive by default (bytes, uncompressed).
+UNZIP_MAX_BYTES = 50 * 1024**3
+
+
+def unzip_to(
+    zip_file: str | Path, output_dir: str | Path = ".", *, max_bytes: int = UNZIP_MAX_BYTES
+) -> list[str]:
+    """Extract a ZIP archive into ``output_dir``.
+
+    Every entry is checked before anything is written: it must land inside
+    ``output_dir`` with links already there followed (so an entry can't write through
+    a link to somewhere else), and it can't touch workspace metadata (a ``.bioamla``
+    folder).
+
+    Args:
+        zip_file: The archive.
+        output_dir: Where to extract it.
+        max_bytes: Refuse archives that would extract to more than this.
+
+    Returns:
+        The extracted paths.
+
+    Raises:
+        NotFoundError: If the archive doesn't exist.
+        InvalidInputError: If an entry would leave ``output_dir`` or touch a
+            ``.bioamla`` folder, or the archive is larger than ``max_bytes``.
+        BioamlaError: If it isn't a valid ZIP or can't be extracted.
+    """
+    from bioamla.exceptions import InvalidInputError
+
+    if not Path(zip_file).is_file():
+        raise NotFoundError(f"ZIP archive not found: {zip_file}")
+    try:
+        with zipfile.ZipFile(zip_file) as zf:
+            infos = zf.infolist()
+            total = sum(i.file_size for i in infos)
+            if total > max_bytes:
+                raise InvalidInputError(
+                    f"{zip_file} would extract to {total} bytes, more than the {max_bytes} allowed"
+                )
+            dest = Path(output_dir)
+            dest.mkdir(parents=True, exist_ok=True)
+            root = dest.resolve()
+            for info in infos:
+                name = info.filename.replace("\\", "/")
+                if ".bioamla" in name.split("/"):
+                    raise InvalidInputError(f"{zip_file}: {info.filename} is workspace metadata")
+                target = (root / name).resolve()
+                if target != root and not target.is_relative_to(root):
+                    raise InvalidInputError(f"{zip_file}: {info.filename} would leave {output_dir}")
+            zf.extractall(dest)
+            return [str(dest / i.filename) for i in infos]
+    except (OSError, zipfile.BadZipFile) as e:
+        raise BioamlaError(f"Extraction failed: {e}") from e
+
+
+def zip_path(source: str | Path, zip_file: str | Path) -> str:
+    """Zip a folder (its contents) or a single file into ``zip_file``.
+
+    Raises:
+        BioamlaError: If the archive can't be written.
+    """
+    try:
+        if Path(source).is_dir():
+            return zip_directory(source, zip_file)
+        return create_zip_file([source], zip_file)
+    except (OSError, ValueError) as e:  # ValueError: a timestamp before 1980
+        raise BioamlaError(f"ZIP creation failed: {e}") from e
+
+
 __all__ = [
+    "AtomicFileWriter",
+    "download_to_dir",
+    "UNZIP_MAX_BYTES",
+    "unzip_to",
+    "zip_path",
     # I/O helpers
     "read_text",
     "write_text",

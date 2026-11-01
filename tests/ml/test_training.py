@@ -195,18 +195,7 @@ class TestASTCheckpointLoading:
 
 
 class TestTrainConfigOverlay:
-    """`--config` precedence: CLI flag > config file > built-in default."""
-
-    def _ctx(self, commandline_params):
-        from click.core import ParameterSource
-
-        class FakeCtx:
-            def get_parameter_source(self, name):
-                if name in commandline_params:
-                    return ParameterSource.COMMANDLINE
-                return ParameterSource.DEFAULT
-
-        return FakeCtx()
+    """Training options: explicit value > config file > built-in default."""
 
     def _write_config(self, tmp_path):
         cfg = tmp_path / "train.toml"
@@ -221,44 +210,47 @@ class TestTrainConfigOverlay:
         )
         return str(cfg)
 
-    def test_no_config_path_is_passthrough(self) -> None:
-        from bioamla.cli.commands.models import _apply_train_config
+    def test_no_config_path_gives_defaults_and_explicit_values(self) -> None:
+        from bioamla.ml.train_config import AST_TRAIN_DEFAULTS, resolve_train_options
 
-        values = {"learning_rate": 5e-5, "num_train_epochs": 1}
-        assert _apply_train_config(self._ctx(set()), None, dict(values)) == values
+        out = resolve_train_options({"num_train_epochs": 3})
+        assert out == {**AST_TRAIN_DEFAULTS, "num_train_epochs": 3}
 
-    def test_config_fills_defaulted_flags(self, tmp_path) -> None:
-        from bioamla.cli.commands.models import _apply_train_config
+    def test_config_fills_unset_options(self, tmp_path) -> None:
+        from bioamla.ml.train_config import resolve_train_options
 
-        cfg = self._write_config(tmp_path)
-        values = {
-            "base_model": "MIT/ast-finetuned-audioset-10-10-0.4593",
-            "learning_rate": 5e-5,
-            "num_train_epochs": 1,
-            "per_device_train_batch_size": 8,
-            "eval_steps": 1,
-            "report_to": "tensorboard",
-        }
-        out = _apply_train_config(self._ctx(set()), cfg, dict(values))
+        out = resolve_train_options({}, self._write_config(tmp_path))
         assert out["base_model"] == "cfg/model"
         assert out["learning_rate"] == 1e-4
         assert out["num_train_epochs"] == 20  # epochs -> num_train_epochs
         assert out["per_device_train_batch_size"] == 32  # batch_size -> ...
         assert out["report_to"] == "mlflow"  # config overrides the tensorboard default
-        # Not present in config -> keeps the flag/default value.
-        assert out["eval_steps"] == 1
+        assert out["eval_steps"] == 1  # not in the config -> default
 
-    def test_explicit_flag_overrides_config(self, tmp_path) -> None:
-        from bioamla.cli.commands.models import _apply_train_config
+    def test_explicit_option_overrides_config(self, tmp_path) -> None:
+        from bioamla.ml.train_config import resolve_train_options
 
         cfg = self._write_config(tmp_path)
-        # User explicitly passed --num-train-epochs and --learning-rate.
-        ctx = self._ctx({"num_train_epochs", "learning_rate"})
-        values = {"num_train_epochs": 3, "learning_rate": 9e-5, "per_device_train_batch_size": 8}
-        out = _apply_train_config(ctx, cfg, dict(values))
-        assert out["num_train_epochs"] == 3  # flag wins over config's 20
-        assert out["learning_rate"] == 9e-5  # flag wins over config's 1e-4
-        assert out["per_device_train_batch_size"] == 32  # defaulted -> config wins
+        out = resolve_train_options({"num_train_epochs": 3, "learning_rate": 9e-5}, cfg)
+        assert out["num_train_epochs"] == 3  # explicit wins over config's 20
+        assert out["learning_rate"] == 9e-5  # explicit wins over config's 1e-4
+        assert out["per_device_train_batch_size"] == 32  # unset -> config wins
+
+    def test_unknown_option_is_an_error(self) -> None:
+        from bioamla.exceptions import InvalidInputError
+        from bioamla.ml.train_config import resolve_train_options
+
+        with pytest.raises(InvalidInputError, match="Unknown training options: epochs"):
+            resolve_train_options({"epochs": 3})
+
+    def test_cli_defaults_match_the_library(self) -> None:
+        """`ast train --help` shows the library's defaults (the CLI can't import them)."""
+        from bioamla.cli.commands.models import ast_train
+        from bioamla.ml.train_config import AST_TRAIN_DEFAULTS
+
+        shown = {p.name: p.default for p in ast_train.params}
+        for name, default in AST_TRAIN_DEFAULTS.items():
+            assert shown[name] == default, name
 
 
 class TestLoadDirectoryDataset:

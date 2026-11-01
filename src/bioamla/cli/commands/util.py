@@ -5,9 +5,9 @@ These are not dataset-specific — they wrap the simple file helpers in
 than under ``dataset``.
 """
 
-import click
+import os
 
-from bioamla.exceptions import BioamlaError
+import click
 
 
 @click.group()
@@ -21,33 +21,17 @@ def util() -> None:
 @click.argument("output_dir", required=False, default=".")
 def util_download(url: str, output_dir: str) -> None:
     """Download a file from the specified URL to the target directory."""
-    import os
-    from urllib.parse import urlparse
-
     from bioamla.cli.console import print_success
     from bioamla.cli.logging_setup import configure_cli_logging
-    from bioamla.common.files import download_file
-
-    if output_dir == ".":
-        output_dir = os.getcwd()
-
-    parsed_url = urlparse(url)
-    filename = os.path.basename(parsed_url.path) or "downloaded_file"
-    output_path = os.path.join(output_dir, filename)
-
-    configure_cli_logging()
-    try:
-        download_file(url, output_path)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    except OSError as e:
-        raise click.ClickException(f"Download failed: {e}") from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
-    if emit_result({"url": url, "output": str(output_path)}):
+    configure_cli_logging()
+    folder = os.getcwd() if output_dir == "." else output_dir
+    result = run_operation("util.download", url=url, output_dir=folder)
+    if emit_result(result):
         return
-    print_success(f"Downloaded to {output_path}")
+    print_success(f"Downloaded to {result['output']}")
 
 
 @util.command("unzip")
@@ -55,26 +39,15 @@ def util_download(url: str, output_dir: str) -> None:
 @click.argument("output_path", required=False, default=".")
 def util_unzip(file_path: str, output_path: str) -> None:
     """Extract a ZIP archive to the specified output directory."""
-    import os
-
     from bioamla.cli.console import print_success
-    from bioamla.common.files import extract_zip_file
-
-    if output_path == ".":
-        output_path = os.getcwd()
-
-    try:
-        extract_zip_file(file_path, output_path)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    except OSError as e:
-        raise click.ClickException(f"Extraction failed: {e}") from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
-    if emit_result({"file": file_path, "output": str(output_path)}):
+    folder = os.getcwd() if output_path == "." else output_path
+    result = run_operation("util.unzip", file=file_path, output_dir=folder)
+    if emit_result(result):
         return
-    print_success(f"Extracted to {output_path}")
+    print_success(f"Extracted to {result['output']}")
 
 
 @util.command("zip")
@@ -82,23 +55,11 @@ def util_unzip(file_path: str, output_path: str) -> None:
 @click.argument("output_file")
 def util_zip(source_path: str, output_file: str) -> None:
     """Create a ZIP archive from a file or directory."""
-    from pathlib import Path
-
     from bioamla.cli.console import print_success
-    from bioamla.common.files import create_zip_file, zip_directory
-
-    try:
-        if Path(source_path).is_dir():
-            zip_directory(source_path, output_file)
-        else:
-            create_zip_file([source_path], output_file)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    except OSError as e:
-        raise click.ClickException(f"ZIP creation failed: {e}") from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
-    if emit_result({"source": source_path, "output": str(output_file)}):
+    result = run_operation("util.zip", source=source_path, output=output_file)
+    if emit_result(result):
         return
     print_success(f"Created {output_file}")

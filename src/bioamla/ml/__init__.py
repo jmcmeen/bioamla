@@ -95,6 +95,18 @@ from bioamla.ml.embedding import (
     save_embeddings,
 )
 
+# --- On files: classify, evaluate, embed --------------------------------------
+from bioamla.ml.files import (
+    EvaluationReport,
+    FilePredictions,
+    SavedEmbeddings,
+    classify_file,
+    embed_file,
+    evaluate_model,
+    evaluation_csv_rows,
+    evaluation_text,
+)
+
 # --- High-level inference ----------------------------------------------------
 from bioamla.ml.inference import (
     ASTInference,
@@ -106,7 +118,12 @@ from bioamla.ml.preprocessing import BioamlaPreprocessor, SpectrogramAugmentatio
 from bioamla.ml.trackers import MLflowTracker, TensorBoardTracker
 
 # --- Training -----------------------------------------------------------------
-from bioamla.ml.train_config import write_train_config
+from bioamla.ml.train_config import (
+    AST_TRAIN_DEFAULTS,
+    resolve_train_options,
+    train_ast_from_options,
+    write_train_config,
+)
 from bioamla.ml.training import train_ast
 
 __all__ = [
@@ -152,6 +169,17 @@ __all__ = [
     "MLflowTracker",
     "TensorBoardTracker",
     "write_train_config",
+    "EvaluationReport",
+    "classify_file",
+    "FilePredictions",
+    "SavedEmbeddings",
+    "embed_file",
+    "evaluate_model",
+    "evaluation_csv_rows",
+    "evaluation_text",
+    "AST_TRAIN_DEFAULTS",
+    "resolve_train_options",
+    "train_ast_from_options",
     # Inference
     "ASTInference",
     "ASTPredictionResult",

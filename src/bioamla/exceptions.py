@@ -122,6 +122,20 @@ class WorkspaceError(BioamlaError):
     """A workspace is malformed, already exists, or was written by a newer bioamla."""
 
 
+class RemoteError(BioamlaError):
+    """A bioamla server couldn't be reached, or refused or failed a request.
+
+    Attributes:
+        status: The HTTP status (``None`` if the server wasn't reached).
+        error_type: The error type the server reported (e.g. ``AccessDenied``).
+    """
+
+    def __init__(self, message: str, status: int | None = None, error_type: str | None = None):
+        super().__init__(message)
+        self.status = status
+        self.error_type = error_type
+
+
 __all__ = [
     "BioamlaError",
     "InvalidInputError",
@@ -147,4 +161,5 @@ __all__ = [
     "LicenseGenerationError",
     "AnnotationError",
     "WorkspaceError",
+    "RemoteError",
 ]

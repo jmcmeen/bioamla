@@ -23,9 +23,14 @@ Heavy backends are imported lazily:
   never required to generate a spectrogram.
 """
 
+from __future__ import annotations
+
+import logging
 import threading
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import librosa
 import numpy as np
@@ -37,6 +42,8 @@ VisualizationType = Literal["stft", "mel", "mfcc", "waveform"]
 WindowType = Literal["hann", "hamming", "blackman", "bartlett", "rectangular", "kaiser"]
 
 # Serializes figure rendering in generate_spectrogram (see the comment there).
+logger = logging.getLogger(__name__)
+
 _RENDER_LOCK = threading.Lock()
 
 
@@ -97,6 +104,7 @@ def generate_spectrogram(
     format: str | None = None,
     show_colorbar: bool = True,
     backend: str = "auto",
+    boxes: Sequence[SpectrogramBox | tuple] | None = None,
 ) -> str:
     """
     Generate a spectrogram visualization from an audio file.
@@ -121,6 +129,11 @@ def generate_spectrogram(
         show_colorbar: Whether to show axes/title/colorbar (default: True).
         backend: Spectrogram compute backend — 'auto' (GPU/torch if available,
             else librosa), 'librosa' (CPU), or 'torch' (force GPU/torch).
+        boxes: Regions to outline, as :class:`SpectrogramBox` or ``(start, end[,
+            low_freq, high_freq[, label]])`` tuples (seconds, Hz). On the STFT and mel
+            plots a box spans its band; one with no band, and every box on the MFCC
+            and waveform plots, spans the full height. Labels are written at the
+            top-left corner.
 
     Returns:
         Path to the saved output image (as a string).
@@ -145,6 +158,7 @@ def generate_spectrogram(
     if window not in valid_windows:
         raise InvalidInputError(f"Invalid window type: {window}. Must be one of {valid_windows}")
 
+    regions = [SpectrogramBox.of(b) for b in boxes or ()]
     resolved_backend = select_backend(backend)
 
     # Load and resample audio
@@ -213,6 +227,14 @@ def generate_spectrogram(
         elif viz_type == "waveform":
             _plot_waveform(audio, sample_rate, ax, title=title, show_legend=show_colorbar)
 
+        if regions:
+            _draw_boxes(
+                ax,
+                regions,
+                _BoxGeometry(viz_type, sample_rate, hop_length, n_fft, n_mels, show_colorbar),
+                color=_box_color(viz_type, cmap),
+            )
+
         # Only use tight_layout when legend is shown, otherwise use full canvas
         if show_colorbar:
             fig.tight_layout()
@@ -246,6 +268,184 @@ def generate_spectrogram(
             raise ProcessingError(f"Failed to save visualization: {e}") from e
 
     return str(output_path)
+
+
+@dataclass(frozen=True)
+class SpectrogramBox:
+    """A region to outline on a spectrogram.
+
+    Attributes:
+        start: Start (s).
+        end: End (s).
+        low_freq: Lower edge (Hz); ``None`` with ``high_freq`` for the full height.
+        high_freq: Upper edge (Hz).
+        label: Text written at its top-left corner.
+    """
+
+    start: float
+    end: float
+    low_freq: float | None = None
+    high_freq: float | None = None
+    label: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.end > self.start:
+            raise InvalidInputError(f"A box must end after it starts: {self.start}-{self.end}")
+        if (self.low_freq is None) != (self.high_freq is None):
+            raise InvalidInputError("A box needs both low_freq and high_freq, or neither")
+        if self.low_freq is not None and not self.high_freq > self.low_freq:
+            raise InvalidInputError(
+                f"A box's high_freq must be above its low_freq: {self.low_freq}-{self.high_freq}"
+            )
+
+    @property
+    def banded(self) -> bool:
+        """Whether it has a frequency band."""
+        return self.low_freq is not None
+
+    @classmethod
+    def of(cls, value: Any) -> SpectrogramBox:
+        """``value`` as a box: a box, an object with the same attributes (e.g. an
+        annotation's ``start_time``/``end_time``), or a tuple ``(start, end[, low_freq,
+        high_freq[, label]])``.
+
+        Raises:
+            InvalidInputError: If it can't be one.
+        """
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, (tuple, list)):
+            if len(value) not in (2, 4, 5):
+                raise InvalidInputError(
+                    f"A box is (start, end[, low_freq, high_freq[, label]]), got {value!r}"
+                )
+            return cls(*value)
+        start = getattr(value, "start", getattr(value, "start_time", None))
+        end = getattr(value, "end", getattr(value, "end_time", None))
+        if start is None or end is None:
+            raise InvalidInputError(f"Not a box: {value!r}")
+        return cls(
+            float(start),
+            float(end),
+            getattr(value, "low_freq", None),
+            getattr(value, "high_freq", None),
+            str(getattr(value, "label", "") or ""),
+        )
+
+
+def annotation_boxes(
+    path: str | Path, recording: str | Path | None = None, label_column: str | None = None
+) -> list[SpectrogramBox]:
+    """The boxes of an annotation file, in any format bioamla reads (Raven ``.txt``,
+    bioamla ``.json``, Arbimon or flat CSV): each annotation's time span and band,
+    labelled with its label.
+
+    Args:
+        path: The annotation file.
+        recording: The recording they're drawn on: a file whose rows name their
+            recording (Arbimon exports do) keeps only that recording's rows.
+        label_column: Raven column holding the label.
+
+    An annotation that can't be a box (it doesn't end after it starts, or has only one
+    band edge) is skipped with a logged warning.
+
+    Raises:
+        NotFoundError: If the file doesn't exist.
+    """
+    from bioamla.datasets._io import load_recording_annotations
+
+    path = Path(path)
+    if not path.is_file():
+        raise NotFoundError(f"Annotation file not found: {path}")
+    boxes = []
+    for i, annotation in enumerate(load_recording_annotations(path, recording, label_column)):
+        try:
+            boxes.append(SpectrogramBox.of(annotation))
+        except InvalidInputError as e:
+            logger.warning("%s: skipping annotation %d: %s", path, i + 1, e)
+    return boxes
+
+
+@dataclass(frozen=True)
+class _BoxGeometry:
+    """How seconds and Hz map onto a plot's data coordinates.
+
+    With a legend, librosa plots in seconds and Hz (the mel axis on its own scale).
+    Without one it plots in frame and bin indices, so boxes are converted to those:
+    the picture is the same with or without boxes.
+    """
+
+    viz_type: str
+    sample_rate: int
+    hop_length: int
+    n_fft: int
+    n_mels: int
+    legend: bool
+
+    @property
+    def banded(self) -> bool:
+        return self.viz_type in ("stft", "mel")
+
+    @property
+    def nyquist(self) -> float:
+        return self.sample_rate / 2
+
+    def x(self, seconds: float) -> float:
+        if self.legend or self.viz_type == "waveform":
+            return seconds
+        return seconds * self.sample_rate / self.hop_length - 0.5  # frame i spans i +- 0.5
+
+    def y(self, hz: float) -> float:
+        hz = min(max(hz, 0.0), self.nyquist)
+        if self.legend:
+            return hz
+        if self.viz_type == "stft":
+            return hz / self.nyquist * (self.n_fft // 2)
+        mels = librosa.mel_frequencies(n_mels=self.n_mels, fmin=0.0, fmax=self.nyquist)
+        return float(np.interp(hz, mels, np.arange(self.n_mels)))
+
+
+def _box_color(viz_type: str, cmap: str) -> str:
+    """White or black, whichever shows on the picture's background (the low end of
+    the colormap; the waveform plot is on white)."""
+    if viz_type == "waveform":
+        return "tab:red"
+    from matplotlib import colormaps
+
+    try:
+        r, g, b, _ = colormaps[cmap](0.1)
+    except (KeyError, ValueError):
+        return "white"
+    return "white" if 0.299 * r + 0.587 * g + 0.114 * b < 0.5 else "black"
+
+
+def _draw_boxes(
+    ax: Any, boxes: list[SpectrogramBox], geometry: _BoxGeometry, color: str = "white"
+) -> None:
+    """Outline ``boxes`` on ``ax``, leaving its limits as they were (a box past the
+    end of the recording doesn't rescale the picture). A banded box entirely above
+    the plotted frequencies is left out."""
+    from matplotlib.patches import Rectangle
+
+    limits = ax.get_xlim(), ax.get_ylim()
+    style = {"fill": False, "edgecolor": color, "linewidth": 1.2}
+    for box in boxes:
+        x0, x1 = geometry.x(box.start), geometry.x(box.end)
+        if geometry.banded and box.banded:
+            if box.low_freq >= geometry.nyquist:
+                continue  # nothing of it is on the picture
+            y0, y1 = geometry.y(box.low_freq), geometry.y(box.high_freq)
+            transform = ax.transData
+        else:
+            # Full height: x in data coordinates, y in axes coordinates (0 to 1).
+            y0, y1 = 0.0, 1.0
+            transform = ax.get_xaxis_transform()
+        ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, transform=transform, **style))
+        if box.label:
+            ax.text(x0, y1, f" {box.label}", transform=transform, color=color,
+                    fontsize=7, va="top", ha="left", clip_on=True)  # fmt: skip
+    ax.set_xlim(*limits[0])
+    ax.set_ylim(*limits[1])
 
 
 def _get_window_function(window: str, n_fft: int) -> np.ndarray:

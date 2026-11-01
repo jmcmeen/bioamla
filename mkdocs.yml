@@ -45,6 +45,7 @@ nav:
       - system: api/system.md
       - workspace: api/workspace.md
       - server: api/server.md
+      - client: api/client.md
       - common: api/common.md
       - protocols: api/protocols.md
       - exceptions: api/exceptions.md

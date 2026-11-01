@@ -48,6 +48,18 @@ from bioamla.cluster.core import (
     sort_by_similarity,
     sort_clusters_by_similarity,
 )
+from bioamla.cluster.files import (
+    ClusterAnalysisReport,
+    ClusteredEmbeddings,
+    NoveltyReport,
+    ReducedEmbeddings,
+    analyze_clusters_file,
+    cluster_embeddings_file,
+    load_array_file,
+    novelty_file,
+    reduce_embeddings_file,
+    save_array_file,
+)
 from bioamla.cluster.models import (
     ClusterAnalysis,
     ClusteringSummary,
@@ -56,6 +68,17 @@ from bioamla.cluster.models import (
 from bioamla.exceptions import ClusteringError, DependencyError
 
 __all__ = [
+    # On .npy files (bioamla.cluster.files)
+    "ClusterAnalysisReport",
+    "ClusteredEmbeddings",
+    "NoveltyReport",
+    "ReducedEmbeddings",
+    "analyze_clusters_file",
+    "cluster_embeddings_file",
+    "load_array_file",
+    "novelty_file",
+    "reduce_embeddings_file",
+    "save_array_file",
     # Configuration
     "ReductionConfig",
     "ClusteringConfig",

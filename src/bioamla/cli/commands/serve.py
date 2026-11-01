@@ -7,6 +7,26 @@ from bioamla.exceptions import BioamlaError
 _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
+def _write_openapi(ctx: click.Context, param: click.Parameter, value: str | None) -> None:
+    """``--openapi FILE``: write the API's OpenAPI document and exit."""
+    if not value or ctx.resilient_parsing:
+        return
+    from bioamla.cli.console import print_kv
+    from bioamla.cli.output import emit_result
+
+    try:
+        from bioamla.server.openapi import write_openapi_spec
+
+        written = write_openapi_spec(value)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    except OSError as e:
+        raise click.ClickException(f"Can't write {value}: {e.strerror or e}") from e
+    if not emit_result({"path": str(written)}):
+        print_kv("Wrote", str(written))
+    ctx.exit()
+
+
 @click.command("serve")
 @click.option(
     "--root",
@@ -30,7 +50,25 @@ _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
     type=click.Path(exists=True, file_okay=False),
     help="A folder outside --root that workspaces may link in place (repeatable)",
 )
-def serve(root: str, host: str, port: int, token_file: str, linkable: tuple[str, ...]) -> None:
+@click.option(
+    "--max-jobs",
+    default=2,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="Jobs that may run at once (machine-learning jobs run one at a time)",
+)
+@click.option(
+    "--openapi",
+    type=click.Path(dir_okay=False),
+    is_eager=True,
+    expose_value=False,
+    callback=_write_openapi,
+    help="Write the API's OpenAPI document to this file and exit; starts no server and "
+    "needs no other option",
+)
+def serve(
+    root: str, host: str, port: int, token_file: str, linkable: tuple[str, ...], max_jobs: int
+) -> None:
     """Run the bioamla HTTP API so other machines can work in this machine's
     workspaces. Needs the [server] extra.
 
@@ -42,6 +80,7 @@ def serve(root: str, host: str, port: int, token_file: str, linkable: tuple[str,
     Examples:
         bioamla serve --root ~/bioamla-workspaces
         bioamla serve --root /srv/workspaces --allow-link /srv/recordings
+        bioamla serve --openapi docs/api/openapi.json
     """
     from pathlib import Path
 
@@ -61,7 +100,10 @@ def serve(root: str, host: str, port: int, token_file: str, linkable: tuple[str,
         root_path.mkdir(parents=True, exist_ok=True)
         token = read_or_create_token(token_file)
         config = ServerConfig(
-            root=root_path, token=token, linkable=[Path(p).expanduser() for p in linkable]
+            root=root_path,
+            token=token,
+            linkable=[Path(p).expanduser() for p in linkable],
+            max_jobs=max_jobs,
         )
         app = create_app(config)
     except BioamlaError as e:

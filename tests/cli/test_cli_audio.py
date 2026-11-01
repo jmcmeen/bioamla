@@ -750,3 +750,38 @@ def test_video_error(runner, mocker):
     result = runner.invoke(cli, ["audio", "video", "in.wav"])
     assert result.exit_code != 0
     assert "no ffmpeg" in result.output
+
+
+def test_visualize_boxes_and_annotations(runner, tmp_path, mocker):
+    gen = mocker.patch("bioamla.viz.generate_spectrogram")
+    ann = tmp_path / "det.csv"
+    ann.write_text("start_time,end_time,low_freq,high_freq,label\n0.5,1.0,500,5000,call\n")
+    result = runner.invoke(cli, ["audio", "visualize", "in.wav", "--box", "1,2",
+                                 "--box", "2.5, 3, 100, 900, a frog, really",
+                                 "--annotations", str(ann)])  # fmt: skip
+    assert result.exit_code == 0, result.output
+    from bioamla.viz import SpectrogramBox
+
+    assert gen.call_args.kwargs["boxes"] == [
+        SpectrogramBox(1, 2), SpectrogramBox(2.5, 3, 100, 900, "a frog, really"),
+        SpectrogramBox(0.5, 1.0, 500, 5000, "call"),
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize("box", ["1", "a,b", "2,1", "1,2,900,100", "1,2,x,100"])
+def test_visualize_bad_box(runner, mocker, box):
+    mocker.patch("bioamla.viz.generate_spectrogram")
+    result = runner.invoke(cli, ["audio", "visualize", "in.wav", "--box", box])
+    assert result.exit_code != 0
+    assert "box" in result.output.lower()
+
+
+def test_visualize_labelled_full_height_boxes(runner, mocker):
+    gen = mocker.patch("bioamla.viz.generate_spectrogram")
+    result = runner.invoke(cli, ["audio", "visualize", "in.wav", "--box", "1,2,frog",
+                                 "--box", "3,4,,,toad"])  # fmt: skip
+    assert result.exit_code == 0, result.output
+    from bioamla.viz import SpectrogramBox
+
+    assert gen.call_args.kwargs["boxes"] == [SpectrogramBox(1, 2, label="frog"),
+                                             SpectrogramBox(3, 4, label="toad")]  # fmt: skip

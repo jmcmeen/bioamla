@@ -6,6 +6,161 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `audio visualize --box START,END[,LOW,HIGH][,LABEL]` (repeatable) and `--annotations FILE`
+  outline regions on the picture: a box spans its band on the STFT and mel spectrograms, and
+  the full height without one (and on MFCC and waveform plots); labels are written at its
+  corner, in white or black to suit the colormap. The picture underneath is unchanged.
+  `--annotations` reads any format bioamla reads (Raven, bioamla JSON, CSV, Arbimon; an
+  export covering several recordings gives only this one's rows, and a row that can't be a
+  box is skipped with a warning), so `detect ... -o det.csv` feeds it directly. The `audio.visualize` request
+  gains `boxes` and `annotations`; the library gains `generate_spectrogram(boxes=...)`,
+  `bioamla.viz.SpectrogramBox` and `bioamla.viz.annotation_boxes()`.
+
+- Integration tests run a pipeline on a real server in CI (upload, detect, annotation
+  summary, clip extraction, dataset stats, download), once through `bioamla.client` and once
+  through `bioamla --remote`, each step reading the paths the previous one reported, and
+  checking streamed progress and the server workspace's history (nothing recorded locally).
+
+- `bioamla --remote NAME:WORKSPACE <command>` runs the command on a server: the CLI builds
+  the operation's request as usual, the server runs it, progress and notices stream back,
+  and the command prints exactly what a local run prints (`--json` included; parity is
+  tested; paths in results come back relative to the remote workspace, as a local run
+  reports them). The remote can also come from `BIOAMLA_REMOTE`, or from top-level `remote` and
+  `workspace` settings in a local workspace. Paths are the server's (local existence checks
+  are skipped). Local-only commands refuse an explicit `--remote`; command-line credentials
+  are never sent; remote runs are recorded in the server's history, not locally.
+- `bioamla.common.wire` (`to_wire()`, `from_wire()`): results as JSON that turns back into
+  the same objects (bioamla dataclasses and enums, paths, NumPy arrays, tuples, NaN, ...);
+  rebuilding only constructs bioamla types. The server sends it with `?wire=true` (operation
+  routes and `GET /v1/jobs/{id}`), and `Client.run(typed=True)` returns the rebuilt objects
+  (`UntypedResult` when this machine can't load the result's type); with
+  `workspace_relative=True`, paths inside the workspace come back relative to it.
+
+- `bioamla.client`: work on a server from another machine. `Client(url, token)` lists and
+  creates workspaces, reads and changes their settings, lists, uploads and downloads files,
+  runs operations (`run()` waits for a job, following its events and progress; `submit()`
+  doesn't; a dropped event stream is resumed after the last event), and lists, follows and
+  cancels jobs (by id or a unique prefix). A refusal raises `RemoteError` with the
+  server's message (`RemoteNotFound`, `RemoteInvalidInput`; `JobFailed` for a failed or
+  cancelled job). It needs only `requests`, so the base install can drive a server.
+- Named remotes in the user's settings file (`[remotes.NAME]` with `url` and `token_env`;
+  the token stays in the environment variable): `add_remote()`, `remotes()`,
+  `get_remote()`, `remove_remote()`, `connect()`.
+- `bioamla remote add|list|remove|ping|workspaces|upload|download|jobs|cancel`. Reads of a
+  server (`list`, `ping`, `workspaces`, `jobs`) aren't recorded in a local workspace's
+  history.
+
+- The server's OpenAPI document is committed as `docs/api/openapi.json` (its version is
+  the API's, `v1`), with a test that fails while it's out of date. Regenerate it with
+  `bioamla serve --openapi docs/api/openapi.json`, which writes it and exits (it needs no
+  other option, and refuses to write a partial document when an extra is missing);
+  `bioamla.server` has `openapi_spec()` and `write_openapi_spec()`.
+
+- Server workspace and file routes: list the workspaces under the server root and create
+  one (`GET`/`POST /v1/workspaces`), a workspace's status (`GET /v1/workspaces/{ws}`), its
+  settings (`GET .../config`, `PUT`/`DELETE .../config/{key}`, keys checked against the
+  operations' request fields), and its files: list a folder (`GET .../files?path=&recursive=`),
+  download (`GET .../files/{path}`) and upload (`PUT .../files/{path}`, streamed to disk,
+  `?overwrite=true` to replace; the file appears whole or not at all, and two uploads of a
+  new file can't both win). Every path must stay inside the workspace root or a linkable
+  folder; uploads go only into the workspace named in the URL. Listings leave out
+  workspace metadata and unfinished uploads, and stop at 10,000 entries (`truncated`).
+- `Workspace.settings()`, `set_setting()`, `unset_setting()` (one spelling per key: `-`
+  and `_` are alike) and `list_files()`; `bioamla.operations.check_setting_key()`,
+  `bioamla.common.settings.check_setting_value()` and
+  `bioamla.common.files.AtomicFileWriter`.
+
+- Server jobs: a job-kind operation posted to the server is queued and answered at once
+  (`202`, with the job), then runs in its own worker process, so a crash or a cancel can't
+  take the server down. `GET /v1/jobs` and `/v1/jobs/{id}` report status, progress and the
+  result or error; `/v1/jobs/{id}/events` streams progress, notices and log lines as
+  server-sent events (resumable with `Last-Event-ID`); `/v1/jobs/{id}/log` gives the log as
+  text; `POST /v1/jobs/{id}/cancel` drops a queued job or stops a running one (its cancel
+  check first, then the worker is ended). At most `bioamla serve --max-jobs` jobs run at
+  once (default 2), and one machine-learning job at a time. A request with a path outside
+  the allowed folders is refused (`403`) before it's queued. Each job is recorded in its
+  workspace's history with its id.
+- `bioamla.operations.prepare()`: a request validated and its paths checked, as `run()`
+  would run it, without running it.
+
+- Every `cluster` and `models ast` command runs through an operation (`cluster.reduce|fit|
+  analyze|novelty`, `models.ast.init-config|predict|train|evaluate|embed|info`), so every
+  command group now has its operations. Training reports progress (steps) through the
+  operation context and stops cleanly when cancelled.
+- Library functions behind them: in `bioamla.cluster`, `reduce_embeddings_file()`,
+  `cluster_embeddings_file()`, `analyze_clusters_file()`, `novelty_file()`,
+  `load_array_file()` and `save_array_file()`; in `bioamla.ml`, `classify_file()`,
+  `evaluate_model()` (with `evaluation_text()` and `evaluation_csv_rows()`), `embed_file()`,
+  and `train_ast_from_options()` with `resolve_train_options()` and `AST_TRAIN_DEFAULTS`
+  (explicit options, then a config file, then defaults; the rule `ast train` follows; an
+  option of the wrong type, or a probability outside 0-1, is refused up front).
+
+- Every `catalogs` command runs through an operation (`catalogs.inat.*`, `catalogs.hf.*`,
+  `catalogs.xc.*`, `catalogs.ml.*`, `catalogs.ebird.*`): searches and lookups are quick,
+  downloads, pushes and pulls are jobs. API keys never travel in a request: an operation
+  takes a key from its context's secrets (locally, a flag such as `--api-key`), else from the
+  environment where it runs. `catalogs.hf.cache-purge` is local-only.
+- `OperationContext.secrets` and `OperationContext.on_notice`: credentials for a run that
+  never enter a request, and messages an operation sends while it runs (the CLI prints
+  them; `hf push-dataset` reports its card and location warnings this way, before the
+  upload).
+- Library functions behind them, in `bioamla.catalogs`: `inat_search()` (rows, optional
+  CSV), `inat_project_stats()` (optional JSON), `push_dataset_folder()` (card, location
+  warnings, push) with `dataset_push_warnings()`, and `ebird_nearby()` (optional CSV).
+
+- `system`, `util` and `workspace` commands run through operations (`system.version|devices|
+  deps|deps-install|schema|export-schemas`, `util.download|unzip|zip`, `workspace.init|status|
+  add|import|list|remove|history`), so every command that does work has one.
+  `system.deps-install` and `util.download` are local-only. `system commands` and
+  `workspace config` stay command-line only: they describe and configure the CLI itself.
+- Library: `bioamla.workspace.current_workspace()`, `Workspace.artifact_row()`,
+  `artifact_rows()` and `status()`; `bioamla.common.files.download_to_dir()`, `unzip_to()`
+  and `zip_path()`; `bioamla.common.config.config_schema_report()` and
+  `export_config_schemas()`; `bioamla.system.install_missing()`.
+
+- Server: one endpoint per remote-safe operation, generated from the registry:
+  `POST /v1/workspaces/{ws}/operations/{name}` with the operation's request as the body (its
+  schema is in the OpenAPI spec). Every path in a request is relative to the workspace and
+  must resolve inside the server's allowed folders; quick operations answer with the result
+  envelope; local-only operations have no route. `GET /v1/operations` lists them with their
+  request schemas and the domains a missing extra makes unavailable. Each run is recorded in
+  the workspace history (`via: "server"`, with the operation and request), failed or not,
+  except the reads of the workspace itself (`workspace.status|list|history`). A server run
+  works on its own workspace: a request's `directory` must be inside it.
+- `Workspace.output_paths()`: the files a run's result says it wrote (what history records),
+  and `Workspace.run_record()`, the history record that both the CLI and the server write.
+
+### Changed
+
+- `cluster reduce|fit` say "Reducing embeddings to 2D using pca..." / "Clustering embeddings
+  using hdbscan..." (the input size is read inside the operation now).
+- `models ast train --id-column` prints a warning that it's ignored; it always was (#254).
+- The `ast init-config` "already exists" error names the fix itself (`force=True` /
+  `--force`).
+- `workspace status` and `workspace list` are no longer recorded in the workspace history
+  (like `workspace history`): they only read it, and recording them buried the real runs.
+- `util unzip` checks every entry before writing anything: an entry that would leave the
+  folder (including through a link already in it) or touch a `.bioamla` folder is refused,
+  as is an archive that would extract to more than 50 GiB (`unzip_to(max_bytes=...)`).
+- `models.ast.train` puts the base model and a local MLflow store (a path or `file:` URI)
+  through the path check, including when they come from the config file, and a model name
+  that fails the check is refused rather than retried as a Hugging Face ID.
+
+### Fixed
+
+- A server request can no longer read or write a workspace's metadata (its `.bioamla`
+  folder and the files directly in it) through an operation's path fields; the path
+  policy refuses them (403). Subfolders such as `.bioamla/imported` are still allowed.
+- `util zip` of a file dated before 1980, `util download` of a malformed URL and `system schema
+  NAME -o` to an unwritable path stopped with a traceback; they report an error. A missing
+  archive for `util unzip` is a not-found error.
+- `cluster reduce|fit|novelty` and `models ast embed` with an output name without `.npy`
+  reported that name, though NumPy wrote `NAME.npy`; they report the file written.
+- `models ast evaluate` and single-file AST prediction failed on Apple Silicon: the input
+  stayed on the CPU while the model ran on MPS (#255).
+
 ## [0.3.11] - 2026-11-01
 
 ### Added

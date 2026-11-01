@@ -12,6 +12,7 @@ import os
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from bioamla.exceptions import BioamlaError, ConfigError, InvalidInputError, NotFoundError
 
@@ -155,10 +156,18 @@ class PathPolicy:
             path: The path, absolute or relative.
             base: What a relative ``path`` is relative to (default: the root).
 
+        A workspace's metadata (its ``.bioamla`` folder and the files directly in it:
+        ``workspace.toml``, ``artifacts.json``, ``config.toml``, ``history.jsonl``) is
+        never a request's to read or write; the server changes it only through the
+        workspace API. Subfolders such as ``.bioamla/imported`` are allowed.
+
         Raises:
-            AccessDenied: If it resolves outside every allowed folder.
+            AccessDenied: If it resolves outside every allowed folder, or to a
+                workspace's metadata.
             InvalidInputError: If it isn't a usable path (e.g. contains a NUL).
         """
+        from bioamla.workspace import WORKSPACE_DIR
+
         try:
             candidate = Path(path)
             if not candidate.is_absolute():
@@ -168,7 +177,14 @@ class PathPolicy:
             raise InvalidInputError(f"Not a usable path: {path!r}") from e
         if not any(resolved == a or resolved.is_relative_to(a) for a in self.allowed):
             raise AccessDenied(f"{path} is outside the folders this server may use")
+        if WORKSPACE_DIR in (resolved.name, resolved.parent.name):
+            raise AccessDenied(f"{path} is a workspace's metadata")
         return resolved
+
+    def path_check(self, identity: Identity, base: str | Path) -> Any:
+        """``check(path) -> str``: :meth:`authorize` for ``identity``, relative paths
+        against ``base``, as an operation context's ``path_check``."""
+        return lambda path: str(self.authorize(identity, path, base=base))
 
     def workspace_dir(self, identity: Identity, name: str) -> Path:
         """The directory of the workspace called ``name`` under the root.
@@ -185,17 +201,7 @@ class PathPolicy:
             AccessDenied: If the workspace, or its metadata, resolves outside the root.
             NotFoundError: If there's no such workspace.
         """
-        if (
-            not name
-            or name in (".", "..")
-            or Path(name).name != name
-            or name.startswith((".", "~"))
-            or "\\" in name
-        ):
-            raise InvalidInputError(f"Not a workspace name: {name!r}")
-        path = self.authorize(identity, name)
-        if path.parent != self.root:  # e.g. a symlink under the root pointing elsewhere
-            raise AccessDenied(f"Workspace {name!r} is not inside the workspace root")
+        path = self._workspace_path(identity, name)
         from bioamla.workspace import WORKSPACE_DIR, is_workspace
 
         if not is_workspace(path):
@@ -204,4 +210,37 @@ class PathPolicy:
         for item in (meta, meta / "workspace.toml"):
             if not item.resolve().is_relative_to(path / WORKSPACE_DIR):
                 raise AccessDenied(f"Workspace {name!r} has metadata outside the workspace")
+        return path
+
+    def new_workspace_dir(self, identity: Identity, name: str) -> Path:
+        """Where a new workspace called ``name`` goes: a folder directly under the root.
+
+        Raises:
+            InvalidInputError: If ``name`` isn't a plain folder name.
+            AccessDenied: If it would resolve outside the root.
+            WorkspaceError: If something already exists there.
+        """
+        from bioamla.exceptions import WorkspaceError
+
+        self._check_name(name)
+        if (self.root / name).is_symlink() or (self.root / name).exists():
+            raise WorkspaceError(f"{name!r} already exists on this server")
+        return self._workspace_path(identity, name)
+
+    @staticmethod
+    def _check_name(name: str) -> None:
+        if (
+            not name
+            or name in (".", "..")
+            or Path(name).name != name
+            or name.startswith((".", "~"))
+            or "\\" in name
+        ):
+            raise InvalidInputError(f"Not a workspace name: {name!r}")
+
+    def _workspace_path(self, identity: Identity, name: str) -> Path:
+        self._check_name(name)
+        path = self.authorize(identity, name)
+        if path.parent != self.root:  # e.g. a symlink under the root pointing elsewhere
+            raise AccessDenied(f"Workspace {name!r} is not inside the workspace root")
         return path

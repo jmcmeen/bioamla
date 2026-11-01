@@ -50,6 +50,18 @@ WORKSPACE_DIR = ".bioamla"
 FORMAT_VERSION = 1
 #: Version of the run records in ``history.jsonl`` (their ``v`` field).
 HISTORY_RECORD_VERSION = 1
+#: Commands that only read a workspace, so aren't recorded in its history (a client
+#: polling them would otherwise bury the real runs). Operation names use dots.
+UNRECORDED_COMMANDS = frozenset({
+    "workspace history",
+    "workspace status",
+    "workspace list",
+    # Reads of another machine's state, not work in this workspace:
+    "remote list",
+    "remote ping",
+    "remote workspaces",
+    "remote jobs",
+})  # fmt: skip
 
 ArtifactKind = Literal["audio_file", "folder", "dataset", "model", "file"]
 ArtifactMode = Literal["linked", "imported"]
@@ -109,6 +121,10 @@ def _guess_kind(path: Path) -> str:
     if path.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS:
         return "audio_file"
     return "file"
+
+
+#: Result keys that name a file a run wrote (see :meth:`Workspace.output_paths`).
+OUTPUT_KEYS = ("output", "output_path", "output_dir", "metadata_file", "results_file")
 
 
 class Workspace:
@@ -423,6 +439,58 @@ class Workspace:
             with open(self.history_path, "a", encoding="utf-8") as f:
                 f.write(line)
 
+    def run_record(
+        self,
+        *,
+        command: str,
+        started: float,
+        ended: float,
+        ok: bool,
+        exit_code: int,
+        error: dict[str, Any] | None,
+        result: Any = None,
+        user: str | None = None,
+        argv: list[str] | None = None,
+        cwd: str | None = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        """A run record for :meth:`record_run`, in the current format.
+
+        Args:
+            command: The command (``"detect energy"``).
+            started: When it started, and ``ended`` when it ended (epoch seconds).
+            ok: Whether it succeeded, with its ``exit_code`` and ``error``
+                (``{"type", "message"}``).
+            result: Its result as JSON-ready data; the files it names become
+                ``outputs`` (see :meth:`output_paths`).
+            user: Who ran it.
+            argv: Its command line (``None`` when it didn't come from one).
+            cwd: Where it ran, relative to the workspace.
+            extra: More fields (e.g. a server run's ``operation``, ``request``,
+                ``via`` and ``job``).
+        """
+        import socket
+        from datetime import datetime, timezone
+
+        from bioamla import __version__
+
+        return {
+            "v": HISTORY_RECORD_VERSION,
+            "time": datetime.fromtimestamp(started, timezone.utc).isoformat(timespec="seconds"),
+            "duration": round(ended - started, 3),
+            "command": command,
+            "argv": argv,
+            "cwd": cwd,
+            "host": socket.gethostname(),
+            "user": user,
+            "bioamla": __version__,
+            "ok": ok,
+            "exit_code": exit_code,
+            "error": error,
+            "outputs": self.output_paths(result),
+            **extra,
+        }
+
     def history(self, limit: int | None = None, failed_only: bool = False) -> list[dict]:
         """Run records, oldest first; the last ``limit`` of them if given.
 
@@ -446,6 +514,152 @@ class Workspace:
         records = list(records)
         return records[-limit:] if limit else records
 
+    def output_paths(self, result: Any) -> list[str]:
+        """The files a run's result says it wrote (its ``output``, ``output_dir``,
+        ``metadata_file``, ``results_file``, ``output_path`` and ``output_files``),
+        relative to the workspace where they're inside it."""
+        if not isinstance(result, dict):
+            return []
+        paths: list[str] = []
+        for key in OUTPUT_KEYS:
+            if isinstance(result.get(key), (str, os.PathLike)) and str(result[key]):
+                paths.append(str(result[key]))
+        files = result.get("output_files")
+        if isinstance(files, (list, tuple)):
+            paths += [str(f) for f in files if isinstance(f, (str, os.PathLike))]
+        return [self.relative(p) for p in dict.fromkeys(paths)]
+
+    def artifact_row(self, artifact: Artifact) -> dict[str, Any]:
+        """``artifact`` as a dict, with where it resolves to and whether it's there
+        (``resolved``, ``exists``)."""
+        path = self.resolve(artifact)
+        return {**artifact.to_dict(), "resolved": str(path), "exists": path.exists()}
+
+    def artifact_rows(self, kind: str | None = None) -> list[dict[str, Any]]:
+        """Every artifact as :meth:`artifact_row`; only those of ``kind`` if given."""
+        return [self.artifact_row(a) for a in self.artifacts(kind=kind)]
+
+    def status(self, last_runs: int = 5) -> dict[str, Any]:
+        """:meth:`to_dict` plus the last ``last_runs`` run records (``last_runs``)."""
+        return {**self.to_dict(), "last_runs": self.history(limit=last_runs)}
+
+    def settings(self) -> dict[str, Any]:
+        """This workspace's own settings (``config.toml``) as dotted keys, e.g.
+        ``{"detect.energy.threshold_db": -25}``.
+
+        Raises:
+            ConfigError: If the file can't be read.
+        """
+        from bioamla.common.settings import flatten, read_settings_file
+
+        return flatten(read_settings_file(self.config_path))
+
+    def set_setting(self, key: str, value: Any) -> None:
+        """Set the dotted ``key`` to ``value`` in this workspace's ``config.toml``.
+
+        The value is stored as given (no conversion to an option's type; the CLI's
+        ``workspace config set`` does that). Another spelling of the same key (``-``
+        for ``_``) is replaced. Comments in the file are not kept.
+
+        Raises:
+            ConfigError: If the file can't be read, or ``key`` or ``value`` can't be
+                stored (e.g. a key that is also a table).
+        """
+        from bioamla.common.settings import (
+            dump_toml,
+            flatten,
+            read_settings_file,
+            set_dotted,
+            unset_dotted,
+        )
+
+        with self._locked():
+            settings = read_settings_file(self.config_path)
+            for name in list(flatten(settings)):  # one spelling per key in the file
+                if name != key and _same_setting(name, key):
+                    unset_dotted(settings, name)
+            set_dotted(settings, key, value)
+            write_text_atomic(self.config_path, dump_toml(settings))
+
+    def unset_setting(self, key: str) -> bool:
+        """Remove the dotted ``key`` (in any spelling: ``-`` or ``_``) from this
+        workspace's ``config.toml``.
+
+        Returns:
+            Whether it was set.
+        """
+        from bioamla.common.settings import dump_toml, flatten, read_settings_file, unset_dotted
+
+        with self._locked():
+            settings = read_settings_file(self.config_path)
+            removed = False
+            for name in list(flatten(settings)):
+                if _same_setting(name, key):
+                    removed = unset_dotted(settings, name) or removed
+            if removed:
+                write_text_atomic(self.config_path, dump_toml(settings))
+        return removed
+
+    def list_files(
+        self, path: str | Path = ".", recursive: bool = False, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        """The files and folders in ``path`` (relative to the workspace, or absolute),
+        sorted by folder. Workspace metadata folders (``.bioamla``) and unfinished
+        uploads (``*.part``) are left out; links to folders are listed but not followed,
+        and folders that can't be read are skipped.
+
+        Args:
+            path: The folder.
+            recursive: Include subfolders.
+            limit: Stop after this many entries.
+
+        Returns:
+            One ``{"path", "type", "size", "modified"}`` per entry: ``path`` relative
+            to the workspace where it's inside it, ``type`` ``"file"``, ``"dir"`` or
+            ``"link"`` (a link to a folder), ``size`` in bytes for files and
+            ``modified`` as epoch seconds.
+
+        Raises:
+            NotFoundError: If ``path`` isn't a folder.
+        """
+        start = Path(path)
+        if not start.is_absolute():
+            start = self.root / start
+        if not start.is_dir():
+            raise NotFoundError(f"No folder {path}")
+        entries: list[dict[str, Any]] = []
+        folders = [start]
+        while folders and (limit is None or len(entries) < limit):
+            folder = folders.pop(0)
+            try:
+                with os.scandir(folder) as it:
+                    children = sorted(it, key=lambda e: e.name)
+            except OSError:
+                continue
+            subfolders = []
+            for entry in children:
+                if entry.name == WORKSPACE_DIR or entry.name.endswith(".part"):
+                    continue
+                try:
+                    is_dir = entry.is_dir()  # follows links
+                    link = entry.is_symlink()
+                    stat = entry.stat()
+                except OSError:
+                    continue  # a broken link
+                kind = "link" if link and is_dir else "dir" if is_dir else "file"
+                entries.append({
+                    "path": self.relative(entry.path),
+                    "type": kind,
+                    "size": stat.st_size if kind == "file" else None,
+                    "modified": stat.st_mtime,
+                })  # fmt: skip
+                if limit is not None and len(entries) >= limit:
+                    break
+                if recursive and kind == "dir":
+                    subfolders.append(Path(entry.path))
+            folders[:0] = subfolders
+        return entries
+
     def to_dict(self) -> dict[str, Any]:
         """Workspace metadata and a count of artifacts per kind."""
         counts: dict[str, int] = {}
@@ -459,6 +673,12 @@ class Workspace:
             "format_version": self.format_version,
             "artifacts": counts,
         }
+
+
+def _same_setting(a: str, b: str) -> bool:
+    """Whether two setting keys name the same thing (``-`` and ``_`` are alike, as in
+    option names)."""
+    return a.replace("-", "_") == b.replace("-", "_")
 
 
 def is_workspace(path: str | Path) -> bool:
@@ -521,6 +741,22 @@ def open_workspace(root: str | Path) -> Workspace:
             f"({FORMAT_VERSION}); upgrade bioamla to open it"
         )
     return Workspace(root, meta)
+
+
+def current_workspace(start: str | Path | None = None) -> Workspace:
+    """The workspace containing ``start`` (default: the current directory).
+
+    Raises:
+        NotFoundError: If there is none.
+    """
+    ws = find_workspace(start)
+    if ws is None:
+        where = start or "the current directory"
+        raise NotFoundError(
+            f"Not inside a bioamla workspace ({where}). "
+            "Create one with `bioamla workspace init` (create_workspace())."
+        )
+    return ws
 
 
 def find_workspace(start: str | Path | None = None) -> Workspace | None:

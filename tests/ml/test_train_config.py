@@ -45,9 +45,9 @@ def test_force_overwrites(tmp_path):
 
 def test_generated_keys_match_train_config_map(tmp_path):
     """Every [training]/[models]/[augmentation] key the CLI reads is documented."""
-    from bioamla.cli.commands.models import _TRAIN_CONFIG_MAP
     from bioamla.common.config import load_toml
+    from bioamla.ml.train_config import TRAIN_CONFIG_KEYS
 
     cfg = load_toml(write_train_config(tmp_path / "t.toml"))
-    for _flag, (section, key) in _TRAIN_CONFIG_MAP.items():
+    for _flag, (section, key) in TRAIN_CONFIG_KEYS.items():
         assert key in cfg.get(section, {}), f"template missing [{section}].{key}"
