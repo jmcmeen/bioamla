@@ -12,6 +12,7 @@ from typing import Any
 
 from bioamla.common.constants import SUPPORTED_AUDIO_EXTENSIONS
 from bioamla.common.files import get_files_by_extension
+from bioamla.exceptions import NotFoundError
 
 
 def get_audio_files(
@@ -46,7 +47,12 @@ def list_audio_files(directory: str | Path, recursive: bool = True) -> list[Path
 
     Returns:
         Sorted list of audio file paths.
+
+    Raises:
+        NotFoundError: If ``directory`` doesn't exist or isn't a folder.
     """
+    if not Path(directory).is_dir():
+        raise NotFoundError(f"Directory not found: {directory}")
     return [Path(p) for p in get_audio_files(directory, recursive=recursive)]
 
 

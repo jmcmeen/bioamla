@@ -152,3 +152,12 @@ def test_segment_makes_no_folder_when_loading_fails(tmp_path):
     with pytest.raises(BioamlaError):
         segment_audio_file(str(tmp_path / "missing.wav"), str(tmp_path / "out"), duration=1.0)
     assert not (tmp_path / "out").exists()
+
+
+def test_listing_a_missing_folder_is_an_error(tmp_path):
+    from bioamla.audio import list_audio_files
+    from bioamla.exceptions import NotFoundError
+
+    with pytest.raises(NotFoundError, match="Directory not found"):
+        list_audio_files(tmp_path / "missing")
+    assert list_audio_files(tmp_path) == []  # an empty folder is fine

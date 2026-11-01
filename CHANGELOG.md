@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Agent skills: a convention for skills that let an AI agent drive bioamla
+  (`skills/<name>/SKILL.md` and `scripts/`). Scripts run `bioamla --json` and act on the
+  JSON (so a skill works locally or against a server), decide by thresholds on objective
+  measurements, send anything below threshold to a person, write to
+  `runs/<skill>/<timestamp>/`, and use only the standard library. A test harness runs each
+  skill's scripts in a synthetic workspace as a pass/fail eval. The first skill,
+  `inventory`, lists a folder's recordings and flags short or unreadable files. See the new
+  "Agent skills" docs page.
+
 - "Running the server" docs page: installing and starting `bioamla serve`, the token file,
   reaching it over an SSH tunnel or a VPN, a systemd unit, and linking recordings already on
   the machine with `--allow-link`.
@@ -153,6 +162,9 @@ All notable changes to this project are documented here. The format is based on
   that fails the check is refused rather than retried as a Hugging Face ID.
 
 ### Fixed
+
+- `audio list` of a folder that doesn't exist (and `list_audio_files()`) raises
+  `NotFoundError` instead of reporting an empty folder (#262).
 
 - A server request can no longer read or write a workspace's metadata (its `.bioamla`
   folder and the files directly in it) through an operation's path fields; the path
