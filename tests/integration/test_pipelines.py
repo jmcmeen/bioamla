@@ -419,3 +419,28 @@ class TestWorkspace:
         assert (root / detect_ok["outputs"][0]).is_file()
         assert not detect_failed["ok"] and detect_failed["error"]["type"] == "BadParameter"
         assert [r["command"] for r in runs][0] == "workspace init"
+
+
+class TestProgressEvents:
+    def test_batch_command_streams_progress(self, recording, tmp_path) -> None:
+        import os
+        import subprocess
+        import sys
+
+        folder = tmp_path / "in"
+        folder.mkdir()
+        for i in range(3):
+            (folder / f"r{i}.wav").write_bytes(recording.read_bytes())
+        env = {**os.environ, "BIOAMLA_PROGRESS": "jsonl"}
+        proc = subprocess.run(
+            [sys.executable, "-m", "bioamla._cli_entry", "--json", "batch", "audio", "features",
+             "--input-dir", str(folder), "--output-dir", str(tmp_path / "out")],
+            capture_output=True, text=True, env=env, check=True,
+        )  # fmt: skip
+        assert json.loads(proc.stdout)["ok"]  # stdout is still exactly the envelope
+        got = [json.loads(line) for line in proc.stderr.splitlines()
+               if line.startswith('{"event"')]  # fmt: skip
+        assert got[0]["event"] == "start" and got[-1]["event"] == "end"
+        assert got[-1]["done"] == 3 and got[-1]["ok"] is True
+        progress = [e["done"] for e in got if e["event"] == "progress"]
+        assert progress == [1, 2, 3]  # every file of a small batch

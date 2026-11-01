@@ -31,6 +31,25 @@ that would prompt (`system deps --install`, `catalogs hf cache --purge`) need `-
 with `--json`. The older per-command `--json` flags (`annotation summary`,
 `audio metadata`, `dataset stats`) still print bare JSON but are deprecated.
 
+### Progress events
+
+Set `BIOAMLA_PROGRESS=jsonl` and commands with a progress bar write progress as JSON
+lines on stderr instead of drawing the bar:
+
+```console
+$ BIOAMLA_PROGRESS=jsonl bioamla --json batch audio features --input-dir rec --output-dir out
+{"event": "start", "description": "Computing features", "total": null}
+{"event": "progress", "description": "Computing features", "done": 1, "total": 10}
+...
+{"event": "end", "description": "Computing features", "done": 10, "total": 10, "ok": true}
+```
+
+A progress event is sent each time the count crosses another whole percent (every item
+of a batch of 100 or fewer), at least every 0.1 s otherwise, on a change of description,
+and for the final count, never twice for the same state. Events are sent with `--quiet`
+too. stderr can also carry messages for people, so read the lines that are
+JSON objects with an `"event"` key. With `--json`, stdout is still exactly one envelope.
+
 ## Commands
 
 ::: mkdocs-click

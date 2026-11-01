@@ -34,6 +34,11 @@ All notable changes to this project are documented here. The format is based on
   the command. `bioamla workspace history [-n N] [--failed] [--all]` shows it, and
   `workspace status` shows the last 5 runs (`last_runs` in its `--json` result). Library:
   `Workspace.record_run()` and `Workspace.history()`.
+- `BIOAMLA_PROGRESS=jsonl`: commands with a progress bar write `start`, `progress` (`done`,
+  `total`, `description`) and `end` (`ok`) events as JSON lines on stderr instead of drawing the
+  bar: one per whole percent (every item of a small batch), at least every 0.1 s, plus the final
+  count. Sent with `--quiet` too; a closed stderr stops the events, not the command. Documented
+  under "Progress events" in the CLI reference.
 
 ## [0.3.8] - 2026-10-31
 

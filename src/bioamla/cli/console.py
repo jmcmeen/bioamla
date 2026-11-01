@@ -22,7 +22,10 @@ info = blue ℹ, file path = cyan, header = bold, label/value = bold value,
 dim = secondary. Errors and warnings go to stderr; everything else to stdout.
 """
 
+import json
+import os
 import sys
+import time
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from typing import Any, TypeVar
@@ -59,12 +62,36 @@ DIM_STYLE = "dim"
 T = TypeVar("T")
 
 
+PROGRESS_ENV = "BIOAMLA_PROGRESS"
+_JSONL_INTERVAL = 0.1  # seconds between progress events (the last one is always sent)
+
+
+def machine_progress() -> bool:
+    """True when ``BIOAMLA_PROGRESS=jsonl``: progress is JSON lines, not a drawn bar."""
+    return os.environ.get(PROGRESS_ENV, "").strip().lower() == "jsonl"
+
+
 class ProgressBar:
     """
     Rich-based progress bar for batch operations.
 
     This class provides a convenient wrapper around Rich's Progress
     with sensible defaults for file processing operations.
+
+    With ``BIOAMLA_PROGRESS=jsonl`` nothing is drawn; instead one JSON object per
+    line goes to stderr, for a server or script to follow::
+
+        {"event": "start", "description": "Computing features", "total": 120}
+        {"event": "progress", "description": "Computing features", "done": 40, "total": 120}
+        {"event": "end", "description": "Computing features", "done": 120, "total": 120,
+         "ok": true}
+
+    A ``progress`` event is sent when the count crosses another whole percent of
+    ``total`` (so every item of a batch of 100 or fewer), at least every 0.1 s
+    otherwise, on a change of description, and for the final count; never twice for
+    the same state. ``total`` is ``null`` while unknown. Events are sent even when
+    the bar itself is disabled (``--quiet``), since they were asked for explicitly.
+    If stderr can't be written (a reader went away), events stop; the command goes on.
 
     Example:
         >>> with ProgressBar(total=100, description="Processing files") as pb:
@@ -102,6 +129,10 @@ class ProgressBar:
         self._progress: Progress | None = None
         self._task_id: TaskID | None = None
         self._completed = 0
+        self._jsonl = machine_progress()
+        self._last_event = 0.0
+        self._last_sent: tuple | None = None
+        self._last_percent = -1
 
     def _create_progress(self) -> Progress:
         """Create the Rich Progress instance with appropriate columns."""
@@ -128,8 +159,40 @@ class ProgressBar:
             disable=self.disable,
         )
 
+    def _emit(self, event: str, *, force: bool = False, **extra) -> None:
+        """Write one progress event as a JSON line to stderr (machine mode only)."""
+        state = (self._completed, self.total, self.description)
+        now = time.monotonic()
+        if event == "progress":
+            if state == self._last_sent:
+                return  # nothing new
+            percent = int(100 * self._completed / self.total) if self.total else self._last_percent
+            due = (
+                force or percent != self._last_percent or now - self._last_event >= _JSONL_INTERVAL
+            )
+            if not due:
+                return
+            self._last_percent = percent
+        record = {"event": event, "description": self.description}
+        if event != "start":
+            record["done"] = self._completed
+        record["total"] = self.total
+        record.update(extra)
+        try:
+            sys.stderr.write(json.dumps(record) + "\n")
+            sys.stderr.flush()
+        except (OSError, ValueError):  # a closed pipe or stream: stop, don't fail the run
+            self._jsonl = False
+            return
+        if event != "start":  # the first update after start is never held back
+            self._last_event = now
+        self._last_sent = state
+
     def __enter__(self) -> "ProgressBar":
         """Enter the progress bar context."""
+        if self._jsonl:
+            self._emit("start")
+            return self
         self._progress = self._create_progress()
         self._progress.start()
         self._task_id = self._progress.add_task(
@@ -140,17 +203,34 @@ class ProgressBar:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit the progress bar context."""
+        if self._jsonl:
+            # Stopping early (a `track()` loop that breaks) is a normal end.
+            self._emit("end", ok=exc_type is None or issubclass(exc_type, GeneratorExit))
+            return
         if self._progress:
             self._progress.stop()
 
     def advance(self, amount: int = 1) -> None:
         """Advance the progress bar."""
+        if self._jsonl:
+            self._completed += amount
+            self._emit("progress", force=self.total is not None and self._completed >= self.total)
+            return
         if self._progress and self._task_id is not None:
             self._progress.advance(self._task_id, amount)
             self._completed += amount
 
     def update(self, completed: int | None = None, description: str | None = None) -> None:
         """Update the progress bar state."""
+        if self._jsonl:
+            changed = description is not None and description != self.description
+            if completed is not None:
+                self._completed = completed
+            if description is not None:
+                self.description = description
+            final = self.total is not None and self._completed >= self.total
+            self._emit("progress", force=changed or final)
+            return
         if self._progress and self._task_id is not None:
             kwargs = {}
             if completed is not None:
@@ -163,6 +243,9 @@ class ProgressBar:
 
     def set_total(self, total: int) -> None:
         """Set the total count (useful when total is unknown at start)."""
+        if self._jsonl:
+            self.total = total
+            return
         if self._progress and self._task_id is not None:
             self._progress.update(self._task_id, total=total)
             self.total = total
