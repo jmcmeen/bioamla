@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Every `cluster` and `models ast` command runs through an operation (`cluster.reduce|fit|
+  analyze|novelty`, `models.ast.init-config|predict|train|evaluate|embed|info`), so every
+  command group now has its operations. Training reports progress (steps) through the
+  operation context and stops cleanly when cancelled.
+- Library functions behind them: in `bioamla.cluster`, `reduce_embeddings_file()`,
+  `cluster_embeddings_file()`, `analyze_clusters_file()`, `novelty_file()`,
+  `load_array_file()` and `save_array_file()`; in `bioamla.ml`, `classify_file()`,
+  `evaluate_model()` (with `evaluation_text()` and `evaluation_csv_rows()`), `embed_file()`,
+  and `train_ast_from_options()` with `resolve_train_options()` and `AST_TRAIN_DEFAULTS`
+  (explicit options, then a config file, then defaults; the rule `ast train` follows; an
+  option of the wrong type, or a probability outside 0-1, is refused up front).
+
+### Changed
+
+- `cluster reduce|fit` say "Reducing embeddings to 2D using pca..." / "Clustering embeddings
+  using hdbscan..." (the input size is read inside the operation now).
+- `models ast train --id-column` prints a warning that it's ignored; it always was (#254).
+- The `ast init-config` "already exists" error names the fix itself (`force=True` /
+  `--force`).
+
+### Fixed
+
+- `models ast evaluate` and single-file AST prediction failed on Apple Silicon: the input
+  stayed on the CPU while the model ran on MPS (#255).
+
 ## [0.3.11] - 2026-11-01
 
 ### Added

@@ -561,3 +561,84 @@ class TestModelBatchLibraryParity:
             Path(p["filepath"]).name for p in json.loads((folder / "predictions.json").read_text())
         ]
         assert names == ["b.wav", "a.wav"]  # CSV order, whatever order the workers finished
+
+
+class TestModelCommandsLibraryParity:
+    """`models ast predict|embed|info|evaluate` reproduced with library calls alone."""
+
+    @pytest.fixture
+    def clips(self, tmp_path) -> Path:
+        folder = tmp_path / "clips"
+        folder.mkdir()
+        t = np.arange(16000 * 2) / 16000
+        for name, freq in (("a.wav", 1000), ("b.wav", 3000)):
+            sf.write(folder / name, 0.5 * np.sin(2 * np.pi * freq * t), 16000)
+        (tmp_path / "truth.csv").write_text("file_name,label\na.wav,a\nb.wav,b\n")
+        return folder
+
+    def test_predict_embed_info_evaluate(self, tiny_ast, clips, tmp_path) -> None:
+        from bioamla.ml import classify_file, embed_file, evaluate_model, get_model_info
+
+        got = bioamla(
+            "models", "ast", "predict", str(clips / "a.wav"), "--model-path", str(tiny_ast),
+            "--segment-seconds", "1", "-o", str(tmp_path / "c.csv"),
+        )  # fmt: skip
+        want = classify_file(
+            clips / "a.wav", model_path=str(tiny_ast), segment_duration=1,
+            output=tmp_path / "l.csv",
+        )  # fmt: skip
+        assert got["count"] == want.count == 2
+        assert (tmp_path / "c.csv").read_text() == (tmp_path / "l.csv").read_text()
+
+        got = bioamla("models", "ast", "embed", str(clips / "b.wav"), "--model-path",
+                      str(tiny_ast), "-o", str(tmp_path / "c.npy"))  # fmt: skip
+        want = embed_file(clips / "b.wav", tmp_path / "l.npy", model_path=str(tiny_ast))
+        assert got["shape"] == want.shape
+        np.testing.assert_allclose(np.load(tmp_path / "c.npy"), np.load(tmp_path / "l.npy"))
+
+        assert (
+            bioamla("models", "ast", "info", str(tiny_ast))["labels"]
+            == get_model_info(str(tiny_ast))["labels"]
+        )
+
+        got = bioamla("models", "ast", "evaluate", str(clips), "--model-path", str(tiny_ast),
+                      "-g", str(tmp_path / "truth.csv"))  # fmt: skip
+        want = evaluate_model(clips, model_path=str(tiny_ast), ground_truth=tmp_path / "truth.csv")
+        assert got["metrics"] == json.loads(json.dumps(want.to_dict()["metrics"]))
+
+    def test_train_operation_reports_progress_and_stops_when_cancelled(
+        self, tiny_ast, clips, tmp_path
+    ) -> None:
+        from bioamla import operations
+
+        try:  # training data is decoded by torchcodec, which needs FFmpeg 4-8 (#256)
+            import torchcodec.decoders  # noqa: F401
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"torchcodec can't load here: {str(e).splitlines()[0]}")
+
+        data = tmp_path / "by_class"
+        for label, name in (("a", "a.wav"), ("b", "b.wav")):
+            (data / label).mkdir(parents=True)
+            for i in range(4):
+                (data / label / f"{i}{name}").write_bytes((clips / name).read_bytes())
+        steps = []
+        ctx = operations.OperationContext(
+            on_progress=lambda done, total: steps.append(done), cancelled=lambda: len(steps) >= 1
+        )
+        from bioamla.exceptions import TrainingCancelled
+
+        with pytest.raises(TrainingCancelled):
+            operations.run(
+                "models.ast.train",
+                {
+                    "train_dataset": str(data),
+                    "training_dir": str(tmp_path / "run"),
+                    "options": {
+                        "base_model": str(tiny_ast), "num_train_epochs": 3,
+                        "per_device_train_batch_size": 2, "report_to": "none",
+                        "dataloader_num_workers": 0, "logging_steps": 1,
+                    },
+                },
+                ctx,
+            )  # fmt: skip
+        assert steps, "training reported no progress before it stopped"

@@ -35,7 +35,7 @@ def wav(tmp_path):
 def test_predict_segments(wav) -> None:
     inst = MagicMock()
     inst.predict_segments.return_value = [_pred("frog", 0.9, 0, 3), _pred("bird", 0.2, 3, 6)]
-    with patch("bioamla.ml.ASTInference", return_value=inst):
+    with patch("bioamla.ml.inference.ASTInference", return_value=inst):
         result = _json(
             "models", "ast", "predict", wav, "--segment-seconds", "3", "--min-confidence", "0.5"
         )
@@ -50,7 +50,7 @@ def test_predict_with_output_reports_path(wav, tmp_path) -> None:
     inst = MagicMock()
     inst.predict.return_value = _pred("frog", 0.8, 0, 10)
     out = tmp_path / "p.csv"
-    with patch("bioamla.ml.ASTInference", return_value=inst):
+    with patch("bioamla.ml.inference.ASTInference", return_value=inst):
         result = _json("models", "ast", "predict", wav, "-o", str(out))
     assert result["output"] == str(out) and out.exists()
 
@@ -64,7 +64,7 @@ def test_evaluate(tmp_path) -> None:
     )
     gt = tmp_path / "gt.csv"
     gt.write_text("file_name,label\n")
-    with patch("bioamla.ml.evaluate_directory", return_value=metrics):
+    with patch("bioamla.ml.ast_service.evaluate_directory", return_value=metrics):
         result = _json("models", "ast", "evaluate", str(tmp_path), "-g", str(gt))
     assert result["metrics"]["accuracy"] == 0.9 and result["metrics"]["total_samples"] == 10
     assert "quiet" not in result["params"]
@@ -73,7 +73,7 @@ def test_evaluate(tmp_path) -> None:
 def test_embed_reports_shape_not_vectors(wav, tmp_path) -> None:
     out = tmp_path / "e.npy"
     with patch(
-        "bioamla.ml.extract_embeddings_file",
+        "bioamla.ml.ast_service.extract_embeddings_file",
         return_value={"embeddings": np.zeros((4, 768), dtype=np.float32)},
     ):
         result = _json("models", "ast", "embed", wav, "--model-path", "m", "-o", str(out))
@@ -92,7 +92,7 @@ def test_info_reports_every_label() -> None:
         "labels": labels,
         "hidden_size": 768,
     }
-    with patch("bioamla.ml.get_model_info", return_value=info):
+    with patch("bioamla.ml.ast_service.get_model_info", return_value=info):
         result = _json("models", "ast", "info", "m")
     assert result["labels"] == labels  # not cut to 10 like the human view
 
@@ -159,7 +159,7 @@ def test_evaluate_csv_report_is_csv(tmp_path) -> None:
     gt = tmp_path / "gt.csv"
     gt.write_text("file_name,label\n")
     out = tmp_path / "eval.csv"
-    with patch("bioamla.ml.evaluate_directory", return_value=metrics):
+    with patch("bioamla.ml.ast_service.evaluate_directory", return_value=metrics):
         result = CliRunner().invoke(
             cli,
             [

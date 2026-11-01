@@ -45,9 +45,11 @@ OPERATION_MODULES: dict[str, str] = {
     "batch.models": "bioamla.ml.batch_operations",
     "annotation": "bioamla.datasets.annotation_operations",
     "audio": "bioamla.audio.operations",
+    "cluster": "bioamla.cluster.operations",
     "dataset": "bioamla.datasets.dataset_operations",
     "detect": "bioamla.detect.operations",
     "indices": "bioamla.indices.operations",
+    "models": "bioamla.ml.operations",
 }
 
 OperationKind = Literal["quick", "job"]

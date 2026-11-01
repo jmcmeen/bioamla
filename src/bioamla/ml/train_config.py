@@ -16,12 +16,16 @@ from __future__ import annotations
 
 from dataclasses import field
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import Field
 
 from bioamla.common.config import config_dataclass
 from bioamla.exceptions import InvalidInputError
+
+if TYPE_CHECKING:
+    from bioamla.ml.ast_service import TrainResult
+    from bioamla.protocols import OnTrainProgress, ShouldStop
 
 Probability = Annotated[float, Field(ge=0.0, le=1.0)]
 # transformers' IntervalStrategy and SaveStrategy values.
@@ -185,7 +189,280 @@ def write_train_config(path: str | Path, force: bool = False) -> Path:
     """
     out = Path(path)
     if out.exists() and not force:
-        raise InvalidInputError(f"File already exists: {out}")
+        raise InvalidInputError(
+            f"File already exists: {out}. Use force=True (--force) to overwrite."
+        )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(TRAIN_CONFIG_TEMPLATE)
     return out
+
+
+# =============================================================================
+# Training from options: explicit values, then a config file, then defaults
+# =============================================================================
+
+#: The defaults of every ``train_ast_from_options`` option (``bioamla models ast
+#: train`` shows the same ones).
+AST_TRAIN_DEFAULTS: dict = {
+    "training_dir": ".",
+    "base_model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+    "split": "train",
+    "category_label_column": "category",
+    "report_to": "tensorboard",
+    "learning_rate": 5.0e-5,
+    "push_to_hub": False,
+    "num_train_epochs": 1,
+    "per_device_train_batch_size": 8,
+    "eval_strategy": "epoch",
+    "save_strategy": "epoch",
+    "eval_steps": 1,
+    "save_steps": 1,
+    "load_best_model_at_end": True,
+    "metric_for_best_model": "accuracy",
+    "logging_strategy": "steps",
+    "logging_steps": 100,
+    "fp16": False,
+    "bf16": False,
+    "gradient_accumulation_steps": 1,
+    "dataloader_num_workers": 4,
+    "torch_compile": False,
+    "finetune_mode": "full",
+    "mlflow_tracking_uri": None,
+    "mlflow_experiment_name": None,
+    "mlflow_run_name": None,
+    "add_noise": False,
+    "time_stretch": False,
+    "pitch_shift": False,
+    "gain": False,
+    "gain_transition": False,
+    "clipping_distortion": False,
+    "augment_multiplier": 1,
+    "augment_probability": 0.8,
+    "min_snr_db": 10.0,
+    "max_snr_db": 20.0,
+    "noise_probability": 0.5,
+    "min_gain_db": -6.0,
+    "max_gain_db": 6.0,
+    "gain_probability": 0.5,
+    "gain_transition_probability": 0.5,
+    "clipping_probability": 0.5,
+    "min_percentile_threshold": 0,
+    "max_percentile_threshold": 30,
+    "min_time_stretch": 0.8,
+    "max_time_stretch": 1.2,
+    "time_stretch_probability": 0.5,
+    "min_pitch_shift": -4,
+    "max_pitch_shift": 4,
+    "pitch_shift_probability": 0.5,
+}
+
+#: Option -> its (section, key) in a training config file (``ast init-config``).
+TRAIN_CONFIG_KEYS: dict[str, tuple[str, str]] = {
+    "base_model": ("models", "default_ast_model"),
+    "learning_rate": ("training", "learning_rate"),
+    "num_train_epochs": ("training", "epochs"),
+    "per_device_train_batch_size": ("training", "batch_size"),
+    "eval_strategy": ("training", "eval_strategy"),
+    "save_strategy": ("training", "save_strategy"),
+    "eval_steps": ("training", "eval_steps"),
+    "save_steps": ("training", "save_steps"),
+    "logging_steps": ("training", "logging_steps"),
+    "report_to": ("training", "report_to"),
+    "add_noise": ("augmentation", "add_noise"),
+    "time_stretch": ("augmentation", "time_stretch"),
+    "pitch_shift": ("augmentation", "pitch_shift"),
+    "gain": ("augmentation", "gain"),
+    "gain_transition": ("augmentation", "gain_transition"),
+    "clipping_distortion": ("augmentation", "clipping_distortion"),
+    "augment_multiplier": ("augmentation", "multiplier"),
+    "augment_probability": ("augmentation", "probability"),
+    "min_snr_db": ("augmentation", "min_snr_db"),
+    "max_snr_db": ("augmentation", "max_snr_db"),
+    "noise_probability": ("augmentation", "noise_probability"),
+    "min_gain_db": ("augmentation", "min_gain_db"),
+    "max_gain_db": ("augmentation", "max_gain_db"),
+    "gain_probability": ("augmentation", "gain_probability"),
+    "gain_transition_probability": ("augmentation", "gain_transition_probability"),
+    "clipping_probability": ("augmentation", "clipping_probability"),
+    "min_percentile_threshold": ("augmentation", "min_percentile_threshold"),
+    "max_percentile_threshold": ("augmentation", "max_percentile_threshold"),
+    "min_time_stretch": ("augmentation", "min_time_stretch"),
+    "max_time_stretch": ("augmentation", "max_time_stretch"),
+    "time_stretch_probability": ("augmentation", "time_stretch_probability"),
+    "min_pitch_shift": ("augmentation", "min_pitch_shift"),
+    "max_pitch_shift": ("augmentation", "max_pitch_shift"),
+    "pitch_shift_probability": ("augmentation", "pitch_shift_probability"),
+}
+
+_AUGMENTATION_LAYERS = (
+    "add_noise",
+    "time_stretch",
+    "pitch_shift",
+    "gain",
+    "gain_transition",
+    "clipping_distortion",
+)
+
+
+_OPTIONAL_STR = {"mlflow_tracking_uri", "mlflow_experiment_name", "mlflow_run_name"}
+
+
+def _check_option(name: str, value: object) -> None:
+    """Refuse a value of the wrong type for ``name`` (as its default's), or a
+    probability outside 0-1."""
+    default = AST_TRAIN_DEFAULTS[name]
+    if name in _OPTIONAL_STR:
+        ok = value is None or isinstance(value, str)
+    elif isinstance(default, bool):
+        ok = isinstance(value, bool)
+    elif isinstance(default, int):
+        ok = isinstance(value, int) and not isinstance(value, bool)
+    elif isinstance(default, float):
+        ok = isinstance(value, (int, float)) and not isinstance(value, bool)
+    else:
+        ok = isinstance(value, str)
+    if not ok:
+        raise InvalidInputError(f"Training option {name} must be like {default!r}, not {value!r}")
+    if name.endswith("probability") and not 0.0 <= float(value) <= 1.0:  # type: ignore[arg-type]
+        raise InvalidInputError(f"Training option {name} must be between 0 and 1, not {value}")
+
+
+def resolve_train_options(options: dict, config_path: str | Path | None = None) -> dict:
+    """Every training option's value: ``options`` (the ones set explicitly) win over
+    the config file, which wins over :data:`AST_TRAIN_DEFAULTS`.
+
+    Raises:
+        InvalidInputError: If ``options`` names an unknown option.
+        ConfigValidationError: If the config file is invalid.
+    """
+    from dataclasses import asdict
+
+    from bioamla.common.config import load_toml, validate_config
+
+    unknown = sorted(set(options) - set(AST_TRAIN_DEFAULTS))
+    if unknown:
+        raise InvalidInputError(f"Unknown training options: {', '.join(unknown)}")
+    for name, value in options.items():
+        _check_option(name, value)
+    resolved = dict(AST_TRAIN_DEFAULTS)
+    if config_path:
+        # Validate the whole file first, so a typo or a wrong type fails before training.
+        cfg = asdict(
+            validate_config(AstTrainConfigFile, load_toml(config_path), source=config_path)
+        )
+        for name, (section, key) in TRAIN_CONFIG_KEYS.items():
+            if cfg[section][key] is not None:
+                resolved[name] = cfg[section][key]
+    resolved.update(options)
+    return resolved
+
+
+def train_ast_from_options(
+    train_dataset: str,
+    options: dict | None = None,
+    *,
+    config_path: str | Path | None = None,
+    on_progress: OnTrainProgress | None = None,
+    should_stop: ShouldStop | None = None,
+) -> TrainResult:
+    """Fine-tune an AST model from flat options, as ``bioamla models ast train`` does.
+
+    Explicit ``options`` win over a training config file (``config_path``, see
+    :func:`write_train_config`), which wins over :data:`AST_TRAIN_DEFAULTS`. The
+    augmentation layers (``add_noise``, ``time_stretch``, ...) are off unless turned
+    on; with none on, ``augment_multiplier`` is ignored (with a warning), since the
+    copies would be identical.
+
+    Args:
+        train_dataset: A Hugging Face dataset ID, a metadata CSV, or a folder with one
+            subfolder per class.
+        options: Training options set explicitly (names as in
+            :data:`AST_TRAIN_DEFAULTS`).
+        config_path: A training config file.
+        on_progress: Called with a :class:`~bioamla.ml.TrainProgress` as training
+            advances.
+        should_stop: Polled during training; returning True stops it.
+
+    Returns:
+        The :class:`~bioamla.ml.TrainResult`.
+
+    Raises:
+        InvalidInputError: If an option is unknown.
+        ConfigValidationError: If the config file is invalid.
+        TrainingError: If training fails.
+    """
+    import logging
+
+    from bioamla.datasets.augmentation import WaveformAugmentationConfig
+    from bioamla.ml.training import train_ast
+
+    o = resolve_train_options(options or {}, config_path)
+    augmentation = None
+    if any(o[layer] for layer in _AUGMENTATION_LAYERS):
+        augmentation = WaveformAugmentationConfig(
+            add_noise=o["add_noise"],
+            noise_min_snr=o["min_snr_db"],
+            noise_max_snr=o["max_snr_db"],
+            noise_probability=o["noise_probability"],
+            time_stretch=o["time_stretch"],
+            time_stretch_min=o["min_time_stretch"],
+            time_stretch_max=o["max_time_stretch"],
+            time_stretch_probability=o["time_stretch_probability"],
+            pitch_shift=o["pitch_shift"],
+            pitch_shift_min=o["min_pitch_shift"],
+            pitch_shift_max=o["max_pitch_shift"],
+            pitch_shift_probability=o["pitch_shift_probability"],
+            gain=o["gain"],
+            gain_min_db=o["min_gain_db"],
+            gain_max_db=o["max_gain_db"],
+            gain_probability=o["gain_probability"],
+            gain_transition=o["gain_transition"],
+            gain_transition_probability=o["gain_transition_probability"],
+            clipping_distortion=o["clipping_distortion"],
+            clipping_min_percentile=o["min_percentile_threshold"],
+            clipping_max_percentile=o["max_percentile_threshold"],
+            clipping_probability=o["clipping_probability"],
+            pipeline_probability=o["augment_probability"],
+            shuffle=True,
+        )
+    multiplier = o["augment_multiplier"]
+    if augmentation is None and multiplier > 1:
+        logging.getLogger(__name__).warning(
+            "augment_multiplier %s ignored: no augmentation layers enabled "
+            "(the copies would be identical).",
+            multiplier,
+        )
+        multiplier = 1
+    return train_ast(
+        train_dataset=train_dataset,
+        training_dir=o["training_dir"],
+        base_model=o["base_model"],
+        split=o["split"],
+        category_label_column=o["category_label_column"],
+        learning_rate=o["learning_rate"],
+        num_train_epochs=o["num_train_epochs"],
+        per_device_train_batch_size=o["per_device_train_batch_size"],
+        eval_strategy=o["eval_strategy"],
+        save_strategy=o["save_strategy"],
+        eval_steps=o["eval_steps"],
+        save_steps=o["save_steps"],
+        load_best_model_at_end=o["load_best_model_at_end"],
+        metric_for_best_model=o["metric_for_best_model"],
+        logging_strategy=o["logging_strategy"],
+        logging_steps=o["logging_steps"],
+        report_to=o["report_to"],
+        fp16=o["fp16"],
+        bf16=o["bf16"],
+        gradient_accumulation_steps=o["gradient_accumulation_steps"],
+        dataloader_num_workers=o["dataloader_num_workers"],
+        torch_compile=o["torch_compile"],
+        finetune_mode=o["finetune_mode"],
+        push_to_hub=o["push_to_hub"],
+        mlflow_tracking_uri=o["mlflow_tracking_uri"],
+        mlflow_experiment_name=o["mlflow_experiment_name"],
+        mlflow_run_name=o["mlflow_run_name"],
+        augmentation=augmentation,
+        augment_multiplier=multiplier,
+        on_progress=on_progress,
+        should_stop=should_stop,
+    )

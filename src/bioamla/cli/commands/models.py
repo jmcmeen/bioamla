@@ -12,79 +12,6 @@ Examples:
 
 import click
 
-from bioamla.exceptions import BioamlaError
-
-# Map ``ast train`` flag names onto config-file (section, key) locations
-# (e.g. [training].epochs -> --num-train-epochs). The ``ast init-config`` template
-# (bioamla.ml.train_config) documents this same schema. Flags set on the command
-# line override these; these override built-in defaults.
-_TRAIN_CONFIG_MAP = {
-    "base_model": ("models", "default_ast_model"),
-    "learning_rate": ("training", "learning_rate"),
-    "num_train_epochs": ("training", "epochs"),
-    "per_device_train_batch_size": ("training", "batch_size"),
-    "eval_strategy": ("training", "eval_strategy"),
-    "save_strategy": ("training", "save_strategy"),
-    "eval_steps": ("training", "eval_steps"),
-    "save_steps": ("training", "save_steps"),
-    "logging_steps": ("training", "logging_steps"),
-    "report_to": ("training", "report_to"),
-    # Augmentation lives in its own [augmentation] section. Every transform is
-    # off by default; a key here (or its CLI flag) opts that layer in. Ranges and
-    # probabilities apply only to the transforms that are enabled.
-    "add_noise": ("augmentation", "add_noise"),
-    "time_stretch": ("augmentation", "time_stretch"),
-    "pitch_shift": ("augmentation", "pitch_shift"),
-    "gain": ("augmentation", "gain"),
-    "gain_transition": ("augmentation", "gain_transition"),
-    "clipping_distortion": ("augmentation", "clipping_distortion"),
-    "augment_multiplier": ("augmentation", "multiplier"),
-    "augment_probability": ("augmentation", "probability"),
-    "min_snr_db": ("augmentation", "min_snr_db"),
-    "max_snr_db": ("augmentation", "max_snr_db"),
-    "noise_probability": ("augmentation", "noise_probability"),
-    "min_gain_db": ("augmentation", "min_gain_db"),
-    "max_gain_db": ("augmentation", "max_gain_db"),
-    "gain_probability": ("augmentation", "gain_probability"),
-    "gain_transition_probability": ("augmentation", "gain_transition_probability"),
-    "clipping_probability": ("augmentation", "clipping_probability"),
-    "min_percentile_threshold": ("augmentation", "min_percentile_threshold"),
-    "max_percentile_threshold": ("augmentation", "max_percentile_threshold"),
-    "min_time_stretch": ("augmentation", "min_time_stretch"),
-    "max_time_stretch": ("augmentation", "max_time_stretch"),
-    "time_stretch_probability": ("augmentation", "time_stretch_probability"),
-    "min_pitch_shift": ("augmentation", "min_pitch_shift"),
-    "max_pitch_shift": ("augmentation", "max_pitch_shift"),
-    "pitch_shift_probability": ("augmentation", "pitch_shift_probability"),
-}
-
-
-def _apply_train_config(ctx: click.Context, config_path: str | None, values: dict) -> dict:
-    """Overlay TOML config onto flag values, honoring CLI-over-file-over-default.
-
-    For each mapped flag, the config value is used only when the flag was left at
-    its default (not passed on the command line) and the config provides it.
-    """
-    if not config_path:
-        return values
-
-    from dataclasses import asdict
-
-    from click.core import ParameterSource
-
-    from bioamla.common.config import load_toml, validate_config
-    from bioamla.ml.train_config import AstTrainConfigFile
-
-    # Validate the whole file first, so a typo or a wrong type fails before training.
-    cfg = asdict(validate_config(AstTrainConfigFile, load_toml(config_path), source=config_path))
-    resolved = dict(values)
-    for name, (section, key) in _TRAIN_CONFIG_MAP.items():
-        from_default = ctx.get_parameter_source(name) == ParameterSource.DEFAULT
-        cfg_value = cfg[section][key]
-        if from_default and cfg_value is not None:
-            resolved[name] = cfg_value
-    return resolved
-
 
 @click.group()
 def models() -> None:
@@ -114,22 +41,13 @@ def ast_init_config(output: str, force: bool) -> None:
     flags still override any value in the file.
     """
     from bioamla.cli.console import print_success
-    from bioamla.exceptions import InvalidInputError
-    from bioamla.ml import write_train_config
-
-    try:
-        path = write_train_config(output, force=force)
-    except InvalidInputError as e:
-        hint = " Use --force to overwrite." if "already exists" in str(e) else ""
-        raise click.ClickException(f"{e}{hint}") from e
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
-    if emit_result({"output": str(path)}):
+    result = run_operation("models.ast.init-config", output=output, force=force)
+    if emit_result(result):
         return
-    print_success(f"Created training config: {path}")
+    print_success(f"Created training config: {result['output']}")
 
 
 @ast.command("predict")
@@ -173,70 +91,31 @@ def ast_predict(
         bioamla models ast predict audio.wav --model-path my_model
         bioamla models ast predict rec.wav --segment-seconds 3 --overlap 1 -o rec.csv
     """
-    import csv
-    from pathlib import Path
-
     from bioamla.cli.console import echo, print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_file_result, json_mode
-    from bioamla.ml import ASTInference
 
-    try:
-        inference = ASTInference(model_path=model_path, sample_rate=resample_freq)
-        if segment_duration > 0:
-            results = inference.predict_segments(
-                file, clip_length=segment_duration, overlap=overlap
-            )
-        else:
-            results = [inference.predict(file)]
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    results = [r for r in results if r.confidence >= min_confidence]
-
-    if output:
-        out_path = Path(output)
-        try:
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            with out_path.open("w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(["filepath", "start", "stop", "prediction", "confidence"])
-                for r in results:
-                    writer.writerow(
-                        [
-                            r.filepath,
-                            r.start_time,
-                            r.end_time,
-                            r.predicted_label,
-                            f"{r.confidence:.6f}",
-                        ]
-                    )
-        except OSError as e:
-            raise click.ClickException(f"Failed to write {output}: {e}") from e
-
+    found = run_operation(
+        "models.ast.predict",
+        file=file,
+        model_path=model_path,
+        segment_duration=segment_duration,
+        overlap=overlap,
+        min_confidence=min_confidence,
+        output=output,
+        resample_freq=resample_freq,
+    )
     if json_mode():
-        emit_file_result(
-            file,
-            count=len(results),
-            predictions=[
-                {
-                    "start_time": r.start_time,
-                    "end_time": r.end_time,
-                    "label": r.predicted_label,
-                    "confidence": r.confidence,
-                }
-                for r in results
-            ],
-        )
+        emit_file_result(file, count=found.count, predictions=found.to_dict()["predictions"])
         return
     if output:
-        print_success(f"Wrote {len(results)} prediction(s) to {output}")
+        print_success(f"Wrote {found.count} prediction(s) to {output}")
         return
 
-    if segment_duration > 0:
-        for r in results:
+    for r in found.predictions:
+        if found.segmented:
             echo(f"{r.start_time:.2f}-{r.end_time:.2f}s  {r.predicted_label} ({r.confidence:.4f})")
-    else:
-        for r in results:
+        else:
             echo(f"{r.predicted_label} ({r.confidence:.4f})")
 
 
@@ -493,159 +372,32 @@ def ast_train(
         bioamla models ast train --train-dataset ./metadata.csv
         bioamla models ast train --train-dataset ./audio_by_class/
     """
-    from bioamla.cli.console import print_kv, print_success
+    from click.core import ParameterSource
+
+    from bioamla.cli.console import print_kv, print_success, print_warning
     from bioamla.cli.logging_setup import configure_cli_logging
-    from bioamla.datasets.augmentation import WaveformAugmentationConfig
-    from bioamla.ml import train_ast
+    from bioamla.cli.operations import run_operation
 
-    # Surface the library's INFO progress messages on the console.
+    # Surface the library's INFO progress messages (and warnings) on the console.
     configure_cli_logging()
+    if ctx.get_parameter_source("category_id_column") != ParameterSource.DEFAULT:
+        print_warning("--id-column is not used by training and is ignored (see issue #254)")
 
-    # Overlay a TOML config (flags win over file, file wins over defaults).
-    try:
-        overrides = _apply_train_config(
-            ctx,
-            config_path,
-            {
-                "base_model": base_model,
-                "learning_rate": learning_rate,
-                "num_train_epochs": num_train_epochs,
-                "per_device_train_batch_size": per_device_train_batch_size,
-                "eval_strategy": eval_strategy,
-                "save_strategy": save_strategy,
-                "eval_steps": eval_steps,
-                "save_steps": save_steps,
-                "logging_steps": logging_steps,
-                "report_to": report_to,
-                "add_noise": add_noise,
-                "time_stretch": time_stretch,
-                "pitch_shift": pitch_shift,
-                "gain": gain,
-                "gain_transition": gain_transition,
-                "clipping_distortion": clipping_distortion,
-                "augment_multiplier": augment_multiplier,
-                "augment_probability": augment_probability,
-                "min_snr_db": min_snr_db,
-                "max_snr_db": max_snr_db,
-                "noise_probability": noise_probability,
-                "min_gain_db": min_gain_db,
-                "max_gain_db": max_gain_db,
-                "gain_probability": gain_probability,
-                "gain_transition_probability": gain_transition_probability,
-                "clipping_probability": clipping_probability,
-                "min_percentile_threshold": min_percentile_threshold,
-                "max_percentile_threshold": max_percentile_threshold,
-                "min_time_stretch": min_time_stretch,
-                "max_time_stretch": max_time_stretch,
-                "time_stretch_probability": time_stretch_probability,
-                "min_pitch_shift": min_pitch_shift,
-                "max_pitch_shift": max_pitch_shift,
-                "pitch_shift_probability": pitch_shift_probability,
-            },
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    base_model = overrides["base_model"]
-    learning_rate = overrides["learning_rate"]
-    num_train_epochs = overrides["num_train_epochs"]
-    per_device_train_batch_size = overrides["per_device_train_batch_size"]
-    eval_strategy = overrides["eval_strategy"]
-    save_strategy = overrides["save_strategy"]
-    eval_steps = overrides["eval_steps"]
-    save_steps = overrides["save_steps"]
-    logging_steps = overrides["logging_steps"]
-    report_to = overrides["report_to"]
-
-    # Each augmentation layer is opt-in (off by default); enable only the ones the
-    # user turned on via flag or [augmentation] TOML. If none are enabled, pass
-    # None so training skips the pipeline entirely. Each enabled layer has its own
-    # per-sample probability; the whole Compose is additionally gated by
-    # --augment-probability and shuffled per sample. Settings come from `overrides`
-    # so the TOML can drive them (CLI flag still wins).
-    layers = (
-        "add_noise",
-        "time_stretch",
-        "pitch_shift",
-        "gain",
-        "gain_transition",
-        "clipping_distortion",
+    # Only the flags given on the command line are passed: they win over the config
+    # file, which wins over the library's defaults.
+    not_options = {"config_path", "train_dataset", "training_dir", "category_id_column"}
+    options = {
+        name: value
+        for name, value in ctx.params.items()
+        if name not in not_options and ctx.get_parameter_source(name) != ParameterSource.DEFAULT
+    }
+    result = run_operation(
+        "models.ast.train",
+        train_dataset=train_dataset,
+        config_path=config_path,
+        training_dir=training_dir,
+        options=options,
     )
-    augment_multiplier = overrides["augment_multiplier"]
-    aug_config = (
-        WaveformAugmentationConfig(
-            add_noise=overrides["add_noise"],
-            noise_min_snr=overrides["min_snr_db"],
-            noise_max_snr=overrides["max_snr_db"],
-            noise_probability=overrides["noise_probability"],
-            time_stretch=overrides["time_stretch"],
-            time_stretch_min=overrides["min_time_stretch"],
-            time_stretch_max=overrides["max_time_stretch"],
-            time_stretch_probability=overrides["time_stretch_probability"],
-            pitch_shift=overrides["pitch_shift"],
-            pitch_shift_min=overrides["min_pitch_shift"],
-            pitch_shift_max=overrides["max_pitch_shift"],
-            pitch_shift_probability=overrides["pitch_shift_probability"],
-            gain=overrides["gain"],
-            gain_min_db=overrides["min_gain_db"],
-            gain_max_db=overrides["max_gain_db"],
-            gain_probability=overrides["gain_probability"],
-            gain_transition=overrides["gain_transition"],
-            gain_transition_probability=overrides["gain_transition_probability"],
-            clipping_distortion=overrides["clipping_distortion"],
-            clipping_min_percentile=overrides["min_percentile_threshold"],
-            clipping_max_percentile=overrides["max_percentile_threshold"],
-            clipping_probability=overrides["clipping_probability"],
-            pipeline_probability=overrides["augment_probability"],
-            shuffle=True,
-        )
-        if any(overrides[layer] for layer in layers)
-        else None
-    )
-
-    # A multiplier only does useful work alongside augmentation — without it, the
-    # train split is just duplicated verbatim. Warn rather than silently no-op.
-    if aug_config is None and augment_multiplier > 1:
-        click.echo(
-            f"Warning: --augment-multiplier {augment_multiplier} ignored — no "
-            "augmentation layers enabled (the copies would be identical).",
-            err=True,
-        )
-        augment_multiplier = 1
-
-    try:
-        result = train_ast(
-            train_dataset=train_dataset,
-            training_dir=training_dir,
-            base_model=base_model,
-            split=split,
-            category_label_column=category_label_column,
-            learning_rate=learning_rate,
-            num_train_epochs=num_train_epochs,
-            per_device_train_batch_size=per_device_train_batch_size,
-            eval_strategy=eval_strategy,
-            save_strategy=save_strategy,
-            eval_steps=eval_steps,
-            save_steps=save_steps,
-            load_best_model_at_end=load_best_model_at_end,
-            metric_for_best_model=metric_for_best_model,
-            logging_strategy=logging_strategy,
-            logging_steps=logging_steps,
-            report_to=report_to,
-            fp16=fp16,
-            bf16=bf16,
-            gradient_accumulation_steps=gradient_accumulation_steps,
-            dataloader_num_workers=dataloader_num_workers,
-            torch_compile=torch_compile,
-            finetune_mode=finetune_mode,
-            push_to_hub=push_to_hub,
-            mlflow_tracking_uri=mlflow_tracking_uri,
-            mlflow_experiment_name=mlflow_experiment_name,
-            mlflow_run_name=mlflow_run_name,
-            augmentation=aug_config,
-            augment_multiplier=augment_multiplier,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
 
     from bioamla.cli.output import emit_result
 
@@ -656,59 +408,6 @@ def ast_train(
         print_kv("Final eval accuracy", f"{result.final_accuracy:.4f}")
     if result.final_loss is not None:
         print_kv("Final eval loss", f"{result.final_loss:.4f}")
-
-
-def _per_class_lines(per_class: dict) -> list[str]:
-    """Per-class precision/recall/F1/support as aligned plain-text rows."""
-    width = max(len("label"), *(len(label) for label in per_class))
-    lines = [f"{'label':<{width}}  precision  recall  f1     support"]
-    for label, m in per_class.items():
-        lines.append(
-            f"{label:<{width}}  {m['precision']:<9.3f}  {m['recall']:<6.3f}  "
-            f"{m['f1_score']:<5.3f}  {m['support']}"
-        )
-    return lines
-
-
-def _evaluation_text(result) -> str:
-    """The ``--format txt`` report: overall metrics, per-class table, confusion
-    matrix (rows true, columns predicted) and skipped files."""
-    lines = [
-        f"accuracy: {result.accuracy}",
-        f"precision: {result.precision}",
-        f"recall: {result.recall}",
-        f"f1_score: {result.f1_score}",
-        f"total_samples: {result.total_samples}",
-    ]
-    if result.per_class:
-        lines += ["", *_per_class_lines(result.per_class)]
-    if result.confusion_matrix and result.labels:
-        width = max(len(label) for label in result.labels)
-        lines += ["", "confusion matrix (rows: true, columns: predicted)"]
-        lines.append(" " * width + "  " + "  ".join(result.labels))
-        for label, row in zip(result.labels, result.confusion_matrix, strict=True):
-            cells = "  ".join(f"{n:>{len(col)}}" for n, col in zip(row, result.labels, strict=True))
-            lines.append(f"{label:<{width}}  {cells}")
-    if result.skipped:
-        lines += ["", "skipped:", *(f"  {s}" for s in result.skipped)]
-    return "\n".join(lines) + "\n"
-
-
-def _evaluation_csv_rows(result) -> list[dict]:
-    """``--format csv``: one overall row (with accuracy), then one row per class."""
-    rows = [
-        {
-            "label": "(overall)",
-            "accuracy": result.accuracy,
-            "precision": result.precision,
-            "recall": result.recall,
-            "f1_score": result.f1_score,
-            "support": result.total_samples,
-        }
-    ]
-    for label, m in (result.per_class or {}).items():
-        rows.append({"label": label, "accuracy": "", **m})
-    return rows
 
 
 @ast.command("evaluate")
@@ -756,9 +455,6 @@ def ast_evaluate(
         bioamla models ast evaluate ./audio_dir -g labels.csv \\
             --format json -o eval.json
     """
-    import json as json_lib
-    from pathlib import Path as PathLib
-
     from bioamla.cli.console import (
         echo,
         print_header,
@@ -767,42 +463,23 @@ def ast_evaluate(
         print_table,
         print_warning,
     )
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import command_options, emit_result, json_mode
-    from bioamla.ml import evaluate_directory
 
-    try:
-        eval_result = evaluate_directory(
-            audio_dir=path,
-            model_path=model_path,
-            ground_truth_csv=ground_truth,
-            file_column=file_column,
-            label_column=label_column,
-            resample_freq=resample_freq,
-            use_fp16=fp16,
-            batch_size=batch_size,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    if output:
-        out_path = PathLib(output)
-        try:
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            metrics = eval_result.to_dict()
-            if output_format == "json":
-                out_path.write_text(json_lib.dumps(metrics, indent=2), encoding="utf-8")
-            elif output_format == "csv":
-                import csv
-
-                rows = _evaluation_csv_rows(eval_result)
-                with out_path.open("w", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(f, fieldnames=list(rows[0]))
-                    writer.writeheader()
-                    writer.writerows(rows)
-            else:
-                out_path.write_text(_evaluation_text(eval_result), encoding="utf-8")
-        except OSError as e:
-            raise click.ClickException(f"Failed to write {output}: {e}") from e
+    report = run_operation(
+        "models.ast.evaluate",
+        path=path,
+        ground_truth=ground_truth,
+        model_path=model_path,
+        output=output,
+        output_format=output_format,
+        file_column=file_column,
+        label_column=label_column,
+        resample_freq=resample_freq,
+        batch_size=batch_size,
+        fp16=fp16,
+    )
+    eval_result = report.metrics
 
     if json_mode():
         emit_result(
@@ -860,36 +537,23 @@ def ast_embed(file: str, model_path: str, output: str, layer: str, sample_rate: 
     Example:
         bioamla models ast embed audio.wav --model-path my_model -o embeddings.npy
     """
-    from pathlib import Path
-
-    import numpy as np
-
     from bioamla.cli.console import print_info, print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_file_result
-    from bioamla.ml import extract_embeddings_file
 
     print_info(f"Loading AST model from {model_path}...")
-
-    try:
-        result = extract_embeddings_file(
-            filepath=file,
-            model_path=model_path,
-            layer=layer,
-            sample_rate=sample_rate,
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    embeddings = result["embeddings"]
-    try:
-        Path(output).parent.mkdir(parents=True, exist_ok=True)
-        np.save(output, embeddings)
-    except OSError as e:
-        raise click.ClickException(f"Failed to write {output}: {e}") from e
+    saved = run_operation(
+        "models.ast.embed",
+        file=file,
+        model_path=model_path,
+        output=output,
+        layer=layer,
+        sample_rate=sample_rate,
+    )
     # The vectors stay in the .npy file; the result says where and what shape.
-    if emit_file_result(file, shape=list(embeddings.shape), dtype=str(embeddings.dtype)):
+    if emit_file_result(file, shape=saved.shape, dtype=saved.dtype):
         return
-    print_success(f"Embeddings saved to {output} (shape: {embeddings.shape})")
+    print_success(f"Embeddings saved to {output} (shape: {tuple(saved.shape)})")
 
 
 @ast.command("info")
@@ -901,14 +565,10 @@ def ast_info(model_path: str) -> None:
         bioamla models ast info bioamla/scp-frogs
     """
     from bioamla.cli.console import print_kv
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result, json_mode
-    from bioamla.ml import get_model_info
 
-    try:
-        info = get_model_info(model_path)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    info = run_operation("models.ast.info", model_path=model_path)
     if json_mode():
         emit_result(
             {

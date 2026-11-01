@@ -47,7 +47,7 @@ def test_ast_group_help(runner: CliRunner) -> None:
 def test_ast_predict_whole_file(runner: CliRunner, test_audio_path) -> None:
     inst = MagicMock()
     inst.predict.return_value = _pred()
-    with patch("bioamla.ml.ASTInference", return_value=inst):
+    with patch("bioamla.ml.inference.ASTInference", return_value=inst):
         result = runner.invoke(cli, ["models", "ast", "predict", test_audio_path])
     assert result.exit_code == 0, result.output
     assert "frog" in result.output
@@ -56,7 +56,7 @@ def test_ast_predict_whole_file(runner: CliRunner, test_audio_path) -> None:
 def test_ast_predict_segments(runner: CliRunner, test_audio_path) -> None:
     inst = MagicMock()
     inst.predict_segments.return_value = [_pred(start=0, end=3), _pred(start=3, end=6)]
-    with patch("bioamla.ml.ASTInference", return_value=inst):
+    with patch("bioamla.ml.inference.ASTInference", return_value=inst):
         result = runner.invoke(
             cli, ["models", "ast", "predict", test_audio_path, "--segment-seconds", "3"]
         )
@@ -68,7 +68,7 @@ def test_ast_predict_output_csv(runner: CliRunner, test_audio_path, tmp_path) ->
     out = tmp_path / "preds.csv"
     inst = MagicMock()
     inst.predict.return_value = _pred()
-    with patch("bioamla.ml.ASTInference", return_value=inst):
+    with patch("bioamla.ml.inference.ASTInference", return_value=inst):
         result = runner.invoke(cli, ["models", "ast", "predict", test_audio_path, "-o", str(out)])
     assert result.exit_code == 0, result.output
     assert out.exists()
@@ -78,7 +78,7 @@ def test_ast_predict_output_csv(runner: CliRunner, test_audio_path, tmp_path) ->
 def test_ast_predict_min_confidence(runner: CliRunner, test_audio_path) -> None:
     inst = MagicMock()
     inst.predict.return_value = _pred(conf=0.1)
-    with patch("bioamla.ml.ASTInference", return_value=inst):
+    with patch("bioamla.ml.inference.ASTInference", return_value=inst):
         result = runner.invoke(
             cli, ["models", "ast", "predict", test_audio_path, "--min-confidence", "0.5"]
         )
@@ -87,7 +87,7 @@ def test_ast_predict_min_confidence(runner: CliRunner, test_audio_path) -> None:
 
 
 def test_ast_predict_error(runner: CliRunner, test_audio_path) -> None:
-    with patch("bioamla.ml.ASTInference", side_effect=ModelError("load failed")):
+    with patch("bioamla.ml.inference.ASTInference", side_effect=ModelError("load failed")):
         result = runner.invoke(cli, ["models", "ast", "predict", test_audio_path])
     assert result.exit_code != 0
 
@@ -134,7 +134,7 @@ def test_ast_train(runner: CliRunner, tmp_path) -> None:
         model_path=str(tmp_path / "model"), final_accuracy=0.92, final_loss=0.3
     )
     with (
-        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.ml.training.train_ast", return_value=result_obj) as m,
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
@@ -151,7 +151,7 @@ def test_ast_train(runner: CliRunner, tmp_path) -> None:
 def test_ast_train_layer_opt_in(runner: CliRunner, tmp_path) -> None:
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
     with (
-        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.ml.training.train_ast", return_value=result_obj) as m,
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
@@ -171,7 +171,7 @@ def test_ast_train_layer_opt_in(runner: CliRunner, tmp_path) -> None:
 def test_ast_train_per_layer_probability(runner: CliRunner, tmp_path) -> None:
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
     with (
-        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.ml.training.train_ast", return_value=result_obj) as m,
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
@@ -193,10 +193,10 @@ def test_ast_train_per_layer_probability(runner: CliRunner, tmp_path) -> None:
     assert aug.noise_probability == 0.3
 
 
-def test_ast_train_multiplier_without_layers_warns(runner: CliRunner, tmp_path) -> None:
+def test_ast_train_multiplier_without_layers_warns(runner: CliRunner, tmp_path, caplog) -> None:
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
     with (
-        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.ml.training.train_ast", return_value=result_obj) as m,
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
@@ -204,7 +204,7 @@ def test_ast_train_multiplier_without_layers_warns(runner: CliRunner, tmp_path) 
             ["models", "ast", "train", "--train-dataset", "me/ds", "--augment-multiplier", "3"],
         )
     assert result.exit_code == 0, result.output
-    assert "ignored" in result.output  # multiplier is a no-op with no augmentation
+    assert "ignored" in caplog.text  # multiplier is a no-op with no augmentation
     # And it is reset so the training run doesn't duplicate identical rows.
     assert m.call_args.kwargs["augment_multiplier"] == 1
     assert m.call_args.kwargs["augmentation"] is None
@@ -217,7 +217,7 @@ def test_ast_train_augmentation_from_toml(runner: CliRunner, tmp_path) -> None:
     )
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
     with (
-        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.ml.training.train_ast", return_value=result_obj) as m,
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
@@ -239,7 +239,7 @@ def test_ast_train_flag_overrides_toml(runner: CliRunner, tmp_path) -> None:
     cfg.write_text("[augmentation]\nadd_noise = true\n")
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
     with (
-        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.ml.training.train_ast", return_value=result_obj) as m,
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
@@ -268,7 +268,7 @@ def test_ast_train_with_config(runner: CliRunner, tmp_path) -> None:
     )
     result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
     with (
-        patch("bioamla.ml.train_ast", return_value=result_obj) as m,
+        patch("bioamla.ml.training.train_ast", return_value=result_obj) as m,
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
@@ -283,7 +283,7 @@ def test_ast_train_with_config(runner: CliRunner, tmp_path) -> None:
 
 def test_ast_train_error(runner: CliRunner) -> None:
     with (
-        patch("bioamla.ml.train_ast", side_effect=TrainingError("empty dataset")),
+        patch("bioamla.ml.training.train_ast", side_effect=TrainingError("empty dataset")),
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(cli, ["models", "ast", "train", "--train-dataset", "me/ds"])
@@ -302,7 +302,7 @@ def test_ast_evaluate(runner: CliRunner, test_audio_dir, tmp_path) -> None:
     eval_result = EvaluationResult(
         accuracy=0.9, precision=0.88, recall=0.91, f1_score=0.89, total_samples=10
     )
-    with patch("bioamla.ml.evaluate_directory", return_value=eval_result):
+    with patch("bioamla.ml.ast_service.evaluate_directory", return_value=eval_result):
         result = runner.invoke(cli, ["models", "ast", "evaluate", test_audio_dir, "-g", str(gt)])
     assert result.exit_code == 0, result.output
     assert "Accuracy: 0.9000" in result.output
@@ -318,7 +318,7 @@ def test_ast_evaluate_output_json(runner: CliRunner, test_audio_dir, tmp_path) -
     eval_result = EvaluationResult(
         accuracy=0.9, precision=0.8, recall=0.8, f1_score=0.8, total_samples=5
     )
-    with patch("bioamla.ml.evaluate_directory", return_value=eval_result):
+    with patch("bioamla.ml.ast_service.evaluate_directory", return_value=eval_result):
         result = runner.invoke(
             cli,
             [
@@ -342,7 +342,7 @@ def test_ast_evaluate_output_json(runner: CliRunner, test_audio_dir, tmp_path) -
 def test_ast_evaluate_error(runner: CliRunner, test_audio_dir, tmp_path) -> None:
     gt = tmp_path / "gt.csv"
     gt.write_text("file_name,label\na.wav,frog\n")
-    with patch("bioamla.ml.evaluate_directory", side_effect=ModelError("bad model")):
+    with patch("bioamla.ml.ast_service.evaluate_directory", side_effect=ModelError("bad model")):
         result = runner.invoke(cli, ["models", "ast", "evaluate", test_audio_dir, "-g", str(gt)])
     assert result.exit_code != 0
 
@@ -353,7 +353,7 @@ def test_ast_evaluate_error(runner: CliRunner, test_audio_dir, tmp_path) -> None
 def test_ast_embed(runner: CliRunner, test_audio_path, tmp_path) -> None:
     out = tmp_path / "emb.npy"
     with patch(
-        "bioamla.ml.extract_embeddings_file",
+        "bioamla.ml.ast_service.extract_embeddings_file",
         return_value={"embeddings": np.zeros((1, 768), dtype=np.float32)},
     ):
         result = runner.invoke(
@@ -366,7 +366,7 @@ def test_ast_embed(runner: CliRunner, test_audio_path, tmp_path) -> None:
 
 def test_ast_embed_error(runner: CliRunner, test_audio_path, tmp_path) -> None:
     out = tmp_path / "emb.npy"
-    with patch("bioamla.ml.extract_embeddings_file", side_effect=ModelError("x")):
+    with patch("bioamla.ml.ast_service.extract_embeddings_file", side_effect=ModelError("x")):
         result = runner.invoke(
             cli,
             ["models", "ast", "embed", test_audio_path, "--model-path", "m", "-o", str(out)],
@@ -385,7 +385,7 @@ def test_ast_info(runner: CliRunner) -> None:
         "classes": ["a", "b", "c"],
         "has_more_classes": False,
     }
-    with patch("bioamla.ml.get_model_info", return_value=info):
+    with patch("bioamla.ml.ast_service.get_model_info", return_value=info):
         result = runner.invoke(cli, ["models", "ast", "info", "me/model"])
     assert result.exit_code == 0, result.output
     assert "me/model" in result.output
@@ -400,14 +400,14 @@ def test_ast_info_more_classes(runner: CliRunner) -> None:
         "classes": [str(i) for i in range(10)],
         "has_more_classes": True,
     }
-    with patch("bioamla.ml.get_model_info", return_value=info):
+    with patch("bioamla.ml.ast_service.get_model_info", return_value=info):
         result = runner.invoke(cli, ["models", "ast", "info", "me/model"])
     assert result.exit_code == 0
     assert "more" in result.output
 
 
 def test_ast_info_error(runner: CliRunner) -> None:
-    with patch("bioamla.ml.get_model_info", side_effect=ModelError("not found")):
+    with patch("bioamla.ml.ast_service.get_model_info", side_effect=ModelError("not found")):
         result = runner.invoke(cli, ["models", "ast", "info", "me/model"])
     assert result.exit_code != 0
 
@@ -419,7 +419,7 @@ def test_ast_train_rejects_bad_config_before_training(runner: CliRunner, tmp_pat
     cfg = tmp_path / "bioamla.toml"
     cfg.write_text('[training]\nepochs = "two"\nlerning_rate = 1e-4\n[augmentaton]\n')
     with (
-        patch("bioamla.ml.train_ast") as m,
+        patch("bioamla.ml.training.train_ast") as m,
         patch("bioamla.cli.logging_setup.configure_cli_logging"),
     ):
         result = runner.invoke(
@@ -437,9 +437,12 @@ def test_train_config_template_matches_schema_and_flag_map() -> None:
     pytest.importorskip("torch")
     from dataclasses import asdict
 
-    from bioamla.cli.commands.models import _TRAIN_CONFIG_MAP
     from bioamla.common.config import tomllib, validate_config
-    from bioamla.ml.train_config import TRAIN_CONFIG_TEMPLATE, AstTrainConfigFile
+    from bioamla.ml.train_config import (
+        TRAIN_CONFIG_KEYS,
+        TRAIN_CONFIG_TEMPLATE,
+        AstTrainConfigFile,
+    )
 
     # The starter file validates, and sets every key the schema defines.
     template = tomllib.loads(TRAIN_CONFIG_TEMPLATE)
@@ -449,8 +452,8 @@ def test_train_config_template_matches_schema_and_flag_map() -> None:
     }
     template_keys = {(s, k) for s, table in template.items() for k in table}
     assert template_keys == schema_keys
-    # Every schema key overlays exactly one CLI flag.
-    assert set(_TRAIN_CONFIG_MAP.values()) == schema_keys
+    # Every schema key overlays exactly one training option.
+    assert set(TRAIN_CONFIG_KEYS.values()) == schema_keys
 
 
 def test_train_config_accepts_transformers_strategies() -> None:
