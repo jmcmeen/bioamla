@@ -42,6 +42,14 @@ All notable changes to this project are documented here. The format is based on
   types `AnnotationTemplate`, `ConvertedAnnotations`, `AnnotationFileSummary`,
   `RewrittenAnnotations` and `GeneratedLabels`.
 
+- Every `dataset` command runs through an operation (`dataset.merge|extract-clips|stats|manifest|
+  partition|build|license|augment|remix`; `stats` is quick, the rest are jobs), with unchanged
+  output.
+- Library functions for the multi-step ones, in `bioamla.datasets`: `write_dataset_manifest()`,
+  `build_dataset()` (extract, partition, manifest and attributions in one call),
+  `write_dataset_license()`, `augment_dataset()` (ranges as `(min, max)` tuples) and
+  `remix_from()` (a recipe plus overrides).
+
 ### Changed
 
 - `batch audio visualize --no-legend` prints a warning that it's ignored; it always was (#246).

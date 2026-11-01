@@ -139,17 +139,17 @@ def test_augment_range_errors_are_usage_errors(tmp_path) -> None:
     [
         (
             ["dataset", "merge", "OUT", "A", "B"],
-            "merge_datasets",
+            "merge.merge_datasets",
             {"datasets_merged": 2, "total_files": 9},
         ),
         (
             ["dataset", "partition", "DIR"],
-            "partition_dataset",
+            "partition.partition_dataset",
             {"groups": 3, "splits": {"train": 2, "test": 1}},
         ),
         (
             ["dataset", "remix", "OUT", "--source", "SRC"],
-            "remix_dataset",
+            "remix.remix_dataset",
             {"total_files": 4, "output_dir": "OUT"},
         ),
     ],
@@ -170,7 +170,7 @@ def test_license_batch_partial_failure_is_an_error(tmp_path) -> None:
             {"status": "failed", "dataset_name": "b", "error": "bad csv"},
         ],
     }
-    with patch("bioamla.datasets.generate_licenses_for_directory", return_value=stats):
+    with patch("bioamla.datasets.licenses.generate_licenses_for_directory", return_value=stats):
         result, envelope = _run("dataset", "license", str(tmp_path), "--batch")
     assert result.exit_code == 1
     assert envelope["ok"] is False
@@ -190,20 +190,20 @@ def test_license_batch_success_reports_stats(tmp_path) -> None:
         "datasets_failed": 0,
         "results": [{"status": "success", "dataset_name": "a", "attributions_count": 5}],
     }
-    with patch("bioamla.datasets.generate_licenses_for_directory", return_value=stats):
+    with patch("bioamla.datasets.licenses.generate_licenses_for_directory", return_value=stats):
         assert _ok("dataset", "license", str(tmp_path), "--batch") == stats
 
 
 def test_extract_clips_and_augment_report_stats(tmp_path) -> None:
     extract = {"clips_written": 5, "files_processed": 1, "labels": ["frog"], "failed": []}
-    with patch("bioamla.datasets.extract_labeled_dataset", return_value=extract):
+    with patch("bioamla.datasets.labeled_dataset.extract_labeled_dataset", return_value=extract):
         assert (
             _ok("dataset", "extract-clips", str(tmp_path / "s.wav"), str(tmp_path / "out"))
             == extract
         )
 
     stats = {"files_created": 20, "files_processed": 10, "files_failed": 1, "output_dir": "out"}
-    with patch("bioamla.datasets.batch_augment", return_value=stats):
+    with patch("bioamla.datasets.augmentation.batch_augment", return_value=stats):
         # A partial failure is a warning for people and a count in the result, as before.
         assert _ok("dataset", "augment", str(tmp_path), "-o", "out", "--add-noise", "3-30") == stats
 
@@ -213,19 +213,24 @@ def test_manifest_and_build(tmp_path) -> None:
 
     manifest = DatasetManifest(label2id={"a": 0}, class_counts={"a": 5}, splits={"train": 5})
     with (
-        patch("bioamla.datasets.build_manifest_from_metadata", return_value=manifest),
-        patch("bioamla.datasets.save_dataset_manifest"),
+        patch("bioamla.datasets.manifest.build_manifest_from_metadata", return_value=manifest),
+        patch("bioamla.datasets.manifest.save_dataset_manifest"),
     ):
         result = _ok("dataset", "manifest", str(tmp_path))
     assert result["manifest"]["label2id"] == {"a": 0}
 
     with (
-        patch("bioamla.datasets.extract_labeled_dataset", return_value={"clips_written": 10}),
-        patch("bioamla.datasets.partition_dataset", return_value={"splits": {"train": 10}}),
-        patch("bioamla.datasets.build_manifest_from_metadata", return_value=manifest),
-        patch("bioamla.datasets.save_dataset_manifest"),
         patch(
-            "bioamla.datasets.generate_license_for_dataset",
+            "bioamla.datasets.labeled_dataset.extract_labeled_dataset",
+            return_value={"clips_written": 10},
+        ),
+        patch(
+            "bioamla.datasets.partition.partition_dataset", return_value={"splits": {"train": 10}}
+        ),
+        patch("bioamla.datasets.manifest.build_manifest_from_metadata", return_value=manifest),
+        patch("bioamla.datasets.manifest.save_dataset_manifest"),
+        patch(
+            "bioamla.datasets.licenses.generate_license_for_dataset",
             return_value={"output_path": str(tmp_path / "ATTRIBUTIONS.md")},
         ),
     ):

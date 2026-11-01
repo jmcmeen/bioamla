@@ -116,6 +116,13 @@ from bioamla.datasets.redact import (
 )
 from bioamla.datasets.remix import RemixRecipe, RemixSource, remix_dataset
 from bioamla.datasets.stats import get_dataset_stats
+from bioamla.datasets.workflows import (
+    augment_dataset,
+    build_dataset,
+    remix_from,
+    write_dataset_license,
+    write_dataset_manifest,
+)
 from bioamla.exceptions import (
     AnnotationError,
     AugmentationError,
@@ -126,6 +133,12 @@ from bioamla.exceptions import (
 )
 
 __all__ = [
+    # Dataset workflows (bioamla.datasets.workflows)
+    "augment_dataset",
+    "build_dataset",
+    "remix_from",
+    "write_dataset_license",
+    "write_dataset_manifest",
     # Annotation files (bioamla.datasets.annotation_files)
     "AnnotationFileSummary",
     "AnnotationTemplate",
