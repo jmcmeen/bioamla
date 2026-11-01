@@ -332,7 +332,8 @@ def test_play_error(runner, mocker):
 
 def test_convert(runner, tmp_path, mocker):
     mocker.patch(
-        "bioamla.audio.convert.load_audio", return_value=(np.zeros(16000, np.float32), 16000)
+        "bioamla.audio.convert.load_audio_channels",
+        return_value=(np.zeros(16000, np.float32), 16000),
     )
     save = mocker.patch("bioamla.audio.convert.save_audio", return_value="out.flac")
     out = tmp_path / "out.flac"
@@ -349,7 +350,7 @@ def test_convert(runner, tmp_path, mocker):
 
 def test_convert_stereo_to_mono(runner, tmp_path, mocker):
     mocker.patch(
-        "bioamla.audio.convert.load_audio",
+        "bioamla.audio.convert.load_audio_channels",
         return_value=(np.zeros((16000, 2), np.float32), 16000),
     )
     save = mocker.patch("bioamla.audio.convert.save_audio", return_value="out.wav")
@@ -361,7 +362,8 @@ def test_convert_stereo_to_mono(runner, tmp_path, mocker):
 
 def test_convert_mono_to_stereo(runner, tmp_path, mocker):
     mocker.patch(
-        "bioamla.audio.convert.load_audio", return_value=(np.zeros(16000, np.float32), 16000)
+        "bioamla.audio.convert.load_audio_channels",
+        return_value=(np.zeros(16000, np.float32), 16000),
     )
     save = mocker.patch("bioamla.audio.convert.save_audio", return_value="out.wav")
     out = tmp_path / "out.wav"
@@ -373,7 +375,8 @@ def test_convert_mono_to_stereo(runner, tmp_path, mocker):
 
 def test_convert_bit_depth_is_ignored_with_a_warning(runner, tmp_path, mocker):
     mocker.patch(
-        "bioamla.audio.convert.load_audio", return_value=(np.zeros(16000, np.float32), 16000)
+        "bioamla.audio.convert.load_audio_channels",
+        return_value=(np.zeros(16000, np.float32), 16000),
     )
     mocker.patch("bioamla.audio.convert.save_audio", return_value="out.wav")
     result = runner.invoke(cli, ["audio", "convert", "in.wav", str(tmp_path / "o.wav"), "-b", "24"])
@@ -382,7 +385,7 @@ def test_convert_bit_depth_is_ignored_with_a_warning(runner, tmp_path, mocker):
 
 
 def test_convert_error(runner, tmp_path, mocker):
-    mocker.patch("bioamla.audio.convert.load_audio", side_effect=AudioLoadError("broken"))
+    mocker.patch("bioamla.audio.convert.load_audio_channels", side_effect=AudioLoadError("broken"))
     result = runner.invoke(cli, ["audio", "convert", "in.wav", str(tmp_path / "o.wav")])
     assert result.exit_code != 0
     assert "broken" in result.output

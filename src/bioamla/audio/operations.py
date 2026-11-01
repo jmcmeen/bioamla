@@ -166,7 +166,7 @@ class AudioConvertRequest:
         file: The audio file.
         output: Where to save the result.
         sample_rate: Target sample rate (Hz).
-        channels: Target channel count (1 or 2).
+        channels: Target channel count (1 or 2; default: keep the file's own).
         format: Output format; by default, from ``output``'s extension.
     """
 

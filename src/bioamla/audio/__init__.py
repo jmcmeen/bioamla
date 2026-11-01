@@ -98,6 +98,7 @@ from bioamla.audio.io import (
     batch_process,
     create_temp_audio_file,
     load_audio,
+    load_audio_channels,
     load_audio_data,
     load_waveform_tensor,
     process_file,
@@ -158,6 +159,7 @@ __all__ = [
     "create_temp_audio_file",
     # File I/O (array-level)
     "load_audio",
+    "load_audio_channels",
     "save_audio",
     "load_waveform_tensor",
     "resample_waveform_tensor",

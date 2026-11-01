@@ -324,7 +324,13 @@ def audio_features(
 @batch_input_options
 @batch_output_options
 @click.option("--sample-rate", "-r", default=None, type=int, help="Target sample rate")
-@click.option("--channels", "-c", default=None, type=int, help="Target number of channels")
+@click.option(
+    "--channels",
+    "-c",
+    default=None,
+    type=int,
+    help="Target number of channels: 1 or 2 (default: keep the file's own)",
+)
 @click.option(
     "--format",
     "-f",

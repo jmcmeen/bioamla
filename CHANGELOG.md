@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `bioamla.audio.load_audio_channels()`: load a file keeping its channels (1-D for mono,
+  `(n_samples, n_channels)` otherwise), where `load_audio()` downmixes to mono.
+
 - Agent skills: a convention for skills that let an AI agent drive bioamla
   (`skills/<name>/SKILL.md` and `scripts/`). Scripts run `bioamla --json` and act on the
   JSON (so a skill works locally or against a server), decide by thresholds on objective
@@ -160,6 +163,11 @@ All notable changes to this project are documented here. The format is based on
   and `Workspace.run_record()`, the history record that both the CLI and the server write.
 
 ### Changed
+
+- **Behavior change:** `audio convert` and `batch audio convert` keep a file's channels: a
+  stereo file stays stereo (each channel as it was) unless `--channels` says otherwise.
+  They used to downmix every file to mono, and `-c 2` duplicated that downmix into both
+  channels (#238).
 
 - `cluster reduce|fit` say "Reducing embeddings to 2D using pca..." / "Clustering embeddings
   using hdbscan..." (the input size is read inside the operation now).

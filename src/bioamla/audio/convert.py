@@ -2,10 +2,10 @@
 Audio Format Conversion
 =======================
 
-Format / channel / sample-rate conversion folded from the old
-``BatchAudioTransformService`` convert path. :func:`convert_audio_file` loads an
-audio file (via the pydub backend), optionally re-channels and resamples it,
-saves it in the target format, and optionally deletes the original.
+Format / channel / sample-rate conversion. :func:`convert_audio_file` loads an audio
+file with its channels, optionally re-channels and resamples it, saves it in the
+target format, and optionally deletes the original. A stereo (or multi-channel)
+file stays that way unless ``target_channels`` says otherwise.
 
 Raises :class:`~bioamla.exceptions.*` on failure (via the underlying I/O
 helpers); ``numpy`` is the only hard dependency at import time.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from bioamla.audio.io import load_audio, save_audio
+from bioamla.audio.io import load_audio_channels, save_audio
 from bioamla.audio.processing import resample_audio
 from bioamla.exceptions import InvalidInputError
 
@@ -25,10 +25,11 @@ SUPPORTED_FORMATS = {"wav", "mp3", "flac", "ogg"}
 
 
 def _rechannel(audio: np.ndarray, current_channels: int, target_channels: int) -> np.ndarray:
-    """Convert ``audio`` between mono and stereo.
+    """Convert ``audio`` to mono or stereo.
 
-    Mono arrays are 1D; stereo arrays are 2D with shape ``(n_samples, 2)`` (the
-    layout :func:`bioamla.audio.io.save_audio` expects).
+    Mono arrays are 1D; others are 2D with shape ``(n_samples, n_channels)`` (the
+    layout :func:`bioamla.audio.io.save_audio` expects). Going to stereo from more
+    than two channels downmixes them first.
     """
     if target_channels == current_channels:
         return audio
@@ -64,7 +65,8 @@ def convert_audio_file(
         target_format: Output container/codec ("wav", "mp3", "flac", "ogg"), or
             ``None`` to choose it from ``output_path``'s extension.
         target_sample_rate: Resample to this rate before saving (optional).
-        target_channels: Output channel count (1 = mono, 2 = stereo); optional.
+        target_channels: Output channel count (1 = mono, 2 = stereo); by default
+            the file keeps its own channels.
         delete_original: Delete the source file after a successful conversion
             (only when the output path differs from the input path).
 
@@ -85,12 +87,12 @@ def convert_audio_file(
     in_path = Path(input_path)
     out_path = Path(output_path)
 
-    # load_audio returns mono float32; treat as 1 channel.
-    audio, sr = load_audio(str(in_path))
+    audio, sr = load_audio_channels(in_path)
     current_channels = 1 if audio.ndim == 1 else audio.shape[1]
 
     if target_sample_rate is not None and target_sample_rate != sr:
-        audio = resample_audio(audio, sr, target_sample_rate)
+        # resample_audio works along the last axis; channels are columns here.
+        audio = resample_audio(audio.T, sr, target_sample_rate).T
         sr = target_sample_rate
 
     if target_channels is not None:

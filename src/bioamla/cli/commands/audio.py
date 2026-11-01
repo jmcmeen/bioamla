@@ -247,7 +247,13 @@ def audio_features(
 @click.argument("input_path")
 @click.argument("output_path")
 @click.option("--sample-rate", "-r", default=None, type=int, help="Target sample rate")
-@click.option("--channels", "-c", default=None, type=int, help="Target number of channels")
+@click.option(
+    "--channels",
+    "-c",
+    default=None,
+    type=int,
+    help="Target number of channels: 1 or 2 (default: keep the file's own)",
+)
 @click.option("--bit-depth", "-b", default=None, type=int, help="Target bit depth")
 @click.option(
     "--format",

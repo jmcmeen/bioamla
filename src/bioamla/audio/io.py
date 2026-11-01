@@ -343,6 +343,34 @@ def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     return audio.astype(np.float32), sr
 
 
+def load_audio_channels(filepath: str | Path) -> tuple[np.ndarray, int]:
+    """
+    Load an audio file keeping every channel (unlike :func:`load_audio`, which
+    downmixes to mono).
+
+    Args:
+        filepath: Path to the audio file.
+
+    Returns:
+        Tuple of (audio array, sample rate): float32, 1-D for a mono file and
+        ``(n_samples, n_channels)`` otherwise.
+
+    Raises:
+        NotFoundError: If the file doesn't exist.
+        AudioLoadError: If decoding fails.
+    """
+    from bioamla.audio._pydub import load_audio_channels as _load_channels
+    from bioamla.exceptions import NotFoundError
+
+    try:
+        audio, sr = _load_channels(str(filepath))
+    except NotFoundError:
+        raise
+    except Exception as e:
+        raise AudioLoadError(f"Failed to load audio file: {e}") from e
+    return audio.astype(np.float32, copy=False), sr
+
+
 def save_audio(
     filepath: str, audio: np.ndarray, sample_rate: int, format: str | None = None
 ) -> str:
@@ -515,6 +543,7 @@ __all__ = [
     "save_audio_data_as",
     "create_temp_audio_file",
     "load_audio",
+    "load_audio_channels",
     "save_audio",
     "load_waveform_tensor",
     "process_file",

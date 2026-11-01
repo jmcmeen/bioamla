@@ -98,7 +98,7 @@ class BatchConvertRequest(BatchRequest):
     Attributes:
         target_format: Output format.
         sample_rate: Target sample rate (Hz).
-        channels: Target channel count (1 or 2).
+        channels: Target channel count (1 or 2; default: keep the file's own).
         delete_original: Delete each source file after it converts.
     """
 

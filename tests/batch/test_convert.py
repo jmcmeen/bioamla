@@ -40,6 +40,63 @@ class TestConvertAudioFile:
         assert out.exists()
 
 
+class TestConvertKeepsChannels:
+    @pytest.fixture
+    def stereo(self, tmp_path):
+        import numpy as np
+        import soundfile as sf
+
+        t = np.arange(8000) / 8000
+        left, right = 0.5 * np.sin(2 * np.pi * 440 * t), 0.25 * np.sin(2 * np.pi * 880 * t)
+        path = tmp_path / "stereo.wav"
+        sf.write(path, np.column_stack([left, right]), 8000)
+        return path
+
+    def test_stereo_stays_stereo_with_its_channels_apart(self, stereo, tmp_path):
+        import numpy as np
+        import soundfile as sf
+
+        out = tmp_path / "out.wav"
+        convert_audio_file(stereo, out, target_format="wav")
+        data, sr = sf.read(out)
+        original, _ = sf.read(stereo)
+        assert data.shape == original.shape and sr == 8000
+        assert np.allclose(data, original, atol=1e-3)  # not a downmix duplicated
+
+    def test_resampling_keeps_the_channels(self, stereo, tmp_path):
+        import soundfile as sf
+
+        out = tmp_path / "out.wav"
+        convert_audio_file(stereo, out, target_format="wav", target_sample_rate=4000)
+        data, sr = sf.read(out)
+        assert sr == 4000 and data.shape == (4000, 2)
+
+    def test_mono_on_request(self, stereo, tmp_path):
+        import soundfile as sf
+
+        out = tmp_path / "out.wav"
+        convert_audio_file(stereo, out, target_format="wav", target_channels=1)
+        assert sf.info(out).channels == 1
+
+    @pytest.mark.usefixtures("requires_ffmpeg_cli")
+    def test_other_formats_keep_their_channels_too(self, stereo, tmp_path):
+        import soundfile as sf
+
+        mp3 = tmp_path / "s.mp3"
+        convert_audio_file(stereo, mp3, target_format="mp3")
+        out = tmp_path / "back.wav"
+        convert_audio_file(mp3, out, target_format="wav")
+        assert sf.info(out).channels == 2
+
+    def test_load_audio_channels(self, stereo, test_audio_path):
+        from bioamla.audio import load_audio_channels
+
+        audio, sr = load_audio_channels(stereo)
+        assert audio.shape == (8000, 2) and audio.dtype.name == "float32"
+        mono, _ = load_audio_channels(test_audio_path)
+        assert mono.ndim == 1
+
+
 class TestConvertCli:
     @pytest.mark.usefixtures("requires_ffmpeg_cli")
     def test_directory_mode_produces_target_format(self, test_audio_dir, tmp_path):

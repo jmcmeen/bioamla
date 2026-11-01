@@ -34,17 +34,20 @@ from bioamla.exceptions import (
 logger = logging.getLogger(__name__)
 
 
-def _audiosegment_to_numpy(segment: AudioSegment) -> tuple[np.ndarray, int]:
+def _audiosegment_to_numpy(
+    segment: AudioSegment, keep_channels: bool = False
+) -> tuple[np.ndarray, int]:
     """Convert pydub AudioSegment to numpy float32 array.
 
-    Always returns mono audio - stereo/multi-channel files are
-    automatically downmixed by averaging channels.
+    Stereo/multi-channel audio is downmixed to mono by averaging channels, unless
+    ``keep_channels``: then it is ``(n_samples, n_channels)``.
 
     Args:
         segment: AudioSegment to convert.
+        keep_channels: Keep every channel instead of downmixing.
 
     Returns:
-        Tuple of (audio_array, sample_rate) where audio is mono float32 [-1.0, 1.0].
+        Tuple of (audio_array, sample_rate), float32 in [-1.0, 1.0].
 
     Raises:
         AudioLoadError: If sample width is not 1, 2, 3, or 4 bytes.
@@ -80,6 +83,8 @@ def _audiosegment_to_numpy(segment: AudioSegment) -> tuple[np.ndarray, int]:
     # Downmix to mono if multi-channel
     if segment.channels > 1:
         audio = audio.reshape((-1, segment.channels))
+        if keep_channels:
+            return audio, segment.frame_rate
         audio = audio.mean(axis=1)
         logger.debug(
             f"Downmixed {segment.channels}-channel audio to mono "
@@ -122,11 +127,13 @@ def _numpy_to_audiosegment(
     )
 
 
-def _load_via_pydub(filepath: str) -> tuple[np.ndarray, int]:
+def _load_via_pydub(filepath: str, keep_channels: bool = False) -> tuple[np.ndarray, int]:
     """Load audio file via pydub/ffmpeg.
 
     Args:
         filepath: Path to audio file.
+        keep_channels: Keep every channel (``(n_samples, n_channels)``) instead of
+            downmixing to mono.
 
     Returns:
         Tuple of (audio_array, sample_rate).
@@ -141,7 +148,7 @@ def _load_via_pydub(filepath: str) -> tuple[np.ndarray, int]:
 
     try:
         segment = AudioSegment.from_file(str(path))
-        return _audiosegment_to_numpy(segment)
+        return _audiosegment_to_numpy(segment, keep_channels=keep_channels)
     except Exception as e:
         raise AudioLoadError(f"Error opening '{filepath}': {e}") from e
 
@@ -152,6 +159,29 @@ _NATIVE_EXTENSIONS = {".wav", ".flac", ".ogg"}
 
 def _to_mono(audio: np.ndarray) -> np.ndarray:
     return audio.mean(axis=1) if audio.ndim > 1 else audio
+
+
+def load_audio_channels(filepath: str) -> tuple[np.ndarray, int]:
+    """Load an audio file keeping its channels: 1-D for mono, ``(n_samples,
+    n_channels)`` otherwise, float32 in [-1.0, 1.0]. soundfile for WAV/FLAC/OGG,
+    pydub (ffmpeg) for the rest.
+
+    Raises:
+        NotFoundError: If file doesn't exist.
+        AudioLoadError: If file cannot be loaded.
+    """
+    path = Path(filepath)
+    if not path.exists():
+        raise NotFoundError(f"Audio file not found: {filepath}")
+    if path.suffix.lower() in _NATIVE_EXTENSIONS:
+        try:
+            import soundfile as sf
+
+            audio, sample_rate = sf.read(str(path), dtype="float32", always_2d=False)
+            return audio, sample_rate
+        except Exception as e:
+            logger.debug(f"soundfile failed for {filepath}, using pydub fallback: {e}")
+    return _load_via_pydub(str(path), keep_channels=True)
 
 
 def load_audio(filepath: str) -> tuple[np.ndarray, int]:
