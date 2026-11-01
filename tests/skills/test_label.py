@@ -6,6 +6,7 @@ import json
 
 import numpy as np
 import pytest
+import soundfile as sf
 
 from tests.skills.conftest import SR, tone, write_wav
 
@@ -86,3 +87,18 @@ def test_evidence_measures_snr_per_candidate(run_skill, loud_and_faint, tiny_ast
 def test_evidence_without_candidates_is_an_error(run_skill, workspace) -> None:
     code, out = run_skill("label", "evidence", "runs/label/none", cwd=workspace)
     assert code == 1 and "No candidates" in out["error"]
+
+
+def test_crops_cut_a_clip_and_image_per_candidate(run_skill, loud_and_faint, tiny_ast) -> None:
+    run_dir = candidates_run(run_skill, loud_and_faint, tiny_ast, "--threshold-db", "-40")
+    code, out = run_skill("label", "crops", run_dir, "--pad", "0.25", cwd=loud_and_faint)
+    assert code == 0, out
+    assert out["crops"] == 2
+    crops = json.loads((loud_and_faint / run_dir / "crops.json").read_text())["crops"]
+    for c in crops:
+        assert (loud_and_faint / c["image"]).read_bytes()[:4] == b"\x89PNG"
+        clip = sf.info(loud_and_faint / c["clip"])
+        assert clip.duration == pytest.approx(c["box"]["end"] + 0.25, abs=0.02)
+        assert c["box"]["start"] == pytest.approx(0.25, abs=0.01)
+        assert c["image"].startswith(run_dir)
+    assert crops[1]["clip_start"] == pytest.approx(2.75, abs=0.1)

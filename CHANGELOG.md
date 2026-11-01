@@ -21,7 +21,8 @@ All notable changes to this project are documented here. The format is based on
   prediction of the segment it overlaps most, flagging labels outside the given
   vocabulary. `evidence.py` measures each candidate: signal-to-noise ratio in the
   detector's band (from `audio features`), detector score, model confidence, band and
-  duration.
+  duration. `crops.py` cuts a clip and a spectrogram image around each candidate,
+  recording the event's box in the clip.
 
 - "Running the server" docs page: installing and starting `bioamla serve`, the token file,
   reaching it over an SSH tunnel or a VPN, a systemd unit, and linking recordings already on

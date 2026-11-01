@@ -33,6 +33,15 @@ to the next step.
    score, model confidence, band and duration. `margin` is null (the model step gives
    only its top label).
 
+3. **Crops**: a clip and a spectrogram image around each candidate, for review.
+
+   ```
+   python <skill>/scripts/crops.py <run_dir> --pad 0.5
+   ```
+
+   Writes `<run_dir>/crops/<id>.wav` and `.png`, and `crops.json` with each event's box
+   in the clip (seconds and Hz). The box isn't drawn on the image.
+
 ## Report
 
 Tell the person how many candidates were found, and where the run folder is. If a step
