@@ -203,6 +203,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- The README is rewritten for people using bioamla: install and extras (now with
+  `server`), a short CLI and library quickstart, workspaces, working on a server, agent
+  skills and API keys, with design notes left to the docs.
+
   the spectrogram image (`audio visualize --box`); `crops.json` still records the box, and
   `box_drawn` says whether it could be drawn (a box with no length or width isn't).
 

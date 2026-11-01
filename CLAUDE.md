@@ -10,9 +10,9 @@ see in the code, trust the code and flag the drift.
 signal processing, acoustic indices, event detection, spectrogram visualization, embedding
 clustering, species catalogs, dataset tooling, and AST-based ML inference.
 
-- **0.2.x is a ground-up rebuild.** The old layered architecture (core/services/models/
-  repository) was torn out and replaced by flat, domain-oriented packages. APIs may still
-  change. When in doubt, favor **removing/simplifying over adding** — keep the core lean.
+- **Flat, domain-oriented packages.** The old layered architecture (core/services/models/
+  repository) was torn out in 0.2.x. When in doubt, favor **removing/simplifying over
+  adding** — keep the core lean.
 - Python **≥ 3.11**, `src/` layout, package `bioamla`, console script `bioamla` →
   `bioamla._cli_entry:main` (a shim that runs `bioamla.cli.cli:main`).
 - Tooling: **uv** for envs/deps, **ruff** for lint+format, **pytest** for tests, **mkdocs**
