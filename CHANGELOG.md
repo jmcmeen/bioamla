@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Every `detect` and `indices` command runs through an operation (`detect.energy|ribbit|peaks|
+  accelerating`, `indices.compute|temporal|aci|adi|aei|bio|ndsi|entropy`), so the server can run
+  them without the CLI. Output and `--json` results are unchanged. Each is declared a `job`,
+  since its cost grows with the recording's length.
+- Library functions behind those commands, for use without the CLI:
+  - `bioamla.detect`: `detect_peaks_file()` and `FilePeaks`, `export_peaks()`,
+    `PeakDetection.to_event()` and `PEAK_EVENT_COLUMNS` (the peak rows the command reports and
+    saves).
+  - `bioamla.indices`: `index_file()` (every index of one file, optionally saved as JSON),
+    `temporal_index_file()` (indices over consecutive windows), `index_values_file()` (selected
+    indices, loading the file once; index parameters only with a single index), with
+    `FileIndices`, `FileTemporalIndices`, `FileIndexValues` and `SEGMENT_COLUMNS`.
+  - An empty output path saves nothing, as the commands always treated it.
+
+### Changed
+
+- `detect.energy` is declared a `job` rather than `quick`, like the other per-file analyses.
+
+### Fixed
+
+- `indices ndsi --n-fft` (and `compute_index(..., "ndsi", n_fft=...)`) is used instead of being
+  ignored; NDSI's default stays 1024, so default results don't change.
+- `temporal_indices` (and `indices temporal`) raises `InvalidInputError` for a window or hop
+  shorter than one sample instead of looping forever.
+- `detect peaks -o name.json` writes JSON, as the other detectors do, instead of CSV.
+
 ## [0.3.9] - 2026-11-01
 
 ### Added

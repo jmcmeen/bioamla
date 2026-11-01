@@ -942,6 +942,9 @@ def temporal_indices(
     Returns:
         List of dictionaries with indices for each time window.
 
+    Raises:
+        InvalidInputError: If a window or hop is shorter than one sample.
+
     Example:
         >>> # Compute indices every minute for a long recording
         >>> results = temporal_indices(audio, 22050, window_duration=60)
@@ -957,6 +960,11 @@ def temporal_indices(
 
     window_samples = int(window_duration * sample_rate)
     hop_samples = int(hop_duration * sample_rate)
+    if window_samples < 1 or hop_samples < 1:
+        raise InvalidInputError(
+            f"window_duration ({window_duration}) and hop_duration ({hop_duration}) must be "
+            f"at least one sample (1/{sample_rate} s)"
+        )
     total_samples = len(audio)
 
     results = []
@@ -1090,16 +1098,20 @@ def compute_index(
     audio: np.ndarray,
     sample_rate: int,
     index_name: str,
-    n_fft: int = 512,
+    n_fft: int | None = None,
     hop_length: int | None = None,
     **kwargs: Any,
 ) -> float:
     """Compute a single acoustic index by name.
 
+    ``n_fft`` defaults to the index's own default: 1024 for NDSI, 512 for the others.
+
     Raises:
         InvalidInputError: if ``index_name`` is not a known index.
     """
     name = index_name.lower()
+    if n_fft is None:
+        n_fft = 1024 if name == "ndsi" else 512
     if name == "aci":
         return compute_aci(
             audio,
@@ -1140,7 +1152,7 @@ def compute_index(
             db_threshold=kwargs.get("db_threshold", -50.0),
         )
     if name == "ndsi":
-        value, _, _ = compute_ndsi(audio, sample_rate, n_fft=1024, hop_length=hop_length)
+        value, _, _ = compute_ndsi(audio, sample_rate, n_fft=n_fft, hop_length=hop_length)
         return value
     if name == "h_spectral":
         return spectral_entropy(audio, sample_rate, n_fft, hop_length)

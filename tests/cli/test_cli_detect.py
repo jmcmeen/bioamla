@@ -1,9 +1,8 @@
 """CLI tests for `bioamla detect` single-file commands.
 
-Domain detectors are imported lazily inside the command bodies from
-`bioamla.detect`, so we patch the symbols there. `detect energy` runs the
-`detect.energy` operation, so its tests patch `bioamla.detect.operations` and
-`bioamla.detect.core` instead.
+Each command runs its `detect.*` operation, which builds the detector in
+`bioamla.detect.operations` and saves through `bioamla.detect.core`, so the
+tests patch the detector classes and `export_detections` there.
 """
 
 from unittest.mock import MagicMock
@@ -138,8 +137,8 @@ def test_energy_missing_file(runner):
 
 def test_ribbit_table(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([_detection(pulse_rate_hz=10.0)])
-    mocker.patch("bioamla.detect.RibbitDetector", cls)
-    mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.RibbitDetector", cls)
+    mocker.patch("bioamla.detect.core.export_detections")
     result = runner.invoke(cli, ["detect", "ribbit", test_audio_path])
     assert result.exit_code == 0
     assert "periodic call detections" in result.output
@@ -147,16 +146,16 @@ def test_ribbit_table(runner, test_audio_path, mocker):
 
 def test_ribbit_json(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([_detection(pulse_rate_hz=10.0)])
-    mocker.patch("bioamla.detect.RibbitDetector", cls)
-    mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.RibbitDetector", cls)
+    mocker.patch("bioamla.detect.core.export_detections")
     result = runner.invoke(cli, ["detect", "ribbit", test_audio_path, "--format", "json"])
     assert result.exit_code == 0
 
 
 def test_ribbit_csv_empty(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([])
-    mocker.patch("bioamla.detect.RibbitDetector", cls)
-    mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.RibbitDetector", cls)
+    mocker.patch("bioamla.detect.core.export_detections")
     result = runner.invoke(cli, ["detect", "ribbit", test_audio_path, "--format", "csv"])
     assert result.exit_code == 0
     assert "No detections found." in result.output
@@ -164,8 +163,8 @@ def test_ribbit_csv_empty(runner, test_audio_path, mocker):
 
 def test_ribbit_output_file(runner, test_audio_path, tmp_path, mocker):
     cls, _ = _mock_detector([_detection(pulse_rate_hz=10.0)])
-    mocker.patch("bioamla.detect.RibbitDetector", cls)
-    export = mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.RibbitDetector", cls)
+    export = mocker.patch("bioamla.detect.core.export_detections")
     out = tmp_path / "r.json"
     result = runner.invoke(cli, ["detect", "ribbit", test_audio_path, "-o", str(out)])
     assert result.exit_code == 0
@@ -175,7 +174,7 @@ def test_ribbit_output_file(runner, test_audio_path, tmp_path, mocker):
 def test_ribbit_error(runner, test_audio_path, mocker):
     instance = MagicMock()
     instance.detect_from_file.side_effect = DetectionError("nope")
-    mocker.patch("bioamla.detect.RibbitDetector", MagicMock(return_value=instance))
+    mocker.patch("bioamla.detect.operations.RibbitDetector", MagicMock(return_value=instance))
     result = runner.invoke(cli, ["detect", "ribbit", test_audio_path])
     assert result.exit_code != 0
 
@@ -191,7 +190,7 @@ def _peak(time=0.2, amp=0.8, width=0.01, prom=0.5):
 
 def test_peaks_table(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([_peak()])
-    mocker.patch("bioamla.detect.CWTPeakDetector", cls)
+    mocker.patch("bioamla.detect.operations.CWTPeakDetector", cls)
     result = runner.invoke(cli, ["detect", "peaks", test_audio_path])
     assert result.exit_code == 0
     assert "Found 1 peaks" in result.output
@@ -200,7 +199,7 @@ def test_peaks_table(runner, test_audio_path, mocker):
 def test_peaks_table_truncates(runner, test_audio_path, mocker):
     peaks = [_peak(time=i * 0.01) for i in range(25)]
     cls, _ = _mock_detector(peaks)
-    mocker.patch("bioamla.detect.CWTPeakDetector", cls)
+    mocker.patch("bioamla.detect.operations.CWTPeakDetector", cls)
     result = runner.invoke(cli, ["detect", "peaks", test_audio_path])
     assert result.exit_code == 0
     assert "and 5 more peaks" in result.output
@@ -208,7 +207,7 @@ def test_peaks_table_truncates(runner, test_audio_path, mocker):
 
 def test_peaks_json(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([_peak()])
-    mocker.patch("bioamla.detect.CWTPeakDetector", cls)
+    mocker.patch("bioamla.detect.operations.CWTPeakDetector", cls)
     result = runner.invoke(cli, ["detect", "peaks", test_audio_path, "--format", "json"])
     assert result.exit_code == 0
     assert '"time"' in result.output
@@ -216,7 +215,7 @@ def test_peaks_json(runner, test_audio_path, mocker):
 
 def test_peaks_csv(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([_peak()])
-    mocker.patch("bioamla.detect.CWTPeakDetector", cls)
+    mocker.patch("bioamla.detect.operations.CWTPeakDetector", cls)
     result = runner.invoke(cli, ["detect", "peaks", test_audio_path, "--format", "csv"])
     assert result.exit_code == 0
     assert "amplitude" in result.output
@@ -224,7 +223,7 @@ def test_peaks_csv(runner, test_audio_path, mocker):
 
 def test_peaks_csv_empty(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([])
-    mocker.patch("bioamla.detect.CWTPeakDetector", cls)
+    mocker.patch("bioamla.detect.operations.CWTPeakDetector", cls)
     result = runner.invoke(cli, ["detect", "peaks", test_audio_path, "--format", "csv"])
     assert result.exit_code == 0
     assert "No peaks found." in result.output
@@ -232,7 +231,7 @@ def test_peaks_csv_empty(runner, test_audio_path, mocker):
 
 def test_peaks_output_file(runner, test_audio_path, tmp_path, mocker):
     cls, _ = _mock_detector([_peak()])
-    mocker.patch("bioamla.detect.CWTPeakDetector", cls)
+    mocker.patch("bioamla.detect.operations.CWTPeakDetector", cls)
     out = tmp_path / "sub" / "peaks.csv"
     result = runner.invoke(cli, ["detect", "peaks", test_audio_path, "-o", str(out)])
     assert result.exit_code == 0
@@ -243,7 +242,7 @@ def test_peaks_output_file(runner, test_audio_path, tmp_path, mocker):
 def test_peaks_error(runner, test_audio_path, mocker):
     instance = MagicMock()
     instance.detect_from_file.side_effect = DetectionError("peakfail")
-    mocker.patch("bioamla.detect.CWTPeakDetector", MagicMock(return_value=instance))
+    mocker.patch("bioamla.detect.operations.CWTPeakDetector", MagicMock(return_value=instance))
     result = runner.invoke(cli, ["detect", "peaks", test_audio_path])
     assert result.exit_code != 0
 
@@ -264,8 +263,8 @@ def _accel_detection():
 
 def test_accelerating_table(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([_accel_detection()])
-    mocker.patch("bioamla.detect.AcceleratingPatternDetector", cls)
-    mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.AcceleratingPatternDetector", cls)
+    mocker.patch("bioamla.detect.core.export_detections")
     result = runner.invoke(cli, ["detect", "accelerating", test_audio_path])
     assert result.exit_code == 0
     assert "pattern detections" in result.output
@@ -274,16 +273,16 @@ def test_accelerating_table(runner, test_audio_path, mocker):
 
 def test_accelerating_json(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([_accel_detection()])
-    mocker.patch("bioamla.detect.AcceleratingPatternDetector", cls)
-    mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.AcceleratingPatternDetector", cls)
+    mocker.patch("bioamla.detect.core.export_detections")
     result = runner.invoke(cli, ["detect", "accelerating", test_audio_path, "--format", "json"])
     assert result.exit_code == 0
 
 
 def test_accelerating_csv_empty(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([])
-    mocker.patch("bioamla.detect.AcceleratingPatternDetector", cls)
-    mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.AcceleratingPatternDetector", cls)
+    mocker.patch("bioamla.detect.core.export_detections")
     result = runner.invoke(cli, ["detect", "accelerating", test_audio_path, "--format", "csv"])
     assert result.exit_code == 0
     assert "No detections found." in result.output
@@ -291,8 +290,8 @@ def test_accelerating_csv_empty(runner, test_audio_path, mocker):
 
 def test_accelerating_output_file(runner, test_audio_path, tmp_path, mocker):
     cls, _ = _mock_detector([_accel_detection()])
-    mocker.patch("bioamla.detect.AcceleratingPatternDetector", cls)
-    export = mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.AcceleratingPatternDetector", cls)
+    export = mocker.patch("bioamla.detect.core.export_detections")
     out = tmp_path / "a.csv"
     result = runner.invoke(cli, ["detect", "accelerating", test_audio_path, "-o", str(out)])
     assert result.exit_code == 0
@@ -302,6 +301,8 @@ def test_accelerating_output_file(runner, test_audio_path, tmp_path, mocker):
 def test_accelerating_error(runner, test_audio_path, mocker):
     instance = MagicMock()
     instance.detect_from_file.side_effect = DetectionError("accfail")
-    mocker.patch("bioamla.detect.AcceleratingPatternDetector", MagicMock(return_value=instance))
+    mocker.patch(
+        "bioamla.detect.operations.AcceleratingPatternDetector", MagicMock(return_value=instance)
+    )
     result = runner.invoke(cli, ["detect", "accelerating", test_audio_path])
     assert result.exit_code != 0

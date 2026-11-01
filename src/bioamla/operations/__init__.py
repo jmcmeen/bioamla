@@ -37,6 +37,7 @@ from bioamla.exceptions import BioamlaError, DependencyError, NotFoundError
 #: module here when its commands are converted.
 OPERATION_MODULES: dict[str, str] = {
     "detect": "bioamla.detect.operations",
+    "indices": "bioamla.indices.operations",
 }
 
 OperationKind = Literal["quick", "job"]

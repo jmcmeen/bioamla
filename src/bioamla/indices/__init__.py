@@ -9,6 +9,12 @@ Example:
     >>> audio = load_audio_data("recording.wav")
     >>> idx = compute_all_indices(audio.samples, audio.sample_rate, include_entropy=True)
     >>> print(idx.aci, idx.ndsi)
+
+For one file, :func:`index_file`, :func:`temporal_index_file` and
+:func:`index_values_file` load it, compute and optionally save the result:
+
+    >>> from bioamla.indices import index_file
+    >>> index_file("recording.wav", output="recording-indices.json").indices.aci
 """
 
 from bioamla._extras import require_extra
@@ -36,6 +42,15 @@ from bioamla.indices.compute import (
     temporal_entropy,
     temporal_indices,
 )
+from bioamla.indices.files import (
+    SEGMENT_COLUMNS,
+    FileIndexValues,
+    FileIndices,
+    FileTemporalIndices,
+    index_file,
+    index_values_file,
+    temporal_index_file,
+)
 
 __all__ = [
     "AcousticIndices",
@@ -56,4 +71,12 @@ __all__ = [
     "describe_index",
     "AVAILABLE_INDICES",
     "INDEX_DESCRIPTIONS",
+    # One file: load, compute, optionally save
+    "index_file",
+    "temporal_index_file",
+    "index_values_file",
+    "FileIndices",
+    "FileTemporalIndices",
+    "FileIndexValues",
+    "SEGMENT_COLUMNS",
 ]

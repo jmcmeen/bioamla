@@ -2,8 +2,6 @@
 
 import click
 
-from bioamla.exceptions import BioamlaError
-
 
 @click.group()
 def detect() -> None:
@@ -119,46 +117,37 @@ def detect_ribbit(
     import json as json_lib
 
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_file_result
-    from bioamla.detect import RibbitDetector, export_detections
 
-    try:
-        detector = RibbitDetector(
-            pulse_rate_hz=pulse_rate,
-            pulse_rate_tolerance=tolerance,
-            low_freq=low_freq,
-            high_freq=high_freq,
-            window_duration=window,
-            min_score=min_score,
-        )
-        detections = detector.detect_from_file(file)
-
-        if output:
-            fmt = "json" if output.endswith(".json") else "csv"
-            export_detections(detections, output, format=fmt)
-            if emit_file_result(
-                file, count=len(detections), detections=[d.to_dict() for d in detections]
-            ):
-                return
-            print_success(f"Saved {len(detections)} detections to {output}")
-            return
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    if emit_file_result(file, count=len(detections), detections=[d.to_dict() for d in detections]):
+    found = run_operation(
+        "detect.ribbit",
+        file=file,
+        pulse_rate=pulse_rate,
+        tolerance=tolerance,
+        low_freq=low_freq,
+        high_freq=high_freq,
+        window=window,
+        min_score=min_score,
+        output=output,
+    )
+    detections = found.detections
+    rows = [d.to_dict() for d in detections]
+    if emit_file_result(file, count=found.count, detections=rows):
+        return
+    if output:
+        print_success(f"Saved {found.count} detections to {output}")
         return
     if output_format == "json":
-        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        click.echo(json_lib.dumps(rows, indent=2))
     elif output_format == "csv":
         import csv
         import sys
 
-        if detections:
-            fieldnames = list(detections[0].to_dict().keys())
-            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+        if rows:
+            writer = csv.DictWriter(sys.stdout, fieldnames=list(rows[0]))
             writer.writeheader()
-            for d in detections:
-                writer.writerow(d.to_dict())
+            writer.writerows(rows)
         else:
             echo("No detections found.", style=DIM_STYLE)
     else:
@@ -201,61 +190,35 @@ def detect_peaks(
     import json as json_lib
 
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_file_result
-    from bioamla.detect import CWTPeakDetector
+    from bioamla.detect import PEAK_EVENT_COLUMNS
 
-    try:
-        detector = CWTPeakDetector(
-            snr_threshold=snr,
-            min_peak_distance=min_distance,
-            low_freq=low_freq,
-            high_freq=high_freq,
-        )
-        peaks = detector.detect_from_file(file)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    fieldnames = ["start_time", "end_time", "confidence", "amplitude", "width"]
-
-    def _row(p):
-        return {
-            "start_time": p.time,
-            "end_time": p.time + p.width,
-            "confidence": p.prominence,
-            "amplitude": p.amplitude,
-            "width": p.width,
-        }
-
-    if output:
-        import csv
-        from pathlib import Path
-
-        out_path = Path(output)
-        try:
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(out_path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                for p in peaks:
-                    writer.writerow(_row(p))
-        except OSError as e:
-            raise click.ClickException(f"Failed to write {output}: {e}") from e
-        if emit_file_result(file, count=len(peaks), detections=[_row(p) for p in peaks]):
-            return
-        print_success(f"Saved {len(peaks)} peaks to {output}")
-    elif emit_file_result(file, count=len(peaks), detections=[_row(p) for p in peaks]):
+    found = run_operation(
+        "detect.peaks",
+        file=file,
+        snr=snr,
+        min_distance=min_distance,
+        low_freq=low_freq,
+        high_freq=high_freq,
+        output=output,
+    )
+    peaks = found.peaks
+    rows = [p.to_event() for p in peaks]
+    if emit_file_result(file, count=found.count, detections=rows):
         return
+    if output:
+        print_success(f"Saved {found.count} peaks to {output}")
     elif output_format == "json":
         click.echo(json_lib.dumps([p.to_dict() for p in peaks], indent=2))
     elif output_format == "csv":
         import csv
         import sys
 
-        if peaks:
-            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+        if rows:
+            writer = csv.DictWriter(sys.stdout, fieldnames=PEAK_EVENT_COLUMNS)
             writer.writeheader()
-            for p in peaks:
-                writer.writerow(_row(p))
+            writer.writerows(rows)
         else:
             echo("No peaks found.", style=DIM_STYLE)
     else:
@@ -308,46 +271,37 @@ def detect_accelerating(
     import json as json_lib
 
     from bioamla.cli.console import DIM_STYLE, echo, print_header, print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_file_result
-    from bioamla.detect import AcceleratingPatternDetector, export_detections
 
-    try:
-        detector = AcceleratingPatternDetector(
-            min_pulses=min_pulses,
-            acceleration_threshold=acceleration,
-            deceleration_threshold=deceleration,
-            low_freq=low_freq,
-            high_freq=high_freq,
-            window_duration=window,
-        )
-        detections = detector.detect_from_file(file)
-
-        if output:
-            fmt = "json" if output.endswith(".json") else "csv"
-            export_detections(detections, output, format=fmt)
-            if emit_file_result(
-                file, count=len(detections), detections=[d.to_dict() for d in detections]
-            ):
-                return
-            print_success(f"Saved {len(detections)} detections to {output}")
-            return
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    if emit_file_result(file, count=len(detections), detections=[d.to_dict() for d in detections]):
+    found = run_operation(
+        "detect.accelerating",
+        file=file,
+        min_pulses=min_pulses,
+        acceleration=acceleration,
+        deceleration=deceleration,
+        low_freq=low_freq,
+        high_freq=high_freq,
+        window=window,
+        output=output,
+    )
+    detections = found.detections
+    rows = [d.to_dict() for d in detections]
+    if emit_file_result(file, count=found.count, detections=rows):
+        return
+    if output:
+        print_success(f"Saved {found.count} detections to {output}")
         return
     if output_format == "json":
-        click.echo(json_lib.dumps([d.to_dict() for d in detections], indent=2))
+        click.echo(json_lib.dumps(rows, indent=2))
     elif output_format == "csv":
         import csv
         import sys
 
-        if detections:
-            fieldnames = list(detections[0].to_dict().keys())
-            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+        if rows:
+            writer = csv.DictWriter(sys.stdout, fieldnames=list(rows[0]))
             writer.writeheader()
-            for d in detections:
-                writer.writerow(d.to_dict())
+            writer.writerows(rows)
         else:
             echo("No detections found.", style=DIM_STYLE)
     else:
