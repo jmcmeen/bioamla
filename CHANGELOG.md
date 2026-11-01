@@ -16,10 +16,12 @@ All notable changes to this project are documented here. The format is based on
   skill's scripts in a synthetic workspace as a pass/fail eval. The first skill,
   `inventory`, lists a folder's recordings and flags short or unreadable files. See the new
   "Agent skills" docs page.
-- The `label` agent skill, for a first pass of labeling. Its first step, `candidates.py`,
+- The `label` agent skill, for a first pass of labeling, one script per step. `candidates.py`
   detects events in a frequency band (`detect energy`) and pairs each with the AST
   prediction of the segment it overlaps most, flagging labels outside the given
-  vocabulary.
+  vocabulary. `evidence.py` measures each candidate: signal-to-noise ratio in the
+  detector's band (from `audio features`), detector score, model confidence, band and
+  duration.
 
 - "Running the server" docs page: installing and starting `bioamla serve`, the token file,
   reaching it over an SSH tunnel or a VPN, a systemd unit, and linking recordings already on

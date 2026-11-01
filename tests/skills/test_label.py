@@ -49,3 +49,40 @@ def test_candidates_report_a_bioamla_error(run_skill, workspace) -> None:
         "label", "candidates", "missing", "--model", "m", "--labels", "a", cwd=workspace
     )
     assert code == 1 and "not found" in out["error"]
+
+
+@pytest.fixture
+def loud_and_faint(workspace):
+    """One recording over a noise floor: a loud burst at 1 s, a faint one at 3 s."""
+    rng = np.random.default_rng(0)
+    samples = burst(5.0, 1.0, 0.5, 2000, 0.5) + burst(5.0, 3.0, 0.5, 2000, 0.02)
+    samples += rng.normal(0, 0.002, samples.size).astype(np.float32)
+    write_wav(workspace / "rec" / "two.wav", samples)
+    return workspace
+
+
+def candidates_run(run_skill, workspace, model, *extra) -> str:
+    code, out = run_skill(
+        "label", "candidates", "rec", "--model", model, "--labels", "a", *extra, cwd=workspace
+    )
+    assert code == 0, out
+    return out["run_dir"]
+
+
+def test_evidence_measures_snr_per_candidate(run_skill, loud_and_faint, tiny_ast) -> None:
+    run_dir = candidates_run(run_skill, loud_and_faint, tiny_ast, "--threshold-db", "-40")
+    code, out = run_skill("label", "evidence", run_dir, cwd=loud_and_faint)
+    assert code == 0, out
+    assert out["candidates"] == 2 and out["unmeasured_snr"] == 0
+    evidence = json.loads((loud_and_faint / run_dir / "evidence.json").read_text())
+    loud, faint = evidence["candidates"]
+    assert loud["snr_db"] > faint["snr_db"] > 0
+    assert loud["snr_db"] > 30
+    assert loud["margin"] is None
+    assert loud["duration"] == pytest.approx(0.5, abs=0.1)
+    assert {"detector_score", "model_confidence", "low_freq", "high_freq"} <= set(loud)
+
+
+def test_evidence_without_candidates_is_an_error(run_skill, workspace) -> None:
+    code, out = run_skill("label", "evidence", "runs/label/none", cwd=workspace)
+    assert code == 1 and "No candidates" in out["error"]

@@ -23,6 +23,16 @@ to the next step.
    Options: `--low-freq`/`--high-freq` (the detector's band, Hz), `--threshold-db`,
    `--min-duration`, `--segment-seconds` (the model's window).
 
+2. **Evidence**: measure each candidate.
+
+   ```
+   python <skill>/scripts/evidence.py <run_dir>
+   ```
+
+   Writes `evidence.json`: signal-to-noise ratio in the detector's band (dB), detector
+   score, model confidence, band and duration. `margin` is null (the model step gives
+   only its top label).
+
 ## Report
 
 Tell the person how many candidates were found, and where the run folder is. If a step
