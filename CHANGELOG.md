@@ -174,6 +174,15 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- **Behavior change:** `audio segment` and `batch audio segment` cut the same clips (#240):
+  named `<stem>_seg0000.<format>` (`--prefix` replaces the stem for `audio segment`), every
+  clip exactly the duration long, with a shorter last clip left out unless `--keep-short`,
+  in WAV, MP3, FLAC or OGG (`batch audio segment` gains `--format`, and `-d` defaults to 3 s
+  there too). `audio segment` used to name clips `<prefix>_0000`, and `batch audio segment`
+  kept the short last clip and wrote only WAV. `segment_audio_file()` leaves the short clip
+  out by default (`include_partial=True` keeps it); the `audio.segment` and
+  `batch.audio.segment` requests gain `include_partial` (and the batch one `format`).
+
 - **Behavior change:** `audio convert` and `batch audio convert` keep a file's channels: a
   stereo file stays stereo (each channel as it was) unless `--channels` says otherwise.
   They used to downmix every file to mono, and `-c 2` duplicated that downmix into both

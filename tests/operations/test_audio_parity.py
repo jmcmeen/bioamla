@@ -91,8 +91,6 @@ def test_segment(test_audio_path_3s, tmp_path):
         test_audio_path_3s,
         str(tmp_path / "lib"),
         duration=1.25,
-        include_partial=False,
-        label="",
     )
     assert got["segments"] == len(segments) == 2
     for seg in segments:

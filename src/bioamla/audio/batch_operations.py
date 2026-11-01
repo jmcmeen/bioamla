@@ -264,15 +264,20 @@ def batch_audio_denoise_op(request: BatchDenoiseRequest, context: OperationConte
 
 @config_dataclass
 class BatchSegmentRequest(BatchRequest):
-    """Cut every file into fixed-length clips.
+    """Cut every file into fixed-length clips, ``<stem>_seg0000.<format>``, ...
 
     Attributes:
         duration: Clip length (s).
         overlap: Overlap between clips (s).
+        format: Clip format.
+        include_partial: Keep each file's last clip when it is shorter than
+            ``duration`` (left out by default).
     """
 
     duration: float = 3.0
     overlap: float = 0.0
+    format: Literal["wav", "mp3", "flac", "ogg"] = "wav"
+    include_partial: bool = False
 
 
 @operation("batch.audio.segment", request=BatchSegmentRequest, kind="job")
@@ -282,6 +287,8 @@ def batch_audio_segment_op(request: BatchSegmentRequest, context: OperationConte
         request.to_config(),
         duration=request.duration,
         overlap=request.overlap,
+        format=request.format,
+        include_partial=request.include_partial,
         on_progress=context.progress,
         operation="batch audio segment",
     )

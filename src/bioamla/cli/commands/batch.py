@@ -524,24 +524,51 @@ def audio_denoise(
     "--duration-seconds",
     "-d",
     "duration",
-    required=True,
+    default=3.0,
     type=float,
-    help="Segment duration in seconds",
+    help="Segment duration in seconds (default: 3.0)",
 )
 @click.option(
     "--overlap", "-o", default=0.0, type=float, help="Overlap between segments in seconds"
+)
+@click.option(
+    "--format",
+    "-f",
+    "out_format",
+    default="wav",
+    type=click.Choice(["wav", "mp3", "flac", "ogg"]),
+    help="Output format (default: wav)",
+)
+@click.option(
+    "--keep-short",
+    is_flag=True,
+    help="Keep a last clip shorter than the duration (left out by default)",
 )
 @max_workers_option
 @recursive_option
 @quiet_option
 def audio_segment(
-    input_dir, input_file, output_dir, duration, overlap, max_workers, recursive, quiet
+    input_dir,
+    input_file,
+    output_dir,
+    duration,
+    overlap,
+    out_format,
+    keep_short,
+    max_workers,
+    recursive,
+    quiet,
 ) -> None:
-    """Batch segment audio files into fixed-duration chunks."""
+    """Batch segment audio files into fixed-duration clips, named STEM_seg0000.FORMAT, ...
+
+    A last clip shorter than the duration is left out unless --keep-short (the same
+    clips as `audio segment`).
+    """
     try:
         result = _run_batch_operation(
             "batch.audio.segment", input_dir=input_dir, input_file=input_file, output_dir=output_dir, max_workers=max_workers, recursive=recursive, quiet=quiet, header="Segmenting audio files...",
-            progress="Segmenting", duration=duration, overlap=overlap,
+            progress="Segmenting", duration=duration, overlap=overlap, format=out_format,
+            include_partial=keep_short,
         )  # fmt: skip
         _report(result, output_dir, quiet)
     finally:

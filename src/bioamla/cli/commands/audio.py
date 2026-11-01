@@ -323,6 +323,11 @@ def audio_convert(
 @click.option(
     "--prefix", "-p", default=None, help="Prefix for output filenames (default: input filename)"
 )
+@click.option(
+    "--keep-short",
+    is_flag=True,
+    help="Keep a last clip shorter than the duration (left out by default)",
+)
 def audio_segment(
     input_path: str,
     output_dir: str,
@@ -330,8 +335,12 @@ def audio_segment(
     overlap: float,
     format: str,
     prefix: str,
+    keep_short: bool,
 ) -> None:
-    """Segment audio file into fixed-duration clips."""
+    """Segment audio file into fixed-duration clips, named PREFIX_seg0000.FORMAT, ...
+
+    A last clip shorter than the duration is left out unless --keep-short.
+    """
     from bioamla.cli.console import print_success
     from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_file_result
@@ -344,6 +353,7 @@ def audio_segment(
         overlap=overlap,
         format=format,
         prefix=prefix,
+        include_partial=keep_short,
     )
     if emit_file_result(input_path, output=output_dir, segments=result.count):
         return

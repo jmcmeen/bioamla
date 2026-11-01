@@ -104,19 +104,42 @@ def test_convert_format_from_file_name(test_audio_path_3s, tmp_path):
 
 def test_segment_options(test_audio_path_3s, tmp_path):
     # 3 s in 1.25 s clips: two whole clips and a 0.5 s remainder.
-    single = segment_audio_file(
-        test_audio_path_3s,
-        str(tmp_path / "single"),
-        duration=1.25,
-        prefix="rec",
-        format="flac",
-        include_partial=False,
-        label="",
-    )
-    assert [s.segment_path.name for s in single] == ["rec_0000.flac", "rec_0001.flac"]
-    batch = segment_audio_file(test_audio_path_3s, str(tmp_path / "batch"), duration=1.25)
-    assert [s.segment_path.name for s in batch][-1].endswith("_seg0002.wav")
-    assert batch[-1].duration == pytest.approx(0.5)
+    default = segment_audio_file(test_audio_path_3s, str(tmp_path / "d"), duration=1.25)
+    assert [s.segment_path.name for s in default] == [
+        "test_audio_3s_seg0000.wav", "test_audio_3s_seg0001.wav",
+    ]  # fmt: skip
+    kept = segment_audio_file(test_audio_path_3s, str(tmp_path / "k"), duration=1.25,
+                              prefix="rec", format="flac", include_partial=True)  # fmt: skip
+    assert [s.segment_path.name for s in kept][-1] == "rec_seg0002.flac"
+    assert kept[-1].duration == pytest.approx(0.5)
+    plain = segment_audio_file(test_audio_path_3s, str(tmp_path / "p"), duration=1.25, label="")
+    assert plain[0].segment_path.name == "test_audio_3s_0000.wav"
+
+
+def test_single_and_batch_segment_cut_the_same_clips(test_audio_path_3s, tmp_path):
+    """`audio segment` and `batch audio segment` give the same names, clips and formats."""
+    import shutil
+
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    folder = tmp_path / "in"
+    folder.mkdir()
+    shutil.copy(test_audio_path_3s, folder / "rec.wav")
+    runner = CliRunner()
+    for keep in ([], ["--keep-short"]):
+        one, many = tmp_path / f"one{len(keep)}", tmp_path / f"many{len(keep)}"
+        common = ["-d", "1.25", "-f", "flac", *keep]
+        r1 = runner.invoke(cli, ["audio", "segment", str(folder / "rec.wav"), str(one), *common])
+        r2 = runner.invoke(cli, ["batch", "audio", "segment", "--input-dir", str(folder),
+                                 "--output-dir", str(many), *common])  # fmt: skip
+        assert r1.exit_code == 0 and r2.exit_code == 0, (r1.output, r2.output)
+        names = sorted(p.name for p in one.iterdir())
+        assert names == sorted(p.name for p in many.iterdir())
+        assert names == ["rec_seg0000.flac", "rec_seg0001.flac"] + (
+            ["rec_seg0002.flac"] if keep else []
+        )
 
 
 @pytest.mark.parametrize("prefix", ["../up", "a/b", "..", "", "c\\d"])

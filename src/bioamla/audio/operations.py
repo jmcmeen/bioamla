@@ -195,16 +195,17 @@ def audio_convert(request: AudioConvertRequest, context: OperationContext) -> Pr
 
 @config_dataclass
 class AudioSegmentRequest:
-    """Cut a file into fixed-length clips; a trailing clip shorter than ``duration``
-    is left out.
+    """Cut a file into fixed-length clips, ``<prefix>_seg0000.<format>``, ...
 
     Attributes:
         file: The audio file.
-        output_dir: The folder to write ``<prefix>_0000.<format>``, ... to.
+        output_dir: The folder to write the clips to.
         duration: Clip length (s).
         overlap: Overlap between clips (s).
         format: Clip format.
         prefix: Clip name prefix (default: the file's name without extension).
+        include_partial: Keep the last clip when it is shorter than ``duration``
+            (left out by default).
     """
 
     file: PathStr
@@ -213,6 +214,7 @@ class AudioSegmentRequest:
     overlap: float = 0.0
     format: AudioFormat = "wav"
     prefix: str | None = None
+    include_partial: bool = False
 
 
 @operation("audio.segment", request=AudioSegmentRequest, kind="job")
@@ -227,8 +229,7 @@ def audio_segment(request: AudioSegmentRequest, context: OperationContext) -> Se
         overlap=request.overlap,
         prefix=request.prefix,
         format=request.format,
-        include_partial=False,
-        label="",
+        include_partial=request.include_partial,
     )
     return SegmentedFile(file=request.file, output_dir=request.output_dir, segments=segments)
 

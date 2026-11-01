@@ -8985,6 +8985,11 @@
               }
             ],
             "title": "Prefix"
+          },
+          "include_partial": {
+            "type": "boolean",
+            "title": "Include Partial",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -8994,7 +8999,7 @@
           "output_dir"
         ],
         "title": "AudioSegmentRequest",
-        "description": "Cut a file into fixed-length clips; a trailing clip shorter than ``duration``\nis left out.\n\nAttributes:\n    file: The audio file.\n    output_dir: The folder to write ``<prefix>_0000.<format>``, ... to.\n    duration: Clip length (s).\n    overlap: Overlap between clips (s).\n    format: Clip format.\n    prefix: Clip name prefix (default: the file's name without extension)."
+        "description": "Cut a file into fixed-length clips, ``<prefix>_seg0000.<format>``, ...\n\nAttributes:\n    file: The audio file.\n    output_dir: The folder to write the clips to.\n    duration: Clip length (s).\n    overlap: Overlap between clips (s).\n    format: Clip format.\n    prefix: Clip name prefix (default: the file's name without extension).\n    include_partial: Keep the last clip when it is shorter than ``duration``\n        (left out by default)."
       },
       "AudioTimeStretchRequest": {
         "properties": {
@@ -10726,12 +10731,28 @@
             "type": "number",
             "title": "Overlap",
             "default": 0.0
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "wav",
+              "mp3",
+              "flac",
+              "ogg"
+            ],
+            "title": "Format",
+            "default": "wav"
+          },
+          "include_partial": {
+            "type": "boolean",
+            "title": "Include Partial",
+            "default": false
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "BatchSegmentRequest",
-        "description": "Cut every file into fixed-length clips.\n\nAttributes:\n    duration: Clip length (s).\n    overlap: Overlap between clips (s)."
+        "description": "Cut every file into fixed-length clips, ``<stem>_seg0000.<format>``, ...\n\nAttributes:\n    duration: Clip length (s).\n    overlap: Overlap between clips (s).\n    format: Clip format.\n    include_partial: Keep each file's last clip when it is shorter than\n        ``duration`` (left out by default)."
       },
       "BatchTrimRequest": {
         "properties": {

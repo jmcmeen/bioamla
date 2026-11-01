@@ -204,7 +204,7 @@ def segment_audio_file(
     overlap: float = 0.0,
     prefix: str | None = None,
     format: str = "wav",
-    include_partial: bool = True,
+    include_partial: bool = False,
     label: str = "seg",
 ) -> list[SegmentInfo]:
     """
@@ -220,7 +220,8 @@ def segment_audio_file(
         overlap: Overlap between consecutive segments in seconds.
         prefix: Filename prefix for segments (defaults to the input stem).
         format: Segment file format ("wav", "mp3", "flac", "ogg").
-        include_partial: Keep a last segment shorter than ``duration``.
+        include_partial: Keep a last segment shorter than ``duration`` (by default
+            every segment is exactly ``duration`` long and a shorter tail is left out).
         label: Text between the prefix and the index (``""`` gives ``rec_0000``).
 
     Returns:
@@ -355,6 +356,8 @@ def batch_segment_files(
     *,
     duration: float,
     overlap: float = 0.0,
+    format: str = "wav",
+    include_partial: bool = False,
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
@@ -364,13 +367,16 @@ def batch_segment_files(
     Split every audio file in a directory into fixed-duration segments.
 
     Segments mirror the input tree under ``output_dir`` and are named
-    ``<stem>_seg0000.wav`` and so on (see :func:`segment_audio_file`).
+    ``<stem>_seg0000.<format>`` and so on (see :func:`segment_audio_file`).
 
     Args:
         input_dir: Directory containing audio files.
         output_dir: Directory the segments are written under.
         duration: Segment duration in seconds.
         overlap: Overlap between consecutive segments in seconds.
+        format: Segment file format ("wav", "mp3", "flac", "ogg").
+        include_partial: Keep each file's last segment when it is shorter than
+            ``duration``.
         recursive: Search subdirectories.
         max_workers: Number of worker threads (1 = sequential).
         continue_on_error: Collect per-file errors and keep going if True.
@@ -408,6 +414,8 @@ def batch_segment_files(
             duration=duration,
             overlap=overlap,
             prefix=stem.name,
+            format=format,
+            include_partial=include_partial,
         )
 
     result = run_batch(
@@ -1063,6 +1071,8 @@ def batch_segment(
     *,
     duration: float,
     overlap: float = 0.0,
+    format: str = "wav",
+    include_partial: bool = False,
     on_progress: OnProgress | None = None,
     operation: str = "batch audio segment",
 ) -> BatchResult:
@@ -1083,8 +1093,9 @@ def batch_segment(
 
         def _segment(in_path: Path, seg_dir: Path) -> list:
             return segment_audio_file(
-                str(in_path), str(seg_dir), duration=duration, overlap=overlap
-            )
+                str(in_path), str(seg_dir), duration=duration, overlap=overlap,
+                format=format, include_partial=include_partial,
+            )  # fmt: skip
 
         return run_csv_segment(
             _csv_context(config),
@@ -1100,6 +1111,8 @@ def batch_segment(
         _output_dir(config),
         duration=duration,
         overlap=overlap,
+        format=format,
+        include_partial=include_partial,
         recursive=config.recursive,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,
