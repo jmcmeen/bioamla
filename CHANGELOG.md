@@ -20,6 +20,19 @@ All notable changes to this project are documented here. The format is based on
   (explicit options, then a config file, then defaults; the rule `ast train` follows; an
   option of the wrong type, or a probability outside 0-1, is refused up front).
 
+- Every `catalogs` command runs through an operation (`catalogs.inat.*`, `catalogs.hf.*`,
+  `catalogs.xc.*`, `catalogs.ml.*`, `catalogs.ebird.*`): searches and lookups are quick,
+  downloads, pushes and pulls are jobs. API keys never travel in a request: an operation
+  takes a key from its context's secrets (locally, a flag such as `--api-key`), else from the
+  environment where it runs. `catalogs.hf.cache-purge` is local-only.
+- `OperationContext.secrets` and `OperationContext.on_notice`: credentials for a run that
+  never enter a request, and messages an operation sends while it runs (the CLI prints
+  them; `hf push-dataset` reports its card and location warnings this way, before the
+  upload).
+- Library functions behind them, in `bioamla.catalogs`: `inat_search()` (rows, optional
+  CSV), `inat_project_stats()` (optional JSON), `push_dataset_folder()` (card, location
+  warnings, push) with `dataset_push_warnings()`, and `ebird_nearby()` (optional CSV).
+
 ### Changed
 
 - `cluster reduce|fit` say "Reducing embeddings to 2D using pca..." / "Clustering embeddings

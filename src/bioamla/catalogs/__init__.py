@@ -48,9 +48,34 @@ from bioamla.catalogs._models import (
     XenoCantoSearchResult,
 )
 from bioamla.catalogs.ebird import EBirdService, match_detections_to_ebird
+from bioamla.catalogs.files import (
+    NEARBY_COLUMNS,
+    DatasetPush,
+    InatSearch,
+    NearbyObservations,
+    ProjectStatsReport,
+    dataset_push_warnings,
+    ebird_nearby,
+    inat_observation_rows,
+    inat_project_stats,
+    inat_search,
+    push_dataset_folder,
+)
 from bioamla.exceptions import CatalogError, DependencyError, InvalidInputError, SpeciesError
 
 __all__ = [
+    # Calls that save their results (bioamla.catalogs.files)
+    "NEARBY_COLUMNS",
+    "DatasetPush",
+    "InatSearch",
+    "NearbyObservations",
+    "ProjectStatsReport",
+    "dataset_push_warnings",
+    "ebird_nearby",
+    "inat_observation_rows",
+    "inat_project_stats",
+    "inat_search",
+    "push_dataset_folder",
     # Submodules
     "ebird",
     "inat",

@@ -15,12 +15,17 @@ from bioamla.exceptions import BioamlaError
 
 
 def run_operation(
-    name: str, /, on_progress: Callable[[int, int], None] | None = None, **request: Any
+    name: str,
+    /,
+    on_progress: Callable[[int, int], None] | None = None,
+    secrets: dict[str, str] | None = None,
+    **request: Any,
 ) -> Any:
     """Run the operation ``name`` locally with ``request`` as its fields.
 
     ``on_progress(done, total)`` receives the operation's progress, e.g. a progress
-    bar's ``on_progress``.
+    bar's ``on_progress``. ``secrets`` holds credentials given on the command line
+    (never put in the request). The operation's notices print as they come.
 
     Raises:
         click.UsageError: If arguments conflict (:class:`~bioamla.exceptions.OptionConflictError`).
@@ -28,7 +33,9 @@ def run_operation(
     """
     from bioamla import operations
 
-    context = operations.OperationContext(on_progress=on_progress)
+    context = operations.OperationContext(
+        on_progress=on_progress, secrets=dict(secrets or {}), on_notice=_print_notice
+    )
     from bioamla.exceptions import OptionConflictError
 
     try:
@@ -37,6 +44,12 @@ def run_operation(
         raise click.UsageError(str(e)) from e
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
+
+
+def _print_notice(level: str, message: str) -> None:
+    from bioamla.cli.console import print_success, print_warning
+
+    (print_warning if level == "warning" else print_success)(message)
 
 
 __all__ = ["run_operation"]

@@ -45,6 +45,7 @@ OPERATION_MODULES: dict[str, str] = {
     "batch.models": "bioamla.ml.batch_operations",
     "annotation": "bioamla.datasets.annotation_operations",
     "audio": "bioamla.audio.operations",
+    "catalogs": "bioamla.catalogs.operations",
     "cluster": "bioamla.cluster.operations",
     "dataset": "bioamla.datasets.dataset_operations",
     "detect": "bioamla.detect.operations",
@@ -102,12 +103,30 @@ class OperationContext:
         cancelled: Returns True when the caller wants the operation to stop.
         path_check: Maps a request path to the path to use, raising if it isn't
             allowed. The default (local runs) allows anything and returns it as given.
+        secrets: Credentials for this run (e.g. ``{"EBIRD_API_KEY": ...}`` from a
+            command-line flag). Never part of a request; an operation falls back to the
+            environment where it runs.
+        on_notice: ``on_notice(level, message)`` for things to tell the caller while
+            the operation runs (``"info"`` or ``"warning"``).
     """
 
     workspace: Any = None
     on_progress: Callable[[int, int], None] | None = None
     cancelled: Callable[[], bool] = field(default=lambda: False)
     path_check: Callable[[str], str] = field(default=lambda p: p)
+    secrets: dict[str, str] = field(default_factory=dict)
+    on_notice: Callable[[str, str], None] | None = None
+
+    def notice(self, level: str, message: str) -> None:
+        """Tell the caller something (a no-op without ``on_notice``)."""
+        if self.on_notice is not None:
+            self.on_notice(level, message)
+
+    def secret(self, name: str) -> str | None:
+        """The credential ``name`` from :attr:`secrets`, else the environment."""
+        import os
+
+        return self.secrets.get(name) or os.environ.get(name)
 
     def resolve_path(self, path: str | None) -> str | None:
         """``path`` after the context's check (``None`` stays ``None``)."""
