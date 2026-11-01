@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _bioamla import (  # noqa: E402
     BioamlaCommandError,
+    add_remote_option,
     fetch,
     publish,
     read_json,
@@ -59,6 +60,10 @@ COLUMNS = [
     "labeled_by",
 ]
 AGENT = "agent"
+
+
+class ChangedMeanwhile(RuntimeError):
+    """The annotations file changed during the merge."""
 
 
 def reasons_against(c: dict, e: dict, t: argparse.Namespace) -> list[str]:
@@ -116,6 +121,7 @@ def annotate(args: argparse.Namespace) -> dict:
     # Merge on a copy of the workspace's file (the server's, with a remote).
     copy = Path(args.run_dir) / "workspace"
     path = fetch(args.annotations, copy, root)
+    before = path.read_bytes() if path.exists() else None
     columns, existing = read_rows(path)
 
     covered = set(run["files"])
@@ -150,6 +156,14 @@ def annotate(args: argparse.Namespace) -> dict:
                 )
         decisions.append(decision)
 
+    # Don't replace a file that changed while this run merged into it (a person may have
+    # edited it meanwhile): check it again just before writing.
+    latest = fetch(args.annotations, Path(args.run_dir) / "check", root)
+    if (latest.read_bytes() if latest.exists() else None) != before:
+        raise ChangedMeanwhile(
+            f"{args.annotations} changed while this run was merging into it; nothing was "
+            "written. Run annotate again."
+        )
     write_rows(path, columns, human + kept_agent + new_rows)
     publish(path, args.annotations, root)
     thresholds = {
@@ -185,9 +199,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--min-snr", type=float, default=10.0, help="Lowest SNR (dB)")
     p.add_argument("--min-score", type=float, default=0.0, help="Lowest detector score")
     p.add_argument("--root", default=".", help="Workspace root (default: here)")
-    p.add_argument("--remote", default=None, metavar="NAME:WORKSPACE",
-                   help="Run on this server workspace (default: $BIOAMLA_REMOTE or the "
-                   "workspace's settings)")  # fmt: skip
+    add_remote_option(p)
     return p
 
 
@@ -199,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError as e:
         print(json.dumps({"error": f"Run the candidates and evidence steps first: {e}"}))
         return 1
-    except BioamlaCommandError as e:
+    except (BioamlaCommandError, ChangedMeanwhile, ValueError) as e:
         print(json.dumps({"error": str(e)}))
         return 1
     except (OSError, csv.Error) as e:

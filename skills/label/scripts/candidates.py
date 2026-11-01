@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _bioamla import BioamlaCommandError, run, run_dir, save_json, use_remote  # noqa: E402
+from _bioamla import BioamlaCommandError, add_remote_option, run, run_dir, save_json, use_remote  # noqa: E402
 
 
 def overlap(a_start: float, a_end: float, b_start: float, b_end: float) -> float:
@@ -119,9 +119,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--min-duration", type=float, default=0.05, help="Shortest event (s)")
     p.add_argument("--segment-seconds", type=int, default=1, help="Prediction segment (s)")
     p.add_argument("--root", default=".", help="Workspace root (default: here)")
-    p.add_argument("--remote", default=None, metavar="NAME:WORKSPACE",
-                   help="Run on this server workspace (default: $BIOAMLA_REMOTE or the "
-                   "workspace's settings)")  # fmt: skip
+    add_remote_option(p)
     return p
 
 

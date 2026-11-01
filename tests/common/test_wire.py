@@ -114,3 +114,18 @@ def test_a_result_holding_a_table_round_trips(test_audio_path):
         pytest.skip(str(e))
     back = round_trip(result)
     pd.testing.assert_frame_equal(back.table, result.table)
+
+
+def test_dataframes_keep_missing_values_timedeltas_and_their_index():
+    import pandas as pd
+
+    frame = pd.DataFrame(
+        {"n": pd.array([1, None], dtype="Int64"), "s": pd.array(["a", None], dtype="string"),
+         "when": pd.to_datetime(["2024-01-01", None]),
+         "gap": pd.to_timedelta([1.5, None], unit="s")},
+        index=pd.Index(["x", "y"], name="file"),
+    )  # fmt: skip
+    pd.testing.assert_frame_equal(round_trip(frame), frame)
+    rows_only = pd.DataFrame(index=pd.Index(["a", "b"], name="f"))
+    back = round_trip(rows_only)
+    assert back.shape == (2, 0) and list(back.index) == ["a", "b"] and back.index.name == "f"

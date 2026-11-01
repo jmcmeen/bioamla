@@ -167,8 +167,14 @@ def test_label_skill_on_a_server_workspace(
     assert (laptop / "annotations.csv").read_text() == "file,label\nmine.wav,owl\n"
     assert not (laptop / "rec").exists()  # the recordings stayed on the server
 
-    # A second run merges into the server's file: the person's row is still kept, and
-    # this run's agent rows replace the first run's.
-    _, again, _ = run_all(step, "model")
+    # A second run, from the folder above with --root, merges into the server's file:
+    # the person's row is still kept, and this run's agent rows replace the first run's.
+    def step_from_above(script: str, *args) -> dict:
+        code, out = run_skill("label", script, *args, "--root", laptop.name,
+                              "--remote", "lab:ws", cwd=laptop.parent)  # fmt: skip
+        assert code == 0, (script, out)
+        return out
+
+    _, again, _ = run_all(step_from_above, "model")
     assert again["person_rows_kept"] == 1
     check_outcome(server_ws, run_dir, annotated, queued)

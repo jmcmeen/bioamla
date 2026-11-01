@@ -97,43 +97,113 @@ def read_json(path: str | Path) -> Any:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-_remote: dict | None = None
+_remotes: dict[tuple[str, str], dict | None] = {}
+
+
+def add_remote_option(parser: Any) -> None:
+    """Give a script's argument parser ``--remote NAME:WORKSPACE``; pass the parsed
+    value to :func:`use_remote`."""
+    parser.add_argument(
+        "--remote",
+        default=None,
+        metavar="NAME:WORKSPACE",
+        help="Run on this server workspace (default: $BIOAMLA_REMOTE or the workspace's "
+        "remote and workspace settings)",
+    )
 
 
 def use_remote(target: str | None) -> None:
     """Run this script's bioamla commands on ``target`` (``NAME:WORKSPACE``), as
     ``BIOAMLA_REMOTE`` would (``None`` leaves the setting as it is)."""
-    global _remote
     if target:
         os.environ["BIOAMLA_REMOTE"] = target
-        _remote = None
+        _remotes.clear()
+
+
+def _parse_target(value: str, workspace: str | None, source: str) -> dict:
+    name, _, ws = value.strip().partition(":")
+    ws = ws or (workspace or "").strip()
+    if not name or not ws:
+        raise BioamlaCommandError(
+            f"{source}: give the remote as NAME:WORKSPACE (which workspace on {name!r}?)",
+            "UsageError",
+        )
+    return {"remote": name, "workspace": ws, "source": source}
+
+
+def _workspace_settings(root: str | Path) -> tuple[dict, str] | None:
+    """The top-level settings of the workspace containing ``root``, and its file."""
+    here = Path(root).resolve()
+    for folder in (here, *here.parents):
+        config = folder / ".bioamla" / "config.toml"
+        if (folder / ".bioamla" / "workspace.toml").is_file():
+            if not config.is_file():
+                return None
+            try:
+                import tomllib
+            except ImportError:  # Python 3.10: ask bioamla
+                found = run("remote", "current", cwd=root)
+                return ({"remote": found["remote"], "workspace": found["workspace"]}
+                        if found.get("remote") else {}), str(config)  # fmt: skip
+            with config.open("rb") as f:
+                return tomllib.load(f), str(config)
+    return None
 
 
 def remote(root: str | Path = ".") -> dict | None:
-    """The remote commands run on (``{"remote", "workspace", ...}``), or ``None``."""
-    global _remote
-    if _remote is None:
-        _remote = run("remote", "current", cwd=root)
-    return _remote if _remote.get("remote") else None
+    """The server workspace this script's bioamla commands run on
+    (``{"remote", "workspace", "source"}``), or ``None`` when they run locally: from
+    ``BIOAMLA_REMOTE``, else the ``remote`` and ``workspace`` settings of the workspace
+    around ``root`` (as ``bioamla remote current`` reports).
+
+    Raises:
+        BioamlaCommandError: If a remote is set without a workspace.
+    """
+    env = os.environ.get("BIOAMLA_REMOTE", "").strip()
+    key = (str(Path(root).resolve()), env)
+    if key not in _remotes:
+        if env:
+            _remotes[key] = _parse_target(env, None, "$BIOAMLA_REMOTE")
+        else:
+            found = _workspace_settings(root)
+            settings, source = found if found else ({}, "")
+            value = settings.get("remote")
+            _remotes[key] = (
+                _parse_target(value, settings.get("workspace"), source)
+                if isinstance(value, str) and value.strip()
+                else None
+            )
+    return _remotes[key]
+
+
+def _workspace_path(path: str) -> str:
+    """``path`` if it's a plain path inside the workspace (relative, no ``..``)."""
+    parts = Path(path).parts
+    if not path or Path(path).is_absolute() or ".." in parts or ":" in parts[0]:
+        raise ValueError(f"{path!r} must be a path inside the workspace (relative, no ..)")
+    return Path(path).as_posix()
 
 
 def fetch(path: str, into: str | Path, root: str | Path = ".") -> Path:
-    """The workspace file ``path`` as a local file under ``into`` (same relative path).
+    """The workspace file ``path`` as a local copy at ``<root>/<into>/<path>``.
 
-    With a remote, the server's copy is downloaded (the local one under ``into`` is
-    removed first when the server has none, so it never stands in for it); without one,
-    the workspace's own file is copied. The returned file may not exist.
+    With a remote, the server's copy is downloaded; without one, the workspace's own
+    file is copied. Any earlier copy is removed first, so it never stands in for a file
+    that is gone. The returned file doesn't exist when the workspace has none.
+
+    Raises:
+        ValueError: If ``path`` isn't a plain path inside the workspace.
     """
-    local = Path(root) / into / path
+    path = _workspace_path(path)
+    local = (Path(root) / into / path).resolve()
+    local.unlink(missing_ok=True)
+    local.parent.mkdir(parents=True, exist_ok=True)
     target = remote(root)
     if target is None:
         source = Path(root) / path
         if source.exists():
-            local.parent.mkdir(parents=True, exist_ok=True)
             local.write_bytes(source.read_bytes())
         return local
-    local.unlink(missing_ok=True)
-    local.parent.mkdir(parents=True, exist_ok=True)
     try:
         run("remote", "download", target["remote"], target["workspace"], path,
             "-o", str(local.parent), "--overwrite", cwd=root)  # fmt: skip
@@ -144,13 +214,20 @@ def fetch(path: str, into: str | Path, root: str | Path = ".") -> Path:
 
 
 def publish(local: str | Path, path: str, root: str | Path = ".") -> None:
-    """Put the local file ``local`` at ``path`` in the workspace: uploaded to the
-    server with a remote (replacing it), else copied into place (unless it is there)."""
+    """Put the file ``local`` (absolute, or relative to ``root``) at ``path`` in the
+    workspace: uploaded to the server with a remote (replacing it), else copied into
+    place through a temporary file.
+
+    Raises:
+        ValueError: If ``path`` isn't a plain path inside the workspace, or names a
+            different file name than ``local`` on a server.
+    """
+    path = _workspace_path(path)
+    source = (Path(local) if Path(local).is_absolute() else Path(root) / local).resolve()
     target = remote(root)
-    source = Path(local) if Path(local).is_absolute() else Path(root) / local
     if target is None:
-        dest = Path(root) / path
-        if dest.resolve() != source.resolve():
+        dest = (Path(root) / path).resolve()
+        if dest != source:
             dest.parent.mkdir(parents=True, exist_ok=True)
             tmp = dest.with_name(dest.name + ".tmp")
             tmp.write_bytes(source.read_bytes())
@@ -169,5 +246,5 @@ def save_json(path: str, data: Any, root: str | Path = ".") -> Path:
     it with a remote."""
     out = write_json(Path(root) / path, data)
     if remote(root) is not None:
-        publish(out, path, root)
+        publish(out.resolve(), path, root)
     return out

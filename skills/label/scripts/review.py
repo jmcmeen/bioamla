@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _bioamla import BioamlaCommandError, read_json, save_json, use_remote  # noqa: E402
+from _bioamla import BioamlaCommandError, add_remote_option, read_json, save_json, use_remote  # noqa: E402
 
 KINDS = {
     "label": "vocabulary",
@@ -87,9 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("run_dir", help="The run folder (after annotate.py)")
     p.add_argument("--root", default=".", help="Workspace root (default: here)")
-    p.add_argument("--remote", default=None, metavar="NAME:WORKSPACE",
-                   help="Run on this server workspace (default: $BIOAMLA_REMOTE or the "
-                   "workspace's settings)")  # fmt: skip
+    add_remote_option(p)
     args = p.parse_args(argv)
     use_remote(args.remote)
     try:
