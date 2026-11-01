@@ -13,20 +13,36 @@ Bioacoustics work often splits across machines. The recordings sit on a storage 
 training wants a GPU, and the person labeling is on a laptop. bioamla today is a library and a
 CLI that run where you are. 0.4.0 lets the same commands, the same agent skills and the
 [MagPy](https://github.com/jmcmeen/magpy) desktop app work against data that lives somewhere
-else, without a second API to learn or keep in sync.
+else, through one set of operations that every front end shares.
 
 ## Three principles
 
-### 1. The CLI is the operation contract
+### 1. Operations are the contract
 
-Any piece of work is a `bioamla` command line. Its outcome is the
-[`--json` envelope](../cli.md#machine-readable-output) (`{"bioamla", "command", "ok",
-"result" | "error"}`) plus whatever files the command wrote into a workspace.
+Every piece of work bioamla can do is an **operation**: a named unit of work such as
+`detect.energy`, `audio.features` or `batch.detect`, with
 
-The CLI, the server, the remote client, MagPy and agent skills all use this one contract. The
-server runs commands; it does not reimplement them. Request shapes come from the command
-options and the exported [config schemas](../cli.md); response shapes are the envelope.
-Typed endpoints may be added later for hot paths, but never as the only way to do something.
+- a typed **request**: a validated config (so it has a JSON Schema), whose path fields are
+  marked as paths;
+- a **function** in the operation's domain package that does the whole job, including what a
+  command does today beyond calling the library (CSV-mode merging, writing outputs);
+- a typed **result**, the same object `--json` reports.
+
+A small registry, `bioamla.operations`, lists them all. The CLI and the server are both thin
+front ends to it:
+
+- **The CLI** parses a command's options into the request, runs the operation, and prints the
+  result for people or as the [`--json` envelope](../cli.md#machine-readable-output).
+- **The server** exposes each operation as a typed endpoint generated from the registry (so its
+  OpenAPI spec always matches), running long operations as jobs.
+
+Operations live in their domain packages (`bioamla.detect` declares the detection operations,
+and so on); the registry is an index, not a separate layer. Library functions below them keep
+taking explicit arguments.
+
+An operation runs with an **operation context** supplied by its front end: where it runs (a
+workspace), progress and cancel hooks, and the check every path in the request goes through.
+Locally the check allows any path; on the server it confines paths to the allowed folders.
 
 ### 2. Data lives with its workspace; work goes to the data
 
@@ -50,7 +66,7 @@ my-survey/
 Commands find the workspace by walking up from the current directory, the way git finds a
 repository. An **artifact** is either *linked* (referenced by path, never copied, so several
 workspaces can share it) or *imported* (copied into `imported/`). Paths inside a workspace are
-stored relative to it, so a command line or a skill means the same thing on any machine.
+stored relative to it, so a request or a skill means the same thing on any machine.
 
 A workspace belongs to one machine. A *remote* workspace lives on the server, under the
 server's workspace root, and can link raw recordings where they already are (for example a
@@ -84,20 +100,20 @@ token_env = "BIOAMLA_LAB_TOKEN"   # the token is read from this variable, never 
 
 Choose it per command (`bioamla --remote lab ...`), per shell (`BIOAMLA_REMOTE=lab`), or per
 workspace (`remote = "lab"` and `workspace = "my-survey"` in its `config.toml`). With a remote
-selected, the client sends the command line to the server as a job, streams its progress and
-prints the same envelope or human-readable output a local run would. Output files stay in the
-remote workspace until you download them.
+selected, the CLI builds the operation request as usual and sends it to the server instead of
+running it, streams its progress, and prints the same envelope or human-readable output a local
+run would. Output files stay in the remote workspace until you download them.
 
 ## Jobs and history
 
 Every command run inside a workspace appends a record to `history.jsonl`: time, command line,
-host, bioamla version, success, duration and output paths. On the server, a **job** is that same
-record plus a status, progress events and a cancel operation. So "what has been run on this
+host, bioamla version, success, duration and output paths. On the server, a **job** is an
+operation run with that same record, plus a status, progress events and a cancel operation. So "what has been run on this
 data" has one answer, whether the work ran locally or remotely.
 
-Progress comes from the hooks commands already have: in machine mode
-(`BIOAMLA_PROGRESS=jsonl`) the progress bar emits one JSON event per update instead of drawing
-a bar, and the server forwards those events to clients.
+Progress comes from the operation context's progress hook. On the command line it drives the
+progress bar (or, with `BIOAMLA_PROGRESS=jsonl`, JSON progress events); on the server it feeds
+the job's progress events, which clients follow.
 
 ## The server
 
@@ -112,20 +128,23 @@ Version 1 of the API (`/v1`, described by a committed OpenAPI spec) covers:
 
 | Area | Endpoints |
 |---|---|
-| Service | version; the command catalog (every command, option, type and default); config schemas |
+| Service | version; the operation catalog (every operation with its request and result schemas) |
+| Operations | one endpoint per operation; quick ones answer directly, long ones start a job |
 | Workspaces | list, create, status, config |
 | Files | list, upload, download; later, streamed audio windows for MagPy |
-| Jobs | submit a command line, status, progress events (server-sent events), cancel, result envelope, logs |
+| Jobs | status, progress events (server-sent events), cancel, result, logs |
 | History | a workspace's run history |
 
-Each job runs as a `bioamla --json` subprocess with the workspace as its working directory, so
+Quick operations (listing files, reading metadata, an audio window) run in the server process.
+Long ones (batches, detection over many files, training) run as jobs in worker processes, so
 a crash or a cancel can't take the server down, and at most one machine-learning job runs at a
-time.
+time. The server needs no CLI: it calls the operations directly.
 
 **Security model (first version).** One user on a trusted network: the server binds to
 localhost by default and is reached over a VPN or SSH tunnel; every request carries the token;
-jobs are command lines only (no shell, no Python); every path a job or request touches must be
-inside a workspace root or an allow-listed linked location. The code keeps the seams for a
+only registered operations can run, and only those marked as remote-safe (not local playback,
+installing system packages or starting another server); every path field of a request must
+resolve inside a workspace root or an allow-listed linked location. The code keeps the seams for a
 later small-lab version with several users: every request carries an identity, jobs record it,
 and path access goes through a single authorization check.
 
@@ -134,7 +153,7 @@ and path access goes through a single authorization check.
 Agent skills (a `SKILL.md` plus helper scripts) let an AI agent drive bioamla, for example to
 do a first pass of hand labeling. Their rules:
 
-- Scripts call only `bioamla --json` and act on its JSON. Decisions come from thresholds on
+- Scripts call `bioamla --json` (that is, operations through the CLI) and act on its JSON. Decisions come from thresholds on
   objective measurements (detection scores, model confidence, signal-to-noise), not from the
   agent's judgement.
 - Files are referred to by workspace-relative paths, and outputs go to
@@ -149,8 +168,9 @@ spectrogram crops for a visual check) come back.
 
 ## MagPy
 
-MagPy talks to bioamla through one layer of its code. That layer gains two backends: the
-current in-process one, and a remote one built on the bioamla client. "Connect to server" then
+MagPy talks to bioamla through one layer of its code. That layer gains two backends: an
+in-process one that runs operations directly, and a remote one that calls the same operations on
+a server through the bioamla client. "Connect to server" then
 lists the server's workspaces, streams audio windows for the spectrogram view and runs heavy
 operations as jobs. MagPy will adopt this after the 0.4.x series settles.
 
@@ -158,6 +178,7 @@ operations as jobs. MagPy will adopt this after the 0.4.x series settles.
 
 - Workspaces: the format, `bioamla workspace` commands, cascading config, run history.
 - Machine-readable progress and a command catalog.
+- The operations registry, with every command converted to run through an operation.
 - The server, the client, `--remote` routing, and pipeline tests that run a remote workflow
   in CI.
 - The skills convention and the first-pass labeling skill.

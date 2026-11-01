@@ -26,7 +26,10 @@ clustering, species catalogs, dataset tooling, and AST-based ML inference.
    than raising bare `Exception`/`ValueError` from library code.
 2. **Organize by domain, not by layer.** New functionality goes in the relevant domain
    subpackage. Do **not** reintroduce a services/models/repository/core split. Do file I/O
-   directly with `pathlib` — there is no repository layer.
+   directly with `pathlib` — there is no repository layer. **Operations** (0.4.0) are not a
+   layer: each domain declares its own (typed request, function, typed result) next to its
+   code, and `bioamla.operations` is only an index of them. See
+   `docs/architecture/workspaces-and-remote.md`.
 3. **`import bioamla` stays fast.** Domain subpackages are lazy (PEP 562 `__getattr__` in
    `bioamla/__init__.py`); heavy third-party deps (torch, librosa, umap, hdbscan,
    sounddevice, transformers) are **imported inside the functions that use them**, never at
@@ -99,6 +102,10 @@ returned to a caller (e.g. `AcousticIndices`, `AudioData`, `AudioMetadata`).
   click.ClickException(str(e)) from e`. (The central handler in `main()` is the backstop; the
   per-command wrap gives Click-native usage/exit behavior.) Keep CLI code thin — logic lives
   in the domain, the command just parses args, calls, and prints.
+- **Commands are front ends to operations** (0.4.0, being converted group by group): a command
+  builds the operation's request from its options, runs the operation, and prints the result.
+  Anything a command does beyond that (CSV-mode merging, writing outputs) belongs in the
+  operation, because the server runs the same operation without the CLI.
 
 ## Conventions
 
