@@ -35,6 +35,7 @@ $ bioamla workspace config set detect.energy.threshold_db -25        # this work
 $ bioamla workspace config set --user models.ast.predict.model_path bioamla/scp-frogs
 $ bioamla workspace config list      # every setting in effect here, and its file
 $ bioamla workspace config get detect.energy.threshold_db
+$ bioamla workspace config list --user   # only the user file's settings
 $ bioamla workspace config unset detect.energy.threshold_db
 ```
 

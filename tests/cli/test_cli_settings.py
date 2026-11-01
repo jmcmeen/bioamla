@@ -140,6 +140,25 @@ class TestConfigCommands:
         result = self.run("get", "detect.energy.threshold_db")
         assert result.exit_code == 1 and "not set" in result.output
 
+    def test_get_and_list_user_file_only(self, ws) -> None:
+        self.run("set", "detect.energy.threshold_db", "-12")
+        self.run("set", "--user", "detect.energy.threshold_db", "-30")
+        self.run("set", "--user", "detect.energy.min_duration", "0.2")
+
+        def as_json(*args):
+            out = CliRunner().invoke(cli, ["--json", "workspace", "config", *args]).stdout
+            return json.loads(out)["result"]
+
+        got = as_json("get", "--user", "detect.energy.threshold_db")
+        assert got["value"] == -30 and got["source"] == str(user_config_path())
+        assert [r["value"] for r in as_json("list", "--user")["settings"]] == [0.2, -30]
+        assert [r["value"] for r in as_json("list")["settings"]] == [0.2, -12]
+
+        user_config_path().unlink()
+        assert as_json("list", "--user")["settings"] == []
+        result = self.run("get", "--user", "detect.energy.threshold_db")
+        assert result.exit_code == 1 and "not set in the user file" in result.output
+
 
 class TestReviewCases:
     def test_root_options_ignore_env_and_settings(self, audio, ws) -> None:

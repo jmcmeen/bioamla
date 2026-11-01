@@ -224,25 +224,33 @@ def _config_target(ctx: click.Context, user: bool):
     return _current(ctx.parent.parent).config_path
 
 
-def _effective(ctx: click.Context) -> dict[str, dict]:
-    """Every setting in effect for this command's workspace (or just the user's)."""
+def _effective(ctx: click.Context, user: bool = False) -> dict[str, dict]:
+    """Every setting in effect for this command's workspace, or with ``user``, only
+    those in the user file."""
     from bioamla.cli.settings_map import active_layers, effective_settings
+    from bioamla.common.settings import read_settings_file, user_config_path
 
     start = (ctx.parent.parent.obj or {}).get("start")
     try:
-        return effective_settings(ctx.find_root().command, active_layers(start))
+        if user:
+            path = user_config_path()
+            layers = [(path, read_settings_file(path))] if path.is_file() else []
+        else:
+            layers = active_layers(start)
+        return effective_settings(ctx.find_root().command, layers)
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
 
 @workspace_config.command("list")
+@click.option("--user", is_flag=True, help="Show only the user file's settings")
 @click.pass_context
-def workspace_config_list(ctx: click.Context) -> None:
+def workspace_config_list(ctx: click.Context, user: bool) -> None:
     """Show every setting in effect here, and the file it comes from."""
     from bioamla.cli.console import print_table
     from bioamla.cli.output import emit_result
 
-    rows = sorted(_effective(ctx).values(), key=lambda r: r["key"])
+    rows = sorted(_effective(ctx, user).values(), key=lambda r: r["key"])
     if emit_result({"settings": rows}):
         return
     if not rows:
@@ -254,15 +262,17 @@ def workspace_config_list(ctx: click.Context) -> None:
 
 @workspace_config.command("get")
 @click.argument("key")
+@click.option("--user", is_flag=True, help="Look only in the user file")
 @click.pass_context
-def workspace_config_get(ctx: click.Context, key: str) -> None:
+def workspace_config_get(ctx: click.Context, key: str, user: bool) -> None:
     """Show the value a setting has here, and where it comes from."""
     from bioamla.cli.output import emit_result
     from bioamla.cli.settings_map import canonical_key
 
-    found = _effective(ctx).get(canonical_key(ctx.find_root().command, key))
+    found = _effective(ctx, user).get(canonical_key(ctx.find_root().command, key))
     if found is None:
-        raise click.ClickException(f"{key} is not set (the command's own default applies)")
+        where = " in the user file" if user else ""
+        raise click.ClickException(f"{key} is not set{where} (the command's own default applies)")
     if emit_result(found):
         return
     click.echo(f"{found['value']!r}  (from {found['source']})")
