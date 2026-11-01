@@ -156,6 +156,11 @@ class TestDenoise:
         assert out.dtype == np.float32
         assert len(out) > 0
 
+    @pytest.mark.parametrize("n", [16000, 22050, 80000])
+    def test_denoise_preserves_length(self, n: int) -> None:
+        audio = np.random.default_rng(0).standard_normal(n).astype(np.float32) * 0.1
+        assert len(spectral_denoise(audio, 16000, noise_reduce_factor=0.5)) == n
+
 
 class TestEditingTransforms:
     def test_pitch_shift_preserves_length(self, sample_audio_data: AudioData) -> None:

@@ -175,7 +175,7 @@ def spectral_denoise(
 
     # Reconstruct
     stft_denoised = magnitude_denoised * np.exp(1j * phase)
-    audio_denoised = librosa.istft(stft_denoised, hop_length=hop_length)
+    audio_denoised = librosa.istft(stft_denoised, hop_length=hop_length, length=len(audio))
 
     return audio_denoised.astype(np.float32)
 

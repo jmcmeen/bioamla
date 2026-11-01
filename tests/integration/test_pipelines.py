@@ -460,3 +460,31 @@ class TestCatalog:
         monkeypatch.chdir(root)
         bioamla("workspace", "config", "set", threshold["setting"], "-3")
         assert bioamla("detect", "energy", str(recording))["params"]["threshold_db"] == -3.0
+
+
+def test_batch_audio_transforms_chain_in_directory_mode(recording: Path, tmp_path: Path) -> None:
+    """resample -> normalize -> trim -> filter -> denoise, each reading the folder the
+    previous step wrote, on real files (no mocks)."""
+    src = tmp_path / "in"
+    src.mkdir()
+    (src / "calls.wav").write_bytes(recording.read_bytes())
+    steps = [
+        ("resample", ["-r", "16000"]),
+        ("normalize", ["-d", "-20"]),
+        ("trim", ["-s", "1", "-e", "6"]),
+        ("filter", ["--highpass", "500"]),
+        ("denoise", ["--strength", "0.5"]),
+    ]
+    folder = src
+    for command, options in steps:
+        out = tmp_path / command
+        result = bioamla(
+            "batch", "audio", command, "--input-dir", str(folder), "--output-dir", str(out),
+            *options,
+        )  # fmt: skip
+        assert (result["successful"], result["failed"]) == (1, 0), command
+        assert result["output_files"] == [str(out / "calls.wav")]
+        folder = out
+    data, sr = sf.read(folder / "calls.wav")
+    assert sr == 16000
+    assert len(data) == 5 * 16000  # trimmed to 1-6 s; denoising keeps the length
