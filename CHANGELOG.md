@@ -50,9 +50,12 @@ All notable changes to this project are documented here. The format is based on
 - `bioamla serve` and the `server` extra (`pip install 'bioamla[server]'`: fastapi, uvicorn):
   the start of the HTTP API (`/v1`) for working in this machine's workspaces from elsewhere.
   This release has `/v1/health` (no token), `/v1/version` and the OpenAPI spec at
-  `/v1/openapi.json`; responses and errors use the `--json` envelope. One user, one bearer
-  token (a file created with mode 600), localhost by default; every path must resolve inside
-  the workspace root or a folder allowed with `--allow-link`. The server doesn't need the CLI.
+  `/v1/openapi.json` (token required; it declares the bearer scheme, and there are no
+  interactive docs pages); responses and errors, unknown routes included, use the `--json`
+  envelope. One user, one bearer token (a file created atomically, with mode 600 on macOS and
+  Linux; a malformed or shared token file is refused), localhost by default; every path must
+  resolve inside the workspace root or a folder allowed with `--allow-link`, and a workspace's
+  `.bioamla` metadata can't link outside it. The server doesn't need the CLI.
   Library: `bioamla.server`; `to_jsonable` now lives in `bioamla.common.jsonable`.
 
 ## [0.3.8] - 2026-10-31

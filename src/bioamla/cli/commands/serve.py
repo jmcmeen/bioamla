@@ -21,7 +21,7 @@ _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
     default="~/.config/bioamla/server-token",
     show_default=True,
     type=click.Path(dir_okay=False),
-    help="File holding the bearer token (created, mode 600, if missing)",
+    help="File holding the bearer token (created if missing; mode 600 on macOS and Linux)",
 )
 @click.option(
     "--allow-link",
@@ -52,13 +52,10 @@ def serve(root: str, host: str, port: int, token_file: str, linkable: tuple[str,
         raise click.ClickException("serve has no --json output (it runs until stopped)")
 
     try:
-        import uvicorn
+        from bioamla._extras import import_extra
+        from bioamla.server import ServerConfig, create_app, read_or_create_token
 
-        from bioamla.server import (
-            ServerConfig,
-            create_app,
-            read_or_create_token,
-        )  # checks the extra
+        uvicorn = import_extra("uvicorn", "server")
 
         root_path = Path(root).expanduser()
         root_path.mkdir(parents=True, exist_ok=True)
@@ -80,5 +77,5 @@ def serve(root: str, host: str, port: int, token_file: str, linkable: tuple[str,
     print_kv("Workspaces", root_path.resolve())
     print_kv("Token", f"in {Path(token_file).expanduser()}")
     shown = f"[{host}]" if ":" in host else host  # IPv6 addresses need brackets in URLs
-    print_kv("API", f"http://{shown}:{port}/v1/  (docs at /v1/docs)")
+    print_kv("API", f"http://{shown}:{port}/v1/  (spec at /v1/openapi.json)")
     uvicorn.run(app, host=host, port=port, log_level="info")

@@ -23,6 +23,21 @@ TOKEN = "s3cret-token"
 ME = Identity()
 
 
+def _can_symlink(tmp_path) -> bool:
+    try:
+        (tmp_path / ".probe-link").symlink_to(tmp_path)
+    except (OSError, NotImplementedError):
+        return False
+    (tmp_path / ".probe-link").unlink()
+    return True
+
+
+@pytest.fixture
+def symlinks(tmp_path) -> None:
+    if not _can_symlink(tmp_path):
+        pytest.skip("can't create symlinks here")
+
+
 @pytest.fixture
 def client(tmp_path):
     root = tmp_path / "workspaces"
@@ -52,9 +67,29 @@ class TestRoutes:
         assert result["api"] == "v1" and result["workspace_format"] == 1
         assert result["user"] == "owner"
 
-    def test_openapi_is_served(self, client) -> None:
-        spec = client.get("/v1/openapi.json").json()
+    def test_openapi_needs_the_token(self, client) -> None:
+        missing = client.get("/v1/openapi.json")
+        assert missing.status_code == 401 and missing.json()["ok"] is False
+        spec = client.get("/v1/openapi.json", headers=auth()).json()
         assert "/v1/version" in spec["paths"]
+        assert "/v1/openapi.json" not in spec["paths"]
+        # generated clients learn that routes need the bearer token
+        assert spec["components"]["securitySchemes"]["HTTPBearer"]["scheme"] == "bearer"
+        assert spec["paths"]["/v1/version"]["get"]["security"] == [{"HTTPBearer": []}]
+        assert "security" not in spec["paths"]["/v1/health"]["get"]
+
+    @pytest.mark.parametrize("path", ["/v1/docs", "/v1/redoc", "/docs"])
+    def test_no_docs_pages(self, client, path) -> None:
+        assert client.get(path).status_code == 404
+
+    def test_routing_errors_use_the_envelope(self, client) -> None:
+        missing = client.get("/v1/nope", headers=auth())
+        assert missing.status_code == 404
+        assert missing.json()["ok"] is False
+        assert missing.json()["error"]["type"] == "NotFoundError"
+        wrong = client.post("/v1/version", headers=auth())
+        assert wrong.status_code == 405 and wrong.headers["allow"] == "GET"
+        assert wrong.json()["error"]["type"] == "MethodNotAllowed"
 
     def test_unexpected_errors_use_the_envelope(self, tmp_path) -> None:
         app = create_app(ServerConfig(root=tmp_path, token=TOKEN))
@@ -92,23 +127,27 @@ class TestPathPolicy:
         with pytest.raises(AccessDenied):
             policy.authorize(ME, path)
 
-    def test_symlinks_cant_escape(self, policy, tmp_path) -> None:
+    def test_symlinks_cant_escape(self, policy, tmp_path, symlinks) -> None:
         (tmp_path / "root" / "ws" / "sneaky").symlink_to(tmp_path / "private")
         with pytest.raises(AccessDenied):
             policy.authorize(ME, "ws/sneaky/x")
 
-    def test_paths_with_token_in_them_are_403_not_401(self, client) -> None:
+    def test_denied_paths_are_403_and_bad_tokens_401(self, client) -> None:
+        from fastapi import Depends
+
         app = client.app
-        from fastapi import Depends  # noqa: F401
 
         @app.get("/v1/check")
-        def check(path: str) -> dict:
-            app.state.policy.authorize(ME, path)
+        def check(path: str, who: Identity = Depends(app.state.identity)) -> dict:
+            app.state.policy.authorize(who, path)
             return {}
 
-        response = client.get("/v1/check", params={"path": "../token_backup"},
-                              headers=auth())  # fmt: skip
+        outside = {"path": "../token_backup"}
+        response = client.get("/v1/check", params=outside, headers=auth())
         assert response.status_code == 403 and response.json()["error"]["type"] == "AccessDenied"
+        assert client.get("/v1/check", params=outside).status_code == 401
+        assert client.get("/v1/check", params=outside, headers=auth("wrong")).status_code == 401
+        assert client.get("/v1/check", params={"path": "ok"}, headers=auth()).status_code == 200
 
     def test_client_paths_are_literal(self, policy) -> None:
         # "~" is a folder name under the root here, never the server user's home
@@ -116,13 +155,29 @@ class TestPathPolicy:
         with pytest.raises(InvalidInputError):
             policy.authorize(ME, "a\x00b")
 
-    def test_workspace_cant_be_a_link_out_of_the_root(self, policy, tmp_path) -> None:
+    def test_workspace_cant_be_a_link_out_of_the_root(self, policy, tmp_path, symlinks) -> None:
         from bioamla.workspace import create_workspace
 
         create_workspace(tmp_path / "archive" / "survey")
         (tmp_path / "root" / "alias").symlink_to(tmp_path / "archive" / "survey")
         with pytest.raises(AccessDenied, match="not inside the workspace root"):
             policy.workspace_dir(ME, "alias")
+
+    @pytest.mark.parametrize("linked", [".bioamla", ".bioamla/workspace.toml"])
+    def test_workspace_metadata_cant_be_a_link_out(
+        self, policy, tmp_path, symlinks, linked
+    ) -> None:
+        from bioamla.workspace import create_workspace
+
+        create_workspace(tmp_path / "private" / "real")
+        (tmp_path / "root" / "survey" / ".bioamla").mkdir(parents=True)
+        target = tmp_path / "private" / "real" / linked
+        link = tmp_path / "root" / "survey" / linked
+        if link.exists():
+            link.rmdir()
+        link.symlink_to(target)
+        with pytest.raises(AccessDenied, match="metadata outside"):
+            policy.workspace_dir(ME, "survey")
 
     def test_workspace_names(self, policy, tmp_path) -> None:
         from bioamla.workspace import create_workspace
@@ -159,6 +214,50 @@ class TestToken:
         with pytest.raises(InvalidInputError, match="empty"):
             read_or_create_token(path)
 
+    @pytest.mark.parametrize(
+        ("content", "match"),
+        [
+            (b"one\ntwo\n", "alone, on one line"),
+            (b"to ken\n", "alone, on one line"),
+            (b"\xff\xfe\n", "not UTF-8"),
+        ],
+    )
+    def test_malformed_refused(self, tmp_path, content, match) -> None:
+        path = tmp_path / "token"
+        path.write_bytes(content)
+        path.chmod(0o600)
+        with pytest.raises(InvalidInputError, match=match):
+            read_or_create_token(path)
+
+    def test_surrounding_blank_lines_are_fine(self, tmp_path) -> None:
+        path = tmp_path / "token"
+        path.write_text("\n  abc  \n\n")
+        path.chmod(0o600)
+        assert read_or_create_token(path) == "abc"
+
+    def test_unusable_location_is_a_bioamla_error(self, tmp_path) -> None:
+        from bioamla.exceptions import ConfigError
+
+        (tmp_path / "a-file").write_text("")
+        with pytest.raises(ConfigError, match="token file"):
+            read_or_create_token(tmp_path / "a-file" / "token")
+
+    def test_losing_a_creation_race_reads_the_winners_token(self, tmp_path, mocker) -> None:
+        import bioamla.server._security as security
+
+        path = tmp_path / "token"
+        real_link = os.link
+
+        def other_process_wins(src, dst):
+            fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            os.write(fd, b"winner\n")
+            os.close(fd)
+            real_link(src, dst)  # raises FileExistsError, as a lost race does
+
+        mocker.patch.object(security.os, "link", side_effect=other_process_wins)
+        assert read_or_create_token(path) == "winner"
+        assert [p.name for p in tmp_path.iterdir()] == ["token"]  # no temp file left
+
 
 class TestServeCommand:
     def test_starts_uvicorn_with_the_app(self, tmp_path, mocker) -> None:
@@ -179,6 +278,9 @@ class TestServeCommand:
         assert app.state.policy.linkable == (archive.resolve(),)
         assert (tmp_path / "ws").is_dir()
 
+    @pytest.mark.skipif(
+        os.name == "nt" or os.geteuid() == 0, reason="needs POSIX permissions that apply"
+    )
     def test_unwritable_root_is_a_clean_error(self, tmp_path, mocker) -> None:
         from click.testing import CliRunner
 
@@ -194,6 +296,20 @@ class TestServeCommand:
         finally:
             locked.chmod(0o700)
         assert result.exit_code == 1 and "Can't start the server" in result.output
+
+    def test_missing_extra_shows_the_install_hint(self, tmp_path, mocker) -> None:
+        from click.testing import CliRunner
+
+        from bioamla.cli.cli import cli
+        from bioamla.exceptions import DependencyError
+
+        mocker.patch(
+            "bioamla._extras.import_extra",
+            side_effect=DependencyError("uvicorn is missing: pip install 'bioamla[server]'"),
+        )
+        result = CliRunner().invoke(cli, ["serve", "--root", str(tmp_path / "ws"),
+                                          "--token-file", str(tmp_path / "t")])  # fmt: skip
+        assert result.exit_code == 1 and "bioamla[server]" in result.output
 
     def test_ipv6_url_has_brackets(self, tmp_path, mocker) -> None:
         from click.testing import CliRunner
