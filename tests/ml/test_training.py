@@ -610,6 +610,9 @@ class TestTrainAst:
             def __call__(self, wavs, sampling_rate=None, return_tensors=None):
                 return {"input_values": torch.zeros(len(wavs), 4, 8)}
 
+            def save_pretrained(self, path):
+                (Path(path) / "preprocessor_config.json").write_text("{}")
+
         fake_config = SimpleNamespace(num_labels=2, label2id={}, id2label={})
         stack = ExitStack()
         for target, value in [
