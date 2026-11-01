@@ -33,6 +33,16 @@ All notable changes to this project are documented here. The format is based on
   CSV), `inat_project_stats()` (optional JSON), `push_dataset_folder()` (card, location
   warnings, push) with `dataset_push_warnings()`, and `ebird_nearby()` (optional CSV).
 
+- `system`, `util` and `workspace` commands run through operations (`system.version|devices|
+  deps|deps-install|schema|export-schemas`, `util.download|unzip|zip`, `workspace.init|status|
+  add|import|list|remove|history`), so every command that does work has one.
+  `system.deps-install` and `util.download` are local-only. `system commands` and
+  `workspace config` stay command-line only: they describe and configure the CLI itself.
+- Library: `bioamla.workspace.current_workspace()`, `Workspace.artifact_row()`,
+  `artifact_rows()` and `status()`; `bioamla.common.files.download_to_dir()`, `unzip_to()`
+  and `zip_path()`; `bioamla.common.config.config_schema_report()` and
+  `export_config_schemas()`; `bioamla.system.dependency.install_missing()`.
+
 ### Changed
 
 - `cluster reduce|fit` say "Reducing embeddings to 2D using pca..." / "Clustering embeddings
@@ -43,6 +53,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- `util zip` of a file dated before 1980, `util download` of a malformed URL and `system schema
+  NAME -o` to an unwritable path stopped with a traceback; they report an error. A missing
+  archive for `util unzip` is a not-found error.
 - `models ast evaluate` and single-file AST prediction failed on Apple Silicon: the input
   stayed on the CPU while the model ran on MPS (#255).
 

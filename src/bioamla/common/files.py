@@ -20,7 +20,7 @@ import zipfile
 from pathlib import Path
 from urllib.request import urlretrieve
 
-from bioamla.exceptions import NotFoundError
+from bioamla.exceptions import BioamlaError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -501,7 +501,65 @@ def zip_directory(directory: str | Path, zip_path: str | Path) -> str:
     return str(zip_path)
 
 
+def download_to_dir(url: str, output_dir: str | Path = ".", show_progress: bool = True) -> str:
+    """Download ``url`` into ``output_dir``, named after the URL's last path part
+    (``downloaded_file`` if it has none).
+
+    Returns:
+        The file written.
+
+    Raises:
+        BioamlaError: If the download fails.
+    """
+    import os
+    from urllib.parse import urlparse
+
+    filename = os.path.basename(urlparse(url).path) or "downloaded_file"
+    output_path = Path(output_dir) / filename
+    try:
+        download_file(url, output_path, show_progress=show_progress)
+    except (OSError, ValueError) as e:  # ValueError: a malformed URL
+        raise BioamlaError(f"Download failed: {e}") from e
+    return str(output_path)
+
+
+def unzip_to(zip_file: str | Path, output_dir: str | Path = ".") -> list[str]:
+    """Extract a ZIP archive into ``output_dir`` (entries can't leave it: ``zipfile``
+    drops absolute paths and ``..`` parts).
+
+    Returns:
+        The extracted paths.
+
+    Raises:
+        NotFoundError: If the archive doesn't exist.
+        BioamlaError: If it isn't a valid ZIP or can't be extracted.
+    """
+    if not Path(zip_file).is_file():
+        raise NotFoundError(f"ZIP archive not found: {zip_file}")
+    try:
+        return extract_zip_file(zip_file, output_dir)
+    except (OSError, zipfile.BadZipFile) as e:
+        raise BioamlaError(f"Extraction failed: {e}") from e
+
+
+def zip_path(source: str | Path, zip_file: str | Path) -> str:
+    """Zip a folder (its contents) or a single file into ``zip_file``.
+
+    Raises:
+        BioamlaError: If the archive can't be written.
+    """
+    try:
+        if Path(source).is_dir():
+            return zip_directory(source, zip_file)
+        return create_zip_file([source], zip_file)
+    except (OSError, ValueError) as e:  # ValueError: a timestamp before 1980
+        raise BioamlaError(f"ZIP creation failed: {e}") from e
+
+
 __all__ = [
+    "download_to_dir",
+    "unzip_to",
+    "zip_path",
     # I/O helpers
     "read_text",
     "write_text",

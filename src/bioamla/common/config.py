@@ -155,6 +155,62 @@ def config_schema(config: str | type) -> dict[str, Any]:
     return schema
 
 
+def config_schema_report(
+    name: str | None = None, output: str | Path | None = None
+) -> dict[str, Any]:
+    """A config's JSON Schema, optionally written to ``output``; without ``name``, the
+    configs that have one.
+
+    Returns:
+        ``{"configs": {name: class}}``, ``{"name", "schema"}``, or (with ``output``)
+        ``{"name", "output"}``.
+
+    Raises:
+        ConfigError: If ``name`` is unknown or the file can't be written.
+        DependencyError: If the config's package needs a missing extra.
+    """
+    import json
+
+    if not name:
+        return {"configs": {n: t.replace(":", ".") for n, t in CONFIG_CLASSES.items()}}
+    schema = config_schema(name)
+    if output is None:
+        return {"name": name, "schema": schema}
+    try:
+        Path(output).write_text(json.dumps(schema, indent=2) + "\n")
+    except OSError as e:
+        raise ConfigError(f"Failed to write {output}: {e}") from e
+    return {"name": name, "output": str(output)}
+
+
+def export_config_schemas(output_dir: str | Path) -> dict[str, Any]:
+    """Write every exported config's JSON Schema to ``<name>.schema.json`` in
+    ``output_dir``.
+
+    Returns:
+        ``{"written": [paths], "skipped": [{"name", "reason"}]}``: a config whose
+        package needs an extra that isn't installed is skipped.
+    """
+    import json
+
+    from bioamla.exceptions import DependencyError
+
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[str] = []
+    skipped: list[dict[str, str]] = []
+    for name in CONFIG_CLASSES:
+        try:
+            schema = config_schema(name)
+        except DependencyError as e:
+            skipped.append({"name": name, "reason": str(e)})
+            continue
+        path = out_dir / f"{name}.schema.json"
+        path.write_text(json.dumps(schema, indent=2) + "\n")
+        written.append(str(path))
+    return {"written": written, "skipped": skipped}
+
+
 def _drop_private_fields(schema: dict[str, Any]) -> None:
     """Remove ``_``-prefixed properties from a schema and its ``$defs``, in place."""
     for node in [schema, *schema.get("$defs", {}).values()]:

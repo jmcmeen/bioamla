@@ -355,3 +355,19 @@ __all__ = [
     "run_install",
     "install",
 ]
+
+
+def install_missing() -> dict:
+    """Install whatever system libraries are missing, then check again.
+
+    Returns:
+        ``{"installed": message or None (nothing was missing), "report": the check}``.
+
+    Raises:
+        BioamlaError: If the install fails.
+    """
+    report = check_all()
+    if report.all_installed:
+        return {"installed": None, "report": report}
+    message = install(report.os_type)
+    return {"installed": message, "report": check_all()}

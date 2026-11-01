@@ -51,6 +51,9 @@ OPERATION_MODULES: dict[str, str] = {
     "detect": "bioamla.detect.operations",
     "indices": "bioamla.indices.operations",
     "models": "bioamla.ml.operations",
+    "system": "bioamla.system.operations",
+    "util": "bioamla.common.file_operations",
+    "workspace": "bioamla.workspace.operations",
 }
 
 OperationKind = Literal["quick", "job"]

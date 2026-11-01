@@ -38,6 +38,7 @@ def test_util_download_error(runner: CliRunner, tmp_path) -> None:
 
 
 def test_util_unzip(runner: CliRunner, tmp_path) -> None:
+    (tmp_path / "a.zip").write_bytes(b"")  # extraction is mocked; the file must exist
     with patch("bioamla.common.files.extract_zip_file") as m:
         result = runner.invoke(cli, ["util", "unzip", str(tmp_path / "a.zip"), str(tmp_path)])
     assert result.exit_code == 0, result.output

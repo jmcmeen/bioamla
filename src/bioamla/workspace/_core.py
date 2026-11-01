@@ -446,6 +446,20 @@ class Workspace:
         records = list(records)
         return records[-limit:] if limit else records
 
+    def artifact_row(self, artifact: Artifact) -> dict[str, Any]:
+        """``artifact`` as a dict, with where it resolves to and whether it's there
+        (``resolved``, ``exists``)."""
+        path = self.resolve(artifact)
+        return {**artifact.to_dict(), "resolved": str(path), "exists": path.exists()}
+
+    def artifact_rows(self, kind: str | None = None) -> list[dict[str, Any]]:
+        """Every artifact as :meth:`artifact_row`; only those of ``kind`` if given."""
+        return [self.artifact_row(a) for a in self.artifacts(kind=kind)]
+
+    def status(self, last_runs: int = 5) -> dict[str, Any]:
+        """:meth:`to_dict` plus the last ``last_runs`` run records (``last_runs``)."""
+        return {**self.to_dict(), "last_runs": self.history(limit=last_runs)}
+
     def to_dict(self) -> dict[str, Any]:
         """Workspace metadata and a count of artifacts per kind."""
         counts: dict[str, int] = {}
@@ -521,6 +535,22 @@ def open_workspace(root: str | Path) -> Workspace:
             f"({FORMAT_VERSION}); upgrade bioamla to open it"
         )
     return Workspace(root, meta)
+
+
+def current_workspace(start: str | Path | None = None) -> Workspace:
+    """The workspace containing ``start`` (default: the current directory).
+
+    Raises:
+        NotFoundError: If there is none.
+    """
+    ws = find_workspace(start)
+    if ws is None:
+        where = start or "the current directory"
+        raise NotFoundError(
+            f"Not inside a bioamla workspace ({where}). "
+            "Create one with `bioamla workspace init` (create_workspace())."
+        )
+    return ws
 
 
 def find_workspace(start: str | Path | None = None) -> Workspace | None:

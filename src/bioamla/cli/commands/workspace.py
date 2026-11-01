@@ -25,29 +25,31 @@ def workspace(ctx: click.Context, directory: str | None) -> None:
     ctx.obj = {"start": directory}
 
 
-def _current(ctx: click.Context):
-    """The workspace for this command, or a ClickException saying how to make one."""
-    from bioamla.workspace import find_workspace
+def _start(ctx: click.Context) -> str:
+    """Where this command looks for its workspace: ``-C``, or the current directory."""
+    return (ctx.obj or {}).get("start") or "."
 
-    start = (ctx.obj or {}).get("start")
+
+def _workspace_run(ctx: click.Context, operation: str, /, **request):
+    """Find this command's workspace (recording the run in its history, even if the
+    operation then fails), then run ``operation`` on it. Returns (workspace, result)."""
+    from bioamla.cli.operations import run_operation
+
+    ws = _current(ctx)
+    return ws, run_operation(operation, directory=str(ws.root), **request)
+
+
+def _current(ctx: click.Context):
+    """The workspace for this command (settings commands), or a ClickException."""
+    from bioamla.cli.output import note_workspace
+    from bioamla.workspace import current_workspace
+
     try:
-        ws = find_workspace(start)
+        ws = current_workspace(_start(ctx))
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
-    if ws is None:
-        where = start or "the current directory"
-        raise click.ClickException(
-            f"Not inside a bioamla workspace ({where}). Create one with `bioamla workspace init`."
-        )
-    from bioamla.cli.output import note_workspace
-
     note_workspace(ws)  # this run's history goes to the workspace it worked on
     return ws
-
-
-def _artifact_row(ws, artifact) -> dict:
-    path = ws.resolve(artifact)
-    return {**artifact.to_dict(), "resolved": str(path), "exists": path.exists()}
 
 
 @workspace.command("init")
@@ -57,25 +59,16 @@ def _artifact_row(ws, artifact) -> dict:
 def workspace_init(ctx: click.Context, directory: str, name: str | None) -> None:
     """Make DIRECTORY (default: the current one) a workspace."""
     from bioamla.cli.console import print_kv, print_success
-    from bioamla.cli.output import emit_result
-    from bioamla.workspace import create_workspace
+    from bioamla.cli.operations import run_operation
+    from bioamla.cli.output import emit_result, note_workspace
+    from bioamla.workspace import open_workspace
 
-    start = (ctx.obj or {}).get("start")
-    root = Path(start or ".") / directory
-    try:
-        ws = create_workspace(root, name=name)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    from bioamla.cli.output import note_workspace
-
-    note_workspace(ws)
-    if emit_result(ws.to_dict()):
+    info = run_operation("workspace.init", directory=str(Path(_start(ctx)) / directory), name=name)
+    note_workspace(open_workspace(info["root"]))
+    if emit_result(info):
         return
-    print_success(f"Created workspace {ws.name!r}")
-    print_kv("Root", ws.root)
-
-
-_STATUS_RUNS = 5
+    print_success(f"Created workspace {info['name']!r}")
+    print_kv("Root", info["root"])
 
 
 @workspace.command("status")
@@ -85,13 +78,9 @@ def workspace_status(ctx: click.Context) -> None:
     from bioamla.cli.console import print_kv, print_table
     from bioamla.cli.output import emit_result
 
-    ws = _current(ctx)
-    try:
-        info = ws.to_dict()
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    runs = ws.history(limit=_STATUS_RUNS)
-    if emit_result({**info, "last_runs": runs}):
+    _, info = _workspace_run(ctx, "workspace.status")
+    runs = info["last_runs"]
+    if emit_result(info):
         return
     print_kv("Workspace", info["name"])
     print_kv("Root", info["root"])
@@ -124,20 +113,19 @@ def _add_command(command_name: str, copy: bool, verb: str, doc: str):
         from bioamla.cli.console import print_success
         from bioamla.cli.output import emit_result
 
-        if name is not None and len(paths) > 1:
-            raise click.UsageError("--name applies to a single PATH")
-        ws = _current(ctx)
         # Relative paths are relative to -C, like git -C.
-        base = Path((ctx.obj or {}).get("start") or ".")
+        base = Path(_start(ctx))
         resolved = [p if Path(p).is_absolute() else str(base / p) for p in paths]
-        try:
-            many = ws.import_many if copy else ws.link_many
-            added = [_artifact_row(ws, a) for a in many(resolved, kind=kind, name=name or "")]
-        except BioamlaError as e:
-            raise click.ClickException(str(e)) from e
-        if emit_result({"workspace": str(ws.root), "artifacts": added}):
+        _, result = _workspace_run(
+            ctx,
+            "workspace.import" if copy else "workspace.add",
+            paths=resolved,
+            kind=kind,
+            name=name,
+        )
+        if emit_result(result):
             return
-        for row in added:
+        for row in result["artifacts"]:
             print_success(f"{verb} {row['kind']} {row['path']}  (id {row['id']})")
 
     return command
@@ -176,12 +164,9 @@ def workspace_list(ctx: click.Context, kind) -> None:
     from bioamla.cli.console import print_table
     from bioamla.cli.output import emit_result
 
-    ws = _current(ctx)
-    try:
-        rows = [_artifact_row(ws, a) for a in ws.artifacts(kind=kind)]
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    if emit_result({"workspace": str(ws.root), "artifacts": rows}):
+    ws, result = _workspace_run(ctx, "workspace.list", kind=kind)
+    rows = result["artifacts"]
+    if emit_result(result):
         return
     if not rows:
         click.echo("No artifacts. Add some with `bioamla workspace add PATH`.")
@@ -203,18 +188,17 @@ def workspace_remove(ctx: click.Context, artifact_id: str, delete_import: bool) 
     from bioamla.cli.console import print_success
     from bioamla.cli.output import emit_result
 
-    ws = _current(ctx)
-    try:
-        artifact = ws.remove(artifact_id, delete_import=delete_import)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    deleted = delete_import and artifact.mode == "imported"
-    if emit_result(
-        {"workspace": str(ws.root), "removed": artifact.to_dict(), "deleted_copy": deleted}
-    ):
+    _, result = _workspace_run(
+        ctx,
+        "workspace.remove",
+        artifact_id=artifact_id,
+        delete_import=delete_import,
+    )
+    if emit_result(result):
         return
-    print_success(f"Removed {artifact.kind} {artifact.path}")
-    if delete_import and not deleted:
+    removed = result["removed"]
+    print_success(f"Removed {removed['kind']} {removed['path']}")
+    if delete_import and not result["deleted_copy"]:
         click.echo("  It was linked, not imported: the file was left where it is.")
 
 
@@ -233,9 +217,14 @@ def workspace_history(ctx: click.Context, limit: int, failed: bool, show_all: bo
     from bioamla.cli.console import print_table
     from bioamla.cli.output import emit_result
 
-    ws = _current(ctx)
-    runs = ws.history(limit=None if show_all else limit, failed_only=failed)
-    if emit_result({"workspace": str(ws.root), "runs": runs}):
+    ws, result = _workspace_run(
+        ctx,
+        "workspace.history",
+        limit=None if show_all else limit,
+        failed=failed,
+    )
+    runs = result["runs"]
+    if emit_result(result):
         return
     if not runs:
         click.echo("No runs recorded yet." if not failed else "No failed runs.")

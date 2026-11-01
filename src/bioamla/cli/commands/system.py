@@ -2,8 +2,6 @@
 
 import click
 
-from bioamla.exceptions import BioamlaError
-
 
 @click.group()
 def system() -> None:
@@ -15,15 +13,10 @@ def system() -> None:
 def system_version() -> None:
     """Show bioamla version and environment information."""
     from bioamla.cli.console import console
-    from bioamla.system import util
-
-    try:
-        version_data = util.get_version()
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
+    version_data = run_operation("system.version")
     if emit_result(version_data):
         return
 
@@ -44,14 +37,10 @@ def system_version() -> None:
 def system_devices() -> None:
     """Show available compute devices (GPU, MPS, CPU)."""
     from bioamla.cli.console import console
-    from bioamla.system import util
-
-    try:
-        devices_data = util.get_device_info()
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
+
+    devices_data = run_operation("system.devices")
 
     if emit_result(devices_data):
         return
@@ -106,30 +95,16 @@ def system_deps(do_install: bool, yes: bool) -> None:
         bioamla system deps --install -y # Install without confirmation
     """
     from bioamla.cli.console import console
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result, json_mode
-    from bioamla.system import dependency
 
     if json_mode() and do_install and not yes:
         raise click.UsageError("--install with --json needs --yes (there is no prompt).")
 
-    try:
-        report = dependency.check_all()
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
     if json_mode():
-        if not do_install:
-            emit_result(report)
-            return
-        if report.all_installed:  # nothing to do, as in the normal path
-            emit_result({"installed": None, "report": report})
-            return
-        try:
-            message = dependency.install(report.os_type)
-        except BioamlaError as e:
-            raise click.ClickException(str(e)) from e
-        emit_result({"installed": message, "report": dependency.check_all()})
+        emit_result(run_operation("system.deps-install" if do_install else "system.deps"))
         return
+    report = run_operation("system.deps")
 
     console.print("\n[bold]System Dependencies[/bold]")
     console.print(f"[dim]Detected OS: {report.os_type}[/dim]\n")
@@ -165,15 +140,10 @@ def system_deps(do_install: bool, yes: bool) -> None:
                 return
 
         console.print("\n[bold]Installing dependencies...[/bold]")
-        try:
-            message = dependency.install(report.os_type)
-        except BioamlaError as e:
-            raise click.ClickException(str(e)) from e
-
-        console.print(f"[green]{message}[/green]")
+        installed = run_operation("system.deps-install")
+        console.print(f"[green]{installed['installed'] or 'Nothing was missing.'}[/green]")
         console.print("\n[bold]Verifying installation...[/bold]")
-        verify = dependency.check_all()
-        for dep in verify.dependencies:
+        for dep in installed["report"].dependencies:
             if dep.installed:
                 console.print(f"[green]✓[/green] {dep.name}")
             else:
@@ -246,50 +216,29 @@ def system_schema(name: str | None, output: str | None, export_all: bool) -> Non
     With no NAME, lists the configs that have a schema. Point an editor's TOML
     or JSON schema support at the output to get completion and validation.
     """
-    import json
-    from pathlib import Path
-
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
-    from bioamla.common.config import CONFIG_CLASSES, config_schema
-    from bioamla.exceptions import DependencyError
 
     if export_all:
         if name or not output:
             raise click.UsageError("--all takes no NAME and needs --output DIRECTORY.")
-        out_dir = Path(output)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        written: list[str] = []
-        skipped: list[dict[str, str]] = []
-        for config_name in CONFIG_CLASSES:
-            try:
-                schema = config_schema(config_name)
-            except DependencyError as e:
-                skipped.append({"name": config_name, "reason": str(e)})
-                click.echo(f"Skipped {config_name}: {e}", err=True)
-                continue
-            path = out_dir / f"{config_name}.schema.json"
-            path.write_text(json.dumps(schema, indent=2) + "\n")
-            written.append(str(path))
+        exported = run_operation("system.export-schemas", output_dir=output)
+        for skipped in exported["skipped"]:
+            click.echo(f"Skipped {skipped['name']}: {skipped['reason']}", err=True)
+        for path in exported["written"]:
             click.echo(f"Wrote {path}")
-        emit_result({"written": written, "skipped": skipped})
+        emit_result(exported)
         return
 
+    result = run_operation("system.schema", name=name, output=output)
+    if emit_result(result):
+        return
     if not name:
-        if emit_result({"configs": {n: t.replace(":", ".") for n, t in CONFIG_CLASSES.items()}}):
-            return
-        for config_name, target in CONFIG_CLASSES.items():
-            click.echo(f"{config_name:<26} {target.replace(':', '.')}")
-        return
-
-    try:
-        schema = config_schema(name)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-    text = json.dumps(schema, indent=2) + "\n"
-    if output:
-        Path(output).write_text(text)
-        if emit_result({"name": name, "output": output}):
-            return
+        for config_name, target in result["configs"].items():
+            click.echo(f"{config_name:<26} {target}")
+    elif output:
         click.echo(f"Wrote {output}")
-    elif not emit_result({"name": name, "schema": schema}):
-        click.echo(text, nl=False)
+    else:
+        import json
+
+        click.echo(json.dumps(result["schema"], indent=2) + "\n", nl=False)
