@@ -147,9 +147,6 @@ def test_label_skill_on_a_server_workspace(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.setenv("BIOAMLA_LAB_TOKEN", token)
     monkeypatch.delenv("BIOAMLA_REMOTE", raising=False)
-    # Load model weights on one thread in the server's job workers: transformers'
-    # threaded loading can deadlock in safetensors (bioamla issue #291).
-    monkeypatch.setenv("HF_DEACTIVATE_ASYNC_LOAD", "1")
     add_remote("lab", url)
     laptop = workspace  # a local workspace with an unrelated annotations file
     (laptop / "annotations.csv").write_text("file,label\nmine.wav,owl\n")
