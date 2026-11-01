@@ -22,6 +22,20 @@ Example:
 """
 
 from bioamla.common.deprecation import deprecated_aliases
+from bioamla.datasets.annotation_files import (
+    AnnotationFileSummary,
+    AnnotationTemplate,
+    ConvertedAnnotations,
+    GeneratedLabels,
+    RewrittenAnnotations,
+    annotation_template,
+    clip_labels_file,
+    convert_annotation_file,
+    filter_annotation_file,
+    frame_labels_file,
+    remap_annotation_file,
+    summarize_annotation_file,
+)
 from bioamla.datasets.annotation_utils import (
     AnnotationSet,
     annotations_to_one_hot,
@@ -112,6 +126,19 @@ from bioamla.exceptions import (
 )
 
 __all__ = [
+    # Annotation files (bioamla.datasets.annotation_files)
+    "AnnotationFileSummary",
+    "AnnotationTemplate",
+    "ConvertedAnnotations",
+    "GeneratedLabels",
+    "RewrittenAnnotations",
+    "annotation_template",
+    "clip_labels_file",
+    "convert_annotation_file",
+    "filter_annotation_file",
+    "frame_labels_file",
+    "remap_annotation_file",
+    "summarize_annotation_file",
     # Annotation data structures
     "Annotation",
     "AnnotationResult",

@@ -43,6 +43,7 @@ OPERATION_MODULES: dict[str, str] = {
     "batch.detect": "bioamla.detect.batch_operations",
     "batch.index": "bioamla.indices.batch_operations",
     "batch.models": "bioamla.ml.batch_operations",
+    "annotation": "bioamla.datasets.annotation_operations",
     "audio": "bioamla.audio.operations",
     "detect": "bioamla.detect.operations",
     "indices": "bioamla.indices.operations",

@@ -1,90 +1,10 @@
 """Annotation management commands for audio datasets."""
 
-import math
 from pathlib import Path
 
 import click
 
 from bioamla.common.constants import ANNOTATION_FORMATS as _FORMAT_CHOICES
-from bioamla.exceptions import BioamlaError
-
-# The datasets package (and numpy/pandas with it) is imported only when a command
-# runs, so `bioamla --help` stays fast. These wrappers keep the call sites short.
-
-
-def _detect_format(*args, **kwargs):
-    from bioamla.datasets._io import detect_annotation_format
-
-    return detect_annotation_format(*args, **kwargs)
-
-
-def _load(*args, **kwargs):
-    from bioamla.datasets._io import load_annotations
-
-    return load_annotations(*args, **kwargs)
-
-
-def _one_recording(annotations, recording: str | None, source: str):
-    """The rows for one recording: ``--recording``, or the file's only one.
-
-    Labels laid on one timeline from several recordings would be meaningless, so a
-    file naming more than one recording needs ``--recording``.
-    """
-    from bioamla.datasets._io import annotations_for_recording, recordings_named
-
-    names = recordings_named(annotations)
-    if recording is not None:
-        kept = annotations_for_recording(annotations, recording)
-        if names and not kept:
-            raise click.ClickException(f"No rows in {source} are for recording {recording!r}")
-        return kept
-    if len(names) > 1:
-        shown = ", ".join(sorted(names)[:3]) + (", ..." if len(names) > 3 else "")
-        raise click.ClickException(
-            f"{source} covers {len(names)} recordings ({shown}); pick one with --recording"
-        )
-    return annotations
-
-
-def _save(*args, **kwargs):
-    from bioamla.datasets._io import save_annotations
-
-    return save_annotations(*args, **kwargs)
-
-
-def _write_labels(output_file, output_format, array, label_map, header_prefix, rows):
-    """Write generated labels; return (data path, label-map path or None).
-
-    ``numpy``: the array as ``.npy`` (``np.save`` adds the suffix when missing)
-    plus a ``<name>.labels.csv`` mapping each label to its column. ``csv``: one
-    table with ``header_prefix`` columns, one column per label, and ``rows``.
-    A failed write is a ClickException.
-    """
-    import csv as csv_lib
-
-    import numpy as np
-
-    output_path = Path(output_file)
-    ordered = sorted(label_map, key=lambda label: label_map[label])
-    try:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        if output_format == "numpy":
-            data_path = output_path if output_path.suffix == ".npy" else Path(f"{output_path}.npy")
-            np.save(data_path, array)
-            label_map_path = output_path.with_suffix(".labels.csv")
-            with open(label_map_path, "w", newline="", encoding="utf-8") as f:
-                writer = csv_lib.writer(f)
-                writer.writerow(["label", "index"])
-                for label in ordered:
-                    writer.writerow([label, label_map[label]])
-            return data_path, label_map_path
-        with open(output_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv_lib.writer(f)
-            writer.writerow([*header_prefix, *ordered])
-            writer.writerows(rows)
-        return output_path, None
-    except OSError as e:
-        raise click.ClickException(f"Failed to write {output_file}: {e}") from e
 
 
 @click.group()
@@ -121,62 +41,29 @@ def annotation_template(
     placeholder row spanning the whole file, ready to edit. The bioamla (.json)
     format stores the audio metadata in the file; raven/csv hold the rows only.
     """
-    from datetime import datetime, timezone
-
-    from bioamla.audio import get_audio_info
     from bioamla.cli.console import echo, print_kv, print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
-    from bioamla.datasets import Annotation
 
-    audio_path = Path(audio_file)
-
-    output_path = Path(output_file)
-    fmt = _detect_format(output_path, out_format)
-
-    try:
-        info = get_audio_info(audio_file)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    annotations = []
-    if not empty:
-        annotations.append(Annotation(start_time=0.0, end_time=info.duration, label=label))
-
-    metadata = {
-        "audio_file": audio_path.name,
-        "sample_rate": info.sample_rate,
-        "duration": round(info.duration, 6),
-        "channels": info.channels,
-        "created": datetime.now(timezone.utc).isoformat(),
-    }
-
-    try:
-        _save(annotations, output_path, fmt, metadata=metadata)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    if emit_result(
-        {
-            "audio_file": audio_file,
-            "output": output_file,
-            "format": fmt,
-            "rows": len(annotations),
-            "audio": {
-                "duration": info.duration,
-                "sample_rate": info.sample_rate,
-                "channels": info.channels,
-            },
-        }
-    ):
+    made = run_operation(
+        "annotation.template",
+        audio_file=audio_file,
+        output=output_file,
+        format=out_format,
+        label=label,
+        empty=empty,
+    )
+    if emit_result(made.to_dict()):
         return
 
     if not quiet:
-        print_success(f"Created {fmt} annotation template: {output_file}")
+        print_success(f"Created {made.format} annotation template: {output_file}")
         echo(
-            f"  audio: {audio_path.name}  duration: {info.duration:.2f}s  sr: {info.sample_rate} Hz"
+            f"  audio: {Path(audio_file).name}  duration: {made.duration:.2f}s  "
+            f"sr: {made.sample_rate} Hz"
         )
-        print_kv("  rows", len(annotations))
-        if fmt != "bioamla":
+        print_kv("  rows", made.rows)
+        if made.format != "bioamla":
             echo("  note: audio metadata is only persisted in the bioamla (.json) format")
 
 
@@ -227,35 +114,26 @@ def annotation_convert(
         bioamla annotation convert pattern_matching_rois.csv labels.txt
     """
     from bioamla.cli.console import print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
 
-    input_path = Path(input_file)
-    output_path = Path(output_file)
-
-    from_format = _detect_format(input_path, from_format, read_header=True)
-    to_format = _detect_format(output_path, to_format)
-
-    if recording is not None and to_format != "arbimon":
-        raise click.UsageError("--recording only applies to --to arbimon")
-    try:
-        annotations, metadata = _load(input_path, from_format, label_column=label_column)
-        _save(annotations, output_path, to_format, metadata=metadata, recording=recording)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    if emit_result(
-        {
-            "input": input_file,
-            "output": output_file,
-            "from_format": from_format,
-            "to_format": to_format,
-            "count": len(annotations),
-        }
-    ):
+    converted = run_operation(
+        "annotation.convert",
+        input=input_file,
+        output=output_file,
+        from_format=from_format,
+        to_format=to_format,
+        label_column=label_column,
+        recording=recording,
+    )
+    if emit_result(converted.to_dict()):
         return
 
     if not quiet:
-        print_success(f"Converted {len(annotations)} annotations from {from_format} to {to_format}")
+        print_success(
+            f"Converted {converted.count} annotations from {converted.from_format} "
+            f"to {converted.to_format}"
+        )
         print_success(f"Output: {output_file}")
 
 
@@ -277,19 +155,11 @@ def annotation_convert(
 def annotation_summary(path: str, file_format: str, output_json: bool) -> None:
     """Display summary statistics for an annotation file."""
     from bioamla.cli.console import echo, print_header, print_kv
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result, json_mode, legacy_json
-    from bioamla.datasets import summarize_annotations
 
-    input_path = Path(path)
-
-    file_format = _detect_format(input_path, file_format, read_header=True)
-
-    try:
-        annotations, metadata = _load(input_path, file_format)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    summary = summarize_annotations(annotations)
+    result = run_operation("annotation.summary", file=path, format=file_format)
+    summary, metadata = result.summary, result.metadata
 
     if json_mode():
         emit_result(summary)
@@ -331,38 +201,23 @@ def annotation_remap(
 ) -> None:
     """Remap annotation labels using a mapping file."""
     from bioamla.cli.console import print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
-    from bioamla.datasets import load_label_mapping, remap_labels
 
-    input_path = Path(input_file)
-    output_path = Path(output_file)
-
-    in_format = _detect_format(input_path, read_header=True)
-    # Same extension (or none): keep the input's format, so an Arbimon CSV stays one.
-    same = not output_path.suffix or output_path.suffix.lower() == input_path.suffix.lower()
-    out_format = in_format if same else _detect_format(output_path)
-
-    try:
-        label_mapping = load_label_mapping(mapping)
-        annotations, metadata = _load(input_path, in_format)
-        original_count = len(annotations)
-        remapped = remap_labels(annotations, label_mapping, keep_unmapped=keep_unmapped)
-        _save(remapped, output_path, out_format, metadata=metadata)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    if emit_result(
-        {
-            "input": input_file,
-            "output": output_file,
-            "input_count": original_count,
-            "output_count": len(remapped),
-        }
-    ):
+    result = run_operation(
+        "annotation.remap",
+        input=input_file,
+        output=output_file,
+        mapping=mapping,
+        keep_unmapped=keep_unmapped,
+    )
+    if emit_result(result.to_dict()):
         return
 
     if not quiet:
-        print_success(f"Remapped {original_count} annotations -> {len(remapped)} annotations")
+        print_success(
+            f"Remapped {result.input_count} annotations -> {result.output_count} annotations"
+        )
         print_success(f"Output: {output_file}")
 
 
@@ -385,48 +240,25 @@ def annotation_filter(
 ) -> None:
     """Filter annotations by label or duration."""
     from bioamla.cli.console import print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
-    from bioamla.datasets import filter_labels
 
-    input_path = Path(input_file)
-    output_path = Path(output_file)
-
-    in_format = _detect_format(input_path, read_header=True)
-    # Same extension (or none): keep the input's format, so an Arbimon CSV stays one.
-    same = not output_path.suffix or output_path.suffix.lower() == input_path.suffix.lower()
-    out_format = in_format if same else _detect_format(output_path)
-
-    try:
-        annotations, metadata = _load(input_path, in_format)
-        original_count = len(annotations)
-
-        include_set = set(include) if include else None
-        exclude_set = set(exclude) if exclude else None
-        filtered = filter_labels(
-            annotations, include_labels=include_set, exclude_labels=exclude_set
-        )
-
-        if min_duration is not None:
-            filtered = [a for a in filtered if a.duration >= min_duration]
-        if max_duration is not None:
-            filtered = [a for a in filtered if a.duration <= max_duration]
-
-        _save(filtered, output_path, out_format, metadata=metadata)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    if emit_result(
-        {
-            "input": input_file,
-            "output": output_file,
-            "input_count": original_count,
-            "output_count": len(filtered),
-        }
-    ):
+    result = run_operation(
+        "annotation.filter",
+        input=input_file,
+        output=output_file,
+        include=list(include) or None,
+        exclude=list(exclude) or None,
+        min_duration=min_duration,
+        max_duration=max_duration,
+    )
+    if emit_result(result.to_dict()):
         return
 
     if not quiet:
-        print_success(f"Filtered {original_count} annotations -> {len(filtered)} annotations")
+        print_success(
+            f"Filtered {result.input_count} annotations -> {result.output_count} annotations"
+        )
         print_success(f"Output: {output_file}")
 
 
@@ -478,99 +310,29 @@ def annotation_generate_labels(
     quiet: bool,
 ) -> None:
     """Generate clip-level labels from annotations."""
-
-    import numpy as np
-
     from bioamla.cli.console import print_kv, print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
-    from bioamla.datasets import (
-        create_label_map,
-        generate_clip_labels,
-        get_unique_labels,
+
+    result = run_operation(
+        "annotation.generate-labels",
+        annotation_file=annotation_file,
+        output=output_file,
+        clip_duration=clip_duration,
+        audio_duration=audio_duration,
+        hop_length=hop_length,
+        min_overlap=min_overlap,
+        multi_label=multi_label,
+        output_format=output_format,
+        recording=recording,
     )
-
-    input_path = Path(annotation_file)
-
-    in_format = _detect_format(input_path, read_header=True)
-
-    try:
-        annotations, metadata = _load(input_path, in_format)
-        annotations = _one_recording(annotations, recording, annotation_file)
-
-        if not annotations:
-            raise click.ClickException("No annotations found in file")
-
-        # Fall back to the duration embedded in a bioamla file when not given.
-        if audio_duration is None:
-            if metadata.get("duration") is not None:
-                audio_duration = float(metadata["duration"])
-            else:
-                raise click.ClickException(
-                    "--audio-duration is required (no duration metadata in this file)"
-                )
-
-        labels = get_unique_labels(annotations)
-        label_map = create_label_map(labels)
-
-        if hop_length is None:
-            hop_length = clip_duration
-        if clip_duration <= 0 or hop_length <= 0:
-            raise click.ClickException("--clip-duration and --hop-length must be positive")
-        if clip_duration > audio_duration:
-            raise click.ClickException(
-                f"--clip-duration ({clip_duration}s) is longer than the audio ({audio_duration}s)"
-            )
-
-        # The small epsilon keeps float error from dropping the last clip
-        # (e.g. 0.2 / 0.1 == 1.9999999999999998).
-        num_clips = math.floor((audio_duration - clip_duration) / hop_length + 1e-9) + 1
-        all_labels = []
-
-        for i in range(num_clips):
-            clip_start = i * hop_length
-            clip_end = clip_start + clip_duration
-            clip_labels = generate_clip_labels(
-                annotations,
-                clip_start,
-                clip_end,
-                label_map,
-                min_overlap=min_overlap,
-                multi_label=multi_label,
-            )
-            all_labels.append(clip_labels)
-
-        labels_array = np.array(all_labels)
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    data_path, label_map_path = _write_labels(
-        output_file,
-        output_format,
-        labels_array,
-        label_map,
-        ["clip_start", "clip_end"],
-        (
-            [f"{i * hop_length:.3f}", f"{i * hop_length + clip_duration:.3f}"]
-            + [int(v) for v in clip_labels]
-            for i, clip_labels in enumerate(labels_array)
-        ),
-    )
-
-    if emit_result(
-        {
-            "annotation_file": annotation_file,
-            "output": str(data_path),
-            "label_map": str(label_map_path) if label_map_path else None,
-            "clips": num_clips,
-            "labels": sorted(label_map),
-        }
-    ):
+    if emit_result(result.to_dict()):
         return
 
     if not quiet:
-        print_success(f"Generated labels for {num_clips} clips")
-        print_kv("Labels", ", ".join(sorted(label_map.keys())))
-        print_success(f"Output: {output_file}")
+        print_success(f"Generated labels for {result.clips} clips")
+        print_kv("Labels", ", ".join(sorted(result.labels)))
+        print_success(f"Output: {result.output}")
 
 
 @annotation.command("generate-frame-labels")
@@ -613,76 +375,24 @@ def annotation_generate_frame_labels(
     quiet: bool,
 ) -> None:
     """Generate frame-level multi-hot labels from annotations (for SED-style models)."""
-
     from bioamla.cli.console import print_kv, print_success
+    from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result
-    from bioamla.datasets import (
-        create_label_map,
-        generate_frame_labels,
-        get_unique_labels,
+
+    result = run_operation(
+        "annotation.generate-frame-labels",
+        annotation_file=annotation_file,
+        output=output_file,
+        frame_size=frame_size,
+        hop_length=hop_length,
+        audio_duration=audio_duration,
+        output_format=output_format,
+        recording=recording,
     )
-
-    input_path = Path(annotation_file)
-
-    in_format = _detect_format(input_path, read_header=True)
-
-    try:
-        annotations, metadata = _load(input_path, in_format)
-        annotations = _one_recording(annotations, recording, annotation_file)
-
-        if not annotations:
-            raise click.ClickException("No annotations found in file")
-
-        # Fall back to the duration embedded in a bioamla file when not given.
-        if audio_duration is None:
-            if metadata.get("duration") is not None:
-                audio_duration = float(metadata["duration"])
-            else:
-                raise click.ClickException(
-                    "--audio-duration is required (no duration metadata in this file)"
-                )
-
-        if hop_length is None:
-            hop_length = frame_size
-
-        labels = get_unique_labels(annotations)
-        label_map = create_label_map(labels)
-
-        # Shape: (num_classes, num_frames).
-        frame_labels = generate_frame_labels(
-            annotations, audio_duration, frame_size, hop_length, label_map
-        )
-    except BioamlaError as e:
-        raise click.ClickException(str(e)) from e
-
-    num_classes, num_frames = frame_labels.shape
-    data_path, label_map_path = _write_labels(
-        output_file,
-        output_format,
-        frame_labels,
-        label_map,
-        ["frame_start", "frame_end"],
-        (
-            # Transpose (num_classes, num_frames) -> per-frame multi-hot row.
-            [f"{i * hop_length:.3f}", f"{i * hop_length + frame_size:.3f}"]
-            + [int(frame_labels[c, i]) for c in range(num_classes)]
-            for i in range(num_frames)
-        ),
-    )
-
-    if emit_result(
-        {
-            "annotation_file": annotation_file,
-            "output": str(data_path),
-            "label_map": str(label_map_path) if label_map_path else None,
-            "classes": num_classes,
-            "frames": num_frames,
-            "labels": sorted(label_map),
-        }
-    ):
+    if emit_result(result.to_dict()):
         return
 
     if not quiet:
-        print_success(f"Generated frame labels: {num_classes} classes x {num_frames} frames")
-        print_kv("Labels", ", ".join(sorted(label_map.keys())))
-        print_success(f"Output: {output_file}")
+        print_success(f"Generated frame labels: {result.classes} classes x {result.frames} frames")
+        print_kv("Labels", ", ".join(sorted(result.labels)))
+        print_success(f"Output: {result.output}")
