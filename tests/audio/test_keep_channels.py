@@ -90,3 +90,57 @@ def test_each_channel():
     assert np.array_equal(each_channel(mono, lambda c: c * 2), mono * 2)
     two = np.stack([mono, -mono], axis=1)
     assert np.array_equal(each_channel(two, lambda c: c[:2]), two[:2])
+
+
+def test_channels_of_different_lengths_are_a_processing_error():
+    from bioamla.audio import each_channel
+    from bioamla.exceptions import ProcessingError
+
+    two = np.stack([np.zeros(10), np.ones(10)], axis=1)
+    with pytest.raises(ProcessingError):
+        each_channel(two, lambda c: c[:5] if c[0] == 0 else c)  # trims only the first
+
+
+def test_batch_convert_refuses_a_bad_channel_count_before_writing(stereo, tmp_path):
+    from bioamla.audio import batch_convert_files
+    from bioamla.exceptions import InvalidInputError
+
+    with pytest.raises(InvalidInputError, match="channel count"):
+        batch_convert_files(str(stereo.parent), str(tmp_path / "out"), channels=3)
+    assert not (tmp_path / "out").exists()
+
+
+def test_mp3_holds_at_most_two_channels(tmp_path):
+    from bioamla.audio import save_audio
+    from bioamla.exceptions import InvalidInputError
+
+    with pytest.raises(InvalidInputError, match="MP3 holds at most 2"):
+        save_audio(str(tmp_path / "x.mp3"), np.zeros((100, 3), dtype=np.float32), SR)
+
+
+@pytest.mark.parametrize(("subtype", "fmt", "want"), [
+    ("FLOAT", "wav", "PCM_32"), ("PCM_32", "flac", "PCM_24"), ("PCM_24", "wav", "PCM_24"),
+])  # fmt: skip
+def test_convert_keeps_the_most_bits_the_output_holds(tmp_path, subtype, fmt, want):
+    from bioamla.audio import convert_audio_file
+
+    src = tmp_path / "src.wav"
+    sf.write(src, 0.1 * np.ones(SR, dtype=np.float32), SR, subtype=subtype)
+    out = convert_audio_file(src, tmp_path / f"out.{fmt}")
+    assert sf.info(out).subtype == want
+
+
+def test_segment_edges(tmp_path):
+    from bioamla.audio import segment_audio_file
+    from bioamla.exceptions import InvalidInputError
+
+    empty = tmp_path / "empty.wav"
+    sf.write(empty, np.zeros(0, dtype=np.float32), SR)
+    with pytest.raises(InvalidInputError, match="no audio"):
+        segment_audio_file(empty, tmp_path / "e", duration=1, include_partial=True)
+    rec = tmp_path / "rec.wav"
+    sf.write(rec, np.zeros(SR * 10, dtype=np.float32), SR)
+    clips = segment_audio_file(rec, tmp_path / "c", duration=3, overlap=2.5, include_partial=True)
+    ends = [s.end_time for s in clips]
+    assert ends[-1] == pytest.approx(10.0) and ends.count(ends[-1]) == 1  # one shorter last clip
+    assert all(s.duration == pytest.approx(3.0) for s in clips[:-1])

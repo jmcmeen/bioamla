@@ -147,8 +147,8 @@ class TestConvertBitDepthDefaultsAndChecks:
         assert (sf.info(out).format, sf.info(out).subtype) == ("FLAC", "PCM_24")
         src32 = tmp_path / "in32.wav"
         sf.write(src32, np.zeros(800), 8000, subtype="PCM_32")
-        # FLAC can't hold 32 bits: the default falls back to 16
-        assert sf.info(convert_audio_file(src32, tmp_path / "o32.flac")).subtype == "PCM_16"
+        # FLAC can't hold 32 bits: the default is the most it holds, 24
+        assert sf.info(convert_audio_file(src32, tmp_path / "o32.flac")).subtype == "PCM_24"
 
     def test_batch_refuses_a_bad_depth_before_writing(self, test_audio_dir, tmp_path):
         from bioamla.audio.batch import batch_convert_files

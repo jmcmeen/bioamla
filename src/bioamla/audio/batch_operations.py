@@ -100,7 +100,8 @@ class BatchConvertRequest(BatchRequest):
         target_format: Output format.
         sample_rate: Target sample rate (Hz).
         channels: Target channel count (1 or 2; default: keep the file's own).
-        bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24; default 16).
+        bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24); by default the
+            source's when the output holds it, else 16.
         delete_original: Delete each source file after it converts.
     """
 

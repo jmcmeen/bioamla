@@ -49,15 +49,44 @@ def _rechannel(audio: np.ndarray, current_channels: int, target_channels: int) -
 
 
 def _source_bit_depth(path: Path, out_fmt: str) -> int | None:
-    """The source's bits per sample if ``out_fmt`` can hold them (PCM sources only)."""
+    """The source's bits per sample, or the most ``out_fmt`` holds up to them (a 32-bit
+    source to FLAC gives 24); ``None`` without one (MP3, ...) or for a lossy output."""
     try:
         import soundfile as sf
 
         subtype = sf.info(str(path)).subtype
     except Exception:  # noqa: BLE001 - not a soundfile format (MP3, ...): no bit depth
         return None
-    bits = {"PCM_S8": 8, "PCM_U8": 8, "PCM_16": 16, "PCM_24": 24, "PCM_32": 32}.get(subtype)
-    return bits if bits in BIT_DEPTH_SUBTYPES.get(out_fmt, {}) else None
+    bits = {"PCM_S8": 8, "PCM_U8": 8, "PCM_16": 16, "PCM_24": 24, "PCM_32": 32,
+            "FLOAT": 32, "DOUBLE": 32}.get(subtype)  # fmt: skip
+    held = [b for b in BIT_DEPTH_SUBTYPES.get(out_fmt, {}) if bits and b <= bits]
+    return max(held) if held else None
+
+
+def check_convert_options(
+    target_format: str | None = None,
+    target_channels: int | None = None,
+    target_bit_depth: int | None = None,
+    output_path: str | Path = "",
+) -> str:
+    """Check conversion options before anything is converted (a batch checks them
+    once, up front); the output format they give.
+
+    Raises:
+        InvalidInputError: If the format or channel count is unsupported, or the bit
+            depth doesn't apply to the format.
+    """
+    fmt = None if target_format is None else target_format.lower().lstrip(".")
+    if fmt is not None and fmt not in SUPPORTED_FORMATS:
+        raise InvalidInputError(
+            f"Unsupported target format: {target_format}. "
+            f"Choose one of {sorted(SUPPORTED_FORMATS)}."
+        )
+    if target_channels not in (None, 1, 2):
+        raise InvalidInputError(f"Unsupported target channel count: {target_channels} (1 or 2)")
+    out_fmt = output_format(output_path, fmt)
+    check_bit_depth(out_fmt, target_bit_depth)
+    return out_fmt
 
 
 def convert_audio_file(
@@ -96,18 +125,9 @@ def convert_audio_file(
         AudioLoadError / AudioSaveError: On I/O failure.
     """
     fmt = None if target_format is None else target_format.lower().lstrip(".")
-    if fmt is not None and fmt not in SUPPORTED_FORMATS:
-        raise InvalidInputError(
-            f"Unsupported target format: {target_format}. "
-            f"Choose one of {sorted(SUPPORTED_FORMATS)}."
-        )
-
-    if target_channels not in (None, 1, 2):
-        raise InvalidInputError(f"Unsupported target channel count: {target_channels} (1 or 2)")
     in_path = Path(input_path)
     out_path = Path(output_path)
-    out_fmt = output_format(out_path, fmt)
-    check_bit_depth(out_fmt, target_bit_depth)
+    out_fmt = check_convert_options(target_format, target_channels, target_bit_depth, out_path)
 
     audio, sr = load_audio_channels(in_path)
     current_channels = 1 if audio.ndim == 1 else audio.shape[1]

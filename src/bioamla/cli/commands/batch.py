@@ -337,7 +337,8 @@ def audio_features(
     "-b",
     default=None,
     type=click.Choice(["8", "16", "24", "32"]),
-    help="Bits per sample: WAV 8, 16, 24 or 32; FLAC 8, 16 or 24 (default 16)",
+    help="Bits per sample: WAV 8, 16, 24 or 32; FLAC 8, 16 or 24 (default: the source's "
+    "when the output holds it, else 16)",
 )
 @click.option(
     "--format",

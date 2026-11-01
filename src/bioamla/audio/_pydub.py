@@ -425,12 +425,18 @@ def save_audio(
         bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24); default 16.
 
     Raises:
-        InvalidInputError: If ``bit_depth`` doesn't apply to the format.
+        InvalidInputError: If ``bit_depth`` doesn't apply to the format, or MP3 is
+            asked to hold more than 2 channels.
         AudioSaveError: If file cannot be saved.
     """
     path = Path(filepath)
     format_to_use = output_format(path, format)
     check_bit_depth(format_to_use, bit_depth)
+    if format_to_use == "mp3" and audio.ndim == 2 and audio.shape[1] > 2:
+        raise InvalidInputError(
+            f"MP3 holds at most 2 channels, not {audio.shape[1]}; mix down first or "
+            "choose another format"
+        )
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

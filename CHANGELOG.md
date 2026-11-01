@@ -238,6 +238,15 @@ These were deprecated in 0.3.x and are breaking changes:
 
 ### Fixed
 
+- Conversion and segmenting edge cases: `batch audio convert` refuses an unsupported
+  channel count (as well as a bit depth) before writing anything (`check_convert_options()`
+  in `bioamla.audio.convert`); `--bit-depth`'s help gives the real default (the source's
+  when the output holds it, else 16); a 32-bit float WAV keeps 32 bits and a 32-bit source
+  to FLAC gets 24, instead of 16; MP3 with more than two channels is refused by
+  `save_audio()` for every caller; segmenting with `--keep-short` and an overlap writes one
+  shorter last clip, not several; an empty file is reported as such. A step that would
+  give a file's channels different lengths raises `ProcessingError`.
+
 - `batch audio visualize --no-legend` draws the bare picture (no axes, title or colorbar);
   it used to be accepted and ignored (#246). `batch.audio.visualize` also honours
   `continue_on_error`, which it ignored.

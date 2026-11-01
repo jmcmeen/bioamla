@@ -157,12 +157,12 @@ def batch_convert_files(
 
     Raises:
         NotFoundError: If the input directory does not exist.
-        InvalidInputError: If ``bit_depth`` doesn't apply to ``target_format``
-            (before anything is written).
+        InvalidInputError: If ``target_format`` or ``channels`` is unsupported, or
+            ``bit_depth`` doesn't apply to the format (before anything is written).
     """
-    from bioamla.audio._pydub import check_bit_depth, output_format
+    from bioamla.audio.convert import check_convert_options
 
-    check_bit_depth(output_format("", target_format), bit_depth)
+    check_convert_options(target_format, channels, bit_depth)
     in_dir = Path(input_dir)
     out_dir = Path(output_dir)
 
@@ -247,7 +247,9 @@ def segment_audio_file(
     if step <= 0:
         raise InvalidInputError("overlap must be smaller than duration.")
     n = audio.shape[-1] if audio.ndim > 1 else len(audio)
-    if n == 0 or (n < seg_samples and not include_partial):
+    if n == 0:
+        raise InvalidInputError(f"{src.name} has no audio to cut")
+    if n < seg_samples and not include_partial:
         raise InvalidInputError(
             f"{src.name} is {n / sr:.3g} s long, shorter than one {duration:g} s clip "
             "(keep it as a shorter clip with --keep-short / include_partial)"
@@ -275,6 +277,8 @@ def segment_audio_file(
                 )
             )
             count += 1
+            if end_idx >= n:  # the clip reached the end: one shorter last clip at most
+                break
             start_idx += step
     except BaseException:
         # Don't leave a partial set behind for a later run to mix with: remove the
@@ -1033,12 +1037,12 @@ def batch_convert(
     place or under ``config.output_dir`` and updates each row's ``file_name``.
 
     Raises:
-        InvalidInputError: If ``bit_depth`` doesn't apply to ``target_format`` (before
-            anything is written).
+        InvalidInputError: If ``target_format`` or ``channels`` is unsupported, or
+            ``bit_depth`` doesn't apply to the format (before anything is written).
     """
-    from bioamla.audio._pydub import check_bit_depth, output_format
+    from bioamla.audio.convert import check_convert_options
 
-    check_bit_depth(output_format("", target_format), bit_depth)
+    check_convert_options(target_format, channels, bit_depth)
     if config.input_file:
         from bioamla.batch import run_csv_transform
 

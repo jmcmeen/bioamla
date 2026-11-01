@@ -431,10 +431,21 @@ def each_channel(audio: np.ndarray, fn: Callable[[np.ndarray], np.ndarray]) -> n
 
     For steps that work on one channel at a time (trim, resample, gain), so a
     multi-channel file keeps its channels.
+
+    Raises:
+        ProcessingError: If ``fn`` gives the channels different lengths (e.g. a
+            silence trim, which depends on each channel's content).
     """
     if audio.ndim == 1:
         return fn(audio)
-    return np.stack([fn(audio[:, c]) for c in range(audio.shape[1])], axis=1)
+    channels = [fn(audio[:, c]) for c in range(audio.shape[1])]
+    if len({len(c) for c in channels}) > 1:
+        from bioamla.exceptions import ProcessingError
+
+        raise ProcessingError(
+            "The step gave the channels different lengths; it can't keep a file's channels"
+        )
+    return np.stack(channels, axis=1)
 
 
 def _load_for(keep_channels: bool, filepath: str | Path) -> tuple[np.ndarray, int]:
@@ -474,7 +485,10 @@ def process_file(
     audio, sr = _load_for(keep_channels, input_path)
     processed = each_channel(audio, lambda ch: processor_fn(ch, sr))
     if sample_rate is not None and sample_rate != sr:
-        processed = each_channel(processed, lambda ch: resample_audio(ch, sr, sample_rate))
+        # resample_audio works along the last axis; channels are columns here.
+        resampled = resample_audio(processed.T if processed.ndim == 2 else processed, sr,
+                                   sample_rate)  # fmt: skip
+        processed = resampled.T if processed.ndim == 2 else resampled
         sr = sample_rate
 
     return save_audio(output_path, processed, sr)
