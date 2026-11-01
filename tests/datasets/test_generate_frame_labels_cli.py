@@ -96,3 +96,18 @@ class TestGenerateFrameLabelsCli:
             n_rows = sum(1 for _ in f) - 1
         # 3.0s, frame 1.0, hop 1.0 -> 3 frames.
         assert n_rows == 3
+
+
+def test_label_maps_are_named_after_their_data_file(tmp_path):
+    from bioamla.datasets import clip_labels_file, frame_labels_file
+
+    ann = tmp_path / "a.json"
+    _write_annotations(ann, duration=2.0)
+    one = clip_labels_file(ann, tmp_path / "run.v1", clip_duration=0.5, output_format="numpy")
+    two = frame_labels_file(ann, tmp_path / "run.v2", frame_size=0.5, output_format="numpy")
+    assert (one.output, one.label_map) == (str(tmp_path / "run.v1.npy"),
+                                           str(tmp_path / "run.v1.labels.csv"))  # fmt: skip
+    assert two.label_map == str(tmp_path / "run.v2.labels.csv")
+    assert (tmp_path / "run.v1.labels.csv").is_file() and (tmp_path / "run.v2.labels.csv").is_file()
+    plain = clip_labels_file(ann, tmp_path / "plain.npy", clip_duration=0.5, output_format="numpy")
+    assert plain.label_map == str(tmp_path / "plain.labels.csv")  # unchanged for .npy names

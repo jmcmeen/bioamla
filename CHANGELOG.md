@@ -186,6 +186,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- `annotation generate-labels` and `generate-frame-labels` with `--format numpy` name the
+  label map after the array file: `run.v1` writes `run.v1.npy` and `run.v1.labels.csv`, so
+  outputs that differ only before their last dot no longer share (and overwrite) one map.
+  Behavior change: an output such as `labels.csv` now writes `labels.csv.labels.csv`
+  beside `labels.csv.npy` (it was `labels.labels.csv`); names ending in `.npy`, or without
+  a dot, are unchanged.
+
 - **Behavior change:** `audio visualize` and `batch audio visualize` draw the same picture
   of a file: one set of defaults (150 dpi, the `magma` colormap, 40 MFCCs, as `bioamla.viz`
   already used), so `audio visualize` pictures are larger (was 100 dpi) and use another

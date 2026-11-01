@@ -413,7 +413,8 @@ def _write_labels(
     header_prefix: list[str],
     rows: Any,
 ) -> tuple[Path, Path | None]:
-    """``numpy``: the array as ``.npy`` plus ``<name>.labels.csv``; ``csv``: one table."""
+    """``numpy``: the array as ``<name>.npy`` (``.npy`` added unless ``output_file`` has
+    it) plus ``<name>.labels.csv``, named after it; ``csv``: one table."""
     import csv
 
     import numpy as np
@@ -425,7 +426,9 @@ def _write_labels(
         if output_format == "numpy":
             data_path = output_path if output_path.suffix == ".npy" else Path(f"{output_path}.npy")
             np.save(data_path, array)
-            label_map_path = output_path.with_suffix(".labels.csv")
+            # Named after the data file, so outputs that differ only before their last
+            # dot (run.v1, run.v2) don't share a map.
+            label_map_path = data_path.with_name(data_path.name[: -len(".npy")] + ".labels.csv")
             with open(label_map_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(["label", "index"])
