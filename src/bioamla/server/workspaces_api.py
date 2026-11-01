@@ -11,8 +11,8 @@
   ``?overwrite=true`` to replace one)
 
 Every path goes through the server's path policy, so it must resolve inside the
-workspace root or a linkable folder. Uploads can't write into a workspace's
-``.bioamla`` folder. To use recordings in a linkable folder without copying them, link
+workspace root or a linkable folder, and never to a workspace's metadata. Uploads go
+only into the workspace named in the URL. To use recordings in a linkable folder without copying them, link
 them with the ``workspace.add`` operation.
 
 The server only writes a workspace's own settings, never the server user's file.
@@ -20,39 +20,19 @@ The server only writes a workspace's own settings, never the server user's file.
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from fastapi import Body, Depends, FastAPI, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from bioamla.exceptions import InvalidInputError, NotFoundError, WorkspaceError
+from bioamla.exceptions import ConfigError, InvalidInputError, NotFoundError, WorkspaceError
+from bioamla.server._security import AccessDenied
 
-#: Upload chunk size (bytes).
-CHUNK = 1 << 20
-
-
-def _setting_key(key: str) -> str:
-    """``key`` if it's a setting key: dotted words, the last naming a request field of
-    an operation (``detect.energy.threshold_db``)."""
-    from bioamla import operations
-
-    parts = key.split(".")
-    if len(parts) < 2 or not all(parts):
-        raise InvalidInputError(f"Not a setting key: {key!r} (e.g. detect.energy.threshold_db)")
-    name, field = ".".join(parts[:-1]), parts[-1]
-    try:
-        op = operations.get(name)
-    except NotFoundError:
-        raise InvalidInputError(f"Not a setting key: {key!r} (no operation {name!r})") from None
-    import dataclasses
-
-    if field not in {f.name for f in dataclasses.fields(op.request)}:
-        raise InvalidInputError(f"Not a setting key: {key!r} ({name} has no {field!r})")
-    return key
+#: Most entries a file listing returns (``truncated`` says when there were more).
+LIST_LIMIT = 10_000
 
 
 def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
@@ -95,9 +75,10 @@ def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
         """Create a workspace under the server root."""
         try:
             path = policy.new_workspace_dir(who, name)
-        except WorkspaceError as e:
-            raise StarletteHTTPException(409, str(e)) from e
-        space = create_workspace(path, title)
+            path.mkdir()  # exclusively: of two creates, one gets the folder
+            space = create_workspace(path, title)
+        except (WorkspaceError, FileExistsError) as e:
+            raise StarletteHTTPException(409, f"{name!r} already exists on this server") from e
         return envelope({**space.to_dict(), "workspace": name})
 
     @app.get(f"/{v}/workspaces/{{ws}}", tags=["workspaces"])
@@ -122,10 +103,14 @@ def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
         who: Any = Depends(identity),
     ) -> dict[str, Any]:
         """Set a setting (``<operation>.<request field>``) in the workspace."""
-        if isinstance(value, dict) or value is None:
-            raise InvalidInputError("A setting is a string, number, boolean or list")
+        from bioamla.common.settings import check_setting_value
+        from bioamla.operations import check_setting_key
+
         space = workspace(who, ws)
-        space.set_setting(_setting_key(key), value)
+        try:
+            space.set_setting(check_setting_key(key), check_setting_value(value))
+        except ConfigError as e:
+            raise InvalidInputError(str(e)) from e
         return envelope({"key": key, "value": value})
 
     @app.delete(f"/{v}/workspaces/{{ws}}/config/{{key}}", tags=["workspaces"])
@@ -140,9 +125,13 @@ def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
         recursive: bool = Query(False, description="Include subfolders"),
         who: Any = Depends(identity),
     ) -> dict[str, Any]:
-        """A folder's files and subfolders (``path``, ``type``, ``size``, ``modified``)."""
+        """A folder's files and subfolders (``path``, ``type``, ``size``, ``modified``),
+        at most 10,000 (``truncated`` says when there were more: list a subfolder)."""
         space, folder = in_workspace(who, ws, path)
-        return envelope({"path": path, "files": space.list_files(folder, recursive=recursive)})
+        files = space.list_files(folder, recursive=recursive, limit=LIST_LIMIT + 1)
+        return envelope(
+            {"path": path, "files": files[:LIST_LIMIT], "truncated": len(files) > LIST_LIMIT}
+        )
 
     @app.get(
         f"/{v}/workspaces/{{ws}}/files/{{path:path}}",
@@ -165,30 +154,32 @@ def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
         overwrite: bool = Query(False, description="Replace an existing file"),
         who: Any = Depends(identity),
     ) -> dict[str, Any]:
-        """Upload a file: the request body, written as is. Missing folders are created."""
-        space, target = in_workspace(who, ws, path)
-        meta = space.dir.resolve()
-        if target == meta or target.is_relative_to(meta):
-            raise InvalidInputError("Uploads can't write into the workspace's .bioamla folder")
+        """Upload a file into the workspace: the request body, written as is. Missing
+        folders are created; the file appears whole or not at all."""
+        from bioamla.common.files import AtomicFileWriter
+
+        space, target = await run_in_threadpool(in_workspace, who, ws, path)
+        home = space.root.resolve()
+        if not target.is_relative_to(home):
+            raise AccessDenied(f"{path} is outside workspace {ws!r}")
         if target.is_dir():
             raise InvalidInputError(f"{path} is a folder")
         if target.exists() and not overwrite:
             raise StarletteHTTPException(409, f"{path} exists; add ?overwrite=true to replace it")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        # Check the folder again now it exists: a link on the way could point elsewhere.
-        policy.authorize(who, target.parent)
-        fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".part")
-        size = 0
         try:
-            with os.fdopen(fd, "wb") as f:
-                async for chunk in request.stream():
-                    f.write(chunk)
-                    size += len(chunk)
-            os.replace(tmp, target)
-        except BaseException:
-            Path(tmp).unlink(missing_ok=True)
-            raise
-        return envelope({"path": space.relative(target), "size": size})
+            writer = await run_in_threadpool(AtomicFileWriter, target, overwrite)
+        except OSError as e:
+            raise InvalidInputError(f"Can't write {path}: {e.strerror or e}") from e
+        with writer:
+            async for chunk in request.stream():
+                await run_in_threadpool(writer.write, chunk)
+            try:
+                await run_in_threadpool(writer.commit)
+            except FileExistsError as e:
+                raise StarletteHTTPException(
+                    409, f"{path} exists; add ?overwrite=true to replace it"
+                ) from e
+        return envelope({"path": space.relative(target), "size": writer.size})
 
 
 __all__ = ["add_workspace_routes"]

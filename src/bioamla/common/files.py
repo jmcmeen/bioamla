@@ -16,6 +16,7 @@ dataclass hierarchy.
 """
 
 import logging
+import os
 import zipfile
 from pathlib import Path
 from urllib.request import urlretrieve
@@ -60,6 +61,69 @@ def write_text(filepath: str | Path, content: str, encoding: str = "utf-8") -> i
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding=encoding)
     return len(content)
+
+
+class AtomicFileWriter:
+    """Write a file in pieces, so it appears whole or not at all.
+
+    The bytes go to a temporary file in the target's folder; :meth:`commit` moves it
+    into place (replacing an existing file only with ``overwrite``) and leaving the
+    ``with`` block without committing removes it.
+
+    Example:
+        >>> with AtomicFileWriter("rec.wav") as w:
+        ...     for chunk in chunks:
+        ...         w.write(chunk)
+        ...     w.commit()
+
+    Raises:
+        FileExistsError: From :meth:`commit`, if the file exists and ``overwrite`` is off
+            (checked as the file is put in place, so two writers can't both win).
+        OSError: If the folder can't be created or written.
+    """
+
+    def __init__(self, path: str | Path, overwrite: bool = False) -> None:
+        import tempfile
+
+        self.path = Path(path)
+        self.overwrite = overwrite
+        self.size = 0
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=f".{self.path.name}.",
+                                   suffix=".part")  # fmt: skip
+        self._tmp = Path(tmp)
+        self._file = os.fdopen(fd, "wb")
+        self._done = False
+
+    def write(self, data: bytes) -> None:
+        """Append ``data``."""
+        self._file.write(data)
+        self.size += len(data)
+
+    def commit(self) -> Path:
+        """Put the file in place."""
+        self._file.close()
+        if self.overwrite:
+            os.replace(self._tmp, self.path)
+        else:
+            try:
+                os.link(self._tmp, self.path)  # fails if it exists
+                self._tmp.unlink()
+            except FileExistsError:
+                raise
+            except OSError:  # no hard links here: claim the name, then fill it
+                os.close(os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+                os.replace(self._tmp, self.path)
+        self._done = True
+        return self.path
+
+    def __enter__(self) -> "AtomicFileWriter":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if not self._done:
+            self._file.close()
+            self._tmp.unlink(missing_ok=True)
 
 
 def write_text_atomic(filepath: str | Path, content: str, encoding: str = "utf-8") -> None:
@@ -594,6 +658,7 @@ def zip_path(source: str | Path, zip_file: str | Path) -> str:
 
 
 __all__ = [
+    "AtomicFileWriter",
     "download_to_dir",
     "UNZIP_MAX_BYTES",
     "unzip_to",

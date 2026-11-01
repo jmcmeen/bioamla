@@ -13,9 +13,14 @@ All notable changes to this project are documented here. The format is based on
   settings (`GET .../config`, `PUT`/`DELETE .../config/{key}`, keys checked against the
   operations' request fields), and its files: list a folder (`GET .../files?path=&recursive=`),
   download (`GET .../files/{path}`) and upload (`PUT .../files/{path}`, streamed to disk,
-  `?overwrite=true` to replace). Every path must stay inside the workspace root or a
-  linkable folder, and uploads can't touch a workspace's `.bioamla` folder.
-- `Workspace.settings()`, `set_setting()`, `unset_setting()` and `list_files()`.
+  `?overwrite=true` to replace; the file appears whole or not at all, and two uploads of a
+  new file can't both win). Every path must stay inside the workspace root or a linkable
+  folder; uploads go only into the workspace named in the URL. Listings leave out
+  workspace metadata and unfinished uploads, and stop at 10,000 entries (`truncated`).
+- `Workspace.settings()`, `set_setting()`, `unset_setting()` (one spelling per key: `-`
+  and `_` are alike) and `list_files()`; `bioamla.operations.check_setting_key()`,
+  `bioamla.common.settings.check_setting_value()` and
+  `bioamla.common.files.AtomicFileWriter`.
 
 - Server jobs: a job-kind operation posted to the server is queued and answered at once
   (`202`, with the job), then runs in its own worker process, so a crash or a cancel can't
@@ -95,6 +100,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- A server request can no longer read or write a workspace's metadata (its `.bioamla`
+  folder and the files directly in it) through an operation's path fields; the path
+  policy refuses them (403). Subfolders such as `.bioamla/imported` are still allowed.
 - `util zip` of a file dated before 1980, `util download` of a malformed URL and `system schema
   NAME -o` to an unwritable path stopped with a traceback; they report an error. A missing
   archive for `util unzip` is a not-found error.

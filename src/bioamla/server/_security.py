@@ -156,10 +156,18 @@ class PathPolicy:
             path: The path, absolute or relative.
             base: What a relative ``path`` is relative to (default: the root).
 
+        A workspace's metadata (its ``.bioamla`` folder and the files directly in it:
+        ``workspace.toml``, ``artifacts.json``, ``config.toml``, ``history.jsonl``) is
+        never a request's to read or write; the server changes it only through the
+        workspace API. Subfolders such as ``.bioamla/imported`` are allowed.
+
         Raises:
-            AccessDenied: If it resolves outside every allowed folder.
+            AccessDenied: If it resolves outside every allowed folder, or to a
+                workspace's metadata.
             InvalidInputError: If it isn't a usable path (e.g. contains a NUL).
         """
+        from bioamla.workspace import WORKSPACE_DIR
+
         try:
             candidate = Path(path)
             if not candidate.is_absolute():
@@ -169,6 +177,8 @@ class PathPolicy:
             raise InvalidInputError(f"Not a usable path: {path!r}") from e
         if not any(resolved == a or resolved.is_relative_to(a) for a in self.allowed):
             raise AccessDenied(f"{path} is outside the folders this server may use")
+        if WORKSPACE_DIR in (resolved.name, resolved.parent.name):
+            raise AccessDenied(f"{path} is a workspace's metadata")
         return resolved
 
     def path_check(self, identity: Identity, base: str | Path) -> Any:
@@ -212,12 +222,13 @@ class PathPolicy:
         """
         from bioamla.exceptions import WorkspaceError
 
-        path = self._workspace_path(identity, name)
-        if path.exists() or path.is_symlink():
+        self._check_name(name)
+        if (self.root / name).is_symlink() or (self.root / name).exists():
             raise WorkspaceError(f"{name!r} already exists on this server")
-        return path
+        return self._workspace_path(identity, name)
 
-    def _workspace_path(self, identity: Identity, name: str) -> Path:
+    @staticmethod
+    def _check_name(name: str) -> None:
         if (
             not name
             or name in (".", "..")
@@ -226,6 +237,9 @@ class PathPolicy:
             or "\\" in name
         ):
             raise InvalidInputError(f"Not a workspace name: {name!r}")
+
+    def _workspace_path(self, identity: Identity, name: str) -> Path:
+        self._check_name(name)
         path = self.authorize(identity, name)
         if path.parent != self.root:  # e.g. a symlink under the root pointing elsewhere
             raise AccessDenied(f"Workspace {name!r} is not inside the workspace root")

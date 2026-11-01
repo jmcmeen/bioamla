@@ -185,8 +185,24 @@ def parse_value(text: str) -> Any:
         return text
 
 
+def check_setting_value(value: Any) -> Any:
+    """``value`` if a settings file can hold it: a string, number or boolean, or a
+    list of them.
+
+    Raises:
+        ConfigError: If it can't (``None``, a table, a list holding either).
+    """
+    scalar = (str, bool, int, float)
+    if isinstance(value, scalar) or (
+        isinstance(value, list) and all(isinstance(v, scalar) for v in value)
+    ):
+        return value
+    raise ConfigError(f"A setting is a string, number, boolean or list of them, not {value!r}")
+
+
 __all__ = [
     "RESERVED_SECTIONS",
+    "check_setting_value",
     "dump_toml",
     "flatten",
     "merge_settings",

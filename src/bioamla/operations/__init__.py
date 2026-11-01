@@ -317,6 +317,31 @@ def build_request(op: Operation, data: Any) -> Any:
     return validate_config(op.request, dict(data), source=f"operation {op.name}")
 
 
+def check_setting_key(key: str) -> str:
+    """``key`` if it names a request field of an operation (``detect.energy.threshold_db``),
+    the form a workspace setting takes.
+
+    Raises:
+        InvalidInputError: If it doesn't (no such operation or field, or the
+            operation's domain needs an extra that isn't installed).
+    """
+    from bioamla.exceptions import InvalidInputError
+
+    parts = key.split(".")
+    if len(parts) < 2 or not all(parts):
+        raise InvalidInputError(f"Not a setting key: {key!r} (e.g. detect.energy.threshold_db)")
+    name, field_name = ".".join(parts[:-1]), parts[-1].replace("-", "_")
+    try:
+        op = get(name)
+    except NotFoundError:
+        raise InvalidInputError(f"Not a setting key: {key!r} (no operation {name!r})") from None
+    except DependencyError as e:
+        raise InvalidInputError(f"Not a setting key here: {key!r} ({e})") from None
+    if field_name not in {f.name for f in dataclasses.fields(op.request)}:
+        raise InvalidInputError(f"Not a setting key: {key!r} ({name} has no {field_name!r})")
+    return key
+
+
 def prepare(name: str, request: Any, context: OperationContext | None = None) -> Any:
     """``request`` as the operation ``name`` would run it: validated, with every path
     field through ``context.resolve_path``. :func:`run` does this first; a front end
@@ -366,6 +391,7 @@ __all__ = [
     "PathStr",
     "all_operations",
     "build_request",
+    "check_setting_key",
     "get",
     "operation",
     "path_fields",

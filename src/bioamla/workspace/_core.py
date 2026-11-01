@@ -543,47 +543,66 @@ class Workspace:
         """
         from bioamla.common.settings import flatten, read_settings_file
 
-        path = self.config_path
-        return flatten(read_settings_file(path)) if path.is_file() else {}
+        return flatten(read_settings_file(self.config_path))
 
     def set_setting(self, key: str, value: Any) -> None:
         """Set the dotted ``key`` to ``value`` in this workspace's ``config.toml``.
 
         The value is stored as given (no conversion to an option's type; the CLI's
-        ``workspace config set`` does that). Comments in the file are not kept.
+        ``workspace config set`` does that). Another spelling of the same key (``-``
+        for ``_``) is replaced. Comments in the file are not kept.
 
         Raises:
             ConfigError: If the file can't be read, or ``key`` or ``value`` can't be
                 stored (e.g. a key that is also a table).
         """
-        from bioamla.common.settings import dump_toml, read_settings_file, set_dotted
+        from bioamla.common.settings import (
+            dump_toml,
+            flatten,
+            read_settings_file,
+            set_dotted,
+            unset_dotted,
+        )
 
         with self._locked():
-            settings = read_settings_file(self.config_path) if self.config_path.is_file() else {}
+            settings = read_settings_file(self.config_path)
+            for name in list(flatten(settings)):  # one spelling per key in the file
+                if name != key and _same_setting(name, key):
+                    unset_dotted(settings, name)
             set_dotted(settings, key, value)
             write_text_atomic(self.config_path, dump_toml(settings))
 
     def unset_setting(self, key: str) -> bool:
-        """Remove the dotted ``key`` from this workspace's ``config.toml``.
+        """Remove the dotted ``key`` (in any spelling: ``-`` or ``_``) from this
+        workspace's ``config.toml``.
 
         Returns:
             Whether it was set.
         """
-        from bioamla.common.settings import dump_toml, read_settings_file, unset_dotted
+        from bioamla.common.settings import dump_toml, flatten, read_settings_file, unset_dotted
 
         with self._locked():
-            if not self.config_path.is_file():
-                return False
             settings = read_settings_file(self.config_path)
-            removed = unset_dotted(settings, key)
+            removed = False
+            for name in list(flatten(settings)):
+                if _same_setting(name, key):
+                    removed = unset_dotted(settings, name) or removed
             if removed:
                 write_text_atomic(self.config_path, dump_toml(settings))
         return removed
 
-    def list_files(self, path: str | Path = ".", recursive: bool = False) -> list[dict[str, Any]]:
+    def list_files(
+        self, path: str | Path = ".", recursive: bool = False, limit: int | None = None
+    ) -> list[dict[str, Any]]:
         """The files and folders in ``path`` (relative to the workspace, or absolute),
-        sorted, leaving out the workspace's ``.bioamla`` folder. Links to folders are
-        listed but not followed.
+        sorted by folder. Workspace metadata folders (``.bioamla``) and unfinished
+        uploads (``*.part``) are left out; links to folders are listed but not followed,
+        and folders that can't be read are skipped.
+
+        Args:
+            path: The folder.
+            recursive: Include subfolders.
+            limit: Stop after this many entries.
 
         Returns:
             One ``{"path", "type", "size", "modified"}`` per entry: ``path`` relative
@@ -599,29 +618,37 @@ class Workspace:
             start = self.root / start
         if not start.is_dir():
             raise NotFoundError(f"No folder {path}")
-        meta = self.dir.resolve()
         entries: list[dict[str, Any]] = []
-
-        def visit(folder: Path) -> None:
-            for child in sorted(folder.iterdir()):
-                if child.resolve() == meta:
+        folders = [start]
+        while folders and (limit is None or len(entries) < limit):
+            folder = folders.pop(0)
+            try:
+                with os.scandir(folder) as it:
+                    children = sorted(it, key=lambda e: e.name)
+            except OSError:
+                continue
+            subfolders = []
+            for entry in children:
+                if entry.name == WORKSPACE_DIR or entry.name.endswith(".part"):
                     continue
                 try:
-                    stat = child.stat()
+                    is_dir = entry.is_dir()  # follows links
+                    link = entry.is_symlink()
+                    stat = entry.stat()
                 except OSError:
                     continue  # a broken link
-                is_link_dir = child.is_symlink() and child.is_dir()
-                kind = "link" if is_link_dir else "dir" if child.is_dir() else "file"
+                kind = "link" if link and is_dir else "dir" if is_dir else "file"
                 entries.append({
-                    "path": self.relative(child),
+                    "path": self.relative(entry.path),
                     "type": kind,
                     "size": stat.st_size if kind == "file" else None,
                     "modified": stat.st_mtime,
                 })  # fmt: skip
+                if limit is not None and len(entries) >= limit:
+                    break
                 if recursive and kind == "dir":
-                    visit(child)
-
-        visit(start)
+                    subfolders.append(Path(entry.path))
+            folders[:0] = subfolders
         return entries
 
     def to_dict(self) -> dict[str, Any]:
@@ -637,6 +664,12 @@ class Workspace:
             "format_version": self.format_version,
             "artifacts": counts,
         }
+
+
+def _same_setting(a: str, b: str) -> bool:
+    """Whether two setting keys name the same thing (``-`` and ``_`` are alike, as in
+    option names)."""
+    return a.replace("-", "_") == b.replace("-", "_")
 
 
 def is_workspace(path: str | Path) -> bool:
