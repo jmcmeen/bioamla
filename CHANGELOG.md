@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- `batch audio resample|normalize|trim|filter|denoise --input-dir` crashed before processing
+  anything (`batch_transform_files()` got an unexpected `operation` argument); it now runs, and
+  `batch_transform_files()` takes `operation` for its log records like the other batch runners.
+- Spectral denoising (`audio denoise`, `batch audio denoise`, `spectral_denoise()`) no longer
+  drops the last few milliseconds of the audio.
+
 ## [0.3.9] - 2026-11-01
 
 ### Added

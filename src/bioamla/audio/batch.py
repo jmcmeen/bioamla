@@ -38,6 +38,7 @@ def batch_transform_files(
     max_workers: int = 1,
     continue_on_error: bool = True,
     on_progress: OnProgress | None = None,
+    operation: str = "transform",
 ) -> BatchResult:
     """
     Apply a per-file transform to every audio file in a directory.
@@ -53,6 +54,7 @@ def batch_transform_files(
         max_workers: Number of worker threads (1 = sequential).
         continue_on_error: Collect per-file errors and keep going if True.
         on_progress: Optional ``(completed, total)`` progress callback.
+        operation: Name used in the batch log records (e.g. the command).
 
     Returns:
         A :class:`bioamla.batch.BatchResult` summarizing the run.
@@ -88,7 +90,7 @@ def batch_transform_files(
         max_workers=max_workers,
         continue_on_error=continue_on_error,
         on_progress=on_progress,
-        operation="transform",
+        operation=operation,
     )
 
 
