@@ -39,11 +39,14 @@ def _default(param: click.Parameter) -> dict[str, Any]:
     default = param.default
     if callable(default):
         return {"default": None, "default_is_dynamic": True}
+    if param.multiple or param.nargs == -1:
+        # Click passes an empty tuple when a repeatable option or variadic argument is unset.
+        if default is _UNSET or default is None:
+            return {"default": []}
+        return {"default": _jsonable(list(default))}
     if default is _UNSET or default is None:
         if getattr(param, "is_flag", False) and not getattr(param, "count", False):
             return {"default": False}  # what an unset flag gives the command
-        return {"default": None}
-    if isinstance(default, (list, tuple)) and not default:
         return {"default": None}
     return {"default": _jsonable(default)}
 
@@ -106,15 +109,16 @@ def command_catalog(root: click.Command, prefix: list[str] | None = None) -> dic
     only those under ``prefix`` (e.g. ``["detect"]``).
 
     Raises:
-        click.UsageError: If ``prefix`` names no command.
+        NotFoundError: If ``prefix`` names no command.
     """
     from bioamla import __version__
+    from bioamla.exceptions import NotFoundError
 
     prefix = prefix or []
     node = root
     for name in prefix:
         if not isinstance(node, click.Group) or name not in node.commands:
-            raise click.UsageError(f"No command {' '.join(prefix)!r}")
+            raise NotFoundError(f"No command {' '.join(prefix)!r}")
         node = node.commands[name]
 
     entries: list[dict[str, Any]] = []

@@ -108,10 +108,12 @@ class BioamlaGroup(click.Group):
             from bioamla.cli.settings_map import settings_default_map
 
             words = [a for a in args if not a.startswith("-")]
-            lenient = any(a in ("--help", "--version") for a in args) or words[:2] == [
-                "workspace",
-                "config",
-            ]
+            # Commands that inspect or fix settings, or describe the CLI, still run
+            # with a broken settings file (it's reported as a warning).
+            lenient = any(a in ("--help", "--version") for a in args) or words[:2] in (
+                ["workspace", "config"],
+                ["system", "commands"],
+            )
             extra.setdefault("default_map", settings_default_map(self, lenient=lenient))
         return super().make_context(info_name, args, parent=parent, **extra)
 

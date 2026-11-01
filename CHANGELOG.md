@@ -43,8 +43,10 @@ All notable changes to this project are documented here. The format is based on
 - `bioamla system commands [PATH...]`: the command catalog. Lists every command, or describes
   the ones under PATH; with `--json`, every group and command with its help, arguments and
   options (flags, type, choices, path and range constraints, default, required, multiple), each
-  option's `BIOAMLA_*` variable and settings key, and the global options. Library:
-  `bioamla.cli.catalog.command_catalog()`.
+  option's `BIOAMLA_*` variable and settings key, and the global options. Repeatable options
+  default to `[]`; the table marks required options; a broken settings file is a warning, not an
+  error, so the catalog still lists. Library: `bioamla.cli.catalog.command_catalog()` (raises
+  `NotFoundError` for an unknown PATH).
 
 ## [0.3.8] - 2026-10-31
 

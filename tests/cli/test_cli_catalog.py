@@ -11,6 +11,7 @@ from click.testing import CliRunner
 from bioamla.cli.catalog import command_catalog
 from bioamla.cli.cli import cli
 from bioamla.cli.settings_map import resolve_key
+from bioamla.exceptions import NotFoundError
 
 
 def all_paths(group: click.Group, prefix: tuple = ()) -> set[str]:
@@ -70,7 +71,7 @@ def test_prefix(catalog) -> None:
     assert {c["path"] for c in detect["commands"]} == {"detect"} | {
         p for p in all_paths(cli) if p.startswith("detect ")
     }
-    with pytest.raises(click.UsageError):
+    with pytest.raises(NotFoundError, match="No command 'nope'"):
         command_catalog(cli, ["nope"])
 
 
@@ -80,7 +81,43 @@ def test_cli(catalog) -> None:
     human = CliRunner().invoke(cli, ["system", "commands", "detect", "energy"])
     assert human.exit_code == 0 and "BIOAMLA_DETECT" in human.output
     bad = CliRunner().invoke(cli, ["system", "commands", "nope"])
-    assert bad.exit_code == 2
+    assert bad.exit_code == 2 and "No command 'nope'" in bad.output
+
+
+def test_human_table_marks_required_options() -> None:
+    result = CliRunner().invoke(cli, ["system", "commands", "models", "ast", "train"])
+    assert result.exit_code == 0 and "required" in result.output
+    (train,) = [c for c in command_catalog(cli)["commands"] if c["path"] == "models ast train"]
+    assert any(o["required"] for o in train["options"])
+    assert result.output.count("yes") >= sum(o["required"] for o in train["options"])
+
+
+def test_repeatable_options_default_to_empty_list() -> None:
+    @click.command()
+    @click.option("--tag", multiple=True)
+    @click.option("--pair", multiple=True, default=())
+    @click.option("--keep", multiple=True, default=("a",))
+    def cmd(tag, pair, keep) -> None: ...
+
+    @click.group()
+    def root() -> None: ...
+
+    root.add_command(cmd)
+    by_name = {o["name"]: o for o in command_catalog(root)["commands"][0]["options"]}
+    assert by_name["tag"]["default"] == []
+    assert by_name["pair"]["default"] == []
+    assert by_name["keep"]["default"] == ["a"]
+
+
+def test_broken_settings_dont_block_the_catalog(tmp_path, monkeypatch) -> None:
+    config = tmp_path / "bioamla" / "config.toml"
+    config.parent.mkdir()
+    config.write_text("this is [not toml", encoding="utf-8")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(cli, ["--json", "system", "commands", "detect", "energy"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["ok"]
 
 
 def test_builds_without_heavy_imports() -> None:

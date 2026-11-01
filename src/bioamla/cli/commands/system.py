@@ -199,8 +199,12 @@ def system_commands(ctx: click.Context, path: tuple[str, ...]) -> None:
     from bioamla.cli.catalog import command_catalog
     from bioamla.cli.console import print_kv, print_table
     from bioamla.cli.output import emit_result
+    from bioamla.exceptions import NotFoundError
 
-    catalog = command_catalog(ctx.find_root().command, list(path))
+    try:
+        catalog = command_catalog(ctx.find_root().command, list(path))
+    except NotFoundError as e:
+        raise click.UsageError(str(e)) from e
     if emit_result(catalog):
         return
     commands = catalog["commands"]
@@ -217,9 +221,10 @@ def system_commands(ctx: click.Context, path: tuple[str, ...]) -> None:
                      for a in leaf["arguments"]])  # fmt: skip
     print_table(
         "Options",
-        ["flags", "type", "default", "setting / env"],
+        ["flags", "type", "required", "default", "setting / env"],
         [[", ".join(o["flags"]), o["type"] + (f" {o['choices']}" if o.get("choices") else ""),
-          "" if o["default"] is None else repr(o["default"]),
+          "yes" if o["required"] else "",
+          "" if o["default"] in (None, []) else repr(o["default"]),
           f"{o.get('setting') or ''}\n{o.get('env') or ''}".strip()]
          for o in leaf["options"]],
     )  # fmt: skip

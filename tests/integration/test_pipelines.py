@@ -7,6 +7,7 @@ its own; these cover the hand-offs between them.
 
 import csv
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -448,6 +449,8 @@ class TestProgressEvents:
 
 class TestCatalog:
     def test_catalog_setting_keys_configure_commands(self, recording, tmp_path, monkeypatch):
+        for name in [n for n in os.environ if n.startswith("BIOAMLA_DETECT_ENERGY_")]:
+            monkeypatch.delenv(name)  # the environment would win over the workspace setting
         catalog = bioamla("system", "commands", "detect", "energy")
         (energy,) = [c for c in catalog["commands"] if c["path"] == "detect energy"]
         threshold = next(o for o in energy["options"] if o["name"] == "threshold_db")
