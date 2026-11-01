@@ -15,12 +15,12 @@ from pathlib import Path
 from bioamla.audio.discovery import list_audio_files
 from bioamla.batch import output_stems, run_batch
 from bioamla.common.constants import (
-    DEFAULT_CMAP,
-    DEFAULT_DPI,
     DEFAULT_HOP_LENGTH,
     DEFAULT_N_FFT,
-    DEFAULT_N_MELS,
-    DEFAULT_N_MFCC,
+    PICTURE_CMAP,
+    PICTURE_DPI,
+    PICTURE_N_MELS,
+    PICTURE_N_MFCC,
 )
 from bioamla.exceptions import NotFoundError
 from bioamla.protocols import OnProgress
@@ -38,16 +38,16 @@ def batch_generate_spectrograms(
     output_dir: str,
     viz_type: VisualizationType = "mel",
     sample_rate: int = 16000,
-    n_mels: int = DEFAULT_N_MELS,
-    n_mfcc: int = DEFAULT_N_MFCC,
+    n_mels: int = PICTURE_N_MELS,
+    n_mfcc: int = PICTURE_N_MFCC,
     hop_length: int = DEFAULT_HOP_LENGTH,
     n_fft: int = DEFAULT_N_FFT,
     window: WindowType = "hann",
     figsize: tuple[int, int] = (10, 4),
-    cmap: str = DEFAULT_CMAP,
+    cmap: str = PICTURE_CMAP,
     db_min: float | None = None,
     db_max: float | None = None,
-    dpi: int = DEFAULT_DPI,
+    dpi: int = PICTURE_DPI,
     format: str = "png",
     show_colorbar: bool = True,
     recursive: bool = True,
@@ -90,6 +90,10 @@ def batch_generate_spectrograms(
     Raises:
         NotFoundError: If the input directory does not exist.
     """
+    from bioamla.viz.core import check_picture_settings
+
+    check_picture_settings(n_fft=n_fft, hop_length=hop_length, n_mels=n_mels, n_mfcc=n_mfcc,
+                           cmap=cmap, dpi=dpi)  # fmt: skip
     in_dir = Path(input_dir)
     out_dir = Path(output_dir)
 

@@ -183,7 +183,10 @@ All notable changes to this project are documented here. The format is based on
   colormap (was `viridis`) and MFCC count (was 20). `batch audio visualize` gains the single
   command's drawing options (`--n-fft`, `--hop-length`, `--n-mels`, `--n-mfcc`, `--cmap`,
   `--dpi`), as does its request; the defaults live in `bioamla.common.constants`
-  (`DEFAULT_N_MELS`, `DEFAULT_N_MFCC`, `DEFAULT_CMAP`, `DEFAULT_DPI`).
+  (`PICTURE_N_MELS`, `PICTURE_N_MFCC`, `PICTURE_CMAP`, `PICTURE_DPI`). A bad setting (an
+  unknown colormap, more MFCCs than mel bands, a size below 1) is refused before any file
+  is drawn (`bioamla.viz.check_picture_settings()`), and `--n-mels` now shapes MFCC
+  pictures too (it was ignored for `-t mfcc`).
 
 - **Behavior change:** `audio trim`, `audio resample` and `audio gain`, `batch audio
   resample` and `batch audio trim` by time range keep a file's channels; they mixed every

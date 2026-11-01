@@ -42,12 +42,13 @@ DEFAULT_N_FFT: int = 2048
 DEFAULT_HOP_LENGTH: int = 512
 DEFAULT_WIN_LENGTH: int = 2048
 
-# Pictures (`audio visualize`, `batch audio visualize`, bioamla.viz): one set of
-# defaults, so the same file gives the same picture whichever way it's drawn.
-DEFAULT_N_MELS: int = 128
-DEFAULT_N_MFCC: int = 40
-DEFAULT_CMAP: str = "magma"
-DEFAULT_DPI: int = 150
+# Pictures only (`audio visualize`, `batch audio visualize`, bioamla.viz): one set of
+# defaults, so the same file gives the same picture whichever way it's drawn. Feature
+# analysis has its own (bioamla.audio.FrameFeatureConfig).
+PICTURE_N_MELS: int = 128
+PICTURE_N_MFCC: int = 40
+PICTURE_CMAP: str = "magma"
+PICTURE_DPI: int = 150
 
 # Annotation file formats read and written by bioamla.datasets. Kept here, not in
 # the datasets package, so the CLI can build its --format choices without
@@ -93,10 +94,10 @@ __all__ = [
     "DEFAULT_N_FFT",
     "DEFAULT_HOP_LENGTH",
     "DEFAULT_WIN_LENGTH",
-    "DEFAULT_N_MELS",
-    "DEFAULT_N_MFCC",
-    "DEFAULT_CMAP",
-    "DEFAULT_DPI",
+    "PICTURE_N_MELS",
+    "PICTURE_N_MFCC",
+    "PICTURE_CMAP",
+    "PICTURE_DPI",
     # Configuration
     "DefaultConfig",
 ]

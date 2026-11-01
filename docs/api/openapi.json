@@ -10953,7 +10953,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "BatchVisualizeRequest",
-        "description": "A spectrogram, MFCC or waveform image of every file (directory mode).\n\nThe drawing settings and their defaults are ``audio.visualize``'s, so both draw\nthe same picture of a file.\n\nAttributes:\n    plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.\n    n_fft: FFT window size.\n    hop_length: Hop length.\n    n_mels: Mel bands.\n    n_mfcc: MFCCs.\n    cmap: Colormap name.\n    dpi: Image DPI.\n    legend: Show axes, title and colorbar.\n    verbose: Log each file at INFO level."
+        "description": "A spectrogram, MFCC or waveform image of every file (directory mode).\n\nThe drawing settings and their defaults are ``audio.visualize``'s, so both draw\nthe same picture of a file (as PNG; boxes and annotations are single-file only).\n\nAttributes:\n    plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.\n    n_fft: FFT window size.\n    hop_length: Hop length.\n    n_mels: Mel bands.\n    n_mfcc: MFCCs.\n    cmap: Colormap name.\n    dpi: Image DPI.\n    legend: Show axes, title and colorbar.\n    verbose: Log each file at INFO level."
       },
       "BioIndexRequest": {
         "properties": {

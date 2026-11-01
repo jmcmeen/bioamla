@@ -11,6 +11,15 @@ from typing import TYPE_CHECKING
 
 import click
 
+from bioamla.common.constants import (
+    DEFAULT_HOP_LENGTH,
+    DEFAULT_N_FFT,
+    PICTURE_CMAP,
+    PICTURE_DPI,
+    PICTURE_N_MELS,
+    PICTURE_N_MFCC,
+)
+
 if TYPE_CHECKING:
     from bioamla.audio.features import FrameFeatureConfig
 
@@ -76,23 +85,22 @@ def picture_options(f: Callable) -> Callable:
     the same defaults as :mod:`bioamla.viz`, so both draw the same picture of a file:
     ``--n-fft``, ``--hop-length``, ``--n-mels``, ``--n-mfcc``, ``--cmap``, ``--dpi``,
     ``--legend/--no-legend``."""
-    from bioamla.common import constants as c
-
+    positive = click.IntRange(min=1)
     options = [
-        click.option("--n-fft", default=c.DEFAULT_N_FFT, show_default=True, type=int,
+        click.option("--n-fft", default=DEFAULT_N_FFT, show_default=True, type=positive,
                      help="FFT window size"),
-        click.option("--hop-length", default=c.DEFAULT_HOP_LENGTH, show_default=True,
-                     type=int, help="Hop length"),
-        click.option("--n-mels", default=c.DEFAULT_N_MELS, show_default=True, type=int,
-                     help="Number of mel bands"),
-        click.option("--n-mfcc", default=c.DEFAULT_N_MFCC, show_default=True, type=int,
-                     help="Number of MFCCs"),
-        click.option("--cmap", default=c.DEFAULT_CMAP, show_default=True,
-                     help="Colormap name"),
-        click.option("--dpi", default=c.DEFAULT_DPI, show_default=True, type=int,
+        click.option("--hop-length", default=DEFAULT_HOP_LENGTH, show_default=True,
+                     type=positive, help="Hop length"),
+        click.option("--n-mels", default=PICTURE_N_MELS, show_default=True, type=positive,
+                     help="Number of mel bands (also used for MFCCs)"),
+        click.option("--n-mfcc", default=PICTURE_N_MFCC, show_default=True, type=positive,
+                     help="Number of MFCCs (at most --n-mels)"),
+        click.option("--cmap", default=PICTURE_CMAP, show_default=True,
+                     help="Colormap name (any of matplotlib's)"),
+        click.option("--dpi", default=PICTURE_DPI, show_default=True, type=positive,
                      help="Output DPI"),
-        click.option("--legend/--no-legend", default=True,
-                     help="Show axes, title, and colorbar (default: True)"),
+        click.option("--legend/--no-legend", default=True, show_default=True,
+                     help="Show axes, title, and colorbar"),
     ]  # fmt: skip
     for option in reversed(options):
         f = option(f)

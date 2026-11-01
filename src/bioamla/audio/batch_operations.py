@@ -32,12 +32,12 @@ from bioamla.audio.operations import AudioFormat
 from bioamla.batch import BatchRequest, BatchResult
 from bioamla.common.config import config_dataclass
 from bioamla.common.constants import (
-    DEFAULT_CMAP,
-    DEFAULT_DPI,
     DEFAULT_HOP_LENGTH,
     DEFAULT_N_FFT,
-    DEFAULT_N_MELS,
-    DEFAULT_N_MFCC,
+    PICTURE_CMAP,
+    PICTURE_DPI,
+    PICTURE_N_MELS,
+    PICTURE_N_MFCC,
 )
 from bioamla.operations import OperationContext, operation
 
@@ -311,7 +311,7 @@ class BatchVisualizeRequest(BatchRequest):
     """A spectrogram, MFCC or waveform image of every file (directory mode).
 
     The drawing settings and their defaults are ``audio.visualize``'s, so both draw
-    the same picture of a file.
+    the same picture of a file (as PNG; boxes and annotations are single-file only).
 
     Attributes:
         plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.
@@ -328,10 +328,10 @@ class BatchVisualizeRequest(BatchRequest):
     plot_type: Literal["mel", "stft", "mfcc", "waveform"] = "mel"
     n_fft: int = DEFAULT_N_FFT
     hop_length: int = DEFAULT_HOP_LENGTH
-    n_mels: int = DEFAULT_N_MELS
-    n_mfcc: int = DEFAULT_N_MFCC
-    cmap: str = DEFAULT_CMAP
-    dpi: int = DEFAULT_DPI
+    n_mels: int = PICTURE_N_MELS
+    n_mfcc: int = PICTURE_N_MFCC
+    cmap: str = PICTURE_CMAP
+    dpi: int = PICTURE_DPI
     legend: bool = True
     verbose: bool = True
 

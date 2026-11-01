@@ -36,12 +36,12 @@ import librosa
 import numpy as np
 
 from bioamla.common.constants import (
-    DEFAULT_CMAP,
-    DEFAULT_DPI,
     DEFAULT_HOP_LENGTH,
     DEFAULT_N_FFT,
-    DEFAULT_N_MELS,
-    DEFAULT_N_MFCC,
+    PICTURE_CMAP,
+    PICTURE_DPI,
+    PICTURE_N_MELS,
+    PICTURE_N_MFCC,
 )
 from bioamla.exceptions import AudioLoadError, InvalidInputError, NotFoundError, ProcessingError
 from bioamla.viz._backend import Backend, mel_power, select_backend, stft_magnitude
@@ -93,22 +93,49 @@ def _load_audio_for_viz(audio_path: str, sample_rate: int) -> np.ndarray:
     return audio
 
 
+def check_picture_settings(
+    *,
+    n_fft: int = DEFAULT_N_FFT,
+    hop_length: int = DEFAULT_HOP_LENGTH,
+    n_mels: int = PICTURE_N_MELS,
+    n_mfcc: int = PICTURE_N_MFCC,
+    cmap: str = PICTURE_CMAP,
+    dpi: int = PICTURE_DPI,
+) -> None:
+    """Check drawing settings before any audio is read (a batch checks them once).
+
+    Raises:
+        InvalidInputError: If a size isn't positive, there are more MFCCs than mel
+            bands, or ``cmap`` isn't a matplotlib colormap.
+    """
+    for name, value in (("n_fft", n_fft), ("hop_length", hop_length), ("n_mels", n_mels),
+                        ("n_mfcc", n_mfcc), ("dpi", dpi)):  # fmt: skip
+        if value < 1:
+            raise InvalidInputError(f"{name} must be at least 1, got {value}")
+    if n_mfcc > n_mels:
+        raise InvalidInputError(f"n_mfcc ({n_mfcc}) can't be more than n_mels ({n_mels})")
+    import matplotlib
+
+    if cmap not in matplotlib.colormaps:
+        raise InvalidInputError(f"Unknown colormap {cmap!r} (e.g. magma, viridis, gray_r)")
+
+
 def generate_spectrogram(
     audio_path: str,
     output_path: str,
     viz_type: VisualizationType = "mel",
     sample_rate: int = 16000,
-    n_mels: int = DEFAULT_N_MELS,
-    n_mfcc: int = DEFAULT_N_MFCC,
+    n_mels: int = PICTURE_N_MELS,
+    n_mfcc: int = PICTURE_N_MFCC,
     hop_length: int = DEFAULT_HOP_LENGTH,
     n_fft: int = DEFAULT_N_FFT,
     window: WindowType = "hann",
     figsize: tuple[int, int] = (10, 4),
-    cmap: str = DEFAULT_CMAP,
+    cmap: str = PICTURE_CMAP,
     title: str | None = None,
     db_min: float | None = None,
     db_max: float | None = None,
-    dpi: int = DEFAULT_DPI,
+    dpi: int = PICTURE_DPI,
     format: str | None = None,
     show_colorbar: bool = True,
     backend: str = "auto",
@@ -165,6 +192,8 @@ def generate_spectrogram(
     valid_windows = ("hann", "hamming", "blackman", "bartlett", "rectangular", "kaiser")
     if window not in valid_windows:
         raise InvalidInputError(f"Invalid window type: {window}. Must be one of {valid_windows}")
+    check_picture_settings(n_fft=n_fft, hop_length=hop_length, n_mels=n_mels, n_mfcc=n_mfcc,
+                           cmap=cmap, dpi=dpi)  # fmt: skip
 
     regions = [SpectrogramBox.of(b) for b in boxes or ()]
     resolved_backend = select_backend(backend)
@@ -231,6 +260,7 @@ def generate_spectrogram(
                 title=title,
                 show_legend=show_colorbar,
                 backend=resolved_backend,
+                n_mels=n_mels,
             )
         elif viz_type == "waveform":
             _plot_waveform(audio, sample_rate, ax, title=title, show_legend=show_colorbar)
@@ -580,12 +610,13 @@ def _plot_mfcc(
     title: str,
     show_legend: bool = True,
     backend: Backend = "librosa",
+    n_mels: int = PICTURE_N_MELS,
 ) -> None:
-    """Plot MFCCs."""
+    """Plot MFCCs (from ``n_mels`` mel bands)."""
     import librosa.display
 
     mag = stft_magnitude(audio, n_fft, hop_length, window, backend)
-    mel_spec = librosa.feature.melspectrogram(S=mag**2, sr=sample_rate)
+    mel_spec = librosa.feature.melspectrogram(S=mag**2, sr=sample_rate, n_mels=n_mels)
     mfccs = librosa.feature.mfcc(S=librosa.power_to_db(mel_spec), n_mfcc=n_mfcc)
 
     img = librosa.display.specshow(
@@ -660,9 +691,9 @@ def compute_stft(
 def compute_mel_spectrogram(
     audio: np.ndarray,
     sample_rate: int,
-    n_fft: int = 2048,
-    hop_length: int = 512,
-    n_mels: int = 128,
+    n_fft: int = DEFAULT_N_FFT,
+    hop_length: int = DEFAULT_HOP_LENGTH,
+    n_mels: int = PICTURE_N_MELS,
     window: WindowType = "hann",
     fmin: float = 0.0,
     fmax: float | None = None,
@@ -735,9 +766,9 @@ def spectrogram_to_db(
 def spectrogram_to_image(
     spectrogram: np.ndarray,
     output_path: str,
-    cmap: str = "magma",
+    cmap: str = PICTURE_CMAP,
     figsize: tuple[int, int] = (10, 4),
-    dpi: int = 150,
+    dpi: int = PICTURE_DPI,
     format: str | None = None,
     title: str | None = None,
     xlabel: str = "Time",

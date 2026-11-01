@@ -573,8 +573,9 @@ def audio_visualize(
     input_dir, input_file, output_dir, plot_type, n_fft, hop_length, n_mels, n_mfcc, cmap, dpi,
     legend, max_workers, recursive, quiet,
 ) -> None:  # fmt: skip
-    """Batch generate audio visualizations, drawn as `audio visualize` draws them (same
-    options and defaults)."""
+    """Batch generate audio visualizations (PNG), drawn with the same drawing options and
+    defaults as `audio visualize`, so a file's picture is the same either way. Boxes and
+    annotations are single-file only."""
     from bioamla.cli.logging_setup import configure_cli_logging
 
     configure_cli_logging()

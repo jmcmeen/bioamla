@@ -30,12 +30,12 @@ from bioamla.batch import config_csv_context as _csv_context
 from bioamla.batch import require_input_dir as _input_dir
 from bioamla.batch import require_output_dir as _output_dir
 from bioamla.common.constants import (
-    DEFAULT_CMAP,
-    DEFAULT_DPI,
     DEFAULT_HOP_LENGTH,
     DEFAULT_N_FFT,
-    DEFAULT_N_MELS,
-    DEFAULT_N_MFCC,
+    PICTURE_CMAP,
+    PICTURE_DPI,
+    PICTURE_N_MELS,
+    PICTURE_N_MFCC,
 )
 from bioamla.exceptions import InvalidInputError, NotFoundError
 from bioamla.protocols import OnProgress
@@ -750,10 +750,10 @@ def batch_visualize(
     viz_type: str = "mel",
     n_fft: int = DEFAULT_N_FFT,
     hop_length: int = DEFAULT_HOP_LENGTH,
-    n_mels: int = DEFAULT_N_MELS,
-    n_mfcc: int = DEFAULT_N_MFCC,
-    cmap: str = DEFAULT_CMAP,
-    dpi: int = DEFAULT_DPI,
+    n_mels: int = PICTURE_N_MELS,
+    n_mfcc: int = PICTURE_N_MFCC,
+    cmap: str = PICTURE_CMAP,
+    dpi: int = PICTURE_DPI,
     legend: bool = True,
     verbose: bool = True,
     on_progress: OnProgress | None = None,
