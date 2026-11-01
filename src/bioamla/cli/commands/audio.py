@@ -558,7 +558,7 @@ def audio_gain(input_path: str, output_path: str, gain_db: float) -> None:
     "--box",
     "boxes",
     multiple=True,
-    metavar="START,END[,LOW,HIGH[,LABEL]]",
+    metavar="START,END[,LOW,HIGH][,LABEL]",
     help="Outline a region: seconds, and optionally its band in Hz and a label "
     "(repeatable). Without a band it spans the full height.",
 )
@@ -622,21 +622,26 @@ def audio_visualize(
 
 
 def _parse_box(text: str) -> dict:
-    """``START,END[,LOW,HIGH[,LABEL]]`` as a box request."""
-    parts = [p.strip() for p in text.split(",", 4)]
-    if len(parts) not in (2, 4, 5):
-        raise click.BadParameter(
-            f"{text!r}: give START,END or START,END,LOW,HIGH[,LABEL]", param_hint="--box"
-        )
+    """``START,END[,LOW,HIGH][,LABEL]`` as a box request (the box itself is checked
+    when it's drawn). Empty band edges (``1,2,,,frog``) mean no band."""
+    parts = [p.strip() for p in text.split(",", 4)]  # a label may hold commas
     try:
-        numbers = [float(p) for p in parts[:4]]
-    except ValueError as e:
-        raise click.BadParameter(f"{text!r}: {e}", param_hint="--box") from e
-    box = {"start": numbers[0], "end": numbers[1]}
-    if len(numbers) == 4:
-        box.update(low_freq=numbers[2], high_freq=numbers[3])
-    if len(parts) == 5:
-        box["label"] = parts[4]
+        start, end = float(parts[0]), float(parts[1])
+        rest = parts[2:]
+        band = [float(p) if p else None for p in rest[:2]] if len(rest) >= 2 else []
+    except (ValueError, IndexError):
+        band = None
+    if band is None or len(parts) < 2:
+        raise click.BadParameter(
+            f"{text!r}: give START,END[,LOW,HIGH][,LABEL] (seconds, Hz)", param_hint="--box"
+        )
+    box: dict = {"start": start, "end": end}
+    if len(rest) == 1:  # START,END,LABEL
+        box["label"] = rest[0]
+    elif rest:
+        box.update(low_freq=band[0], high_freq=band[1])
+        if len(rest) > 2:
+            box["label"] = rest[2]
     return box
 
 

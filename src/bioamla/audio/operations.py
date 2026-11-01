@@ -518,7 +518,7 @@ def audio_visualize(request: AudioVisualizeRequest, context: OperationContext) -
 
     boxes = [SpectrogramBox.of(b) for b in request.boxes]
     if request.annotations:
-        boxes += annotation_boxes(request.annotations)
+        boxes += annotation_boxes(request.annotations, recording=request.file)
     saved = generate_spectrogram(
         audio_path=request.file,
         output_path=request.output,

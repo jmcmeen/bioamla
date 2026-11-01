@@ -25,6 +25,7 @@ Heavy backends are imported lazily:
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -41,6 +42,8 @@ VisualizationType = Literal["stft", "mel", "mfcc", "waveform"]
 WindowType = Literal["hann", "hamming", "blackman", "bartlett", "rectangular", "kaiser"]
 
 # Serializes figure rendering in generate_spectrogram (see the comment there).
+logger = logging.getLogger(__name__)
+
 _RENDER_LOCK = threading.Lock()
 
 
@@ -156,7 +159,6 @@ def generate_spectrogram(
         raise InvalidInputError(f"Invalid window type: {window}. Must be one of {valid_windows}")
 
     regions = [SpectrogramBox.of(b) for b in boxes or ()]
-    coords = bool(regions)
     resolved_backend = select_backend(backend)
 
     # Load and resample audio
@@ -191,7 +193,6 @@ def generate_spectrogram(
                 db_max=db_max,
                 show_legend=show_colorbar,
                 backend=resolved_backend,
-                coords=coords,
             )
         elif viz_type == "mel":
             _plot_mel_spectrogram(
@@ -208,7 +209,6 @@ def generate_spectrogram(
                 db_max=db_max,
                 show_legend=show_colorbar,
                 backend=resolved_backend,
-                coords=coords,
             )
         elif viz_type == "mfcc":
             _plot_mfcc(
@@ -223,15 +223,17 @@ def generate_spectrogram(
                 title=title,
                 show_legend=show_colorbar,
                 backend=resolved_backend,
-                coords=coords,
             )
         elif viz_type == "waveform":
             _plot_waveform(audio, sample_rate, ax, title=title, show_legend=show_colorbar)
 
         if regions:
-            # White shows on the colormaps; the waveform plot is on white.
-            color = "tab:red" if viz_type == "waveform" else "white"
-            _draw_boxes(ax, regions, banded=viz_type in ("stft", "mel"), color=color)
+            _draw_boxes(
+                ax,
+                regions,
+                _BoxGeometry(viz_type, sample_rate, hop_length, n_fft, n_mels, show_colorbar),
+                color=_box_color(viz_type, cmap),
+            )
 
         # Only use tight_layout when legend is shown, otherwise use full canvas
         if show_colorbar:
@@ -331,45 +333,119 @@ class SpectrogramBox:
         )
 
 
-def annotation_boxes(path: str | Path, label_column: str | None = None) -> list[SpectrogramBox]:
+def annotation_boxes(
+    path: str | Path, recording: str | Path | None = None, label_column: str | None = None
+) -> list[SpectrogramBox]:
     """The boxes of an annotation file, in any format bioamla reads (Raven ``.txt``,
     bioamla ``.json``, Arbimon or flat CSV): each annotation's time span and band,
     labelled with its label.
 
+    Args:
+        path: The annotation file.
+        recording: The recording they're drawn on: a file whose rows name their
+            recording (Arbimon exports do) keeps only that recording's rows.
+        label_column: Raven column holding the label.
+
+    An annotation that can't be a box (it doesn't end after it starts, or has only one
+    band edge) is skipped with a logged warning.
+
     Raises:
         NotFoundError: If the file doesn't exist.
-        InvalidInputError: If an annotation can't be a box (e.g. it ends before it starts).
     """
-    from bioamla.datasets._io import detect_annotation_format, load_annotations
+    from bioamla.datasets._io import load_recording_annotations
 
     path = Path(path)
     if not path.is_file():
         raise NotFoundError(f"Annotation file not found: {path}")
-    fmt = detect_annotation_format(path, read_header=True)
-    annotations, _ = load_annotations(path, fmt, label_column=label_column)
-    return [SpectrogramBox.of(a) for a in annotations]
+    boxes = []
+    for i, annotation in enumerate(load_recording_annotations(path, recording, label_column)):
+        try:
+            boxes.append(SpectrogramBox.of(annotation))
+        except InvalidInputError as e:
+            logger.warning("%s: skipping annotation %d: %s", path, i + 1, e)
+    return boxes
 
 
-def _draw_boxes(ax: Any, boxes: list[SpectrogramBox], banded: bool, color: str = "white") -> None:
-    """Outline ``boxes`` on ``ax`` (data coordinates: seconds, and Hz when ``banded``)."""
+@dataclass(frozen=True)
+class _BoxGeometry:
+    """How seconds and Hz map onto a plot's data coordinates.
+
+    With a legend, librosa plots in seconds and Hz (the mel axis on its own scale).
+    Without one it plots in frame and bin indices, so boxes are converted to those:
+    the picture is the same with or without boxes.
+    """
+
+    viz_type: str
+    sample_rate: int
+    hop_length: int
+    n_fft: int
+    n_mels: int
+    legend: bool
+
+    @property
+    def banded(self) -> bool:
+        return self.viz_type in ("stft", "mel")
+
+    @property
+    def nyquist(self) -> float:
+        return self.sample_rate / 2
+
+    def x(self, seconds: float) -> float:
+        if self.legend or self.viz_type == "waveform":
+            return seconds
+        return seconds * self.sample_rate / self.hop_length - 0.5  # frame i spans i +- 0.5
+
+    def y(self, hz: float) -> float:
+        hz = min(max(hz, 0.0), self.nyquist)
+        if self.legend:
+            return hz
+        if self.viz_type == "stft":
+            return hz / self.nyquist * (self.n_fft // 2)
+        mels = librosa.mel_frequencies(n_mels=self.n_mels, fmin=0.0, fmax=self.nyquist)
+        return float(np.interp(hz, mels, np.arange(self.n_mels)))
+
+
+def _box_color(viz_type: str, cmap: str) -> str:
+    """White or black, whichever shows on the picture's background (the low end of
+    the colormap; the waveform plot is on white)."""
+    if viz_type == "waveform":
+        return "tab:red"
+    from matplotlib import colormaps
+
+    try:
+        r, g, b, _ = colormaps[cmap](0.1)
+    except (KeyError, ValueError):
+        return "white"
+    return "white" if 0.299 * r + 0.587 * g + 0.114 * b < 0.5 else "black"
+
+
+def _draw_boxes(
+    ax: Any, boxes: list[SpectrogramBox], geometry: _BoxGeometry, color: str = "white"
+) -> None:
+    """Outline ``boxes`` on ``ax``, leaving its limits as they were (a box past the
+    end of the recording doesn't rescale the picture). A banded box entirely above
+    the plotted frequencies is left out."""
     from matplotlib.patches import Rectangle
 
+    limits = ax.get_xlim(), ax.get_ylim()
     style = {"fill": False, "edgecolor": color, "linewidth": 1.2}
     for box in boxes:
-        if banded and box.banded:
-            ax.add_patch(Rectangle((box.start, box.low_freq), box.end - box.start,
-                                   box.high_freq - box.low_freq, **style))  # fmt: skip
-            top = min(box.high_freq, max(ax.get_ylim()))  # keep the label in view
+        x0, x1 = geometry.x(box.start), geometry.x(box.end)
+        if geometry.banded and box.banded:
+            if box.low_freq >= geometry.nyquist:
+                continue  # nothing of it is on the picture
+            y0, y1 = geometry.y(box.low_freq), geometry.y(box.high_freq)
             transform = ax.transData
         else:
             # Full height: x in data coordinates, y in axes coordinates (0 to 1).
+            y0, y1 = 0.0, 1.0
             transform = ax.get_xaxis_transform()
-            ax.add_patch(Rectangle((box.start, 0), box.end - box.start, 1,
-                                   transform=transform, **style))  # fmt: skip
-            top = 1
+        ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, transform=transform, **style))
         if box.label:
-            ax.text(box.start, top, f" {box.label}", transform=transform, color=color,
+            ax.text(x0, y1, f" {box.label}", transform=transform, color=color,
                     fontsize=7, va="top", ha="left", clip_on=True)  # fmt: skip
+    ax.set_xlim(*limits[0])
+    ax.set_ylim(*limits[1])
 
 
 def _get_window_function(window: str, n_fft: int) -> np.ndarray:
@@ -404,10 +480,8 @@ def _plot_stft_spectrogram(
     db_max: float | None = None,
     show_legend: bool = True,
     backend: Backend = "librosa",
-    coords: bool = False,
 ) -> None:
-    """Plot an STFT spectrogram (in seconds and Hz with ``coords``, even without a
-    legend)."""
+    """Plot an STFT spectrogram."""
     import librosa.display
 
     mag = stft_magnitude(audio, n_fft, hop_length, window, backend)
@@ -424,8 +498,8 @@ def _plot_stft_spectrogram(
         stft_db,
         sr=sample_rate,
         hop_length=hop_length,
-        x_axis="time" if show_legend or coords else None,
-        y_axis="hz" if show_legend or coords else None,
+        x_axis="time" if show_legend else None,
+        y_axis="hz" if show_legend else None,
         ax=ax,
         cmap=cmap,
         vmin=vmin,
@@ -453,10 +527,8 @@ def _plot_mel_spectrogram(
     db_max: float | None = None,
     show_legend: bool = True,
     backend: Backend = "librosa",
-    coords: bool = False,
 ) -> None:
-    """Plot a mel spectrogram (in seconds and Hz with ``coords``, even without a
-    legend)."""
+    """Plot a mel spectrogram."""
     import librosa.display
 
     mel_spec = mel_power(audio, sample_rate, n_fft, hop_length, n_mels, window, backend=backend)
@@ -473,8 +545,8 @@ def _plot_mel_spectrogram(
         mel_spec_db,
         sr=sample_rate,
         hop_length=hop_length,
-        x_axis="time" if show_legend or coords else None,
-        y_axis="mel" if show_legend or coords else None,
+        x_axis="time" if show_legend else None,
+        y_axis="mel" if show_legend else None,
         ax=ax,
         cmap=cmap,
         vmin=vmin,
@@ -500,9 +572,8 @@ def _plot_mfcc(
     title: str,
     show_legend: bool = True,
     backend: Backend = "librosa",
-    coords: bool = False,
 ) -> None:
-    """Plot MFCCs (in seconds with ``coords``, even without a legend)."""
+    """Plot MFCCs."""
     import librosa.display
 
     mag = stft_magnitude(audio, n_fft, hop_length, window, backend)
@@ -513,7 +584,7 @@ def _plot_mfcc(
         mfccs,
         sr=sample_rate,
         hop_length=hop_length,
-        x_axis="time" if show_legend or coords else None,
+        x_axis="time" if show_legend else None,
         ax=ax,
         cmap=cmap,
     )

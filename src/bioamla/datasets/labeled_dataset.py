@@ -16,9 +16,7 @@ from typing import Any
 
 from bioamla.audio import get_audio_files
 from bioamla.datasets._io import (
-    annotations_for_recording,
-    detect_annotation_format,
-    load_annotations,
+    load_recording_annotations,
 )
 from bioamla.datasets._metadata import read_metadata_csv, write_metadata_csv
 from bioamla.datasets.annotation_utils import create_label_map, filter_labels
@@ -100,19 +98,9 @@ def _resolve_pairs(source: str, annotations: str | None) -> list[tuple[Path, Pat
 
 
 def _load_pair_annotations(ann_file: Path, audio_file: Path) -> list[Annotation]:
-    """The annotations for ``audio_file`` from ``ann_file``.
-
-    A file that names each row's recording (a ``recording`` column, as Arbimon
-    exports have) can cover many recordings; only the rows for this one are kept.
-    """
-    fmt = detect_annotation_format(ann_file, read_header=True)
-    anns, _ = load_annotations(ann_file, fmt)
-    kept = annotations_for_recording(anns, audio_file)
-    if not kept and anns:
-        logger.warning(f"No rows in {ann_file} name the recording {audio_file.name}")
-    elif len(kept) < len(anns):
-        logger.info(f"{ann_file}: {len(kept)} of {len(anns)} rows are for {audio_file.name}")
-    return kept
+    """The annotations for ``audio_file`` from ``ann_file`` (see
+    :func:`~bioamla.datasets._io.load_recording_annotations`)."""
+    return load_recording_annotations(ann_file, audio_file)
 
 
 def _resolve_source_metadata(source: str, source_metadata: str | None) -> Path | None:

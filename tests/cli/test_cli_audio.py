@@ -768,9 +768,20 @@ def test_visualize_boxes_and_annotations(runner, tmp_path, mocker):
     ]  # fmt: skip
 
 
-@pytest.mark.parametrize("box", ["1", "1,2,3", "a,b", "2,1", "1,2,900,100"])
+@pytest.mark.parametrize("box", ["1", "a,b", "2,1", "1,2,900,100", "1,2,x,100"])
 def test_visualize_bad_box(runner, mocker, box):
     mocker.patch("bioamla.viz.generate_spectrogram")
     result = runner.invoke(cli, ["audio", "visualize", "in.wav", "--box", box])
     assert result.exit_code != 0
     assert "box" in result.output.lower()
+
+
+def test_visualize_labelled_full_height_boxes(runner, mocker):
+    gen = mocker.patch("bioamla.viz.generate_spectrogram")
+    result = runner.invoke(cli, ["audio", "visualize", "in.wav", "--box", "1,2,frog",
+                                 "--box", "3,4,,,toad"])  # fmt: skip
+    assert result.exit_code == 0, result.output
+    from bioamla.viz import SpectrogramBox
+
+    assert gen.call_args.kwargs["boxes"] == [SpectrogramBox(1, 2, label="frog"),
+                                             SpectrogramBox(3, 4, label="toad")]  # fmt: skip

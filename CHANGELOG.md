@@ -8,11 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
-- `audio visualize --box START,END[,LOW,HIGH[,LABEL]]` (repeatable) and `--annotations FILE`
+- `audio visualize --box START,END[,LOW,HIGH][,LABEL]` (repeatable) and `--annotations FILE`
   outline regions on the picture: a box spans its band on the STFT and mel spectrograms, and
   the full height without one (and on MFCC and waveform plots); labels are written at its
-  corner. `--annotations` reads any format bioamla reads (Raven, bioamla JSON, CSV,
-  Arbimon), so `detect ... -o det.csv` feeds it directly. The `audio.visualize` request
+  corner, in white or black to suit the colormap. The picture underneath is unchanged.
+  `--annotations` reads any format bioamla reads (Raven, bioamla JSON, CSV, Arbimon; an
+  export covering several recordings gives only this one's rows, and a row that can't be a
+  box is skipped with a warning), so `detect ... -o det.csv` feeds it directly. The `audio.visualize` request
   gains `boxes` and `annotations`; the library gains `generate_spectrogram(boxes=...)`,
   `bioamla.viz.SpectrogramBox` and `bioamla.viz.annotation_boxes()`.
 
