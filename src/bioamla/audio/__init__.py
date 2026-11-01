@@ -21,13 +21,26 @@ from bioamla.audio.analysis import (
     is_silent,
 )
 from bioamla.audio.batch import (
+    batch_audio_info,
+    batch_convert,
     batch_convert_files,
+    batch_frame_features,
     batch_frame_features_files,
     batch_info_files,
+    batch_recording_metadata,
+    batch_resample,
     batch_resample_files,
+    batch_segment,
     batch_segment_files,
+    batch_transform,
     batch_transform_files,
+    batch_validate_wavs,
+    batch_visualize,
+    denoise_processor,
+    filter_processor,
+    normalize_processor,
     segment_audio_file,
+    trim_processor,
 )
 from bioamla.audio.convert import convert_audio_file
 from bioamla.audio.data import (
@@ -228,6 +241,20 @@ __all__ = [
     "batch_frame_features_files",
     "batch_segment_files",
     "segment_audio_file",
+    # Batch commands, directory or CSV mode (bioamla.audio.batch)
+    "batch_audio_info",
+    "batch_convert",
+    "batch_frame_features",
+    "batch_recording_metadata",
+    "batch_resample",
+    "batch_segment",
+    "batch_transform",
+    "batch_validate_wavs",
+    "batch_visualize",
+    "denoise_processor",
+    "filter_processor",
+    "normalize_processor",
+    "trim_processor",
     # Conversion
     "convert_audio_file",
     # One file: load, process, save (bioamla.audio.files)

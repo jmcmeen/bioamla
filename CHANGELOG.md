@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Every `batch audio` command runs through an operation (`batch.audio.info|validate|metadata|
+  features|convert|resample|normalize|trim|filter|denoise|segment|visualize`), in directory and
+  CSV mode, with unchanged output. Each takes a `BatchRequest` (`input_dir` or `input_file`,
+  `output_dir`, `recursive`, `max_workers`, `continue_on_error`) plus its options; all are jobs
+  and report progress where the library does.
+- Library functions behind them, each handling both modes from a `BatchConfig`, in
+  `bioamla.audio.batch` (also exported from `bioamla.audio`): `batch_audio_info()`,
+  `batch_validate_wavs()` (invalid files in `metadata["invalid_files"]`),
+  `batch_recording_metadata()`, `batch_frame_features()`, `batch_convert()`,
+  `batch_resample()`, `batch_transform()` with `normalize_processor()`, `trim_processor()`,
+  `filter_processor()` and `denoise_processor()`, `batch_segment()` and `batch_visualize()`.
+- The CSV-mode runners in `bioamla.batch`: `run_csv_merge()`, `run_csv_transform()`,
+  `run_csv_process()`, `run_csv_segment()` and `run_csv_predict_segments()`, and
+  `BatchRequest`. Operation names may now nest (`batch.audio.*`): the registry loads the module
+  for the longest registered prefix, so one domain's missing extra doesn't hide another's.
+
+### Changed
+
+- `batch audio visualize --no-legend` prints a warning that it's ignored; it always was (#246).
+- Batch directory mode honours `continue_on_error` in `batch_audio_info()`,
+  `batch_validate_wavs()`, `batch_recording_metadata()` and `batch_segment()`.
+
+### Fixed
+
+- `batch audio resample|normalize|trim|filter|denoise --input-dir` crashed before processing
+  anything (`batch_transform_files()` got an unexpected `operation` argument); it now runs, and
+  `batch_transform_files()` takes `operation` for its log records like the other batch runners.
+- Spectral denoising (`audio denoise`, `batch audio denoise`, `spectral_denoise()`) no longer
+  drops the last few milliseconds of the audio.
+
 ## [0.3.10] - 2026-11-01
 
 ### Added
@@ -55,11 +87,6 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
-- `batch audio resample|normalize|trim|filter|denoise --input-dir` crashed before processing
-  anything (`batch_transform_files()` got an unexpected `operation` argument); it now runs, and
-  `batch_transform_files()` takes `operation` for its log records like the other batch runners.
-- Spectral denoising (`audio denoise`, `batch audio denoise`, `spectral_denoise()`) no longer
-  drops the last few milliseconds of the audio.
 - `indices ndsi --n-fft` (and `compute_index(..., "ndsi", n_fft=...)`) is used instead of being
   ignored; NDSI's default stays 1024, so default results don't change.
 - `temporal_indices` (and `indices temporal`) raises `InvalidInputError` for a window or hop

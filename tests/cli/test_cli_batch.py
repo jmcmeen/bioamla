@@ -303,11 +303,12 @@ def test_audio_metadata_csv(runner, tmp_path):
 
 def test_audio_metadata_error(runner, test_audio_dir, mocker):
     mocker.patch(
-        "bioamla.audio.discovery.list_audio_files",
+        "bioamla.audio.batch.list_audio_files",
         side_effect=ProcessingError("listfail"),
     )
     result = runner.invoke(cli, ["batch", "audio", "metadata", "--input-dir", test_audio_dir])
     assert result.exit_code != 0
+    assert "listfail" in result.output
 
 
 # --------------------------------------------------------------------------- #

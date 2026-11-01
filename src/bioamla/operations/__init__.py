@@ -33,9 +33,12 @@ from typing import Annotated, Any, Literal
 
 from bioamla.exceptions import BioamlaError, DependencyError, NotFoundError
 
-#: Name prefix -> the module that declares those operations. Each domain adds its
-#: module here when its commands are converted.
+#: Name prefix -> the module that declares those operations; the longest matching
+#: prefix wins, so ``batch.audio`` and ``batch.detect`` can load separately (one
+#: domain's missing extra doesn't hide another's). Each domain adds its module here
+#: when its commands are converted.
 OPERATION_MODULES: dict[str, str] = {
+    "batch.audio": "bioamla.audio.batch_operations",
     "audio": "bioamla.audio.operations",
     "detect": "bioamla.detect.operations",
     "indices": "bioamla.indices.operations",
@@ -170,8 +173,14 @@ def _qualname(func: Callable) -> str:
 
 
 def _module_for(name: str) -> str | None:
-    prefix = name.split(".", 1)[0]
-    return OPERATION_MODULES.get(prefix)
+    """The module for ``name``'s longest registered prefix (``batch.audio.info`` ->
+    ``batch.audio`` before ``batch``)."""
+    parts = name.split(".")
+    for n in range(len(parts) - 1, 0, -1):
+        module = OPERATION_MODULES.get(".".join(parts[:n]))
+        if module is not None:
+            return module
+    return None
 
 
 def get(name: str) -> Operation:

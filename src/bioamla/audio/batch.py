@@ -26,6 +26,7 @@ from bioamla.protocols import OnProgress
 
 if TYPE_CHECKING:
     from bioamla.audio.features import FrameFeatureConfig
+    from bioamla.batch import BatchConfig, CSVBatchContext
 
 
 def batch_transform_files(
@@ -508,6 +509,596 @@ def batch_frame_features_files(
     return result
 
 
+# =============================================================================
+# Per-file processors for batch_transform (module level, so they pickle)
+# =============================================================================
+
+
+def _normalize_rms(audio: np.ndarray, sr: int, *, target_db: float) -> np.ndarray:
+    from bioamla.audio.processing import normalize_loudness
+
+    return normalize_loudness(audio, sr, target_db=target_db)
+
+
+def _normalize_peak(audio: np.ndarray, sr: int) -> np.ndarray:
+    from bioamla.audio.processing import peak_normalize
+
+    return peak_normalize(audio)
+
+
+def _trim_range(
+    audio: np.ndarray, sr: int, *, start: float | None, end: float | None
+) -> np.ndarray:
+    from bioamla.audio.processing import trim_audio
+
+    return trim_audio(audio, sr, start_time=start, end_time=end)
+
+
+def _trim_silence(audio: np.ndarray, sr: int, *, threshold_db: float) -> np.ndarray:
+    from bioamla.audio.processing import trim_silence
+
+    return trim_silence(audio, sr, threshold_db=threshold_db)
+
+
+def _denoise(audio: np.ndarray, sr: int, *, strength: float) -> np.ndarray:
+    from bioamla.audio.processing import spectral_denoise
+
+    return spectral_denoise(audio, sr, noise_reduce_factor=strength)
+
+
+def _filter(
+    audio: np.ndarray,
+    sr: int,
+    *,
+    lowpass: float | None,
+    highpass: float | None,
+    bandpass: tuple[float, float] | None,
+    order: int,
+) -> np.ndarray:
+    from bioamla.audio.processing import bandpass_filter, highpass_filter, lowpass_filter
+
+    if bandpass is not None:
+        return bandpass_filter(audio, sr, bandpass[0], bandpass[1], order=order)
+    if lowpass is not None:
+        return lowpass_filter(audio, sr, lowpass, order=order)
+    return highpass_filter(audio, sr, highpass, order=order)
+
+
+def _passthrough(audio: np.ndarray, sr: int) -> np.ndarray:
+    return audio
+
+
+def normalize_processor(*, target_db: float = -20.0, peak: bool = False) -> Callable:
+    """A :func:`batch_transform` processor: RMS loudness to ``target_db``, or (with
+    ``peak``) peak normalization."""
+    import functools
+
+    return _normalize_peak if peak else functools.partial(_normalize_rms, target_db=target_db)
+
+
+def trim_processor(
+    *,
+    start: float | None = None,
+    end: float | None = None,
+    silence_threshold_db: float | None = None,
+) -> Callable:
+    """A :func:`batch_transform` processor: keep ``start``..``end`` (s), or, with
+    ``silence_threshold_db``, trim leading and trailing silence below it."""
+    import functools
+
+    if silence_threshold_db is not None:
+        return functools.partial(_trim_silence, threshold_db=silence_threshold_db)
+    return functools.partial(_trim_range, start=start, end=end)
+
+
+def denoise_processor(*, strength: float = 1.0) -> Callable:
+    """A :func:`batch_transform` processor: spectral noise reduction (0–2)."""
+    import functools
+
+    return functools.partial(_denoise, strength=strength)
+
+
+def filter_processor(
+    *,
+    lowpass: float | None = None,
+    highpass: float | None = None,
+    bandpass_low: float | None = None,
+    bandpass_high: float | None = None,
+    order: int = 5,
+) -> Callable:
+    """A :func:`batch_transform` processor: one Butterworth filter, band-pass before
+    low-pass before high-pass (as :func:`~bioamla.audio.filter_audio_file`).
+
+    Raises:
+        InvalidInputError: If no filter is given, or only one band-pass edge.
+    """
+    import functools
+
+    if (bandpass_low is not None) != (bandpass_high is not None):
+        raise InvalidInputError("Both bandpass_low and bandpass_high must be specified together")
+    if lowpass is None and highpass is None and bandpass_low is None:
+        raise InvalidInputError("Must specify lowpass, highpass, or bandpass_low and bandpass_high")
+    bandpass = (bandpass_low, bandpass_high) if bandpass_low is not None else None
+    return functools.partial(
+        _filter, lowpass=lowpass, highpass=highpass, bandpass=bandpass, order=order
+    )
+
+
+# =============================================================================
+# Batch commands, directory or CSV mode (from a BatchConfig)
+# =============================================================================
+
+
+def _csv_context(config: "BatchConfig") -> "CSVBatchContext":
+    from bioamla.batch import load_csv
+
+    return load_csv(config.input_file, str(config.output_dir) if config.output_dir else None)
+
+
+def _input_dir(config: "BatchConfig") -> str:
+    if not config.input_dir:
+        raise InvalidInputError("input_dir (--input-dir) is required for this command.")
+    return str(config.input_dir)
+
+
+def _output_dir(config: "BatchConfig") -> str:
+    if not config.output_dir:
+        raise InvalidInputError("output_dir (--output-dir) is required for this command.")
+    return str(config.output_dir)
+
+
+def batch_transform(
+    config: "BatchConfig",
+    processor: Callable[[np.ndarray, int], np.ndarray],
+    *,
+    sample_rate: int | None = None,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch audio transform",
+) -> BatchResult:
+    """Apply ``processor`` to every file of a batch and save the results as WAV.
+
+    Directory mode writes into ``config.output_dir`` (required), mirroring the input
+    tree; CSV mode writes in place or under ``config.output_dir`` and updates each
+    row's ``file_name``.
+
+    Args:
+        config: The batch input and output (see :class:`~bioamla.batch.BatchConfig`).
+        processor: ``processor(audio, sample_rate) -> audio``, e.g. from
+            :func:`normalize_processor`; it must pickle for ``max_workers > 1``.
+        sample_rate: Resample the outputs to this rate.
+        on_progress: ``(done, total)`` callback.
+        operation: Name used in the batch log records.
+
+    Raises:
+        InvalidInputError: If directory mode has no ``output_dir``.
+    """
+    if config.input_file:
+        from bioamla.audio.io import process_file
+        from bioamla.batch import run_csv_transform
+
+        def _transform(in_path: Path, out_path: Path) -> Path:
+            wav_out = out_path.with_suffix(".wav")
+            return Path(process_file(str(in_path), str(wav_out), processor, sample_rate))
+
+        return run_csv_transform(
+            _csv_context(config),
+            _transform,
+            new_extension=".wav",
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            operation=operation,
+        )
+    input_dir = _input_dir(config)
+    return batch_transform_files(
+        input_dir,
+        _output_dir(config),
+        processor_fn=processor,
+        sample_rate=sample_rate,
+        recursive=config.recursive,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        on_progress=on_progress,
+        operation=operation,
+    )
+
+
+def batch_resample(
+    config: "BatchConfig",
+    sample_rate: int,
+    *,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch audio resample",
+) -> BatchResult:
+    """Resample every file of a batch to ``sample_rate`` (see :func:`batch_transform`)."""
+    return batch_transform(
+        config, _passthrough, sample_rate=sample_rate, on_progress=on_progress, operation=operation
+    )
+
+
+def batch_visualize(
+    config: "BatchConfig",
+    *,
+    viz_type: str = "mel",
+    verbose: bool = True,
+    on_progress: OnProgress | None = None,
+) -> BatchResult:
+    """Draw a spectrogram, MFCC or waveform image of every file in a folder.
+
+    Directory mode only; images mirror the input tree under ``config.output_dir``
+    (required). See :func:`bioamla.viz.batch_generate_spectrograms`.
+
+    Raises:
+        InvalidInputError: If ``config`` is CSV mode or has no ``output_dir``.
+    """
+    from bioamla.viz import batch_generate_spectrograms
+
+    stats = batch_generate_spectrograms(
+        _input_dir(config),
+        _output_dir(config),
+        viz_type=viz_type,
+        recursive=config.recursive,
+        verbose=verbose,
+        on_progress=on_progress,
+        max_workers=config.max_workers,
+    )
+    return BatchResult(
+        total_files=stats["files_processed"] + stats["files_failed"],
+        successful=stats["files_processed"],
+        failed=stats["files_failed"],
+        output_files=stats.get("output_files", []),
+        errors=stats.get("errors", []),
+    )
+
+
+def _info_columns(path: Path) -> dict:
+    from bioamla.audio.info import get_audio_info
+
+    info = get_audio_info(str(path))
+    return {
+        "duration": info.duration,
+        "sample_rate": info.sample_rate,
+        "channels": info.channels,
+        "samples": info.samples,
+        "format": info.format,
+    }
+
+
+def batch_audio_info(
+    config: "BatchConfig",
+    *,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch audio info",
+) -> BatchResult:
+    """Read every file's header (duration, sample rate, channels, samples, format).
+
+    Directory mode writes ``audio_info.csv`` into ``config.output_dir`` if given (see
+    :func:`batch_info_files`); CSV mode adds the columns to the metadata CSV.
+    """
+    if config.input_file:
+        from bioamla.batch import run_csv_merge
+
+        return run_csv_merge(
+            _csv_context(config),
+            _info_columns,
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            operation=operation,
+        )
+    return batch_info_files(
+        _input_dir(config),
+        str(config.output_dir) if config.output_dir else None,
+        recursive=config.recursive,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        on_progress=on_progress,
+    )
+
+
+def _check_wav(path: Path) -> dict:
+    from bioamla.audio._riffy import is_wav_path
+    from bioamla.audio.info import validate_wav
+    from bioamla.exceptions import AudioLoadError
+
+    if not is_wav_path(path):
+        return {"valid": "skipped", "error": "not a WAV file"}
+    try:
+        validate_wav(str(path))
+    except AudioLoadError as e:
+        return {"valid": "false", "error": str(e)}
+    return {"valid": "true", "error": ""}
+
+
+def batch_validate_wavs(
+    config: "BatchConfig",
+    *,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch audio validate",
+) -> BatchResult:
+    """Check that every WAV is well-formed PCM or float (header only).
+
+    Non-WAV files are skipped. Directory mode counts an invalid file as failed and
+    writes ``validation_report.csv`` (``file_name``, ``valid``, ``error``) into
+    ``config.output_dir`` if given; CSV mode adds ``valid`` and ``error`` columns.
+
+    Returns:
+        The run's result; ``metadata["invalid_files"]`` lists the invalid files in
+        either mode.
+    """
+    from bioamla.batch import run_batch, run_csv_merge
+    from bioamla.exceptions import AudioLoadError
+
+    invalid: list[str] = []
+    if config.input_file:
+
+        def _check_row(path: Path) -> dict:
+            row = _check_wav(path)
+            if row["valid"] == "false":
+                invalid.append(str(path))
+            return row
+
+        result = run_csv_merge(
+            _csv_context(config),
+            _check_row,
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            operation=operation,
+        )
+        result.metadata["invalid_files"] = sorted(invalid)
+        return result
+
+    files = list_audio_files(_input_dir(config), recursive=config.recursive)
+    rows: list[dict] = []
+
+    def _validate(path: Path) -> str:
+        row = {"file_name": str(path), **_check_wav(path)}
+        rows.append(row)
+        if row["valid"] == "false":
+            invalid.append(str(path))
+            raise AudioLoadError(f"{path}: {row['error']}")
+        return str(path)
+
+    result = run_batch(
+        files,
+        _validate,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        on_progress=on_progress,
+        operation=operation,
+    )
+    rows.sort(key=lambda r: r["file_name"])
+    result.skipped = sum(1 for r in rows if r["valid"] == "skipped")
+    result.metadata["invalid_files"] = sorted(invalid)
+    if config.output_dir:
+        report = Path(config.output_dir) / "validation_report.csv"
+        write_rows_csv(report, rows, ["file_name", "valid", "error"])
+        result.metadata["output_file"] = str(report)
+    return result
+
+
+def batch_recording_metadata(
+    config: "BatchConfig",
+    *,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch audio metadata",
+) -> BatchResult:
+    """Read every WAV's recorder metadata (GUANO, AudioMoth, WAMD, bext).
+
+    Non-WAV files are skipped. Directory mode writes ``recorder_metadata.csv`` into
+    ``config.output_dir`` if given and anything was read; CSV mode adds the columns
+    to the metadata CSV.
+    """
+    from bioamla.audio._riffy import is_wav_path
+    from bioamla.audio.metadata import RECORDING_METADATA_FIELDS, get_recording_metadata
+    from bioamla.batch import run_batch, run_csv_merge
+
+    if config.input_file:
+
+        def _row_meta(path: Path) -> dict:
+            if not is_wav_path(path):
+                return {}
+            return get_recording_metadata(str(path)).to_dict()
+
+        return run_csv_merge(
+            _csv_context(config),
+            _row_meta,
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            operation=operation,
+        )
+
+    all_files = list_audio_files(_input_dir(config), recursive=config.recursive)
+    files = [f for f in all_files if is_wav_path(f)]
+    rows: list[dict] = []
+
+    def _meta(path: Path) -> str:
+        rows.append({"file_name": str(path), **get_recording_metadata(str(path)).to_dict()})
+        return str(path)
+
+    result = run_batch(
+        files,
+        _meta,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        on_progress=on_progress,
+        operation=operation,
+    )
+    result.skipped = len(all_files) - len(files)
+    rows.sort(key=lambda r: r["file_name"])
+    if config.output_dir and rows:
+        out = Path(config.output_dir) / "recorder_metadata.csv"
+        write_rows_csv(out, rows, ["file_name", *RECORDING_METADATA_FIELDS])
+        result.metadata["output_file"] = str(out)
+    return result
+
+
+def batch_frame_features(
+    config: "BatchConfig",
+    *,
+    analysis: "FrameFeatureConfig | None" = None,
+    trajectory: bool = False,
+    gate_db: float = 38.0,
+    file_format: str = "csv",
+    on_progress: OnProgress | None = None,
+    operation: str = "batch audio features",
+) -> BatchResult:
+    """Write a per-frame feature table for every file.
+
+    Directory mode mirrors the input tree under ``config.output_dir`` (required) and
+    writes an index, ``frame_features.csv`` (see :func:`batch_frame_features_files`).
+    CSV mode writes each table under ``config.output_dir`` (mirroring the CSV's
+    folder) or next to its audio, and adds ``features_file`` and ``n_frames``.
+    """
+    from bioamla.audio.features import FrameFeatureConfig, frame_features_file
+
+    analysis = analysis or FrameFeatureConfig()
+    if config.input_file:
+        from bioamla.batch import run_csv_merge
+
+        context = _csv_context(config)
+        listed = [str(row.file_path) for row in context.rows]
+        tables = frame_feature_table_paths(listed, context.csv_dir, context.output_dir, file_format)
+
+        def _analyze(path: Path) -> dict:
+            result = frame_features_file(
+                path, tables[str(path)], config=analysis, trajectory=trajectory, gate_db=gate_db
+            )
+            # A Path: written relative to wherever the metadata CSV is saved.
+            return {
+                "features_file": Path(result.output_path).resolve(),
+                "n_frames": result.features.n_frames,
+            }
+
+        return run_csv_merge(
+            context,
+            _analyze,
+            clear=("features_file", "n_frames"),
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            operation=operation,
+        )
+    input_dir = _input_dir(config)
+    return batch_frame_features_files(
+        input_dir,
+        _output_dir(config),
+        config=analysis,
+        trajectory=trajectory,
+        gate_db=gate_db,
+        file_format=file_format,
+        recursive=config.recursive,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        on_progress=on_progress,
+    )
+
+
+def batch_convert(
+    config: "BatchConfig",
+    *,
+    target_format: str = "wav",
+    sample_rate: int | None = None,
+    channels: int | None = None,
+    delete_original: bool = False,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch audio convert",
+) -> BatchResult:
+    """Convert every file to ``target_format`` (see :func:`convert_audio_file`).
+
+    Directory mode writes into ``config.output_dir`` (required); CSV mode writes in
+    place or under ``config.output_dir`` and updates each row's ``file_name``.
+    """
+    if config.input_file:
+        from bioamla.batch import run_csv_transform
+
+        def _convert(in_path: Path, out_path: Path) -> Path:
+            return Path(
+                convert_audio_file(
+                    in_path,
+                    out_path,
+                    target_format=target_format,
+                    target_sample_rate=sample_rate,
+                    target_channels=channels,
+                    delete_original=delete_original,
+                )
+            )
+
+        return run_csv_transform(
+            _csv_context(config),
+            _convert,
+            new_extension=f".{target_format}",
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            operation=operation,
+        )
+    input_dir = _input_dir(config)
+    return batch_convert_files(
+        input_dir,
+        _output_dir(config),
+        target_format=target_format,
+        sample_rate=sample_rate,
+        channels=channels,
+        delete_original=delete_original,
+        recursive=config.recursive,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        on_progress=on_progress,
+    )
+
+
+def batch_segment(
+    config: "BatchConfig",
+    *,
+    duration: float,
+    overlap: float = 0.0,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch audio segment",
+) -> BatchResult:
+    """Cut every file into ``duration``-second clips (see :func:`segment_audio_file`).
+
+    Directory mode mirrors the input tree under ``config.output_dir`` (required); CSV
+    mode writes the clips next to each file's output and replaces each row by one
+    row per clip.
+
+    Raises:
+        InvalidInputError: If ``duration`` isn't positive, or directory mode has no
+            ``output_dir``.
+    """
+    if duration <= 0:
+        raise InvalidInputError(f"duration must be positive (got {duration})")
+    if config.input_file:
+        from bioamla.batch import run_csv_segment
+
+        def _segment(in_path: Path, seg_dir: Path) -> list:
+            return segment_audio_file(
+                str(in_path), str(seg_dir), duration=duration, overlap=overlap
+            )
+
+        return run_csv_segment(
+            _csv_context(config),
+            _segment,
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            operation=operation,
+        )
+    input_dir = _input_dir(config)
+    return batch_segment_files(
+        input_dir,
+        _output_dir(config),
+        duration=duration,
+        overlap=overlap,
+        recursive=config.recursive,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        on_progress=on_progress,
+    )
+
+
 __all__ = [
     "batch_transform_files",
     "batch_resample_files",
@@ -517,4 +1108,18 @@ __all__ = [
     "segment_audio_file",
     "batch_frame_features_files",
     "frame_feature_table_paths",
+    # Batch commands, directory or CSV mode
+    "batch_transform",
+    "batch_resample",
+    "batch_visualize",
+    "batch_audio_info",
+    "batch_validate_wavs",
+    "batch_recording_metadata",
+    "batch_frame_features",
+    "batch_convert",
+    "batch_segment",
+    "normalize_processor",
+    "trim_processor",
+    "denoise_processor",
+    "filter_processor",
 ]
