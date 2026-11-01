@@ -87,8 +87,12 @@ cluster = [  # dimensionality reduction, clustering, novelty detection
   "hdbscan>=0.8.0",
   "scikit-learn>=1.0.0",
 ]
+server = [  # bioamla serve: the HTTP API (calls operations directly; no CLI needed)
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+]
 all = [
-  "bioamla[audio,viz,indices,detect,ml,cluster]",
+  "bioamla[audio,viz,indices,detect,ml,cluster,server]",
 ]
 # The command-line interface. The library itself (`import bioamla`) does not need
 # these — only the `bioamla` console command does. Install with
@@ -109,6 +113,7 @@ dev = [
   "mkdocstrings[python]>=0.26",
   "mkdocs-click>=0.8",
   "pymdown-extensions>=11.0.1,<12",  # 11.0.1 fixes advisories; 12 breaks mkdocstrings highlighting
+  "httpx>=0.27",  # FastAPI's TestClient (server tests)
 ]
 
 [project.urls]

@@ -9,6 +9,7 @@ features need an extra (see ``[project.optional-dependencies]``):
 - ``indices``, ``detect``: ``audio`` plus numba for indices
 - ``ml``: torch, transformers, datasets, ... (AST models, augmentation, HF datasets)
 - ``cluster``: umap, hdbscan, scikit-learn
+- ``server``: fastapi, uvicorn (the HTTP API behind ``bioamla serve``)
 - ``all``: every extra
 
 The domain packages that need an extra wholesale (``viz``, ``indices``,
@@ -42,6 +43,7 @@ EXTRAS: dict[str, tuple[str, ...]] = {
         "mlflow",
     ),
     "cluster": ("umap", "hdbscan", "sklearn"),
+    "server": ("fastapi", "uvicorn"),
 }
 
 # The extra to suggest for a missing module: the smallest one that provides it.

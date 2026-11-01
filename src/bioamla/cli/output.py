@@ -22,18 +22,47 @@ in JSON mode without calling it gets ``"result": null``.
 
 from __future__ import annotations
 
-import dataclasses
-import datetime as _dt
-import enum
 import json
-import math
 import sys
-from pathlib import PurePath
 from typing import IO, Any, NoReturn
 
 _real_stdout: IO[str] | None = None
 _installed: IO[str] | None = None  # the stream we put on sys.stdout
 _emitted = False
+# The run's result and error, remembered in every mode (not only --json) so the
+# workspace history can record what a command produced.
+_last_result: Any = None
+_last_error: dict[str, Any] | None = None
+_run_workspace: Any = None
+
+
+def reset_run_record() -> None:
+    """Forget the previous run's result, error and workspace (start and end of a run)."""
+    global _last_result, _last_error, _run_workspace
+    _last_result = None
+    _last_error = None
+    _run_workspace = None
+
+
+def last_result() -> Any:
+    """The result the running command reported, as the command passed it, or ``None``."""
+    return _last_result
+
+
+def note_workspace(workspace: Any) -> None:
+    """Say which workspace the running command works on (for its history record)."""
+    global _run_workspace
+    _run_workspace = workspace
+
+
+def run_workspace() -> Any:
+    """The workspace the running command said it works on, or ``None``."""
+    return _run_workspace
+
+
+def last_error() -> dict[str, Any] | None:
+    """The error the running command ended with, as ``{"type", "message"}``, or ``None``."""
+    return _last_error
 
 
 def json_mode() -> bool:
@@ -68,39 +97,7 @@ def disable_json_mode() -> None:
     _emitted = False
 
 
-def to_jsonable(value: Any) -> Any:
-    """Convert a result into JSON types.
-
-    Dataclasses (their ``to_dict()`` when they have one), mappings and sequences
-    are converted recursively. Paths, datetimes and enums become strings or their
-    values, numpy scalars and arrays become numbers and lists, and NaN and
-    infinity become ``None``. Anything else becomes ``str(value)``.
-    """
-    if value is None or isinstance(value, (bool, int, str)):
-        return value
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        to_dict = getattr(value, "to_dict", None)
-        if callable(to_dict):
-            return to_jsonable(to_dict())
-        # Field by field (not dataclasses.asdict, which deep-copies and skips the
-        # to_dict() of nested dataclasses).
-        return {f.name: to_jsonable(getattr(value, f.name)) for f in dataclasses.fields(value)}
-    if isinstance(value, dict):
-        return {str(k): to_jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return [to_jsonable(v) for v in value]
-    if isinstance(value, PurePath):
-        return str(value)
-    if isinstance(value, (_dt.datetime, _dt.date, _dt.time)):
-        return value.isoformat()
-    if isinstance(value, enum.Enum):
-        return to_jsonable(value.value)
-    tolist = getattr(value, "tolist", None)  # numpy scalars and arrays
-    if callable(tolist):
-        return to_jsonable(tolist())
-    return str(value)
+from bioamla.common.jsonable import to_jsonable  # noqa: E402  (re-exported)
 
 
 def _write(envelope: dict[str, Any]) -> None:
@@ -169,8 +166,6 @@ def emit_file_result(file: str, output: Any = _NO_OUTPUT, **fields: Any) -> bool
     """
     import click
 
-    if not json_mode():
-        return False
     ctx = click.get_current_context()
     result: dict[str, Any] = {
         "file": file,
@@ -181,8 +176,7 @@ def emit_file_result(file: str, output: Any = _NO_OUTPUT, **fields: Any) -> bool
         result["output"] = None if output is None else str(output)
     elif "output" in ctx.params:
         result["output"] = ctx.params["output"]
-    emit_result(result)
-    return True
+    return emit_result(result)
 
 
 def emit_result(result: Any) -> bool:
@@ -191,6 +185,8 @@ def emit_result(result: Any) -> bool:
     Returns True if it reported, so a command can skip its human output:
     ``if emit_result({...}): return``.
     """
+    global _last_result
+    _last_result = result  # kept as-is; the history reads only its output paths
     if not json_mode():
         return False
     _write(_envelope(current_command(), ok=True, result=to_jsonable(result)))
@@ -221,8 +217,10 @@ def emit_error(command: str | None, error_type: str, message: str, details: Any 
     ``details`` (optional) goes in ``error.details``: structured data about the
     failure, such as which items of a batch failed and why.
     """
+    global _last_error
+    _last_error = {"type": error_type, "message": message}
     if json_mode():
-        error = {"type": error_type, "message": message}
+        error = dict(_last_error)
         if details is not None:
             error["details"] = to_jsonable(details)
         _write(_envelope(command, ok=False, error=error))
@@ -327,6 +325,11 @@ __all__ = [
     "enable_json_mode",
     "finish",
     "json_mode",
+    "last_error",
+    "last_result",
+    "note_workspace",
+    "reset_run_record",
+    "run_workspace",
     "legacy_json",
     "to_jsonable",
 ]

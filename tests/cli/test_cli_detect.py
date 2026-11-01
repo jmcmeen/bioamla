@@ -1,7 +1,9 @@
 """CLI tests for `bioamla detect` single-file commands.
 
 Domain detectors are imported lazily inside the command bodies from
-`bioamla.detect`, so we patch the symbols there.
+`bioamla.detect`, so we patch the symbols there. `detect energy` runs the
+`detect.energy` operation, so its tests patch `bioamla.detect.operations` and
+`bioamla.detect.core` instead.
 """
 
 from unittest.mock import MagicMock
@@ -56,8 +58,8 @@ def test_detect_subcommand_help(runner, cmd):
 
 def test_energy_table(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([_detection()])
-    mocker.patch("bioamla.detect.BandLimitedEnergyDetector", cls)
-    mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.BandLimitedEnergyDetector", cls)
+    mocker.patch("bioamla.detect.core.export_detections")
     result = runner.invoke(cli, ["detect", "energy", test_audio_path])
     assert result.exit_code == 0
     assert "Found 1 detections" in result.output
@@ -66,8 +68,8 @@ def test_energy_table(runner, test_audio_path, mocker):
 
 def test_energy_json(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([_detection()])
-    mocker.patch("bioamla.detect.BandLimitedEnergyDetector", cls)
-    mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.BandLimitedEnergyDetector", cls)
+    mocker.patch("bioamla.detect.core.export_detections")
     result = runner.invoke(cli, ["detect", "energy", test_audio_path, "--format", "json"])
     assert result.exit_code == 0
     assert '"start_time"' in result.output
@@ -75,8 +77,8 @@ def test_energy_json(runner, test_audio_path, mocker):
 
 def test_energy_csv(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([_detection()])
-    mocker.patch("bioamla.detect.BandLimitedEnergyDetector", cls)
-    mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.BandLimitedEnergyDetector", cls)
+    mocker.patch("bioamla.detect.core.export_detections")
     result = runner.invoke(cli, ["detect", "energy", test_audio_path, "--format", "csv"])
     assert result.exit_code == 0
     assert "start_time" in result.output
@@ -84,8 +86,8 @@ def test_energy_csv(runner, test_audio_path, mocker):
 
 def test_energy_csv_empty(runner, test_audio_path, mocker):
     cls, _ = _mock_detector([])
-    mocker.patch("bioamla.detect.BandLimitedEnergyDetector", cls)
-    mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.BandLimitedEnergyDetector", cls)
+    mocker.patch("bioamla.detect.core.export_detections")
     result = runner.invoke(cli, ["detect", "energy", test_audio_path, "--format", "csv"])
     assert result.exit_code == 0
     assert "No detections found." in result.output
@@ -93,8 +95,8 @@ def test_energy_csv_empty(runner, test_audio_path, mocker):
 
 def test_energy_output_file(runner, test_audio_path, tmp_path, mocker):
     cls, _ = _mock_detector([_detection()])
-    mocker.patch("bioamla.detect.BandLimitedEnergyDetector", cls)
-    export = mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.BandLimitedEnergyDetector", cls)
+    export = mocker.patch("bioamla.detect.core.export_detections")
     out = tmp_path / "dets.json"
     result = runner.invoke(cli, ["detect", "energy", test_audio_path, "-o", str(out)])
     assert result.exit_code == 0
@@ -105,8 +107,8 @@ def test_energy_output_file(runner, test_audio_path, tmp_path, mocker):
 
 def test_energy_output_csv_format(runner, test_audio_path, tmp_path, mocker):
     cls, _ = _mock_detector([_detection()])
-    mocker.patch("bioamla.detect.BandLimitedEnergyDetector", cls)
-    export = mocker.patch("bioamla.detect.export_detections")
+    mocker.patch("bioamla.detect.operations.BandLimitedEnergyDetector", cls)
+    export = mocker.patch("bioamla.detect.core.export_detections")
     out = tmp_path / "dets.csv"
     result = runner.invoke(cli, ["detect", "energy", test_audio_path, "-o", str(out)])
     assert result.exit_code == 0
@@ -116,7 +118,9 @@ def test_energy_output_csv_format(runner, test_audio_path, tmp_path, mocker):
 def test_energy_error(runner, test_audio_path, mocker):
     instance = MagicMock()
     instance.detect_from_file.side_effect = DetectionError("boom")
-    mocker.patch("bioamla.detect.BandLimitedEnergyDetector", MagicMock(return_value=instance))
+    mocker.patch(
+        "bioamla.detect.operations.BandLimitedEnergyDetector", MagicMock(return_value=instance)
+    )
     result = runner.invoke(cli, ["detect", "energy", test_audio_path])
     assert result.exit_code != 0
     assert "boom" in result.output

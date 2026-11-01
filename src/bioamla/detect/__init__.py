@@ -9,6 +9,10 @@ Example:
     >>> from bioamla.detect import BandLimitedEnergyDetector
     >>> detector = BandLimitedEnergyDetector(low_freq=500, high_freq=3000)
     >>> detections = detector.detect_from_file("recording.wav")
+
+:func:`detect_file` runs a detector on one file and saves the detections:
+
+    >>> found = detect_file(detector, "recording.wav", output="recording.csv")
 """
 
 from bioamla._extras import require_extra
@@ -22,10 +26,12 @@ from bioamla.detect.core import (
     BandLimitedEnergyDetector,
     CWTPeakDetector,
     Detection,
+    FileDetections,
     PeakDetection,
     RibbitDetector,
     batch_detect,
     detect_all,
+    detect_file,
     export_detections,
 )
 from bioamla.exceptions import (
@@ -38,6 +44,7 @@ from bioamla.exceptions import (
 __all__ = [
     # Data classes
     "Detection",
+    "FileDetections",
     "PeakDetection",
     # Detector classes
     "BandLimitedEnergyDetector",
@@ -46,6 +53,7 @@ __all__ = [
     "AcceleratingPatternDetector",
     # Convenience functions
     "detect_all",
+    "detect_file",
     "export_detections",
     "batch_detect",
     "batch_detect_dir",

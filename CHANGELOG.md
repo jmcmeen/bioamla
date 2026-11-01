@@ -6,6 +6,70 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `bioamla.workspace`: project workspaces. A workspace is a directory with a `.bioamla/` folder
+  (`workspace.toml`, `config.toml`, `artifacts.json`, and `annotations/`, `imported/`,
+  `datasets/`, `models/`, `runs/`); `create_workspace()`, `open_workspace()` and
+  `find_workspace()` (walks up from a directory, like git). Artifacts are linked (referenced in
+  place; paths inside the workspace stored relative so it can move) or imported (copied in).
+  `WorkspaceError` for malformed workspaces and ones written by a newer bioamla. First piece of
+  the 0.4.0 workspace and remote work; the format is shared with MagPy.
+- `bioamla workspace init|status|add|import|list|remove`: create a workspace, see what it holds,
+  link files or folders in place (`add`) or copy them in (`import`), list artifacts (flagging
+  any whose linked file has gone missing), and forget one (`--delete-import` also removes an
+  imported copy). Commands find the workspace from the current directory or `-C PATH` (relative
+  paths then resolve against it, as with `git -C`); several PATHS are added all-or-nothing; all
+  report `--json` results. Library: `Workspace.link_many()` and `import_many()`.
+- Settings: any command option can take its default from `~/.config/bioamla/config.toml`, the
+  workspace's `.bioamla/config.toml`, or a `BIOAMLA_<COMMAND>_<OPTION>` environment variable, in
+  that order, with the command-line flag winning over all of them. Tables name commands
+  (`[detect.energy]`) and keys name options by their long name. `bioamla workspace config
+  list|get|set|unset [--user]` manages them; unknown keys are reported. See the new Settings
+  page. Library: `bioamla.common.settings`.
+- Run history: every command run inside a workspace is recorded in `.bioamla/history.jsonl`
+  (time, duration, command line, working folder, host, user, bioamla version, success, exit
+  code, error, and the output files its result names). Values of secret-looking options are
+  hidden; `--help`/`--version` runs aren't recorded, and a problem writing the file never fails
+  the command. `bioamla workspace history [-n N] [--failed] [--all]` shows it, and
+  `workspace status` shows the last 5 runs (`last_runs` in its `--json` result). Library:
+  `Workspace.record_run()` and `Workspace.history()`.
+- `BIOAMLA_PROGRESS=jsonl`: commands with a progress bar write `start`, `progress` (`done`,
+  `total`, `description`) and `end` (`ok`) events as JSON lines on stderr instead of drawing the
+  bar: one per whole percent (every item of a small batch), at least every 0.1 s, plus the final
+  count before `end`; `end`'s `ok` is false if the work failed or stopped early. Sent with
+  `--quiet` too; a closed stderr stops the events, not the command or its count. Documented
+  under "Progress events" in the CLI reference.
+- `bioamla system commands [PATH...]`: the command catalog. Lists every command, or describes
+  the ones under PATH; with `--json`, every group and command with its help, arguments and
+  options (flags, type, choices, path and range constraints, default, required, multiple), each
+  option's `BIOAMLA_*` variable and settings key, and the global options. Repeatable options
+  default to `[]`; the table marks required options; a broken settings file is a warning, not an
+  error, so the catalog still lists. Library: `bioamla.cli.catalog.command_catalog()` (raises
+  `NotFoundError` for an unknown PATH).
+- `bioamla serve` and the `server` extra (`pip install 'bioamla[server]'`: fastapi, uvicorn):
+  the start of the HTTP API (`/v1`) for working in this machine's workspaces from elsewhere.
+  This release has `/v1/health` (no token), `/v1/version` and the OpenAPI spec at
+  `/v1/openapi.json` (token required; it declares the bearer scheme, and there are no
+  interactive docs pages); responses and errors, unknown routes included, use the `--json`
+  envelope. One user, one bearer token (a file created atomically, with mode 600 on macOS and
+  Linux; a malformed or shared token file is refused), localhost by default; every path must
+  resolve inside the workspace root or a folder allowed with `--allow-link`, and a workspace's
+  `.bioamla` metadata can't link outside it. The server doesn't need the CLI.
+  Library: `bioamla.server`; `to_jsonable` now lives in `bioamla.common.jsonable`.
+- `bioamla.operations`: a registry of operations, the shared contract the CLI and the server
+  call. Each operation has a typed request (a validated config whose path fields are marked
+  `PathStr` and appear in its JSON Schema with `"format": "path"`), a function declared in its
+  domain package, and a result. `operations.run(name, request, context)` validates the request,
+  passes every path through the context's check, and runs it; `OperationContext` carries the
+  workspace, progress and cancel hooks. Domains load on first use, and `all_operations()` lists
+  what's available and which domains need an extra. Request paths also accept `pathlib.Path`
+  and `list[PathStr]`; a path hidden where it can't be checked is refused at registration. `detect energy` is the first command run
+  through one (`detect.energy`), with unchanged output.
+- `bioamla.detect.detect_file(detector, file, output=None)`: run any detector on one file and
+  optionally save the detections (JSON for `.json`, otherwise CSV), returning `FileDetections`
+  (`file`, `detections`, `count`, `output`, `to_dict()`).
+
 ## [0.3.8] - 2026-10-31
 
 ### Security

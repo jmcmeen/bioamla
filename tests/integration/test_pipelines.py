@@ -7,6 +7,7 @@ its own; these cover the hand-offs between them.
 
 import csv
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -376,3 +377,86 @@ class TestEmbedToCluster:
         assert result["total_files"] == 2 and result["failed"] == 0  # the .wav isn't tried
         rows = {Path(r["file_name"]).name: r for r in read_csv(tmp_path / "cl" / "meta.csv")}
         assert rows["a2.wav"]["cluster"] == ""
+
+
+class TestWorkspace:
+    def test_init_add_and_detect_inside(self, recording, tmp_path, monkeypatch) -> None:
+        root = tmp_path / "survey"
+        created = bioamla("workspace", "init", str(root))
+        recs = root / "recordings"
+        recs.mkdir()
+        (recs / recording.name).write_bytes(recording.read_bytes())
+
+        monkeypatch.chdir(root / "recordings")  # commands find the workspace from below
+        (linked,) = bioamla("workspace", "add", ".")["artifacts"]
+        assert linked["path"] == "recordings" and linked["kind"] == "folder"
+
+        detections = bioamla("detect", "energy", recording.name, "-o", "../det.csv")
+        assert detections["count"] == 7
+        status = bioamla("workspace", "status")
+        assert status["id"] == created["id"] and status["artifacts"] == {"folder": 1}
+
+    def test_settings_written_by_config_set_reach_commands(self, recording, tmp_path, monkeypatch):
+        root = tmp_path / "survey"
+        bioamla("workspace", "init", str(root))
+        monkeypatch.chdir(root)
+        default = bioamla("detect", "energy", str(recording))
+        bioamla("workspace", "config", "set", "detect.energy.threshold_db", "-1")
+        tuned = bioamla("detect", "energy", str(recording))
+        assert tuned["params"]["threshold_db"] == -1.0
+        assert tuned["count"] < default["count"]
+        bioamla("workspace", "config", "unset", "detect.energy.threshold_db")
+        assert bioamla("detect", "energy", str(recording))["params"]["threshold_db"] == -20.0
+
+    def test_runs_are_recorded_with_their_outputs(self, recording, tmp_path, monkeypatch):
+        root = tmp_path / "survey"
+        bioamla("workspace", "init", str(root))
+        monkeypatch.chdir(root)
+        bioamla("detect", "energy", str(recording), "-o", "det.csv")
+        bioamla_error("detect", "energy", "missing.wav")
+        runs = bioamla("workspace", "history")["runs"]
+        detect_ok, detect_failed = runs[-2:]
+        assert detect_ok["ok"] and detect_ok["outputs"] == ["det.csv"]
+        assert (root / detect_ok["outputs"][0]).is_file()
+        assert not detect_failed["ok"] and detect_failed["error"]["type"] == "BadParameter"
+        assert [r["command"] for r in runs][0] == "workspace init"
+
+
+class TestProgressEvents:
+    def test_batch_command_streams_progress(self, recording, tmp_path) -> None:
+        import os
+        import subprocess
+        import sys
+
+        folder = tmp_path / "in"
+        folder.mkdir()
+        for i in range(3):
+            (folder / f"r{i}.wav").write_bytes(recording.read_bytes())
+        env = {**os.environ, "BIOAMLA_PROGRESS": "jsonl"}
+        proc = subprocess.run(
+            [sys.executable, "-m", "bioamla._cli_entry", "--json", "batch", "audio", "features",
+             "--input-dir", str(folder), "--output-dir", str(tmp_path / "out")],
+            capture_output=True, text=True, env=env, check=True,
+        )  # fmt: skip
+        assert json.loads(proc.stdout)["ok"]  # stdout is still exactly the envelope
+        got = [json.loads(line) for line in proc.stderr.splitlines()
+               if line.startswith('{"event"')]  # fmt: skip
+        assert got[0]["event"] == "start" and got[-1]["event"] == "end"
+        assert got[-1]["done"] == 3 and got[-1]["ok"] is True
+        progress = [e["done"] for e in got if e["event"] == "progress"]
+        assert progress == [1, 2, 3]  # every file of a small batch
+
+
+class TestCatalog:
+    def test_catalog_setting_keys_configure_commands(self, recording, tmp_path, monkeypatch):
+        for name in [n for n in os.environ if n.startswith("BIOAMLA_DETECT_ENERGY_")]:
+            monkeypatch.delenv(name)  # the environment would win over the workspace setting
+        catalog = bioamla("system", "commands", "detect", "energy")
+        (energy,) = [c for c in catalog["commands"] if c["path"] == "detect energy"]
+        threshold = next(o for o in energy["options"] if o["name"] == "threshold_db")
+
+        root = tmp_path / "survey"
+        bioamla("workspace", "init", str(root))
+        monkeypatch.chdir(root)
+        bioamla("workspace", "config", "set", threshold["setting"], "-3")
+        assert bioamla("detect", "energy", str(recording))["params"]["threshold_db"] == -3.0

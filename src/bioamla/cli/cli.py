@@ -2,7 +2,9 @@
 BioAMLA CLI - Bioacoustic Machine Learning Applications
 """
 
+import logging
 import sys
+import time
 
 import click
 
@@ -21,8 +23,10 @@ from .commands import (
     detect,
     indices,
     models,
+    serve,
     system,
     util,
+    workspace,
 )
 
 _BANNER = r"""
@@ -91,10 +95,74 @@ class BioamlaGroup(click.Group):
     ``SystemExit`` or an unexpected exception, yields exactly one envelope.
     """
 
+    #: Marks the root: its options (--json, --log-level, ...) are decided before
+    #: settings are read, so settings files and BIOAMLA_* variables can't set them.
+    is_bioamla_root = True
+
+    def make_context(self, info_name, args, parent=None, **extra):
+        # Option defaults from the user's and the workspace's config.toml and
+        # BIOAMLA_<COMMAND>_<OPTION> environment variables (that order, later
+        # winning); a flag on the command line still wins over all of them.
+        # Done here, inside main()'s error handling, so a malformed settings file
+        # is reported like any other error (and as an envelope with --json).
+        if parent is None:
+            from bioamla.cli.settings_map import settings_default_map
+
+            words = [a for a in args if not a.startswith("-")]
+            # Commands that inspect or fix settings, or describe the CLI, still run
+            # with a broken settings file (it's reported as a warning).
+            lenient = any(a in ("--help", "--version") for a in args) or words[:2] in (
+                ["workspace", "config"],
+                ["system", "commands"],
+            )
+            extra.setdefault("default_map", settings_default_map(self, lenient=lenient))
+        return super().make_context(info_name, args, parent=parent, **extra)
+
     def main(self, args=None, prog_name=None, complete_var=None, standalone_mode=True, **extra):
-        from bioamla.cli import output
+        from bioamla.cli import history, output
 
         args = list(sys.argv[1:] if args is None else args)
+        if not history.should_record(self, args):
+            return self._main(args, prog_name, complete_var, standalone_mode, **extra)
+
+        # Record the run in the workspace history, however it ends. Run Click in
+        # non-standalone mode so every outcome reaches us as a value or an exception
+        # (standalone Click would print and exit before we saw it), then finish the
+        # way standalone mode would.
+        output.reset_run_record()
+        json_run = output.json_flag_given(self, args)
+        started = time.time()
+        ok, exit_code, error = True, 0, None
+        rv = None
+        try:
+            rv = self._main(args, prog_name, complete_var, False, **extra)
+            if isinstance(rv, int) and not isinstance(rv, bool) and rv != 0:  # ctx.exit(n)
+                ok, exit_code = False, rv
+        except BaseException as exc:
+            ok, exit_code, error = False, *_describe_exit(exc)
+            if exit_code == 0:
+                ok = True
+            if not standalone_mode:
+                raise
+            _finish_standalone_error(exc, json_run)
+        finally:
+            if error is None and not ok:
+                error = output.last_error()  # e.g. a --json run that already reported it
+            try:
+                history.record_run(
+                    self, args, started=started, ended=time.time(), ok=ok,
+                    exit_code=exit_code, error=error,
+                )  # fmt: skip
+            except Exception as e:  # noqa: BLE001 - history must never fail a command
+                logging.getLogger("bioamla.cli").warning("Couldn't record this run: %s", e)
+            output.reset_run_record()
+        if not standalone_mode:
+            return rv
+        sys.exit(exit_code)
+
+    def _main(self, args, prog_name, complete_var, standalone_mode, **extra):
+        from bioamla.cli import output
+
         if not output.json_flag_given(self, args):
             return super().main(args, prog_name, complete_var, standalone_mode, **extra)
 
@@ -122,6 +190,44 @@ class BioamlaGroup(click.Group):
             return rv
         finally:
             output.disable_json_mode()
+
+
+def _describe_exit(exc: BaseException) -> tuple[int, dict | None]:
+    """Exit code and recorded error for how a run ended."""
+    if isinstance(exc, SystemExit):
+        code = exc.code
+        if code is None:
+            return 0, None
+        if isinstance(code, bool) or not isinstance(code, int):
+            return 1, None
+        return code, None
+    if isinstance(exc, click.exceptions.Exit):
+        return exc.exit_code, None
+    if isinstance(exc, click.ClickException):
+        cause = exc.__cause__ if isinstance(exc.__cause__, BioamlaError) else exc
+        return exc.exit_code, {"type": type(cause).__name__, "message": exc.format_message()}
+    if isinstance(exc, (click.exceptions.Abort, KeyboardInterrupt)):
+        return 1, {"type": "Aborted", "message": "Interrupted"}
+    return 1, {"type": type(exc).__name__, "message": str(exc)}
+
+
+def _finish_standalone_error(exc: BaseException, json_run: bool) -> None:
+    """End the process the way Click's standalone mode (and the JSON contract) would
+    for ``exc``; re-raise what standalone mode lets through."""
+    if isinstance(exc, SystemExit):
+        raise exc
+    if isinstance(exc, click.exceptions.Exit):
+        sys.exit(exc.exit_code)
+    if isinstance(exc, click.ClickException):
+        exc.show()
+        sys.exit(exc.exit_code)
+    if isinstance(exc, (click.exceptions.Abort, KeyboardInterrupt)):
+        if not json_run:
+            click.echo("Aborted!", err=True)
+        sys.exit(1)
+    if json_run and isinstance(exc, BioamlaError):
+        handle_cli_error(exc)  # the JSON is out; show the error for people too
+    raise exc
 
 
 @click.group(cls=BioamlaGroup)
@@ -172,8 +278,10 @@ cli.add_command(dataset)
 cli.add_command(detect)
 cli.add_command(indices)
 cli.add_command(models)
+cli.add_command(serve)
 cli.add_command(system)
 cli.add_command(util)
+cli.add_command(workspace)
 
 
 def main() -> None:

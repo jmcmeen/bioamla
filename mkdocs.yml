@@ -27,7 +27,10 @@ theme:
 nav:
   - Home: index.md
   - CLI Reference: cli.md
+  - Settings: settings.md
   - Recorder metadata: recorder-metadata.md
+  - Architecture:
+      - Workspaces, remote work and skills: architecture/workspaces-and-remote.md
   - API Reference:
       - audio: api/audio.md
       - viz: api/viz.md
@@ -38,7 +41,10 @@ nav:
       - datasets: api/datasets.md
       - ml: api/ml.md
       - batch: api/batch.md
+      - operations: api/operations.md
       - system: api/system.md
+      - workspace: api/workspace.md
+      - server: api/server.md
       - common: api/common.md
       - protocols: api/protocols.md
       - exceptions: api/exceptions.md
