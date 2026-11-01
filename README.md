@@ -18,6 +18,7 @@ Python 3.11 or newer, in a virtual environment:
 ```bash
 pip install "bioamla[all,cli]"     # everything, plus the `bioamla` command
 pip install "bioamla[audio,cli]"   # or only the parts you need
+pip install bioamla                # the slim library alone: no PyTorch, librosa or plots
 ```
 
 | Extra | For |
@@ -52,7 +53,8 @@ bioamla indices compute recording.wav             # ACI, ADI, AEI, BIO, NDSI, en
 bioamla detect energy recording.wav -o detections.csv
 bioamla models ast predict frog.wav --model-path bioamla/scp-frogs --top-k 3
 
-# The same over a folder, or a CSV with a file_name column (results merge back into it):
+# The same over a folder, or a CSV with a file_name column (a copy with the results
+# added goes to the output folder):
 bioamla batch index --input-dir ./recordings --output-dir ./out
 bioamla batch detect energy --input-file recordings.csv --output-dir ./out
 ```
@@ -92,20 +94,22 @@ Run bioamla on the machine that holds the recordings (or the GPU), and drive it 
 your laptop with the same commands:
 
 ```bash
-# On the server
+# On the server (it listens on localhost only)
 pip install "bioamla[all,cli]"
 bioamla serve --root ~/bioamla-workspaces --allow-link /data/recordings
 
-# On the laptop
-bioamla remote add lab http://lab-server:8765
+# On the laptop: reach it through an SSH tunnel, then add it as a remote
+ssh -N -L 8765:localhost:8765 lab-server &
+bioamla remote add lab http://localhost:8765
 export BIOAMLA_LAB_TOKEN=...                       # from the server's token file
+bioamla remote workspaces lab --create costa-rica
 bioamla remote upload lab costa-rica rec.wav --to raw
 bioamla --remote lab:costa-rica detect energy raw/rec.wav
 ```
 
 The output is the same as a local run's. See
-[Running the server](https://jmcmeen.github.io/bioamla/server/) for tokens, SSH tunnels
-and systemd.
+[Running the server](https://jmcmeen.github.io/bioamla/server/) for the token, a VPN
+instead of a tunnel, and systemd.
 
 ## Agent skills
 
@@ -122,8 +126,11 @@ else needs a key.
 
 ## More
 
-- [Documentation](https://jmcmeen.github.io/bioamla): CLI and API reference, settings,
-  recorder metadata.
+- Documentation: the [CLI reference](https://jmcmeen.github.io/bioamla/cli/),
+  [using the library](https://jmcmeen.github.io/bioamla/library/) and its
+  [API reference](https://jmcmeen.github.io/bioamla/api/audio/),
+  [settings](https://jmcmeen.github.io/bioamla/settings/) and
+  [recorder metadata](https://jmcmeen.github.io/bioamla/recorder-metadata/).
 - [Examples](https://github.com/jmcmeen/bioamla/tree/main/examples): end-to-end scripts,
   from catalog downloads to a trained and published model.
 - [Contributing](https://github.com/jmcmeen/bioamla/blob/main/CONTRIBUTING.md),

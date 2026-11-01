@@ -37,7 +37,7 @@ clustering, species catalogs, dataset tooling, and AST-based ML inference.
 4. **Slim base, opt-in extras.** `pip install bioamla` installs only the light core
    (numpy, scipy, pandas, soundfile, pydub, riffy, requests, the catalog clients). Heavy
    dependencies live in extras: `audio` (librosa, sounddevice), `viz`, `indices`, `detect`,
-   `ml` (torch, transformers, …), `cluster`, and `all`. `bioamla/_extras.py` maps each extra
+   `ml` (torch, transformers, …), `cluster`, `server` (fastapi, uvicorn), and `all`. `bioamla/_extras.py` maps each extra
    to its modules. A domain package that needs an extra wholesale calls `require_extra(...)`
    at the top of its `__init__.py`; a function elsewhere imports its heavy dependency with
    `import_extra("librosa", "audio")`. Both raise `DependencyError` with the install command,
