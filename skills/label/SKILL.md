@@ -31,7 +31,9 @@ to the next step.
 
    Writes `evidence.json`: signal-to-noise ratio in the detector's band (dB), detector
    score, model confidence, band and duration. `margin` is null (the model step gives
-   only its top label).
+   only its top label). SNR is null when a recording has no quieter frames to compare
+   with, as when the detector's relative threshold makes a recording of nothing but
+   noise one long event; such candidates go to review.
 
 3. **Crops**: a clip and a spectrogram image around each candidate, for review.
 
@@ -72,5 +74,5 @@ to the next step.
 
 Tell the person how many candidates were found, how many were written as annotations,
 and how many were held back and why (the review step's `reasons` counts), and point
-them at `review_queue.json`. If a step
-prints `{"error": ...}`, report the error as it is and stop.
+them at `review_queue.json`. If a step prints `{"error": ...}`, report the error as it
+is and stop.

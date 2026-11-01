@@ -59,4 +59,4 @@ the integration tests (`pytest -m integration tests/skills`).
 | Skill | What it does |
 |---|---|
 | `inventory` | Lists a folder's recordings and flags files that are too short or unreadable. A minimal example of the convention. |
-| `label` | A first pass of labeling: finds candidate events with an energy detector and classifies each with an AST model. |
+| `label` | A first pass of labeling: finds events with an energy detector, classifies them with an AST model, measures each (SNR, scores), cuts a clip and spectrogram, writes the ones that clear the thresholds as `labeled_by=agent` annotations without touching a person's rows, and queues the rest for review. Its eval runs all five steps on recordings with known events. |

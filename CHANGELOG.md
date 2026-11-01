@@ -27,7 +27,9 @@ All notable changes to this project are documented here. The format is based on
   with `confidence`, `method` and `labeled_by=agent`; rows a person made are never
   changed, and earlier agent rows for the same recordings are replaced. `review.py`
   queues every candidate below a threshold, with its reasons, evidence, clip and image,
-  in `review_queue.json`.
+  in `review_queue.json`. An end-to-end eval runs the five steps on synthetic recordings with
+  known events and checks what is annotated, what is queued, and that a person's row is
+  untouched.
 
 - "Running the server" docs page: installing and starting `bioamla serve`, the token file,
   reaching it over an SSH tunnel or a VPN, a systemd unit, and linking recordings already on
