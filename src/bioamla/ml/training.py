@@ -49,6 +49,77 @@ _SPLIT_ALIAS = {
 }
 
 
+def decode_example_audio(audio: str | dict[str, Any], sampling_rate: int) -> Any:
+    """A training example's audio as a mono float32 array at ``sampling_rate``.
+
+    ``audio`` is a file path (local datasets), or a ``datasets`` audio value left
+    undecoded (``{"path", "bytes"}``): the file at ``path``, or the encoded ``bytes``
+    (Hub datasets that embed their audio). Decoding goes through bioamla's own loader (soundfile, or ffmpeg through
+    pydub for other formats), so it doesn't depend on the FFmpeg versions
+    ``datasets``' decoder supports.
+
+    Raises:
+        AudioLoadError: If the audio can't be decoded.
+    """
+    import io
+    import os
+    import tempfile
+
+    import numpy as np
+
+    from bioamla.audio import load_audio
+    from bioamla.audio.processing import resample_audio
+    from bioamla.exceptions import AudioLoadError
+
+    if isinstance(audio, str | Path):
+        audio = {"path": str(audio)}
+    data, path = audio.get("bytes"), audio.get("path")
+    if data:
+        import soundfile as sf
+
+        try:
+            wave, sr = sf.read(io.BytesIO(data), dtype="float32", always_2d=True)
+            wave = wave.mean(axis=1)
+        except Exception:  # noqa: BLE001 - not a soundfile format: decode through a file
+            suffix = Path(path).suffix if path else ""
+            fd, tmp = tempfile.mkstemp(suffix=suffix)
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(data)
+                wave, sr = load_audio(tmp)
+            finally:
+                os.unlink(tmp)
+    elif path:
+        wave, sr = load_audio(path)
+    else:
+        raise AudioLoadError("A training example has no audio (no path or bytes)")
+    if sr != sampling_rate:
+        wave = resample_audio(wave, sr, sampling_rate)
+    return np.asarray(wave, dtype=np.float32)
+
+
+class BatchPreprocessor:
+    """Turns a batch of training examples into model inputs: decode the audio
+    (:func:`decode_example_audio`), optionally augment it, and extract features.
+
+    A module-level class, not a closure, so a ``DataLoader`` can hand it to worker
+    processes (which pickle it when they are spawned, as on macOS and Windows).
+    """
+
+    def __init__(self, feature_extractor: Any, augmentations: Any = None) -> None:
+        self.feature_extractor = feature_extractor
+        self.augmentations = augmentations
+
+    def __call__(self, batch: dict[str, Any]) -> dict[str, Any]:
+        rate = self.feature_extractor.sampling_rate
+        wavs = [decode_example_audio(audio, rate) for audio in batch["input_values"]]
+        if self.augmentations is not None:
+            wavs = [self.augmentations(w, sample_rate=rate) for w in wavs]
+        name = self.feature_extractor.model_input_names[0]
+        inputs = self.feature_extractor(wavs, sampling_rate=rate, return_tensors="pt")
+        return {name: inputs.get(name), "labels": list(batch["labels"])}
+
+
 def _dataframe_to_ast_dataset(df, label_column, sampling_rate=SAMPLING_RATE):
     """Build an HF ``Dataset`` (or ``DatasetDict`` when a usable ``split`` column exists).
 
@@ -61,13 +132,13 @@ def _dataframe_to_ast_dataset(df, label_column, sampling_rate=SAMPLING_RATE):
     Returns:
         ``(dataset, used_fixed_split)``.
     """
-    from datasets import Audio, Dataset, DatasetDict
+    from datasets import Dataset, DatasetDict
 
     cols = ["audio", label_column]
 
     def _flat():
         ds = Dataset.from_pandas(df[cols], preserve_index=False)
-        return ds.cast_column("audio", Audio(sampling_rate=sampling_rate))
+        return ds
 
     if "split" not in df.columns:
         return _flat(), False
@@ -79,7 +150,7 @@ def _dataframe_to_ast_dataset(df, label_column, sampling_rate=SAMPLING_RATE):
     splits: dict = {}
     for split_key, group in df.groupby(normalized):
         ds = Dataset.from_pandas(group[cols], preserve_index=False)
-        splits[split_key] = ds.cast_column("audio", Audio(sampling_rate=sampling_rate))
+        splits[split_key] = ds
 
     # The trainer evaluates on the "test" split; if a fixed split provides only
     # validation, use it as the eval set so the split is still respected.
@@ -209,7 +280,6 @@ def _load_directory_dataset(
     train_path: Path, train_dataset: str, split: str, category_label_column: str
 ):
     """Load an audiofolder-style directory (class-named subdirectories)."""
-    from datasets import load_dataset
 
     subdirs = [d for d in train_path.iterdir() if d.is_dir()]
     audio_extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
@@ -220,10 +290,18 @@ def _load_directory_dataset(
             for subdir in subdirs
         )
         if has_audio_in_subdirs:
-            logger.info(f"Loading from audiofolder directory: {train_dataset}")
+            import pandas as pd
+
+            logger.info(f"Loading from class directories: {train_dataset}")
             logger.info(f"Found class directories: {[d.name for d in subdirs]}")
-            dataset = load_dataset("audiofolder", data_dir=train_dataset, split=split)
-            return dataset, "label"  # audiofolder uses 'label'
+            rows = [
+                {"audio": str(f), "label": subdir.name}
+                for subdir in sorted(subdirs)
+                for f in sorted(subdir.rglob("*"))
+                if f.is_file() and f.suffix.lower() in audio_extensions
+            ]
+            dataset, _ = _dataframe_to_ast_dataset(pd.DataFrame(rows), "label")
+            return dataset, "label"
         raise TrainingError(
             f"Directory {train_dataset} has subdirectories but they don't contain audio files. "
             f"Expected structure: {train_dataset}/class_name/*.wav"
@@ -596,7 +674,12 @@ def train_ast(
         num_proc=None,
     )
 
-    dataset = dataset.cast_column("audio", Audio(sampling_rate=SAMPLING_RATE))
+    # Audio is decoded by bioamla (decode_example_audio), not by datasets: its audio
+    # feature goes through torchcodec, which works only with some FFmpeg versions.
+    # Local datasets hold plain paths; a Hub dataset's audio feature is left undecoded.
+    first = dataset[next(iter(dataset))] if isinstance(dataset, DatasetDict) else dataset
+    if isinstance(first.features.get("audio"), Audio):
+        dataset = dataset.cast_column("audio", Audio(decode=False))
 
     _check_stop("loading the feature extractor")
     pretrained_model = base_model
@@ -604,10 +687,10 @@ def train_ast(
     model_input_name = feature_extractor.model_input_names[0]
     sampling_rate = feature_extractor.sampling_rate
 
-    def preprocess_audio(batch):
-        wavs = [audio["array"] for audio in batch["input_values"]]
-        inputs = feature_extractor(wavs, sampling_rate=sampling_rate, return_tensors="pt")
-        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
+    def waves(batch) -> list:
+        return [decode_example_audio(audio, sampling_rate) for audio in batch["input_values"]]
+
+    preprocess_audio = BatchPreprocessor(feature_extractor)
 
     label2id = {name: idx for idx, name in enumerate(class_names)}
 
@@ -666,25 +749,15 @@ def train_ast(
         audio_augmentations = None
         logger.info("Audio augmentations disabled")
 
-    def preprocess_audio_with_transforms(batch):
-        if audio_augmentations is not None:
-            wavs = [
-                audio_augmentations(audio["array"], sample_rate=sampling_rate)
-                for audio in batch["input_values"]
-            ]
-        else:
-            wavs = [audio["array"] for audio in batch["input_values"]]
-        inputs = feature_extractor(wavs, sampling_rate=sampling_rate, return_tensors="pt")
-        return {model_input_name: inputs.get(model_input_name), "labels": list(batch["labels"])}
+    preprocess_audio_with_transforms = BatchPreprocessor(feature_extractor, audio_augmentations)
 
-    dataset = dataset.cast_column("audio", Audio(sampling_rate=feature_extractor.sampling_rate))
     dataset = dataset.rename_column("audio", "input_values")
 
     def is_valid_audio(example):
         try:
-            _ = example["input_values"]["array"]
+            decode_example_audio(example["input_values"], sampling_rate)
             return True
-        except (RuntimeError, Exception):
+        except Exception:  # noqa: BLE001 - any unreadable file is filtered out
             return False
 
     _check_stop("filtering corrupted audio")
@@ -714,7 +787,7 @@ def train_ast(
             raise TrainingError("No valid audio samples found in training dataset after filtering")
 
         def compute_stats(batch):
-            wavs = [audio["array"] for audio in batch["input_values"]]
+            wavs = waves(batch)
             inputs = feature_extractor(wavs, sampling_rate=sampling_rate, return_tensors="pt")
             values = inputs.get(model_input_name)
             means = [float(torch.mean(values[i])) for i in range(values.shape[0])]

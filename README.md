@@ -82,8 +82,9 @@ Without `[cli]`, the `bioamla` command prints a hint to install it.
 Beyond the Python packages, bioamla needs a working **FFmpeg** install on the host:
 
 - **FFmpeg shared libraries (`libav*`), major version 4–8** — used by `torchcodec` (the backend
-  behind `torchaudio.load`) to *decode* audio for waveform loading, AST inference/training, and
-  HuggingFace dataset materialization.
+  behind `torchaudio.load`) to *decode* audio for waveform loading and AST inference. Without
+  them (or with FFmpeg 9), WAV, FLAC and OGG still load through libsndfile. AST training
+  decodes its audio with bioamla's own loader, so it doesn't need them.
 - **The `ffmpeg`/`ffprobe` CLI** — used by `pydub` to *encode* non-WAV formats (FLAC/MP3/OGG/M4A)
   and to read their metadata. Plain WAV I/O works without FFmpeg: WAV headers and recorder
   metadata are read with [riffy](https://github.com/jmcmeen/riffy), a pure-Python RIFF parser.

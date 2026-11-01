@@ -273,6 +273,15 @@ These were deprecated in 0.3.x and are breaking changes:
 
 ### Fixed
 
+- `models ast train` failed with FFmpeg 9 (and any FFmpeg that torchcodec can't load):
+  `datasets` decoded the training audio through torchcodec. Training audio is now decoded
+  by bioamla's own loader (`bioamla.ml.training.decode_example_audio`), local datasets keep
+  plain file paths, and a Hub dataset's audio column is left undecoded for it (#256). A
+  folder of class subfolders is read by bioamla too, so its classes keep their folder
+  names as labels. Training with DataLoader workers on macOS and Windows (spawned workers)
+  failed to pickle the dataset's transform; it is now a module-level
+  `bioamla.ml.training.BatchPreprocessor`.
+
 - Conversion and segmenting edge cases: `batch audio convert` refuses an unsupported
   channel count (as well as a bit depth) before writing anything (`check_convert_options()`
   in `bioamla.audio.convert`); `--bit-depth`'s help gives the real default (the source's

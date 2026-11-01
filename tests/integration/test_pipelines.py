@@ -607,11 +607,6 @@ class TestModelCommandsLibraryParity:
     ) -> None:
         from bioamla import operations
 
-        try:  # training data is decoded by torchcodec, which needs FFmpeg 4-8 (#256)
-            import torchcodec.decoders  # noqa: F401
-        except Exception as e:  # noqa: BLE001
-            pytest.skip(f"torchcodec can't load here: {str(e).splitlines()[0]}")
-
         data = tmp_path / "by_class"
         for label, name in (("a", "a.wav"), ("b", "b.wav")):
             (data / label).mkdir(parents=True)
