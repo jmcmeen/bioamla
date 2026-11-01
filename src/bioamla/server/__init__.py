@@ -19,6 +19,7 @@ from bioamla.server._security import (  # noqa: E402
     read_or_create_token,
 )
 from bioamla.server.app import API_VERSION, ServerConfig, create_app, envelope  # noqa: E402
+from bioamla.server.openapi import openapi_spec, write_openapi_spec  # noqa: E402
 
 __all__ = [
     "API_VERSION",
@@ -30,5 +31,7 @@ __all__ = [
     "check_token",
     "create_app",
     "envelope",
+    "openapi_spec",
     "read_or_create_token",
+    "write_openapi_spec",
 ]

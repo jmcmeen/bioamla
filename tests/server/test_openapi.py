@@ -39,4 +39,18 @@ def test_serve_writes_it_without_a_root(tmp_path):
     result = CliRunner().invoke(cli, ["serve", "--openapi", str(out)])
     assert result.exit_code == 0, result.output
     assert json.loads(out.read_text())["openapi"].startswith("3.")
-    assert CliRunner().invoke(cli, ["serve"]).exit_code == 2
+    assert CliRunner().invoke(cli, ["serve"]).exit_code == 2  # --root is required to serve
+    as_json = CliRunner().invoke(cli, ["--json", "serve", "--openapi", str(out)])
+    assert json.loads(as_json.stdout)["result"]["path"] == str(out)
+    blocked = tmp_path / "file"
+    blocked.write_text("")
+    failed = CliRunner().invoke(cli, ["serve", "--openapi", str(blocked / "openapi.json")])
+    assert failed.exit_code == 1 and "Can't write" in failed.output
+
+
+def test_a_missing_extra_is_an_error_not_a_partial_document(monkeypatch):
+    from bioamla.exceptions import DependencyError
+
+    monkeypatch.setattr(operations, "all_operations", lambda: ([], {"ml": "no torch"}))
+    with pytest.raises(DependencyError, match="every extra"):
+        openapi_spec()

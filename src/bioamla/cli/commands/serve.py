@@ -7,11 +7,32 @@ from bioamla.exceptions import BioamlaError
 _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
+def _write_openapi(ctx: click.Context, param: click.Parameter, value: str | None) -> None:
+    """``--openapi FILE``: write the API's OpenAPI document and exit."""
+    if not value or ctx.resilient_parsing:
+        return
+    from bioamla.cli.console import print_kv
+    from bioamla.cli.output import emit_result
+
+    try:
+        from bioamla.server.openapi import write_openapi_spec
+
+        written = write_openapi_spec(value)
+    except BioamlaError as e:
+        raise click.ClickException(str(e)) from e
+    except OSError as e:
+        raise click.ClickException(f"Can't write {value}: {e.strerror or e}") from e
+    if not emit_result({"path": str(written)}):
+        print_kv("Wrote", str(written))
+    ctx.exit()
+
+
 @click.command("serve")
 @click.option(
     "--root",
+    required=True,
     type=click.Path(file_okay=False),
-    help="Folder holding the server's workspaces (created if missing); required to serve",
+    help="Folder holding the server's workspaces (created if missing)",
 )
 @click.option("--host", default="127.0.0.1", show_default=True, help="Address to listen on")
 @click.option("--port", default=8765, show_default=True, type=int, help="Port to listen on")
@@ -38,18 +59,15 @@ _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 )
 @click.option(
     "--openapi",
-    "openapi_file",
     type=click.Path(dir_okay=False),
-    help="Write the API's OpenAPI document to this file and exit (no server)",
+    is_eager=True,
+    expose_value=False,
+    callback=_write_openapi,
+    help="Write the API's OpenAPI document to this file and exit; starts no server and "
+    "needs no other option",
 )
 def serve(
-    root: str | None,
-    host: str,
-    port: int,
-    token_file: str,
-    linkable: tuple[str, ...],
-    max_jobs: int,
-    openapi_file: str | None,
+    root: str, host: str, port: int, token_file: str, linkable: tuple[str, ...], max_jobs: int
 ) -> None:
     """Run the bioamla HTTP API so other machines can work in this machine's
     workspaces. Needs the [server] extra.
@@ -69,16 +87,6 @@ def serve(
     from bioamla.cli.console import print_kv, print_warning
     from bioamla.cli.output import json_mode
 
-    if openapi_file:
-        try:
-            from bioamla.server.openapi import write_openapi_spec
-
-            print_kv("Wrote", str(write_openapi_spec(openapi_file)))
-        except BioamlaError as e:
-            raise click.ClickException(str(e)) from e
-        return
-    if root is None:
-        raise click.UsageError("Missing option '--root'.")
     if json_mode():
         raise click.ClickException("serve has no --json output (it runs until stopped)")
 

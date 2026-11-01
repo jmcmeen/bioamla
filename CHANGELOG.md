@@ -10,9 +10,9 @@ All notable changes to this project are documented here. The format is based on
 
 - The server's OpenAPI document is committed as `docs/api/openapi.json` (its version is
   the API's, `v1`), with a test that fails while it's out of date. Regenerate it with
-  `bioamla serve --openapi docs/api/openapi.json`, which writes it and exits;
-  `bioamla.server.openapi` has `openapi_spec()` and `write_openapi_spec()`. `serve --root`
-  is required only to serve.
+  `bioamla serve --openapi docs/api/openapi.json`, which writes it and exits (it needs no
+  other option, and refuses to write a partial document when an extra is missing);
+  `bioamla.server` has `openapi_spec()` and `write_openapi_spec()`.
 
 - Server workspace and file routes: list the workspaces under the server root and create
   one (`GET`/`POST /v1/workspaces`), a workspace's status (`GET /v1/workspaces/{ws}`), its
