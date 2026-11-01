@@ -168,3 +168,26 @@ def test_annotate_holds_back_candidates_below_threshold(
     faint = decisions["decisions"][1]
     assert not faint["accepted"] and faint["reasons"][0].startswith("SNR 1")
     assert len(read_rows(loud_and_faint / "annotations.csv")) == 1
+
+
+def test_review_queues_what_was_held_back(run_skill, loud_and_faint, tiny_ast) -> None:
+    ws = loud_and_faint
+    run_dir = evidence_run(run_skill, ws, tiny_ast)
+    assert run_skill("label", "crops", run_dir, cwd=ws)[0] == 0
+    code, out = run_skill(
+        "label", "annotate", run_dir, "--min-confidence", "0", "--min-snr", "30", cwd=ws
+    )
+    assert code == 0 and out["not_accepted"] == 1
+    code, out = run_skill("label", "review", run_dir, cwd=ws)
+    assert code == 0, out
+    assert out["queued"] == 1 and out["with_crops"] == 1 and out["reasons"] == {"snr": 1}
+    (item,) = json.loads((ws / out["queue"]).read_text())["items"]
+    assert item["id"] == "c0002" and item["start_time"] == pytest.approx(3.0, abs=0.1)
+    assert item["evidence"]["snr_db"] < 30 and item["suggested_label"] in {"a", "b"}
+    assert (ws / item["image"]).exists() and (ws / item["clip"]).exists()
+
+
+def test_review_needs_the_decisions(run_skill, loud_and_faint, tiny_ast) -> None:
+    run_dir = evidence_run(run_skill, loud_and_faint, tiny_ast)
+    code, out = run_skill("label", "review", run_dir, cwd=loud_and_faint)
+    assert code == 1 and "decisions.json" in out["error"]

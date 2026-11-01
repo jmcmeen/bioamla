@@ -25,7 +25,9 @@ All notable changes to this project are documented here. The format is based on
   recording the event's box in the clip. `annotate.py` accepts the candidates that clear
   confidence, SNR and detector-score thresholds and merges them into an annotations CSV
   with `confidence`, `method` and `labeled_by=agent`; rows a person made are never
-  changed, and earlier agent rows for the same recordings are replaced.
+  changed, and earlier agent rows for the same recordings are replaced. `review.py`
+  queues every candidate below a threshold, with its reasons, evidence, clip and image,
+  in `review_queue.json`.
 
 - "Running the server" docs page: installing and starting `bioamla serve`, the token file,
   reaching it over an SSH tunnel or a VPN, a systemd unit, and linking recordings already on

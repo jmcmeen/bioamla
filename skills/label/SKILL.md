@@ -59,8 +59,18 @@ to the next step.
    should set its `labeled_by` to their name, so later runs keep it. Every decision
    and its reasons go to `decisions.json`.
 
+5. **Review queue**: everything held back, for a person.
+
+   ```
+   python <skill>/scripts/review.py <run_dir>
+   ```
+
+   Writes `review_queue.json`: each held-back candidate with its reasons, evidence,
+   suggested label, clip and image. Don't relabel these yourself; they're for the person.
+
 ## Report
 
 Tell the person how many candidates were found, how many were written as annotations,
-and how many were held back, and where the run folder is. If a step
+and how many were held back and why (the review step's `reasons` counts), and point
+them at `review_queue.json`. If a step
 prints `{"error": ...}`, report the error as it is and stop.
