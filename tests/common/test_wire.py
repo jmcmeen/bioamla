@@ -1,0 +1,75 @@
+"""The wire form: results as JSON that turns back into the same objects."""
+
+import json
+import math
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from bioamla.common.wire import WireError, from_wire, to_wire
+from bioamla.workspace import Artifact
+
+
+def round_trip(value):
+    return from_wire(json.loads(json.dumps(to_wire(value), allow_nan=False)))
+
+
+def test_plain_values_round_trip():
+    value = {"a": [1, 2.5, "x", None, True], "t": (1, (2, 3)), "p": Path("a/b.wav"),
+             "nan": float("nan"), "inf": float("-inf"), 3: "int key", "__wire__": "tag-like"}  # fmt: skip
+    back = round_trip(value)
+    assert back["t"] == (1, (2, 3)) and back["p"] == Path("a/b.wav") and back[3] == "int key"
+    assert math.isnan(back["nan"]) and back["inf"] == float("-inf")
+    assert back["__wire__"] == "tag-like" and back["a"] == value["a"]
+
+
+def test_numpy_round_trips_with_dtype_and_shape():
+    arr = np.arange(6, dtype="int16").reshape(2, 3)
+    back = round_trip({"arr": arr, "s": np.float32(1.5), "b": np.bool_(True)})
+    assert back["arr"].dtype == np.int16 and back["arr"].shape == (2, 3)
+    assert (back["arr"] == arr).all()
+    assert back["s"].dtype == np.float32 and back["s"] == 1.5
+    assert isinstance(back["b"], np.bool_) and bool(back["b"])
+
+
+def test_bioamla_dataclasses_round_trip_without_rerunning_init():
+    artifact = Artifact(id="a1", kind="audio_file", mode="linked", path="rec.wav")
+    back = round_trip([artifact])
+    assert back == [artifact] and type(back[0]) is Artifact
+
+
+def test_real_results_round_trip(test_audio_path):
+    from bioamla import operations
+
+    for name, request in (("audio.info", {"file": test_audio_path}),
+                          ("detect.energy", {"file": test_audio_path})):  # fmt: skip
+        try:
+            result = operations.run(name, request)
+        except Exception as e:  # noqa: BLE001 - an extra may be missing
+            pytest.skip(str(e))
+        back = round_trip(result)
+        assert type(back) is type(result)
+        assert back.to_dict() == result.to_dict()
+
+
+@dataclass
+class NotOurs:
+    x: int = 1
+    y: list = field(default_factory=list)
+
+
+def test_only_bioamla_types_go_out_or_come_back():
+    with pytest.raises(WireError):
+        to_wire(NotOurs())
+    with pytest.raises(WireError):
+        to_wire(object())
+    for evil in ("os:system", "subprocess:Popen", "builtins:eval", "bioamla:nothing_here"):
+        with pytest.raises(WireError):
+            from_wire({"__wire__": "dataclass", "type": evil, "fields": {}})
+    with pytest.raises(WireError):  # a bioamla function, not a dataclass
+        from_wire({"__wire__": "dataclass", "type": "bioamla.workspace:open_workspace",
+                   "fields": {}})  # fmt: skip
+    with pytest.raises(WireError):
+        from_wire({"__wire__": "nope"})

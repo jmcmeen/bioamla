@@ -111,6 +111,18 @@
               "type": "string",
               "title": "Job Id"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "responses": {
@@ -850,6 +862,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -910,6 +934,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -970,6 +1006,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1030,6 +1078,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1090,6 +1150,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1150,6 +1222,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1210,6 +1294,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1270,6 +1366,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1330,6 +1438,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1390,6 +1510,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1450,6 +1582,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1510,6 +1654,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1570,6 +1726,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1630,6 +1798,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1690,6 +1870,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1750,6 +1942,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1810,6 +2014,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1870,6 +2086,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1930,6 +2158,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -1990,6 +2230,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2050,6 +2302,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2110,6 +2374,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2170,6 +2446,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2230,6 +2518,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2290,6 +2590,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2350,6 +2662,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2410,6 +2734,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2470,6 +2806,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2530,6 +2878,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2590,6 +2950,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2650,6 +3022,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2710,6 +3094,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2770,6 +3166,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2830,6 +3238,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2890,6 +3310,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -2950,6 +3382,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3010,6 +3454,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3070,6 +3526,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3130,6 +3598,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3190,6 +3670,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3250,6 +3742,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3310,6 +3814,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3370,6 +3886,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3430,6 +3958,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3490,6 +4030,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3550,6 +4102,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3610,6 +4174,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3670,6 +4246,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3730,6 +4318,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3790,6 +4390,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3850,6 +4462,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3910,6 +4534,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -3970,6 +4606,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4030,6 +4678,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4090,6 +4750,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4150,6 +4822,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4210,6 +4894,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4270,6 +4966,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4330,6 +5038,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4390,6 +5110,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4450,6 +5182,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4510,6 +5254,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4570,6 +5326,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4630,6 +5398,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4690,6 +5470,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4750,6 +5542,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4810,6 +5614,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4870,6 +5686,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4930,6 +5758,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -4990,6 +5830,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5050,6 +5902,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5110,6 +5974,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5170,6 +6046,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5230,6 +6118,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5290,6 +6190,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5350,6 +6262,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5410,6 +6334,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5470,6 +6406,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5530,6 +6478,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5590,6 +6550,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5650,6 +6622,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5710,6 +6694,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5770,6 +6766,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5830,6 +6838,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5890,6 +6910,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -5950,6 +6982,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6010,6 +7054,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6070,6 +7126,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6130,6 +7198,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6190,6 +7270,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6250,6 +7342,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6310,6 +7414,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6370,6 +7486,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6430,6 +7558,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6490,6 +7630,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6550,6 +7702,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6610,6 +7774,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6670,6 +7846,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6730,6 +7918,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6790,6 +7990,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6850,6 +8062,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6910,6 +8134,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -6970,6 +8206,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {
@@ -7030,6 +8278,18 @@
               "type": "string",
               "title": "Ws"
             }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
           }
         ],
         "requestBody": {

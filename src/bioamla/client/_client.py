@@ -22,6 +22,19 @@ class RemoteInvalidInput(RemoteError, InvalidInputError):
     """The server refused a request as invalid (HTTP 400 or 422)."""
 
 
+class UntypedResult(RemoteError):
+    """A typed run's result couldn't be rebuilt here (e.g. its type needs an extra this
+    machine doesn't have); :attr:`result` is its JSON.
+
+    Attributes:
+        result: The result as JSON, as an untyped run returns it.
+    """
+
+    def __init__(self, message: str, result: Any):
+        super().__init__(message)
+        self.result = result
+
+
 class JobFailed(RemoteError):
     """A job finished without a result (failed or cancelled).
 
@@ -222,19 +235,41 @@ class Client:
         *,
         on_progress: Callable[[int, int], None] | None = None,
         on_event: Callable[[dict[str, Any]], None] | None = None,
+        typed: bool = False,
     ) -> Any:
         """Run the operation ``name`` in ``ws`` and return its result, waiting for a
         job to finish (streaming its events to ``on_event`` and its progress to
         ``on_progress``).
 
+        Args:
+            typed: Return the same objects a local run returns (rebuilt from the
+                server's wire form, see :mod:`bioamla.common.wire`) instead of the
+                result's JSON.
+
         Raises:
+            UntypedResult: With ``typed``, if the result can't be rebuilt here (its
+                ``result`` holds the JSON).
             JobFailed: If the job failed or was cancelled.
             RemoteError: If the server refused the request.
         """
-        is_job, answer, _ = self._submit(ws, name, request)
-        if not is_job:
-            return answer
-        return self.wait(answer["id"], on_progress=on_progress, on_event=on_event)["result"]
+        params = {"wire": "true"} if typed else {}
+        is_job, answer, body = self._submit(ws, name, request, **params)
+        if is_job:
+            done = self.wait(answer["id"], on_progress=on_progress, on_event=on_event)
+            answer = done["result"]
+            if typed:
+                body = self._request("GET", f"/jobs/{quote(done['id'])}",
+                                     params=params).json()  # fmt: skip
+        if typed and body.get("wire") is not None:
+            from bioamla.common.wire import WireError, from_wire
+
+            try:
+                return from_wire(body["wire"])
+            except WireError as e:
+                raise UntypedResult(f"Can't rebuild the result of {name}: {e}", answer) from e
+        if typed:
+            raise UntypedResult(f"The server sent no typed result for {name}", answer)
+        return answer
 
     def wait(
         self,
@@ -362,4 +397,5 @@ __all__ = [
     "JobFailed",
     "RemoteInvalidInput",
     "RemoteNotFound",
+    "UntypedResult",
 ]

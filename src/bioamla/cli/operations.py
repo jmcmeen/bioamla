@@ -21,7 +21,8 @@ def run_operation(
     secrets: dict[str, str] | None = None,
     **request: Any,
 ) -> Any:
-    """Run the operation ``name`` locally with ``request`` as its fields.
+    """Run the operation ``name`` with ``request`` as its fields: locally, or on the
+    run's remote server (see :mod:`bioamla.cli.remote_mode`).
 
     ``on_progress(done, total)`` receives the operation's progress, e.g. a progress
     bar's ``on_progress``. ``secrets`` holds credentials given on the command line
@@ -32,6 +33,20 @@ def run_operation(
         click.ClickException: If the request is invalid or the operation fails.
     """
     from bioamla import operations
+    from bioamla.cli import remote_mode
+
+    target = remote_mode.current()
+    if target is not None:
+        try:
+            remote_ok = operations.get(name).remote
+        except BioamlaError:
+            remote_ok = True  # can't load it here; the server decides
+        if remote_ok:
+            return remote_mode.run(target, name, request, on_progress=on_progress,
+                                   on_notice=_print_notice, secrets=secrets)  # fmt: skip
+        if target.explicit:
+            command = name.replace(".", " ")
+            raise click.UsageError(f"`{command}` runs only on this machine; drop --remote")
 
     context = operations.OperationContext(
         on_progress=on_progress, secrets=dict(secrets or {}), on_notice=_print_notice

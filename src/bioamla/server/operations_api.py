@@ -4,7 +4,9 @@
 workspace ``ws`` (a folder under the server root). The body is the operation's request
 (its JSON Schema is in the OpenAPI spec); every path in it is relative to the workspace
 and must resolve inside the server's allowed folders. A quick operation answers with
-the result envelope; a job-kind operation is run by the job runner instead.
+the result envelope (with ``?wire=true``, also the result in the typed wire form, see
+:mod:`bioamla.common.wire`, as ``wire``); a job-kind operation is run by the job
+runner instead.
 
 ``GET /v1/operations`` lists them: name, kind, summary, path fields and request schema.
 Each run is recorded in the workspace's history, like a command run there (except the
@@ -18,11 +20,23 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, Depends, FastAPI
+from fastapi import Body, Depends, FastAPI, Query
 
 from bioamla.exceptions import BioamlaError
 
 logger = logging.getLogger(__name__)
+
+
+def wire_result(result: Any) -> Any:
+    """``result`` in the wire form (:mod:`bioamla.common.wire`), which a client turns
+    back into the same objects; ``None`` if it can't be sent that way."""
+    from bioamla.common.wire import WireError, to_wire
+
+    try:
+        return to_wire(result)
+    except WireError:
+        logger.info("A %s result has no wire form", type(result).__name__, exc_info=True)
+        return None
 
 
 def result_data(result: Any) -> Any:
@@ -134,7 +148,7 @@ def _add_route(app: FastAPI, api_version: str, envelope: Any, op: Any) -> None:
     identity = app.state.identity
     request_type = op.request
 
-    def run(ws: str, request: Any, who: Any) -> dict[str, Any]:
+    def run(ws: str, request: Any, who: Any, wire: bool) -> dict[str, Any]:
         ws_dir = app.state.policy.workspace_dir(who, ws)
         if op.kind == "job":
             return app.state.submit_job(ws_dir, op.name, request, who)
@@ -153,14 +167,18 @@ def _add_route(app: FastAPI, api_version: str, envelope: Any, op: Any) -> None:
             raise
         record_server_run(context.workspace, op.name, request, user=who.user,
                           started=started, ok=True, error=None, result=result)  # fmt: skip
-        return envelope(result_data(result))
+        answer = envelope(result_data(result))
+        if wire:
+            answer["wire"] = wire_result(result)
+        return answer
 
     def endpoint(
         ws: str,
         request: request_type = Body(...),  # type: ignore[valid-type]
+        wire: bool = Query(False, description="Also answer with the typed result (`wire`)"),
         who: Any = Depends(identity),
     ) -> dict[str, Any]:
-        return run(ws, request, who)
+        return run(ws, request, who, wire)
 
     # This module's annotations are strings (``from __future__``); give FastAPI the
     # real request type so it validates the body and puts the schema in the spec.
@@ -177,4 +195,10 @@ def _add_route(app: FastAPI, api_version: str, envelope: Any, op: Any) -> None:
     )(endpoint)
 
 
-__all__ = ["add_operation_routes", "operation_context", "record_server_run", "result_data"]
+__all__ = [
+    "add_operation_routes",
+    "operation_context",
+    "record_server_run",
+    "result_data",
+    "wire_result",
+]

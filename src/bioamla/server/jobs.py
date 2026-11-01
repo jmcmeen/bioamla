@@ -73,6 +73,7 @@ class Job:
         result: The operation's result once it succeeded, as the routes report it.
         error: ``{"type", "message"}`` once it failed or was cancelled.
         events: Everything that happened, in order (each with an ``id``).
+        wire: The result in the typed wire form (:mod:`bioamla.common.wire`), if any.
     """
 
     id: str
@@ -88,6 +89,7 @@ class Job:
     result: Any = None
     error: dict[str, str] | None = None
     events: list[dict[str, Any]] = field(default_factory=list)
+    wire: Any = field(default=None, repr=False)
     # Not reported:
     ws_dir: Path | None = field(default=None, repr=False)
     request_obj: Any = field(default=None, repr=False)
@@ -356,6 +358,7 @@ class JobRunner:
             if kind == "notice" or len(job.events) < self.max_events:
                 self._event(job, kind, level=level, message=text)
         elif kind == "result":
+            job.wire = rest[1] if len(rest) > 1 else None
             self._finish(job, SUCCEEDED, result=rest[0])
         elif kind == "error":
             error = rest[0]
@@ -458,9 +461,17 @@ def add_job_routes(app: Any, api_version: str, envelope: Any, runner: JobRunner)
         )
 
     @app.get(f"/{api_version}/jobs/{{job_id}}", tags=["jobs"])
-    def get_job(job_id: str, who: Any = Depends(identity)) -> dict[str, Any]:
+    def get_job(
+        job_id: str,
+        wire: bool = Query(False, description="Also answer with the typed result (`wire`)"),
+        who: Any = Depends(identity),
+    ) -> dict[str, Any]:
         """A job's status and progress, and its result or error once it's done."""
-        return envelope(runner.get(job_id).to_dict())
+        job = runner.get(job_id)
+        answer = envelope(job.to_dict())
+        if wire:
+            answer["wire"] = job.wire
+        return answer
 
     @app.post(f"/{api_version}/jobs/{{job_id}}/cancel", tags=["jobs"])
     def cancel_job(job_id: str, who: Any = Depends(identity)) -> dict[str, Any]:

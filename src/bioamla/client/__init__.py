@@ -24,6 +24,7 @@ from bioamla.client._client import (
     JobFailed,
     RemoteInvalidInput,
     RemoteNotFound,
+    UntypedResult,
 )
 from bioamla.client._remotes import (
     Remote,
@@ -48,4 +49,5 @@ __all__ = [
     "get_remote",
     "remotes",
     "remove_remote",
+    "UntypedResult",
 ]

@@ -37,6 +37,10 @@ from bioamla.exceptions import ConfigError
 #: Top-level tables that hold settings for something other than a command.
 RESERVED_SECTIONS = frozenset({"remotes"})
 
+#: Top-level string settings that say where commands run (``remote = "lab"``,
+#: ``workspace = "costa-rica"``), not option defaults.
+WHERE_KEYS = frozenset({"remote", "workspace"})
+
 
 def user_config_path() -> Path:
     """Where the user's settings file lives (it may not exist)."""
@@ -202,6 +206,7 @@ def check_setting_value(value: Any) -> Any:
 
 __all__ = [
     "RESERVED_SECTIONS",
+    "WHERE_KEYS",
     "check_setting_value",
     "dump_toml",
     "flatten",

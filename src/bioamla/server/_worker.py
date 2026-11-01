@@ -7,7 +7,8 @@ one-way pipe:
 - ``("progress", done, total)``
 - ``("notice", level, message)``
 - ``("log", level, message)``: the worker's log records at INFO and above
-- ``("result", data)``: the operation's result, JSON-ready, as the routes report it
+- ``("result", data, wire)``: the operation's result, JSON-ready as the routes report
+  it, and in the typed wire form (``None`` if it has none)
 - ``("error", {"type", "message"})``: the operation failed (``OperationCancelled``
   when it stopped for a cancel)
 """
@@ -62,7 +63,7 @@ def run_job(
     from bioamla import operations
     from bioamla.common.jsonable import to_jsonable
     from bioamla.server._security import Identity, PathPolicy
-    from bioamla.server.operations_api import result_data
+    from bioamla.server.operations_api import result_data, wire_result
     from bioamla.workspace import open_workspace
 
     if hasattr(os, "setsid"):
@@ -89,7 +90,7 @@ def run_job(
     )
     try:
         result = operations.run(name, request, context)
-        send(("result", to_jsonable(result_data(result))))
+        send(("result", to_jsonable(result_data(result)), wire_result(result)))
     except Exception as e:  # noqa: BLE001 - every failure is reported to the server
         if isinstance(e, BioamlaError):
             error = {"type": type(e).__name__, "message": str(e)}
