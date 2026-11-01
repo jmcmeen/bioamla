@@ -10,9 +10,8 @@ _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 @click.command("serve")
 @click.option(
     "--root",
-    required=True,
     type=click.Path(file_okay=False),
-    help="Folder holding the server's workspaces (created if missing)",
+    help="Folder holding the server's workspaces (created if missing); required to serve",
 )
 @click.option("--host", default="127.0.0.1", show_default=True, help="Address to listen on")
 @click.option("--port", default=8765, show_default=True, type=int, help="Port to listen on")
@@ -37,8 +36,20 @@ _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
     type=click.IntRange(min=1),
     help="Jobs that may run at once (machine-learning jobs run one at a time)",
 )
+@click.option(
+    "--openapi",
+    "openapi_file",
+    type=click.Path(dir_okay=False),
+    help="Write the API's OpenAPI document to this file and exit (no server)",
+)
 def serve(
-    root: str, host: str, port: int, token_file: str, linkable: tuple[str, ...], max_jobs: int
+    root: str | None,
+    host: str,
+    port: int,
+    token_file: str,
+    linkable: tuple[str, ...],
+    max_jobs: int,
+    openapi_file: str | None,
 ) -> None:
     """Run the bioamla HTTP API so other machines can work in this machine's
     workspaces. Needs the [server] extra.
@@ -51,12 +62,23 @@ def serve(
     Examples:
         bioamla serve --root ~/bioamla-workspaces
         bioamla serve --root /srv/workspaces --allow-link /srv/recordings
+        bioamla serve --openapi docs/api/openapi.json
     """
     from pathlib import Path
 
     from bioamla.cli.console import print_kv, print_warning
     from bioamla.cli.output import json_mode
 
+    if openapi_file:
+        try:
+            from bioamla.server.openapi import write_openapi_spec
+
+            print_kv("Wrote", str(write_openapi_spec(openapi_file)))
+        except BioamlaError as e:
+            raise click.ClickException(str(e)) from e
+        return
+    if root is None:
+        raise click.UsageError("Missing option '--root'.")
     if json_mode():
         raise click.ClickException("serve has no --json output (it runs until stopped)")
 
