@@ -137,6 +137,8 @@ class JobRunner:
             (their history records stay in their workspaces).
         max_events: Events kept per job; past that, further progress and log events
             are dropped (status events and the latest progress are always kept).
+        timeout: Seconds a job may run before it's failed and its worker ended
+            (``None``: no limit), so a hung worker can't hold a slot forever.
     """
 
     def __init__(
@@ -149,6 +151,7 @@ class JobRunner:
         poll: float = 0.05,
         keep_jobs: int = 200,
         max_events: int = 5000,
+        timeout: float | None = None,
     ) -> None:
         import multiprocessing
 
@@ -158,6 +161,7 @@ class JobRunner:
         self.cancel_grace = cancel_grace
         self.poll = poll
         self.keep_jobs = keep_jobs
+        self.timeout = timeout
         self.max_events = max_events
         self.jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
@@ -301,6 +305,17 @@ class JobRunner:
                     "type": "WorkerError",
                     "message": f"The worker exited with code {code} before finishing",
                 })  # fmt: skip
+        elif (
+            self.timeout is not None
+            and job.cancel_requested is None
+            and time.time() - (job.started or time.time()) > self.timeout
+        ):
+            _signal(job._process, kill=True)
+            job._process.join(timeout=self.cancel_grace)
+            self._finish(job, FAILED, error={
+                "type": "JobTimeout",
+                "message": f"Stopped after running longer than {self.timeout:g} s",
+            })  # fmt: skip
         elif job.cancel_requested is not None:
             waited = time.time() - job.cancel_requested
             if waited > 2 * self.cancel_grace and job._signalled < 2:

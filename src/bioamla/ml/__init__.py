@@ -27,6 +27,13 @@ from bioamla._extras import require_extra
 # Fail early, with the install command, if the [ml] extra is missing.
 require_extra("ml", "bioamla.ml")
 
+import os  # noqa: E402
+
+# transformers loads weights on a thread pool, and a worker can deadlock in
+# safetensors' one-time initialisation while holding the GIL; load serially unless
+# the user asked otherwise (HF_DEACTIVATE_ASYNC_LOAD=0).
+os.environ.setdefault("HF_DEACTIVATE_ASYNC_LOAD", "1")
+
 from bioamla.ml.ast import (
     InferenceConfig,
     ast_predict,

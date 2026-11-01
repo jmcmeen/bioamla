@@ -213,3 +213,17 @@ def test_old_finished_jobs_are_forgotten(tmp_path):
     queued = runner.jobs.setdefault("q", _job("q", tmp_path))
     runner._prune()
     assert set(runner.jobs) == {"j2", "j3", queued.id}
+
+
+@pytest.mark.slow
+def test_a_job_past_its_time_limit_is_stopped(tmp_path, test_audio_path):
+    root = tmp_path / "root"
+    ws = root / "ws"
+    create_workspace(ws)
+    shutil.copy(test_audio_path, ws / "rec.wav")
+    config = ServerConfig(root=root, token="t", job_timeout=0.3)
+    with TestClient(create_app(config)) as client:
+        job = submit(client, "detect.energy", {"file": "rec.wav"})
+        done = wait(client, job["id"])
+    assert done["status"] == "failed" and done["error"]["type"] == "JobTimeout"
+    assert open_workspace(ws).history()[-1]["error"]["type"] == "JobTimeout"

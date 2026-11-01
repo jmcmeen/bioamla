@@ -58,6 +58,13 @@ def _write_openapi(ctx: click.Context, param: click.Parameter, value: str | None
     help="Jobs that may run at once (machine-learning jobs run one at a time)",
 )
 @click.option(
+    "--job-timeout",
+    type=click.FloatRange(min=1),
+    default=None,
+    metavar="SECONDS",
+    help="Stop a job that runs longer than this (default: no limit)",
+)
+@click.option(
     "--openapi",
     type=click.Path(dir_okay=False),
     is_eager=True,
@@ -67,7 +74,13 @@ def _write_openapi(ctx: click.Context, param: click.Parameter, value: str | None
     "needs no other option",
 )
 def serve(
-    root: str, host: str, port: int, token_file: str, linkable: tuple[str, ...], max_jobs: int
+    root: str,
+    host: str,
+    port: int,
+    token_file: str,
+    linkable: tuple[str, ...],
+    max_jobs: int,
+    job_timeout: float | None,
 ) -> None:
     """Run the bioamla HTTP API so other machines can work in this machine's
     workspaces. Needs the [server] extra.
@@ -104,6 +117,7 @@ def serve(
             token=token,
             linkable=[Path(p).expanduser() for p in linkable],
             max_jobs=max_jobs,
+            job_timeout=job_timeout,
         )
         app = create_app(config)
     except BioamlaError as e:

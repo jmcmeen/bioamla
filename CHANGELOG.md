@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `bioamla serve --job-timeout SECONDS` (`ServerConfig.job_timeout`): a job running longer
+  is stopped and fails with `JobTimeout`, so a hung worker can't hold a slot forever.
+
 - `models ast predict --top-k K` ranks each prediction's K most likely labels: the JSON
   gains `top` (`[{label, confidence}, ...]`, best first) and `margin` (top-1 minus top-2
   confidence), the CSV gains `margin` and `top` columns, and the human output lists them.
@@ -280,6 +283,10 @@ These were deprecated in 0.3.x and are breaking changes:
 - `bioamla.cli.output.legacy_json`, the helper behind those flags.
 
 ### Fixed
+
+- Loading a model could hang forever: transformers loads weights on a thread pool, and a
+  worker can deadlock in safetensors' initialisation while holding the GIL. bioamla now
+  loads weights serially (it sets `HF_DEACTIVATE_ASYNC_LOAD=1` unless it's already set).
 
 - A trained model now carries its feature extractor (`preprocessor_config.json`, with the
   training set's mean and std) in `best_model/`, its checkpoints and a Hub push, so
