@@ -5,7 +5,8 @@ the recording to the event plus some padding (``audio trim``) and draw the clip'
 spectrogram (``audio visualize``) with the event's box outlined on it, both into
 ``<run_dir>/crops/``. Writes ``crops.json``: each candidate's clip, image, where the clip
 starts in the recording, and the event's box in the clip's own time (seconds) and
-frequency (Hz), so a person reviewing it knows where to look.
+frequency (Hz), so a person reviewing it knows where to look. A box with only one band
+edge is drawn full height; one with no length or width isn't drawn (``box_drawn``).
 
 Usage (from the workspace root):
     python scripts/crops.py runs/label/<timestamp> --pad 0.5
@@ -23,13 +24,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _bioamla import BioamlaCommandError, read_json, run, write_json  # noqa: E402
 
 
+def _num(value: float) -> str:
+    return repr(float(value))  # full precision: the drawn box matches crops.json
+
+
+def drawable(box: dict) -> bool:
+    """Whether ``audio visualize`` can outline ``box``: it has length, and a band (when
+    both edges are known) has width."""
+    if not box["end"] > box["start"]:
+        return False
+    low, high = box.get("low_freq"), box.get("high_freq")
+    return low is None or high is None or high > low
+
+
 def box_option(box: dict, label: str | None = None) -> str:
-    """``box`` as the value of ``audio visualize --box``: ``START,END[,LOW,HIGH][,LABEL]``
-    (the band only when both edges are known; a label with a comma is left off)."""
-    parts = [f"{box['start']:g}", f"{box['end']:g}"]
-    if box.get("low_freq") is not None and box.get("high_freq") is not None:
-        parts += [f"{box['low_freq']:g}", f"{box['high_freq']:g}"]
-    if label and "," not in str(label):
+    """``box`` as the value of ``audio visualize --box``: ``START,END,LOW,HIGH[,LABEL]``,
+    or ``START,END`` / ``START,END,,,LABEL`` without both band edges (then it spans the
+    full height). A label may contain commas: all after the fourth comma is the label."""
+    low, high = box.get("low_freq"), box.get("high_freq")
+    parts = [_num(box["start"]), _num(box["end"])]
+    if low is not None and high is not None:
+        parts += [_num(low), _num(high)]
+    elif label:
+        parts += ["", ""]
+    if label:
         parts.append(str(label))
     return ",".join(parts)
 
@@ -51,8 +69,10 @@ def crop(run_folder: str, pad: float = 0.5, kind: str = "stft", root: str = ".")
             "low_freq": c["low_freq"],
             "high_freq": c["high_freq"],
         }
-        run("audio", "visualize", clip, "--type", kind, "--output", image,
-            "--box", box_option(box, c.get("label")), cwd=root)  # fmt: skip
+        # A box with no length or no width can't be outlined; the image goes without it.
+        boxed = drawable(box)
+        outline = ["--box", box_option(box, c.get("label"))] if boxed else []
+        run("audio", "visualize", clip, "--type", kind, "--output", image, *outline, cwd=root)
         crops.append(
             {
                 "id": c["id"],
@@ -60,7 +80,8 @@ def crop(run_folder: str, pad: float = 0.5, kind: str = "stft", root: str = ".")
                 "image": image,
                 "clip_start": round(start, 4),
                 "box": box,
-            }  # fmt: skip
+                "box_drawn": boxed,
+            }
         )
     write_json(Path(root) / folder / "crops.json", {"pad": pad, "type": kind, "crops": crops})
     return {"run_dir": run_folder, "crops": len(crops), "folder": (folder / "crops").as_posix()}

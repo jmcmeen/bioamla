@@ -191,6 +191,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+  the spectrogram image (`audio visualize --box`); `crops.json` still records the box, and
+  `box_drawn` says whether it could be drawn (a box with no length or width isn't).
+
 - The labeling skill's crop step outlines each candidate's box, with its suggested label, on
   the spectrogram image (`audio visualize --box`); `crops.json` still records the box.
 
