@@ -983,6 +983,9 @@ def train_ast(
         else:
             Path(best_model_path).mkdir(parents=True, exist_ok=True)
             trainer.save_model(best_model_path)
+            # With the model, the feature settings and the training set's mean and std
+            # it was trained with, so inference prepares audio the same way.
+            feature_extractor.save_pretrained(best_model_path)
 
             # Pull final eval metrics from the trainer's log history (no extra eval pass).
             for entry in reversed(trainer.state.log_history):

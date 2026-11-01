@@ -281,6 +281,11 @@ These were deprecated in 0.3.x and are breaking changes:
 
 ### Fixed
 
+- A trained model's `best_model/` now holds its feature extractor (`preprocessor_config.json`,
+  with the training set's mean and std), so `models ast predict|evaluate|embed` prepare
+  audio the way the model was trained; before, they fell back to the default settings, and
+  a base model with non-default feature settings couldn't be used after training.
+
 - `models ast train` failed with FFmpeg 9 (and any FFmpeg that torchcodec can't load):
   `datasets` decoded the training audio through torchcodec. Training audio is now decoded
   by bioamla's own loader (`bioamla.ml.training.decode_example_audio`), local datasets keep

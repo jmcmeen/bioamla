@@ -633,6 +633,27 @@ class TestModelCommandsLibraryParity:
         want = evaluate_model(clips, model_path=str(tiny_ast), ground_truth=tmp_path / "truth.csv")
         assert got["metrics"] == json.loads(json.dumps(want.to_dict()["metrics"]))
 
+    def test_a_trained_model_predicts_with_its_training_features(
+        self, tiny_ast, clips, tmp_path
+    ) -> None:
+        data = tmp_path / "by_class"
+        for label, name in (("a", "a.wav"), ("b", "b.wav")):
+            (data / label).mkdir(parents=True)
+            for i in range(4):
+                (data / label / f"{i}{name}").write_bytes((clips / name).read_bytes())
+        bioamla("models", "ast", "train", "--train-dataset", str(data),
+                "--training-dir", str(tmp_path / "run"), "--base-model", str(tiny_ast),
+                "--num-train-epochs", "1", "--per-device-train-batch-size", "4",
+                "--report-to", "none")  # fmt: skip
+        best = tmp_path / "run" / "best_model"
+        saved = json.loads((best / "preprocessor_config.json").read_text())
+        default = json.loads((tiny_ast / "preprocessor_config.json").read_text())
+        assert saved["max_length"] == default["max_length"] == 128  # the base model's settings
+        assert (saved["mean"], saved["std"]) != (default["mean"], default["std"])  # computed
+        # The base model's non-default max_length only works with its own extractor.
+        got = bioamla("models", "ast", "predict", str(clips / "a.wav"), "--model-path", str(best))
+        assert got["predictions"][0]["label"] in {"a", "b"}
+
     def test_train_operation_reports_progress_and_stops_when_cancelled(
         self, tiny_ast, clips, tmp_path
     ) -> None:
