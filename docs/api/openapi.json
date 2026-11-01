@@ -2501,8 +2501,8 @@
         "tags": [
           "audio"
         ],
-        "summary": "Draw a spectrogram, MFCC or waveform image of a file.",
-        "description": "Draw a spectrogram, MFCC or waveform image of a file.\n\nRuns as a job: answers with a job id.",
+        "summary": "Draw a spectrogram, MFCC or waveform image of a file, with boxes outlined.",
+        "description": "Draw a spectrogram, MFCC or waveform image of a file, with boxes outlined.\n\nRuns as a job: answers with a job id.",
         "operationId": "op_audio_visualize",
         "security": [
           {
@@ -9273,6 +9273,25 @@
             "type": "boolean",
             "title": "Legend",
             "default": true
+          },
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/VisualizeBox"
+            },
+            "type": "array",
+            "title": "Boxes"
+          },
+          "annotations": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "path"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotations"
           }
         },
         "additionalProperties": false,
@@ -9282,7 +9301,7 @@
           "output"
         ],
         "title": "AudioVisualizeRequest",
-        "description": "A spectrogram, MFCC or waveform image of a file.\n\nAttributes:\n    file: The audio file.\n    output: The image file to write.\n    viz_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.\n    n_fft: FFT window size.\n    hop_length: Hop length.\n    n_mels: Mel bands.\n    n_mfcc: MFCCs.\n    cmap: Colormap name.\n    dpi: Image DPI.\n    legend: Show axes, title and colorbar."
+        "description": "A spectrogram, MFCC or waveform image of a file.\n\nAttributes:\n    file: The audio file.\n    output: The image file to write.\n    viz_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.\n    n_fft: FFT window size.\n    hop_length: Hop length.\n    n_mels: Mel bands.\n    n_mfcc: MFCCs.\n    cmap: Colormap name.\n    dpi: Image DPI.\n    legend: Show axes, title and colorbar.\n    boxes: Regions to outline (seconds, Hz).\n    annotations: An annotation file (any format bioamla reads) whose\n        annotations are outlined too, labelled."
       },
       "AugmentRequest": {
         "properties": {
@@ -13793,6 +13812,53 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VisualizeBox": {
+        "properties": {
+          "start": {
+            "type": "number",
+            "title": "Start"
+          },
+          "end": {
+            "type": "number",
+            "title": "End"
+          },
+          "low_freq": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low Freq"
+          },
+          "high_freq": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High Freq"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "VisualizeBox",
+        "description": "A region to outline on a picture (see :class:`bioamla.viz.SpectrogramBox`).\n\nAttributes:\n    start: Start (s).\n    end: End (s).\n    low_freq: Lower edge (Hz); leave both edges out for the full height.\n    high_freq: Upper edge (Hz).\n    label: Text at its top-left corner."
       },
       "WorkspaceRequest": {
         "properties": {
