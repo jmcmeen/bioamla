@@ -10,9 +10,9 @@ see in the code, trust the code and flag the drift.
 signal processing, acoustic indices, event detection, spectrogram visualization, embedding
 clustering, species catalogs, dataset tooling, and AST-based ML inference.
 
-- **0.2.x is a ground-up rebuild.** The old layered architecture (core/services/models/
-  repository) was torn out and replaced by flat, domain-oriented packages. APIs may still
-  change. When in doubt, favor **removing/simplifying over adding** — keep the core lean.
+- **Flat, domain-oriented packages.** The old layered architecture (core/services/models/
+  repository) was torn out in 0.2.x. When in doubt, favor **removing/simplifying over
+  adding** — keep the core lean.
 - Python **≥ 3.11**, `src/` layout, package `bioamla`, console script `bioamla` →
   `bioamla._cli_entry:main` (a shim that runs `bioamla.cli.cli:main`).
 - Tooling: **uv** for envs/deps, **ruff** for lint+format, **pytest** for tests, **mkdocs**
@@ -37,7 +37,7 @@ clustering, species catalogs, dataset tooling, and AST-based ML inference.
 4. **Slim base, opt-in extras.** `pip install bioamla` installs only the light core
    (numpy, scipy, pandas, soundfile, pydub, riffy, requests, the catalog clients). Heavy
    dependencies live in extras: `audio` (librosa, sounddevice), `viz`, `indices`, `detect`,
-   `ml` (torch, transformers, …), `cluster`, and `all`. `bioamla/_extras.py` maps each extra
+   `ml` (torch, transformers, …), `cluster`, `server` (fastapi, uvicorn), and `all`. `bioamla/_extras.py` maps each extra
    to its modules. A domain package that needs an extra wholesale calls `require_extra(...)`
    at the top of its `__init__.py`; a function elsewhere imports its heavy dependency with
    `import_extra("librosa", "audio")`. Both raise `DependencyError` with the install command,
@@ -123,9 +123,10 @@ returned to a caller (e.g. `AcousticIndices`, `AudioData`, `AudioMetadata`).
   Attributes/Args; many modules cite literature references (keep that for indices/detect).
 - Use `logging.getLogger(__name__)`, not `print`, in library code. The CLI uses
   `click.echo` / `rich` for user output.
-- **Config / secrets**: `.env` in CWD (or a parent) is auto-loaded on import (`override=False`,
-  so real env vars win). Catalog keys: `EBIRD_API_KEY`, `XC_API_KEY`, `HF_TOKEN`. Read keys at
-  call time; never hardcode or commit them.
+- **Config / secrets**: on import, only the catalog keys (`EBIRD_API_KEY`, `XC_API_KEY`,
+  `HF_TOKEN`) are read from the nearest `.env` in the CWD or a parent, never overriding a real
+  env var; nothing else in the file is loaded. Read keys at call time; never hardcode or
+  commit them.
 
 ## Testing
 

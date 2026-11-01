@@ -27,6 +27,7 @@ theme:
 nav:
   - Home: index.md
   - CLI Reference: cli.md
+  - Using the library: library.md
   - Settings: settings.md
   - Recorder metadata: recorder-metadata.md
   - Running the server: server.md

@@ -203,11 +203,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
-  the spectrogram image (`audio visualize --box`); `crops.json` still records the box, and
-  `box_drawn` says whether it could be drawn (a box with no length or width isn't).
+- The README is rewritten for people using bioamla: install and extras (now with
+  `server`), a short CLI and library quickstart, workspaces, working on a server, agent
+  skills and API keys. How the library is organized moves to a new docs page, "Using the
+  library".
 
 - The labeling skill's crop step outlines each candidate's box, with its suggested label, on
-  the spectrogram image (`audio visualize --box`); `crops.json` still records the box.
+  the spectrogram image (`audio visualize --box`); `crops.json` still records the box, and
+  `box_drawn` says whether it could be drawn (a box with no length or width isn't).
 
 - **Breaking:** `batch models predict` reports ranked labels the way `models ast predict
   --top-k` does, and only when asked: `--top-k K` (default 0, was 5) adds `top` (`[{label,
@@ -303,6 +306,12 @@ These were deprecated in 0.3.x and are breaking changes:
 - `bioamla.cli.output.legacy_json`, the helper behind those flags.
 
 ### Fixed
+
+- The catalog keys in a `.env` file in the working directory (or a parent) are now read
+  when bioamla is installed, not only from a source checkout: the search started from the
+  installed package's folder. Only `EBIRD_API_KEY`, `XC_API_KEY` and `HF_TOKEN` are read
+  from the file (an exported variable still wins); other variables in it, such as another
+  project's secrets or `BIOAMLA_*` settings, are no longer loaded.
 
 - Loading a model could hang forever: transformers loads weights on a thread pool, and a
   worker can deadlock in safetensors' initialisation while holding the GIL. bioamla now
