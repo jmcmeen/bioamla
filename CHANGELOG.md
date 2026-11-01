@@ -307,6 +307,10 @@ These were deprecated in 0.3.x and are breaking changes:
 
 ### Fixed
 
+- A `.env` file in the working directory (or a parent) is loaded again when bioamla is
+  installed (not run from a source checkout); the search started from the installed
+  package's folder, so catalog keys in `./.env` were ignored.
+
 - Loading a model could hang forever: transformers loads weights on a thread pool, and a
   worker can deadlock in safetensors' initialisation while holding the GIL. bioamla now
   loads weights serially (it sets `HF_DEACTIVATE_ASYNC_LOAD=1` unless it's already set).

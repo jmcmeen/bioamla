@@ -23,7 +23,7 @@ Domains:
 import importlib
 from importlib.metadata import PackageNotFoundError, version
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 # Exception hierarchy base — catch the whole family with a single except.
 from bioamla.exceptions import BioamlaError
@@ -39,7 +39,8 @@ except PackageNotFoundError:  # package not installed (e.g. source checkout)
 # library-import usage "just work". override=False means a real exported
 # environment variable always wins over the file (important for CI / shells).
 # Keys are read lazily at call time, so this only needs to run before first use.
-load_dotenv(override=False)
+# usecwd: look from the current directory up, not from where bioamla is installed.
+load_dotenv(find_dotenv(usecwd=True), override=False)
 
 # Domain subpackages are loaded LAZILY (PEP 562) so that `import bioamla` and
 # `bioamla --help` stay fast: accessing e.g. ``bioamla.audio`` imports it on first
