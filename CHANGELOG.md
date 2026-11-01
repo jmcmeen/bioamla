@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Server jobs: a job-kind operation posted to the server is queued and answered at once
+  (`202`, with the job), then runs in its own worker process, so a crash or a cancel can't
+  take the server down. `GET /v1/jobs` and `/v1/jobs/{id}` report status, progress and the
+  result or error; `/v1/jobs/{id}/events` streams progress, notices and log lines as
+  server-sent events (resumable with `Last-Event-ID`); `/v1/jobs/{id}/log` gives the log as
+  text; `POST /v1/jobs/{id}/cancel` drops a queued job or stops a running one (its cancel
+  check first, then the worker is ended). At most `bioamla serve --max-jobs` jobs run at
+  once (default 2), and one machine-learning job at a time. A request with a path outside
+  the allowed folders is refused (`403`) before it's queued. Each job is recorded in its
+  workspace's history with its id.
+- `bioamla.operations.prepare()`: a request validated and its paths checked, as `run()`
+  would run it, without running it.
+
 - Every `cluster` and `models ast` command runs through an operation (`cluster.reduce|fit|
   analyze|novelty`, `models.ast.init-config|predict|train|evaluate|embed|info`), so every
   command group now has its operations. Training reports progress (steps) through the

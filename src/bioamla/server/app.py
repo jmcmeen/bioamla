@@ -42,11 +42,13 @@ class ServerConfig:
         token: The bearer token clients must present.
         linkable: Folders outside ``root`` that workspaces may link (e.g. an archive
             of recordings), used in place.
+        max_jobs: How many jobs may run at once (machine-learning jobs: one at a time).
     """
 
     root: Path
     token: str
     linkable: list[Path] = field(default_factory=list)
+    max_jobs: int = 2
 
 
 def envelope(result: Any) -> dict[str, Any]:
@@ -76,7 +78,7 @@ def _error(status: int, error_type: str, message: str) -> JSONResponse:
     )  # fmt: skip
 
 
-_HTTP_ERROR_TYPES = {404: "NotFoundError", 405: "MethodNotAllowed", 501: "NotImplemented"}
+_HTTP_ERROR_TYPES = {404: "NotFoundError", 405: "MethodNotAllowed"}
 
 
 def create_app(config: ServerConfig) -> FastAPI:
@@ -86,18 +88,30 @@ def create_app(config: ServerConfig) -> FastAPI:
         config: The workspace root, token and linkable folders.
 
     Returns:
-        A FastAPI application. ``app.state.policy`` is its :class:`PathPolicy` and
-        ``app.state.identity`` the dependency that checks the token.
+        A FastAPI application. ``app.state.policy`` is its :class:`PathPolicy`,
+        ``app.state.identity`` the dependency that checks the token and
+        ``app.state.jobs`` its :class:`~bioamla.server.jobs.JobRunner`.
     """
+    from contextlib import asynccontextmanager
+
     from bioamla import __version__
+    from bioamla.server.jobs import JobRunner, add_job_routes
+
+    runner = JobRunner(config.root, config.linkable, max_jobs=config.max_jobs)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        yield
+        runner.close()  # end running workers with the server
 
     app = FastAPI(
         title="bioamla",
         version=__version__,
-        description="Run bioamla commands in workspaces on this machine.",
+        description="Run bioamla operations in workspaces on this machine.",
         openapi_url=None,  # served below, behind the token
         docs_url=None,
         redoc_url=None,
+        lifespan=lifespan,
     )
     policy = PathPolicy(config.root, config.linkable)
     app.state.config = config
@@ -160,12 +174,9 @@ def create_app(config: ServerConfig) -> FastAPI:
     def openapi(who: Identity = Depends(identity)) -> dict[str, Any]:
         return app.openapi()
 
-    def submit_job(ws_dir: Path, name: str, request: Any, who: Identity) -> dict[str, Any]:
-        raise StarletteHTTPException(501, f"{name} runs as a job; this server can't run jobs yet")
-
-    app.state.submit_job = submit_job  # replaced by the job runner
-
     from bioamla.server.operations_api import add_operation_routes
+
+    add_job_routes(app, API_VERSION, envelope, runner)
 
     app.state.operations = add_operation_routes(app, API_VERSION, envelope)
 

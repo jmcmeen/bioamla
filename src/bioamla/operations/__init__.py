@@ -317,15 +317,16 @@ def build_request(op: Operation, data: Any) -> Any:
     return validate_config(op.request, dict(data), source=f"operation {op.name}")
 
 
-def run(name: str, request: Any, context: OperationContext | None = None) -> Any:
-    """Run the operation ``name`` on ``request`` (a request object or a dict).
-
-    Every path field goes through ``context.resolve_path`` first.
+def prepare(name: str, request: Any, context: OperationContext | None = None) -> Any:
+    """``request`` as the operation ``name`` would run it: validated, with every path
+    field through ``context.resolve_path``. :func:`run` does this first; a front end
+    that runs the operation later (e.g. as a job) can call it to reject a bad request
+    straight away.
 
     Raises:
         NotFoundError: If there's no such operation.
         ConfigValidationError: If the request is invalid.
-        BioamlaError: Whatever the operation raises.
+        BioamlaError: Whatever the context's path check raises.
     """
     op = get(name)
     context = context or OperationContext()
@@ -339,7 +340,21 @@ def run(name: str, request: Any, context: OperationContext | None = None) -> Any
             resolved[f] = context.resolve_path(value)
     if resolved:
         req = dataclasses.replace(req, **resolved)
-    return op.func(req, context)
+    return req
+
+
+def run(name: str, request: Any, context: OperationContext | None = None) -> Any:
+    """Run the operation ``name`` on ``request`` (a request object or a dict).
+
+    Every path field goes through ``context.resolve_path`` first.
+
+    Raises:
+        NotFoundError: If there's no such operation.
+        ConfigValidationError: If the request is invalid.
+        BioamlaError: Whatever the operation raises.
+    """
+    context = context or OperationContext()
+    return get(name).func(prepare(name, request, context), context)
 
 
 __all__ = [
@@ -354,5 +369,6 @@ __all__ = [
     "get",
     "operation",
     "path_fields",
+    "prepare",
     "run",
 ]

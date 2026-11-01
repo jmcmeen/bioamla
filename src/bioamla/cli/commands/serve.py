@@ -30,7 +30,16 @@ _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
     type=click.Path(exists=True, file_okay=False),
     help="A folder outside --root that workspaces may link in place (repeatable)",
 )
-def serve(root: str, host: str, port: int, token_file: str, linkable: tuple[str, ...]) -> None:
+@click.option(
+    "--max-jobs",
+    default=2,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="Jobs that may run at once (machine-learning jobs run one at a time)",
+)
+def serve(
+    root: str, host: str, port: int, token_file: str, linkable: tuple[str, ...], max_jobs: int
+) -> None:
     """Run the bioamla HTTP API so other machines can work in this machine's
     workspaces. Needs the [server] extra.
 
@@ -61,7 +70,10 @@ def serve(root: str, host: str, port: int, token_file: str, linkable: tuple[str,
         root_path.mkdir(parents=True, exist_ok=True)
         token = read_or_create_token(token_file)
         config = ServerConfig(
-            root=root_path, token=token, linkable=[Path(p).expanduser() for p in linkable]
+            root=root_path,
+            token=token,
+            linkable=[Path(p).expanduser() for p in linkable],
+            max_jobs=max_jobs,
         )
         app = create_app(config)
     except BioamlaError as e:

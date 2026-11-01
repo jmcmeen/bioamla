@@ -82,13 +82,6 @@ def test_failures_are_recorded_and_reported(server):
     assert record["ok"] is False and record["error"]["type"] == "NotFoundError"
 
 
-def test_jobs_wait_for_the_job_runner(server):
-    client, _, _ = server
-    got = post(client, "detect.energy", {"file": "x.wav"})
-    assert got.status_code == 501
-    assert got.json()["error"]["type"] == "NotImplemented"
-
-
 def test_workspace_and_token_checks(server):
     client, _, _ = server
     assert post(client, "workspace.status", {}, ws="nope").status_code == 404
