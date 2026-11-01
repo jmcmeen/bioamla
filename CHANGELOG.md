@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Integration tests run a pipeline on a real server in CI (upload, detect, annotation
+  summary, clip extraction, dataset stats, download), once through `bioamla.client` and once
+  through `bioamla --remote`, checking each hand-off and the server workspace's history.
+
 - `bioamla --remote NAME:WORKSPACE <command>` runs the command on a server: the CLI builds
   the operation's request as usual, the server runs it, progress and notices stream back,
   and the command prints exactly what a local run prints (`--json` included; parity is
