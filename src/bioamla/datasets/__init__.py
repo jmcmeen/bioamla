@@ -22,6 +22,20 @@ Example:
 """
 
 from bioamla.common.deprecation import deprecated_aliases
+from bioamla.datasets.annotation_files import (
+    AnnotationFileSummary,
+    AnnotationTemplate,
+    ConvertedAnnotations,
+    GeneratedLabels,
+    RewrittenAnnotations,
+    annotation_template,
+    clip_labels_file,
+    convert_annotation_file,
+    filter_annotation_file,
+    frame_labels_file,
+    remap_annotation_file,
+    summarize_annotation_file,
+)
 from bioamla.datasets.annotation_utils import (
     AnnotationSet,
     annotations_to_one_hot,
@@ -102,6 +116,13 @@ from bioamla.datasets.redact import (
 )
 from bioamla.datasets.remix import RemixRecipe, RemixSource, remix_dataset
 from bioamla.datasets.stats import get_dataset_stats
+from bioamla.datasets.workflows import (
+    augment_dataset,
+    build_dataset,
+    remix_from,
+    write_dataset_license,
+    write_dataset_manifest,
+)
 from bioamla.exceptions import (
     AnnotationError,
     AugmentationError,
@@ -112,6 +133,25 @@ from bioamla.exceptions import (
 )
 
 __all__ = [
+    # Dataset workflows (bioamla.datasets.workflows)
+    "augment_dataset",
+    "build_dataset",
+    "remix_from",
+    "write_dataset_license",
+    "write_dataset_manifest",
+    # Annotation files (bioamla.datasets.annotation_files)
+    "AnnotationFileSummary",
+    "AnnotationTemplate",
+    "ConvertedAnnotations",
+    "GeneratedLabels",
+    "RewrittenAnnotations",
+    "annotation_template",
+    "clip_labels_file",
+    "convert_annotation_file",
+    "filter_annotation_file",
+    "frame_labels_file",
+    "remap_annotation_file",
+    "summarize_annotation_file",
     # Annotation data structures
     "Annotation",
     "AnnotationResult",

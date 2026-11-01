@@ -21,6 +21,7 @@ from bioamla._extras import require_extra
 require_extra("cluster", "bioamla.cluster")
 
 from bioamla.cluster.batch import (
+    batch_cluster,
     cluster_batch_files,
     cluster_embedding_files,
     load_embedding_file,
@@ -79,6 +80,7 @@ __all__ = [
     "export_clusters_to_csv",
     # Batch
     "cluster_batch_files",
+    "batch_cluster",
     "cluster_embedding_files",
     "load_embeddings_batch",
     "load_embedding_file",

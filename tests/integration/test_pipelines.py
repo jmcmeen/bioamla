@@ -460,3 +460,104 @@ class TestCatalog:
         monkeypatch.chdir(root)
         bioamla("workspace", "config", "set", threshold["setting"], "-3")
         assert bioamla("detect", "energy", str(recording))["params"]["threshold_db"] == -3.0
+
+
+def test_batch_audio_transforms_chain_in_directory_mode(recording: Path, tmp_path: Path) -> None:
+    """resample -> normalize -> trim -> filter -> denoise, each reading the folder the
+    previous step wrote, on real files (no mocks)."""
+    src = tmp_path / "in"
+    src.mkdir()
+    (src / "calls.wav").write_bytes(recording.read_bytes())
+    steps = [
+        ("resample", ["-r", "16000"]),
+        ("normalize", ["-d", "-20"]),
+        ("trim", ["-s", "1", "-e", "6"]),
+        ("filter", ["--highpass", "500"]),
+        ("denoise", ["--strength", "0.5"]),
+    ]
+    folder = src
+    for command, options in steps:
+        out = tmp_path / command
+        result = bioamla(
+            "batch", "audio", command, "--input-dir", str(folder), "--output-dir", str(out),
+            *options,
+        )  # fmt: skip
+        assert (result["successful"], result["failed"]) == (1, 0), command
+        assert result["output_files"] == [str(out / "calls.wav")]
+        folder = out
+    data, sr = sf.read(folder / "calls.wav")
+    assert sr == 16000
+    assert len(data) == 5 * 16000  # trimmed to 1-6 s; denoising keeps the length
+
+
+class TestModelBatchLibraryParity:
+    """`batch models predict|embed` reproduced with library calls alone (no CLI)."""
+
+    @pytest.fixture
+    def folder(self, tmp_path) -> Path:
+        folder = tmp_path / "in"
+        folder.mkdir()
+        t = np.arange(16000 * 2) / 16000
+        for name, freq in (("a.wav", 1000), ("b.wav", 3000)):
+            sf.write(folder / name, 0.5 * np.sin(2 * np.pi * freq * t), 16000)
+        return folder
+
+    def test_predict_whole_files_and_segments(self, tiny_ast, folder, tmp_path) -> None:
+        from bioamla.batch import BatchConfig
+        from bioamla.ml import batch_predict
+
+        for extra, name in (
+            ([], "predictions.json"),
+            (["--segment-seconds", "1"], "predictions.csv"),
+        ):
+            cli_out, lib_out = tmp_path / f"cli{len(extra)}", tmp_path / f"lib{len(extra)}"
+            got = bioamla(
+                "batch", "models", "predict", "--input-dir", str(folder),
+                "--output-dir", str(cli_out), "-m", str(tiny_ast), *extra,
+            )  # fmt: skip
+            want = batch_predict(
+                BatchConfig(input_dir=str(folder), output_dir=str(lib_out)),
+                model_path=str(tiny_ast),
+                segment_duration=1 if extra else 0,
+            )
+            assert got["results_file"] == str(cli_out / name)
+            assert want.metadata["output_file"] == str(lib_out / name)
+            cli_text = (cli_out / name).read_text().replace(str(cli_out), "")
+            assert cli_text == (lib_out / name).read_text().replace(str(lib_out), "")
+
+    def test_embed_csv_mode(self, tiny_ast, folder, tmp_path) -> None:
+        from bioamla.batch import BatchConfig
+        from bioamla.ml import batch_embed
+
+        manifest = folder / "files.csv"
+        manifest.write_text("file_name\na.wav\nb.wav\n")
+        got = bioamla(
+            "batch", "models", "embed", "--input-file", str(manifest),
+            "--output-dir", str(tmp_path / "cli"), "-m", str(tiny_ast),
+        )  # fmt: skip
+        want = batch_embed(
+            BatchConfig(input_file=str(manifest), output_dir=str(tmp_path / "lib")),
+            model_path=str(tiny_ast),
+        )
+        cli_rows = read_csv(got["metadata_csv"])
+        lib_rows = read_csv(want.metadata["metadata_csv"])
+        assert [r["embedding_file"] for r in cli_rows] == [r["embedding_file"] for r in lib_rows]
+        for row in cli_rows:
+            a = np.load(tmp_path / "cli" / row["embedding_file"])
+            b = np.load(tmp_path / "lib" / row["embedding_file"])
+            np.testing.assert_allclose(a, b, rtol=1e-6)
+
+    def test_predict_without_output_dir_saves_beside_the_input(
+        self, tiny_ast, folder, tmp_path
+    ) -> None:
+        manifest = folder / "files.csv"
+        manifest.write_text("file_name\nb.wav\na.wav\n")
+        got = bioamla(
+            "batch", "models", "predict", "--input-file", str(manifest), "-m", str(tiny_ast),
+            "--max-workers", "2",
+        )  # fmt: skip
+        assert got["results_file"] == str(folder / "predictions.json")
+        names = [
+            Path(p["filepath"]).name for p in json.loads((folder / "predictions.json").read_text())
+        ]
+        assert names == ["b.wav", "a.wav"]  # CSV order, whatever order the workers finished

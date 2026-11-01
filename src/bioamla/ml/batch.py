@@ -15,7 +15,20 @@ functions for fast startup.
 
 from pathlib import Path
 
-from bioamla.batch import BatchResult, discover_files, output_stems, run_batch
+from bioamla.batch import (
+    BatchConfig,
+    BatchResult,
+    config_csv_context,
+    discover_files,
+    output_stems,
+    require_input_dir,
+    require_output_dir,
+    run_batch,
+    run_csv_merge,
+    run_csv_predict_segments,
+    run_csv_process,
+    write_rows_csv,
+)
 from bioamla.exceptions import NotFoundError
 from bioamla.protocols import OnProgress
 
@@ -266,4 +279,200 @@ __all__ = [
     "batch_predict_files",
     "batch_predict_segments",
     "batch_embed_files",
+    "batch_predict",
+    "batch_embed",
 ]
+
+
+_SEGMENT_COLUMNS = ["filepath", "start_time", "end_time", "predicted_label", "confidence"]
+
+
+def _write_json(path: Path, data: object) -> str:
+    import json
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return str(path)
+
+
+def batch_predict(
+    config: BatchConfig,
+    *,
+    model_path: str,
+    top_k: int = 5,
+    min_confidence: float = 0.0,
+    segment_duration: int = 0,
+    overlap: int = 0,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch models predict",
+) -> BatchResult:
+    """Classify every file of a batch with an AST model, whole or in segments.
+
+    Whole files: predictions go to ``predictions.json``, in CSV order in CSV mode.
+    With ``segment_duration`` (seconds) each file is classified per segment: directory
+    mode writes a flat ``predictions.csv`` (one row per segment, those below
+    ``min_confidence`` left out); CSV mode replaces each row with one row per segment.
+    Files go to ``config.output_dir``, or, without one, beside the input (the input
+    folder, or the metadata CSV's folder). The file written, if any, is
+    ``metadata["output_file"]``.
+
+    Args:
+        config: The batch input and output.
+        model_path: AST model (Hugging Face ID or local path).
+        top_k: Top predictions per file.
+        min_confidence: Leave out predictions below this confidence.
+        segment_duration: Classify N-second segments (0: whole files).
+        overlap: Overlap between segments (s).
+        on_progress: ``(done, total)`` callback.
+        operation: Name used in the batch log records.
+    """
+    if config.output_dir:
+        out_dir = Path(config.output_dir)
+    elif config.input_file:
+        out_dir = Path(config.input_file).parent
+    else:
+        out_dir = Path(require_input_dir(config))
+    if segment_duration > 0:
+        if config.input_file:
+            from bioamla.ml.inference import ASTInference
+
+            context = config_csv_context(config)  # read (and check) the CSV first
+            inference = ASTInference(model_path=model_path)
+
+            def _predict_segments(path: Path) -> list[dict]:
+                results = inference.predict_segments(
+                    str(path), clip_length=segment_duration, overlap=overlap
+                )
+                return [
+                    {
+                        "start_time": r.start_time,
+                        "end_time": r.end_time,
+                        "prediction": r.predicted_label,
+                        "confidence": r.confidence,
+                    }
+                    for r in results
+                    if r.confidence >= min_confidence
+                ]
+
+            return run_csv_predict_segments(
+                context,
+                _predict_segments,
+                max_workers=config.max_workers,
+                continue_on_error=config.continue_on_error,
+                on_progress=on_progress,
+                operation=operation,
+            )
+        result = batch_predict_segments(
+            require_input_dir(config),
+            model_path=model_path,
+            segment_duration=segment_duration,
+            overlap=overlap,
+            min_confidence=min_confidence,
+            recursive=config.recursive,
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+        )
+        segments = result.metadata.get("segments", [])
+        if segments:
+            out = out_dir / "predictions.csv"
+            write_rows_csv(out, segments, _SEGMENT_COLUMNS)
+            result.metadata["output_file"] = str(out)
+        return result
+
+    if config.input_file:
+        from bioamla.ml.inference import ASTInference
+
+        context = config_csv_context(config)
+        inference = ASTInference(model_path=model_path)
+        by_path: dict[str, dict] = {}
+
+        def _process(path: Path) -> None:
+            pred = inference.predict_topk(str(path), top_k=top_k, min_confidence=min_confidence)
+            by_path[str(path)] = {
+                "filepath": str(path),
+                "predicted_label": pred.predicted_label,
+                "confidence": pred.confidence,
+                "top_k_labels": pred.top_k_labels,
+                "top_k_scores": pred.top_k_scores,
+            }
+
+        result = run_csv_process(
+            context,
+            _process,
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            operation=operation,
+        )
+        # In CSV order, whatever order the workers finished in.
+        predictions = [by_path[p] for p in (str(r.file_path) for r in context.rows) if p in by_path]
+    else:
+        result = batch_predict_files(
+            require_input_dir(config),
+            model_path=model_path,
+            top_k=top_k,
+            min_confidence=min_confidence,
+            recursive=config.recursive,
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+        )
+        predictions = result.metadata.get("predictions", [])
+    if predictions:
+        result.metadata["output_file"] = _write_json(out_dir / "predictions.json", predictions)
+    return result
+
+
+def batch_embed(
+    config: BatchConfig,
+    *,
+    model_path: str,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch models embed",
+) -> BatchResult:
+    """Save an AST embedding (``<name>_embeddings.npy``) for every file of a batch.
+
+    Embeddings mirror the input (folder or the CSV's folder) under ``config.output_dir``
+    (required); files that share a name get distinct embeddings. CSV mode adds each
+    row's ``embedding_file`` (blank for a file that failed).
+
+    Raises:
+        InvalidInputError: If ``config`` has no ``output_dir``.
+    """
+    out_dir = Path(require_output_dir(config))
+    if config.input_file:
+        import numpy as np
+
+        from bioamla.ml.embedding import EmbeddingConfig, EmbeddingExtractor
+
+        context = config_csv_context(config)  # read (and check) the CSV before the model
+        extractor = EmbeddingExtractor(config=EmbeddingConfig(model_path=model_path))
+        stems = output_stems([str(row.file_path) for row in context.rows], context.csv_dir)
+
+        def _analyze(path: Path) -> dict:
+            stem = stems[str(path)]
+            target = out_dir / stem.parent / f"{stem.name}_embeddings.npy"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            np.save(str(target), extractor.extract(str(path)).embeddings)
+            # A Path: written relative to wherever the metadata CSV is saved.
+            return {"embedding_file": target.resolve()}
+
+        return run_csv_merge(
+            context,
+            _analyze,
+            clear=("embedding_file",),
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            operation=operation,
+        )
+    return batch_embed_files(
+        require_input_dir(config),
+        str(out_dir),
+        model_path=model_path,
+        recursive=config.recursive,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        on_progress=on_progress,
+    )

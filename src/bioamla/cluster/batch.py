@@ -17,7 +17,7 @@ import json
 import pickle
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -26,6 +26,9 @@ from bioamla.batch import discover_files as _discover_files
 from bioamla.cluster.core import cluster_embeddings
 from bioamla.exceptions import ClusteringError, InvalidInputError
 from bioamla.protocols import OnProgress
+
+if TYPE_CHECKING:
+    from bioamla.batch import BatchConfig
 
 EMBEDDING_EXTENSIONS = {".npy", ".pkl", ".pickle", ".json"}
 
@@ -297,3 +300,88 @@ def file_cluster(labels: list[int]) -> int:
     counts = Counter(real)
     top = max(counts.values())
     return min(label for label, count in counts.items() if count == top)
+
+
+def batch_cluster(
+    config: "BatchConfig",
+    *,
+    method: str = "hdbscan",
+    n_clusters: int | None = None,
+    min_cluster_size: int = 5,
+    min_samples: int = 3,
+    on_progress: OnProgress | None = None,
+) -> BatchResult:
+    """Cluster the embeddings of a batch, in directory or CSV mode.
+
+    Results go to ``config.output_dir`` (required; see :func:`cluster_batch_files`).
+    In CSV mode a CSV from ``batch models embed`` names each row's embedding in
+    ``embedding_file`` (a blank one, where embedding failed, is skipped); without
+    that column, ``file_name`` is the embedding. Each row gets ``cluster`` and
+    ``cluster_labels`` (blank for a file that wasn't clustered).
+
+    Raises:
+        InvalidInputError: If there is no ``output_dir``, or no row names an embedding.
+    """
+    from bioamla.batch import (
+        config_csv_context,
+        merge_analysis_results,
+        require_input_dir,
+        require_output_dir,
+        resolve_file_path,
+        write_csv,
+    )
+
+    output_dir = require_output_dir(config)
+    if not config.input_file:
+        return cluster_batch_files(
+            require_input_dir(config),
+            output_dir,
+            method=method,
+            n_clusters=n_clusters,
+            min_cluster_size=min_cluster_size,
+            min_samples=min_samples,
+            recursive=config.recursive,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+        )
+
+    context = config_csv_context(config)
+    if "embedding_file" in context.fieldnames:
+        row_paths = [
+            resolve_file_path(e, context.csv_dir)
+            if (e := row.metadata_fields.get("embedding_file"))
+            else None
+            for row in context.rows
+        ]
+    else:
+        row_paths = [row.file_path for row in context.rows]
+    embedding_paths = [str(p) for p in row_paths if p is not None]
+    if not embedding_paths:
+        raise InvalidInputError(f"No row in {config.input_file} has an embedding_file")
+    result = cluster_embedding_files(
+        embedding_paths,
+        output_dir,
+        method=method,
+        n_clusters=n_clusters,
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        continue_on_error=config.continue_on_error,
+        on_progress=on_progress,
+    )
+    by_file = {
+        str(Path(a["filepath"]).resolve()): a for a in result.metadata.get("file_assignments", [])
+    }
+    for row, path in zip(context.rows, row_paths, strict=True):
+        # Blank for a file that wasn't clustered, so no earlier run's value lingers.
+        assignment = by_file.get(str(Path(path).resolve())) if path is not None else None
+        merge_analysis_results(
+            row,
+            {
+                "cluster": assignment["cluster"] if assignment else "",
+                "cluster_labels": ";".join(str(x) for x in assignment["cluster_labels"])
+                if assignment
+                else "",
+            },
+        )
+    result.metadata["metadata_csv"] = str(write_csv(context))
+    return result

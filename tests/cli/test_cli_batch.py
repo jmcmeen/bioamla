@@ -303,11 +303,12 @@ def test_audio_metadata_csv(runner, tmp_path):
 
 def test_audio_metadata_error(runner, test_audio_dir, mocker):
     mocker.patch(
-        "bioamla.audio.discovery.list_audio_files",
+        "bioamla.audio.batch.list_audio_files",
         side_effect=ProcessingError("listfail"),
     )
     result = runner.invoke(cli, ["batch", "audio", "metadata", "--input-dir", test_audio_dir])
     assert result.exit_code != 0
+    assert "listfail" in result.output
 
 
 # --------------------------------------------------------------------------- #
@@ -603,7 +604,7 @@ def test_audio_convert_csv(runner, csv_with_audio, mocker):
 
 @pytest.mark.parametrize("method", ["energy", "ribbit", "peaks", "accelerating"])
 def test_detect_dir(runner, test_audio_dir, tmp_path, mocker, method):
-    m = mocker.patch("bioamla.detect.batch_detect_dir", return_value=_result())
+    m = mocker.patch("bioamla.detect.batch.batch_detect_dir", return_value=_result())
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
@@ -617,14 +618,14 @@ def test_detect_dir(runner, test_audio_dir, tmp_path, mocker, method):
 
 def test_detect_dir_default_output(runner, test_audio_dir, mocker):
     # When no --output-dir, it falls back to the input dir.
-    m = mocker.patch("bioamla.detect.batch_detect_dir", return_value=_result())
+    m = mocker.patch("bioamla.detect.batch.batch_detect_dir", return_value=_result())
     result = runner.invoke(cli, ["batch", "detect", "energy", "--input-dir", test_audio_dir])
     assert result.exit_code == 0
     assert m.call_args.args[1] == test_audio_dir
 
 
 def test_detect_dir_error(runner, test_audio_dir, mocker):
-    mocker.patch("bioamla.detect.batch_detect_dir", side_effect=ProcessingError("detfail"))
+    mocker.patch("bioamla.detect.batch.batch_detect_dir", side_effect=ProcessingError("detfail"))
     result = runner.invoke(cli, ["batch", "detect", "energy", "--input-dir", test_audio_dir])
     assert result.exit_code != 0
 
@@ -694,7 +695,7 @@ def test_models_predict_dir(runner, test_audio_dir, tmp_path, mocker):
     res.metadata = {
         "predictions": [{"filepath": "a.wav", "predicted_label": "frog", "confidence": 0.9}]
     }
-    mocker.patch("bioamla.ml.batch_predict_files", return_value=res)
+    mocker.patch("bioamla.ml.batch.batch_predict_files", return_value=res)
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
@@ -732,7 +733,7 @@ def test_models_predict_segments_dir(runner, test_audio_dir, tmp_path, mocker):
             }
         ]
     }
-    mocker.patch("bioamla.ml.batch_predict_segments", return_value=res)
+    mocker.patch("bioamla.ml.batch.batch_predict_segments", return_value=res)
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
@@ -755,7 +756,7 @@ def test_models_predict_segments_dir(runner, test_audio_dir, tmp_path, mocker):
 
 
 def test_models_predict_error(runner, test_audio_dir, mocker):
-    mocker.patch("bioamla.ml.batch_predict_files", side_effect=ProcessingError("mfail"))
+    mocker.patch("bioamla.ml.batch.batch_predict_files", side_effect=ProcessingError("mfail"))
     result = runner.invoke(
         cli,
         ["batch", "models", "predict", "--input-dir", test_audio_dir, "-m", "some/model"],
@@ -764,7 +765,7 @@ def test_models_predict_error(runner, test_audio_dir, mocker):
 
 
 def test_models_embed_dir(runner, test_audio_dir, tmp_path, mocker):
-    mocker.patch("bioamla.ml.batch_embed_files", return_value=_result())
+    mocker.patch("bioamla.ml.batch.batch_embed_files", return_value=_result())
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
@@ -834,7 +835,7 @@ def _cluster_result(files=()):
 
 
 def test_cluster_dir(runner, test_audio_dir, tmp_path, mocker):
-    m = mocker.patch("bioamla.cluster.cluster_batch_files", return_value=_cluster_result())
+    m = mocker.patch("bioamla.cluster.batch.cluster_batch_files", return_value=_cluster_result())
     out = tmp_path / "out"
     result = runner.invoke(
         cli,
@@ -861,7 +862,7 @@ def test_cluster_requires_output(runner, test_audio_dir):
 
 
 def test_cluster_error(runner, test_audio_dir, tmp_path, mocker):
-    mocker.patch("bioamla.cluster.cluster_batch_files", side_effect=ProcessingError("cfail"))
+    mocker.patch("bioamla.cluster.batch.cluster_batch_files", side_effect=ProcessingError("cfail"))
     out = tmp_path / "out"
     result = runner.invoke(
         cli,

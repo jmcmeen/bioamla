@@ -183,7 +183,7 @@ def test_unexpected_exception_gets_an_envelope(monkeypatch, tmp_path) -> None:
     def boom(*args, **kwargs):
         raise RuntimeError("domain bug")
 
-    monkeypatch.setattr("bioamla.datasets.get_dataset_stats", boom)
+    monkeypatch.setattr("bioamla.datasets.stats.get_dataset_stats", boom)
     result = CliRunner().invoke(cli, ["--json", "dataset", "stats", str(tmp_path)])
     assert result.exit_code == 1
     envelope = json.loads(result.stdout)

@@ -10,9 +10,22 @@ from pathlib import Path
 from typing import Any
 
 from bioamla.audio.discovery import list_audio_files
-from bioamla.batch import BatchResult, run_batch, write_rows_csv
+from bioamla.batch import (
+    BatchConfig,
+    BatchResult,
+    config_csv_context,
+    require_input_dir,
+    run_batch,
+    run_csv_merge,
+    write_rows_csv,
+)
 from bioamla.exceptions import NotFoundError
-from bioamla.indices.compute import _failed_indices_row, _indices_row, check_index_names
+from bioamla.indices.compute import (
+    DEFAULT_INDICES,
+    _failed_indices_row,
+    _indices_row,
+    check_index_names,
+)
 from bioamla.protocols import OnProgress
 
 
@@ -95,4 +108,56 @@ def _columns(rows: list[dict[str, Any]]) -> list[str]:
     return ["filepath", *values, *tail]
 
 
-__all__ = ["batch_index_files"]
+__all__ = ["batch_index_files", "batch_indices"]
+
+
+def batch_indices(
+    config: BatchConfig,
+    indices: list[str] | None = None,
+    *,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch index",
+) -> BatchResult:
+    """Compute acoustic indices for a batch, in directory or CSV mode.
+
+    Directory mode writes ``indices.csv`` into ``config.output_dir`` if given (see
+    :func:`batch_index_files`); CSV mode adds the index columns to each row.
+
+    Args:
+        config: The batch input and output.
+        indices: Index names (``None``: :data:`DEFAULT_INDICES`).
+        on_progress: ``(done, total)`` callback.
+        operation: Name used in the batch log records.
+
+    Raises:
+        InvalidInputError: If the selection is empty or names an unknown index.
+    """
+    selected = list(DEFAULT_INDICES) if indices is None else list(indices)
+    check_index_names(selected)
+    if config.input_file:
+
+        def _analyze(path: Path) -> dict[str, Any]:
+            row = _indices_row(path, selected)
+            # Drop the bookkeeping columns before merging into the CSV row.
+            for key in ("filepath", "success"):
+                row.pop(key, None)
+            return row
+
+        return run_csv_merge(
+            config_csv_context(config),
+            _analyze,
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            operation=operation,
+        )
+
+    return batch_index_files(
+        require_input_dir(config),
+        str(config.output_dir) if config.output_dir else None,
+        indices=selected,
+        recursive=config.recursive,
+        max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
+        on_progress=on_progress,
+    )

@@ -22,9 +22,10 @@ from bioamla._extras import require_extra
 # Fail early, with the install command, if the [indices] extra is missing.
 require_extra("indices", "bioamla.indices")
 
-from bioamla.indices.batch import batch_index_files
+from bioamla.indices.batch import batch_index_files, batch_indices
 from bioamla.indices.compute import (
     AVAILABLE_INDICES,
+    DEFAULT_INDICES,
     INDEX_DESCRIPTIONS,
     AcousticIndices,
     batch_compute_indices,
@@ -64,12 +65,14 @@ __all__ = [
     "compute_indices_from_file",
     "batch_compute_indices",
     "batch_index_files",
+    "batch_indices",
     "check_index_names",
     "temporal_indices",
     "spectral_entropy",
     "temporal_entropy",
     "describe_index",
     "AVAILABLE_INDICES",
+    "DEFAULT_INDICES",
     "INDEX_DESCRIPTIONS",
     # One file: load, compute, optionally save
     "index_file",

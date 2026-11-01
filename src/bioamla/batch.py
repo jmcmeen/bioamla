@@ -34,6 +34,7 @@ from typing import Any, TypeVar
 from bioamla.common.config import config_dataclass
 from bioamla.common.log import log_fields
 from bioamla.exceptions import InvalidInputError, NotFoundError
+from bioamla.operations import PathStr
 from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
@@ -786,9 +787,331 @@ def write_csv(context: CSVBatchContext) -> Path:
     return output_csv_path
 
 
+# =============================================================================
+# Operation requests
+# =============================================================================
+
+
+@config_dataclass
+class BatchRequest:
+    """The input and output every batch operation takes (see :mod:`bioamla.operations`).
+
+    Exactly one of ``input_dir`` (directory mode) and ``input_file`` (a metadata CSV
+    with a ``file_name`` column) is given.
+
+    Attributes:
+        input_dir: Folder of audio files.
+        input_file: Metadata CSV listing the files.
+        output_dir: Where results go (in CSV mode, the updated CSV too; without it,
+            CSV-mode outputs go next to their inputs).
+        recursive: Search subfolders (directory mode).
+        max_workers: Parallel workers.
+        continue_on_error: Keep going after a file fails.
+    """
+
+    input_dir: PathStr | None = None
+    input_file: PathStr | None = None
+    output_dir: PathStr | None = None
+    recursive: bool = True
+    max_workers: int = 1
+    continue_on_error: bool = True
+
+    def to_config(self) -> BatchConfig:
+        """The :class:`BatchConfig` for this request.
+
+        Raises:
+            InvalidInputError: Unless exactly one of ``input_dir`` and ``input_file``
+                is given.
+        """
+        return BatchConfig(
+            input_dir=self.input_dir,
+            input_file=self.input_file,
+            output_dir=self.output_dir or "",
+            recursive=self.recursive,
+            max_workers=self.max_workers,
+            continue_on_error=self.continue_on_error,
+            quiet=True,
+        )
+
+
+# =============================================================================
+# Reading a BatchConfig
+# =============================================================================
+
+
+def config_csv_context(config: BatchConfig) -> CSVBatchContext:
+    """The metadata CSV of a CSV-mode ``config``, with its output folder (see
+    :func:`load_csv`)."""
+    output_dir = str(config.output_dir) if config.output_dir else None
+    return load_csv(config.input_file, output_dir)
+
+
+def require_input_dir(config: BatchConfig) -> str:
+    """``config.input_dir``, for commands that only run in directory mode.
+
+    Raises:
+        InvalidInputError: If ``config`` has no ``input_dir``.
+    """
+    if not config.input_dir:
+        raise InvalidInputError("input_dir (--input-dir) is required for this command.")
+    return str(config.input_dir)
+
+
+def require_output_dir(config: BatchConfig) -> str:
+    """``config.output_dir``, for commands that must write somewhere.
+
+    Raises:
+        InvalidInputError: If ``config`` has no ``output_dir``.
+    """
+    if not config.output_dir:
+        raise InvalidInputError("output_dir (--output-dir) is required for this command.")
+    return str(config.output_dir)
+
+
+# =============================================================================
+# CSV-mode runners: one per kind of command
+# =============================================================================
+
+
+def _finish(context: CSVBatchContext, result: BatchResult) -> BatchResult:
+    result.metadata["metadata_csv"] = str(write_csv(context))
+    return result
+
+
+def run_csv_merge(
+    context: CSVBatchContext,
+    analyze_file: Callable[[Path], dict[str, Any]],
+    *,
+    clear: tuple[str, ...] = (),
+    max_workers: int = 1,
+    continue_on_error: bool = True,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch",
+) -> BatchResult:
+    """CSV mode for analyses: add each file's result columns to its row.
+
+    Runs ``analyze_file`` on every listed file, merges the returned columns into the
+    row and writes the updated CSV (columns unioned, ``file_name`` first). The
+    ``clear`` columns are blanked on every row first, so a row that fails this run
+    doesn't keep a value from an earlier one.
+
+    Returns:
+        The run's result; ``metadata["metadata_csv"]`` is the CSV written.
+    """
+    for row in context.rows:
+        for column in clear:
+            if column in row.metadata_fields or column in context.fieldnames:
+                row.metadata_fields[column] = ""
+
+    def _process(row: MetadataRow) -> str:
+        merge_analysis_results(row, analyze_file(row.file_path))
+        return str(row.file_path)
+
+    result = run_csv_batch(
+        context,
+        _process,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+        operation=operation,
+    )
+    return _finish(context, result)
+
+
+def run_csv_transform(
+    context: CSVBatchContext,
+    transform_file: Callable[[Path, Path], Path | str],
+    *,
+    new_extension: str | None = None,
+    max_workers: int = 1,
+    continue_on_error: bool = True,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch",
+) -> BatchResult:
+    """CSV mode for commands that write a new file per row (convert, resample, ...).
+
+    ``transform_file(input_path, output_path)`` writes the new file (in place, or
+    under the context's output folder; see :func:`resolve_output_path`) and returns
+    where it went; the row's ``file_name`` is updated to it before the CSV is written.
+
+    Returns:
+        The run's result; ``metadata["metadata_csv"]`` is the CSV written.
+    """
+
+    def _process(row: MetadataRow) -> str:
+        out_path = resolve_output_path(row.file_path, context, new_extension=new_extension)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        final_path = Path(transform_file(row.file_path, out_path))
+        update_row_path(row, final_path, context)
+        return str(final_path)
+
+    result = run_csv_batch(
+        context,
+        _process,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+        operation=operation,
+    )
+    return _finish(context, result)
+
+
+def run_csv_process(
+    context: CSVBatchContext,
+    process_file: Callable[[Path], Any],
+    *,
+    max_workers: int = 1,
+    continue_on_error: bool = True,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch",
+) -> BatchResult:
+    """CSV mode for commands whose results go elsewhere (detections, predictions).
+
+    Runs ``process_file`` on every listed file; the CSV is written back with its rows
+    unchanged (paths re-resolved for its new location).
+
+    Returns:
+        The run's result; ``metadata["metadata_csv"]`` is the CSV written.
+    """
+
+    def _process(row: MetadataRow) -> str:
+        process_file(row.file_path)
+        return str(row.file_path)
+
+    result = run_csv_batch(
+        context,
+        _process,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+        operation=operation,
+    )
+    return _finish(context, result)
+
+
+def run_csv_segment(
+    context: CSVBatchContext,
+    segment_file: Callable[[Path, Path], list[SegmentInfo]],
+    *,
+    max_workers: int = 1,
+    continue_on_error: bool = True,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch",
+) -> BatchResult:
+    """CSV mode for segmenting: each row becomes one row per segment written.
+
+    ``segment_file(input_path, output_dir)`` writes the segments (next to where the
+    file's output goes) and returns their :class:`SegmentInfo`. Each parent row is
+    replaced by its segments' rows, carrying ``parent_file``, ``segment_id``,
+    ``start_time``, ``end_time`` and ``duration``.
+
+    Returns:
+        The run's result; ``metadata["metadata_csv"]`` is the CSV written.
+    """
+    segment_mapping: dict[Path, list[SegmentInfo]] = {}
+
+    def _process(row: MetadataRow) -> str:
+        seg_dir = resolve_output_path(row.file_path, context).parent
+        seg_dir.mkdir(parents=True, exist_ok=True)
+        segments = segment_file(row.file_path, seg_dir)
+        if segments:
+            segment_mapping[row.file_path] = segments
+        return str(row.file_path)
+
+    result = run_csv_batch(
+        context,
+        _process,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+        operation=operation,
+    )
+
+    new_rows: list[MetadataRow] = []
+    for row in context.rows:
+        if row.file_path in segment_mapping:
+            new_rows.extend(expand_row_for_segments(row, segment_mapping[row.file_path], context))
+        else:
+            new_rows.append(row)
+    context.rows = new_rows
+    for name in ("parent_file", "segment_id", "start_time", "end_time", "duration"):
+        if name not in context.fieldnames:
+            context.fieldnames.append(name)
+    return _finish(context, result)
+
+
+def run_csv_predict_segments(
+    context: CSVBatchContext,
+    predict_file: Callable[[Path], list[dict[str, Any]]],
+    *,
+    max_workers: int = 1,
+    continue_on_error: bool = True,
+    on_progress: OnProgress | None = None,
+    operation: str = "batch",
+) -> BatchResult:
+    """CSV mode for per-segment predictions: each row becomes one row per span.
+
+    ``predict_file(input_path)`` returns one dict per span (``start_time``,
+    ``end_time``, ``prediction``, ``confidence``). Each parent row is replaced by one
+    row per span, keeping its ``file_name`` and adding ``segment_id`` and those
+    columns. No files are written; the rows describe parts of the original file.
+
+    Returns:
+        The run's result; ``metadata["metadata_csv"]`` is the CSV written.
+    """
+    span_mapping: dict[Path, list[dict[str, Any]]] = {}
+
+    def _process(row: MetadataRow) -> str:
+        spans = predict_file(row.file_path)
+        if spans:
+            span_mapping[row.file_path] = spans
+        return str(row.file_path)
+
+    result = run_csv_batch(
+        context,
+        _process,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+        operation=operation,
+    )
+
+    new_rows: list[MetadataRow] = []
+    for row in context.rows:
+        spans = span_mapping.get(row.file_path)
+        if not spans:
+            new_rows.append(row)
+            continue
+        for seg_id, span in enumerate(spans):
+            fields = row.metadata_fields.copy()
+            fields.update(
+                {
+                    "segment_id": seg_id,
+                    "start_time": span["start_time"],
+                    "end_time": span["end_time"],
+                    "prediction": span["prediction"],
+                    "confidence": span["confidence"],
+                }
+            )
+            new_rows.append(
+                MetadataRow(
+                    file_name=row.file_name,
+                    file_path=row.file_path,
+                    metadata_fields=fields,
+                    output_path=row.output_path,
+                )
+            )
+    context.rows = new_rows
+    for name in ("segment_id", "start_time", "end_time", "prediction", "confidence"):
+        if name not in context.fieldnames:
+            context.fieldnames.append(name)
+    return _finish(context, result)
+
+
 __all__ = [
     # Types
     "BatchConfig",
+    "BatchRequest",
     "BatchResult",
     "SegmentInfo",
     "MetadataRow",
@@ -808,4 +1131,14 @@ __all__ = [
     "update_row_path",
     "merge_analysis_results",
     "expand_row_for_segments",
+    # Reading a BatchConfig
+    "config_csv_context",
+    "require_input_dir",
+    "require_output_dir",
+    # CSV-mode runners
+    "run_csv_merge",
+    "run_csv_transform",
+    "run_csv_process",
+    "run_csv_segment",
+    "run_csv_predict_segments",
 ]

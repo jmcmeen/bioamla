@@ -13,7 +13,15 @@ import json
 from pathlib import Path
 from typing import Any
 
-from bioamla.batch import BatchResult, run_batch
+from bioamla.batch import (
+    BatchConfig,
+    BatchResult,
+    config_csv_context,
+    merge_analysis_results,
+    require_input_dir,
+    run_batch,
+    write_csv,
+)
 from bioamla.batch import discover_files as _discover_files
 from bioamla.common.constants import SUPPORTED_AUDIO_EXTENSIONS
 from bioamla.detect.core import (
@@ -26,7 +34,7 @@ from bioamla.detect.core import (
 from bioamla.exceptions import InvalidDetectionParams
 from bioamla.protocols import OnProgress
 
-__all__ = ["batch_detect_dir", "batch_detect_files"]
+__all__ = ["batch_detect_dir", "batch_detect_files", "batch_detection"]
 
 _AUDIO_EXTS = {ext.lower() for ext in SUPPORTED_AUDIO_EXTENSIONS}
 
@@ -218,3 +226,55 @@ def _write_detections_json(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
     return output_path
+
+
+def batch_detection(
+    config: BatchConfig,
+    method: str = "energy",
+    *,
+    on_progress: OnProgress | None = None,
+    **params: Any,
+) -> BatchResult:
+    """Run one detector over a batch, in directory or CSV mode.
+
+    Detections go to ``detections_<method>.json`` (``metadata["output_file"]``) in
+    ``config.output_dir``, or, without one, beside the input: the input folder, or the
+    metadata CSV's folder. CSV mode also adds each file's ``num_detections`` to its
+    row (blank for a file that failed) and writes the CSV.
+
+    Args:
+        config: The batch input and output.
+        method: ``energy``, ``ribbit``, ``peaks`` or ``accelerating``.
+        on_progress: ``(done, total)`` callback.
+        **params: Detector parameters (see :func:`batch_detect_dir`).
+    """
+    if config.input_file:
+        context = config_csv_context(config)
+        out_dir = Path(context.output_dir) if context.output_dir else context.csv_path.parent
+        result = batch_detect_files(
+            [row.file_path for row in context.rows],
+            out_dir,
+            method,
+            max_workers=config.max_workers,
+            continue_on_error=config.continue_on_error,
+            on_progress=on_progress,
+            **params,
+        )
+        counts = result.metadata["file_counts"]
+        for row in context.rows:
+            # Blank for a file that failed, so no earlier run's count lingers.
+            merge_analysis_results(row, {"num_detections": counts.get(str(row.file_path), "")})
+        result.metadata["metadata_csv"] = str(write_csv(context))
+        return result
+
+    in_dir = require_input_dir(config)
+    return batch_detect_dir(
+        in_dir,
+        str(config.output_dir) if config.output_dir else in_dir,
+        method=method,
+        recursive=config.recursive,
+        continue_on_error=config.continue_on_error,
+        max_workers=config.max_workers,
+        on_progress=on_progress,
+        **params,
+    )

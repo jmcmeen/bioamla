@@ -264,7 +264,9 @@ def generate_frame_labels(
         raise InvalidInputError("hop_length must be positive")
 
     num_classes = len(label_map)
-    num_frames = max(0, int((total_duration - frame_size) / hop_length) + 1)
+    # The small epsilon keeps float error from dropping the last frame
+    # (e.g. (0.3 - 0.1) / 0.1 == 1.9999999999999998).
+    num_frames = max(0, int((total_duration - frame_size) / hop_length + 1e-9) + 1)
     labels = np.zeros((num_classes, num_frames), dtype=np.float32)
 
     for frame_idx in range(num_frames):

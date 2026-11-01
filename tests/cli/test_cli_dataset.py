@@ -37,7 +37,7 @@ def test_dataset_group_help(runner: CliRunner) -> None:
 
 def test_dataset_merge_quiet(runner: CliRunner, tmp_path) -> None:
     stats = {"datasets_merged": 2, "total_files": 100, "files_converted": 0}
-    with patch("bioamla.datasets.merge_datasets", return_value=stats):
+    with patch("bioamla.datasets.merge.merge_datasets", return_value=stats):
         result = runner.invoke(
             cli,
             [
@@ -54,7 +54,7 @@ def test_dataset_merge_quiet(runner: CliRunner, tmp_path) -> None:
 
 
 def test_dataset_merge_error(runner: CliRunner, tmp_path) -> None:
-    with patch("bioamla.datasets.merge_datasets", side_effect=MergeError("conflict")):
+    with patch("bioamla.datasets.merge.merge_datasets", side_effect=MergeError("conflict")):
         result = runner.invoke(
             cli, ["dataset", "merge", str(tmp_path / "out"), str(tmp_path / "a")]
         )
@@ -75,7 +75,9 @@ def test_dataset_extract_clips(runner: CliRunner, tmp_path) -> None:
         "skipped": [],
         "failed": [],
     }
-    with patch("bioamla.datasets.extract_labeled_dataset", return_value=result_dict):
+    with patch(
+        "bioamla.datasets.labeled_dataset.extract_labeled_dataset", return_value=result_dict
+    ):
         result = runner.invoke(
             cli, ["dataset", "extract-clips", str(tmp_path / "src.wav"), str(tmp_path / "out")]
         )
@@ -104,7 +106,7 @@ def test_dataset_stats(runner: CliRunner, tmp_path) -> None:
         "categories": {"frog": 30, "bird": 20},
         "licenses": {"cc0": 50},
     }
-    with patch("bioamla.datasets.get_dataset_stats", return_value=stats):
+    with patch("bioamla.datasets.stats.get_dataset_stats", return_value=stats):
         result = runner.invoke(cli, ["dataset", "stats", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "Total files: 50" in result.output
@@ -112,14 +114,14 @@ def test_dataset_stats(runner: CliRunner, tmp_path) -> None:
 
 def test_dataset_stats_json(runner: CliRunner, tmp_path) -> None:
     stats = {"total_files": 1, "num_categories": 1, "categories": {"frog": 1}}
-    with patch("bioamla.datasets.get_dataset_stats", return_value=stats):
+    with patch("bioamla.datasets.stats.get_dataset_stats", return_value=stats):
         result = runner.invoke(cli, ["dataset", "stats", str(tmp_path), "--json"])
     assert result.exit_code == 0
     assert '"total_files": 1' in result.output
 
 
 def test_dataset_stats_error(runner: CliRunner, tmp_path) -> None:
-    with patch("bioamla.datasets.get_dataset_stats", side_effect=DatasetError("no csv")):
+    with patch("bioamla.datasets.stats.get_dataset_stats", side_effect=DatasetError("no csv")):
         result = runner.invoke(cli, ["dataset", "stats", str(tmp_path)])
     assert result.exit_code != 0
 
@@ -134,8 +136,8 @@ def test_dataset_manifest(runner: CliRunner, tmp_path) -> None:
         label2id={"a": 0, "b": 1}, class_counts={"a": 5, "b": 3}, splits={"train": 8}
     )
     with (
-        patch("bioamla.datasets.build_manifest_from_metadata", return_value=manifest),
-        patch("bioamla.datasets.save_dataset_manifest"),
+        patch("bioamla.datasets.manifest.build_manifest_from_metadata", return_value=manifest),
+        patch("bioamla.datasets.manifest.save_dataset_manifest"),
     ):
         result = runner.invoke(cli, ["dataset", "manifest", str(tmp_path)])
     assert result.exit_code == 0, result.output
@@ -155,8 +157,8 @@ def test_dataset_manifest_prints_recording_summary(runner: CliRunner, tmp_path) 
         sites=[{"latitude": 36.52, "longitude": -82.21, "files": 2}],
     )
     with (
-        patch("bioamla.datasets.build_manifest_from_metadata", return_value=manifest),
-        patch("bioamla.datasets.save_dataset_manifest"),
+        patch("bioamla.datasets.manifest.build_manifest_from_metadata", return_value=manifest),
+        patch("bioamla.datasets.manifest.save_dataset_manifest"),
     ):
         result = runner.invoke(cli, ["dataset", "manifest", str(tmp_path)])
     assert result.exit_code == 0, result.output
@@ -165,7 +167,9 @@ def test_dataset_manifest_prints_recording_summary(runner: CliRunner, tmp_path) 
 
 
 def test_dataset_manifest_error(runner: CliRunner, tmp_path) -> None:
-    with patch("bioamla.datasets.build_manifest_from_metadata", side_effect=DatasetError("bad")):
+    with patch(
+        "bioamla.datasets.manifest.build_manifest_from_metadata", side_effect=DatasetError("bad")
+    ):
         result = runner.invoke(cli, ["dataset", "manifest", str(tmp_path)])
     assert result.exit_code != 0
 
@@ -180,14 +184,14 @@ def test_dataset_partition(runner: CliRunner, tmp_path) -> None:
         "splits": {"train": 21, "val": 5, "test": 4},
         "metadata_file": str(tmp_path / "metadata.csv"),
     }
-    with patch("bioamla.datasets.partition_dataset", return_value=result_dict):
+    with patch("bioamla.datasets.partition.partition_dataset", return_value=result_dict):
         result = runner.invoke(cli, ["dataset", "partition", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "Partitioned" in result.output
 
 
 def test_dataset_partition_error(runner: CliRunner, tmp_path) -> None:
-    with patch("bioamla.datasets.partition_dataset", side_effect=DatasetError("x")):
+    with patch("bioamla.datasets.partition.partition_dataset", side_effect=DatasetError("x")):
         result = runner.invoke(cli, ["dataset", "partition", str(tmp_path)])
     assert result.exit_code != 0
 
@@ -202,10 +206,10 @@ def test_dataset_build(runner: CliRunner, tmp_path) -> None:
     partition = {"splits": {"train": 7, "val": 2, "test": 1}}
     manifest = SimpleNamespace(label2id={"a": 0})
     with (
-        patch("bioamla.datasets.extract_labeled_dataset", return_value=extract),
-        patch("bioamla.datasets.partition_dataset", return_value=partition),
-        patch("bioamla.datasets.build_manifest_from_metadata", return_value=manifest),
-        patch("bioamla.datasets.save_dataset_manifest"),
+        patch("bioamla.datasets.labeled_dataset.extract_labeled_dataset", return_value=extract),
+        patch("bioamla.datasets.partition.partition_dataset", return_value=partition),
+        patch("bioamla.datasets.manifest.build_manifest_from_metadata", return_value=manifest),
+        patch("bioamla.datasets.manifest.save_dataset_manifest"),
         patch(
             "bioamla.datasets.generate_license_for_dataset",
             return_value={"output_path": str(tmp_path / "ATTRIBUTIONS.md")},
@@ -224,11 +228,14 @@ def test_dataset_build_no_partition(runner: CliRunner, tmp_path) -> None:
     extract = {"clips_written": 10}
     manifest = SimpleNamespace(label2id={"a": 0})
     with (
-        patch("bioamla.datasets.extract_labeled_dataset", return_value=extract),
-        patch("bioamla.datasets.partition_dataset") as mpart,
-        patch("bioamla.datasets.build_manifest_from_metadata", return_value=manifest),
-        patch("bioamla.datasets.save_dataset_manifest"),
-        patch("bioamla.datasets.generate_license_for_dataset", side_effect=DatasetError("none")),
+        patch("bioamla.datasets.labeled_dataset.extract_labeled_dataset", return_value=extract),
+        patch("bioamla.datasets.partition.partition_dataset") as mpart,
+        patch("bioamla.datasets.manifest.build_manifest_from_metadata", return_value=manifest),
+        patch("bioamla.datasets.manifest.save_dataset_manifest"),
+        patch(
+            "bioamla.datasets.licenses.generate_license_for_dataset",
+            side_effect=DatasetError("none"),
+        ),
     ):
         result = runner.invoke(
             cli,
@@ -246,7 +253,9 @@ def test_dataset_build_no_partition(runner: CliRunner, tmp_path) -> None:
 
 
 def test_dataset_build_error(runner: CliRunner, tmp_path) -> None:
-    with patch("bioamla.datasets.extract_labeled_dataset", side_effect=DatasetError("fail")):
+    with patch(
+        "bioamla.datasets.labeled_dataset.extract_labeled_dataset", side_effect=DatasetError("fail")
+    ):
         result = runner.invoke(
             cli, ["dataset", "build", str(tmp_path / "src.wav"), str(tmp_path / "out")]
         )
@@ -265,7 +274,7 @@ def test_dataset_license_single(runner: CliRunner, tmp_path) -> None:
         "attributions_count": 3,
         "file_size": 1234,
     }
-    with patch("bioamla.datasets.generate_license_for_dataset", return_value=stats):
+    with patch("bioamla.datasets.licenses.generate_license_for_dataset", return_value=stats):
         result = runner.invoke(cli, ["dataset", "license", str(ds)])
     assert result.exit_code == 0, result.output
     assert "License file generated" in result.output
@@ -297,7 +306,7 @@ def test_dataset_license_batch(runner: CliRunner, tmp_path) -> None:
             {"status": "success", "dataset_name": "b", "attributions_count": 3},
         ],
     }
-    with patch("bioamla.datasets.generate_licenses_for_directory", return_value=stats):
+    with patch("bioamla.datasets.licenses.generate_licenses_for_directory", return_value=stats):
         result = runner.invoke(cli, ["dataset", "license", str(tmp_path), "--batch"])
     assert result.exit_code == 0, result.output
     assert "Processed 2 dataset(s)" in result.output
@@ -305,7 +314,7 @@ def test_dataset_license_batch(runner: CliRunner, tmp_path) -> None:
 
 def test_dataset_license_batch_none(runner: CliRunner, tmp_path) -> None:
     stats = {"datasets_found": 0, "datasets_processed": 0, "datasets_failed": 0, "results": []}
-    with patch("bioamla.datasets.generate_licenses_for_directory", return_value=stats):
+    with patch("bioamla.datasets.licenses.generate_licenses_for_directory", return_value=stats):
         result = runner.invoke(cli, ["dataset", "license", str(tmp_path), "--batch"])
     assert result.exit_code != 0
     assert "No datasets found" in result.output
@@ -321,7 +330,7 @@ def test_dataset_augment(runner: CliRunner, tmp_path) -> None:
         "files_failed": 0,
         "output_dir": str(tmp_path / "out"),
     }
-    with patch("bioamla.datasets.batch_augment", return_value=stats):
+    with patch("bioamla.datasets.augmentation.batch_augment", return_value=stats):
         result = runner.invoke(
             cli,
             [
@@ -341,7 +350,7 @@ def test_dataset_augment(runner: CliRunner, tmp_path) -> None:
 
 def test_dataset_augment_summary_reports_failures(runner: CliRunner, tmp_path) -> None:
     stats = {"files_created": 4, "files_processed": 2, "files_failed": 1, "output_dir": "o"}
-    with patch("bioamla.datasets.batch_augment", return_value=stats):
+    with patch("bioamla.datasets.augmentation.batch_augment", return_value=stats):
         result = runner.invoke(
             cli,
             ["dataset", "augment", str(tmp_path), "-o", str(tmp_path / "out"), "--gain", "-6,6"],
@@ -359,7 +368,7 @@ def test_dataset_augment_no_options(runner: CliRunner, tmp_path) -> None:
 
 def test_dataset_augment_ranges(runner: CliRunner, tmp_path) -> None:
     stats = {"files_created": 1, "files_processed": 1, "files_failed": 0, "output_dir": "o"}
-    with patch("bioamla.datasets.batch_augment", return_value=stats):
+    with patch("bioamla.datasets.augmentation.batch_augment", return_value=stats):
         result = runner.invoke(
             cli,
             [
@@ -381,7 +390,7 @@ def test_dataset_augment_ranges(runner: CliRunner, tmp_path) -> None:
 
 
 def test_dataset_augment_error(runner: CliRunner, tmp_path) -> None:
-    with patch("bioamla.datasets.batch_augment", side_effect=DatasetError("bad")):
+    with patch("bioamla.datasets.augmentation.batch_augment", side_effect=DatasetError("bad")):
         result = runner.invoke(
             cli,
             [
@@ -420,7 +429,7 @@ def _remix_stats(tmp_path) -> dict:
 
 
 def test_dataset_remix_flags(runner: CliRunner, tmp_path) -> None:
-    with patch("bioamla.datasets.remix_dataset", return_value=_remix_stats(tmp_path)) as m:
+    with patch("bioamla.datasets.remix.remix_dataset", return_value=_remix_stats(tmp_path)) as m:
         result = runner.invoke(
             cli,
             [
@@ -445,7 +454,7 @@ def test_dataset_remix_flags(runner: CliRunner, tmp_path) -> None:
 def test_dataset_remix_recipe_with_overrides(runner: CliRunner, tmp_path) -> None:
     recipe_path = tmp_path / "r.toml"
     recipe_path.write_text('[remix]\nsource = "orig"\nkeep = ["dog"]\n')
-    with patch("bioamla.datasets.remix_dataset", return_value=_remix_stats(tmp_path)) as m:
+    with patch("bioamla.datasets.remix.remix_dataset", return_value=_remix_stats(tmp_path)) as m:
         result = runner.invoke(
             cli,
             [
@@ -470,7 +479,7 @@ def test_dataset_remix_keep_and_drop_rejected(runner: CliRunner, tmp_path) -> No
     recipe_path = tmp_path / "r.toml"
     recipe_path.write_text('[remix]\nsource = "orig"\n')
     for args in (["--recipe", str(recipe_path)], ["--source", str(tmp_path)]):
-        with patch("bioamla.datasets.remix_dataset") as m:
+        with patch("bioamla.datasets.remix.remix_dataset") as m:
             result = runner.invoke(
                 cli, ["dataset", "remix", str(tmp_path / "out"), *args, "-k", "dog", "-d", "cat"]
             )
@@ -486,7 +495,7 @@ def test_dataset_remix_needs_recipe_or_source(runner: CliRunner, tmp_path) -> No
 
 
 def test_dataset_remix_error(runner: CliRunner, tmp_path) -> None:
-    with patch("bioamla.datasets.remix_dataset", side_effect=InvalidInputError("bad label")):
+    with patch("bioamla.datasets.remix.remix_dataset", side_effect=InvalidInputError("bad label")):
         result = runner.invoke(
             cli, ["dataset", "remix", str(tmp_path / "out"), "--source", str(tmp_path)]
         )

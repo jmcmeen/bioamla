@@ -1078,6 +1078,9 @@ def temporal_entropy(
 
 AVAILABLE_INDICES = ["aci", "adi", "aei", "bio", "ndsi", "h_spectral", "h_temporal"]
 
+#: The indices ``batch index`` computes when none are named (no entropy).
+DEFAULT_INDICES = ["aci", "adi", "aei", "bio", "ndsi"]
+
 INDEX_DESCRIPTIONS = {
     "aci": "Acoustic Complexity Index - measures variability of sound intensities",
     "adi": "Acoustic Diversity Index - Shannon diversity across frequency bands",

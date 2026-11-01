@@ -19,6 +19,10 @@ class InvalidInputError(BioamlaError):
     """Caller passed bad, contradictory, or out-of-range arguments."""
 
 
+class OptionConflictError(InvalidInputError):
+    """Two arguments that can't be used together (on the command line, a usage error)."""
+
+
 class NotFoundError(BioamlaError):
     """A required input path or resource does not exist."""
 
@@ -121,6 +125,7 @@ class WorkspaceError(BioamlaError):
 __all__ = [
     "BioamlaError",
     "InvalidInputError",
+    "OptionConflictError",
     "NotFoundError",
     "AudioLoadError",
     "AudioSaveError",

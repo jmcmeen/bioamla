@@ -218,13 +218,12 @@ class TestIndicesCsvCli:
 class TestPredictSegmentsCsvExpansion:
     """``batch models predict --input-file --segment-seconds`` row expansion.
 
-    Exercises the CLI helper directly with a fake per-file predictor so no model
+    Exercises the library runner directly with a fake per-file predictor so no model
     download / torch is needed — the point under test is the CSV row expansion.
     """
 
     def test_expands_one_row_per_segment(self, test_audio_dir, tmp_path):
-        from bioamla.batch import BatchConfig
-        from bioamla.cli.commands.batch import _run_csv_predict_segments
+        from bioamla.batch import BatchConfig, config_csv_context, run_csv_predict_segments
 
         csv_path = _make_meta_csv(Path(test_audio_dir), ["audio_0.wav", "audio_1.wav"])
         out_dir = tmp_path / "out"
@@ -236,7 +235,7 @@ class TestPredictSegmentsCsvExpansion:
                 {"start_time": 3.0, "end_time": 6.0, "prediction": "bird", "confidence": 0.8},
             ]
 
-        _run_csv_predict_segments(config, fake_predict)
+        run_csv_predict_segments(config_csv_context(config), fake_predict)
 
         out_csv = out_dir / "meta.csv"
         rows = list(csv.DictReader(out_csv.read_text(encoding="utf-8").splitlines()))
@@ -256,8 +255,7 @@ class TestPredictSegmentsCsvExpansion:
         ).resolve()
 
     def test_min_confidence_filter_drops_segments(self, test_audio_dir, tmp_path):
-        from bioamla.batch import BatchConfig
-        from bioamla.cli.commands.batch import _run_csv_predict_segments
+        from bioamla.batch import BatchConfig, config_csv_context, run_csv_predict_segments
 
         csv_path = _make_meta_csv(Path(test_audio_dir), ["audio_0.wav"])
         out_dir = tmp_path / "out"
@@ -267,7 +265,7 @@ class TestPredictSegmentsCsvExpansion:
         def fake_predict(path):
             return [{"start_time": 0.0, "end_time": 3.0, "prediction": "frog", "confidence": 0.95}]
 
-        _run_csv_predict_segments(config, fake_predict)
+        run_csv_predict_segments(config_csv_context(config), fake_predict)
 
         rows = list(csv.DictReader((out_dir / "meta.csv").read_text(encoding="utf-8").splitlines()))
         assert len(rows) == 1

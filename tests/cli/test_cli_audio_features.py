@@ -131,7 +131,7 @@ class TestBatchAudioFeatures:
     def test_directory_mode_needs_output_dir(self, tree) -> None:
         result = _run("batch", "audio", "features", "--input-dir", str(tree))
         assert result.exit_code == 1
-        assert "--output-dir is required" in result.output
+        assert "output_dir (--output-dir) is required" in result.output
 
     def test_csv_mode_merges_columns(self, tree, tmp_path) -> None:
         meta = tree / "meta.csv"

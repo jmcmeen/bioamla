@@ -23,13 +23,18 @@ def run_operation(
     bar's ``on_progress``.
 
     Raises:
+        click.UsageError: If arguments conflict (:class:`~bioamla.exceptions.OptionConflictError`).
         click.ClickException: If the request is invalid or the operation fails.
     """
     from bioamla import operations
 
     context = operations.OperationContext(on_progress=on_progress)
+    from bioamla.exceptions import OptionConflictError
+
     try:
         return operations.run(name, request, context)
+    except OptionConflictError as e:
+        raise click.UsageError(str(e)) from e
     except BioamlaError as e:
         raise click.ClickException(str(e)) from e
 
