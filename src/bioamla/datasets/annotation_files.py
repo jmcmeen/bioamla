@@ -413,8 +413,9 @@ def _write_labels(
     header_prefix: list[str],
     rows: Any,
 ) -> tuple[Path, Path | None]:
-    """``numpy``: the array as ``<name>.npy`` (``.npy`` added unless ``output_file`` has
-    it) plus ``<name>.labels.csv``, named after it; ``csv``: one table."""
+    """``numpy``: the array as ``<name>.npy`` (a ``.csv`` suffix becomes ``.npy``;
+    otherwise ``.npy`` is added unless the name has it) plus ``<name>.labels.csv``,
+    named after it; ``csv``: one table."""
     import csv
 
     import numpy as np
@@ -424,11 +425,15 @@ def _write_labels(
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         if output_format == "numpy":
-            data_path = output_path if output_path.suffix == ".npy" else Path(f"{output_path}.npy")
+            from bioamla.common.files import npy_path
+
+            if output_path.suffix.lower() == ".csv":  # labels.csv -> labels.npy
+                output_path = output_path.with_suffix(".npy")
+            data_path = Path(npy_path(output_path))
             np.save(data_path, array)
             # Named after the data file, so outputs that differ only before their last
             # dot (run.v1, run.v2) don't share a map.
-            label_map_path = data_path.with_name(data_path.name[: -len(".npy")] + ".labels.csv")
+            label_map_path = data_path.with_name(data_path.stem + ".labels.csv")
             with open(label_map_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(["label", "index"])

@@ -126,6 +126,13 @@ class AtomicFileWriter:
             self._tmp.unlink(missing_ok=True)
 
 
+def npy_path(path: str | Path) -> str:
+    """The file ``numpy.save`` writes for ``path``: ``.npy`` is added unless the name
+    already ends in it (as numpy decides, case-sensitively)."""
+    path = str(path)
+    return path if path.endswith(".npy") else path + ".npy"
+
+
 def write_text_atomic(filepath: str | Path, content: str, encoding: str = "utf-8") -> None:
     """Write ``content`` via a temporary file in the same folder and a rename, so a
     reader (or a crash) never sees a half-written file."""
@@ -658,6 +665,7 @@ def zip_path(source: str | Path, zip_file: str | Path) -> str:
 
 
 __all__ = [
+    "npy_path",
     "AtomicFileWriter",
     "download_to_dir",
     "UNZIP_MAX_BYTES",

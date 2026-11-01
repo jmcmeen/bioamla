@@ -325,6 +325,8 @@ def annotation_generate_labels(
         print_success(f"Generated labels for {result.clips} clips")
         print_kv("Labels", ", ".join(sorted(result.labels)))
         print_success(f"Output: {result.output}")
+        if result.label_map:
+            print_success(f"Label map: {result.label_map}")
 
 
 @annotation.command("generate-frame-labels")
@@ -388,3 +390,5 @@ def annotation_generate_frame_labels(
         print_success(f"Generated frame labels: {result.classes} classes x {result.frames} frames")
         print_kv("Labels", ", ".join(sorted(result.labels)))
         print_success(f"Output: {result.output}")
+        if result.label_map:
+            print_success(f"Label map: {result.label_map}")
