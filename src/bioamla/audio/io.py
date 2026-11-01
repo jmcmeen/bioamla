@@ -365,29 +365,39 @@ def _loaded(load: Callable[[str], tuple[np.ndarray, int]], filepath: str | Path)
 
 
 def save_audio(
-    filepath: str, audio: np.ndarray, sample_rate: int, format: str | None = None
+    filepath: str,
+    audio: np.ndarray,
+    sample_rate: int,
+    format: str | None = None,
+    bit_depth: int | None = None,
 ) -> str:
     """
     Save a ``numpy`` audio array to a file.
 
     Args:
         filepath: Destination file path.
-        audio: Audio data as a numpy array.
+        audio: Audio data as a numpy array (1-D, or ``(n_samples, n_channels)``).
         sample_rate: Sample rate in Hz.
         format: Output format (auto-detected from the extension if not given).
+        bit_depth: Bits per sample: 8, 16, 24 or 32 for WAV, 8, 16 or 24 for FLAC
+            (default 16). Lossy formats (MP3, OGG) take none.
 
     Returns:
         Path to the saved file (as a string).
 
     Raises:
+        InvalidInputError: If ``bit_depth`` doesn't apply to the format.
         AudioSaveError: If encoding/writing fails.
     """
     from bioamla.audio._pydub import save_audio as _pydub_save_audio
+    from bioamla.exceptions import InvalidInputError
 
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        _pydub_save_audio(str(path), audio, sample_rate, format=format)
+        _pydub_save_audio(str(path), audio, sample_rate, format=format, bit_depth=bit_depth)
+    except InvalidInputError:
+        raise
     except Exception as e:
         raise AudioSaveError(f"Failed to save audio: {e}") from e
     return str(path)

@@ -167,6 +167,7 @@ class AudioConvertRequest:
         output: Where to save the result.
         sample_rate: Target sample rate (Hz).
         channels: Target channel count (1 or 2; default: keep the file's own).
+        bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24; default 16).
         format: Output format; by default, from ``output``'s extension.
     """
 
@@ -174,6 +175,7 @@ class AudioConvertRequest:
     output: PathStr
     sample_rate: int | None = None
     channels: int | None = None
+    bit_depth: Literal[8, 16, 24, 32] | None = None
     format: AudioFormat | None = None
 
 
@@ -186,6 +188,7 @@ def audio_convert(request: AudioConvertRequest, context: OperationContext) -> Pr
         target_format=request.format,
         target_sample_rate=request.sample_rate,
         target_channels=request.channels,
+        target_bit_depth=request.bit_depth,
     )
     return ProcessedFile(file=request.file, output=str(saved))
 

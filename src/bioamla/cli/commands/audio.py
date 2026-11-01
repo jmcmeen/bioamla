@@ -254,7 +254,13 @@ def audio_features(
     type=int,
     help="Target number of channels: 1 or 2 (default: keep the file's own)",
 )
-@click.option("--bit-depth", "-b", default=None, type=int, help="Target bit depth")
+@click.option(
+    "--bit-depth",
+    "-b",
+    default=None,
+    type=click.Choice(["8", "16", "24", "32"]),
+    help="Bits per sample: WAV 8, 16, 24 or 32; FLAC 8, 16 or 24 (default 16)",
+)
 @click.option(
     "--format",
     "-f",
@@ -267,22 +273,21 @@ def audio_convert(
     output_path: str,
     sample_rate: int,
     channels: int,
-    bit_depth: int,
+    bit_depth: str | None,
     format: str,
 ) -> None:
     """Convert audio file format or properties."""
-    from bioamla.cli.console import print_success, print_warning
+    from bioamla.cli.console import print_success
     from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_file_result
 
-    if bit_depth is not None:
-        print_warning("--bit-depth is not supported yet and is ignored (see issue #239)")
     run_operation(
         "audio.convert",
         file=input_path,
         output=output_path,
         sample_rate=sample_rate,
         channels=channels,
+        bit_depth=int(bit_depth) if bit_depth else None,
         format=format,
     )
     if emit_file_result(input_path, output=output_path):

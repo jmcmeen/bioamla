@@ -116,6 +116,26 @@ class TestConvertKeepsChannels:
         assert mono.ndim == 1
 
 
+class TestConvertBitDepth:
+    def test_library_and_batch(self, test_audio_path, test_audio_dir, tmp_path):
+        import soundfile as sf
+
+        from bioamla.audio import save_audio
+        from bioamla.audio.batch import batch_convert_files
+
+        out = convert_audio_file(test_audio_path, tmp_path / "x.wav", target_bit_depth=24)
+        assert sf.info(out).subtype == "PCM_24"
+        assert sf.info(convert_audio_file(test_audio_path, tmp_path / "d.wav")).subtype == "PCM_16"
+        import numpy as np
+
+        stereo = np.zeros((100, 2), dtype=np.float32)
+        save_audio(str(tmp_path / "s.flac"), stereo, 8000, bit_depth=24)
+        assert sf.info(tmp_path / "s.flac").channels == 2
+        result = batch_convert_files(test_audio_dir, str(tmp_path / "b"), bit_depth=24)
+        assert result.successful > 0
+        assert {sf.info(p).subtype for p in (tmp_path / "b").rglob("*.wav")} == {"PCM_24"}
+
+
 class TestConvertCli:
     @pytest.mark.usefixtures("requires_ffmpeg_cli")
     def test_directory_mode_produces_target_format(self, test_audio_dir, tmp_path):

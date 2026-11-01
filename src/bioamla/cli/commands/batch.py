@@ -332,6 +332,13 @@ def audio_features(
     help="Target number of channels: 1 or 2 (default: keep the file's own)",
 )
 @click.option(
+    "--bit-depth",
+    "-b",
+    default=None,
+    type=click.Choice(["8", "16", "24", "32"]),
+    help="Bits per sample: WAV 8, 16, 24 or 32; FLAC 8, 16 or 24 (default 16)",
+)
+@click.option(
     "--format",
     "-f",
     "out_format",
@@ -354,6 +361,7 @@ def audio_convert(
     output_dir,
     sample_rate,
     channels,
+    bit_depth,
     out_format,
     delete_original,
     max_workers,
@@ -365,7 +373,7 @@ def audio_convert(
         result = _run_batch_operation(
             "batch.audio.convert", input_dir=input_dir, input_file=input_file, output_dir=output_dir, max_workers=max_workers, recursive=recursive, quiet=quiet, header="Converting audio files...",
             target_format=out_format, sample_rate=sample_rate, channels=channels,
-            delete_original=delete_original,
+            bit_depth=int(bit_depth) if bit_depth else None, delete_original=delete_original,
         )  # fmt: skip
         _report(result, output_dir, quiet)
     finally:

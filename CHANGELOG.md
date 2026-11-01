@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `audio convert --bit-depth` and the new `batch audio convert --bit-depth` write that many bits
+  per sample: 8, 16, 24 or 32 for WAV, 8, 16 or 24 for FLAC (default 16, as before). A
+  depth the format can't hold, or any depth for MP3 or OGG, is refused before anything is
+  written; the option used to be accepted and ignored (#239). The library gains
+  `save_audio(bit_depth=...)` and `convert_audio_file(target_bit_depth=...)`, and the
+  `audio.convert` and `batch.audio.convert` requests a `bit_depth` field.
+
 - `bioamla.audio.load_audio_channels()`: load a file keeping its channels (1-D for mono,
   `(n_samples, n_channels)` otherwise), where `load_audio()` downmixes to mono.
 

@@ -138,6 +138,7 @@ def batch_convert_files(
     target_format: str = "wav",
     sample_rate: int | None = None,
     channels: int | None = None,
+    bit_depth: int | None = None,
     delete_original: bool = False,
     recursive: bool = True,
     max_workers: int = 1,
@@ -176,6 +177,7 @@ def batch_convert_files(
             target_format=target_format,
             target_sample_rate=sample_rate,
             target_channels=channels,
+            target_bit_depth=bit_depth,
             delete_original=delete_original,
         )
 
@@ -993,6 +995,7 @@ def batch_convert(
     target_format: str = "wav",
     sample_rate: int | None = None,
     channels: int | None = None,
+    bit_depth: int | None = None,
     delete_original: bool = False,
     on_progress: OnProgress | None = None,
     operation: str = "batch audio convert",
@@ -1013,6 +1016,7 @@ def batch_convert(
                     target_format=target_format,
                     target_sample_rate=sample_rate,
                     target_channels=channels,
+                    target_bit_depth=bit_depth,
                     delete_original=delete_original,
                 )
             )
@@ -1033,6 +1037,7 @@ def batch_convert(
         target_format=target_format,
         sample_rate=sample_rate,
         channels=channels,
+        bit_depth=bit_depth,
         delete_original=delete_original,
         recursive=config.recursive,
         max_workers=config.max_workers,

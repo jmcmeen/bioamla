@@ -99,12 +99,14 @@ class BatchConvertRequest(BatchRequest):
         target_format: Output format.
         sample_rate: Target sample rate (Hz).
         channels: Target channel count (1 or 2; default: keep the file's own).
+        bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24; default 16).
         delete_original: Delete each source file after it converts.
     """
 
     target_format: Literal["wav", "mp3", "flac", "ogg"] = "wav"
     sample_rate: int | None = None
     channels: int | None = None
+    bit_depth: Literal[8, 16, 24, 32] | None = None
     delete_original: bool = False
 
 
@@ -116,6 +118,7 @@ def batch_audio_convert_op(request: BatchConvertRequest, context: OperationConte
         target_format=request.target_format,
         sample_rate=request.sample_rate,
         channels=request.channels,
+        bit_depth=request.bit_depth,
         delete_original=request.delete_original,
         on_progress=context.progress,
         operation="batch audio convert",

@@ -373,15 +373,29 @@ def test_convert_mono_to_stereo(runner, tmp_path, mocker):
     assert save.call_args.kwargs["format"] is None  # from the file name
 
 
-def test_convert_bit_depth_is_ignored_with_a_warning(runner, tmp_path, mocker):
-    mocker.patch(
-        "bioamla.audio.convert.load_audio_channels",
-        return_value=(np.zeros(16000, np.float32), 16000),
+def test_convert_writes_the_bit_depth(runner, tmp_path, test_audio_path):
+    import soundfile as sf
+
+    for bits, subtype in (("24", "PCM_24"), ("32", "PCM_32"), ("8", "PCM_U8")):
+        out = tmp_path / f"o{bits}.wav"
+        result = runner.invoke(cli, ["audio", "convert", test_audio_path, str(out), "-b", bits])
+        assert result.exit_code == 0, result.output
+        assert sf.info(out).subtype == subtype
+    flac = tmp_path / "o.flac"
+    assert (
+        runner.invoke(cli, ["audio", "convert", test_audio_path, str(flac), "-b", "24"]).exit_code
+        == 0
     )
-    mocker.patch("bioamla.audio.convert.save_audio", return_value="out.wav")
-    result = runner.invoke(cli, ["audio", "convert", "in.wav", str(tmp_path / "o.wav"), "-b", "24"])
-    assert result.exit_code == 0
-    assert "--bit-depth is not supported" in result.stderr
+    assert sf.info(flac).subtype == "PCM_24"
+
+
+def test_convert_refuses_a_bit_depth_the_format_cannot_hold(runner, tmp_path, test_audio_path):
+    for out, bits in (("o.mp3", "24"), ("o.flac", "32")):
+        result = runner.invoke(
+            cli, ["audio", "convert", test_audio_path, str(tmp_path / out), "-b", bits]
+        )
+        assert result.exit_code == 1 and "can't be written" in result.output
+        assert not (tmp_path / out).exists()
 
 
 def test_convert_error(runner, tmp_path, mocker):

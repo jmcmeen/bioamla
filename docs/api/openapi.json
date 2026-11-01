@@ -8584,6 +8584,23 @@
             ],
             "title": "Channels"
           },
+          "bit_depth": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  8,
+                  16,
+                  24,
+                  32
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bit Depth"
+          },
           "format": {
             "anyOf": [
               {
@@ -8609,7 +8626,7 @@
           "output"
         ],
         "title": "AudioConvertRequest",
-        "description": "Convert a file's format, sample rate or channel count.\n\nAttributes:\n    file: The audio file.\n    output: Where to save the result.\n    sample_rate: Target sample rate (Hz).\n    channels: Target channel count (1 or 2; default: keep the file's own).\n    format: Output format; by default, from ``output``'s extension."
+        "description": "Convert a file's format, sample rate or channel count.\n\nAttributes:\n    file: The audio file.\n    output: Where to save the result.\n    sample_rate: Target sample rate (Hz).\n    channels: Target channel count (1 or 2; default: keep the file's own).\n    bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24; default 16).\n    format: Output format; by default, from ``output``'s extension."
       },
       "AudioDenoiseRequest": {
         "properties": {
@@ -9701,6 +9718,23 @@
             ],
             "title": "Channels"
           },
+          "bit_depth": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  8,
+                  16,
+                  24,
+                  32
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bit Depth"
+          },
           "delete_original": {
             "type": "boolean",
             "title": "Delete Original",
@@ -9710,7 +9744,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "BatchConvertRequest",
-        "description": "Convert every file's format, sample rate or channel count.\n\nAttributes:\n    target_format: Output format.\n    sample_rate: Target sample rate (Hz).\n    channels: Target channel count (1 or 2; default: keep the file's own).\n    delete_original: Delete each source file after it converts."
+        "description": "Convert every file's format, sample rate or channel count.\n\nAttributes:\n    target_format: Output format.\n    sample_rate: Target sample rate (Hz).\n    channels: Target channel count (1 or 2; default: keep the file's own).\n    bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24; default 16).\n    delete_original: Delete each source file after it converts."
       },
       "BatchDenoiseRequest": {
         "properties": {

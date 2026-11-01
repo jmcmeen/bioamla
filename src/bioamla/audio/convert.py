@@ -54,6 +54,7 @@ def convert_audio_file(
     target_format: str | None = "wav",
     target_sample_rate: int | None = None,
     target_channels: int | None = None,
+    target_bit_depth: int | None = None,
     delete_original: bool = False,
 ) -> str:
     """Convert an audio file to a target format, optionally re-channel/resample.
@@ -67,6 +68,8 @@ def convert_audio_file(
         target_sample_rate: Resample to this rate before saving (optional).
         target_channels: Output channel count (1 = mono, 2 = stereo); by default
             the file keeps its own channels.
+        target_bit_depth: Bits per sample for WAV (8, 16, 24, 32) or FLAC (8, 16,
+            24); default 16. Lossy formats take none.
         delete_original: Delete the source file after a successful conversion
             (only when the output path differs from the input path).
 
@@ -75,7 +78,8 @@ def convert_audio_file(
 
     Raises:
         InvalidInputError: If ``target_format``/``target_channels`` is unsupported, or
-            the file has more than 2 channels for MP3 output without ``target_channels``.
+            the file has more than 2 channels for MP3 output without ``target_channels``,
+            or ``target_bit_depth`` doesn't apply to the format.
         AudioLoadError / AudioSaveError: On I/O failure.
     """
     fmt = None if target_format is None else target_format.lower().lstrip(".")
@@ -89,10 +93,18 @@ def convert_audio_file(
         raise InvalidInputError(f"Unsupported target channel count: {target_channels} (1 or 2)")
     in_path = Path(input_path)
     out_path = Path(output_path)
+    out_fmt = fmt or out_path.suffix.lower().lstrip(".") or "wav"
+    if target_bit_depth is not None:
+        from bioamla.audio._pydub import BIT_DEPTH_SUBTYPES
+
+        if target_bit_depth not in BIT_DEPTH_SUBTYPES.get(out_fmt, {}):
+            raise InvalidInputError(
+                f"A bit depth of {target_bit_depth} can't be written as {out_fmt.upper()} "
+                "(WAV: 8, 16, 24, 32; FLAC: 8, 16, 24; lossy formats have none)"
+            )
 
     audio, sr = load_audio_channels(in_path)
     current_channels = 1 if audio.ndim == 1 else audio.shape[1]
-    out_fmt = fmt or out_path.suffix.lower().lstrip(".")
     if target_channels is None and current_channels > 2 and out_fmt == "mp3":
         raise InvalidInputError(
             f"{in_path.name} has {current_channels} channels and MP3 holds at most 2; "
@@ -110,7 +122,7 @@ def convert_audio_file(
     if target_channels is not None:
         audio = _rechannel(audio, current_channels, target_channels)
 
-    saved = save_audio(str(out_path), audio, sr, format=fmt)
+    saved = save_audio(str(out_path), audio, sr, format=fmt, bit_depth=target_bit_depth)
 
     if delete_original and out_path.resolve() != in_path.resolve():
         in_path.unlink(missing_ok=True)
