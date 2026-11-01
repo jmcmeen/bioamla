@@ -177,6 +177,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- **Behavior change:** `audio trim`, `audio resample` and `audio gain`, `batch audio
+  resample` and `batch audio trim` by time range keep a file's channels; they mixed every
+  file down to mono. `batch audio trim --trim-silence` still mixes down, so every channel is
+  cut the same. The library functions behind them (`trim_audio_file()`,
+  `resample_audio_file()`, `gain_audio_file()`, `batch_resample()`) do the same, and
+  `batch_transform()`, `batch_transform_files()` and `process_file()` take
+  `keep_channels`. New: `bioamla.audio.each_channel()`.
+
 - **Behavior change:** `audio segment` and `batch audio segment` cut the same clips (#240):
   named `<stem>_seg0000.<format>` (`--prefix` replaces the stem for `audio segment`), every
   clip exactly the duration long, with a shorter last clip left out unless `--keep-short`,

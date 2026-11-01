@@ -425,11 +425,30 @@ def load_waveform_tensor(filepath: str) -> tuple:
     return _load_waveform_tensor(filepath)
 
 
+def each_channel(audio: np.ndarray, fn: Callable[[np.ndarray], np.ndarray]) -> np.ndarray:
+    """``fn`` applied to each channel of ``audio`` (1-D, or ``(n_samples, n_channels)``
+    as :func:`load_audio_channels` returns it), the channels put back together.
+
+    For steps that work on one channel at a time (trim, resample, gain), so a
+    multi-channel file keeps its channels.
+    """
+    if audio.ndim == 1:
+        return fn(audio)
+    return np.stack([fn(audio[:, c]) for c in range(audio.shape[1])], axis=1)
+
+
+def _load_for(keep_channels: bool, filepath: str | Path) -> tuple[np.ndarray, int]:
+    """:func:`load_audio_channels` with ``keep_channels``, else :func:`load_audio` (mono)."""
+    return load_audio_channels(filepath) if keep_channels else load_audio(str(filepath))
+
+
 def process_file(
     input_path: str,
     output_path: str,
     processor_fn: Callable[[np.ndarray, int], np.ndarray],
     sample_rate: int | None = None,
+    *,
+    keep_channels: bool = False,
 ) -> str:
     """
     Load, process, and save a single audio file.
@@ -440,6 +459,8 @@ def process_file(
         processor_fn: Callable taking ``(audio, sample_rate)`` and returning
             the processed audio array.
         sample_rate: Optional target sample rate for the output.
+        keep_channels: Keep the file's channels, applying ``processor_fn`` to each
+            (default: the file is mixed down to mono first).
 
     Returns:
         Path to the output file.
@@ -450,14 +471,10 @@ def process_file(
     """
     from bioamla.audio.processing import resample_audio
 
-    audio, sr = load_audio(input_path)
-
-    # Process
-    processed = processor_fn(audio, sr)
-
-    # Resample if needed
+    audio, sr = _load_for(keep_channels, input_path)
+    processed = each_channel(audio, lambda ch: processor_fn(ch, sr))
     if sample_rate is not None and sample_rate != sr:
-        processed = resample_audio(processed, sr, sample_rate)
+        processed = each_channel(processed, lambda ch: resample_audio(ch, sr, sample_rate))
         sr = sample_rate
 
     return save_audio(output_path, processed, sr)

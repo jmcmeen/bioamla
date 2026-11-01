@@ -39,6 +39,8 @@ def mock_load_save(mocker):
     """Patch load_audio/save_audio used by the processing commands."""
     audio = np.zeros(16000, dtype=np.float32)
     load = mocker.patch("bioamla.audio.files.load_audio", return_value=(audio, 16000))
+    # Trim, resample and gain keep a file's channels, through the other loader.
+    mocker.patch("bioamla.audio.files.load_audio_channels", side_effect=load)
     save = mocker.patch("bioamla.audio.files.save_audio")
     return load, save
 

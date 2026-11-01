@@ -18,8 +18,7 @@ import numpy as np
 
 from bioamla.audio.convert import convert_audio_file
 from bioamla.audio.discovery import list_audio_files
-from bioamla.audio.io import load_audio, save_audio
-from bioamla.audio.processing import resample_audio
+from bioamla.audio.io import load_audio, process_file, save_audio
 from bioamla.batch import (
     BatchResult,
     SegmentInfo,
@@ -49,6 +48,7 @@ def batch_transform_files(
     continue_on_error: bool = True,
     on_progress: OnProgress | None = None,
     operation: str = "transform",
+    keep_channels: bool = False,
 ) -> BatchResult:
     """
     Apply a per-file transform to every audio file in a directory.
@@ -65,6 +65,8 @@ def batch_transform_files(
         continue_on_error: Collect per-file errors and keep going if True.
         on_progress: Optional ``(completed, total)`` progress callback.
         operation: Name used in the batch log records (e.g. the command).
+        keep_channels: Keep each file's channels, applying ``processor_fn`` to each
+            (default: files are mixed down to mono first).
 
     Returns:
         A :class:`bioamla.batch.BatchResult` summarizing the run.
@@ -87,12 +89,9 @@ def batch_transform_files(
         out_path = out_dir / stem.parent / f"{stem.name}.wav"
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        audio, sr = load_audio(audio_path)
-        processed = processor_fn(audio, sr)
-        if sample_rate is not None and sample_rate != sr:
-            processed = resample_audio(processed, sr, sample_rate)
-            sr = sample_rate
-        return save_audio(str(out_path), processed, sr)
+        return process_file(
+            audio_path, str(out_path), processor_fn, sample_rate, keep_channels=keep_channels
+        )
 
     return run_batch(
         files,
@@ -124,6 +123,7 @@ def batch_resample_files(
         output_dir,
         processor_fn=lambda audio, sr: audio,
         sample_rate=target_sample_rate,
+        keep_channels=True,
         recursive=recursive,
         max_workers=max_workers,
         continue_on_error=continue_on_error,
@@ -663,6 +663,7 @@ def batch_transform(
     sample_rate: int | None = None,
     on_progress: OnProgress | None = None,
     operation: str = "batch audio transform",
+    keep_channels: bool = False,
 ) -> BatchResult:
     """Apply ``processor`` to every file of a batch and save the results as WAV.
 
@@ -677,6 +678,8 @@ def batch_transform(
         sample_rate: Resample the outputs to this rate.
         on_progress: ``(done, total)`` callback.
         operation: Name used in the batch log records.
+        keep_channels: Keep each file's channels, applying ``processor`` to each
+            (default: files are mixed down to mono first).
 
     Raises:
         InvalidInputError: If directory mode has no ``output_dir``.
@@ -687,7 +690,8 @@ def batch_transform(
 
         def _transform(in_path: Path, out_path: Path) -> Path:
             wav_out = out_path.with_suffix(".wav")
-            return Path(process_file(str(in_path), str(wav_out), processor, sample_rate))
+            return Path(process_file(str(in_path), str(wav_out), processor, sample_rate,
+                                     keep_channels=keep_channels))  # fmt: skip
 
         return run_csv_transform(
             _csv_context(config),
@@ -709,6 +713,7 @@ def batch_transform(
         continue_on_error=config.continue_on_error,
         on_progress=on_progress,
         operation=operation,
+        keep_channels=keep_channels,
     )
 
 
@@ -719,10 +724,12 @@ def batch_resample(
     on_progress: OnProgress | None = None,
     operation: str = "batch audio resample",
 ) -> BatchResult:
-    """Resample every file of a batch to ``sample_rate`` (see :func:`batch_transform`)."""
+    """Resample every file of a batch to ``sample_rate``, keeping its channels (see
+    :func:`batch_transform`)."""
     return batch_transform(
-        config, _passthrough, sample_rate=sample_rate, on_progress=on_progress, operation=operation
-    )
+        config, _passthrough, sample_rate=sample_rate, on_progress=on_progress,
+        operation=operation, keep_channels=True,
+    )  # fmt: skip
 
 
 def batch_visualize(

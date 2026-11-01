@@ -3221,8 +3221,8 @@
         "tags": [
           "batch"
         ],
-        "summary": "Trim every file to a time range, or trim its silence.",
-        "description": "Trim every file to a time range, or trim its silence.\n\nRuns as a job: answers with a job id.",
+        "summary": "Trim every file to a time range (keeping its channels), or trim its silence",
+        "description": "Trim every file to a time range (keeping its channels), or trim its silence\n\nRuns as a job: answers with a job id.",
         "operationId": "op_batch_audio_trim",
         "security": [
           {

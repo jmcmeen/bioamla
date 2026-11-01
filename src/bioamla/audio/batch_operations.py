@@ -190,7 +190,8 @@ class BatchTrimRequest(BatchRequest):
 
 @operation("batch.audio.trim", request=BatchTrimRequest, kind="job")
 def batch_audio_trim_op(request: BatchTrimRequest, context: OperationContext) -> BatchResult:
-    """Trim every file to a time range, or trim its silence."""
+    """Trim every file to a time range (keeping its channels), or trim its silence
+    (mixed down to mono, so every channel is cut the same)."""
     processor = trim_processor(
         start=request.start,
         end=request.end,
@@ -201,6 +202,7 @@ def batch_audio_trim_op(request: BatchTrimRequest, context: OperationContext) ->
         processor,
         on_progress=context.progress,
         operation="batch audio trim",
+        keep_channels=not request.trim_silence,
     )
 
 

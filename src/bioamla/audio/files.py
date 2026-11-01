@@ -1,8 +1,9 @@
 """Audio processing on files: load one, transform it, save the result.
 
 These are the file-level calls behind the ``bioamla audio`` commands. Each takes an
-input file and an output path, loads the audio (mono, as :func:`load_audio` does),
-applies one step and writes the result, returning a :class:`ProcessedFile`.
+input file and an output path, loads the audio, applies one step and writes the
+result, returning a :class:`ProcessedFile`. Trim, resample and gain keep the file's
+channels; the other steps mix it down to mono first (as :func:`load_audio` does).
 :func:`describe_audio_file` and :func:`recording_metadata_report` read a file's
 header and recorder metadata without decoding it.
 
@@ -19,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from bioamla.audio.info import AudioInfo, get_audio_info
-from bioamla.audio.io import load_audio, save_audio
+from bioamla.audio.io import each_channel, load_audio, load_audio_channels, save_audio
 from bioamla.exceptions import InvalidInputError
 
 
@@ -43,12 +44,30 @@ class ProcessedFile:
 
 
 def _transform(
-    input_path: str | Path, output_path: str | Path, fn: Any, description: str = ""
+    input_path: str | Path,
+    output_path: str | Path,
+    fn: Any,
+    description: str = "",
+    *,
+    keep_channels: bool = False,
 ) -> ProcessedFile:
-    """Load ``input_path``, save ``fn(audio, sr)`` (an array, or ``(array, rate)``)."""
-    audio, sr = load_audio(str(input_path))
-    out = fn(audio, sr)
-    samples, rate = out if isinstance(out, tuple) else (out, sr)
+    """Load ``input_path``, save ``fn(audio, sr)`` (an array, or ``(array, rate)``).
+
+    With ``keep_channels`` the file keeps its channels, ``fn`` applied to each;
+    otherwise it is mixed down to mono first.
+    """
+    audio, sr = (load_audio_channels(input_path) if keep_channels
+                 else load_audio(str(input_path)))  # fmt: skip
+    rate = sr
+
+    def one(channel: Any) -> Any:
+        nonlocal rate
+        out = fn(channel, sr)
+        if isinstance(out, tuple):
+            out, rate = out
+        return out
+
+    samples = each_channel(audio, one)
     save_audio(str(output_path), samples, rate)
     return ProcessedFile(file=str(input_path), output=str(output_path), description=description)
 
@@ -90,6 +109,7 @@ def trim_audio_file(
         input_path,
         output_path,
         lambda a, sr: trim_audio(a, sr, start_time=start if start != 0.0 else None, end_time=end),
+        keep_channels=True,
     )
 
 
@@ -130,11 +150,14 @@ def normalize_audio_file(
 def resample_audio_file(
     input_path: str | Path, output_path: str | Path, sample_rate: int
 ) -> ProcessedFile:
-    """Resample a file to ``sample_rate`` (Hz) and save it."""
+    """Resample a file to ``sample_rate`` (Hz), keeping its channels, and save it."""
     from bioamla.audio.processing import resample_audio
 
     return _transform(
-        input_path, output_path, lambda a, sr: (resample_audio(a, sr, sample_rate), sample_rate)
+        input_path,
+        output_path,
+        lambda a, sr: (resample_audio(a, sr, sample_rate), sample_rate),
+        keep_channels=True,
     )
 
 
@@ -238,10 +261,12 @@ def add_noise_audio_file(
 def gain_audio_file(
     input_path: str | Path, output_path: str | Path, gain_db: float
 ) -> ProcessedFile:
-    """Apply a fixed gain (dB) to a file and save it."""
+    """Apply a fixed gain (dB) to a file, keeping its channels, and save it."""
     from bioamla.audio.processing import apply_gain
 
-    return _transform(input_path, output_path, lambda a, sr: apply_gain(a, gain_db))
+    return _transform(
+        input_path, output_path, lambda a, sr: apply_gain(a, gain_db), keep_channels=True
+    )
 
 
 @dataclass
