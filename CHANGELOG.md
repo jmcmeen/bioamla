@@ -37,7 +37,8 @@ All notable changes to this project are documented here. The format is based on
 - `BIOAMLA_PROGRESS=jsonl`: commands with a progress bar write `start`, `progress` (`done`,
   `total`, `description`) and `end` (`ok`) events as JSON lines on stderr instead of drawing the
   bar: one per whole percent (every item of a small batch), at least every 0.1 s, plus the final
-  count. Sent with `--quiet` too; a closed stderr stops the events, not the command. Documented
+  count before `end`; `end`'s `ok` is false if the work failed or stopped early. Sent with
+  `--quiet` too; a closed stderr stops the events, not the command or its count. Documented
   under "Progress events" in the CLI reference.
 
 ## [0.3.8] - 2026-10-31

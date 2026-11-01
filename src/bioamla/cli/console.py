@@ -81,7 +81,7 @@ class ProgressBar:
     With ``BIOAMLA_PROGRESS=jsonl`` nothing is drawn; instead one JSON object per
     line goes to stderr, for a server or script to follow::
 
-        {"event": "start", "description": "Computing features", "total": 120}
+        {"event": "start", "description": "Computing features", "done": 0, "total": 120}
         {"event": "progress", "description": "Computing features", "done": 40, "total": 120}
         {"event": "end", "description": "Computing features", "done": 120, "total": 120,
          "ok": true}
@@ -89,9 +89,13 @@ class ProgressBar:
     A ``progress`` event is sent when the count crosses another whole percent of
     ``total`` (so every item of a batch of 100 or fewer), at least every 0.1 s
     otherwise, on a change of description, and for the final count; never twice for
-    the same state. ``total`` is ``null`` while unknown. Events are sent even when
-    the bar itself is disabled (``--quiet``), since they were asked for explicitly.
-    If stderr can't be written (a reader went away), events stop; the command goes on.
+    the same state. ``total`` is ``null`` while unknown. Progress events are sent only
+    inside the ``with`` block (counting done before it shows in ``start``), and the
+    final count is always sent before ``end``; ``end`` has ``ok: false`` if the block
+    raised. Events are sent even when the bar itself is disabled (``--quiet``), since
+    they were asked for explicitly. If stderr can't be written (a reader went away),
+    events stop but the count goes on; the command is unaffected. Writes block while
+    stderr's reader isn't keeping up, as stdout's do.
 
     Example:
         >>> with ProgressBar(total=100, description="Processing files") as pb:
@@ -130,6 +134,8 @@ class ProgressBar:
         self._task_id: TaskID | None = None
         self._completed = 0
         self._jsonl = machine_progress()
+        self._active = False  # events only between start and end
+        self._stream_ok = True  # False once stderr can't be written
         self._last_event = 0.0
         self._last_sent: tuple | None = None
         self._last_percent = -1
@@ -161,6 +167,8 @@ class ProgressBar:
 
     def _emit(self, event: str, *, force: bool = False, **extra) -> None:
         """Write one progress event as a JSON line to stderr (machine mode only)."""
+        if not self._stream_ok or (event == "progress" and not self._active):
+            return
         state = (self._completed, self.total, self.description)
         now = time.monotonic()
         if event == "progress":
@@ -173,16 +181,14 @@ class ProgressBar:
             if not due:
                 return
             self._last_percent = percent
-        record = {"event": event, "description": self.description}
-        if event != "start":
-            record["done"] = self._completed
+        record = {"event": event, "description": self.description, "done": self._completed}
         record["total"] = self.total
         record.update(extra)
         try:
             sys.stderr.write(json.dumps(record) + "\n")
             sys.stderr.flush()
         except (OSError, ValueError):  # a closed pipe or stream: stop, don't fail the run
-            self._jsonl = False
+            self._stream_ok = False  # keep counting; just send nothing more
             return
         if event != "start":  # the first update after start is never held back
             self._last_event = now
@@ -192,6 +198,7 @@ class ProgressBar:
         """Enter the progress bar context."""
         if self._jsonl:
             self._emit("start")
+            self._active = True
             return self
         self._progress = self._create_progress()
         self._progress.start()
@@ -204,8 +211,9 @@ class ProgressBar:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit the progress bar context."""
         if self._jsonl:
-            # Stopping early (a `track()` loop that breaks) is a normal end.
-            self._emit("end", ok=exc_type is None or issubclass(exc_type, GeneratorExit))
+            self._emit("progress", force=True)  # the final count, if it was held back
+            self._active = False
+            self._emit("end", ok=exc_type is None)
             return
         if self._progress:
             self._progress.stop()
@@ -287,6 +295,13 @@ def track(
     Yields:
         Items from the iterable
 
+    An item counts as done when the loop asks for the next one, or when the loop
+    stops while holding it. In machine mode the ``end`` event's ``ok`` is true only if
+    the loop ran to the end; stopping early (``break`` or an error) ends with
+    ``ok: false``. A loop that is abandoned without being finished sends ``end`` only
+    when the generator is closed or garbage-collected, so close it (or use
+    ``contextlib.closing``) if you keep a reference to it.
+
     Example:
         >>> for file in track(files, description="Processing files"):
         ...     process(file)
@@ -305,7 +320,11 @@ def track(
         disable=disable,
     ) as progress:
         for item in iterable:
-            yield item
+            try:
+                yield item
+            except GeneratorExit:
+                progress.advance()  # the loop stopped holding this item
+                raise
             progress.advance()
 
 
