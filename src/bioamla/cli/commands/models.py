@@ -72,6 +72,13 @@ def ast_init_config(output: str, force: bool) -> None:
     "Default: print to stdout.",
 )
 @click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
+@click.option(
+    "--top-k",
+    default=0,
+    type=click.IntRange(min=0),
+    help="Also rank the K most likely labels of each prediction, with the margin between "
+    "the first two (adds `top` and `margin`; CSV: margin and top columns)",
+)
 def ast_predict(
     file: str,
     model_path: str,
@@ -80,6 +87,7 @@ def ast_predict(
     min_confidence: float,
     output: str | None,
     resample_freq: int,
+    top_k: int,
 ) -> None:
     """Run AST prediction on a single audio file — whole file or in segments.
 
@@ -90,6 +98,7 @@ def ast_predict(
     Examples:
         bioamla models ast predict audio.wav --model-path my_model
         bioamla models ast predict rec.wav --segment-seconds 3 --overlap 1 -o rec.csv
+        bioamla models ast predict rec.wav --segment-seconds 3 --top-k 3
     """
     from bioamla.cli.console import echo, print_success
     from bioamla.cli.operations import run_operation
@@ -104,6 +113,7 @@ def ast_predict(
         min_confidence=min_confidence,
         output=output,
         resample_freq=resample_freq,
+        top_k=top_k,
     )
     if json_mode():
         emit_file_result(file, count=found.count, predictions=found.to_dict()["predictions"])
@@ -113,10 +123,13 @@ def ast_predict(
         return
 
     for r in found.predictions:
-        if found.segmented:
-            echo(f"{r.start_time:.2f}-{r.end_time:.2f}s  {r.predicted_label} ({r.confidence:.4f})")
-        else:
-            echo(f"{r.predicted_label} ({r.confidence:.4f})")
+        span = f"{r.start_time:.2f}-{r.end_time:.2f}s  " if found.segmented else ""
+        line = f"{span}{r.predicted_label} ({r.confidence:.4f})"
+        if r.top_k_labels is not None:
+            ranked = ", ".join(f"{t['label']} {t['confidence']:.4f}" for t in r.top())
+            margin = "" if r.margin is None else f"  margin {r.margin:.4f}"
+            line += f"  [{ranked}]{margin}"
+        echo(line)
 
 
 @ast.command("train")

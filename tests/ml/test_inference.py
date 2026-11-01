@@ -235,3 +235,34 @@ class TestPredictSegments:
         with _patch_audio(waveform=wav):
             with pytest.raises(ModelError, match="AST inference failed"):
                 inf.predict_segments("a.wav", clip_length=3)
+
+
+class TestRankedLabels:
+    def test_predict_ranks_labels_with_a_margin(self) -> None:
+        inf = _make_inference()
+        with _patch_audio():
+            res = inf.predict("a.wav", top_k=2)
+        assert res.top_k_labels == ["a", "b"]
+        assert res.top_k_scores[0] == pytest.approx(res.confidence)
+        assert res.margin == pytest.approx(res.top_k_scores[0] - res.top_k_scores[1])
+        assert res.top() == [{"label": "a", "confidence": res.top_k_scores[0]},
+                             {"label": "b", "confidence": res.top_k_scores[1]}]  # fmt: skip
+
+    def test_segments_rank_each_segment(self) -> None:
+        inf = _make_inference()
+        with _patch_audio(waveform=torch.zeros(1, 16000 * 6)):
+            results = inf.predict_segments("a.wav", clip_length=3, top_k=5)  # clamped to 3
+        assert [r.top_k_labels for r in results] == [["a", "b", "c"]] * 2
+        assert all(r.margin > 0 for r in results)
+
+    def test_without_top_k_nothing_changes(self) -> None:
+        inf = _make_inference()
+        with _patch_audio():
+            res = inf.predict("a.wav")
+        assert res.top_k_labels is None and res.margin is None and res.top() is None
+
+    def test_one_label_has_no_margin(self) -> None:
+        inf = _make_inference()
+        with _patch_audio():
+            res = inf.predict("a.wav", top_k=1)
+        assert res.top_k_labels == ["a"] and res.margin is None

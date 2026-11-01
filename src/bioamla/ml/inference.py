@@ -76,6 +76,21 @@ class ASTPredictionResult:
     top_k_labels: list[str] | None = None
     top_k_scores: list[float] | None = None
 
+    @property
+    def margin(self) -> float | None:
+        """Top-1 minus top-2 confidence, when the ranked labels hold at least two."""
+        scores = self.top_k_scores or []
+        return scores[0] - scores[1] if len(scores) >= 2 else None
+
+    def top(self) -> list[dict[str, float | str]] | None:
+        """The ranked labels as ``[{"label", "confidence"}, ...]`` (``None`` without them)."""
+        if self.top_k_labels is None:
+            return None
+        return [
+            {"label": label, "confidence": score}
+            for label, score in zip(self.top_k_labels, self.top_k_scores or [], strict=True)
+        ]
+
 
 class ASTInference:
     """
@@ -134,13 +149,17 @@ class ASTInference:
         self.label2id = self.model.config.label2id
         logger.info(f"Model loaded with {len(self.id2label)} classes")
 
-    def predict(self, audio_path: str, return_logits: bool = False) -> ASTPredictionResult:
+    def predict(
+        self, audio_path: str, return_logits: bool = False, top_k: int = 0
+    ) -> ASTPredictionResult:
         """
         Run inference on a single audio file (treated as one clip).
 
         Args:
             audio_path: Path to the audio file.
             return_logits: Include raw logits in the result if True.
+            top_k: Also rank the ``top_k`` most likely labels (``top_k_labels`` /
+                ``top_k_scores``; 0: don't).
 
         Returns:
             An :class:`ASTPredictionResult`.
@@ -174,6 +193,7 @@ class ASTInference:
         predicted_label = self.id2label[predicted_idx]
         duration = waveform.shape[1] / self.sample_rate
 
+        top_labels, top_scores = self._rank(probs, top_k) if top_k > 0 else (None, None)
         return ASTPredictionResult(
             filepath=audio_path,
             start_time=0.0,
@@ -181,6 +201,8 @@ class ASTInference:
             predicted_label=predicted_label,
             confidence=confidence,
             logits=logits.cpu().tolist() if return_logits else None,
+            top_k_labels=top_labels,
+            top_k_scores=top_scores,
         )
 
     def predict_topk(
@@ -252,7 +274,12 @@ class ASTInference:
         )
 
     def predict_segments(
-        self, audio_path: str, clip_length: int = 10, overlap: int = 0, return_logits: bool = False
+        self,
+        audio_path: str,
+        clip_length: int = 10,
+        overlap: int = 0,
+        return_logits: bool = False,
+        top_k: int = 0,
     ) -> list[ASTPredictionResult]:
         """
         Run inference on an audio file split into segments.
@@ -262,6 +289,8 @@ class ASTInference:
             clip_length: Duration of each segment in seconds.
             overlap: Overlap between segments in seconds.
             return_logits: Include raw logits in each result if True.
+            top_k: Also rank each segment's ``top_k`` most likely labels
+                (``top_k_labels`` / ``top_k_scores``; 0: don't).
 
         Returns:
             A list of :class:`ASTPredictionResult`, one per segment.
@@ -299,6 +328,7 @@ class ASTInference:
             predicted_idx = logits.argmax(-1).item()
             confidence = probs[predicted_idx].item()
             predicted_label = self.id2label[predicted_idx]
+            top_labels, top_scores = self._rank(probs, top_k) if top_k > 0 else (None, None)
 
             results.append(
                 ASTPredictionResult(
@@ -308,10 +338,22 @@ class ASTInference:
                     predicted_label=predicted_label,
                     confidence=confidence,
                     logits=logits.cpu().tolist() if return_logits else None,
+                    top_k_labels=top_labels,
+                    top_k_scores=top_scores,
                 )
             )
 
         return results
+
+    def _rank(self, probs: "torch.Tensor", top_k: int) -> tuple[list[str], list[float]]:
+        """The ``top_k`` most likely labels and their probabilities, best first."""
+        torch = _require_torch()
+        k = min(max(top_k, 1), probs.shape[-1])
+        scores, indices = torch.topk(probs, k)
+        return (
+            [self.id2label[int(i)] for i in indices.cpu().tolist()],
+            [float(v) for v in scores.cpu().tolist()],
+        )
 
     def _extract_features(self, waveform: "torch.Tensor") -> "torch.Tensor":
         """Extract feature-extractor input values from a waveform tensor."""

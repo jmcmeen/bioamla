@@ -80,7 +80,8 @@ def test_evidence_measures_snr_per_candidate(run_skill, loud_and_faint, tiny_ast
     loud, faint = evidence["candidates"]
     assert loud["snr_db"] > faint["snr_db"] > 0
     assert loud["snr_db"] > 30
-    assert loud["margin"] is None
+    # tiny_ast has two labels: the margin is top-1 minus top-2, i.e. 2 * confidence - 1.
+    assert loud["margin"] == pytest.approx(2 * loud["model_confidence"] - 1, abs=1e-6)
     assert loud["duration"] == pytest.approx(0.5, abs=0.1)
     assert {"detector_score", "model_confidence", "low_freq", "high_freq"} <= set(loud)
 

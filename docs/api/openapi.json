@@ -13142,6 +13142,11 @@
             "type": "integer",
             "title": "Resample Freq",
             "default": 16000
+          },
+          "top_k": {
+            "type": "integer",
+            "title": "Top K",
+            "default": 0
           }
         },
         "additionalProperties": false,
@@ -13150,7 +13155,7 @@
           "file"
         ],
         "title": "PredictRequest",
-        "description": "Classify one audio file with an AST model.\n\nAttributes:\n    file: The audio file.\n    model_path: The model (Hugging Face ID or local path).\n    segment_duration: Classify N-second segments (0: the whole file).\n    overlap: Overlap between segments (s).\n    min_confidence: Leave out predictions below this.\n    output: A CSV to save the predictions to.\n    resample_freq: The model's sample rate."
+        "description": "Classify one audio file with an AST model.\n\nAttributes:\n    file: The audio file.\n    model_path: The model (Hugging Face ID or local path).\n    segment_duration: Classify N-second segments (0: the whole file).\n    overlap: Overlap between segments (s).\n    min_confidence: Leave out predictions below this.\n    output: A CSV to save the predictions to.\n    resample_freq: The model's sample rate.\n    top_k: Also rank each prediction's ``top_k`` most likely labels, with the\n        margin between the first two (0: don't)."
       },
       "PullDatasetRequest": {
         "properties": {

@@ -30,8 +30,8 @@ to the next step.
    ```
 
    Writes `evidence.json`: signal-to-noise ratio in the detector's band (dB), detector
-   score, model confidence, band and duration. `margin` is null (the model step gives
-   only its top label). SNR is null when a recording has no quieter frames to compare
+   score, model confidence, the margin between the model's top two labels, band and
+   duration. SNR is null when a recording has no quieter frames to compare
    with, as when the detector's relative threshold makes a recording of nothing but
    noise one long event; such candidates go to review.
 

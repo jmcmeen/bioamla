@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `models ast predict --top-k K` ranks each prediction's K most likely labels: the JSON
+  gains `top` (`[{label, confidence}, ...]`, best first) and `margin` (top-1 minus top-2
+  confidence), the CSV gains `margin` and `top` columns, and the human output lists them.
+  Without the option the output is unchanged. In the library: `classify_file(top_k=...)`,
+  `ASTInference.predict(top_k=...)`/`predict_segments(top_k=...)`, and
+  `ASTPredictionResult.margin`/`top()`. The labeling skill now records each candidate's
+  `margin`.
+
 - `batch_generate_spectrograms()` gains `show_colorbar` and `continue_on_error`,
   `batch_visualize()` gains `legend`, and the `batch.audio.visualize` request a `legend` field.
 

@@ -48,6 +48,8 @@ class PredictRequest:
         min_confidence: Leave out predictions below this.
         output: A CSV to save the predictions to.
         resample_freq: The model's sample rate.
+        top_k: Also rank each prediction's ``top_k`` most likely labels, with the
+            margin between the first two (0: don't).
     """
 
     file: PathStr
@@ -57,6 +59,7 @@ class PredictRequest:
     min_confidence: float = 0.0
     output: PathStr | None = None
     resample_freq: int = 16000
+    top_k: int = 0
 
 
 @operation("models.ast.predict", request=PredictRequest, kind="job")
@@ -72,6 +75,7 @@ def predict_op(request: PredictRequest, context: OperationContext) -> Any:
         min_confidence=request.min_confidence,
         resample_freq=request.resample_freq,
         output=request.output,
+        top_k=request.top_k,
     )
 
 

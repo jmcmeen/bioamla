@@ -10,8 +10,8 @@ SNR is the median frame level inside the event minus the median level of the
 recording's frames outside every candidate, in dB. It is null when the recording
 has no such frames.
 
-``margin`` (top-1 minus top-2 confidence) is null for now: ``models ast predict``
-returns only the top label per segment.
+``margin`` is the model's top-1 minus top-2 confidence for the candidate's segment
+(``models ast predict --top-k 2``); null for a model with a single label.
 
 Usage (from the workspace root):
     python scripts/evidence.py runs/label/<timestamp>
@@ -64,7 +64,7 @@ def measure(run_folder: str, root: str = ".") -> dict:
                     "snr_db": snr_db(frames, c["start_time"], c["end_time"], spans),
                     "detector_score": c["detector_score"],
                     "model_confidence": c["model_confidence"],
-                    "margin": None,
+                    "margin": c.get("margin"),
                     "low_freq": c["low_freq"],
                     "high_freq": c["high_freq"],
                     "duration": round(c["end_time"] - c["start_time"], 4),

@@ -571,6 +571,21 @@ class TestModelCommandsLibraryParity:
         assert got["count"] == want.count == 2
         assert (tmp_path / "c.csv").read_text() == (tmp_path / "l.csv").read_text()
 
+        ranked = bioamla(
+            "models", "ast", "predict", str(clips / "a.wav"), "--model-path", str(tiny_ast),
+            "--segment-seconds", "1", "--top-k", "2", "-o", str(tmp_path / "k.csv"),
+        )  # fmt: skip
+        want = classify_file(clips / "a.wav", model_path=str(tiny_ast), segment_duration=1,
+                             top_k=2)  # fmt: skip
+        assert ranked["predictions"] == json.loads(json.dumps(want.to_dict()["predictions"]))
+        for p in ranked["predictions"]:
+            assert [t["label"] for t in p["top"]][0] == p["label"]
+            assert p["margin"] == pytest.approx(
+                p["top"][0]["confidence"] - p["top"][1]["confidence"]
+            )
+        rows = read_csv(tmp_path / "k.csv")
+        assert set(rows[0]) >= {"margin", "top"} and rows[0]["top"].count(";") == 1
+
         got = bioamla("models", "ast", "embed", str(clips / "b.wav"), "--model-path",
                       str(tiny_ast), "-o", str(tmp_path / "c.npy"))  # fmt: skip
         want = embed_file(clips / "b.wav", tmp_path / "l.npy", model_path=str(tiny_ast))

@@ -40,7 +40,7 @@ def file_candidates(path: str, args: argparse.Namespace, root: str) -> list[dict
         return []
     predicted = run(
         "models", "ast", "predict", path, "--model-path", args.model,
-        "--segment-seconds", args.segment_seconds,
+        "--segment-seconds", args.segment_seconds, "--top-k", "2",
         cwd=root,
     )["predictions"]  # fmt: skip
     vocabulary = set(args.labels)
@@ -63,6 +63,7 @@ def file_candidates(path: str, args: argparse.Namespace, root: str) -> list[dict
                 "detector_score": d["confidence"],
                 "label": label,
                 "model_confidence": best["confidence"] if best else None,
+                "margin": best.get("margin") if best else None,
                 "in_vocabulary": label in vocabulary,
             }
         )

@@ -20,7 +20,9 @@ def _json(*args: str) -> dict:
 
 
 def _pred(label, conf, start, end):
-    return SimpleNamespace(
+    from bioamla.ml.inference import ASTPredictionResult
+
+    return ASTPredictionResult(
         filepath="x.wav", start_time=start, end_time=end, predicted_label=label, confidence=conf
     )
 

@@ -19,7 +19,9 @@ def runner() -> CliRunner:
 
 
 def _pred(label="frog", conf=0.9, start=0.0, end=3.0):
-    return SimpleNamespace(
+    from bioamla.ml.inference import ASTPredictionResult
+
+    return ASTPredictionResult(
         filepath="x.wav",
         start_time=start,
         end_time=end,
@@ -467,3 +469,17 @@ def test_train_config_accepts_transformers_strategies() -> None:
         validate_config(AstTrainConfigFile, {"training": {"save_strategy": save.value}})
     for interval in IntervalStrategy:
         validate_config(AstTrainConfigFile, {"training": {"eval_strategy": interval.value}})
+
+
+def test_ast_predict_top_k_lists_ranked_labels(runner: CliRunner, test_audio_path) -> None:
+    pred = _pred()
+    pred.top_k_labels, pred.top_k_scores = ["frog", "toad"], [0.9, 0.06]
+    inst = MagicMock()
+    inst.predict.return_value = pred
+    with patch("bioamla.ml.inference.ASTInference", return_value=inst):
+        result = runner.invoke(cli, ["models", "ast", "predict", test_audio_path, "--top-k", "2"])
+    assert result.exit_code == 0, result.output
+    assert inst.predict.call_args.kwargs["top_k"] == 2
+    assert "[frog 0.9000, toad 0.0600]  margin 0.8400" in result.output
+    bad = runner.invoke(cli, ["models", "ast", "predict", test_audio_path, "--top-k", "-1"])
+    assert bad.exit_code == 2
