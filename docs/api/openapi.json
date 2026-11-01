@@ -10434,7 +10434,7 @@
           "top_k": {
             "type": "integer",
             "title": "Top K",
-            "default": 5
+            "default": 0
           },
           "min_confidence": {
             "type": "number",

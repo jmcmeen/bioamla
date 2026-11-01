@@ -1040,6 +1040,10 @@ def run_csv_segment(
     return _finish(context, result)
 
 
+#: The columns every span of a per-segment prediction has.
+_SPAN_COLUMNS = ("start_time", "end_time", "prediction", "confidence")
+
+
 def run_csv_predict_segments(
     context: CSVBatchContext,
     predict_file: Callable[[Path], list[dict[str, Any]]],
@@ -1082,6 +1086,10 @@ def run_csv_predict_segments(
         if not spans:
             new_rows.append(row)
             continue
+        clash = sorted(set(spans[0]) & set(row.metadata_fields) - set(_SPAN_COLUMNS))
+        if clash:
+            logger.warning("%s: segment columns replace the row's own %s",
+                           row.file_name, ", ".join(clash))  # fmt: skip
         for seg_id, span in enumerate(spans):
             fields = row.metadata_fields.copy()
             fields.update({"segment_id": seg_id, **span})
@@ -1094,9 +1102,10 @@ def run_csv_predict_segments(
                 )
             )
     context.rows = new_rows
-    names = ["segment_id", "start_time", "end_time", "prediction", "confidence"]
-    for spans in span_mapping.values():
-        names += [k for span in spans for k in span if k not in names]
+    names = ["segment_id", *_SPAN_COLUMNS]
+    for spans in span_mapping.values():  # every span of a run has the same columns
+        names += [k for k in spans[0] if k not in names]
+        break
     for name in names:
         if name not in context.fieldnames:
             context.fieldnames.append(name)

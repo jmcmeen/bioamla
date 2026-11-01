@@ -803,7 +803,7 @@ def models() -> None:
 )
 @click.option(
     "--top-k",
-    default=5,
+    default=0,
     show_default=True,
     type=click.IntRange(min=0),
     help="Rank each prediction's K most likely labels (top and margin, as `models ast "

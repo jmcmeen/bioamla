@@ -67,10 +67,7 @@ def _prediction_row(p: Any) -> dict[str, Any]:
         "label": p.predicted_label,
         "confidence": p.confidence,
     }
-    if p.top_k_labels is not None:
-        row["top"] = p.top()
-        row["margin"] = p.margin
-    return row
+    return {**row, **p.ranked()}
 
 
 def classify_file(

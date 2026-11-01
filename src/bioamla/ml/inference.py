@@ -22,7 +22,7 @@ Example:
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from bioamla.exceptions import ModelError
 from bioamla.ml.ast import mono_waveform
@@ -81,6 +81,13 @@ class ASTPredictionResult:
         """Top-1 minus top-2 confidence, when the ranked labels hold at least two."""
         scores = self.top_k_scores or []
         return scores[0] - scores[1] if len(scores) >= 2 else None
+
+    def ranked(self) -> dict[str, Any]:
+        """The ranked labels as JSON reports them: ``top`` (``[{"label",
+        "confidence"}]``, best first) and ``margin``; empty when not ranked."""
+        if self.top_k_labels is None:
+            return {}
+        return {"top": self.top(), "margin": self.margin}
 
     def ranked_cells(self) -> dict[str, str]:
         """The ranked labels as CSV cells: ``margin`` and ``top``

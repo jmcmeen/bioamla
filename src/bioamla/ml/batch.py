@@ -29,7 +29,7 @@ from bioamla.batch import (
     run_csv_process,
     write_rows_csv,
 )
-from bioamla.exceptions import NotFoundError
+from bioamla.exceptions import InvalidInputError, NotFoundError
 from bioamla.protocols import OnProgress
 
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
@@ -44,7 +44,7 @@ def batch_predict_files(
     input_dir: str,
     model_path: str = "bioamla/scp-frogs",
     *,
-    top_k: int = 5,
+    top_k: int = 0,
     min_confidence: float = 0.0,
     resample_freq: int = 16000,
     recursive: bool = True,
@@ -64,8 +64,9 @@ def batch_predict_files(
     Args:
         input_dir: Directory containing input audio files.
         model_path: Path to model or HuggingFace identifier.
-        top_k: Number of top predictions to keep per file.
-        min_confidence: Drop predictions below this probability.
+        top_k: Rank each prediction's ``top_k`` most likely labels (``top`` and
+            ``margin``, as :func:`bioamla.ml.classify_file` reports them; 0: don't).
+        min_confidence: Leave out files whose prediction is below this probability.
         resample_freq: Target sample rate.
         recursive: Search subdirectories.
         max_workers: Worker count (kept at 1 in practice — the model is shared).
@@ -79,6 +80,7 @@ def batch_predict_files(
         NotFoundError: If the input directory does not exist.
         ModelError: On model-load or inference failure.
     """
+    _check_top_k(top_k)
     in_dir = Path(input_dir)
     if not in_dir.exists():
         raise NotFoundError(f"Input directory not found: {in_dir}")
@@ -91,7 +93,11 @@ def batch_predict_files(
     predictions: list = []
 
     def _process_one(audio_path: Path) -> str:
-        pred = inference.predict_topk(str(audio_path), top_k=top_k, min_confidence=min_confidence)
+        # Ranked as models ast predict ranks: the list isn't cut by min_confidence;
+        # a prediction below it is left out, like a segment below it.
+        pred = inference.predict(str(audio_path), top_k=top_k)
+        if pred.confidence < min_confidence:
+            return f"{audio_path}: below {min_confidence} ({pred.confidence:.4f})"
         predictions.append(
             {
                 "filepath": str(audio_path),
@@ -99,7 +105,7 @@ def batch_predict_files(
                 "confidence": pred.confidence,
                 "start_time": pred.start_time,
                 "end_time": pred.end_time,
-                **_ranked(pred),
+                **pred.ranked(),
             }
         )
         return f"{audio_path}: {pred.predicted_label} ({pred.confidence:.4f})"
@@ -161,6 +167,7 @@ def batch_predict_segments(
         NotFoundError: If the input directory does not exist.
         ModelError: On model-load or inference failure.
     """
+    _check_top_k(top_k)
     in_dir = Path(input_dir)
     if not in_dir.exists():
         raise NotFoundError(f"Input directory not found: {in_dir}")
@@ -291,12 +298,9 @@ __all__ = [
 _SEGMENT_COLUMNS = ["filepath", "start_time", "end_time", "predicted_label", "confidence"]
 
 
-def _ranked(pred: object) -> dict[str, object]:
-    """A prediction's ranked labels as JSON reports them (``top``, ``margin``), as
-    :func:`bioamla.ml.classify_file` does; nothing when it wasn't ranked."""
-    if pred.top_k_labels is None:  # type: ignore[attr-defined]
-        return {}
-    return {"top": pred.top(), "margin": pred.margin}  # type: ignore[attr-defined]
+def _check_top_k(top_k: int) -> None:
+    if top_k < 0:
+        raise InvalidInputError(f"top_k must be 0 or more, got {top_k}")
 
 
 def _write_json(path: Path, data: object) -> str:
@@ -311,7 +315,7 @@ def batch_predict(
     config: BatchConfig,
     *,
     model_path: str,
-    top_k: int = 5,
+    top_k: int = 0,
     min_confidence: float = 0.0,
     segment_duration: int = 0,
     overlap: int = 0,
@@ -341,6 +345,7 @@ def batch_predict(
         on_progress: ``(done, total)`` callback.
         operation: Name used in the batch log records.
     """
+    _check_top_k(top_k)
     if config.output_dir:
         out_dir = Path(config.output_dir)
     elif config.input_file:
@@ -406,12 +411,14 @@ def batch_predict(
         by_path: dict[str, dict] = {}
 
         def _process(path: Path) -> None:
-            pred = inference.predict_topk(str(path), top_k=top_k, min_confidence=min_confidence)
+            pred = inference.predict(str(path), top_k=top_k)
+            if pred.confidence < min_confidence:
+                return
             by_path[str(path)] = {
                 "filepath": str(path),
                 "predicted_label": pred.predicted_label,
                 "confidence": pred.confidence,
-                **_ranked(pred),
+                **pred.ranked(),
             }
 
         result = run_csv_process(

@@ -528,10 +528,14 @@ class TestModelBatchLibraryParity:
                if Path(r["filepath"]).name == "a.wav"]  # fmt: skip
         assert got == want and all(top for _, top in got)
 
+        # Without --top-k (0), neither mode ranks: like models ast predict.
         plain = bioamla("batch", "models", "predict", "--input-dir", str(folder),
                         "--output-dir", str(tmp_path / "plain"), "-m", str(tiny_ast),
-                        "--segment-seconds", "1", "--top-k", "0")  # fmt: skip
+                        "--segment-seconds", "1")  # fmt: skip
         assert "top" not in read_csv(plain["results_file"])[0]
+        whole = bioamla("batch", "models", "predict", "--input-dir", str(folder),
+                        "--output-dir", str(tmp_path / "plain-whole"), "-m", str(tiny_ast))  # fmt: skip
+        assert all("top" not in p for p in json.loads(Path(whole["results_file"]).read_text()))
 
     def test_embed_csv_mode(self, tiny_ast, folder, tmp_path) -> None:
         from bioamla.batch import BatchConfig

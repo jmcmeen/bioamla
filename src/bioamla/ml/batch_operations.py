@@ -23,7 +23,7 @@ class BatchPredictRequest(BatchRequest):
     """
 
     model: str = ""
-    top_k: int = 5
+    top_k: int = 0
     min_confidence: float = 0.0
     segment_duration: int = 0
     overlap: int = 0

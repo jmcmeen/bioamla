@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from bioamla.exceptions import NotFoundError
+from bioamla.exceptions import InvalidInputError, NotFoundError
 from bioamla.ml.batch import (
     _audio_filter,
     batch_embed_files,
@@ -35,7 +35,7 @@ class TestBatchPredictFiles:
         fake_inf = MagicMock()
         from bioamla.ml.inference import ASTPredictionResult
 
-        fake_inf.predict_topk.return_value = ASTPredictionResult(
+        fake_inf.predict.return_value = ASTPredictionResult(
             filepath="x.wav",
             start_time=0.0,
             end_time=1.0,
@@ -45,8 +45,13 @@ class TestBatchPredictFiles:
             top_k_scores=[0.9, 0.08],
         )
         with patch("bioamla.ml.inference.ASTInference", return_value=fake_inf):
-            result = batch_predict_files(test_audio_dir, model_path="hub/model")
+            result = batch_predict_files(test_audio_dir, model_path="hub/model", top_k=2)
+            below = batch_predict_files(test_audio_dir, model_path="hub/model",
+                                        min_confidence=0.95)  # fmt: skip
         assert result.successful == 3
+        assert below.metadata["predictions"] == []  # left out, like a segment below it
+        with pytest.raises(InvalidInputError, match="top_k"):
+            batch_predict_files(test_audio_dir, model_path="hub/model", top_k=-1)
         preds = result.metadata["predictions"]
         assert len(preds) == 3
         assert preds[0]["predicted_label"] == "a"

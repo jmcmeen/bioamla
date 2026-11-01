@@ -186,11 +186,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
-- `batch models predict` reports ranked labels the way `models ast predict --top-k` does:
-  `top` (`[{label, confidence}]`) and `margin` (top-1 minus top-2) in `predictions.json`,
-  in place of `top_k_labels` and `top_k_scores`; per segment, `margin` and `top` columns
-  (`label:confidence;...`). `--top-k 0` leaves them out (default 5). This changes what
-  scripts reading `predictions.json` or the segment CSV see.
+- **Breaking:** `batch models predict` reports ranked labels the way `models ast predict
+  --top-k` does, and only when asked: `--top-k K` (default 0, was 5) adds `top` (`[{label,
+  confidence}]`) and `margin` (top-1 minus top-2) to each whole-file prediction in
+  `predictions.json`, in place of `top_k_labels` and `top_k_scores`, and `margin` and `top`
+  columns (`label:confidence;...`) per segment. The ranked list is no longer cut by
+  `--min-confidence`; instead a whole-file prediction below it is left out, as a segment
+  below it already was.
 
 - **Breaking:** `annotation generate-labels` and `generate-frame-labels` with `--format
   numpy` name the label map after the array file: `run.v1` writes `run.v1.npy` and
