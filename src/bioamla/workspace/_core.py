@@ -48,6 +48,8 @@ from bioamla.exceptions import InvalidInputError, NotFoundError, WorkspaceError
 WORKSPACE_DIR = ".bioamla"
 #: Version of the on-disk format this code writes and reads.
 FORMAT_VERSION = 1
+#: Version of the run records in ``history.jsonl`` (their ``v`` field).
+HISTORY_RECORD_VERSION = 1
 
 ArtifactKind = Literal["audio_file", "folder", "dataset", "model", "file"]
 ArtifactMode = Literal["linked", "imported"]

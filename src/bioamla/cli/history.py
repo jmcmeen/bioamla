@@ -26,7 +26,8 @@ from typing import Any
 
 logger = logging.getLogger("bioamla.cli")
 
-RECORD_VERSION = 1
+from bioamla.workspace._core import HISTORY_RECORD_VERSION as RECORD_VERSION  # noqa: E402
+
 _NOT_RECORDED = {"workspace history"}
 _SECRET = re.compile(r"(key|token|password|passwd|secret)", re.IGNORECASE)
 _OUTPUT_KEYS = ("output", "output_path", "output_dir", "metadata_file", "results_file")

@@ -28,6 +28,7 @@ REPORTING_CALLS = re.compile(
 # get "result": null, or refuse with an error.
 NO_JSON_RESULT = {
     "audio play": "plays sound; refuses --json with an error",
+    "serve": "runs until stopped; refuses --json with an error",
 }
 
 

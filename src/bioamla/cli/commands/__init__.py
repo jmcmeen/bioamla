@@ -9,6 +9,7 @@ from .dataset import dataset
 from .detect import detect
 from .indices import indices
 from .models import models
+from .serve import serve
 from .system import system
 from .util import util
 from .workspace import workspace
@@ -23,6 +24,7 @@ __all__ = [
     "detect",
     "indices",
     "models",
+    "serve",
     "system",
     "util",
     "workspace",

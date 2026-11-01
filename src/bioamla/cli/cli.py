@@ -23,6 +23,7 @@ from .commands import (
     detect,
     indices,
     models,
+    serve,
     system,
     util,
     workspace,
@@ -277,6 +278,7 @@ cli.add_command(dataset)
 cli.add_command(detect)
 cli.add_command(indices)
 cli.add_command(models)
+cli.add_command(serve)
 cli.add_command(system)
 cli.add_command(util)
 cli.add_command(workspace)

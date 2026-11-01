@@ -22,13 +22,8 @@ in JSON mode without calling it gets ``"result": null``.
 
 from __future__ import annotations
 
-import dataclasses
-import datetime as _dt
-import enum
 import json
-import math
 import sys
-from pathlib import PurePath
 from typing import IO, Any, NoReturn
 
 _real_stdout: IO[str] | None = None
@@ -102,39 +97,7 @@ def disable_json_mode() -> None:
     _emitted = False
 
 
-def to_jsonable(value: Any) -> Any:
-    """Convert a result into JSON types.
-
-    Dataclasses (their ``to_dict()`` when they have one), mappings and sequences
-    are converted recursively. Paths, datetimes and enums become strings or their
-    values, numpy scalars and arrays become numbers and lists, and NaN and
-    infinity become ``None``. Anything else becomes ``str(value)``.
-    """
-    if value is None or isinstance(value, (bool, int, str)):
-        return value
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        to_dict = getattr(value, "to_dict", None)
-        if callable(to_dict):
-            return to_jsonable(to_dict())
-        # Field by field (not dataclasses.asdict, which deep-copies and skips the
-        # to_dict() of nested dataclasses).
-        return {f.name: to_jsonable(getattr(value, f.name)) for f in dataclasses.fields(value)}
-    if isinstance(value, dict):
-        return {str(k): to_jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return [to_jsonable(v) for v in value]
-    if isinstance(value, PurePath):
-        return str(value)
-    if isinstance(value, (_dt.datetime, _dt.date, _dt.time)):
-        return value.isoformat()
-    if isinstance(value, enum.Enum):
-        return to_jsonable(value.value)
-    tolist = getattr(value, "tolist", None)  # numpy scalars and arrays
-    if callable(tolist):
-        return to_jsonable(tolist())
-    return str(value)
+from bioamla.common.jsonable import to_jsonable  # noqa: E402  (re-exported)
 
 
 def _write(envelope: dict[str, Any]) -> None:
