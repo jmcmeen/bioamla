@@ -1,7 +1,7 @@
 """Tests for bioamla.audio.metadata (recorder metadata via riffy)."""
 
 import wave
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from riffy import BextMetadata, GuanoMetadata, InfoMetadata, WAVParser
@@ -97,7 +97,7 @@ class TestGetRecordingMetadata:
     def test_audiomoth(self, audiomoth_wav: str) -> None:
         meta = get_recording_metadata(audiomoth_wav)
         assert meta.sources == ("info", "audiomoth")
-        assert meta.recorded_at == datetime(2021, 11, 12, 19, 30, 0, tzinfo=timezone.utc)
+        assert meta.recorded_at == datetime(2021, 11, 12, 19, 30, 0, tzinfo=UTC)
         assert meta.device_make == "Open Acoustic Devices"
         assert meta.device_model == "AudioMoth"
         assert meta.device_id == "248D9B045EC9EE79"
@@ -140,11 +140,11 @@ class TestToDict:
 class TestFromRiffyPrecedence:
     def test_guano_beats_audiomoth(self) -> None:
         g = GuanoMetadata(version="1.0")
-        g.timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        g.timestamp = datetime(2020, 1, 1, tzinfo=UTC)
         g.serial = "G1"
         moth = AudioMothMetadata.from_comment(AUDIOMOTH_COMMENT)
         meta = RecordingMetadata.from_riffy(RiffyRecordingMetadata(guano=g, audiomoth=moth))
-        assert meta.recorded_at == datetime(2020, 1, 1, tzinfo=timezone.utc)
+        assert meta.recorded_at == datetime(2020, 1, 1, tzinfo=UTC)
         assert meta.device_id == "G1"
         assert meta.device_model == "AudioMoth"
         # fields GUANO lacks still fall through to AudioMoth

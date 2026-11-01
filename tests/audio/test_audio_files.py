@@ -104,19 +104,23 @@ def test_convert_format_from_file_name(test_audio_path_3s, tmp_path):
 
 def test_segment_options(test_audio_path_3s, tmp_path):
     # 3 s in 1.25 s clips: two whole clips and a 0.5 s remainder.
-    single = segment_audio_file(
-        test_audio_path_3s,
-        str(tmp_path / "single"),
-        duration=1.25,
-        prefix="rec",
-        format="flac",
-        include_partial=False,
-        label="",
-    )
-    assert [s.segment_path.name for s in single] == ["rec_0000.flac", "rec_0001.flac"]
-    batch = segment_audio_file(test_audio_path_3s, str(tmp_path / "batch"), duration=1.25)
-    assert [s.segment_path.name for s in batch][-1].endswith("_seg0002.wav")
-    assert batch[-1].duration == pytest.approx(0.5)
+    default = segment_audio_file(test_audio_path_3s, str(tmp_path / "d"), duration=1.25)
+    assert [s.segment_path.name for s in default] == [
+        "test_audio_3s_seg0000.wav", "test_audio_3s_seg0001.wav",
+    ]  # fmt: skip
+    kept = segment_audio_file(test_audio_path_3s, str(tmp_path / "k"), duration=1.25,
+                              prefix="rec", format="flac", include_partial=True)  # fmt: skip
+    assert [s.segment_path.name for s in kept][-1] == "rec_seg0002.flac"
+    assert kept[-1].duration == pytest.approx(0.5)
+
+
+def test_a_file_shorter_than_one_clip_is_an_error_not_silence(test_audio_path_3s, tmp_path):
+    with pytest.raises(InvalidInputError, match="--keep-short"):
+        segment_audio_file(test_audio_path_3s, str(tmp_path / "x"), duration=5.0)
+    assert not (tmp_path / "x").exists()  # nothing created
+    kept = segment_audio_file(test_audio_path_3s, str(tmp_path / "y"), duration=5.0,
+                              include_partial=True)  # fmt: skip
+    assert len(kept) == 1 and kept[0].duration == pytest.approx(3.0)
 
 
 @pytest.mark.parametrize("prefix", ["../up", "a/b", "..", "", "c\\d"])

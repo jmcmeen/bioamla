@@ -60,7 +60,7 @@ def test_segment_checks_its_output_folder(test_audio_path_3s, tmp_path):
     assert result.count == 3
     assert str(tmp_path / "clips") in seen
     assert [s["path"].rsplit("/", 1)[1] for s in result.to_dict()["segments"]][0].endswith(
-        "_0000.wav"
+        "_seg0000.wav"
     )
 
 

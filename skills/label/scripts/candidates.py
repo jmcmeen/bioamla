@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _bioamla import BioamlaCommandError, run, run_dir, write_json  # noqa: E402
+from _bioamla import BioamlaCommandError, add_remote_option, run, run_dir, save_json, use_remote  # noqa: E402
 
 
 def overlap(a_start: float, a_end: float, b_start: float, b_end: float) -> float:
@@ -40,17 +40,20 @@ def file_candidates(path: str, args: argparse.Namespace, root: str) -> list[dict
         return []
     predicted = run(
         "models", "ast", "predict", path, "--model-path", args.model,
-        "--segment-seconds", args.segment_seconds,
+        "--segment-seconds", args.segment_seconds, "--top-k", "2",
         cwd=root,
     )["predictions"]  # fmt: skip
     vocabulary = set(args.labels)
     rows = []
     for d in detected:
-        best = max(
-            predicted,
-            key=lambda p: overlap(d["start_time"], d["end_time"], p["start_time"], p["end_time"]),
-            default=None,
-        )
+        shared = [
+            (overlap(d["start_time"], d["end_time"], p["start_time"], p["end_time"]), p)
+            for p in predicted
+        ]
+        # The segment sharing the most of the event; none if no segment covers it (no
+        # label rather than a wrong one).
+        most = max(shared, key=lambda pair: pair[0], default=(0.0, None))
+        best = most[1] if most[0] > 0 else None
         label = best["label"] if best else None
         rows.append(
             {
@@ -63,6 +66,7 @@ def file_candidates(path: str, args: argparse.Namespace, root: str) -> list[dict
                 "detector_score": d["confidence"],
                 "label": label,
                 "model_confidence": best["confidence"] if best else None,
+                "margin": best.get("margin") if best else None,
                 "in_vocabulary": label in vocabulary,
             }
         )
@@ -78,8 +82,8 @@ def find_candidates(args: argparse.Namespace, root: str = ".") -> dict:
     for i, c in enumerate(candidates, 1):
         c["id"] = f"c{i:04d}"
     out = run_dir("label", root)
-    write_json(
-        out / "candidates.json",
+    save_json(
+        (out.relative_to(root) / "candidates.json").as_posix(),
         {
             "folder": args.folder,
             "files": files,
@@ -93,6 +97,7 @@ def find_candidates(args: argparse.Namespace, root: str = ".") -> dict:
             },
             "candidates": candidates,
         },
+        root,
     )
     return {
         "run_dir": str(out.relative_to(root)),
@@ -114,11 +119,13 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--min-duration", type=float, default=0.05, help="Shortest event (s)")
     p.add_argument("--segment-seconds", type=int, default=1, help="Prediction segment (s)")
     p.add_argument("--root", default=".", help="Workspace root (default: here)")
+    add_remote_option(p)
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    use_remote(args.remote)
     try:
         summary = find_candidates(args, args.root)
     except BioamlaCommandError as e:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from bioamla.cli.options import frame_feature_options
+from bioamla.cli.options import frame_feature_options, picture_options, segment_options
 from bioamla.exceptions import BioamlaError
 
 
@@ -247,8 +247,21 @@ def audio_features(
 @click.argument("input_path")
 @click.argument("output_path")
 @click.option("--sample-rate", "-r", default=None, type=int, help="Target sample rate")
-@click.option("--channels", "-c", default=None, type=int, help="Target number of channels")
-@click.option("--bit-depth", "-b", default=None, type=int, help="Target bit depth")
+@click.option(
+    "--channels",
+    "-c",
+    default=None,
+    type=int,
+    help="Target number of channels: 1 or 2 (default: keep the file's own)",
+)
+@click.option(
+    "--bit-depth",
+    "-b",
+    default=None,
+    type=click.Choice(["8", "16", "24", "32"]),
+    help="Bits per sample: WAV 8, 16, 24 or 32; FLAC 8, 16 or 24 (default: the source's "
+    "when the output holds it, else 16)",
+)
 @click.option(
     "--format",
     "-f",
@@ -261,22 +274,21 @@ def audio_convert(
     output_path: str,
     sample_rate: int,
     channels: int,
-    bit_depth: int,
+    bit_depth: str | None,
     format: str,
 ) -> None:
     """Convert audio file format or properties."""
-    from bioamla.cli.console import print_success, print_warning
+    from bioamla.cli.console import print_success
     from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_file_result
 
-    if bit_depth is not None:
-        print_warning("--bit-depth is not supported yet and is ignored (see issue #239)")
     run_operation(
         "audio.convert",
         file=input_path,
         output=output_path,
         sample_rate=sample_rate,
         channels=channels,
+        bit_depth=int(bit_depth) if bit_depth else None,
         format=format,
     )
     if emit_file_result(input_path, output=output_path):
@@ -287,28 +299,7 @@ def audio_convert(
 @audio.command("segment")
 @click.argument("input_path")
 @click.argument("output_dir")
-@click.option(
-    "--duration-seconds",
-    "-d",
-    "duration",
-    default=3.0,
-    type=float,
-    help="Segment duration in seconds (default: 3.0)",
-)
-@click.option(
-    "--overlap",
-    "-o",
-    default=0.0,
-    type=float,
-    help="Overlap between segments in seconds (default: 0.0)",
-)
-@click.option(
-    "--format",
-    "-f",
-    default="wav",
-    type=click.Choice(["wav", "mp3", "flac", "ogg"]),
-    help="Output format (default: wav)",
-)
+@segment_options
 @click.option(
     "--prefix", "-p", default=None, help="Prefix for output filenames (default: input filename)"
 )
@@ -317,10 +308,14 @@ def audio_segment(
     output_dir: str,
     duration: float,
     overlap: float,
-    format: str,
+    out_format: str,
+    keep_short: bool,
     prefix: str,
 ) -> None:
-    """Segment audio file into fixed-duration clips."""
+    """Segment audio file into fixed-duration clips, named PREFIX_seg0000.FORMAT, ...
+
+    A last clip shorter than the duration is left out unless --keep-short.
+    """
     from bioamla.cli.console import print_success
     from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_file_result
@@ -331,8 +326,9 @@ def audio_segment(
         output_dir=output_dir,
         duration=duration,
         overlap=overlap,
-        format=format,
+        format=out_format,
         prefix=prefix,
+        include_partial=keep_short,
     )
     if emit_file_result(input_path, output=output_dir, segments=result.count):
         return
@@ -533,17 +529,7 @@ def audio_gain(input_path: str, output_path: str, gain_db: float) -> None:
     type=click.Choice(["mel", "stft", "mfcc", "waveform"]),
     help="Visualization type",
 )
-@click.option("--n-fft", default=2048, type=int, help="FFT window size")
-@click.option("--hop-length", default=512, type=int, help="Hop length")
-@click.option("--n-mels", default=128, type=int, help="Number of mel bands")
-@click.option("--n-mfcc", default=20, type=int, help="Number of MFCCs")
-@click.option("--cmap", default="viridis", help="Colormap name")
-@click.option("--dpi", default=100, type=int, help="Output DPI")
-@click.option(
-    "--legend/--no-legend",
-    default=True,
-    help="Show axes, title, and colorbar (default: True)",
-)
+@picture_options
 @click.option(
     "--box",
     "boxes",

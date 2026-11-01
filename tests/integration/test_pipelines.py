@@ -506,6 +506,37 @@ class TestModelBatchLibraryParity:
             cli_text = (cli_out / name).read_text().replace(str(cli_out), "")
             assert cli_text == (lib_out / name).read_text().replace(str(lib_out), "")
 
+    def test_ranked_labels_match_models_ast_predict(self, tiny_ast, folder, tmp_path) -> None:
+        single = bioamla("models", "ast", "predict", str(folder / "a.wav"),
+                         "--model-path", str(tiny_ast), "--top-k", "2")  # fmt: skip
+        bioamla("batch", "models", "predict", "--input-dir", str(folder),
+                "--output-dir", str(tmp_path / "whole"), "-m", str(tiny_ast), "--top-k", "2")  # fmt: skip
+        batch = json.loads((tmp_path / "whole" / "predictions.json").read_text())
+        row = next(p for p in batch if Path(p["filepath"]).name == "a.wav")
+        assert set(row) >= {"top", "margin"} and "top_k_labels" not in row
+        assert row["top"] == single["predictions"][0]["top"]
+        assert row["margin"] == single["predictions"][0]["margin"]
+
+        bioamla("models", "ast", "predict", str(folder / "a.wav"), "--model-path",
+                str(tiny_ast), "--segment-seconds", "1", "--top-k", "2",
+                "-o", str(tmp_path / "single.csv"))  # fmt: skip
+        bioamla("batch", "models", "predict", "--input-dir", str(folder),
+                "--output-dir", str(tmp_path / "segs"), "-m", str(tiny_ast),
+                "--segment-seconds", "1", "--top-k", "2")  # fmt: skip
+        want = [(r["margin"], r["top"]) for r in read_csv(tmp_path / "single.csv")]
+        got = [(r["margin"], r["top"]) for r in read_csv(tmp_path / "segs" / "predictions.csv")
+               if Path(r["filepath"]).name == "a.wav"]  # fmt: skip
+        assert got == want and all(top for _, top in got)
+
+        # Without --top-k (0), neither mode ranks: like models ast predict.
+        plain = bioamla("batch", "models", "predict", "--input-dir", str(folder),
+                        "--output-dir", str(tmp_path / "plain"), "-m", str(tiny_ast),
+                        "--segment-seconds", "1")  # fmt: skip
+        assert "top" not in read_csv(plain["results_file"])[0]
+        whole = bioamla("batch", "models", "predict", "--input-dir", str(folder),
+                        "--output-dir", str(tmp_path / "plain-whole"), "-m", str(tiny_ast))  # fmt: skip
+        assert all("top" not in p for p in json.loads(Path(whole["results_file"]).read_text()))
+
     def test_embed_csv_mode(self, tiny_ast, folder, tmp_path) -> None:
         from bioamla.batch import BatchConfig
         from bioamla.ml import batch_embed
@@ -571,6 +602,21 @@ class TestModelCommandsLibraryParity:
         assert got["count"] == want.count == 2
         assert (tmp_path / "c.csv").read_text() == (tmp_path / "l.csv").read_text()
 
+        ranked = bioamla(
+            "models", "ast", "predict", str(clips / "a.wav"), "--model-path", str(tiny_ast),
+            "--segment-seconds", "1", "--top-k", "2", "-o", str(tmp_path / "k.csv"),
+        )  # fmt: skip
+        want = classify_file(clips / "a.wav", model_path=str(tiny_ast), segment_duration=1,
+                             top_k=2)  # fmt: skip
+        assert ranked["predictions"] == json.loads(json.dumps(want.to_dict()["predictions"]))
+        for p in ranked["predictions"]:
+            assert [t["label"] for t in p["top"]][0] == p["label"]
+            assert p["margin"] == pytest.approx(
+                p["top"][0]["confidence"] - p["top"][1]["confidence"]
+            )
+        rows = read_csv(tmp_path / "k.csv")
+        assert set(rows[0]) >= {"margin", "top"} and rows[0]["top"].count(";") == 1
+
         got = bioamla("models", "ast", "embed", str(clips / "b.wav"), "--model-path",
                       str(tiny_ast), "-o", str(tmp_path / "c.npy"))  # fmt: skip
         want = embed_file(clips / "b.wav", tmp_path / "l.npy", model_path=str(tiny_ast))
@@ -587,15 +633,42 @@ class TestModelCommandsLibraryParity:
         want = evaluate_model(clips, model_path=str(tiny_ast), ground_truth=tmp_path / "truth.csv")
         assert got["metrics"] == json.loads(json.dumps(want.to_dict()["metrics"]))
 
+    def test_a_trained_model_predicts_with_its_training_features(
+        self, tiny_ast, clips, tmp_path
+    ) -> None:
+        data = tmp_path / "by_class"
+        for label, name in (("a", "a.wav"), ("b", "b.wav")):
+            (data / label).mkdir(parents=True)
+            for i in range(4):
+                (data / label / f"{i}{name}").write_bytes((clips / name).read_bytes())
+        bioamla("models", "ast", "train", "--train-dataset", str(data),
+                "--training-dir", str(tmp_path / "run"), "--base-model", str(tiny_ast),
+                "--num-train-epochs", "1", "--per-device-train-batch-size", "4",
+                "--report-to", "none")  # fmt: skip
+        best = tmp_path / "run" / "best_model"
+        saved = json.loads((best / "preprocessor_config.json").read_text())
+        default = json.loads((tiny_ast / "preprocessor_config.json").read_text())
+        assert saved["max_length"] == default["max_length"] == 128  # the base model's settings
+        assert (saved["mean"], saved["std"]) != (default["mean"], default["std"])  # computed
+        # The base model's non-default max_length only works with its own extractor.
+        got = bioamla("models", "ast", "predict", str(clips / "a.wav"), "--model-path", str(best))
+        assert got["predictions"][0]["label"] in {"a", "b"}
+
+        # The same with the library alone.
+        from bioamla.ml import classify_file, train_ast
+
+        lib = train_ast(train_dataset=str(data), training_dir=str(tmp_path / "lib"),
+                        base_model=str(tiny_ast), num_train_epochs=1,
+                        per_device_train_batch_size=4, report_to="none")  # fmt: skip
+        lib_best = tmp_path / "lib" / "best_model"
+        assert lib.model_path == str(lib_best)
+        assert json.loads((lib_best / "preprocessor_config.json").read_text())["max_length"] == 128
+        assert classify_file(clips / "a.wav", model_path=str(lib_best)).count == 1
+
     def test_train_operation_reports_progress_and_stops_when_cancelled(
         self, tiny_ast, clips, tmp_path
     ) -> None:
         from bioamla import operations
-
-        try:  # training data is decoded by torchcodec, which needs FFmpeg 4-8 (#256)
-            import torchcodec.decoders  # noqa: F401
-        except Exception as e:  # noqa: BLE001
-            pytest.skip(f"torchcodec can't load here: {str(e).splitlines()[0]}")
 
         data = tmp_path / "by_class"
         for label, name in (("a", "a.wav"), ("b", "b.wav")):

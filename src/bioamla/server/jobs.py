@@ -19,6 +19,10 @@ Routes:
   one is asked through its cancel check, and its worker is ended if it hasn't stopped
   after a grace period.
 
+With a timeout (``bioamla serve --job-timeout``), a running job that sends nothing
+(no progress, notice, log line or result) for that long is stopped the same way and
+fails with ``JobTimeout``; a long job that keeps reporting progress runs on.
+
 Jobs are kept in memory; each is also recorded in its workspace's history (with
 ``job`` set to its id), so the record outlives the server.
 """
@@ -97,6 +101,8 @@ class Job:
     request_obj: Any = field(default=None, repr=False)
     cancel_requested: float | None = field(default=None, repr=False)
     _signalled: int = field(default=0, repr=False)
+    _last_heard: float = field(default=0.0, repr=False)
+    _timed_out: bool = field(default=False, repr=False)
     _process: Any = field(default=None, repr=False)
     _conn: Any = field(default=None, repr=False)
     _cancel: Any = field(default=None, repr=False)
@@ -137,6 +143,13 @@ class JobRunner:
             (their history records stay in their workspaces).
         max_events: Events kept per job; past that, further progress and log events
             are dropped (status events and the latest progress are always kept).
+        timeout: Seconds a running job may go without sending anything (progress,
+            a notice, a log line, its result) before it's stopped and failed with
+            ``JobTimeout`` (``None``: no limit), so a hung worker can't hold a slot
+            forever while a long job that reports progress runs on.
+
+    Raises:
+        InvalidInputError: If ``timeout`` isn't positive.
     """
 
     def __init__(
@@ -149,6 +162,7 @@ class JobRunner:
         poll: float = 0.05,
         keep_jobs: int = 200,
         max_events: int = 5000,
+        timeout: float | None = None,
     ) -> None:
         import multiprocessing
 
@@ -158,6 +172,11 @@ class JobRunner:
         self.cancel_grace = cancel_grace
         self.poll = poll
         self.keep_jobs = keep_jobs
+        if timeout is not None and timeout <= 0:
+            from bioamla.exceptions import InvalidInputError
+
+            raise InvalidInputError(f"timeout must be positive, got {timeout}")
+        self.timeout = timeout
         self.max_events = max_events
         self.jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
@@ -293,7 +312,9 @@ class JobRunner:
             self._drain(job)
             if job.status != RUNNING:
                 return
-            if job.cancel_requested is not None:  # ended without a result
+            if job._timed_out:  # ended without a result
+                self._finish(job, FAILED, error=self._timeout_error())
+            elif job.cancel_requested is not None:
                 self._finish(job, CANCELLED, error=_cancelled())
             else:
                 code = job._process.exitcode
@@ -301,6 +322,18 @@ class JobRunner:
                     "type": "WorkerError",
                     "message": f"The worker exited with code {code} before finishing",
                 })  # fmt: skip
+        elif (
+            self.timeout is not None
+            and job.cancel_requested is None
+            and time.time() - job._last_heard > self.timeout
+        ):
+            # Stopped like a cancel (asked, then ended, then killed); it fails as a
+            # timeout once the worker is gone, unless its result arrives first.
+            job._timed_out = True
+            job.cancel_requested = time.time()
+            job._cancel.set()
+            self._event(job, "notice", level="warning",
+                        message=f"Nothing from the job for {self.timeout:g} s; stopping it")  # fmt: skip
         elif job.cancel_requested is not None:
             waited = time.time() - job.cancel_requested
             if waited > 2 * self.cancel_grace and job._signalled < 2:
@@ -309,6 +342,12 @@ class JobRunner:
             elif waited > self.cancel_grace and job._signalled < 1:
                 _signal(job._process, kill=False)
                 job._signalled = 1
+
+    def _timeout_error(self) -> dict[str, str]:
+        return {
+            "type": "JobTimeout",
+            "message": f"Stopped after {self.timeout:g} s without progress or output",
+        }
 
     def _prune(self) -> None:
         done = sorted((j for j in self.jobs.values() if j.status in FINISHED),
@@ -345,6 +384,7 @@ class JobRunner:
         job._process.start()
         send.close()  # the worker holds the only sending end, so EOF means it's gone
         job.status, job.started = RUNNING, time.time()
+        job._last_heard = job.started
         self._event(job, "status", status=RUNNING)
 
     def _drain(self, job: Job) -> None:
@@ -360,6 +400,7 @@ class JobRunner:
 
     def _handle(self, job: Job, message: tuple) -> None:
         kind, *rest = message
+        job._last_heard = time.time()
         if kind == "progress":
             done, total = rest
             job.progress = {"done": done, "total": total}
@@ -374,6 +415,9 @@ class JobRunner:
             self._finish(job, SUCCEEDED, result=rest[0])
         elif kind == "error":
             error = rest[0]
+            if job._timed_out and error.get("type") == "OperationCancelled":
+                self._finish(job, FAILED, error=self._timeout_error())
+                return
             status = CANCELLED if error.get("type") == "OperationCancelled" else FAILED
             self._finish(job, status, error=error)
         else:

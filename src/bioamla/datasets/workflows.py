@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -59,7 +59,7 @@ def write_dataset_manifest(
         str(dataset_dir),
         name=name or dataset_path.name,
         kind=kind,
-        created=datetime.now(timezone.utc).isoformat(),
+        created=datetime.now(UTC).isoformat(),
         metadata_filename=metadata_filename,
         sample_rate=sample_rate,
     )

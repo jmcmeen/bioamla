@@ -18,12 +18,15 @@ Performance features:
 - ``torch.compile()`` for optimized model execution
 """
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from bioamla.common.config import config_dataclass
 from bioamla.exceptions import ModelError
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import numpy as np
@@ -66,31 +69,53 @@ class InferenceConfig:
     num_workers: int = 1
 
 
-@lru_cache(maxsize=4)
-def get_cached_feature_extractor(model_path: str | None = None) -> "ASTFeatureExtractor":
-    """
-    Get a cached AST feature extractor instance.
+def load_feature_extractor(model_path: str | None = None) -> "ASTFeatureExtractor":
+    """The feature extractor saved with ``model_path``: its feature settings and the
+    training set's mean and std.
 
-    Uses an LRU cache to avoid recreating the feature extractor on every call.
-    If loading from a model path fails (e.g. missing ``preprocessor_config.json``),
-    falls back to the default :class:`ASTFeatureExtractor`.
+    Without a model, or when the model has no ``preprocessor_config.json`` (a model
+    trained before bioamla saved one), this is the default :class:`ASTFeatureExtractor`,
+    with a warning: audio is then prepared with AudioSet's statistics, not the
+    model's, and its predictions may be off.
 
     Args:
-        model_path: Optional path to load a feature extractor from a specific
-            model. If None or if loading fails, uses the default extractor.
-
-    Returns:
-        ASTFeatureExtractor: Cached feature extractor instance.
-
+        model_path: A local model folder or Hugging Face ID.
     """
     ASTFeatureExtractor, _ = _require_transformers()
     if model_path:
         try:
             return ASTFeatureExtractor.from_pretrained(model_path)
         except OSError:
-            # Model doesn't have preprocessor_config.json, use default
-            pass
+            logger.warning(
+                "%s has no feature extractor (preprocessor_config.json); using the default "
+                "settings, so predictions may be off. Retrain it with this version of "
+                "bioamla, or copy the base model's preprocessor_config.json beside it.",
+                model_path,
+            )
     return ASTFeatureExtractor()
+
+
+@lru_cache(maxsize=4)
+def _saved_feature_extractor(model_path: str) -> "ASTFeatureExtractor":
+    ASTFeatureExtractor, _ = _require_transformers()
+    return ASTFeatureExtractor.from_pretrained(model_path)
+
+
+def get_cached_feature_extractor(model_path: str | None = None) -> "ASTFeatureExtractor":
+    """:func:`load_feature_extractor`, reusing the last few models' extractors.
+
+    Only an extractor loaded from a model is cached, so one saved later (a model
+    retrained into the same folder) is picked up.
+
+    Args:
+        model_path: A local model folder or Hugging Face ID.
+    """
+    if model_path:
+        try:
+            return _saved_feature_extractor(model_path)
+        except OSError:
+            pass
+    return load_feature_extractor(model_path)
 
 
 def load_pretrained_ast_model(

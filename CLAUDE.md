@@ -13,7 +13,7 @@ clustering, species catalogs, dataset tooling, and AST-based ML inference.
 - **0.2.x is a ground-up rebuild.** The old layered architecture (core/services/models/
   repository) was torn out and replaced by flat, domain-oriented packages. APIs may still
   change. When in doubt, favor **removing/simplifying over adding** — keep the core lean.
-- Python **≥ 3.10**, `src/` layout, package `bioamla`, console script `bioamla` →
+- Python **≥ 3.11**, `src/` layout, package `bioamla`, console script `bioamla` →
   `bioamla._cli_entry:main` (a shim that runs `bioamla.cli.cli:main`).
 - Tooling: **uv** for envs/deps, **ruff** for lint+format, **pytest** for tests, **mkdocs**
   for docs. Drive everything through the `Makefile`.
@@ -116,7 +116,7 @@ returned to a caller (e.g. `AcousticIndices`, `AudioData`, `AudioMetadata`).
 ## Conventions
 
 - **Type hints** on public functions; modern syntax (`X | None`, `list[str]`) — ruff `UP` is
-  on, `target-version = py310`.
+  on, `target-version = py311`.
 - **ruff**: line-length 100 (formatter owns wrapping; `E501` ignored), isort with
   `known-first-party = ["bioamla"]`. Run `make fmt` to auto-fix.
 - **Docstrings**: module docstring explaining the domain + per-public-function docstrings with

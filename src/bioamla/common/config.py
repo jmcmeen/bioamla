@@ -23,7 +23,7 @@ loads, so modules that only need :func:`load_toml` stay light.
 from __future__ import annotations
 
 import functools
-import sys
+import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -221,16 +221,6 @@ def _drop_private_fields(schema: dict[str, Any]) -> None:
             node["required"] = [k for k in node["required"] if not k.startswith("_")]
 
 
-# Use tomli for Python < 3.11, tomllib for Python >= 3.11.
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    try:
-        import tomli as tomllib
-    except ImportError:
-        tomllib = None
-
-
 def load_toml(filepath: str | Path) -> dict[str, Any]:
     """Load a TOML file into a dictionary.
 
@@ -242,12 +232,8 @@ def load_toml(filepath: str | Path) -> dict[str, Any]:
 
     Raises:
         NotFoundError: If the file doesn't exist.
-        ConfigError: If TOML parsing fails or tomli is unavailable on < 3.11.
+        ConfigError: If TOML parsing fails.
     """
-    if tomllib is None:
-        raise ConfigError(
-            "TOML support requires tomli package for Python < 3.11. Install with: pip install tomli"
-        )
 
     path = Path(filepath)
     if not path.exists():

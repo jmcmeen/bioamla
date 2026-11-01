@@ -26,8 +26,10 @@ from bioamla.cli.batch_options import batch_input_options, batch_output_options
 from bioamla.cli.options import (
     frame_feature_options,
     max_workers_option,
+    picture_options,
     quiet_option,
     recursive_option,
+    segment_options,
 )
 from bioamla.exceptions import BioamlaError
 
@@ -324,7 +326,21 @@ def audio_features(
 @batch_input_options
 @batch_output_options
 @click.option("--sample-rate", "-r", default=None, type=int, help="Target sample rate")
-@click.option("--channels", "-c", default=None, type=int, help="Target number of channels")
+@click.option(
+    "--channels",
+    "-c",
+    default=None,
+    type=int,
+    help="Target number of channels: 1 or 2 (default: keep the file's own)",
+)
+@click.option(
+    "--bit-depth",
+    "-b",
+    default=None,
+    type=click.Choice(["8", "16", "24", "32"]),
+    help="Bits per sample: WAV 8, 16, 24 or 32; FLAC 8, 16 or 24 (default: the source's "
+    "when the output holds it, else 16)",
+)
 @click.option(
     "--format",
     "-f",
@@ -348,6 +364,7 @@ def audio_convert(
     output_dir,
     sample_rate,
     channels,
+    bit_depth,
     out_format,
     delete_original,
     max_workers,
@@ -359,7 +376,7 @@ def audio_convert(
         result = _run_batch_operation(
             "batch.audio.convert", input_dir=input_dir, input_file=input_file, output_dir=output_dir, max_workers=max_workers, recursive=recursive, quiet=quiet, header="Converting audio files...",
             target_format=out_format, sample_rate=sample_rate, channels=channels,
-            delete_original=delete_original,
+            bit_depth=int(bit_depth) if bit_depth else None, delete_original=delete_original,
         )  # fmt: skip
         _report(result, output_dir, quiet)
     finally:
@@ -506,28 +523,32 @@ def audio_denoise(
 @audio.command("segment")
 @batch_input_options
 @batch_output_options
-@click.option(
-    "--duration-seconds",
-    "-d",
-    "duration",
-    required=True,
-    type=float,
-    help="Segment duration in seconds",
-)
-@click.option(
-    "--overlap", "-o", default=0.0, type=float, help="Overlap between segments in seconds"
-)
+@segment_options
 @max_workers_option
 @recursive_option
 @quiet_option
 def audio_segment(
-    input_dir, input_file, output_dir, duration, overlap, max_workers, recursive, quiet
+    input_dir,
+    input_file,
+    output_dir,
+    duration,
+    overlap,
+    out_format,
+    keep_short,
+    max_workers,
+    recursive,
+    quiet,
 ) -> None:
-    """Batch segment audio files into fixed-duration chunks."""
+    """Batch segment audio files into fixed-duration clips, named STEM_seg0000.FORMAT, ...
+
+    A last clip shorter than the duration is left out unless --keep-short (the same
+    clips as `audio segment`).
+    """
     try:
         result = _run_batch_operation(
             "batch.audio.segment", input_dir=input_dir, input_file=input_file, output_dir=output_dir, max_workers=max_workers, recursive=recursive, quiet=quiet, header="Segmenting audio files...",
-            progress="Segmenting", duration=duration, overlap=overlap,
+            progress="Segmenting", duration=duration, overlap=overlap, format=out_format,
+            include_partial=keep_short,
         )  # fmt: skip
         _report(result, output_dir, quiet)
     finally:
@@ -544,25 +565,26 @@ def audio_segment(
     type=click.Choice(["mel", "stft", "mfcc", "waveform"]),
     help="Visualization type",
 )
-@click.option("--legend/--no-legend", default=True, help="Show axes, title, and colorbar")
+@picture_options
 @max_workers_option
 @recursive_option
 @quiet_option
 def audio_visualize(
-    input_dir, input_file, output_dir, plot_type, legend, max_workers, recursive, quiet
-) -> None:
-    """Batch generate audio visualizations."""
-    from bioamla.cli.console import print_warning
+    input_dir, input_file, output_dir, plot_type, n_fft, hop_length, n_mels, n_mfcc, cmap, dpi,
+    legend, max_workers, recursive, quiet,
+) -> None:  # fmt: skip
+    """Batch generate audio visualizations (PNG), drawn with the same drawing options and
+    defaults as `audio visualize`, so a file's picture is the same either way. Boxes and
+    annotations are single-file only."""
     from bioamla.cli.logging_setup import configure_cli_logging
 
     configure_cli_logging()
-    if not legend:
-        print_warning("--no-legend is not supported in batch mode yet and is ignored (see #246)")
     try:
         result = _run_batch_operation(
             "batch.audio.visualize", input_dir=input_dir, input_file=input_file, output_dir=output_dir, max_workers=max_workers, recursive=recursive, quiet=quiet,
             header=f"Generating {plot_type} visualizations...",
-            plot_type=plot_type, verbose=not quiet,
+            plot_type=plot_type, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels,
+            n_mfcc=n_mfcc, cmap=cmap, dpi=dpi, legend=legend, verbose=not quiet,
         )  # fmt: skip
         _report(result, output_dir, quiet)
     finally:
@@ -779,7 +801,14 @@ def models() -> None:
     required=True,
     help="Model path (HuggingFace ID or local path)",
 )
-@click.option("--top-k", default=5, type=int, help="Number of top predictions to return")
+@click.option(
+    "--top-k",
+    default=0,
+    show_default=True,
+    type=click.IntRange(min=0),
+    help="Rank each prediction's K most likely labels (top and margin, as `models ast "
+    "predict --top-k` reports them; 0: don't)",
+)
 @click.option("--min-confidence", default=0.0, type=float, help="Minimum confidence threshold")
 @click.option(
     "--segment-seconds",

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import csv
 import json
+import subprocess
 
 import numpy as np
 import pytest
 import soundfile as sf
 
-from tests.skills.conftest import SR, tone, write_wav
+from tests.skills.conftest import SR, bioamla_bin, tone, write_wav
 
 pytestmark = pytest.mark.integration
 
@@ -80,7 +81,8 @@ def test_evidence_measures_snr_per_candidate(run_skill, loud_and_faint, tiny_ast
     loud, faint = evidence["candidates"]
     assert loud["snr_db"] > faint["snr_db"] > 0
     assert loud["snr_db"] > 30
-    assert loud["margin"] is None
+    # tiny_ast has two labels: the margin is top-1 minus top-2, i.e. 2 * confidence - 1.
+    assert loud["margin"] == pytest.approx(2 * loud["model_confidence"] - 1, abs=1e-6)
     assert loud["duration"] == pytest.approx(0.5, abs=0.1)
     assert {"detector_score", "model_confidence", "low_freq", "high_freq"} <= set(loud)
 
@@ -101,8 +103,14 @@ def test_crops_cut_a_clip_and_image_per_candidate(run_skill, loud_and_faint, tin
         clip = sf.info(loud_and_faint / c["clip"])
         assert clip.duration == pytest.approx(c["box"]["end"] + 0.25, abs=0.02)
         assert c["box"]["start"] == pytest.approx(0.25, abs=0.01)
-        assert c["image"].startswith(run_dir)
+        assert c["image"].startswith(run_dir) and c["box_drawn"] is True
     assert crops[1]["clip_start"] == pytest.approx(2.75, abs=0.1)
+    # The event's box is drawn: the image differs from the plain spectrogram of its clip.
+    plain = loud_and_faint / "plain.png"
+    subprocess.run([bioamla_bin(), "audio", "visualize",
+                    crops[0]["clip"], "--type", "stft", "--output", str(plain)],
+                   cwd=loud_and_faint, check=True, capture_output=True)  # fmt: skip
+    assert plain.read_bytes() != (loud_and_faint / crops[0]["image"]).read_bytes()
 
 
 def read_rows(path) -> list[dict]:
@@ -191,3 +199,25 @@ def test_review_needs_the_decisions(run_skill, loud_and_faint, tiny_ast) -> None
     run_dir = evidence_run(run_skill, loud_and_faint, tiny_ast)
     code, out = run_skill("label", "review", run_dir, cwd=loud_and_faint)
     assert code == 1 and "decisions.json" in out["error"]
+
+
+def test_an_event_no_segment_covers_gets_no_label(monkeypatch) -> None:
+    import argparse
+    import importlib.util
+
+    from tests.skills.conftest import skill_script
+
+    spec = importlib.util.spec_from_file_location("candidates", skill_script("label", "candidates"))
+    candidates = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(candidates)
+    answers = {
+        "detect": {"detections": [{"start_time": 5.0, "end_time": 5.5, "frequency_low": 500,
+                                   "frequency_high": 5000, "confidence": 0.9}]},
+        "models": {"predictions": [{"start_time": 0.0, "end_time": 3.0, "label": "a",
+                                    "confidence": 0.99, "margin": 0.98}]},
+    }  # fmt: skip
+    monkeypatch.setattr(candidates, "run", lambda *args, **kw: answers[args[0]])
+    args = argparse.Namespace(low_freq=500, high_freq=5000, threshold_db=-20, min_duration=0.05,
+                              model="m", segment_seconds=3, labels=["a"])  # fmt: skip
+    (row,) = candidates.file_candidates("rec.wav", args, ".")
+    assert row["label"] is None and row["model_confidence"] is None and row["margin"] is None

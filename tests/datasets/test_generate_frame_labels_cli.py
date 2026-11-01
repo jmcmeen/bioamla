@@ -96,3 +96,15 @@ class TestGenerateFrameLabelsCli:
             n_rows = sum(1 for _ in f) - 1
         # 3.0s, frame 1.0, hop 1.0 -> 3 frames.
         assert n_rows == 3
+
+
+def test_numpy_output_names_its_label_map(tmp_path):
+    ann = tmp_path / "a.json"
+    _write_annotations(ann, duration=2.0)
+    res = CliRunner().invoke(
+        annotation,
+        ["generate-frame-labels", str(ann), str(tmp_path / "run.v1"), "--frame-size", "0.5",
+         "--format", "numpy"],
+    )  # fmt: skip
+    assert res.exit_code == 0, res.output
+    assert f"Label map: {tmp_path / 'run.v1.labels.csv'}" in res.output

@@ -12,6 +12,11 @@ this package imports fast. Training runs can report to any
 :class:`TensorBoardTracker` are included. Load / inference
 failures raise :class:`~bioamla.exceptions.ModelError`.
 
+Importing it sets ``HF_DEACTIVATE_ASYNC_LOAD=1`` in the process environment unless
+it's already set, so transformers loads model weights serially (its threaded loading
+can deadlock); this applies to every transformers model the process loads. Set the
+variable to ``0`` before importing to keep threaded loading.
+
 Example:
     >>> from bioamla.ml import ASTInference
     >>> inference = ASTInference(model_path="bioamla/scp-frogs")
@@ -27,12 +32,20 @@ from bioamla._extras import require_extra
 # Fail early, with the install command, if the [ml] extra is missing.
 require_extra("ml", "bioamla.ml")
 
+import os  # noqa: E402
+
+# transformers loads weights on a thread pool, and a worker can deadlock in
+# safetensors' one-time initialisation while holding the GIL; load serially unless
+# the user asked otherwise (HF_DEACTIVATE_ASYNC_LOAD=0).
+os.environ.setdefault("HF_DEACTIVATE_ASYNC_LOAD", "1")
+
 from bioamla.ml.ast import (
     InferenceConfig,
     ast_predict,
     ast_predict_batch,
     extract_features,
     get_cached_feature_extractor,
+    load_feature_extractor,
     load_pretrained_ast_model,
     wav_ast_inference,
 )
@@ -154,6 +167,7 @@ __all__ = [
     "ast_predict_batch",
     "extract_features",
     "get_cached_feature_extractor",
+    "load_feature_extractor",
     "load_pretrained_ast_model",
     "wav_ast_inference",
     # AST service-level

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from bioamla.exceptions import ModelError
+from bioamla.exceptions import InvalidInputError, ModelError
 
 
 def _write_output(path: Path, write: Any) -> None:
@@ -50,21 +50,24 @@ class FilePredictions:
 
     def to_dict(self) -> dict[str, Any]:
         """``{"file", "count", "predictions": [{start_time, end_time, label, confidence}],
-        "output"}``."""
+        "output"}``; with ranked labels, each prediction also has ``top`` (``[{label,
+        confidence}, ...]``, best first) and ``margin`` (top-1 minus top-2)."""
         return {
             "file": self.file,
             "count": self.count,
-            "predictions": [
-                {
-                    "start_time": p.start_time,
-                    "end_time": p.end_time,
-                    "label": p.predicted_label,
-                    "confidence": p.confidence,
-                }
-                for p in self.predictions
-            ],
+            "predictions": [_prediction_row(p) for p in self.predictions],
             "output": self.output,
         }
+
+
+def _prediction_row(p: Any) -> dict[str, Any]:
+    row = {
+        "start_time": p.start_time,
+        "end_time": p.end_time,
+        "label": p.predicted_label,
+        "confidence": p.confidence,
+    }
+    return {**row, **p.ranked()}
 
 
 def classify_file(
@@ -76,6 +79,7 @@ def classify_file(
     min_confidence: float = 0.0,
     resample_freq: int = 16000,
     output: str | Path | None = None,
+    top_k: int = 0,
 ) -> FilePredictions:
     """Classify one audio file with an AST model, whole or in segments.
 
@@ -86,31 +90,41 @@ def classify_file(
         overlap: Overlap between segments (s).
         min_confidence: Leave out predictions below this.
         resample_freq: The model's sample rate.
-        output: A CSV to save ``filepath, start, stop, prediction, confidence`` to.
+        output: A CSV to save ``filepath, start, stop, prediction, confidence`` to
+            (with ``top_k``, also ``margin`` and ``top``: ``label:confidence`` pairs,
+            best first, separated by ``;``).
+        top_k: Also rank each prediction's ``top_k`` most likely labels (0: don't).
 
     Raises:
+        InvalidInputError: If ``top_k`` is negative.
         ModelError: If the model can't be loaded or run, or the CSV can't be written.
     """
     from bioamla.ml.inference import ASTInference
 
+    if top_k < 0:
+        raise InvalidInputError(f"top_k must be 0 or more, got {top_k}")
     inference = ASTInference(model_path=model_path, sample_rate=resample_freq)
     if segment_duration > 0:
         results = inference.predict_segments(
-            str(file), clip_length=segment_duration, overlap=overlap
+            str(file), clip_length=segment_duration, overlap=overlap, top_k=top_k
         )
     else:
-        results = [inference.predict(str(file))]
+        results = [inference.predict(str(file), top_k=top_k)]
     kept = [r for r in results if r.confidence >= min_confidence]
     if output:
 
         def _write(path: Path) -> None:
             with path.open("w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                writer.writerow(["filepath", "start", "stop", "prediction", "confidence"])
-                writer.writerows(
-                    [r.filepath, r.start_time, r.end_time, r.predicted_label, f"{r.confidence:.6f}"]
-                    for r in kept
-                )
+                header = ["filepath", "start", "stop", "prediction", "confidence"]
+                writer.writerow(header + (["margin", "top"] if top_k else []))
+                for r in kept:
+                    row = [r.filepath, r.start_time, r.end_time, r.predicted_label,
+                           f"{r.confidence:.6f}"]  # fmt: skip
+                    if top_k:
+                        cells = r.ranked_cells()
+                        row += [cells["margin"], cells["top"]]
+                    writer.writerow(row)
 
         _write_output(Path(output), _write)
     return FilePredictions(

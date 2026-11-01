@@ -23,6 +23,7 @@ from bioamla.viz.core import (
     VisualizationType,
     WindowType,
     annotation_boxes,
+    check_picture_settings,
     compute_mel_spectrogram,
     compute_stft,
     generate_spectrogram,
@@ -35,6 +36,7 @@ from bioamla.viz.video import SpectrogramVideoResult, generate_spectrogram_video
 __all__ = [
     "SpectrogramBox",
     "annotation_boxes",
+    "check_picture_settings",
     "generate_spectrogram",
     "generate_spectrogram_video",
     "SpectrogramVideoResult",

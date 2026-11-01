@@ -40,6 +40,126 @@ class TestConvertAudioFile:
         assert out.exists()
 
 
+class TestConvertKeepsChannels:
+    @pytest.fixture
+    def stereo(self, tmp_path):
+        import numpy as np
+        import soundfile as sf
+
+        t = np.arange(8000) / 8000
+        left, right = 0.5 * np.sin(2 * np.pi * 440 * t), 0.25 * np.sin(2 * np.pi * 880 * t)
+        path = tmp_path / "stereo.wav"
+        sf.write(path, np.column_stack([left, right]), 8000)
+        return path
+
+    def test_stereo_stays_stereo_with_its_channels_apart(self, stereo, tmp_path):
+        import numpy as np
+        import soundfile as sf
+
+        out = tmp_path / "out.wav"
+        convert_audio_file(stereo, out, target_format="wav")
+        data, sr = sf.read(out)
+        original, _ = sf.read(stereo)
+        assert data.shape == original.shape and sr == 8000
+        assert np.allclose(data, original, atol=1e-3)  # not a downmix duplicated
+
+    def test_resampling_keeps_the_channels(self, stereo, tmp_path):
+        import soundfile as sf
+
+        out = tmp_path / "out.wav"
+        convert_audio_file(stereo, out, target_format="wav", target_sample_rate=4000)
+        data, sr = sf.read(out)
+        assert sr == 4000 and data.shape == (4000, 2)
+
+    def test_mono_on_request(self, stereo, tmp_path):
+        import soundfile as sf
+
+        out = tmp_path / "out.wav"
+        convert_audio_file(stereo, out, target_format="wav", target_channels=1)
+        assert sf.info(out).channels == 1
+
+    @pytest.mark.usefixtures("requires_ffmpeg_cli")
+    def test_other_formats_keep_their_channels_too(self, stereo, tmp_path):
+        import soundfile as sf
+
+        mp3 = tmp_path / "s.mp3"
+        convert_audio_file(stereo, mp3, target_format="mp3")
+        out = tmp_path / "back.wav"
+        convert_audio_file(mp3, out, target_format="wav")
+        assert sf.info(out).channels == 2
+
+    def test_channel_counts_are_checked_first(self, stereo, tmp_path):
+        from bioamla.exceptions import InvalidInputError
+
+        with pytest.raises(InvalidInputError, match="1 or 2"):
+            convert_audio_file(stereo, tmp_path / "x.wav", target_channels=4)
+
+    def test_more_channels_than_mp3_holds(self, tmp_path):
+        import numpy as np
+        import soundfile as sf
+
+        from bioamla.exceptions import InvalidInputError
+
+        quad = tmp_path / "quad.wav"
+        sf.write(quad, np.zeros((800, 4)), 8000)
+        with pytest.raises(InvalidInputError, match="MP3 holds at most 2"):
+            convert_audio_file(quad, tmp_path / "q.mp3", target_format="mp3")
+        convert_audio_file(quad, tmp_path / "q.wav", target_format="wav")
+        assert sf.info(tmp_path / "q.wav").channels == 4  # kept where the format can
+
+    def test_load_audio_channels(self, stereo, test_audio_path):
+        from bioamla.audio import load_audio_channels
+
+        audio, sr = load_audio_channels(stereo)
+        assert audio.shape == (8000, 2) and audio.dtype.name == "float32"
+        mono, _ = load_audio_channels(test_audio_path)
+        assert mono.ndim == 1
+
+
+class TestConvertBitDepth:
+    def test_library_and_batch(self, test_audio_path, test_audio_dir, tmp_path):
+        import soundfile as sf
+
+        from bioamla.audio import save_audio
+        from bioamla.audio.batch import batch_convert_files
+
+        out = convert_audio_file(test_audio_path, tmp_path / "x.wav", target_bit_depth=24)
+        assert sf.info(out).subtype == "PCM_24"
+        assert sf.info(convert_audio_file(test_audio_path, tmp_path / "d.wav")).subtype == "PCM_16"
+        import numpy as np
+
+        stereo = np.zeros((100, 2), dtype=np.float32)
+        save_audio(str(tmp_path / "s.flac"), stereo, 8000, bit_depth=24)
+        assert sf.info(tmp_path / "s.flac").channels == 2
+        result = batch_convert_files(test_audio_dir, str(tmp_path / "b"), bit_depth=24)
+        assert result.successful > 0
+        assert {sf.info(p).subtype for p in (tmp_path / "b").rglob("*.wav")} == {"PCM_24"}
+
+
+class TestConvertBitDepthDefaultsAndChecks:
+    def test_keeps_the_source_depth_when_the_format_can(self, tmp_path):
+        import numpy as np
+        import soundfile as sf
+
+        src = tmp_path / "in24.wav"
+        sf.write(src, np.zeros(800), 8000, subtype="PCM_24")
+        out = convert_audio_file(src, tmp_path / "o.flac")  # format from the extension
+        assert (sf.info(out).format, sf.info(out).subtype) == ("FLAC", "PCM_24")
+        src32 = tmp_path / "in32.wav"
+        sf.write(src32, np.zeros(800), 8000, subtype="PCM_32")
+        # FLAC can't hold 32 bits: the default is the most it holds, 24
+        assert sf.info(convert_audio_file(src32, tmp_path / "o32.flac")).subtype == "PCM_24"
+
+    def test_batch_refuses_a_bad_depth_before_writing(self, test_audio_dir, tmp_path):
+        from bioamla.audio.batch import batch_convert_files
+        from bioamla.exceptions import InvalidInputError
+
+        out = tmp_path / "never"
+        with pytest.raises(InvalidInputError, match="MP3"):
+            batch_convert_files(test_audio_dir, str(out), target_format="mp3", bit_depth=24)
+        assert not out.exists()
+
+
 class TestConvertCli:
     @pytest.mark.usefixtures("requires_ffmpeg_cli")
     def test_directory_mode_produces_target_format(self, test_audio_dir, tmp_path):

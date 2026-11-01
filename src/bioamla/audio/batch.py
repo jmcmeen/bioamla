@@ -18,8 +18,7 @@ import numpy as np
 
 from bioamla.audio.convert import convert_audio_file
 from bioamla.audio.discovery import list_audio_files
-from bioamla.audio.io import load_audio, save_audio
-from bioamla.audio.processing import resample_audio
+from bioamla.audio.io import load_audio, process_file, save_audio
 from bioamla.batch import (
     BatchResult,
     SegmentInfo,
@@ -30,6 +29,14 @@ from bioamla.batch import (
 from bioamla.batch import config_csv_context as _csv_context
 from bioamla.batch import require_input_dir as _input_dir
 from bioamla.batch import require_output_dir as _output_dir
+from bioamla.common.constants import (
+    DEFAULT_HOP_LENGTH,
+    DEFAULT_N_FFT,
+    PICTURE_CMAP,
+    PICTURE_DPI,
+    PICTURE_N_MELS,
+    PICTURE_N_MFCC,
+)
 from bioamla.exceptions import InvalidInputError, NotFoundError
 from bioamla.protocols import OnProgress
 
@@ -49,6 +56,7 @@ def batch_transform_files(
     continue_on_error: bool = True,
     on_progress: OnProgress | None = None,
     operation: str = "transform",
+    keep_channels: bool = False,
 ) -> BatchResult:
     """
     Apply a per-file transform to every audio file in a directory.
@@ -65,6 +73,8 @@ def batch_transform_files(
         continue_on_error: Collect per-file errors and keep going if True.
         on_progress: Optional ``(completed, total)`` progress callback.
         operation: Name used in the batch log records (e.g. the command).
+        keep_channels: Keep each file's channels, applying ``processor_fn`` to each
+            (default: files are mixed down to mono first).
 
     Returns:
         A :class:`bioamla.batch.BatchResult` summarizing the run.
@@ -87,12 +97,9 @@ def batch_transform_files(
         out_path = out_dir / stem.parent / f"{stem.name}.wav"
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        audio, sr = load_audio(audio_path)
-        processed = processor_fn(audio, sr)
-        if sample_rate is not None and sample_rate != sr:
-            processed = resample_audio(processed, sr, sample_rate)
-            sr = sample_rate
-        return save_audio(str(out_path), processed, sr)
+        return process_file(
+            audio_path, str(out_path), processor_fn, sample_rate, keep_channels=keep_channels
+        )
 
     return run_batch(
         files,
@@ -124,6 +131,7 @@ def batch_resample_files(
         output_dir,
         processor_fn=lambda audio, sr: audio,
         sample_rate=target_sample_rate,
+        keep_channels=True,
         recursive=recursive,
         max_workers=max_workers,
         continue_on_error=continue_on_error,
@@ -138,6 +146,7 @@ def batch_convert_files(
     target_format: str = "wav",
     sample_rate: int | None = None,
     channels: int | None = None,
+    bit_depth: int | None = None,
     delete_original: bool = False,
     recursive: bool = True,
     max_workers: int = 1,
@@ -156,7 +165,12 @@ def batch_convert_files(
 
     Raises:
         NotFoundError: If the input directory does not exist.
+        InvalidInputError: If ``target_format`` or ``channels`` is unsupported, or
+            ``bit_depth`` doesn't apply to the format (before anything is written).
     """
+    from bioamla.audio.convert import check_convert_options
+
+    check_convert_options(target_format, channels, bit_depth)
     in_dir = Path(input_dir)
     out_dir = Path(output_dir)
 
@@ -176,6 +190,7 @@ def batch_convert_files(
             target_format=target_format,
             target_sample_rate=sample_rate,
             target_channels=channels,
+            target_bit_depth=bit_depth,
             delete_original=delete_original,
         )
 
@@ -197,14 +212,12 @@ def segment_audio_file(
     overlap: float = 0.0,
     prefix: str | None = None,
     format: str = "wav",
-    include_partial: bool = True,
-    label: str = "seg",
+    include_partial: bool = False,
 ) -> list[SegmentInfo]:
     """
     Split one audio file into fixed-duration segments written under ``output_dir``.
 
-    Segments are named ``<prefix>_<label><index:04d>.<format>``
-    (``rec_seg0000.wav`` by default).
+    Segments are named ``<prefix>_seg<index:04d>.<format>`` (``rec_seg0000.wav``).
 
     Args:
         input_path: Source audio file.
@@ -213,16 +226,17 @@ def segment_audio_file(
         overlap: Overlap between consecutive segments in seconds.
         prefix: Filename prefix for segments (defaults to the input stem).
         format: Segment file format ("wav", "mp3", "flac", "ogg").
-        include_partial: Keep a last segment shorter than ``duration``.
-        label: Text between the prefix and the index (``""`` gives ``rec_0000``).
+        include_partial: Keep a last segment shorter than ``duration`` (by default
+            every segment is exactly ``duration`` long and a shorter tail is left out).
 
     Returns:
         A list of :class:`bioamla.batch.SegmentInfo`, one per written segment.
 
     Raises:
         InvalidInputError: If ``duration`` is not positive, ``overlap`` is not
-            smaller than ``duration``, or ``prefix`` isn't a plain name (so clips
-            stay inside ``output_dir``).
+            smaller than ``duration``, ``prefix`` isn't a plain name (so clips stay
+            inside ``output_dir``), or the file is shorter than ``duration`` without
+            ``include_partial`` (it would give no clip at all).
 
     If writing fails partway, the segments already written are removed.
     """
@@ -240,9 +254,16 @@ def segment_audio_file(
     step = int((duration - overlap) * sr)
     if step <= 0:
         raise InvalidInputError("overlap must be smaller than duration.")
+    n = audio.shape[-1] if audio.ndim > 1 else len(audio)
+    if n == 0:
+        raise InvalidInputError(f"{src.name} has no audio to cut")
+    if n < seg_samples and not include_partial:
+        raise InvalidInputError(
+            f"{src.name} is {n / sr:.3g} s long, shorter than one {duration:g} s clip "
+            "(keep it as a shorter clip with --keep-short / include_partial)"
+        )
     out_dir.mkdir(parents=True, exist_ok=True)  # only once there is something to write
 
-    n = audio.shape[-1] if audio.ndim > 1 else len(audio)
     segments: list[SegmentInfo] = []
     count = 0
     start_idx = 0
@@ -252,7 +273,7 @@ def segment_audio_file(
                 break
             end_idx = min(start_idx + seg_samples, n)
             chunk = audio[..., start_idx:end_idx] if audio.ndim > 1 else audio[start_idx:end_idx]
-            seg_out = out_dir / f"{stem}_{label}{count:04d}.{format}"
+            seg_out = out_dir / f"{stem}_seg{count:04d}.{format}"
             save_audio(str(seg_out), chunk, sr)
             segments.append(
                 SegmentInfo(
@@ -264,6 +285,8 @@ def segment_audio_file(
                 )
             )
             count += 1
+            if end_idx >= n:  # the clip reached the end: one shorter last clip at most
+                break
             start_idx += step
     except BaseException:
         # Don't leave a partial set behind for a later run to mix with: remove the
@@ -271,7 +294,7 @@ def segment_audio_file(
         for seg in segments:
             seg.segment_path.unlink(missing_ok=True)
         if start_idx < n:
-            (out_dir / f"{stem}_{label}{count:04d}.{format}").unlink(missing_ok=True)
+            (out_dir / f"{stem}_seg{count:04d}.{format}").unlink(missing_ok=True)
         raise
 
     return segments
@@ -348,6 +371,8 @@ def batch_segment_files(
     *,
     duration: float,
     overlap: float = 0.0,
+    format: str = "wav",
+    include_partial: bool = False,
     recursive: bool = True,
     max_workers: int = 1,
     continue_on_error: bool = True,
@@ -357,13 +382,16 @@ def batch_segment_files(
     Split every audio file in a directory into fixed-duration segments.
 
     Segments mirror the input tree under ``output_dir`` and are named
-    ``<stem>_seg0000.wav`` and so on (see :func:`segment_audio_file`).
+    ``<stem>_seg0000.<format>`` and so on (see :func:`segment_audio_file`).
 
     Args:
         input_dir: Directory containing audio files.
         output_dir: Directory the segments are written under.
         duration: Segment duration in seconds.
         overlap: Overlap between consecutive segments in seconds.
+        format: Segment file format ("wav", "mp3", "flac", "ogg").
+        include_partial: Keep each file's last segment when it is shorter than
+            ``duration``.
         recursive: Search subdirectories.
         max_workers: Number of worker threads (1 = sequential).
         continue_on_error: Collect per-file errors and keep going if True.
@@ -401,6 +429,8 @@ def batch_segment_files(
             duration=duration,
             overlap=overlap,
             prefix=stem.name,
+            format=format,
+            include_partial=include_partial,
         )
 
     result = run_batch(
@@ -645,6 +675,7 @@ def batch_transform(
     sample_rate: int | None = None,
     on_progress: OnProgress | None = None,
     operation: str = "batch audio transform",
+    keep_channels: bool = False,
 ) -> BatchResult:
     """Apply ``processor`` to every file of a batch and save the results as WAV.
 
@@ -659,6 +690,8 @@ def batch_transform(
         sample_rate: Resample the outputs to this rate.
         on_progress: ``(done, total)`` callback.
         operation: Name used in the batch log records.
+        keep_channels: Keep each file's channels, applying ``processor`` to each
+            (default: files are mixed down to mono first).
 
     Raises:
         InvalidInputError: If directory mode has no ``output_dir``.
@@ -669,7 +702,8 @@ def batch_transform(
 
         def _transform(in_path: Path, out_path: Path) -> Path:
             wav_out = out_path.with_suffix(".wav")
-            return Path(process_file(str(in_path), str(wav_out), processor, sample_rate))
+            return Path(process_file(str(in_path), str(wav_out), processor, sample_rate,
+                                     keep_channels=keep_channels))  # fmt: skip
 
         return run_csv_transform(
             _csv_context(config),
@@ -691,6 +725,7 @@ def batch_transform(
         continue_on_error=config.continue_on_error,
         on_progress=on_progress,
         operation=operation,
+        keep_channels=keep_channels,
     )
 
 
@@ -701,20 +736,32 @@ def batch_resample(
     on_progress: OnProgress | None = None,
     operation: str = "batch audio resample",
 ) -> BatchResult:
-    """Resample every file of a batch to ``sample_rate`` (see :func:`batch_transform`)."""
+    """Resample every file of a batch to ``sample_rate``, keeping its channels (see
+    :func:`batch_transform`)."""
     return batch_transform(
-        config, _passthrough, sample_rate=sample_rate, on_progress=on_progress, operation=operation
-    )
+        config, _passthrough, sample_rate=sample_rate, on_progress=on_progress,
+        operation=operation, keep_channels=True,
+    )  # fmt: skip
 
 
 def batch_visualize(
     config: "BatchConfig",
     *,
     viz_type: str = "mel",
+    n_fft: int = DEFAULT_N_FFT,
+    hop_length: int = DEFAULT_HOP_LENGTH,
+    n_mels: int = PICTURE_N_MELS,
+    n_mfcc: int = PICTURE_N_MFCC,
+    cmap: str = PICTURE_CMAP,
+    dpi: int = PICTURE_DPI,
+    legend: bool = True,
     verbose: bool = True,
     on_progress: OnProgress | None = None,
 ) -> BatchResult:
-    """Draw a spectrogram, MFCC or waveform image of every file in a folder.
+    """Draw a spectrogram, MFCC or waveform image of every file in a folder, with axes,
+    title and colorbar unless ``legend`` is ``False``. The drawing settings default to
+    :func:`bioamla.viz.generate_spectrogram`'s, so each picture matches ``audio
+    visualize``'s of the same file.
 
     Directory mode only; images mirror the input tree under ``config.output_dir``
     (required). See :func:`bioamla.viz.batch_generate_spectrograms`.
@@ -728,10 +775,18 @@ def batch_visualize(
         _input_dir(config),
         _output_dir(config),
         viz_type=viz_type,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        n_mels=n_mels,
+        n_mfcc=n_mfcc,
+        cmap=cmap,
+        dpi=dpi,
+        show_colorbar=legend,
         recursive=config.recursive,
         verbose=verbose,
         on_progress=on_progress,
         max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
     )
     return BatchResult(
         total_files=stats["files_processed"] + stats["files_failed"],
@@ -993,6 +1048,7 @@ def batch_convert(
     target_format: str = "wav",
     sample_rate: int | None = None,
     channels: int | None = None,
+    bit_depth: int | None = None,
     delete_original: bool = False,
     on_progress: OnProgress | None = None,
     operation: str = "batch audio convert",
@@ -1001,7 +1057,14 @@ def batch_convert(
 
     Directory mode writes into ``config.output_dir`` (required); CSV mode writes in
     place or under ``config.output_dir`` and updates each row's ``file_name``.
+
+    Raises:
+        InvalidInputError: If ``target_format`` or ``channels`` is unsupported, or
+            ``bit_depth`` doesn't apply to the format (before anything is written).
     """
+    from bioamla.audio.convert import check_convert_options
+
+    check_convert_options(target_format, channels, bit_depth)
     if config.input_file:
         from bioamla.batch import run_csv_transform
 
@@ -1013,6 +1076,7 @@ def batch_convert(
                     target_format=target_format,
                     target_sample_rate=sample_rate,
                     target_channels=channels,
+                    target_bit_depth=bit_depth,
                     delete_original=delete_original,
                 )
             )
@@ -1033,6 +1097,7 @@ def batch_convert(
         target_format=target_format,
         sample_rate=sample_rate,
         channels=channels,
+        bit_depth=bit_depth,
         delete_original=delete_original,
         recursive=config.recursive,
         max_workers=config.max_workers,
@@ -1046,6 +1111,8 @@ def batch_segment(
     *,
     duration: float,
     overlap: float = 0.0,
+    format: str = "wav",
+    include_partial: bool = False,
     on_progress: OnProgress | None = None,
     operation: str = "batch audio segment",
 ) -> BatchResult:
@@ -1066,8 +1133,9 @@ def batch_segment(
 
         def _segment(in_path: Path, seg_dir: Path) -> list:
             return segment_audio_file(
-                str(in_path), str(seg_dir), duration=duration, overlap=overlap
-            )
+                str(in_path), str(seg_dir), duration=duration, overlap=overlap,
+                format=format, include_partial=include_partial,
+            )  # fmt: skip
 
         return run_csv_segment(
             _csv_context(config),
@@ -1083,6 +1151,8 @@ def batch_segment(
         _output_dir(config),
         duration=duration,
         overlap=overlap,
+        format=format,
+        include_partial=include_partial,
         recursive=config.recursive,
         max_workers=config.max_workers,
         continue_on_error=config.continue_on_error,

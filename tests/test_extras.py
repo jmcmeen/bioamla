@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -19,11 +20,6 @@ from bioamla._extras import (
     require_extra,
 )
 from bioamla.exceptions import DependencyError
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 PYPROJECT = Path(__file__).resolve().parents[1] / "pyproject.toml"
 

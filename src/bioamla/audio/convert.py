@@ -2,10 +2,10 @@
 Audio Format Conversion
 =======================
 
-Format / channel / sample-rate conversion folded from the old
-``BatchAudioTransformService`` convert path. :func:`convert_audio_file` loads an
-audio file (via the pydub backend), optionally re-channels and resamples it,
-saves it in the target format, and optionally deletes the original.
+Format / channel / sample-rate conversion. :func:`convert_audio_file` loads an audio
+file with its channels, optionally re-channels and resamples it, saves it in the
+target format, and optionally deletes the original. A stereo (or multi-channel)
+file stays that way unless ``target_channels`` says otherwise.
 
 Raises :class:`~bioamla.exceptions.*` on failure (via the underlying I/O
 helpers); ``numpy`` is the only hard dependency at import time.
@@ -15,7 +15,8 @@ from pathlib import Path
 
 import numpy as np
 
-from bioamla.audio.io import load_audio, save_audio
+from bioamla.audio._pydub import BIT_DEPTH_SUBTYPES, check_bit_depth, output_format
+from bioamla.audio.io import load_audio_channels, save_audio
 from bioamla.audio.processing import resample_audio
 from bioamla.exceptions import InvalidInputError
 
@@ -25,10 +26,11 @@ SUPPORTED_FORMATS = {"wav", "mp3", "flac", "ogg"}
 
 
 def _rechannel(audio: np.ndarray, current_channels: int, target_channels: int) -> np.ndarray:
-    """Convert ``audio`` between mono and stereo.
+    """Convert ``audio`` to mono or stereo.
 
-    Mono arrays are 1D; stereo arrays are 2D with shape ``(n_samples, 2)`` (the
-    layout :func:`bioamla.audio.io.save_audio` expects).
+    Mono arrays are 1D; others are 2D with shape ``(n_samples, n_channels)`` (the
+    layout :func:`bioamla.audio.io.save_audio` expects). Going to stereo from more
+    than two channels downmixes them first.
     """
     if target_channels == current_channels:
         return audio
@@ -46,34 +48,33 @@ def _rechannel(audio: np.ndarray, current_channels: int, target_channels: int) -
     raise InvalidInputError(f"Unsupported target channel count: {target_channels}")
 
 
-def convert_audio_file(
-    input_path: str | Path,
-    output_path: str | Path,
-    *,
-    target_format: str | None = "wav",
-    target_sample_rate: int | None = None,
+def _source_bit_depth(path: Path, out_fmt: str) -> int | None:
+    """The source's bits per sample, or the most ``out_fmt`` holds up to them (a 32-bit
+    source to FLAC gives 24); ``None`` without one (MP3, ...) or for a lossy output."""
+    try:
+        import soundfile as sf
+
+        subtype = sf.info(str(path)).subtype
+    except Exception:  # noqa: BLE001 - not a soundfile format (MP3, ...): no bit depth
+        return None
+    bits = {"PCM_S8": 8, "PCM_U8": 8, "PCM_16": 16, "PCM_24": 24, "PCM_32": 32,
+            "FLOAT": 32, "DOUBLE": 32}.get(subtype)  # fmt: skip
+    held = [b for b in BIT_DEPTH_SUBTYPES.get(out_fmt, {}) if bits and b <= bits]
+    return max(held) if held else None
+
+
+def check_convert_options(
+    target_format: str | None = None,
     target_channels: int | None = None,
-    delete_original: bool = False,
+    target_bit_depth: int | None = None,
+    output_path: str | Path = "",
 ) -> str:
-    """Convert an audio file to a target format, optionally re-channel/resample.
-
-    Args:
-        input_path: Source audio file.
-        output_path: Destination file path (its suffix should match
-            ``target_format``).
-        target_format: Output container/codec ("wav", "mp3", "flac", "ogg"), or
-            ``None`` to choose it from ``output_path``'s extension.
-        target_sample_rate: Resample to this rate before saving (optional).
-        target_channels: Output channel count (1 = mono, 2 = stereo); optional.
-        delete_original: Delete the source file after a successful conversion
-            (only when the output path differs from the input path).
-
-    Returns:
-        The output path as a string.
+    """Check conversion options before anything is converted (a batch checks them
+    once, up front); the output format they give.
 
     Raises:
-        InvalidInputError: If ``target_format``/``target_channels`` is unsupported.
-        AudioLoadError / AudioSaveError: On I/O failure.
+        InvalidInputError: If the format or channel count is unsupported, or the bit
+            depth doesn't apply to the format.
     """
     fmt = None if target_format is None else target_format.lower().lstrip(".")
     if fmt is not None and fmt not in SUPPORTED_FORMATS:
@@ -81,22 +82,74 @@ def convert_audio_file(
             f"Unsupported target format: {target_format}. "
             f"Choose one of {sorted(SUPPORTED_FORMATS)}."
         )
+    if target_channels not in (None, 1, 2):
+        raise InvalidInputError(f"Unsupported target channel count: {target_channels} (1 or 2)")
+    out_fmt = output_format(output_path, fmt)
+    check_bit_depth(out_fmt, target_bit_depth)
+    return out_fmt
 
+
+def convert_audio_file(
+    input_path: str | Path,
+    output_path: str | Path,
+    *,
+    target_format: str | None = None,
+    target_sample_rate: int | None = None,
+    target_channels: int | None = None,
+    target_bit_depth: int | None = None,
+    delete_original: bool = False,
+) -> str:
+    """Convert an audio file to a target format, optionally re-channel/resample.
+
+    Args:
+        input_path: Source audio file.
+        output_path: Destination file path.
+        target_format: Output container/codec ("wav", "mp3", "flac", "ogg"); by
+            default from ``output_path``'s extension (WAV for an unknown one).
+        target_sample_rate: Resample to this rate before saving (optional).
+        target_channels: Output channel count (1 = mono, 2 = stereo); by default
+            the file keeps its own channels.
+        target_bit_depth: Bits per sample for WAV (8, 16, 24, 32) or FLAC (8, 16,
+            24). By default the source's, when it has one the output format can hold
+            (a 24-bit WAV stays 24-bit), else 16. Lossy formats take none.
+        delete_original: Delete the source file after a successful conversion
+            (only when the output path differs from the input path).
+
+    Returns:
+        The output path as a string.
+
+    Raises:
+        InvalidInputError: If ``target_format``/``target_channels`` is unsupported, or
+            the file has more than 2 channels for MP3 output without ``target_channels``,
+            or ``target_bit_depth`` doesn't apply to the format.
+        AudioLoadError / AudioSaveError: On I/O failure.
+    """
+    fmt = None if target_format is None else target_format.lower().lstrip(".")
     in_path = Path(input_path)
     out_path = Path(output_path)
+    out_fmt = check_convert_options(target_format, target_channels, target_bit_depth, out_path)
 
-    # load_audio returns mono float32; treat as 1 channel.
-    audio, sr = load_audio(str(in_path))
+    audio, sr = load_audio_channels(in_path)
     current_channels = 1 if audio.ndim == 1 else audio.shape[1]
+    if target_channels is None and current_channels > 2 and out_fmt == "mp3":
+        raise InvalidInputError(
+            f"{in_path.name} has {current_channels} channels and MP3 holds at most 2; "
+            "choose 1 or 2 channels, or another format"
+        )
 
+    # Fewer channels first, so resampling works on what's kept.
+    if target_channels is not None and target_channels < current_channels:
+        audio = _rechannel(audio, current_channels, target_channels)
+        current_channels = target_channels
     if target_sample_rate is not None and target_sample_rate != sr:
-        audio = resample_audio(audio, sr, target_sample_rate)
+        # resample_audio works along the last axis; channels are columns here.
+        audio = resample_audio(audio.T, sr, target_sample_rate).T
         sr = target_sample_rate
-
     if target_channels is not None:
         audio = _rechannel(audio, current_channels, target_channels)
 
-    saved = save_audio(str(out_path), audio, sr, format=fmt)
+    bit_depth = target_bit_depth or _source_bit_depth(in_path, out_fmt)
+    saved = save_audio(str(out_path), audio, sr, format=fmt, bit_depth=bit_depth)
 
     if delete_original and out_path.resolve() != in_path.resolve():
         in_path.unlink(missing_ok=True)

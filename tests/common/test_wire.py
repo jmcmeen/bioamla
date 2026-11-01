@@ -87,3 +87,45 @@ def test_arrays_travel_compactly():
     assert "b64" in wire and len(json.dumps(wire)) < 60_000
     with pytest.raises(WireError):
         to_wire(np.array([object()], dtype=object))
+
+
+def test_dataframes_round_trip_with_dtypes_and_index():
+    import pandas as pd
+
+    frame = pd.DataFrame(
+        {"t": np.array([0.0, 0.5], dtype="float32"), "n": [1, 2], "s": ["a", "b"],
+         "x": [float("nan"), 1.0]},
+        index=[10, 20],
+    )  # fmt: skip
+    back = round_trip({"table": frame})["table"]
+    pd.testing.assert_frame_equal(back, frame)
+    empty = pd.DataFrame(columns=["a"]).astype({"a": "float64"})
+    pd.testing.assert_frame_equal(round_trip(empty), empty, check_index_type=False)
+
+
+def test_a_result_holding_a_table_round_trips(test_audio_path):
+    import pandas as pd
+
+    from bioamla import operations
+
+    try:
+        result = operations.run("audio.features", {"file": test_audio_path})
+    except Exception as e:  # noqa: BLE001 - an extra may be missing
+        pytest.skip(str(e))
+    back = round_trip(result)
+    pd.testing.assert_frame_equal(back.table, result.table)
+
+
+def test_dataframes_keep_missing_values_timedeltas_and_their_index():
+    import pandas as pd
+
+    frame = pd.DataFrame(
+        {"n": pd.array([1, None], dtype="Int64"), "s": pd.array(["a", None], dtype="string"),
+         "when": pd.to_datetime(["2024-01-01", None]),
+         "gap": pd.to_timedelta([1.5, None], unit="s")},
+        index=pd.Index(["x", "y"], name="file"),
+    )  # fmt: skip
+    pd.testing.assert_frame_equal(round_trip(frame), frame)
+    rows_only = pd.DataFrame(index=pd.Index(["a", "b"], name="f"))
+    back = round_trip(rows_only)
+    assert back.shape == (2, 0) and list(back.index) == ["a", "b"] and back.index.name == "f"

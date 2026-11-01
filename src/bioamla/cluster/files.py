@@ -36,12 +36,6 @@ def load_array_file(path: str | Path, ndim: int | None = 2) -> np.ndarray:
     return array
 
 
-def _npy_path(path: str | Path) -> str:
-    """The file ``np.save`` writes for ``path``: ``.npy`` is added when it's missing."""
-    path = str(path)
-    return path if path.endswith(".npy") else path + ".npy"
-
-
 def save_array_file(path: str | Path, array: np.ndarray) -> str:
     """Save a ``.npy`` array, creating its folder.
 
@@ -51,7 +45,9 @@ def save_array_file(path: str | Path, array: np.ndarray) -> str:
     Raises:
         ClusteringError: If it can't be written.
     """
-    out = _npy_path(path)
+    from bioamla.common.files import npy_path
+
+    out = npy_path(path)
     try:
         Path(out).parent.mkdir(parents=True, exist_ok=True)
         np.save(out, array)

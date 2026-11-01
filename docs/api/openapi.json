@@ -3221,8 +3221,8 @@
         "tags": [
           "batch"
         ],
-        "summary": "Trim every file to a time range, or trim its silence.",
-        "description": "Trim every file to a time range, or trim its silence.\n\nRuns as a job: answers with a job id.",
+        "summary": "Trim every file to a time range (keeping its channels), or trim its silence",
+        "description": "Trim every file to a time range (keeping its channels), or trim its silence\n\nRuns as a job: answers with a job id.",
         "operationId": "op_batch_audio_trim",
         "security": [
           {
@@ -8584,6 +8584,23 @@
             ],
             "title": "Channels"
           },
+          "bit_depth": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  8,
+                  16,
+                  24,
+                  32
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bit Depth"
+          },
           "format": {
             "anyOf": [
               {
@@ -8609,7 +8626,7 @@
           "output"
         ],
         "title": "AudioConvertRequest",
-        "description": "Convert a file's format, sample rate or channel count.\n\nAttributes:\n    file: The audio file.\n    output: Where to save the result.\n    sample_rate: Target sample rate (Hz).\n    channels: Target channel count (1 or 2).\n    format: Output format; by default, from ``output``'s extension."
+        "description": "Convert a file's format, sample rate or channel count.\n\nAttributes:\n    file: The audio file.\n    output: Where to save the result.\n    sample_rate: Target sample rate (Hz).\n    channels: Target channel count (1 or 2; default: keep the file's own).\n    bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24); by default the\n        source's when the output holds it, else 16.\n    format: Output format; by default, from ``output``'s extension."
       },
       "AudioDenoiseRequest": {
         "properties": {
@@ -8968,6 +8985,11 @@
               }
             ],
             "title": "Prefix"
+          },
+          "include_partial": {
+            "type": "boolean",
+            "title": "Include Partial",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -8977,7 +8999,7 @@
           "output_dir"
         ],
         "title": "AudioSegmentRequest",
-        "description": "Cut a file into fixed-length clips; a trailing clip shorter than ``duration``\nis left out.\n\nAttributes:\n    file: The audio file.\n    output_dir: The folder to write ``<prefix>_0000.<format>``, ... to.\n    duration: Clip length (s).\n    overlap: Overlap between clips (s).\n    format: Clip format.\n    prefix: Clip name prefix (default: the file's name without extension)."
+        "description": "Cut a file into fixed-length clips, ``<prefix>_seg0000.<format>``, ...\n\nAttributes:\n    file: The audio file.\n    output_dir: The folder to write the clips to.\n    duration: Clip length (s).\n    overlap: Overlap between clips (s).\n    format: Clip format.\n    prefix: Clip name prefix (default: the file's name without extension).\n    include_partial: Keep the last clip when it is shorter than ``duration``\n        (left out by default)."
       },
       "AudioTimeStretchRequest": {
         "properties": {
@@ -9257,17 +9279,17 @@
           "n_mfcc": {
             "type": "integer",
             "title": "N Mfcc",
-            "default": 20
+            "default": 40
           },
           "cmap": {
             "type": "string",
             "title": "Cmap",
-            "default": "viridis"
+            "default": "magma"
           },
           "dpi": {
             "type": "integer",
             "title": "Dpi",
-            "default": 100
+            "default": 150
           },
           "legend": {
             "type": "boolean",
@@ -9701,6 +9723,23 @@
             ],
             "title": "Channels"
           },
+          "bit_depth": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  8,
+                  16,
+                  24,
+                  32
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bit Depth"
+          },
           "delete_original": {
             "type": "boolean",
             "title": "Delete Original",
@@ -9710,7 +9749,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "BatchConvertRequest",
-        "description": "Convert every file's format, sample rate or channel count.\n\nAttributes:\n    target_format: Output format.\n    sample_rate: Target sample rate (Hz).\n    channels: Target channel count (1 or 2).\n    delete_original: Delete each source file after it converts."
+        "description": "Convert every file's format, sample rate or channel count.\n\nAttributes:\n    target_format: Output format.\n    sample_rate: Target sample rate (Hz).\n    channels: Target channel count (1 or 2; default: keep the file's own).\n    bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24); by default the\n        source's when the output holds it, else 16.\n    delete_original: Delete each source file after it converts."
       },
       "BatchDenoiseRequest": {
         "properties": {
@@ -10395,7 +10434,7 @@
           "top_k": {
             "type": "integer",
             "title": "Top K",
-            "default": 5
+            "default": 0
           },
           "min_confidence": {
             "type": "number",
@@ -10416,7 +10455,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "BatchPredictRequest",
-        "description": "AST classification over a batch, whole files or in segments.\n\nAttributes:\n    model: Model (Hugging Face ID or local path).\n    top_k: Top predictions per file.\n    min_confidence: Leave out predictions below this confidence.\n    segment_duration: Classify N-second segments (0: whole files).\n    overlap: Overlap between segments (s)."
+        "description": "AST classification over a batch, whole files or in segments.\n\nAttributes:\n    model: Model (Hugging Face ID or local path).\n    top_k: Rank each prediction's ``top_k`` most likely labels (``top`` and\n        ``margin``; 0 leaves them out).\n    min_confidence: Leave out predictions below this confidence.\n    segment_duration: Classify N-second segments (0: whole files).\n    overlap: Overlap between segments (s)."
       },
       "BatchRequest": {
         "properties": {
@@ -10692,12 +10731,28 @@
             "type": "number",
             "title": "Overlap",
             "default": 0.0
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "wav",
+              "mp3",
+              "flac",
+              "ogg"
+            ],
+            "title": "Format",
+            "default": "wav"
+          },
+          "include_partial": {
+            "type": "boolean",
+            "title": "Include Partial",
+            "default": false
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "BatchSegmentRequest",
-        "description": "Cut every file into fixed-length clips.\n\nAttributes:\n    duration: Clip length (s).\n    overlap: Overlap between clips (s)."
+        "description": "Cut every file into fixed-length clips, ``<stem>_seg0000.<format>``, ...\n\nAttributes:\n    duration: Clip length (s).\n    overlap: Overlap between clips (s).\n    format: Clip format.\n    include_partial: Keep each file's last clip when it is shorter than\n        ``duration`` (left out by default)."
       },
       "BatchTrimRequest": {
         "properties": {
@@ -10854,6 +10909,41 @@
             "title": "Plot Type",
             "default": "mel"
           },
+          "n_fft": {
+            "type": "integer",
+            "title": "N Fft",
+            "default": 2048
+          },
+          "hop_length": {
+            "type": "integer",
+            "title": "Hop Length",
+            "default": 512
+          },
+          "n_mels": {
+            "type": "integer",
+            "title": "N Mels",
+            "default": 128
+          },
+          "n_mfcc": {
+            "type": "integer",
+            "title": "N Mfcc",
+            "default": 40
+          },
+          "cmap": {
+            "type": "string",
+            "title": "Cmap",
+            "default": "magma"
+          },
+          "dpi": {
+            "type": "integer",
+            "title": "Dpi",
+            "default": 150
+          },
+          "legend": {
+            "type": "boolean",
+            "title": "Legend",
+            "default": true
+          },
           "verbose": {
             "type": "boolean",
             "title": "Verbose",
@@ -10863,7 +10953,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "BatchVisualizeRequest",
-        "description": "A spectrogram, MFCC or waveform image of every file (directory mode).\n\nAttributes:\n    plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.\n    verbose: Log each file at INFO level."
+        "description": "A spectrogram, MFCC or waveform image of every file (directory mode).\n\nThe drawing settings and their defaults are ``audio.visualize``'s, so both draw\nthe same picture of a file (as PNG; boxes and annotations are single-file only).\n\nAttributes:\n    plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.\n    n_fft: FFT window size.\n    hop_length: Hop length.\n    n_mels: Mel bands.\n    n_mfcc: MFCCs.\n    cmap: Colormap name.\n    dpi: Image DPI.\n    legend: Show axes, title and colorbar.\n    verbose: Log each file at INFO level."
       },
       "BioIndexRequest": {
         "properties": {
@@ -13052,6 +13142,12 @@
             "type": "integer",
             "title": "Resample Freq",
             "default": 16000
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Top K",
+            "default": 0
           }
         },
         "additionalProperties": false,
@@ -13060,7 +13156,7 @@
           "file"
         ],
         "title": "PredictRequest",
-        "description": "Classify one audio file with an AST model.\n\nAttributes:\n    file: The audio file.\n    model_path: The model (Hugging Face ID or local path).\n    segment_duration: Classify N-second segments (0: the whole file).\n    overlap: Overlap between segments (s).\n    min_confidence: Leave out predictions below this.\n    output: A CSV to save the predictions to.\n    resample_freq: The model's sample rate."
+        "description": "Classify one audio file with an AST model.\n\nAttributes:\n    file: The audio file.\n    model_path: The model (Hugging Face ID or local path).\n    segment_duration: Classify N-second segments (0: the whole file).\n    overlap: Overlap between segments (s).\n    min_confidence: Leave out predictions below this.\n    output: A CSV to save the predictions to.\n    resample_freq: The model's sample rate.\n    top_k: Also rank each prediction's ``top_k`` most likely labels, with the\n        margin between the first two (0: don't)."
       },
       "PullDatasetRequest": {
         "properties": {

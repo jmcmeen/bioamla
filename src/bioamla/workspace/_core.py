@@ -35,7 +35,7 @@ import sys
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
@@ -57,6 +57,7 @@ UNRECORDED_COMMANDS = frozenset({
     "workspace status",
     "workspace list",
     # Reads of another machine's state, not work in this workspace:
+    "remote current",
     "remote list",
     "remote ping",
     "remote workspaces",
@@ -470,13 +471,13 @@ class Workspace:
                 ``via`` and ``job``).
         """
         import socket
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from bioamla import __version__
 
         return {
             "v": HISTORY_RECORD_VERSION,
-            "time": datetime.fromtimestamp(started, timezone.utc).isoformat(timespec="seconds"),
+            "time": datetime.fromtimestamp(started, UTC).isoformat(timespec="seconds"),
             "duration": round(ended - started, 3),
             "command": command,
             "argv": argv,
@@ -699,7 +700,7 @@ def create_workspace(root: str | Path, name: str | None = None) -> Workspace:
         "format_version": FORMAT_VERSION,
         "id": _new_id(),
         "name": name or root.name,
-        "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "created": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     dot = root / WORKSPACE_DIR
     for sub in _SUBDIRS:
@@ -730,8 +731,6 @@ def open_workspace(root: str | Path) -> Workspace:
         version = int(meta["format_version"])
         meta["id"]
     except ConfigError as e:
-        if "tomli" in str(e):  # a missing dependency, not a broken workspace
-            raise
         raise WorkspaceError(f"Unreadable {meta_path}: {e}") from e
     except (KeyError, ValueError, TypeError) as e:
         raise WorkspaceError(f"Unreadable {meta_path}: {e}") from e

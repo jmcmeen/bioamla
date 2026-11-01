@@ -14,6 +14,14 @@ from pathlib import Path
 
 from bioamla.audio.discovery import list_audio_files
 from bioamla.batch import output_stems, run_batch
+from bioamla.common.constants import (
+    DEFAULT_HOP_LENGTH,
+    DEFAULT_N_FFT,
+    PICTURE_CMAP,
+    PICTURE_DPI,
+    PICTURE_N_MELS,
+    PICTURE_N_MFCC,
+)
 from bioamla.exceptions import NotFoundError
 from bioamla.protocols import OnProgress
 from bioamla.viz.core import (
@@ -30,21 +38,23 @@ def batch_generate_spectrograms(
     output_dir: str,
     viz_type: VisualizationType = "mel",
     sample_rate: int = 16000,
-    n_mels: int = 128,
-    n_mfcc: int = 40,
-    hop_length: int = 512,
-    n_fft: int = 2048,
+    n_mels: int = PICTURE_N_MELS,
+    n_mfcc: int = PICTURE_N_MFCC,
+    hop_length: int = DEFAULT_HOP_LENGTH,
+    n_fft: int = DEFAULT_N_FFT,
     window: WindowType = "hann",
     figsize: tuple[int, int] = (10, 4),
-    cmap: str = "magma",
+    cmap: str = PICTURE_CMAP,
     db_min: float | None = None,
     db_max: float | None = None,
-    dpi: int = 150,
+    dpi: int = PICTURE_DPI,
     format: str = "png",
+    show_colorbar: bool = True,
     recursive: bool = True,
     verbose: bool = True,
     on_progress: OnProgress | None = None,
     max_workers: int = 1,
+    continue_on_error: bool = True,
 ) -> dict:
     """
     Generate spectrograms for all audio files in a directory.
@@ -65,10 +75,13 @@ def batch_generate_spectrograms(
         db_max: Maximum dB value for scaling.
         dpi: Resolution for output images.
         format: Output format ('png' or 'jpg').
+        show_colorbar: Show axes, title and colorbar (as
+            :func:`~bioamla.viz.generate_spectrogram`); ``False`` gives the bare image.
         recursive: Whether to search subdirectories.
         verbose: Whether to log progress at INFO level.
         on_progress: Optional ``(completed, total)`` progress callback.
         max_workers: Worker threads; 1 runs sequentially.
+        continue_on_error: Keep going after a file fails (else raise its error).
 
     Returns:
         Statistics dict with ``files_processed``, ``files_failed``, ``output_dir``,
@@ -77,6 +90,10 @@ def batch_generate_spectrograms(
     Raises:
         NotFoundError: If the input directory does not exist.
     """
+    from bioamla.viz.core import check_picture_settings
+
+    check_picture_settings(n_fft=n_fft, hop_length=hop_length, n_mels=n_mels, n_mfcc=n_mfcc,
+                           cmap=cmap, dpi=dpi)  # fmt: skip
     in_dir = Path(input_dir)
     out_dir = Path(output_dir)
 
@@ -126,13 +143,19 @@ def batch_generate_spectrograms(
             db_max=db_max,
             dpi=dpi,
             format=format,
+            show_colorbar=show_colorbar,
         )
         if verbose:
             logger.info(f"  Generated: {output_path}")
         return output_path
 
     result = run_batch(
-        files, _generate, max_workers=max_workers, on_progress=on_progress, operation="spectrogram"
+        files,
+        _generate,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+        operation="spectrogram",
     )
 
     return {

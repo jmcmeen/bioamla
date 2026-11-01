@@ -43,12 +43,15 @@ class ServerConfig:
         linkable: Folders outside ``root`` that workspaces may link (e.g. an archive
             of recordings), used in place.
         max_jobs: How many jobs may run at once (machine-learning jobs: one at a time).
+        job_timeout: Seconds a running job may go without reporting anything before
+            it's stopped (``None``: no limit).
     """
 
     root: Path
     token: str
     linkable: list[Path] = field(default_factory=list)
     max_jobs: int = 2
+    job_timeout: float | None = None
 
 
 def envelope(result: Any) -> dict[str, Any]:
@@ -97,7 +100,9 @@ def create_app(config: ServerConfig) -> FastAPI:
     from bioamla import __version__
     from bioamla.server.jobs import JobRunner, add_job_routes
 
-    runner = JobRunner(config.root, config.linkable, max_jobs=config.max_jobs)
+    runner = JobRunner(
+        config.root, config.linkable, max_jobs=config.max_jobs, timeout=config.job_timeout
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

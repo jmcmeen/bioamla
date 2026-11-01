@@ -58,6 +58,33 @@ def remote_add(name: str, url: str, token_env: str | None) -> None:
     print_success(f"Added remote {added.name}: {added.url} (token in ${added.token_env})")
 
 
+@remote.command("current")
+def remote_current() -> None:
+    """Show where commands run from here: the remote and its workspace, from
+    $BIOAMLA_REMOTE or the local workspace's `remote` and `workspace` settings (null
+    when commands run on this machine).
+
+    Scripts use it to tell whether their files belong on a server, e.g. the labeling
+    skill uploads its annotations there.
+    """
+    from bioamla.cli.output import emit_result
+    from bioamla.cli.remote_mode import resolve
+
+    target = resolve(None)
+    found = (
+        {"remote": target.name, "workspace": target.workspace, "source": target.source}
+        if target
+        else {"remote": None, "workspace": None, "source": None}
+    )
+    if emit_result(found):
+        return
+    if target is None:
+        click.echo("Commands run on this machine (no remote set).")
+    else:
+        where = f"{target.name}:{target.workspace}" if target.workspace else target.name
+        click.echo(f"{where}  (from {target.source})")
+
+
 @remote.command("list")
 def remote_list() -> None:
     """Show the remotes, and whether each one's token is set."""

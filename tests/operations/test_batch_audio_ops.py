@@ -188,10 +188,14 @@ def test_no_output_dir_writes_no_none_folder(manifest, test_audio_dir, tmp_path,
 
 
 @pytest.mark.parametrize(
-    "name", ["batch.audio.info", "batch.audio.metadata", "batch.audio.segment"]
+    "name",
+    ["batch.audio.info", "batch.audio.metadata", "batch.audio.segment", "batch.audio.visualize"],
 )
 def test_directory_mode_honours_continue_on_error(name, tmp_path):
     from bioamla.exceptions import BioamlaError
+
+    if name.endswith("visualize"):
+        pytest.importorskip("matplotlib")
 
     folder = tmp_path / "in"
     folder.mkdir()

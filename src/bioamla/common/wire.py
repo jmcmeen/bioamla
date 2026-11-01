@@ -7,7 +7,8 @@ print a remote result exactly as it prints a local one).
 
 Supported: ``None``, booleans, numbers (including NaN and infinity), strings, lists,
 tuples, dicts, :class:`pathlib.Path`, dates and datetimes, NumPy arrays and scalars,
-and dataclasses and enums defined in ``bioamla``. Rebuilding only ever imports
+pandas DataFrames (with their column dtypes and index), and dataclasses and enums
+defined in ``bioamla``. Rebuilding only ever imports
 ``bioamla`` modules and only constructs dataclasses and enums from them.
 
 Example:
@@ -90,6 +91,8 @@ def to_wire(value: Any) -> Any:
         return {_TAG: "float", "value": repr(value)}
     if isinstance(value, PurePath):
         return {_TAG: "path", "value": str(value)}
+    if isinstance(value, _dt.timedelta):
+        return {_TAG: "timedelta", "value": value.total_seconds()}
     if isinstance(value, _dt.datetime):
         return {_TAG: "datetime", "value": value.isoformat()}
     if isinstance(value, _dt.date):
@@ -108,6 +111,19 @@ def to_wire(value: Any) -> Any:
             raise WireError(f"Can't send a {_type_name(cls)}")
         fields = {f.name: to_wire(getattr(value, f.name)) for f in dataclasses.fields(value)}
         return {_TAG: "dataclass", "type": _type_name(cls), "fields": fields}
+    pandas = _loaded("pandas")
+    if pandas is not None and isinstance(value, pandas.DataFrame):
+        return {
+            _TAG: "dataframe",
+            "columns": [to_wire(c) for c in value.columns],
+            "dtypes": [str(t) for t in value.dtypes],
+            "index": [_cell(v, pandas) for v in value.index.tolist()],
+            "index_dtype": str(value.index.dtype),
+            "index_name": to_wire(value.index.name),
+            "data": [
+                [_cell(v, pandas) for v in row] for row in value.to_numpy(dtype=object).tolist()
+            ],  # fmt: skip
+        }
     numpy = _numpy()
     if numpy is not None:
         if isinstance(value, numpy.ndarray):
@@ -141,6 +157,8 @@ def from_wire(data: Any) -> Any:
             return float(data["value"])
         if tag == "path":
             return Path(data["value"])
+        if tag == "timedelta":
+            return _dt.timedelta(seconds=data["value"])
         if tag == "datetime":
             return _dt.datetime.fromisoformat(data["value"])
         if tag == "date":
@@ -153,6 +171,18 @@ def from_wire(data: Any) -> Any:
             return _bioamla_type(data["type"], "enum")(from_wire(data["value"]))
         if tag == "dataclass":
             return _dataclass(data)
+        if tag == "dataframe":
+            import pandas
+
+            columns = [from_wire(c) for c in data["columns"]]
+            rows = from_wire(data["data"])
+            index = pandas.Index(from_wire(data["index"]), name=from_wire(data.get("index_name")))
+            if "index_dtype" in data:
+                index = index.astype(data["index_dtype"])
+            # Rows with no columns keep their index; no rows keep their columns.
+            frame = pandas.DataFrame(rows if rows and columns else None, columns=columns,
+                                     index=index)  # fmt: skip
+            return frame.astype(dict(zip(columns, data["dtypes"], strict=True)))
         if tag in ("ndarray", "npscalar"):
             import numpy
 
@@ -195,10 +225,25 @@ def _dataclass(data: dict[str, Any]) -> Any:
     return obj
 
 
-def _numpy() -> Any:
+def _cell(value: Any, pandas: Any) -> Any:
+    """A DataFrame cell on the wire: a missing value (NaN, NaT, pd.NA) is ``None``
+    (the column's dtype brings it back), anything else as :func:`to_wire` sends it."""
+    try:
+        if pandas.isna(value) is True:
+            return None
+    except (TypeError, ValueError):
+        pass
+    return to_wire(value.to_pydatetime() if hasattr(value, "to_pydatetime") else value)
+
+
+def _loaded(module: str) -> Any:
     import sys
 
-    return sys.modules.get("numpy")  # an array can only exist if numpy is loaded
+    return sys.modules.get(module)  # a value of its type can only exist if it's loaded
+
+
+def _numpy() -> Any:
+    return _loaded("numpy")
 
 
 def dumps(value: Any) -> str:

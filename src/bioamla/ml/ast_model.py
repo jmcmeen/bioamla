@@ -98,7 +98,7 @@ class ASTModel(BaseAudioModel):
             ModelError: If the model cannot be loaded.
         """
         torch = _require_torch()
-        ASTFeatureExtractor, AutoModelForAudioClassification = _require_transformers()
+        _, AutoModelForAudioClassification = _require_transformers()
 
         is_local = Path(model_path).exists() or model_path.startswith(("./", "../"))
         torch_dtype = torch.float16 if use_fp16 else None
@@ -119,10 +119,9 @@ class ASTModel(BaseAudioModel):
             self.model = torch.compile(self.model)
 
         # Load feature extractor (fall back to default if config is absent).
-        try:
-            self.feature_extractor = ASTFeatureExtractor.from_pretrained(model_path)
-        except OSError:
-            self.feature_extractor = ASTFeatureExtractor()
+        from bioamla.ml.ast import load_feature_extractor
+
+        self.feature_extractor = load_feature_extractor(model_path)
 
         self.id2label = self.model.config.id2label
         self.label2id = self.model.config.label2id

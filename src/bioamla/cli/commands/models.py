@@ -72,6 +72,13 @@ def ast_init_config(output: str, force: bool) -> None:
     "Default: print to stdout.",
 )
 @click.option("--resample-freq", default=16000, type=int, help="Resampling frequency")
+@click.option(
+    "--top-k",
+    default=0,
+    type=click.IntRange(min=0),
+    help="Also rank the K most likely labels of each prediction, with the margin between "
+    "the first two (adds `top` and `margin`; CSV: margin and top columns)",
+)
 def ast_predict(
     file: str,
     model_path: str,
@@ -80,6 +87,7 @@ def ast_predict(
     min_confidence: float,
     output: str | None,
     resample_freq: int,
+    top_k: int,
 ) -> None:
     """Run AST prediction on a single audio file — whole file or in segments.
 
@@ -90,6 +98,7 @@ def ast_predict(
     Examples:
         bioamla models ast predict audio.wav --model-path my_model
         bioamla models ast predict rec.wav --segment-seconds 3 --overlap 1 -o rec.csv
+        bioamla models ast predict rec.wav --segment-seconds 3 --top-k 3
     """
     from bioamla.cli.console import echo, print_success
     from bioamla.cli.operations import run_operation
@@ -104,6 +113,7 @@ def ast_predict(
         min_confidence=min_confidence,
         output=output,
         resample_freq=resample_freq,
+        top_k=top_k,
     )
     if json_mode():
         emit_file_result(file, count=found.count, predictions=found.to_dict()["predictions"])
@@ -113,10 +123,13 @@ def ast_predict(
         return
 
     for r in found.predictions:
-        if found.segmented:
-            echo(f"{r.start_time:.2f}-{r.end_time:.2f}s  {r.predicted_label} ({r.confidence:.4f})")
-        else:
-            echo(f"{r.predicted_label} ({r.confidence:.4f})")
+        span = f"{r.start_time:.2f}-{r.end_time:.2f}s  " if found.segmented else ""
+        line = f"{span}{r.predicted_label} ({r.confidence:.4f})"
+        if r.top_k_labels is not None:
+            ranked = ", ".join(f"{t['label']} {t['confidence']:.4f}" for t in r.top())
+            margin = "" if r.margin is None else f"  margin {r.margin:.4f}"
+            line += f"  [{ranked}]{margin}"
+        echo(line)
 
 
 @ast.command("train")
@@ -144,12 +157,6 @@ def ast_predict(
     "or directory with class subdirectories (e.g. ./data/bird/, ./data/frog/)",
 )
 @click.option("--split", default="train", help="Dataset split to use (for HuggingFace datasets)")
-@click.option(
-    "--id-column",
-    "category_id_column",
-    default="target",
-    help="Column name for category/target IDs",
-)
 @click.option(
     "--label-column", "category_label_column", default="category", help="Column name for labels"
 )
@@ -309,7 +316,6 @@ def ast_train(
     base_model: str,
     train_dataset: str,
     split: str,
-    category_id_column: str,
     category_label_column: str,
     report_to: str,
     learning_rate: float,
@@ -374,18 +380,16 @@ def ast_train(
     """
     from click.core import ParameterSource
 
-    from bioamla.cli.console import print_kv, print_success, print_warning
+    from bioamla.cli.console import print_kv, print_success
     from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.cli.operations import run_operation
 
     # Surface the library's INFO progress messages (and warnings) on the console.
     configure_cli_logging()
-    if ctx.get_parameter_source("category_id_column") != ParameterSource.DEFAULT:
-        print_warning("--id-column is not used by training and is ignored (see issue #254)")
 
     # Only the flags given on the command line are passed: they win over the config
     # file, which wins over the library's defaults.
-    not_options = {"config_path", "train_dataset", "training_dir", "category_id_column"}
+    not_options = {"config_path", "train_dataset", "training_dir"}
     options = {
         name: value
         for name, value in ctx.params.items()

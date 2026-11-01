@@ -952,3 +952,95 @@ def test_indices_empty_selection_rejected(runner, test_audio_dir):
     result = runner.invoke(cli, ["batch", "index", "--input-dir", test_audio_dir, "--indices", ","])
     assert result.exit_code != 0
     assert "at least one index" in result.output
+
+
+def test_single_and_batch_segment_cut_the_same_clips(test_audio_path_3s, tmp_path):
+    """`audio segment` and `batch audio segment` give the same names, clips and formats."""
+    import shutil
+
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    folder = tmp_path / "in"
+    folder.mkdir()
+    shutil.copy(test_audio_path_3s, folder / "rec.wav")
+    runner = CliRunner()
+    for keep in ([], ["--keep-short"]):
+        one, many = tmp_path / f"one{len(keep)}", tmp_path / f"many{len(keep)}"
+        common = ["-d", "1.25", "-f", "flac", *keep]
+        r1 = runner.invoke(cli, ["audio", "segment", str(folder / "rec.wav"), str(one), *common])
+        r2 = runner.invoke(cli, ["batch", "audio", "segment", "--input-dir", str(folder),
+                                 "--output-dir", str(many), *common])  # fmt: skip
+        assert r1.exit_code == 0 and r2.exit_code == 0, (r1.output, r2.output)
+        names = sorted(p.name for p in one.iterdir())
+        assert names == sorted(p.name for p in many.iterdir())
+        assert names == ["rec_seg0000.flac", "rec_seg0001.flac"] + (
+            ["rec_seg0002.flac"] if keep else []
+        )
+
+
+def test_batch_segment_reports_a_file_too_short_for_a_clip(test_audio_path_3s, tmp_path):
+    import shutil
+
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    folder = tmp_path / "in"
+    folder.mkdir()
+    shutil.copy(test_audio_path_3s, folder / "rec.wav")
+    result = CliRunner().invoke(cli, ["--json", "batch", "audio", "segment", "--input-dir",
+                                      str(folder), "--output-dir", str(tmp_path / "o"), "-d", "5"])  # fmt: skip
+    import json
+
+    body = json.loads(result.stdout)["result"]
+    assert body["failed"] == 1 and "--keep-short" in json.dumps(body)
+
+
+@pytest.mark.parametrize("plot_type", ["mel", "stft", "mfcc", "waveform"])
+def test_batch_visualize_honours_no_legend(test_audio_path, tmp_path, plot_type):
+    import shutil
+
+    pytest.importorskip("matplotlib")
+    from click.testing import CliRunner
+    from PIL import Image
+
+    from bioamla.cli.cli import cli
+    from bioamla.viz import generate_spectrogram
+
+    folder = tmp_path / "in"
+    folder.mkdir()
+    shutil.copy(test_audio_path, folder / "rec.wav")
+    runner = CliRunner()
+    for flag in ("--legend", "--no-legend"):
+        result = runner.invoke(cli, ["batch", "audio", "visualize", "--input-dir", str(folder),
+                                     "--output-dir", str(tmp_path / flag.strip("-")),
+                                     "-t", plot_type, flag])  # fmt: skip
+        assert result.exit_code == 0, result.output
+    # The library's own bare picture, drawn with the batch function's settings.
+    bare = tmp_path / "bare.png"
+    generate_spectrogram(str(folder / "rec.wav"), str(bare), viz_type=plot_type,
+                         show_colorbar=False)  # fmt: skip
+    with Image.open(tmp_path / "no-legend" / "rec.png") as got, Image.open(bare) as want:
+        assert got.size == want.size and got.tobytes() == want.tobytes()
+    with Image.open(tmp_path / "legend" / "rec.png") as a, Image.open(bare) as b:
+        assert a.tobytes() != b.tobytes()  # the flag changes the picture
+
+
+def test_batch_visualize_request_takes_legend(test_audio_path, tmp_path):
+    import shutil
+
+    pytest.importorskip("matplotlib")
+    from bioamla import operations
+
+    folder = tmp_path / "in"
+    folder.mkdir()
+    shutil.copy(test_audio_path, folder / "rec.wav")
+    sizes = []
+    for legend in (True, False):
+        out = tmp_path / str(legend)
+        operations.run("batch.audio.visualize",
+                       {"input_dir": str(folder), "output_dir": str(out), "legend": legend})  # fmt: skip
+        sizes.append((out / "rec.png").stat().st_size)
+    assert sizes[0] != sizes[1]

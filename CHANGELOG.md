@@ -8,6 +8,48 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- The labeling skill works on a server workspace: with a remote set (each step's `--remote
+  NAME:WORKSPACE`, `BIOAMLA_REMOTE`, or the workspace's `remote` and `workspace`
+  settings), the annotate step downloads the server's annotations file, merges into it with
+  the same rules (a person's rows are never changed) and uploads it back, and every step
+  uploads what it writes (run files, crops index, review queue). A local file of the same
+  name is left alone. Its eval runs against a real server too. Skill scripts get
+  `fetch()`, `publish()` and `save_json()` in `_bioamla.py`.
+- `bioamla remote current`: the remote and workspace commands run on from here (from
+  `BIOAMLA_REMOTE` or the local workspace's settings), or null.
+- The typed wire form (`bioamla.common.wire`) carries pandas DataFrames, with their column
+  dtypes and index, so a remote `audio features` gives the same frames table as a local run.
+
+- `bioamla serve --job-timeout SECONDS` (`ServerConfig.job_timeout`): a running job that
+  sends nothing (no progress, notice, log line or result) for that long is stopped like a
+  cancel and fails with `JobTimeout`, so a hung worker can't hold a slot forever, while a
+  long job that keeps reporting progress runs on.
+
+- `models ast predict --top-k K` ranks each prediction's K most likely labels: the JSON
+  gains `top` (`[{label, confidence}, ...]`, best first) and `margin` (top-1 minus top-2
+  confidence), the CSV gains `margin` and `top` columns, and the human output lists them.
+  Without the option the output is unchanged. In the library: `classify_file(top_k=...)`,
+  `ASTInference.predict(top_k=...)`/`predict_segments(top_k=...)`, and
+  `ASTPredictionResult.margin`/`top()`. A negative `top_k` is refused when the request
+  is checked. The labeling skill now records each candidate's `margin`, and gives no
+  label to an event that no prediction segment covers (it took the first segment's).
+
+- `batch_generate_spectrograms()` gains `show_colorbar` and `continue_on_error`,
+  `batch_visualize()` gains `legend`, and the `batch.audio.visualize` request a `legend` field.
+
+- `audio convert --bit-depth` and the new `batch audio convert --bit-depth` write that many bits
+  per sample: 8, 16, 24 or 32 for WAV, 8, 16 or 24 for FLAC. A depth the format can't hold,
+  or any depth for MP3 or OGG, is refused before anything is written; the option used to be
+  accepted and ignored (#239). **Behavior change:** without it, a conversion keeps the
+  source's bit depth when the output format can hold it (a 24-bit WAV to FLAC stays 24-bit;
+  it used to drop to 16), else writes 16 bits. The library gains `save_audio(bit_depth=...)`
+  and `convert_audio_file(target_bit_depth=...)`; the `audio.convert` and
+  `batch.audio.convert` requests gain a `bit_depth` field. WAV and FLAC are now always
+  written through soundfile, so FLAC output no longer needs ffmpeg.
+
+- `bioamla.audio.load_audio_channels()`: load a file keeping its channels (1-D for mono,
+  `(n_samples, n_channels)` otherwise), where `load_audio()` downmixes to mono.
+
 - Agent skills: a convention for skills that let an AI agent drive bioamla
   (`skills/<name>/SKILL.md` and `scripts/`). Scripts run `bioamla --json` and act on the
   JSON (so a skill works locally or against a server), decide by thresholds on objective
@@ -161,9 +203,68 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+  the spectrogram image (`audio visualize --box`); `crops.json` still records the box, and
+  `box_drawn` says whether it could be drawn (a box with no length or width isn't).
+
+- The labeling skill's crop step outlines each candidate's box, with its suggested label, on
+  the spectrogram image (`audio visualize --box`); `crops.json` still records the box.
+
+- **Breaking:** `batch models predict` reports ranked labels the way `models ast predict
+  --top-k` does, and only when asked: `--top-k K` (default 0, was 5) adds `top` (`[{label,
+  confidence}]`) and `margin` (top-1 minus top-2) to each whole-file prediction in
+  `predictions.json`, in place of `top_k_labels` and `top_k_scores`, and `margin` and `top`
+  columns (`label:confidence;...`) per segment. The ranked list is no longer cut by
+  `--min-confidence`; instead a whole-file prediction below it is left out, as a segment
+  below it already was.
+
+- **Breaking:** `annotation generate-labels` and `generate-frame-labels` with `--format
+  numpy` name the label map after the array file: `run.v1` writes `run.v1.npy` and
+  `run.v1.labels.csv` (both used to write `run.labels.csv`, so outputs that differed only
+  before their last dot overwrote each other's map), and a `.csv` output name becomes
+  `.npy`: `labels.csv` writes `labels.npy` (it was `labels.csv.npy`) and
+  `labels.labels.csv`. Names ending in `.npy`, or without a dot, are unchanged. The human
+  output now shows the label map's path. `bioamla.common.files.npy_path()` gives the file
+  `numpy.save` writes for a name.
+
+- **Behavior change:** `audio visualize` and `batch audio visualize` draw the same picture
+  of a file: one set of defaults (150 dpi, the `magma` colormap, 40 MFCCs, as `bioamla.viz`
+  already used), so `audio visualize` pictures are larger (was 100 dpi) and use another
+  colormap (was `viridis`) and MFCC count (was 20). `batch audio visualize` gains the single
+  command's drawing options (`--n-fft`, `--hop-length`, `--n-mels`, `--n-mfcc`, `--cmap`,
+  `--dpi`), as does its request; the defaults live in `bioamla.common.constants`
+  (`PICTURE_N_MELS`, `PICTURE_N_MFCC`, `PICTURE_CMAP`, `PICTURE_DPI`). A bad setting (an
+  unknown colormap, more MFCCs than mel bands, a size below 1) is refused before any file
+  is drawn (`bioamla.viz.check_picture_settings()`), and `--n-mels` now shapes MFCC
+  pictures too (it was ignored for `-t mfcc`).
+
+- **Behavior change:** `audio trim`, `audio resample` and `audio gain`, `batch audio
+  resample` and `batch audio trim` by time range keep a file's channels; they mixed every
+  file down to mono. `batch audio trim --trim-silence` still mixes down, so every channel is
+  cut the same. The library functions behind them (`trim_audio_file()`,
+  `resample_audio_file()`, `gain_audio_file()`, `batch_resample()`) do the same, and
+  `batch_transform()`, `batch_transform_files()` and `process_file()` take
+  `keep_channels`. New: `bioamla.audio.each_channel()`.
+
+- **Behavior change:** `audio segment` and `batch audio segment` cut the same clips (#240):
+  named `<stem>_seg0000.<format>` (`--prefix` replaces the stem for `audio segment`), every
+  clip exactly the duration long, with a shorter last clip left out unless `--keep-short`,
+  in WAV, MP3, FLAC or OGG (`batch audio segment` gains `--format`, and `-d` defaults to 3 s
+  there too). `audio segment` used to name clips `<prefix>_0000`, and `batch audio segment`
+  kept the short last clip and wrote only WAV. A file shorter than one clip is an error that
+  names `--keep-short` (counted as a failed file in a batch) rather than silently giving no
+  clips. `segment_audio_file()` leaves the short clip out by default (`include_partial=True`
+  keeps it) and loses its `label` parameter (clips are always `_seg0000`); the
+  `audio.segment` and `batch.audio.segment` requests gain `include_partial` (and the batch
+  one `format`).
+
+- **Behavior change:** `audio convert` and `batch audio convert` keep a file's channels: a
+  stereo file stays stereo (each channel as it was) unless `--channels` says otherwise.
+  They used to downmix every file to mono, and `-c 2` duplicated that downmix into both
+  channels (#238). A file with more than two channels converted to MP3 (which holds two)
+  needs `--channels 1` or `2`; a channel count other than 1 or 2 is refused up front.
+
 - `cluster reduce|fit` say "Reducing embeddings to 2D using pca..." / "Clustering embeddings
   using hdbscan..." (the input size is read inside the operation now).
-- `models ast train --id-column` prints a warning that it's ignored; it always was (#254).
 - The `ast init-config` "already exists" error names the fix itself (`force=True` /
   `--force`).
 - `workspace status` and `workspace list` are no longer recorded in the workspace history
@@ -176,6 +277,17 @@ All notable changes to this project are documented here. The format is based on
   that fails the check is refused rather than retried as a Hugging Face ID.
 
 ### Removed
+
+- `models ast train --id-column`, which training never used: labels are numbered from the
+  sorted `--label-column` values (#254). Passing it is now a usage error.
+
+Deprecated in 0.3.x:
+
+These are breaking changes:
+
+- **Python 3.10 support.** bioamla now requires Python 3.11 or newer. 3.10 reached end of life in
+  October 2026, and the security fixes for pillow and filelock need 3.11. The `tomli`
+  dependency is gone (`tomllib` is in the standard library from 3.11).
 
 These were deprecated in 0.3.x and are breaking changes:
 
@@ -191,6 +303,48 @@ These were deprecated in 0.3.x and are breaking changes:
 - `bioamla.cli.output.legacy_json`, the helper behind those flags.
 
 ### Fixed
+
+- Loading a model could hang forever: transformers loads weights on a thread pool, and a
+  worker can deadlock in safetensors' initialisation while holding the GIL. bioamla now
+  loads weights serially (it sets `HF_DEACTIVATE_ASYNC_LOAD=1` unless it's already set).
+
+- A trained model now carries its feature extractor (`preprocessor_config.json`, with the
+  training set's mean and std) in `best_model/`, its checkpoints and a Hub push, so
+  `models ast predict|evaluate|embed` prepare audio the way the model was trained; before,
+  they fell back to the default settings, and a base model with non-default feature
+  settings couldn't be used after training. A model with no extractor (trained before this
+  release) still gets the default one, now with a warning; `bioamla.ml.load_feature_extractor()`
+  does this, and the cache no longer keeps a fallback once a model's own extractor appears.
+
+- `models ast train` failed with FFmpeg 9 (and any FFmpeg that torchcodec can't load):
+  `datasets` decoded the training audio through torchcodec. Training audio is now decoded
+  by bioamla's own loader (`bioamla.ml.training.decode_example_audio`), local datasets keep
+  plain file paths, and a Hub dataset's audio column is left undecoded for it (#256). A
+  folder of class subfolders is read by bioamla too (labels are the folder names, audio may
+  sit in nested folders), as is one split into `train/` and `test/` (or `val/`) folders of
+  class folders, which becomes a fixed split. A missing decoder (no ffmpeg for MP3) is
+  reported instead of every file being dropped as unreadable. Training with DataLoader workers on macOS and Windows (spawned workers)
+  failed to pickle the dataset's transform; it is now a module-level
+  `bioamla.ml.training.BatchPreprocessor`.
+
+- Conversion and segmenting edge cases: `batch audio convert` refuses an unsupported
+  channel count (as well as a bit depth) before writing anything (`check_convert_options()`
+  in `bioamla.audio.convert`); `--bit-depth`'s help gives the real default (the source's
+  when the output holds it, else 16); a 32-bit float WAV keeps 32 bits and a 32-bit source
+  to FLAC gets 24, instead of 16; MP3 with more than two channels is refused by
+  `save_audio()` for every caller; segmenting with `--keep-short` and an overlap writes one
+  shorter last clip, not several; an empty file is reported as such. A step that would
+  give a file's channels different lengths raises `ProcessingError`.
+
+- `batch audio visualize --no-legend` draws the bare picture (no axes, title or colorbar);
+  it used to be accepted and ignored (#246). `batch.audio.visualize` also honours
+  `continue_on_error`, which it ignored.
+
+- `convert_audio_file()` called without `target_format` wrote WAV data whatever the output's
+  extension (a `.flac` path got a WAV file); it now takes the format from the extension.
+
+- A 32-bit PCM file read through ffmpeg (formats soundfile can't read) that was nearly
+  silent was taken for float audio and came out at full scale; it is scaled as integers.
 
 - `audio list` of a folder that doesn't exist (and `list_audio_files()`) raises
   `NotFoundError` instead of reporting an empty folder (#262).

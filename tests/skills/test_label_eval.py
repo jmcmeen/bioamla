@@ -46,19 +46,24 @@ PERSON_ROW = {
 THRESHOLDS = ["--min-confidence", "0", "--min-snr", "30"]
 
 
-@pytest.fixture
-def known_workspace(workspace):
+def write_known(ws) -> None:
+    """The recordings and the person's annotation into the workspace folder ``ws``."""
     rng = np.random.default_rng(1)
     for name, events in EVENTS.items():
         samples = rng.normal(0, NOISE, int(DURATION * SR)).astype(np.float32)
         for start, end, freq, amp, _ in events:
             i = int(start * SR)
             samples[i : i + int((end - start) * SR)] += tone(end - start, freq, amp)
-        write_wav(workspace / name, samples)
-    with (workspace / "annotations.csv").open("w", newline="") as f:
+        write_wav(ws / name, samples)
+    with (ws / "annotations.csv").open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(PERSON_ROW))
         writer.writeheader()
         writer.writerow(PERSON_ROW)
+
+
+@pytest.fixture
+def known_workspace(workspace):
+    write_known(workspace)
     return workspace
 
 
@@ -71,23 +76,20 @@ def matches(found: tuple[str, float, float], want: tuple[str, float, float]) -> 
     return found[0] == want[0] and abs(found[1] - want[1]) < 0.1 and abs(found[2] - want[2]) < 0.1
 
 
-def test_label_skill_end_to_end(run_skill, known_workspace, tiny_ast) -> None:
-    ws = known_workspace
-
-    def step(script: str, *args) -> dict:
-        code, out = run_skill("label", script, *args, cwd=ws)
-        assert code == 0, (script, out)
-        return out
-
-    found = step("candidates", "rec", "--model", tiny_ast, "--labels", "a,b",
+def run_all(step, model) -> tuple[str, dict, dict]:
+    """Run the five steps as an agent would; returns the run folder and the annotate
+    and review summaries."""
+    found = step("candidates", "rec", "--model", model, "--labels", "a,b",
                  "--threshold-db", "-40")  # fmt: skip
-    run_dir = found["run_dir"]
     assert found["files"] == 4
+    run_dir = found["run_dir"]
     step("evidence", run_dir)
     step("crops", run_dir)
-    annotated = step("annotate", run_dir, *THRESHOLDS)
-    queued = step("review", run_dir)
+    return run_dir, step("annotate", run_dir, *THRESHOLDS), step("review", run_dir)
 
+
+def check_outcome(ws, run_dir: str, annotated: dict, queued: dict) -> None:
+    """The decisions, as the files in workspace folder ``ws`` record them."""
     # Every candidate is a known event (or the noise-only recording), and none is missed.
     candidates = json.loads((ws / run_dir / "candidates.json").read_text())["candidates"]
     spans = [(c["file"], c["start_time"], c["end_time"]) for c in candidates]
@@ -112,3 +114,64 @@ def test_label_skill_end_to_end(run_skill, known_workspace, tiny_ast) -> None:
     assert queued["reasons"] == {"snr": 2}
     assert items[1]["reasons"] == ["SNR could not be measured"]
     assert all((ws / i["image"]).exists() for i in items)
+
+
+def test_label_skill_end_to_end(run_skill, known_workspace, tiny_ast) -> None:
+    ws = known_workspace
+
+    def step(script: str, *args) -> dict:
+        code, out = run_skill("label", script, *args, cwd=ws)
+        assert code == 0, (script, out)
+        return out
+
+    run_dir, annotated, queued = run_all(step, tiny_ast)
+    assert annotated["remote"] is None
+    check_outcome(ws, run_dir, annotated, queued)
+
+
+def test_label_skill_on_a_server_workspace(
+    run_skill, workspace, tiny_ast, live_server, tmp_path, monkeypatch
+) -> None:
+    """The same run from a laptop against a server workspace (``--remote``): the
+    recordings and the person's annotation are on the server, and everything the skill
+    writes lands there too, with the same decisions. The laptop's own annotations file
+    is left alone."""
+    import shutil
+
+    from bioamla.client import add_remote
+
+    url, token, root = live_server
+    server_ws = root / "ws"
+    write_known(server_ws)
+    shutil.copytree(tiny_ast, server_ws / "model")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("BIOAMLA_LAB_TOKEN", token)
+    monkeypatch.delenv("BIOAMLA_REMOTE", raising=False)
+    add_remote("lab", url)
+    laptop = workspace  # a local workspace with an unrelated annotations file
+    (laptop / "annotations.csv").write_text("file,label\nmine.wav,owl\n")
+
+    def step(script: str, *args) -> dict:
+        code, out = run_skill("label", script, *args, "--remote", "lab:ws", cwd=laptop)
+        assert code == 0, (script, out)
+        return out
+
+    run_dir, annotated, queued = run_all(step, "model")
+    assert annotated["remote"]["remote"] == "lab"
+    check_outcome(server_ws, run_dir, annotated, queued)
+    for name in ("candidates.json", "evidence.json", "crops.json", "decisions.json"):
+        assert (server_ws / run_dir / name).is_file(), name
+    assert (laptop / "annotations.csv").read_text() == "file,label\nmine.wav,owl\n"
+    assert not (laptop / "rec").exists()  # the recordings stayed on the server
+
+    # A second run, from the folder above with --root, merges into the server's file:
+    # the person's row is still kept, and this run's agent rows replace the first run's.
+    def step_from_above(script: str, *args) -> dict:
+        code, out = run_skill("label", script, *args, "--root", laptop.name,
+                              "--remote", "lab:ws", cwd=laptop.parent)  # fmt: skip
+        assert code == 0, (script, out)
+        return out
+
+    _, again, _ = run_all(step_from_above, "model")
+    assert again["person_rows_kept"] == 1
+    check_outcome(server_ws, run_dir, annotated, queued)

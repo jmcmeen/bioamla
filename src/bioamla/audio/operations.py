@@ -33,6 +33,14 @@ from bioamla.audio.files import (
     trim_audio_file,
 )
 from bioamla.common.config import config_dataclass
+from bioamla.common.constants import (
+    DEFAULT_HOP_LENGTH,
+    DEFAULT_N_FFT,
+    PICTURE_CMAP,
+    PICTURE_DPI,
+    PICTURE_N_MELS,
+    PICTURE_N_MFCC,
+)
 from bioamla.operations import OperationContext, PathStr, operation
 
 AudioFormat = Literal["wav", "mp3", "flac", "ogg"]
@@ -166,7 +174,9 @@ class AudioConvertRequest:
         file: The audio file.
         output: Where to save the result.
         sample_rate: Target sample rate (Hz).
-        channels: Target channel count (1 or 2).
+        channels: Target channel count (1 or 2; default: keep the file's own).
+        bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24); by default the
+            source's when the output holds it, else 16.
         format: Output format; by default, from ``output``'s extension.
     """
 
@@ -174,6 +184,7 @@ class AudioConvertRequest:
     output: PathStr
     sample_rate: int | None = None
     channels: int | None = None
+    bit_depth: Literal[8, 16, 24, 32] | None = None
     format: AudioFormat | None = None
 
 
@@ -186,22 +197,24 @@ def audio_convert(request: AudioConvertRequest, context: OperationContext) -> Pr
         target_format=request.format,
         target_sample_rate=request.sample_rate,
         target_channels=request.channels,
+        target_bit_depth=request.bit_depth,
     )
     return ProcessedFile(file=request.file, output=str(saved))
 
 
 @config_dataclass
 class AudioSegmentRequest:
-    """Cut a file into fixed-length clips; a trailing clip shorter than ``duration``
-    is left out.
+    """Cut a file into fixed-length clips, ``<prefix>_seg0000.<format>``, ...
 
     Attributes:
         file: The audio file.
-        output_dir: The folder to write ``<prefix>_0000.<format>``, ... to.
+        output_dir: The folder to write the clips to.
         duration: Clip length (s).
         overlap: Overlap between clips (s).
         format: Clip format.
         prefix: Clip name prefix (default: the file's name without extension).
+        include_partial: Keep the last clip when it is shorter than ``duration``
+            (left out by default).
     """
 
     file: PathStr
@@ -210,6 +223,7 @@ class AudioSegmentRequest:
     overlap: float = 0.0
     format: AudioFormat = "wav"
     prefix: str | None = None
+    include_partial: bool = False
 
 
 @operation("audio.segment", request=AudioSegmentRequest, kind="job")
@@ -224,8 +238,7 @@ def audio_segment(request: AudioSegmentRequest, context: OperationContext) -> Se
         overlap=request.overlap,
         prefix=request.prefix,
         format=request.format,
-        include_partial=False,
-        label="",
+        include_partial=request.include_partial,
     )
     return SegmentedFile(file=request.file, output_dir=request.output_dir, segments=segments)
 
@@ -500,12 +513,12 @@ class AudioVisualizeRequest:
     file: PathStr
     output: PathStr
     viz_type: Literal["mel", "stft", "mfcc", "waveform"] = "mel"
-    n_fft: int = 2048
-    hop_length: int = 512
-    n_mels: int = 128
-    n_mfcc: int = 20
-    cmap: str = "viridis"
-    dpi: int = 100
+    n_fft: int = DEFAULT_N_FFT
+    hop_length: int = DEFAULT_HOP_LENGTH
+    n_mels: int = PICTURE_N_MELS
+    n_mfcc: int = PICTURE_N_MFCC
+    cmap: str = PICTURE_CMAP
+    dpi: int = PICTURE_DPI
     legend: bool = True
     boxes: list[VisualizeBox] = field(default_factory=list)
     annotations: PathStr | None = None

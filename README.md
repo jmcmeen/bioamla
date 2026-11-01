@@ -1,7 +1,7 @@
 # bioamla
 
 [![PyPI version](https://img.shields.io/pypi/v/bioamla.svg)](https://pypi.org/project/bioamla/)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jmcmeen/bioamla/blob/main/LICENSE)
 [![CI](https://github.com/jmcmeen/bioamla/actions/workflows/ci.yml/badge.svg)](https://github.com/jmcmeen/bioamla/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-mkdocs--material-blue.svg)](https://jmcmeen.github.io/bioamla)
@@ -45,7 +45,7 @@ Two conventions matter for consumers:
 
 ## Install
 
-Requires Python ≥ 3.10. Install into a **virtual environment** so bioamla's dependencies stay
+Requires Python ≥ 3.11. Install into a **virtual environment** so bioamla's dependencies stay
 isolated from other projects and your system Python:
 
 ```bash
@@ -82,8 +82,9 @@ Without `[cli]`, the `bioamla` command prints a hint to install it.
 Beyond the Python packages, bioamla needs a working **FFmpeg** install on the host:
 
 - **FFmpeg shared libraries (`libav*`), major version 4–8** — used by `torchcodec` (the backend
-  behind `torchaudio.load`) to *decode* audio for waveform loading, AST inference/training, and
-  HuggingFace dataset materialization.
+  behind `torchaudio.load`) to *decode* audio for waveform loading and AST inference. Without
+  them (or with FFmpeg 9), WAV, FLAC and OGG still load through libsndfile. AST training
+  decodes its audio with bioamla's own loader, so it doesn't need them.
 - **The `ffmpeg`/`ffprobe` CLI** — used by `pydub` to *encode* non-WAV formats (FLAC/MP3/OGG/M4A)
   and to read their metadata. Plain WAV I/O works without FFmpeg: WAV headers and recorder
   metadata are read with [riffy](https://github.com/jmcmeen/riffy), a pure-Python RIFF parser.

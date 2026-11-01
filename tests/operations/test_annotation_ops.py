@@ -163,4 +163,5 @@ def test_numpy_output_reports_the_file_written(table, tmp_path):
          "--clip-duration", "1", "--audio-duration", "5", "--format", "numpy"],
     )  # fmt: skip
     assert run.exit_code == 0, run.output
-    assert f"Output: {tmp_path / 'labels.csv.npy'}" in run.output
+    assert f"Output: {tmp_path / 'labels.npy'}" in run.output  # a .csv name becomes .npy
+    assert f"Label map: {tmp_path / 'labels.labels.csv'}" in run.output

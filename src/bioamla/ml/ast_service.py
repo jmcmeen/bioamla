@@ -166,7 +166,7 @@ def extract_embeddings_file(
         raise NotFoundError(f"Audio file not found: {filepath}")
 
     import torch
-    from transformers import ASTFeatureExtractor, AutoModel
+    from transformers import AutoModel
 
     from bioamla.audio.torchaudio import load_waveform_tensor, resample_waveform_tensor
 
@@ -178,10 +178,9 @@ def extract_embeddings_file(
     if orig_sr != sample_rate:
         waveform = resample_waveform_tensor(waveform, orig_sr, sample_rate)
 
-    try:
-        feature_extractor = ASTFeatureExtractor.from_pretrained(model_path)
-    except OSError:
-        feature_extractor = ASTFeatureExtractor()
+    from bioamla.ml.ast import load_feature_extractor
+
+    feature_extractor = load_feature_extractor(model_path)
 
     try:
         model = AutoModel.from_pretrained(model_path)

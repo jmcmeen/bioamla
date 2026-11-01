@@ -22,16 +22,22 @@ SKILLS = Path(__file__).resolve().parents[2] / "skills"
 SR = 16000
 
 
+def bioamla_bin() -> str:
+    """This environment's ``bioamla`` command."""
+    return str(Path(sys.executable).parent / "bioamla")
+
+
 def skill_script(skill: str, script: str) -> Path:
     return SKILLS / skill / "scripts" / f"{script}.py"
 
 
 @pytest.fixture
 def run_skill():
-    """``run_skill(skill, script, *args, cwd=workspace)`` -> (exit code, parsed stdout)."""
-    env = {**os.environ, "BIOAMLA_BIN": str(Path(sys.executable).parent / "bioamla")}
+    """``run_skill(skill, script, *args, cwd=workspace)`` -> (exit code, parsed stdout).
+    The script gets this process's environment as it is at the call."""
 
     def run(skill: str, script: str, *args: str, cwd: Path) -> tuple[int, dict]:
+        env = {**os.environ, "BIOAMLA_BIN": bioamla_bin()}
         proc = subprocess.run(
             [sys.executable, str(skill_script(skill, script)), *map(str, args)],
             cwd=cwd,

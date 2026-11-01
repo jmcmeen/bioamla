@@ -10,7 +10,8 @@ Design notes:
 - All audio loading returns mono float32 in [-1.0, 1.0]
 - Uses soundfile for WAV/FLAC/OGG (fast native C) with pydub fallback
 - Uses ffprobe for fast metadata extraction without full file decode
-- Saving always outputs 16-bit audio
+- Saving writes WAV and FLAC through soundfile (16-bit unless a bit depth is given),
+  other formats through pydub at 16 bits
 """
 
 import json
@@ -34,17 +35,20 @@ from bioamla.exceptions import (
 logger = logging.getLogger(__name__)
 
 
-def _audiosegment_to_numpy(segment: AudioSegment) -> tuple[np.ndarray, int]:
+def _audiosegment_to_numpy(
+    segment: AudioSegment, keep_channels: bool = False
+) -> tuple[np.ndarray, int]:
     """Convert pydub AudioSegment to numpy float32 array.
 
-    Always returns mono audio - stereo/multi-channel files are
-    automatically downmixed by averaging channels.
+    Stereo/multi-channel audio is downmixed to mono by averaging channels, unless
+    ``keep_channels``: then it is ``(n_samples, n_channels)``.
 
     Args:
         segment: AudioSegment to convert.
+        keep_channels: Keep every channel instead of downmixing.
 
     Returns:
-        Tuple of (audio_array, sample_rate) where audio is mono float32 [-1.0, 1.0].
+        Tuple of (audio_array, sample_rate), float32 in [-1.0, 1.0].
 
     Raises:
         AudioLoadError: If sample width is not 1, 2, 3, or 4 bytes.
@@ -65,12 +69,12 @@ def _audiosegment_to_numpy(segment: AudioSegment) -> tuple[np.ndarray, int]:
         array = array.astype(np.int32)
         audio = array.astype(np.float32) / 8388608.0
     elif sample_width == 4:
-        # 32-bit: could be int32 or float32
-        if array.dtype == np.float32 or (len(array) > 0 and np.max(np.abs(array)) <= 1.0):
+        # 32-bit: float samples stay as they are; integer PCM is scaled. Decided by
+        # the array's type, never by the values (a near-silent int file is not float).
+        if np.issubdtype(array.dtype, np.floating):
             audio = array.astype(np.float32)
         else:
-            array = array.astype(np.int32)
-            audio = array.astype(np.float32) / 2147483648.0
+            audio = array.astype(np.int32).astype(np.float32) / 2147483648.0
     else:
         raise AudioLoadError(
             f"Unsupported sample width: {sample_width} bytes. "
@@ -80,6 +84,8 @@ def _audiosegment_to_numpy(segment: AudioSegment) -> tuple[np.ndarray, int]:
     # Downmix to mono if multi-channel
     if segment.channels > 1:
         audio = audio.reshape((-1, segment.channels))
+        if keep_channels:
+            return audio, segment.frame_rate
         audio = audio.mean(axis=1)
         logger.debug(
             f"Downmixed {segment.channels}-channel audio to mono "
@@ -122,11 +128,13 @@ def _numpy_to_audiosegment(
     )
 
 
-def _load_via_pydub(filepath: str) -> tuple[np.ndarray, int]:
+def _load_via_pydub(filepath: str, keep_channels: bool = False) -> tuple[np.ndarray, int]:
     """Load audio file via pydub/ffmpeg.
 
     Args:
         filepath: Path to audio file.
+        keep_channels: Keep every channel (``(n_samples, n_channels)``) instead of
+            downmixing to mono.
 
     Returns:
         Tuple of (audio_array, sample_rate).
@@ -141,7 +149,7 @@ def _load_via_pydub(filepath: str) -> tuple[np.ndarray, int]:
 
     try:
         segment = AudioSegment.from_file(str(path))
-        return _audiosegment_to_numpy(segment)
+        return _audiosegment_to_numpy(segment, keep_channels=keep_channels)
     except Exception as e:
         raise AudioLoadError(f"Error opening '{filepath}': {e}") from e
 
@@ -154,18 +162,10 @@ def _to_mono(audio: np.ndarray) -> np.ndarray:
     return audio.mean(axis=1) if audio.ndim > 1 else audio
 
 
-def load_audio(filepath: str) -> tuple[np.ndarray, int]:
-    """Load audio file using the fastest available backend.
-
-    Routes to optimal loader:
-    - soundfile (native C via libsndfile) for WAV/FLAC/OGG: ~10-30x faster
-    - pydub (ffmpeg subprocess) for M4A/MP3: slower but wider format support
-
-    Args:
-        filepath: Path to audio file.
-
-    Returns:
-        Tuple of (audio_array, sample_rate) where audio is mono float32 [-1.0, 1.0].
+def load_audio_channels(filepath: str) -> tuple[np.ndarray, int]:
+    """Load an audio file keeping its channels: 1-D for mono, ``(n_samples,
+    n_channels)`` otherwise, float32 in [-1.0, 1.0]. soundfile (native C, ~10-30x
+    faster) for WAV/FLAC/OGG, pydub (ffmpeg) for the rest or when soundfile fails.
 
     Raises:
         NotFoundError: If file doesn't exist.
@@ -174,30 +174,27 @@ def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     path = Path(filepath)
     if not path.exists():
         raise NotFoundError(f"Audio file not found: {filepath}")
-
-    ext = path.suffix.lower()
-
-    # Fast path: soundfile for native formats
-    if ext in _NATIVE_EXTENSIONS:
+    if path.suffix.lower() in _NATIVE_EXTENSIONS:
         try:
             import soundfile as sf
 
             audio, sample_rate = sf.read(str(path), dtype="float32", always_2d=False)
-
-            audio = _to_mono(audio)
-
-            logger.debug(
-                f"Loaded {ext} file via soundfile (fast): {path.name} "
-                f"({sample_rate}Hz, {len(audio)} samples)"
-            )
             return audio, sample_rate
-
         except Exception as e:
             logger.debug(f"soundfile failed for {filepath}, using pydub fallback: {e}")
+    return _load_via_pydub(str(path), keep_channels=True)
 
-    # Slow path: pydub for M4A, MP3, or if soundfile failed
-    logger.debug(f"Loading {ext} file via pydub (slow): {path.name}")
-    return _load_via_pydub(str(path))
+
+def load_audio(filepath: str) -> tuple[np.ndarray, int]:
+    """Load an audio file as mono float32 in [-1.0, 1.0] (channels averaged), using
+    the fastest backend (see :func:`load_audio_channels`).
+
+    Raises:
+        NotFoundError: If file doesn't exist.
+        AudioLoadError: If file cannot be loaded.
+    """
+    audio, sample_rate = load_audio_channels(filepath)
+    return _to_mono(audio).astype(np.float32, copy=False), sample_rate
 
 
 def load_audio_window(
@@ -372,39 +369,84 @@ def _check_block_samples(block: int, step: int, sample_rate: int) -> None:
         )
 
 
+#: Bit depth -> soundfile subtype, for the formats that store integer samples.
+BIT_DEPTH_SUBTYPES = {
+    "wav": {8: "PCM_U8", 16: "PCM_16", 24: "PCM_24", 32: "PCM_32"},
+    "flac": {8: "PCM_S8", 16: "PCM_16", 24: "PCM_24"},
+}
+
+# Extension -> the format ``save_audio`` writes (pydub calls M4A/AAC "ipod").
+_EXTENSION_FORMATS = {".wav": "wav", ".flac": "flac", ".ogg": "ogg", ".mp3": "mp3", ".m4a": "ipod"}
+
+
+def output_format(path: str | Path, format: str | None = None) -> str:
+    """The format :func:`save_audio` writes ``path`` in: ``format`` (any case, with or
+    without a leading dot), else from the extension, else WAV."""
+    if format:
+        return format.lower().lstrip(".")
+    return _EXTENSION_FORMATS.get(Path(path).suffix.lower(), "wav")
+
+
+def check_bit_depth(format: str, bit_depth: int | None) -> None:
+    """Raise unless ``format`` (as :func:`output_format` gives it) can hold ``bit_depth``
+    (``None`` always passes).
+
+    Raises:
+        InvalidInputError: If it can't (lossy formats hold no bit depth).
+    """
+    if bit_depth is None or bit_depth in BIT_DEPTH_SUBTYPES.get(format, {}):
+        return
+    choices = "; ".join(
+        f"{fmt.upper()}: {', '.join(map(str, bits))}" for fmt, bits in BIT_DEPTH_SUBTYPES.items()
+    )
+    raise InvalidInputError(
+        f"A bit depth of {bit_depth} can't be written as {format.upper()} "
+        f"({choices}; lossy formats have none)"
+    )
+
+
 def save_audio(
     filepath: str,
     audio: np.ndarray,
     sample_rate: int,
     format: str | None = None,
+    bit_depth: int | None = None,
 ) -> None:
     """Save numpy audio array to file.
 
+    WAV and FLAC are written by soundfile, at ``bit_depth`` bits (default 16); other
+    formats by pydub (ffmpeg), at 16 bits.
+
     Args:
         filepath: Destination file path.
-        audio: Audio data as numpy array (float32).
+        audio: Audio data as numpy array (float32), 1-D or ``(n_samples, n_channels)``.
         sample_rate: Sample rate in Hz.
         format: Output format (auto-detected from extension if None).
+        bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24); default 16.
 
     Raises:
+        InvalidInputError: If ``bit_depth`` doesn't apply to the format, or MP3 is
+            asked to hold more than 2 channels.
         AudioSaveError: If file cannot be saved.
     """
     path = Path(filepath)
-
-    format_to_use = format
-    if format_to_use is None:
-        ext = path.suffix.lower()
-        format_map = {
-            ".wav": "wav",
-            ".flac": "flac",
-            ".ogg": "ogg",
-            ".mp3": "mp3",
-            ".m4a": "ipod",  # pydub uses "ipod" for M4A/AAC
-        }
-        format_to_use = format_map.get(ext, "wav")
+    format_to_use = output_format(path, format)
+    check_bit_depth(format_to_use, bit_depth)
+    if format_to_use == "mp3" and audio.ndim == 2 and audio.shape[1] > 2:
+        raise InvalidInputError(
+            f"MP3 holds at most 2 channels, not {audio.shape[1]}; mix down first or "
+            "choose another format"
+        )
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
+        if format_to_use in BIT_DEPTH_SUBTYPES:
+            import soundfile as sf
+
+            subtype = BIT_DEPTH_SUBTYPES[format_to_use][bit_depth or 16]
+            sf.write(str(path), np.clip(audio, -1.0, 1.0), sample_rate,
+                     subtype=subtype, format=format_to_use.upper())  # fmt: skip
+            return
         channels = 1 if audio.ndim == 1 else audio.shape[1]
         segment = _numpy_to_audiosegment(audio, sample_rate, channels)
         # export() returns the open output file; close it rather than leak it.

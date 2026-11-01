@@ -213,3 +213,95 @@ def test_old_finished_jobs_are_forgotten(tmp_path):
     queued = runner.jobs.setdefault("q", _job("q", tmp_path))
     runner._prune()
     assert set(runner.jobs) == {"j2", "j3", queued.id}
+
+
+class _Silent:
+    """A fake worker: alive until ended, sending nothing."""
+
+    pid = None
+
+    def __init__(self):
+        self.alive = True
+
+    def is_alive(self):
+        return self.alive
+
+    def terminate(self):
+        self.alive = False
+
+    def kill(self):
+        self.alive = False
+
+    def join(self, timeout=None):
+        pass
+
+    exitcode = -15
+
+
+class _Pipe:
+    def __init__(self, messages=()):
+        self.messages = list(messages)
+
+    def poll(self):
+        return bool(self.messages)
+
+    def recv(self):
+        return self.messages.pop(0)
+
+    def close(self):
+        pass
+
+
+def _running(runner, tmp_path, *, quiet_for, messages=()):
+    import threading
+
+    job = _job("detect.energy", tmp_path)
+    job.status, job.started = "running", 0.0
+    job._last_heard = time.time() - quiet_for
+    job._process, job._conn, job._cancel = _Silent(), _Pipe(messages), threading.Event()
+    runner.jobs[job.id] = job
+    return job
+
+
+def test_a_silent_job_is_stopped_and_fails_as_a_timeout(tmp_path, monkeypatch):
+    from bioamla.server.jobs import JobRunner
+
+    monkeypatch.setattr("bioamla.server.jobs._signal",
+                        lambda process, kill: process.kill() if kill else process.terminate())  # fmt: skip
+    runner = JobRunner(tmp_path, timeout=10, cancel_grace=0)
+    job = _running(runner, tmp_path, quiet_for=11)
+    runner._tick()
+    assert job._cancel.is_set() and job.status == "running"  # asked first, like a cancel
+    runner._tick()  # past the grace: ended
+    runner._tick()
+    assert job.status == "failed" and job.error["type"] == "JobTimeout"
+    assert any("stopping it" in e.get("message", "") for e in job.events)
+
+
+def test_a_job_that_reports_progress_runs_on(tmp_path):
+    from bioamla.server.jobs import JobRunner
+
+    runner = JobRunner(tmp_path, timeout=10, cancel_grace=0)
+    job = _running(runner, tmp_path, quiet_for=11, messages=[("progress", 1, 9)])
+    runner._tick()
+    assert job.status == "running" and not job._cancel.is_set()
+
+
+def test_a_result_that_arrives_after_the_timeout_still_counts(tmp_path):
+    from bioamla.server.jobs import JobRunner
+
+    runner = JobRunner(tmp_path, timeout=10, cancel_grace=60)
+    job = _running(runner, tmp_path, quiet_for=11)
+    runner._tick()  # timed out: asked to stop
+    job._conn.messages.append(("result", {"count": 1}, None))
+    runner._tick()
+    assert job.status == "succeeded" and job.result == {"count": 1}
+
+
+def test_a_timeout_must_be_positive(tmp_path):
+    from bioamla.exceptions import InvalidInputError
+    from bioamla.server.jobs import JobRunner
+
+    for bad in (0, -1):
+        with pytest.raises(InvalidInputError):
+            JobRunner(tmp_path, timeout=bad)

@@ -9,6 +9,17 @@ Turns a folder of recordings into draft annotations for a person to check. Every
 decision is a threshold on an objective measurement; you run the steps and report what
 they say. You never decide a label yourself, and you never change a label a person made.
 
+## Where it runs
+
+The steps run wherever bioamla commands run. With a remote set (pass
+`--remote NAME:WORKSPACE` to every step, or set `BIOAMLA_REMOTE`, or `remote` and
+`workspace` in the local workspace's settings), the recordings, the model path, the
+annotations file and every output are the server workspace's: the steps upload what
+they write (run files, crops index, review queue), and the annotate step downloads the
+server's annotations file, merges into it with the same rules, and uploads it back. A
+local file with the same name is left alone. The run folder's JSON files are also kept
+locally, so you can read them without fetching.
+
 ## Steps
 
 Run from the workspace root, in order. Each prints a JSON summary; pass its `run_dir`
@@ -30,8 +41,8 @@ to the next step.
    ```
 
    Writes `evidence.json`: signal-to-noise ratio in the detector's band (dB), detector
-   score, model confidence, band and duration. `margin` is null (the model step gives
-   only its top label). SNR is null when a recording has no quieter frames to compare
+   score, model confidence, the margin between the model's top two labels, band and
+   duration. SNR is null when a recording has no quieter frames to compare
    with, as when the detector's relative threshold makes a recording of nothing but
    noise one long event; such candidates go to review.
 
@@ -41,8 +52,9 @@ to the next step.
    python <skill>/scripts/crops.py <run_dir> --pad 0.5
    ```
 
-   Writes `<run_dir>/crops/<id>.wav` and `.png`, and `crops.json` with each event's box
-   in the clip (seconds and Hz). The box isn't drawn on the image.
+   Writes `<run_dir>/crops/<id>.wav` and `.png` (the event's box outlined on the
+   spectrogram, with the suggested label), and `crops.json` with each event's box in the
+   clip (seconds and Hz).
 
 4. **Annotate**: accept the candidates that clear every threshold and merge them into
    the annotations CSV.

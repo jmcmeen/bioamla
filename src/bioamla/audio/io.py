@@ -318,7 +318,7 @@ def create_temp_audio_file(audio: AudioData, suffix: str = ".wav") -> Path:
 
 def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     """
-    Load an audio file as a mono ``numpy`` array.
+    Load an audio file as a mono ``numpy`` array (channels averaged).
 
     Args:
         filepath: Path to the audio file.
@@ -327,46 +327,77 @@ def load_audio(filepath: str) -> tuple[np.ndarray, int]:
         Tuple of (audio array, sample rate). The array is mono float32.
 
     Raises:
-        AudioLoadError: If decoding fails.
+        AudioLoadError: If the file is missing or decoding fails.
     """
-    from bioamla.audio._pydub import load_audio as _pydub_load_audio
+    from bioamla.audio._pydub import load_audio as _load
 
+    return _loaded(_load, filepath)
+
+
+def load_audio_channels(filepath: str | Path) -> tuple[np.ndarray, int]:
+    """
+    Load an audio file keeping every channel (unlike :func:`load_audio`, which
+    downmixes to mono).
+
+    Args:
+        filepath: Path to the audio file.
+
+    Returns:
+        Tuple of (audio array, sample rate): float32, 1-D for a mono file and
+        ``(n_samples, n_channels)`` otherwise.
+
+    Raises:
+        AudioLoadError: If the file is missing or decoding fails.
+    """
+    from bioamla.audio._pydub import load_audio_channels as _load
+
+    return _loaded(_load, filepath)
+
+
+def _loaded(load: Callable[[str], tuple[np.ndarray, int]], filepath: str | Path):
     try:
-        audio, sr = _pydub_load_audio(filepath)
-    except Exception as e:
+        audio, sr = load(str(filepath))
+    except AudioLoadError:
+        raise  # already says what failed
+    except Exception as e:  # a missing file too: reported as a load failure
         raise AudioLoadError(f"Failed to load audio file: {e}") from e
-
-    # Convert to mono if stereo
-    if audio.ndim > 1:
-        audio = audio.mean(axis=0) if audio.shape[0] <= 2 else audio.mean(axis=1)
-
-    return audio.astype(np.float32), sr
+    return audio.astype(np.float32, copy=False), sr
 
 
 def save_audio(
-    filepath: str, audio: np.ndarray, sample_rate: int, format: str | None = None
+    filepath: str,
+    audio: np.ndarray,
+    sample_rate: int,
+    format: str | None = None,
+    bit_depth: int | None = None,
 ) -> str:
     """
     Save a ``numpy`` audio array to a file.
 
     Args:
         filepath: Destination file path.
-        audio: Audio data as a numpy array.
+        audio: Audio data as a numpy array (1-D, or ``(n_samples, n_channels)``).
         sample_rate: Sample rate in Hz.
         format: Output format (auto-detected from the extension if not given).
+        bit_depth: Bits per sample: 8, 16, 24 or 32 for WAV, 8, 16 or 24 for FLAC
+            (default 16). Lossy formats (MP3, OGG) take none.
 
     Returns:
         Path to the saved file (as a string).
 
     Raises:
+        InvalidInputError: If ``bit_depth`` doesn't apply to the format.
         AudioSaveError: If encoding/writing fails.
     """
     from bioamla.audio._pydub import save_audio as _pydub_save_audio
+    from bioamla.exceptions import InvalidInputError
 
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        _pydub_save_audio(str(path), audio, sample_rate, format=format)
+        _pydub_save_audio(str(path), audio, sample_rate, format=format, bit_depth=bit_depth)
+    except (InvalidInputError, AudioSaveError):
+        raise  # already says what failed
     except Exception as e:
         raise AudioSaveError(f"Failed to save audio: {e}") from e
     return str(path)
@@ -394,11 +425,41 @@ def load_waveform_tensor(filepath: str) -> tuple:
     return _load_waveform_tensor(filepath)
 
 
+def each_channel(audio: np.ndarray, fn: Callable[[np.ndarray], np.ndarray]) -> np.ndarray:
+    """``fn`` applied to each channel of ``audio`` (1-D, or ``(n_samples, n_channels)``
+    as :func:`load_audio_channels` returns it), the channels put back together.
+
+    For steps that work on one channel at a time (trim, resample, gain), so a
+    multi-channel file keeps its channels.
+
+    Raises:
+        ProcessingError: If ``fn`` gives the channels different lengths (e.g. a
+            silence trim, which depends on each channel's content).
+    """
+    if audio.ndim == 1:
+        return fn(audio)
+    channels = [fn(audio[:, c]) for c in range(audio.shape[1])]
+    if len({len(c) for c in channels}) > 1:
+        from bioamla.exceptions import ProcessingError
+
+        raise ProcessingError(
+            "The step gave the channels different lengths; it can't keep a file's channels"
+        )
+    return np.stack(channels, axis=1)
+
+
+def _load_for(keep_channels: bool, filepath: str | Path) -> tuple[np.ndarray, int]:
+    """:func:`load_audio_channels` with ``keep_channels``, else :func:`load_audio` (mono)."""
+    return load_audio_channels(filepath) if keep_channels else load_audio(str(filepath))
+
+
 def process_file(
     input_path: str,
     output_path: str,
     processor_fn: Callable[[np.ndarray, int], np.ndarray],
     sample_rate: int | None = None,
+    *,
+    keep_channels: bool = False,
 ) -> str:
     """
     Load, process, and save a single audio file.
@@ -409,6 +470,8 @@ def process_file(
         processor_fn: Callable taking ``(audio, sample_rate)`` and returning
             the processed audio array.
         sample_rate: Optional target sample rate for the output.
+        keep_channels: Keep the file's channels, applying ``processor_fn`` to each
+            (default: the file is mixed down to mono first).
 
     Returns:
         Path to the output file.
@@ -419,14 +482,13 @@ def process_file(
     """
     from bioamla.audio.processing import resample_audio
 
-    audio, sr = load_audio(input_path)
-
-    # Process
-    processed = processor_fn(audio, sr)
-
-    # Resample if needed
+    audio, sr = _load_for(keep_channels, input_path)
+    processed = each_channel(audio, lambda ch: processor_fn(ch, sr))
     if sample_rate is not None and sample_rate != sr:
-        processed = resample_audio(processed, sr, sample_rate)
+        # resample_audio works along the last axis; channels are columns here.
+        resampled = resample_audio(processed.T if processed.ndim == 2 else processed, sr,
+                                   sample_rate)  # fmt: skip
+        processed = resampled.T if processed.ndim == 2 else resampled
         sr = sample_rate
 
     return save_audio(output_path, processed, sr)
@@ -515,6 +577,7 @@ __all__ = [
     "save_audio_data_as",
     "create_temp_audio_file",
     "load_audio",
+    "load_audio_channels",
     "save_audio",
     "load_waveform_tensor",
     "process_file",

@@ -5,6 +5,7 @@ inside the command bodies, so we patch the symbols there. Heavy audio/ML work is
 mocked; tests exercise arg-parsing, branching and output formatting only.
 """
 
+from datetime import UTC
 from unittest.mock import MagicMock, PropertyMock
 
 import numpy as np
@@ -38,6 +39,8 @@ def mock_load_save(mocker):
     """Patch load_audio/save_audio used by the processing commands."""
     audio = np.zeros(16000, dtype=np.float32)
     load = mocker.patch("bioamla.audio.files.load_audio", return_value=(audio, 16000))
+    # Trim, resample and gain keep a file's channels, through the other loader.
+    mocker.patch("bioamla.audio.files.load_audio_channels", side_effect=load)
     save = mocker.patch("bioamla.audio.files.save_audio")
     return load, save
 
@@ -126,7 +129,7 @@ def _fake_info():
 
 
 def test_info_metadata_flag(runner, mocker):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from bioamla.audio import RecordingMetadata
 
@@ -134,7 +137,7 @@ def test_info_metadata_flag(runner, mocker):
     mocker.patch(
         "bioamla.audio.metadata.get_recording_metadata",
         return_value=RecordingMetadata(
-            recorded_at=datetime(2021, 11, 12, 19, 30, tzinfo=timezone.utc),
+            recorded_at=datetime(2021, 11, 12, 19, 30, tzinfo=UTC),
             device_model="AudioMoth",
             device_id="248D9B045EC9EE79",
             gain="medium",
@@ -331,7 +334,8 @@ def test_play_error(runner, mocker):
 
 def test_convert(runner, tmp_path, mocker):
     mocker.patch(
-        "bioamla.audio.convert.load_audio", return_value=(np.zeros(16000, np.float32), 16000)
+        "bioamla.audio.convert.load_audio_channels",
+        return_value=(np.zeros(16000, np.float32), 16000),
     )
     save = mocker.patch("bioamla.audio.convert.save_audio", return_value="out.flac")
     out = tmp_path / "out.flac"
@@ -348,7 +352,7 @@ def test_convert(runner, tmp_path, mocker):
 
 def test_convert_stereo_to_mono(runner, tmp_path, mocker):
     mocker.patch(
-        "bioamla.audio.convert.load_audio",
+        "bioamla.audio.convert.load_audio_channels",
         return_value=(np.zeros((16000, 2), np.float32), 16000),
     )
     save = mocker.patch("bioamla.audio.convert.save_audio", return_value="out.wav")
@@ -360,7 +364,8 @@ def test_convert_stereo_to_mono(runner, tmp_path, mocker):
 
 def test_convert_mono_to_stereo(runner, tmp_path, mocker):
     mocker.patch(
-        "bioamla.audio.convert.load_audio", return_value=(np.zeros(16000, np.float32), 16000)
+        "bioamla.audio.convert.load_audio_channels",
+        return_value=(np.zeros(16000, np.float32), 16000),
     )
     save = mocker.patch("bioamla.audio.convert.save_audio", return_value="out.wav")
     out = tmp_path / "out.wav"
@@ -370,18 +375,33 @@ def test_convert_mono_to_stereo(runner, tmp_path, mocker):
     assert save.call_args.kwargs["format"] is None  # from the file name
 
 
-def test_convert_bit_depth_is_ignored_with_a_warning(runner, tmp_path, mocker):
-    mocker.patch(
-        "bioamla.audio.convert.load_audio", return_value=(np.zeros(16000, np.float32), 16000)
+def test_convert_writes_the_bit_depth(runner, tmp_path, test_audio_path):
+    import soundfile as sf
+
+    for bits, subtype in (("24", "PCM_24"), ("32", "PCM_32"), ("8", "PCM_U8")):
+        out = tmp_path / f"o{bits}.wav"
+        result = runner.invoke(cli, ["audio", "convert", test_audio_path, str(out), "-b", bits])
+        assert result.exit_code == 0, result.output
+        assert sf.info(out).subtype == subtype
+    flac = tmp_path / "o.flac"
+    assert (
+        runner.invoke(cli, ["audio", "convert", test_audio_path, str(flac), "-b", "24"]).exit_code
+        == 0
     )
-    mocker.patch("bioamla.audio.convert.save_audio", return_value="out.wav")
-    result = runner.invoke(cli, ["audio", "convert", "in.wav", str(tmp_path / "o.wav"), "-b", "24"])
-    assert result.exit_code == 0
-    assert "--bit-depth is not supported" in result.stderr
+    assert sf.info(flac).subtype == "PCM_24"
+
+
+def test_convert_refuses_a_bit_depth_the_format_cannot_hold(runner, tmp_path, test_audio_path):
+    for out, bits in (("o.mp3", "24"), ("o.flac", "32")):
+        result = runner.invoke(
+            cli, ["audio", "convert", test_audio_path, str(tmp_path / out), "-b", bits]
+        )
+        assert result.exit_code == 1 and "can't be written" in result.output
+        assert not (tmp_path / out).exists()
 
 
 def test_convert_error(runner, tmp_path, mocker):
-    mocker.patch("bioamla.audio.convert.load_audio", side_effect=AudioLoadError("broken"))
+    mocker.patch("bioamla.audio.convert.load_audio_channels", side_effect=AudioLoadError("broken"))
     result = runner.invoke(cli, ["audio", "convert", "in.wav", str(tmp_path / "o.wav")])
     assert result.exit_code != 0
     assert "broken" in result.output

@@ -28,8 +28,17 @@ from bioamla.audio.batch import (
     trim_processor,
 )
 from bioamla.audio.features import FrameFeatureConfig
+from bioamla.audio.operations import AudioFormat
 from bioamla.batch import BatchRequest, BatchResult
 from bioamla.common.config import config_dataclass
+from bioamla.common.constants import (
+    DEFAULT_HOP_LENGTH,
+    DEFAULT_N_FFT,
+    PICTURE_CMAP,
+    PICTURE_DPI,
+    PICTURE_N_MELS,
+    PICTURE_N_MFCC,
+)
 from bioamla.operations import OperationContext, operation
 
 
@@ -98,13 +107,16 @@ class BatchConvertRequest(BatchRequest):
     Attributes:
         target_format: Output format.
         sample_rate: Target sample rate (Hz).
-        channels: Target channel count (1 or 2).
+        channels: Target channel count (1 or 2; default: keep the file's own).
+        bit_depth: Bits per sample (WAV: 8, 16, 24, 32; FLAC: 8, 16, 24); by default the
+            source's when the output holds it, else 16.
         delete_original: Delete each source file after it converts.
     """
 
     target_format: Literal["wav", "mp3", "flac", "ogg"] = "wav"
     sample_rate: int | None = None
     channels: int | None = None
+    bit_depth: Literal[8, 16, 24, 32] | None = None
     delete_original: bool = False
 
 
@@ -116,6 +128,7 @@ def batch_audio_convert_op(request: BatchConvertRequest, context: OperationConte
         target_format=request.target_format,
         sample_rate=request.sample_rate,
         channels=request.channels,
+        bit_depth=request.bit_depth,
         delete_original=request.delete_original,
         on_progress=context.progress,
         operation="batch audio convert",
@@ -186,7 +199,8 @@ class BatchTrimRequest(BatchRequest):
 
 @operation("batch.audio.trim", request=BatchTrimRequest, kind="job")
 def batch_audio_trim_op(request: BatchTrimRequest, context: OperationContext) -> BatchResult:
-    """Trim every file to a time range, or trim its silence."""
+    """Trim every file to a time range (keeping its channels), or trim its silence
+    (mixed down to mono, so every channel is cut the same)."""
     processor = trim_processor(
         start=request.start,
         end=request.end,
@@ -197,6 +211,7 @@ def batch_audio_trim_op(request: BatchTrimRequest, context: OperationContext) ->
         processor,
         on_progress=context.progress,
         operation="batch audio trim",
+        keep_channels=not request.trim_silence,
     )
 
 
@@ -261,15 +276,20 @@ def batch_audio_denoise_op(request: BatchDenoiseRequest, context: OperationConte
 
 @config_dataclass
 class BatchSegmentRequest(BatchRequest):
-    """Cut every file into fixed-length clips.
+    """Cut every file into fixed-length clips, ``<stem>_seg0000.<format>``, ...
 
     Attributes:
         duration: Clip length (s).
         overlap: Overlap between clips (s).
+        format: Clip format.
+        include_partial: Keep each file's last clip when it is shorter than
+            ``duration`` (left out by default).
     """
 
     duration: float = 3.0
     overlap: float = 0.0
+    format: AudioFormat = "wav"
+    include_partial: bool = False
 
 
 @operation("batch.audio.segment", request=BatchSegmentRequest, kind="job")
@@ -279,6 +299,8 @@ def batch_audio_segment_op(request: BatchSegmentRequest, context: OperationConte
         request.to_config(),
         duration=request.duration,
         overlap=request.overlap,
+        format=request.format,
+        include_partial=request.include_partial,
         on_progress=context.progress,
         operation="batch audio segment",
     )
@@ -288,12 +310,29 @@ def batch_audio_segment_op(request: BatchSegmentRequest, context: OperationConte
 class BatchVisualizeRequest(BatchRequest):
     """A spectrogram, MFCC or waveform image of every file (directory mode).
 
+    The drawing settings and their defaults are ``audio.visualize``'s, so both draw
+    the same picture of a file (as PNG; boxes and annotations are single-file only).
+
     Attributes:
         plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.
+        n_fft: FFT window size.
+        hop_length: Hop length.
+        n_mels: Mel bands.
+        n_mfcc: MFCCs.
+        cmap: Colormap name.
+        dpi: Image DPI.
+        legend: Show axes, title and colorbar.
         verbose: Log each file at INFO level.
     """
 
     plot_type: Literal["mel", "stft", "mfcc", "waveform"] = "mel"
+    n_fft: int = DEFAULT_N_FFT
+    hop_length: int = DEFAULT_HOP_LENGTH
+    n_mels: int = PICTURE_N_MELS
+    n_mfcc: int = PICTURE_N_MFCC
+    cmap: str = PICTURE_CMAP
+    dpi: int = PICTURE_DPI
+    legend: bool = True
     verbose: bool = True
 
 
@@ -305,6 +344,13 @@ def batch_audio_visualize_op(
     return batch_visualize(
         request.to_config(),
         viz_type=request.plot_type,
+        n_fft=request.n_fft,
+        hop_length=request.hop_length,
+        n_mels=request.n_mels,
+        n_mfcc=request.n_mfcc,
+        cmap=request.cmap,
+        dpi=request.dpi,
+        legend=request.legend,
         verbose=request.verbose,
         on_progress=context.progress,
     )

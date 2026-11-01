@@ -209,3 +209,25 @@ def test_a_none_result_is_a_typed_result(monkeypatch):
     with pytest.raises(UntypedResult, match="Can't send a Foo") as e:
         client.run("ws", "x.y", typed=True)
     assert e.value.result == {"a": 1}
+
+
+def test_remote_current_says_where_commands_run(tmp_path, monkeypatch):
+    from bioamla.workspace import create_workspace
+
+    run = CliRunner().invoke
+    monkeypatch.delenv("BIOAMLA_REMOTE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    here = json.loads(run(cli, ["--json", "remote", "current"]).stdout)["result"]
+    assert here == {"remote": None, "workspace": None, "source": None}
+    monkeypatch.setenv("BIOAMLA_REMOTE", "lab:field")
+    there = json.loads(run(cli, ["--json", "remote", "current"]).stdout)["result"]
+    assert (there["remote"], there["workspace"], there["source"]) == (
+        "lab", "field", "$BIOAMLA_REMOTE"
+    )  # fmt: skip
+    monkeypatch.delenv("BIOAMLA_REMOTE")
+    ws = create_workspace(tmp_path / "laptop")
+    ws.config_path.write_text('remote = "lab"\nworkspace = "site"\n')
+    monkeypatch.chdir(ws.root)
+    configured = json.loads(run(cli, ["--json", "remote", "current"]).stdout)["result"]
+    assert (configured["remote"], configured["workspace"]) == ("lab", "site")
+    assert ws.history() == []  # a read, not recorded
