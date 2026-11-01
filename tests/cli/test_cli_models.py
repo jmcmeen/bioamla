@@ -486,6 +486,6 @@ def test_ast_predict_top_k_lists_ranked_labels(runner: CliRunner, test_audio_pat
 
 
 def test_ast_train_has_no_id_column_option(runner: CliRunner) -> None:
-    result = runner.invoke(cli, ["models", "ast", "train", "--train-dataset", "x", "--id-column",
-                                 "target"])  # fmt: skip
-    assert result.exit_code == 2 and "No such option" in result.output
+    args = ["models", "ast", "train", "--train-dataset", "x", "--id-column", "target"]
+    result = runner.invoke(cli, args)
+    assert result.exit_code == 2 and "No such option '--id-column'" in result.output

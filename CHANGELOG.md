@@ -225,7 +225,6 @@ All notable changes to this project are documented here. The format is based on
 
 - `cluster reduce|fit` say "Reducing embeddings to 2D using pca..." / "Clustering embeddings
   using hdbscan..." (the input size is read inside the operation now).
-- `models ast train --id-column` prints a warning that it's ignored; it always was (#254).
 - The `ast init-config` "already exists" error names the fix itself (`force=True` /
   `--force`).
 - `workspace status` and `workspace list` are no longer recorded in the workspace history
@@ -239,8 +238,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Removed
 
-- `models ast train --id-column`, which training never used (labels are numbered from
-  the sorted `--label-column` values). Passing it is now a usage error.
+- `models ast train --id-column`, which training never used: labels are numbered from the
+  sorted `--label-column` values (#254). Passing it is now a usage error.
+
+Deprecated in 0.3.x:
+
+These are breaking changes:
 
 - **Python 3.10 support.** bioamla now requires Python 3.11 or newer. 3.10 reached end of life in
   October 2026, and the security fixes for pillow and filelock need 3.11. The `tomli`
