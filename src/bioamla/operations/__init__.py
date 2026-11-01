@@ -39,6 +39,10 @@ from bioamla.exceptions import BioamlaError, DependencyError, NotFoundError
 #: when its commands are converted.
 OPERATION_MODULES: dict[str, str] = {
     "batch.audio": "bioamla.audio.batch_operations",
+    "batch.cluster": "bioamla.cluster.batch_operations",
+    "batch.detect": "bioamla.detect.batch_operations",
+    "batch.index": "bioamla.indices.batch_operations",
+    "batch.models": "bioamla.ml.batch_operations",
     "audio": "bioamla.audio.operations",
     "detect": "bioamla.detect.operations",
     "indices": "bioamla.indices.operations",
@@ -174,9 +178,9 @@ def _qualname(func: Callable) -> str:
 
 def _module_for(name: str) -> str | None:
     """The module for ``name``'s longest registered prefix (``batch.audio.info`` ->
-    ``batch.audio`` before ``batch``)."""
+    ``batch.audio`` before ``batch``); a name may itself be registered (``batch.index``)."""
     parts = name.split(".")
-    for n in range(len(parts) - 1, 0, -1):
+    for n in range(len(parts), 0, -1):
         module = OPERATION_MODULES.get(".".join(parts[:n]))
         if module is not None:
             return module

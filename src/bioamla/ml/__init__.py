@@ -63,7 +63,13 @@ from bioamla.ml.base import (
 )
 
 # --- Batch wrappers ----------------------------------------------------------
-from bioamla.ml.batch import batch_embed_files, batch_predict_files, batch_predict_segments
+from bioamla.ml.batch import (
+    batch_embed,
+    batch_embed_files,
+    batch_predict,
+    batch_predict_files,
+    batch_predict_segments,
+)
 from bioamla.ml.device import (
     DeviceContext,
     get_current_device_index,
@@ -163,6 +169,8 @@ __all__ = [
     "batch_predict_files",
     "batch_predict_segments",
     "batch_embed_files",
+    "batch_predict",
+    "batch_embed",
     # Preprocessing / augmentation
     "SpectrogramAugmentationConfig",
     "BioamlaPreprocessor",

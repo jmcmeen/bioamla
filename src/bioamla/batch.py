@@ -835,6 +835,40 @@ class BatchRequest:
 
 
 # =============================================================================
+# Reading a BatchConfig
+# =============================================================================
+
+
+def config_csv_context(config: BatchConfig) -> CSVBatchContext:
+    """The metadata CSV of a CSV-mode ``config``, with its output folder (see
+    :func:`load_csv`)."""
+    output_dir = str(config.output_dir) if config.output_dir else None
+    return load_csv(config.input_file, output_dir)
+
+
+def require_input_dir(config: BatchConfig) -> str:
+    """``config.input_dir``, for commands that only run in directory mode.
+
+    Raises:
+        InvalidInputError: If ``config`` has no ``input_dir``.
+    """
+    if not config.input_dir:
+        raise InvalidInputError("input_dir (--input-dir) is required for this command.")
+    return str(config.input_dir)
+
+
+def require_output_dir(config: BatchConfig) -> str:
+    """``config.output_dir``, for commands that must write somewhere.
+
+    Raises:
+        InvalidInputError: If ``config`` has no ``output_dir``.
+    """
+    if not config.output_dir:
+        raise InvalidInputError("output_dir (--output-dir) is required for this command.")
+    return str(config.output_dir)
+
+
+# =============================================================================
 # CSV-mode runners: one per kind of command
 # =============================================================================
 
@@ -1097,6 +1131,10 @@ __all__ = [
     "update_row_path",
     "merge_analysis_results",
     "expand_row_for_segments",
+    # Reading a BatchConfig
+    "config_csv_context",
+    "require_input_dir",
+    "require_output_dir",
     # CSV-mode runners
     "run_csv_merge",
     "run_csv_transform",

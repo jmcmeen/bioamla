@@ -20,13 +20,22 @@ from bioamla.audio.convert import convert_audio_file
 from bioamla.audio.discovery import list_audio_files
 from bioamla.audio.io import load_audio, save_audio
 from bioamla.audio.processing import resample_audio
-from bioamla.batch import BatchResult, SegmentInfo, output_stems, run_batch, write_rows_csv
+from bioamla.batch import (
+    BatchResult,
+    SegmentInfo,
+    output_stems,
+    run_batch,
+    write_rows_csv,
+)
+from bioamla.batch import config_csv_context as _csv_context
+from bioamla.batch import require_input_dir as _input_dir
+from bioamla.batch import require_output_dir as _output_dir
 from bioamla.exceptions import InvalidInputError, NotFoundError
 from bioamla.protocols import OnProgress
 
 if TYPE_CHECKING:
     from bioamla.audio.features import FrameFeatureConfig
-    from bioamla.batch import BatchConfig, CSVBatchContext
+    from bioamla.batch import BatchConfig
 
 
 def batch_transform_files(
@@ -627,24 +636,6 @@ def filter_processor(
 # =============================================================================
 # Batch commands, directory or CSV mode (from a BatchConfig)
 # =============================================================================
-
-
-def _csv_context(config: "BatchConfig") -> "CSVBatchContext":
-    from bioamla.batch import load_csv
-
-    return load_csv(config.input_file, str(config.output_dir) if config.output_dir else None)
-
-
-def _input_dir(config: "BatchConfig") -> str:
-    if not config.input_dir:
-        raise InvalidInputError("input_dir (--input-dir) is required for this command.")
-    return str(config.input_dir)
-
-
-def _output_dir(config: "BatchConfig") -> str:
-    if not config.output_dir:
-        raise InvalidInputError("output_dir (--output-dir) is required for this command.")
-    return str(config.output_dir)
 
 
 def batch_transform(
