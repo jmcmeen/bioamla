@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-11-01
+
 ### Added
 
 - Every `batch audio` command runs through an operation (`batch.audio.info|validate|metadata|
@@ -738,7 +740,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.10...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.11...HEAD
+[0.3.11]: https://github.com/jmcmeen/bioamla/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/jmcmeen/bioamla/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/jmcmeen/bioamla/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/jmcmeen/bioamla/compare/v0.3.7...v0.3.8
