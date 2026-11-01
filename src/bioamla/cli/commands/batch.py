@@ -28,6 +28,7 @@ from bioamla.cli.options import (
     max_workers_option,
     quiet_option,
     recursive_option,
+    segment_options,
 )
 from bioamla.exceptions import BioamlaError
 
@@ -520,30 +521,7 @@ def audio_denoise(
 @audio.command("segment")
 @batch_input_options
 @batch_output_options
-@click.option(
-    "--duration-seconds",
-    "-d",
-    "duration",
-    default=3.0,
-    type=float,
-    help="Segment duration in seconds (default: 3.0)",
-)
-@click.option(
-    "--overlap", "-o", default=0.0, type=float, help="Overlap between segments in seconds"
-)
-@click.option(
-    "--format",
-    "-f",
-    "out_format",
-    default="wav",
-    type=click.Choice(["wav", "mp3", "flac", "ogg"]),
-    help="Output format (default: wav)",
-)
-@click.option(
-    "--keep-short",
-    is_flag=True,
-    help="Keep a last clip shorter than the duration (left out by default)",
-)
+@segment_options
 @max_workers_option
 @recursive_option
 @quiet_option

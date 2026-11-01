@@ -28,6 +28,7 @@ from bioamla.audio.batch import (
     trim_processor,
 )
 from bioamla.audio.features import FrameFeatureConfig
+from bioamla.audio.operations import AudioFormat
 from bioamla.batch import BatchRequest, BatchResult
 from bioamla.common.config import config_dataclass
 from bioamla.operations import OperationContext, operation
@@ -276,7 +277,7 @@ class BatchSegmentRequest(BatchRequest):
 
     duration: float = 3.0
     overlap: float = 0.0
-    format: Literal["wav", "mp3", "flac", "ogg"] = "wav"
+    format: AudioFormat = "wav"
     include_partial: bool = False
 
 

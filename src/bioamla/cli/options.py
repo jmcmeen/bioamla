@@ -32,6 +32,45 @@ def quiet_option(f: Callable) -> Callable:
     return click.option("--quiet", "-q", is_flag=True, help="Suppress progress output")(f)
 
 
+def segment_options(f: Callable) -> Callable:
+    """The clip options ``audio segment`` and ``batch audio segment`` share, so they
+    cut the same clips: ``--duration-seconds``, ``--overlap``, ``--format``,
+    ``--keep-short``."""
+    options = [
+        click.option(
+            "--duration-seconds",
+            "-d",
+            "duration",
+            default=3.0,
+            type=float,
+            help="Segment duration in seconds (default: 3.0)",
+        ),
+        click.option(
+            "--overlap",
+            "-o",
+            default=0.0,
+            type=float,
+            help="Overlap between segments in seconds (default: 0.0)",
+        ),
+        click.option(
+            "--format",
+            "-f",
+            "out_format",
+            default="wav",
+            type=click.Choice(["wav", "mp3", "flac", "ogg"]),
+            help="Output format (default: wav)",
+        ),
+        click.option(
+            "--keep-short",
+            is_flag=True,
+            help="Keep a last clip shorter than the duration (left out by default)",
+        ),
+    ]
+    for option in reversed(options):
+        f = option(f)
+    return f
+
+
 def frame_feature_options(f: Callable) -> Callable:
     """Analysis options shared by ``audio features`` and ``batch audio features``."""
     options = [

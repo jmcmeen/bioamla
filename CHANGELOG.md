@@ -179,9 +179,12 @@ All notable changes to this project are documented here. The format is based on
   clip exactly the duration long, with a shorter last clip left out unless `--keep-short`,
   in WAV, MP3, FLAC or OGG (`batch audio segment` gains `--format`, and `-d` defaults to 3 s
   there too). `audio segment` used to name clips `<prefix>_0000`, and `batch audio segment`
-  kept the short last clip and wrote only WAV. `segment_audio_file()` leaves the short clip
-  out by default (`include_partial=True` keeps it); the `audio.segment` and
-  `batch.audio.segment` requests gain `include_partial` (and the batch one `format`).
+  kept the short last clip and wrote only WAV. A file shorter than one clip is an error that
+  names `--keep-short` (counted as a failed file in a batch) rather than silently giving no
+  clips. `segment_audio_file()` leaves the short clip out by default (`include_partial=True`
+  keeps it) and loses its `label` parameter (clips are always `_seg0000`); the
+  `audio.segment` and `batch.audio.segment` requests gain `include_partial` (and the batch
+  one `format`).
 
 - **Behavior change:** `audio convert` and `batch audio convert` keep a file's channels: a
   stereo file stays stereo (each channel as it was) unless `--channels` says otherwise.

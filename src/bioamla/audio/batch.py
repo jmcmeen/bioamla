@@ -205,13 +205,11 @@ def segment_audio_file(
     prefix: str | None = None,
     format: str = "wav",
     include_partial: bool = False,
-    label: str = "seg",
 ) -> list[SegmentInfo]:
     """
     Split one audio file into fixed-duration segments written under ``output_dir``.
 
-    Segments are named ``<prefix>_<label><index:04d>.<format>``
-    (``rec_seg0000.wav`` by default).
+    Segments are named ``<prefix>_seg<index:04d>.<format>`` (``rec_seg0000.wav``).
 
     Args:
         input_path: Source audio file.
@@ -222,15 +220,15 @@ def segment_audio_file(
         format: Segment file format ("wav", "mp3", "flac", "ogg").
         include_partial: Keep a last segment shorter than ``duration`` (by default
             every segment is exactly ``duration`` long and a shorter tail is left out).
-        label: Text between the prefix and the index (``""`` gives ``rec_0000``).
 
     Returns:
         A list of :class:`bioamla.batch.SegmentInfo`, one per written segment.
 
     Raises:
         InvalidInputError: If ``duration`` is not positive, ``overlap`` is not
-            smaller than ``duration``, or ``prefix`` isn't a plain name (so clips
-            stay inside ``output_dir``).
+            smaller than ``duration``, ``prefix`` isn't a plain name (so clips stay
+            inside ``output_dir``), or the file is shorter than ``duration`` without
+            ``include_partial`` (it would give no clip at all).
 
     If writing fails partway, the segments already written are removed.
     """
@@ -248,9 +246,14 @@ def segment_audio_file(
     step = int((duration - overlap) * sr)
     if step <= 0:
         raise InvalidInputError("overlap must be smaller than duration.")
+    n = audio.shape[-1] if audio.ndim > 1 else len(audio)
+    if n == 0 or (n < seg_samples and not include_partial):
+        raise InvalidInputError(
+            f"{src.name} is {n / sr:.3g} s long, shorter than one {duration:g} s clip "
+            "(keep it as a shorter clip with --keep-short / include_partial)"
+        )
     out_dir.mkdir(parents=True, exist_ok=True)  # only once there is something to write
 
-    n = audio.shape[-1] if audio.ndim > 1 else len(audio)
     segments: list[SegmentInfo] = []
     count = 0
     start_idx = 0
@@ -260,7 +263,7 @@ def segment_audio_file(
                 break
             end_idx = min(start_idx + seg_samples, n)
             chunk = audio[..., start_idx:end_idx] if audio.ndim > 1 else audio[start_idx:end_idx]
-            seg_out = out_dir / f"{stem}_{label}{count:04d}.{format}"
+            seg_out = out_dir / f"{stem}_seg{count:04d}.{format}"
             save_audio(str(seg_out), chunk, sr)
             segments.append(
                 SegmentInfo(
@@ -279,7 +282,7 @@ def segment_audio_file(
         for seg in segments:
             seg.segment_path.unlink(missing_ok=True)
         if start_idx < n:
-            (out_dir / f"{stem}_{label}{count:04d}.{format}").unlink(missing_ok=True)
+            (out_dir / f"{stem}_seg{count:04d}.{format}").unlink(missing_ok=True)
         raise
 
     return segments

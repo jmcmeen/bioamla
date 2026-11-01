@@ -952,3 +952,47 @@ def test_indices_empty_selection_rejected(runner, test_audio_dir):
     result = runner.invoke(cli, ["batch", "index", "--input-dir", test_audio_dir, "--indices", ","])
     assert result.exit_code != 0
     assert "at least one index" in result.output
+
+
+def test_single_and_batch_segment_cut_the_same_clips(test_audio_path_3s, tmp_path):
+    """`audio segment` and `batch audio segment` give the same names, clips and formats."""
+    import shutil
+
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    folder = tmp_path / "in"
+    folder.mkdir()
+    shutil.copy(test_audio_path_3s, folder / "rec.wav")
+    runner = CliRunner()
+    for keep in ([], ["--keep-short"]):
+        one, many = tmp_path / f"one{len(keep)}", tmp_path / f"many{len(keep)}"
+        common = ["-d", "1.25", "-f", "flac", *keep]
+        r1 = runner.invoke(cli, ["audio", "segment", str(folder / "rec.wav"), str(one), *common])
+        r2 = runner.invoke(cli, ["batch", "audio", "segment", "--input-dir", str(folder),
+                                 "--output-dir", str(many), *common])  # fmt: skip
+        assert r1.exit_code == 0 and r2.exit_code == 0, (r1.output, r2.output)
+        names = sorted(p.name for p in one.iterdir())
+        assert names == sorted(p.name for p in many.iterdir())
+        assert names == ["rec_seg0000.flac", "rec_seg0001.flac"] + (
+            ["rec_seg0002.flac"] if keep else []
+        )
+
+
+def test_batch_segment_reports_a_file_too_short_for_a_clip(test_audio_path_3s, tmp_path):
+    import shutil
+
+    from click.testing import CliRunner
+
+    from bioamla.cli.cli import cli
+
+    folder = tmp_path / "in"
+    folder.mkdir()
+    shutil.copy(test_audio_path_3s, folder / "rec.wav")
+    result = CliRunner().invoke(cli, ["--json", "batch", "audio", "segment", "--input-dir",
+                                      str(folder), "--output-dir", str(tmp_path / "o"), "-d", "5"])  # fmt: skip
+    import json
+
+    body = json.loads(result.stdout)["result"]
+    assert body["failed"] == 1 and "--keep-short" in json.dumps(body)

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from bioamla.cli.options import frame_feature_options
+from bioamla.cli.options import frame_feature_options, segment_options
 from bioamla.exceptions import BioamlaError
 
 
@@ -298,44 +298,18 @@ def audio_convert(
 @audio.command("segment")
 @click.argument("input_path")
 @click.argument("output_dir")
-@click.option(
-    "--duration-seconds",
-    "-d",
-    "duration",
-    default=3.0,
-    type=float,
-    help="Segment duration in seconds (default: 3.0)",
-)
-@click.option(
-    "--overlap",
-    "-o",
-    default=0.0,
-    type=float,
-    help="Overlap between segments in seconds (default: 0.0)",
-)
-@click.option(
-    "--format",
-    "-f",
-    default="wav",
-    type=click.Choice(["wav", "mp3", "flac", "ogg"]),
-    help="Output format (default: wav)",
-)
+@segment_options
 @click.option(
     "--prefix", "-p", default=None, help="Prefix for output filenames (default: input filename)"
-)
-@click.option(
-    "--keep-short",
-    is_flag=True,
-    help="Keep a last clip shorter than the duration (left out by default)",
 )
 def audio_segment(
     input_path: str,
     output_dir: str,
     duration: float,
     overlap: float,
-    format: str,
-    prefix: str,
+    out_format: str,
     keep_short: bool,
+    prefix: str,
 ) -> None:
     """Segment audio file into fixed-duration clips, named PREFIX_seg0000.FORMAT, ...
 
@@ -351,7 +325,7 @@ def audio_segment(
         output_dir=output_dir,
         duration=duration,
         overlap=overlap,
-        format=format,
+        format=out_format,
         prefix=prefix,
         include_partial=keep_short,
     )

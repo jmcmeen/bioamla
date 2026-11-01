@@ -112,34 +112,15 @@ def test_segment_options(test_audio_path_3s, tmp_path):
                               prefix="rec", format="flac", include_partial=True)  # fmt: skip
     assert [s.segment_path.name for s in kept][-1] == "rec_seg0002.flac"
     assert kept[-1].duration == pytest.approx(0.5)
-    plain = segment_audio_file(test_audio_path_3s, str(tmp_path / "p"), duration=1.25, label="")
-    assert plain[0].segment_path.name == "test_audio_3s_0000.wav"
 
 
-def test_single_and_batch_segment_cut_the_same_clips(test_audio_path_3s, tmp_path):
-    """`audio segment` and `batch audio segment` give the same names, clips and formats."""
-    import shutil
-
-    from click.testing import CliRunner
-
-    from bioamla.cli.cli import cli
-
-    folder = tmp_path / "in"
-    folder.mkdir()
-    shutil.copy(test_audio_path_3s, folder / "rec.wav")
-    runner = CliRunner()
-    for keep in ([], ["--keep-short"]):
-        one, many = tmp_path / f"one{len(keep)}", tmp_path / f"many{len(keep)}"
-        common = ["-d", "1.25", "-f", "flac", *keep]
-        r1 = runner.invoke(cli, ["audio", "segment", str(folder / "rec.wav"), str(one), *common])
-        r2 = runner.invoke(cli, ["batch", "audio", "segment", "--input-dir", str(folder),
-                                 "--output-dir", str(many), *common])  # fmt: skip
-        assert r1.exit_code == 0 and r2.exit_code == 0, (r1.output, r2.output)
-        names = sorted(p.name for p in one.iterdir())
-        assert names == sorted(p.name for p in many.iterdir())
-        assert names == ["rec_seg0000.flac", "rec_seg0001.flac"] + (
-            ["rec_seg0002.flac"] if keep else []
-        )
+def test_a_file_shorter_than_one_clip_is_an_error_not_silence(test_audio_path_3s, tmp_path):
+    with pytest.raises(InvalidInputError, match="--keep-short"):
+        segment_audio_file(test_audio_path_3s, str(tmp_path / "x"), duration=5.0)
+    assert not (tmp_path / "x").exists()  # nothing created
+    kept = segment_audio_file(test_audio_path_3s, str(tmp_path / "y"), duration=5.0,
+                              include_partial=True)  # fmt: skip
+    assert len(kept) == 1 and kept[0].duration == pytest.approx(3.0)
 
 
 @pytest.mark.parametrize("prefix", ["../up", "a/b", "..", "", "c\\d"])
