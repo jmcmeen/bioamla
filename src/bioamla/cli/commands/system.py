@@ -180,6 +180,51 @@ def system_deps(do_install: bool, yes: bool) -> None:
                 console.print(f"[red]✗[/red] {dep.name}")
 
 
+@system.command("commands")
+@click.argument("path", nargs=-1)
+@click.pass_context
+def system_commands(ctx: click.Context, path: tuple[str, ...]) -> None:
+    """List every command, or describe the commands under PATH (e.g. `detect energy`).
+
+    With --json: every command's help, arguments and options (type, choices,
+    default, required, flags), plus each option's BIOAMLA_* variable and settings
+    key. Scripts and agent tools use it to learn the CLI without parsing --help.
+
+    \b
+    Examples:
+        bioamla system commands
+        bioamla system commands detect energy
+        bioamla --json system commands > commands.json
+    """
+    from bioamla.cli.catalog import command_catalog
+    from bioamla.cli.console import print_kv, print_table
+    from bioamla.cli.output import emit_result
+
+    catalog = command_catalog(ctx.find_root().command, list(path))
+    if emit_result(catalog):
+        return
+    commands = catalog["commands"]
+    leaf = commands[0] if path and commands and commands[0]["kind"] == "command" else None
+    if leaf is None:
+        rows = [[f"bioamla {c['path']}", c["summary"]] for c in commands if c["kind"] == "command"]
+        print_table(f"{len(rows)} commands", ["command", "what it does"], rows)
+        return
+    print_kv("Command", f"bioamla {leaf['path']}")
+    click.echo(f"\n{leaf['help']}\n")
+    if leaf["arguments"]:
+        print_table("Arguments", ["name", "type", "required"],
+                    [[a["name"], a["type"], "yes" if a["required"] else ""]
+                     for a in leaf["arguments"]])  # fmt: skip
+    print_table(
+        "Options",
+        ["flags", "type", "default", "setting / env"],
+        [[", ".join(o["flags"]), o["type"] + (f" {o['choices']}" if o.get("choices") else ""),
+          "" if o["default"] is None else repr(o["default"]),
+          f"{o.get('setting') or ''}\n{o.get('env') or ''}".strip()]
+         for o in leaf["options"]],
+    )  # fmt: skip
+
+
 @system.command("schema")
 @click.argument("name", required=False)
 @click.option(

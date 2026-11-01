@@ -444,3 +444,16 @@ class TestProgressEvents:
         assert got[-1]["done"] == 3 and got[-1]["ok"] is True
         progress = [e["done"] for e in got if e["event"] == "progress"]
         assert progress == [1, 2, 3]  # every file of a small batch
+
+
+class TestCatalog:
+    def test_catalog_setting_keys_configure_commands(self, recording, tmp_path, monkeypatch):
+        catalog = bioamla("system", "commands", "detect", "energy")
+        (energy,) = [c for c in catalog["commands"] if c["path"] == "detect energy"]
+        threshold = next(o for o in energy["options"] if o["name"] == "threshold_db")
+
+        root = tmp_path / "survey"
+        bioamla("workspace", "init", str(root))
+        monkeypatch.chdir(root)
+        bioamla("workspace", "config", "set", threshold["setting"], "-3")
+        assert bioamla("detect", "energy", str(recording))["params"]["threshold_db"] == -3.0

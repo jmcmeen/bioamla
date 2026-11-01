@@ -40,6 +40,11 @@ All notable changes to this project are documented here. The format is based on
   count before `end`; `end`'s `ok` is false if the work failed or stopped early. Sent with
   `--quiet` too; a closed stderr stops the events, not the command or its count. Documented
   under "Progress events" in the CLI reference.
+- `bioamla system commands [PATH...]`: the command catalog. Lists every command, or describes
+  the ones under PATH; with `--json`, every group and command with its help, arguments and
+  options (flags, type, choices, path and range constraints, default, required, multiple), each
+  option's `BIOAMLA_*` variable and settings key, and the global options. Library:
+  `bioamla.cli.catalog.command_catalog()`.
 
 ## [0.3.8] - 2026-10-31
 

@@ -24,7 +24,7 @@ def _norm(name: str) -> str:
     return name.lstrip("-").replace("-", "_")
 
 
-def _settable(option: click.Parameter) -> bool:
+def is_settable(option: click.Parameter) -> bool:
     """Options a setting may give a default: not --help/--version-style eager flags,
     and not ones whose value the command never sees."""
     return isinstance(option, click.Option) and option.expose_value and not option.is_eager
@@ -38,7 +38,7 @@ def find_option(command: click.Command, key: str) -> click.Parameter | None:
         return None
     wanted = _norm(key)
     for param in command.params:
-        if not _settable(param):
+        if not is_settable(param):
             continue
         names = {param.name or ""} | {_norm(o) for o in param.opts if o.startswith("--")}
         if wanted in names:
@@ -99,6 +99,13 @@ def _leaves(table: dict[str, Any], prefix: str = "") -> list[str]:
     return out
 
 
+def setting_key(path: list[str], option: click.Option) -> str:
+    """The settings key for ``option`` of the command at ``path``:
+    ``detect.energy.threshold_db`` for ``bioamla detect energy --threshold-db``."""
+    longs = [o for o in option.opts if o.startswith("--")]
+    return ".".join([*path, _norm(longs[0]) if longs else option.name or ""])
+
+
 def canonical_key(root: click.Command, dotted: str) -> str:
     """``dotted`` with its option spelled as the long name with ``_``
     (``detect.energy.threshold-db`` -> ``detect.energy.threshold_db``); unchanged if it
@@ -109,9 +116,8 @@ def canonical_key(root: click.Command, dotted: str) -> str:
         _, option = resolve_key(root, dotted)
     except ConfigError:
         return dotted
-    longs = [o for o in option.opts if o.startswith("--")]
     *path, _ = dotted.split(".")
-    return ".".join([*path, _norm(longs[0]) if longs else option.name or ""])
+    return setting_key(path, option)
 
 
 def resolve_key(root: click.Command, dotted: str) -> tuple[click.Command, click.Parameter]:
@@ -160,7 +166,7 @@ def env_settings(root: click.Command, environ: dict[str, str] | None = None) -> 
 
     def walk(command: click.Command, path: list[str], node: dict[str, Any]) -> None:
         for param in command.params if path else ():  # root options aren't settable
-            if _settable(param):
+            if is_settable(param):
                 name = env_name(path, param)
                 if name and name in environ:
                     value = environ[name]
