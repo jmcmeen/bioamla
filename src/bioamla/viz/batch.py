@@ -41,6 +41,7 @@ def batch_generate_spectrograms(
     db_max: float | None = None,
     dpi: int = 150,
     format: str = "png",
+    show_colorbar: bool = True,
     recursive: bool = True,
     verbose: bool = True,
     on_progress: OnProgress | None = None,
@@ -65,6 +66,8 @@ def batch_generate_spectrograms(
         db_max: Maximum dB value for scaling.
         dpi: Resolution for output images.
         format: Output format ('png' or 'jpg').
+        show_colorbar: Show axes, title and colorbar (as
+            :func:`~bioamla.viz.generate_spectrogram`); ``False`` gives the bare image.
         recursive: Whether to search subdirectories.
         verbose: Whether to log progress at INFO level.
         on_progress: Optional ``(completed, total)`` progress callback.
@@ -126,6 +129,7 @@ def batch_generate_spectrograms(
             db_max=db_max,
             dpi=dpi,
             format=format,
+            show_colorbar=show_colorbar,
         )
         if verbose:
             logger.info(f"  Generated: {output_path}")

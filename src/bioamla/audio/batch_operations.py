@@ -301,10 +301,12 @@ class BatchVisualizeRequest(BatchRequest):
 
     Attributes:
         plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.
+        legend: Show axes, title and colorbar.
         verbose: Log each file at INFO level.
     """
 
     plot_type: Literal["mel", "stft", "mfcc", "waveform"] = "mel"
+    legend: bool = True
     verbose: bool = True
 
 
@@ -316,6 +318,7 @@ def batch_audio_visualize_op(
     return batch_visualize(
         request.to_config(),
         viz_type=request.plot_type,
+        legend=request.legend,
         verbose=request.verbose,
         on_progress=context.progress,
     )

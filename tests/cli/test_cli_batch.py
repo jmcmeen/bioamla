@@ -996,3 +996,29 @@ def test_batch_segment_reports_a_file_too_short_for_a_clip(test_audio_path_3s, t
 
     body = json.loads(result.stdout)["result"]
     assert body["failed"] == 1 and "--keep-short" in json.dumps(body)
+
+
+def test_batch_visualize_honours_no_legend(test_audio_path, tmp_path):
+    import shutil
+
+    pytest.importorskip("matplotlib")
+    from click.testing import CliRunner
+    from PIL import Image
+
+    from bioamla.cli.cli import cli
+    from bioamla.viz import generate_spectrogram
+
+    folder = tmp_path / "in"
+    folder.mkdir()
+    shutil.copy(test_audio_path, folder / "rec.wav")
+    runner = CliRunner()
+    for flag in ("--legend", "--no-legend"):
+        result = runner.invoke(cli, ["batch", "audio", "visualize", "--input-dir", str(folder),
+                                     "--output-dir", str(tmp_path / flag.strip("-")), flag])  # fmt: skip
+        assert result.exit_code == 0, result.output
+    bare = tmp_path / "bare.png"
+    generate_spectrogram(str(folder / "rec.wav"), str(bare), show_colorbar=False)
+    with Image.open(tmp_path / "no-legend" / "rec.png") as got, Image.open(bare) as want:
+        assert got.size == want.size and got.tobytes() == want.tobytes()
+    with Image.open(tmp_path / "legend" / "rec.png") as a, Image.open(bare) as b:
+        assert a.tobytes() != b.tobytes()  # the flag changes the picture

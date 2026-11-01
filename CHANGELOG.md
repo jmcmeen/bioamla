@@ -227,6 +227,11 @@ These were deprecated in 0.3.x and are breaking changes:
 
 ### Fixed
 
+- `batch audio visualize --no-legend` draws the bare picture (no axes, title or colorbar);
+  it used to be accepted and ignored (#246). `batch_generate_spectrograms()` gains
+  `show_colorbar`, `batch_visualize()` `legend`, and the `batch.audio.visualize` request a
+  `legend` field.
+
 - `convert_audio_file()` called without `target_format` wrote WAV data whatever the output's
   extension (a `.flac` path got a WAV file); it now takes the format from the extension.
 

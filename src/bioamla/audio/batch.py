@@ -729,10 +729,12 @@ def batch_visualize(
     config: "BatchConfig",
     *,
     viz_type: str = "mel",
+    legend: bool = True,
     verbose: bool = True,
     on_progress: OnProgress | None = None,
 ) -> BatchResult:
-    """Draw a spectrogram, MFCC or waveform image of every file in a folder.
+    """Draw a spectrogram, MFCC or waveform image of every file in a folder, with axes,
+    title and colorbar unless ``legend`` is ``False``.
 
     Directory mode only; images mirror the input tree under ``config.output_dir``
     (required). See :func:`bioamla.viz.batch_generate_spectrograms`.
@@ -746,6 +748,7 @@ def batch_visualize(
         _input_dir(config),
         _output_dir(config),
         viz_type=viz_type,
+        show_colorbar=legend,
         recursive=config.recursive,
         verbose=verbose,
         on_progress=on_progress,

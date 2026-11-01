@@ -571,17 +571,14 @@ def audio_visualize(
     input_dir, input_file, output_dir, plot_type, legend, max_workers, recursive, quiet
 ) -> None:
     """Batch generate audio visualizations."""
-    from bioamla.cli.console import print_warning
     from bioamla.cli.logging_setup import configure_cli_logging
 
     configure_cli_logging()
-    if not legend:
-        print_warning("--no-legend is not supported in batch mode yet and is ignored (see #246)")
     try:
         result = _run_batch_operation(
             "batch.audio.visualize", input_dir=input_dir, input_file=input_file, output_dir=output_dir, max_workers=max_workers, recursive=recursive, quiet=quiet,
             header=f"Generating {plot_type} visualizations...",
-            plot_type=plot_type, verbose=not quiet,
+            plot_type=plot_type, legend=legend, verbose=not quiet,
         )  # fmt: skip
         _report(result, output_dir, quiet)
     finally:

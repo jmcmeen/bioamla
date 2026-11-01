@@ -10909,6 +10909,11 @@
             "title": "Plot Type",
             "default": "mel"
           },
+          "legend": {
+            "type": "boolean",
+            "title": "Legend",
+            "default": true
+          },
           "verbose": {
             "type": "boolean",
             "title": "Verbose",
@@ -10918,7 +10923,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "BatchVisualizeRequest",
-        "description": "A spectrogram, MFCC or waveform image of every file (directory mode).\n\nAttributes:\n    plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.\n    verbose: Log each file at INFO level."
+        "description": "A spectrogram, MFCC or waveform image of every file (directory mode).\n\nAttributes:\n    plot_type: ``mel``, ``stft``, ``mfcc`` or ``waveform``.\n    legend: Show axes, title and colorbar.\n    verbose: Log each file at INFO level."
       },
       "BioIndexRequest": {
         "properties": {
