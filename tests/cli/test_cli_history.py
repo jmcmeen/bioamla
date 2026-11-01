@@ -27,10 +27,10 @@ def records(ws) -> list[dict]:
 
 
 def test_runs_inside_a_workspace_are_recorded(ws) -> None:
-    run("workspace", "status")
+    run("system", "version")
     (record,) = records(ws)
-    assert record["v"] == 1 and record["command"] == "workspace status"
-    assert record["argv"] == ["workspace", "status"]
+    assert record["v"] == 1 and record["command"] == "system version"
+    assert record["argv"] == ["system", "version"]
     assert record["ok"] is True and record["exit_code"] == 0 and record["error"] is None
     assert record["cwd"] == "." and record["host"] and "bioamla" in record
 
@@ -38,7 +38,7 @@ def test_runs_inside_a_workspace_are_recorded(ws) -> None:
 def test_cwd_is_relative_to_the_workspace(ws, monkeypatch) -> None:
     (ws.root / "sub").mkdir()
     monkeypatch.chdir(ws.root / "sub")
-    run("workspace", "status")
+    run("system", "version")
     assert records(ws)[-1]["cwd"] == "sub"
 
 
@@ -57,8 +57,10 @@ def test_init_records_itself(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.parametrize(
-    "args", [["--help"], ["detect", "--help"], ["--version"], ["workspace", "history"], []]
-)
+    "args",
+    [["--help"], ["detect", "--help"], ["--version"], [],
+     ["workspace", "history"], ["workspace", "status"], ["workspace", "list"]],
+)  # fmt: skip
 def test_not_recorded(ws, args) -> None:
     run(*args)
     assert records(ws) == []
@@ -82,26 +84,26 @@ def test_outputs_come_from_the_result(ws) -> None:
 
 
 def test_history_command(ws) -> None:
-    run("workspace", "status")
+    run("system", "version")
     run("workspace", "remove", "nope")
-    run("workspace", "list")
+    run("system", "schema")
     result = json.loads(run("--json", "workspace", "history").stdout)["result"]
     assert [r["command"] for r in result["runs"]] == [
-        "workspace status", "workspace remove", "workspace list"
+        "system version", "workspace remove", "system schema"
     ]  # fmt: skip
     failed = json.loads(run("--json", "workspace", "history", "--failed").stdout)["result"]
     assert [r["command"] for r in failed["runs"]] == ["workspace remove"]
     last = json.loads(run("--json", "workspace", "history", "-n", "1").stdout)["result"]
-    assert [r["command"] for r in last["runs"]] == ["workspace list"]
-    assert "workspace status" in run("workspace", "history").output
+    assert [r["command"] for r in last["runs"]] == ["system schema"]
+    assert "system version" in run("workspace", "history").output
 
 
 def test_bad_lines_are_skipped(ws) -> None:
-    run("workspace", "status")
+    run("system", "version")
     with open(ws.history_path, "a") as f:
         f.write("{half a record\n[1, 2]\n")
-    run("workspace", "list")
-    assert [r["command"] for r in ws.history()] == ["workspace status", "workspace list"]
+    run("system", "schema")
+    assert [r["command"] for r in ws.history()] == ["system version", "system schema"]
 
 
 @pytest.mark.parametrize(
@@ -122,6 +124,7 @@ def test_should_record() -> None:
     assert should_record(cli, ["detect", "energy", "a.wav"])
     assert not should_record(cli, ["detect", "energy", "--help"])
     assert not should_record(cli, ["workspace", "history"])
+    assert not should_record(cli, ["workspace", "-C", "x", "status"])
     assert not should_record(cli, ["--json"])
 
 
@@ -130,9 +133,9 @@ def test_dash_c_and_init_from_outside_record_in_that_workspace(tmp_path, monkeyp
 
     monkeypatch.chdir(tmp_path)
     run("workspace", "init", "survey", "--name", "Survey")
-    run("workspace", "-C", "survey", "status")
+    run("workspace", "-C", "survey", "remove", "nope")
     commands = [r["command"] for r in open_workspace(tmp_path / "survey").history()]
-    assert commands == ["workspace init", "workspace status"]
+    assert commands == ["workspace init", "workspace remove"]
 
 
 def test_failures_without_json_keep_their_error(ws) -> None:
@@ -151,8 +154,8 @@ def test_attached_dash_c(tmp_path, monkeypatch) -> None:
 
     ws = create_workspace(tmp_path / "survey")
     monkeypatch.chdir(tmp_path)
-    run("workspace", "-Csurvey", "status")
-    assert [r["command"] for r in ws.history()] == ["workspace status"]
+    run("workspace", "-Csurvey", "remove", "nope")
+    assert [r["command"] for r in ws.history()] == ["workspace remove"]
 
 
 def test_flags_never_hide_the_next_argument() -> None:
@@ -190,7 +193,7 @@ def test_recording_problems_never_fail_the_command(ws, monkeypatch) -> None:
         raise RuntimeError("disk on fire")
 
     monkeypatch.setattr("bioamla.cli.history.record_run", boom)
-    result = run("workspace", "status")
+    result = run("system", "version")
     assert result.exit_code == 0
 
 
@@ -199,13 +202,13 @@ def test_status_shows_the_last_runs(ws) -> None:
     assert "Last runs" in first.output and "none" in first.output
 
     for _ in range(6):
-        run("workspace", "list")
+        run("system", "version")
     run("workspace", "config", "get", "nope.x")  # fails
     result = CliRunner().invoke(cli, ["--json", "workspace", "status"])
     last = json.loads(result.stdout)["result"]["last_runs"]
     assert len(last) == 5
-    assert last == records(ws)[-6:-1]  # the --json status run itself is recorded after
-    assert last[-1]["ok"] is False and last[0]["command"] == "workspace list"
+    assert last == records(ws)[-5:]  # status itself isn't recorded
+    assert last[-1]["ok"] is False and last[0]["command"] == "system version"
 
     human = run("workspace", "status").output
     assert "Last runs" in human and "workspace config get nope.x" in human

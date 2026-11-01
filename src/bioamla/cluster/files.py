@@ -36,18 +36,28 @@ def load_array_file(path: str | Path, ndim: int | None = 2) -> np.ndarray:
     return array
 
 
+def _npy_path(path: str | Path) -> str:
+    """The file ``np.save`` writes for ``path``: ``.npy`` is added when it's missing."""
+    path = str(path)
+    return path if path.endswith(".npy") else path + ".npy"
+
+
 def save_array_file(path: str | Path, array: np.ndarray) -> str:
     """Save a ``.npy`` array, creating its folder.
+
+    Returns:
+        The file written (``path``, with ``.npy`` added if it was missing).
 
     Raises:
         ClusteringError: If it can't be written.
     """
+    out = _npy_path(path)
     try:
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        np.save(path, array)
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        np.save(out, array)
     except OSError as e:
         raise ClusteringError(f"Failed to write {path}: {e}") from e
-    return str(path)
+    return out
 
 
 @dataclass
@@ -96,10 +106,10 @@ def reduce_embeddings_file(
 
     embeddings = load_array_file(embeddings_file)
     reduced = reduce_dimensions(embeddings, method=method, n_components=n_components)
-    save_array_file(output, reduced)
+    written = save_array_file(output, reduced)
     return ReducedEmbeddings(
         file=str(embeddings_file),
-        output=str(output),
+        output=written,
         n_samples=len(embeddings),
         n_features=int(embeddings.shape[1]),
         shape=list(reduced.shape),
@@ -175,11 +185,11 @@ def cluster_embeddings_file(
     )
     clusterer = AudioClusterer(config=config)
     labels = np.asarray(clusterer.fit_predict(embeddings))
-    save_array_file(output, labels)
+    written = save_array_file(output, labels)
     unique, counts = np.unique(labels, return_counts=True)
     return ClusteredEmbeddings(
         file=str(embeddings_file),
-        output=str(output),
+        output=written,
         n_samples=len(labels),
         n_clusters=int(clusterer.n_clusters_),
         n_noise=int((labels == -1).sum()),
@@ -314,10 +324,10 @@ def novelty_file(
     summary, is_novel, scores = detect_novelty(
         embeddings, known_labels=known, method=method, threshold=threshold
     )
-    save_array_file(output, np.column_stack([is_novel.astype(int), scores]))
+    written = save_array_file(output, np.column_stack([is_novel.astype(int), scores]))
     return NoveltyReport(
         file=str(embeddings_file),
-        output=str(output),
+        output=written,
         n_samples=len(is_novel),
         n_novel=int(summary.n_novel),
         novel_percentage=float(summary.novel_percentage),

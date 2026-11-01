@@ -342,21 +342,6 @@ def install(os_type: str | None = None) -> str:
     return message
 
 
-__all__ = [
-    "DependencyInfo",
-    "DependencyReport",
-    "detect_os",
-    "check_ffmpeg",
-    "check_libsndfile",
-    "check_portaudio",
-    "check_all",
-    "get_install_commands",
-    "get_full_install_command",
-    "run_install",
-    "install",
-]
-
-
 def install_missing() -> dict:
     """Install whatever system libraries are missing, then check again.
 
@@ -371,3 +356,19 @@ def install_missing() -> dict:
         return {"installed": None, "report": report}
     message = install(report.os_type)
     return {"installed": message, "report": check_all()}
+
+
+__all__ = [
+    "DependencyInfo",
+    "DependencyReport",
+    "detect_os",
+    "check_ffmpeg",
+    "check_libsndfile",
+    "check_portaudio",
+    "check_all",
+    "get_install_commands",
+    "get_full_install_command",
+    "run_install",
+    "install",
+    "install_missing",
+]

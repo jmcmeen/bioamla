@@ -1,7 +1,9 @@
 """Operations for ``workspace``: thin adapters over :mod:`bioamla.workspace`.
 
 See :mod:`bioamla.operations`. ``directory`` is where to look for the workspace (it is
-found by walking up, like git); ``init`` makes it one. The settings commands
+found by walking up, like git); ``init`` makes it one. When the run already has a
+workspace (a server run in one), that is the workspace, and ``directory`` must be
+inside it. The settings commands
 (``workspace config``) have no operations: settings are defaults for command-line
 options, so they mean nothing to a request, which always says what it wants.
 """
@@ -12,6 +14,26 @@ from typing import Any, Literal
 
 from bioamla.common.config import config_dataclass
 from bioamla.operations import OperationContext, PathStr, operation
+
+
+def _workspace(directory: str, context: OperationContext) -> Any:
+    """The workspace ``directory`` is in: the run's own when it has one (``directory``
+    must then be inside it), else found by walking up from ``directory``."""
+    from pathlib import Path
+
+    from bioamla.workspace import current_workspace
+
+    ws = context.workspace
+    if ws is None:
+        return current_workspace(directory)
+    from bioamla.exceptions import InvalidInputError
+
+    root = Path(ws.root).resolve()
+    where = Path(directory).resolve()
+    if where != root and not where.is_relative_to(root):
+        raise InvalidInputError(f"{directory} is not inside the workspace {ws.name!r}")
+    return ws
+
 
 ArtifactKind = Literal["audio_file", "folder", "dataset", "model", "file"]
 
@@ -51,9 +73,7 @@ class WorkspaceRequest:
 @operation("workspace.status", request=WorkspaceRequest)
 def status_op(request: WorkspaceRequest, context: OperationContext) -> dict[str, Any]:
     """A workspace's name, location, artifact counts and last runs."""
-    from bioamla.workspace import current_workspace
-
-    return current_workspace(request.directory).status()
+    return _workspace(request.directory, context).status()
 
 
 @config_dataclass
@@ -73,13 +93,12 @@ class AddRequest:
     name: str | None = None
 
 
-def _add(request: AddRequest, copy: bool) -> dict[str, Any]:
+def _add(request: AddRequest, context: OperationContext, copy: bool) -> dict[str, Any]:
     from bioamla.exceptions import OptionConflictError
-    from bioamla.workspace import current_workspace
 
     if request.name is not None and len(request.paths) > 1:
         raise OptionConflictError("--name applies to a single PATH")
-    ws = current_workspace(request.directory)
+    ws = _workspace(request.directory, context)
     many = ws.import_many if copy else ws.link_many
     added = many(list(request.paths), kind=request.kind, name=request.name or "")
     return {"workspace": str(ws.root), "artifacts": [ws.artifact_row(a) for a in added]}
@@ -88,13 +107,13 @@ def _add(request: AddRequest, copy: bool) -> dict[str, Any]:
 @operation("workspace.add", request=AddRequest)
 def add_op(request: AddRequest, context: OperationContext) -> dict[str, Any]:
     """Link files or folders into a workspace, leaving them where they are."""
-    return _add(request, copy=False)
+    return _add(request, context, copy=False)
 
 
 @operation("workspace.import", request=AddRequest, kind="job")
 def import_op(request: AddRequest, context: OperationContext) -> dict[str, Any]:
     """Copy files or folders into a workspace."""
-    return _add(request, copy=True)
+    return _add(request, context, copy=True)
 
 
 @config_dataclass
@@ -113,9 +132,7 @@ class ListRequest:
 @operation("workspace.list", request=ListRequest)
 def list_op(request: ListRequest, context: OperationContext) -> dict[str, Any]:
     """List a workspace's artifacts and whether each is still there."""
-    from bioamla.workspace import current_workspace
-
-    ws = current_workspace(request.directory)
+    ws = _workspace(request.directory, context)
     return {"workspace": str(ws.root), "artifacts": ws.artifact_rows(kind=request.kind)}
 
 
@@ -137,9 +154,7 @@ class RemoveRequest:
 @operation("workspace.remove", request=RemoveRequest)
 def remove_op(request: RemoveRequest, context: OperationContext) -> dict[str, Any]:
     """Forget an artifact (linked files are never touched)."""
-    from bioamla.workspace import current_workspace
-
-    ws = current_workspace(request.directory)
+    ws = _workspace(request.directory, context)
     artifact = ws.remove(request.artifact_id, delete_import=request.delete_import)
     return {
         "workspace": str(ws.root),
@@ -166,9 +181,7 @@ class HistoryRequest:
 @operation("workspace.history", request=HistoryRequest)
 def history_op(request: HistoryRequest, context: OperationContext) -> dict[str, Any]:
     """The commands run in a workspace."""
-    from bioamla.workspace import current_workspace
-
-    ws = current_workspace(request.directory)
+    ws = _workspace(request.directory, context)
     return {
         "workspace": str(ws.root),
         "runs": ws.history(limit=request.limit, failed_only=request.failed),

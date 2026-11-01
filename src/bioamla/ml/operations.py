@@ -96,15 +96,22 @@ class TrainRequest:
 
 @operation("models.ast.train", request=TrainRequest, kind="job")
 def train_op(request: TrainRequest, context: OperationContext) -> Any:
-    """Fine-tune an AST model."""
-    from bioamla.ml.train_config import train_ast_from_options
+    """Fine-tune an AST model.
+
+    Every option that names a local file or folder (the base model, a local MLflow
+    store) goes through the path check, including those that come from the config
+    file. ``push_to_hub`` and a remote ``mlflow_tracking_uri`` are honoured with the
+    credentials of the machine that runs the training.
+    """
+    from bioamla.ml.train_config import resolve_train_options, train_ast_from_options
 
     options = dict(request.options or {})
     if "training_dir" in options:
         raise InvalidInputError("Give training_dir as its own field, not in options")
     options["training_dir"] = request.training_dir
-    if "base_model" in options:
-        options["base_model"] = _model(str(options["base_model"]), context)
+    resolved = resolve_train_options(options, request.config_path)
+    resolved["base_model"] = _model(str(resolved["base_model"]), context)
+    resolved["mlflow_tracking_uri"] = _tracking_uri(resolved["mlflow_tracking_uri"], context)
 
     def progress(p: Any) -> None:
         if context.on_progress is not None:
@@ -112,11 +119,25 @@ def train_op(request: TrainRequest, context: OperationContext) -> Any:
 
     return train_ast_from_options(
         _model(request.train_dataset, context),
-        options,
-        config_path=request.config_path,
+        resolved,
         on_progress=progress,
         should_stop=context.cancelled,
     )
+
+
+def _tracking_uri(uri: str | None, context: OperationContext) -> str | None:
+    """An MLflow tracking URI, with a local store (a path or ``file:`` URI) through the
+    path check; a server URI (``http://...``) is left as it is."""
+    if not uri:
+        return uri
+    from urllib.parse import urlparse
+
+    parsed = urlparse(uri)
+    if parsed.scheme == "file":
+        return context.resolve_path(parsed.path)
+    if not parsed.scheme or len(parsed.scheme) == 1:  # a plain path (or C:\...)
+        return context.resolve_path(uri)
+    return uri
 
 
 @config_dataclass
@@ -225,16 +246,13 @@ _HF_ID = re.compile(r"[A-Za-z0-9][\w.-]*/[\w.-]+(:[\w.-]+)?")
 def _model(name: str, context: OperationContext) -> str:
     """A model or dataset named by local path or Hugging Face ID.
 
-    The name always goes through the path check first. A path that's allowed and
-    exists is used; otherwise a name shaped like an ID (``org/name``) is taken as one;
-    anything else is refused with the check's own error.
+    The name always goes through the path check first, and a name the check refuses
+    is refused (a relative ``org/name`` only fails it when it's a link out of the
+    allowed folders). A path that's allowed and exists is used; otherwise a name
+    shaped like an ID (``org/name``) is taken as one, and anything else is returned
+    as checked (so the library reports it missing).
     """
-    try:
-        resolved = context.resolve_path(name)
-    except Exception:
-        if _HF_ID.fullmatch(name) and not Path(name).exists():
-            return name
-        raise
+    resolved = context.resolve_path(name)
     if resolved is not None and Path(resolved).exists():
         return resolved
     return name if _HF_ID.fullmatch(name) else resolved

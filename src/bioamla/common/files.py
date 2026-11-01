@@ -523,21 +523,58 @@ def download_to_dir(url: str, output_dir: str | Path = ".", show_progress: bool 
     return str(output_path)
 
 
-def unzip_to(zip_file: str | Path, output_dir: str | Path = ".") -> list[str]:
-    """Extract a ZIP archive into ``output_dir`` (entries can't leave it: ``zipfile``
-    drops absolute paths and ``..`` parts).
+#: The most :func:`unzip_to` extracts from one archive by default (bytes, uncompressed).
+UNZIP_MAX_BYTES = 50 * 1024**3
+
+
+def unzip_to(
+    zip_file: str | Path, output_dir: str | Path = ".", *, max_bytes: int = UNZIP_MAX_BYTES
+) -> list[str]:
+    """Extract a ZIP archive into ``output_dir``.
+
+    Every entry is checked before anything is written: it must land inside
+    ``output_dir`` with links already there followed (so an entry can't write through
+    a link to somewhere else), and it can't touch workspace metadata (a ``.bioamla``
+    folder).
+
+    Args:
+        zip_file: The archive.
+        output_dir: Where to extract it.
+        max_bytes: Refuse archives that would extract to more than this.
 
     Returns:
         The extracted paths.
 
     Raises:
         NotFoundError: If the archive doesn't exist.
+        InvalidInputError: If an entry would leave ``output_dir`` or touch a
+            ``.bioamla`` folder, or the archive is larger than ``max_bytes``.
         BioamlaError: If it isn't a valid ZIP or can't be extracted.
     """
+    from bioamla.exceptions import InvalidInputError
+
     if not Path(zip_file).is_file():
         raise NotFoundError(f"ZIP archive not found: {zip_file}")
     try:
-        return extract_zip_file(zip_file, output_dir)
+        with zipfile.ZipFile(zip_file) as zf:
+            infos = zf.infolist()
+            total = sum(i.file_size for i in infos)
+            if total > max_bytes:
+                raise InvalidInputError(
+                    f"{zip_file} would extract to {total} bytes, more than the {max_bytes} allowed"
+                )
+            dest = Path(output_dir)
+            dest.mkdir(parents=True, exist_ok=True)
+            root = dest.resolve()
+            for info in infos:
+                name = info.filename.replace("\\", "/")
+                if ".bioamla" in name.split("/"):
+                    raise InvalidInputError(f"{zip_file}: {info.filename} is workspace metadata")
+                target = (root / name).resolve()
+                if target != root and not target.is_relative_to(root):
+                    raise InvalidInputError(f"{zip_file}: {info.filename} would leave {output_dir}")
+            zf.extractall(dest)
+            return [str(dest / i.filename) for i in infos]
     except (OSError, zipfile.BadZipFile) as e:
         raise BioamlaError(f"Extraction failed: {e}") from e
 
@@ -558,6 +595,7 @@ def zip_path(source: str | Path, zip_file: str | Path) -> str:
 
 __all__ = [
     "download_to_dir",
+    "UNZIP_MAX_BYTES",
     "unzip_to",
     "zip_path",
     # I/O helpers

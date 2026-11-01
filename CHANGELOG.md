@@ -41,7 +41,7 @@ All notable changes to this project are documented here. The format is based on
 - Library: `bioamla.workspace.current_workspace()`, `Workspace.artifact_row()`,
   `artifact_rows()` and `status()`; `bioamla.common.files.download_to_dir()`, `unzip_to()`
   and `zip_path()`; `bioamla.common.config.config_schema_report()` and
-  `export_config_schemas()`; `bioamla.system.dependency.install_missing()`.
+  `export_config_schemas()`; `bioamla.system.install_missing()`.
 
 - Server: one endpoint per remote-safe operation, generated from the registry:
   `POST /v1/workspaces/{ws}/operations/{name}` with the operation's request as the body (its
@@ -49,8 +49,11 @@ All notable changes to this project are documented here. The format is based on
   must resolve inside the server's allowed folders; quick operations answer with the result
   envelope; local-only operations have no route. `GET /v1/operations` lists them with their
   request schemas and the domains a missing extra makes unavailable. Each run is recorded in
-  the workspace history (`via: "server"`, with the operation and request).
-- `Workspace.output_paths()`: the files a run's result says it wrote (what history records).
+  the workspace history (`via: "server"`, with the operation and request), failed or not,
+  except the reads of the workspace itself (`workspace.status|list|history`). A server run
+  works on its own workspace: a request's `directory` must be inside it.
+- `Workspace.output_paths()`: the files a run's result says it wrote (what history records),
+  and `Workspace.run_record()`, the history record that both the CLI and the server write.
 
 ### Changed
 
@@ -59,12 +62,22 @@ All notable changes to this project are documented here. The format is based on
 - `models ast train --id-column` prints a warning that it's ignored; it always was (#254).
 - The `ast init-config` "already exists" error names the fix itself (`force=True` /
   `--force`).
+- `workspace status` and `workspace list` are no longer recorded in the workspace history
+  (like `workspace history`): they only read it, and recording them buried the real runs.
+- `util unzip` checks every entry before writing anything: an entry that would leave the
+  folder (including through a link already in it) or touch a `.bioamla` folder is refused,
+  as is an archive that would extract to more than 50 GiB (`unzip_to(max_bytes=...)`).
+- `models.ast.train` puts the base model and a local MLflow store (a path or `file:` URI)
+  through the path check, including when they come from the config file, and a model name
+  that fails the check is refused rather than retried as a Hugging Face ID.
 
 ### Fixed
 
 - `util zip` of a file dated before 1980, `util download` of a malformed URL and `system schema
   NAME -o` to an unwritable path stopped with a traceback; they report an error. A missing
   archive for `util unzip` is a not-found error.
+- `cluster reduce|fit|novelty` and `models ast embed` with an output name without `.npy`
+  reported that name, though NumPy wrote `NAME.npy`; they report the file written.
 - `models ast evaluate` and single-file AST prediction failed on Apple Silicon: the input
   stayed on the CPU while the model ran on MPS (#255).
 

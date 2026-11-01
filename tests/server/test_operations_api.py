@@ -105,3 +105,34 @@ def test_spec_documents_each_request(server):
     schema = spec["components"]["schemas"][ref.rsplit("/", 1)[1]]
     assert "file" in schema["properties"]
     assert json.dumps(path["security"]) != "[]"
+
+
+def test_workspace_operations_stay_in_the_run_workspace(server, tmp_path):
+    client, ws, _ = server
+    create_workspace(ws.parent / "other")
+    create_workspace(tmp_path)  # a workspace around the server root
+    for directory in ("../other", ".."):
+        got = post(client, "workspace.list", {"directory": directory})
+        assert got.status_code == 400, directory
+        assert "not inside the workspace" in got.json()["error"]["message"]
+    got = post(client, "workspace.list", {})
+    assert got.json()["result"]["workspace"] == str(ws)
+
+
+def test_unexpected_failures_are_recorded(server, mocker):
+    client, ws, _ = server
+    mocker.patch("bioamla.audio.operations.describe_audio_file", side_effect=RuntimeError("x"))
+    (ws / "rec.wav").write_bytes(b"RIFF")
+    client = TestClient(client.app, raise_server_exceptions=False)
+    got = post(client, "audio.info", {"file": "rec.wav"})
+    assert got.status_code == 500
+    record = open_workspace(ws).history()[-1]
+    assert (record["operation"], record["ok"]) == ("audio.info", False)
+    assert record["error"]["type"] == "InternalError"
+
+
+def test_reads_of_the_workspace_are_not_recorded(server):
+    client, ws, _ = server
+    for name in ("workspace.status", "workspace.history", "workspace.list"):
+        assert post(client, name, {}).status_code == 200
+    assert open_workspace(ws).history() == []

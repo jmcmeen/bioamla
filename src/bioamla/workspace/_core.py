@@ -50,6 +50,9 @@ WORKSPACE_DIR = ".bioamla"
 FORMAT_VERSION = 1
 #: Version of the run records in ``history.jsonl`` (their ``v`` field).
 HISTORY_RECORD_VERSION = 1
+#: Commands that only read a workspace, so aren't recorded in its history (a client
+#: polling them would otherwise bury the real runs). Operation names use dots.
+UNRECORDED_COMMANDS = frozenset({"workspace history", "workspace status", "workspace list"})
 
 ArtifactKind = Literal["audio_file", "folder", "dataset", "model", "file"]
 ArtifactMode = Literal["linked", "imported"]
@@ -426,6 +429,58 @@ class Workspace:
         with self._locked():
             with open(self.history_path, "a", encoding="utf-8") as f:
                 f.write(line)
+
+    def run_record(
+        self,
+        *,
+        command: str,
+        started: float,
+        ended: float,
+        ok: bool,
+        exit_code: int,
+        error: dict[str, Any] | None,
+        result: Any = None,
+        user: str | None = None,
+        argv: list[str] | None = None,
+        cwd: str | None = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        """A run record for :meth:`record_run`, in the current format.
+
+        Args:
+            command: The command (``"detect energy"``).
+            started: When it started, and ``ended`` when it ended (epoch seconds).
+            ok: Whether it succeeded, with its ``exit_code`` and ``error``
+                (``{"type", "message"}``).
+            result: Its result as JSON-ready data; the files it names become
+                ``outputs`` (see :meth:`output_paths`).
+            user: Who ran it.
+            argv: Its command line (``None`` when it didn't come from one).
+            cwd: Where it ran, relative to the workspace.
+            extra: More fields (e.g. a server run's ``operation``, ``request``,
+                ``via`` and ``job``).
+        """
+        import socket
+        from datetime import datetime, timezone
+
+        from bioamla import __version__
+
+        return {
+            "v": HISTORY_RECORD_VERSION,
+            "time": datetime.fromtimestamp(started, timezone.utc).isoformat(timespec="seconds"),
+            "duration": round(ended - started, 3),
+            "command": command,
+            "argv": argv,
+            "cwd": cwd,
+            "host": socket.gethostname(),
+            "user": user,
+            "bioamla": __version__,
+            "ok": ok,
+            "exit_code": exit_code,
+            "error": error,
+            "outputs": self.output_paths(result),
+            **extra,
+        }
 
     def history(self, limit: int | None = None, failed_only: bool = False) -> list[dict]:
         """Run records, oldest first; the last ``limit`` of them if given.

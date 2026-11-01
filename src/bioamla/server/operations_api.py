@@ -7,14 +7,14 @@ and must resolve inside the server's allowed folders. A quick operation answers 
 the result envelope; a job-kind operation is run by the job runner instead.
 
 ``GET /v1/operations`` lists them: name, kind, summary, path fields and request schema.
-Each run is recorded in the workspace's history, like a command run there.
+Each run is recorded in the workspace's history, like a command run there (except the
+operations that only read the workspace: its history, status and artifact list).
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -45,35 +45,33 @@ def record_server_run(
 ) -> None:
     """Append a server run to the workspace history, in the same record as a CLI run
     (``command`` from the operation name; ``operation`` and ``request`` in place of
-    ``argv``). A problem writing the record is logged, never raised."""
-    import socket
+    ``argv``). Operations that only read the workspace aren't recorded. A problem
+    writing the record is logged, never raised."""
     from dataclasses import asdict, is_dataclass
 
-    from bioamla import __version__
     from bioamla.common.jsonable import to_jsonable
-    from bioamla.workspace import HISTORY_RECORD_VERSION
+    from bioamla.workspace import UNRECORDED_COMMANDS
 
+    command = name.replace(".", " ")
+    if command in UNRECORDED_COMMANDS:
+        return
     try:
-        record = {
-            "v": HISTORY_RECORD_VERSION,
-            "time": datetime.fromtimestamp(started, timezone.utc).isoformat(timespec="seconds"),
-            "duration": round(time.time() - started, 3),
-            "command": name.replace(".", " "),
-            "operation": name,
-            "request": to_jsonable(asdict(request) if is_dataclass(request) else request),
-            "argv": None,
-            "cwd": None,
-            "host": socket.gethostname(),
-            "user": user,
-            "via": "server",
-            "job": job_id,
-            "bioamla": __version__,
-            "ok": ok,
-            "exit_code": 0 if ok else 1,
-            "error": error,
-            "outputs": ws.output_paths(to_jsonable(result_data(result))) if ok else [],
-        }
-        ws.record_run(record)
+        ws.record_run(
+            ws.run_record(
+                command=command,
+                started=started,
+                ended=time.time(),
+                ok=ok,
+                exit_code=0 if ok else 1,
+                error=error,
+                result=to_jsonable(result_data(result)) if ok else None,
+                user=user,
+                operation=name,
+                request=to_jsonable(asdict(request) if is_dataclass(request) else request),
+                via="server",
+                job=job_id,
+            )
+        )
     except Exception:  # noqa: BLE001 - history must never fail a run
         logger.warning("Couldn't record the run of %s in %s", name, ws.root, exc_info=True)
 
@@ -105,25 +103,25 @@ def add_operation_routes(app: FastAPI, api_version: str, envelope: Any) -> list[
     available, unavailable = operations.all_operations()
     remote = [op for op in available if op.remote]
 
+    listing = {
+        "operations": [
+            {
+                "name": op.name,
+                "kind": op.kind,
+                "summary": op.summary,
+                "path_fields": list(op.path_fields()),
+                "request_schema": config_schema(op.request),
+            }
+            for op in remote
+        ],
+        "unavailable": unavailable,
+    }
+
     @app.get(f"/{api_version}/operations", tags=["operations"])
     def list_operations(who: Any = Depends(identity)) -> dict[str, Any]:
         """Every operation this server runs: name, kind, summary, path fields and the
         request's JSON Schema; and the domains that aren't available (missing extras)."""
-        return envelope(
-            {
-                "operations": [
-                    {
-                        "name": op.name,
-                        "kind": op.kind,
-                        "summary": op.summary,
-                        "path_fields": list(op.path_fields()),
-                        "request_schema": config_schema(op.request),
-                    }
-                    for op in remote
-                ],
-                "unavailable": unavailable,
-            }
-        )
+        return envelope(listing)
 
     for op in remote:
         _add_route(app, api_version, envelope, op)
@@ -144,8 +142,12 @@ def _add_route(app: FastAPI, api_version: str, envelope: Any, op: Any) -> None:
         started = time.time()
         try:
             result = operations.run(op.name, request, context)
-        except BioamlaError as e:
-            error = {"type": type(e).__name__, "message": str(e)}
+        except Exception as e:
+            # Recorded as the route reports it: unexpected errors stay unexplained.
+            if isinstance(e, BioamlaError):
+                error = {"type": type(e).__name__, "message": str(e)}
+            else:
+                error = {"type": "InternalError", "message": "Unexpected server error"}
             record_server_run(context.workspace, op.name, request, user=who.user,
                               started=started, ok=False, error=error)  # fmt: skip
             raise

@@ -13,7 +13,7 @@ These power the ``bioamla config`` CLI group. ``torch`` is imported lazily by
 """
 
 from bioamla.system import dependency, util
-from bioamla.system.dependency import DependencyInfo, DependencyReport
+from bioamla.system.dependency import DependencyInfo, DependencyReport, install_missing
 from bioamla.system.util import DeviceInfo, DevicesData, VersionData
 
 __all__ = [
@@ -24,4 +24,5 @@ __all__ = [
     "DeviceInfo",
     "DevicesData",
     "VersionData",
+    "install_missing",
 ]

@@ -83,3 +83,13 @@ def test_operations_check_paths(embeddings, tmp_path):
     )
     assert seen == ["emb.npy", "o.npy"]
     assert operations.get("cluster.novelty").kind == "job"
+
+
+def test_outputs_report_the_npy_file_written(embeddings, tmp_path):
+    """np.save adds .npy to a name without it; results name the file actually written."""
+    got = lib.reduce_embeddings_file(embeddings, tmp_path / "reduced")
+    assert got.output == str(tmp_path / "reduced.npy") and Path(got.output).exists()
+    fit = lib.cluster_embeddings_file(
+        embeddings, tmp_path / "labels", method="kmeans", n_clusters=2
+    )
+    assert fit.output.endswith("labels.npy") and Path(fit.output).exists()

@@ -254,7 +254,7 @@ class SavedEmbeddings:
 
     Attributes:
         file: The audio file.
-        output: The ``.npy`` written.
+        output: The ``.npy`` written (``.npy`` is added to a name without it).
         shape: The array's shape.
         dtype: Its dtype.
     """
@@ -289,10 +289,11 @@ def embed_file(
     embeddings = extract_embeddings_file(
         filepath=str(file), model_path=model_path, layer=layer, sample_rate=sample_rate
     )["embeddings"]
-    _write_output(Path(output), lambda p: np.save(p, embeddings))
+    out = str(output) if str(output).endswith(".npy") else f"{output}.npy"  # as np.save does
+    _write_output(Path(out), lambda p: np.save(p, embeddings))
     return SavedEmbeddings(
         file=str(file),
-        output=str(output),
+        output=out,
         shape=list(embeddings.shape),
         dtype=str(embeddings.dtype),
     )

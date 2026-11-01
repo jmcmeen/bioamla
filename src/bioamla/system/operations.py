@@ -46,7 +46,7 @@ def deps_op(request: NoRequest, context: OperationContext) -> Any:
 @operation("system.deps-install", request=NoRequest, kind="job", remote=False)
 def deps_install_op(request: NoRequest, context: OperationContext) -> dict[str, Any]:
     """Install missing system libraries with the OS package manager (local only)."""
-    from bioamla.system.dependency import install_missing
+    from bioamla.system import install_missing
 
     return install_missing()
 
