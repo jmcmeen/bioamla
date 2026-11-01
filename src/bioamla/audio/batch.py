@@ -753,6 +753,7 @@ def batch_visualize(
         verbose=verbose,
         on_progress=on_progress,
         max_workers=config.max_workers,
+        continue_on_error=config.continue_on_error,
     )
     return BatchResult(
         total_files=stats["files_processed"] + stats["files_failed"],

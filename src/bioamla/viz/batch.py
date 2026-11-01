@@ -46,6 +46,7 @@ def batch_generate_spectrograms(
     verbose: bool = True,
     on_progress: OnProgress | None = None,
     max_workers: int = 1,
+    continue_on_error: bool = True,
 ) -> dict:
     """
     Generate spectrograms for all audio files in a directory.
@@ -72,6 +73,7 @@ def batch_generate_spectrograms(
         verbose: Whether to log progress at INFO level.
         on_progress: Optional ``(completed, total)`` progress callback.
         max_workers: Worker threads; 1 runs sequentially.
+        continue_on_error: Keep going after a file fails (else raise its error).
 
     Returns:
         Statistics dict with ``files_processed``, ``files_failed``, ``output_dir``,
@@ -136,7 +138,12 @@ def batch_generate_spectrograms(
         return output_path
 
     result = run_batch(
-        files, _generate, max_workers=max_workers, on_progress=on_progress, operation="spectrogram"
+        files,
+        _generate,
+        max_workers=max_workers,
+        continue_on_error=continue_on_error,
+        on_progress=on_progress,
+        operation="spectrogram",
     )
 
     return {

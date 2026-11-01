@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `batch_generate_spectrograms()` gains `show_colorbar` and `continue_on_error`,
+  `batch_visualize()` gains `legend`, and the `batch.audio.visualize` request a `legend` field.
+
 - `audio convert --bit-depth` and the new `batch audio convert --bit-depth` write that many bits
   per sample: 8, 16, 24 or 32 for WAV, 8, 16 or 24 for FLAC. A depth the format can't hold,
   or any depth for MP3 or OGG, is refused before anything is written; the option used to be
@@ -228,9 +231,8 @@ These were deprecated in 0.3.x and are breaking changes:
 ### Fixed
 
 - `batch audio visualize --no-legend` draws the bare picture (no axes, title or colorbar);
-  it used to be accepted and ignored (#246). `batch_generate_spectrograms()` gains
-  `show_colorbar`, `batch_visualize()` `legend`, and the `batch.audio.visualize` request a
-  `legend` field.
+  it used to be accepted and ignored (#246). `batch.audio.visualize` also honours
+  `continue_on_error`, which it ignored.
 
 - `convert_audio_file()` called without `target_format` wrote WAV data whatever the output's
   extension (a `.flac` path got a WAV file); it now takes the format from the extension.
