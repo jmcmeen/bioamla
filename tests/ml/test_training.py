@@ -706,7 +706,8 @@ class TestTrainAst:
         )
         fake_trainer.accelerator = None
 
-        with self._mocks(fake_trainer, tmp_path):
+        trainer_cls = MagicMock(return_value=fake_trainer)
+        with self._mocks(fake_trainer, tmp_path, trainer_cls=trainer_cls):
             result = train_ast(
                 train_dataset="owner/ds",
                 training_dir=str(tmp_path),
@@ -721,6 +722,9 @@ class TestTrainAst:
         assert result.final_loss == 0.3
         fake_trainer.train.assert_called_once()
         fake_trainer.save_model.assert_called_once()
+        # The Trainer saves the feature extractor with the model (and checkpoints).
+        extractor = trainer_cls.call_args.kwargs["processing_class"]
+        assert extractor.do_normalize and extractor.model_input_names == ["input_values"]
 
     def test_tracker_sees_a_finished_run(self, tmp_path) -> None:
         import json

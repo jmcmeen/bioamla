@@ -33,6 +33,7 @@ from bioamla.ml.ast import (
     ast_predict_batch,
     extract_features,
     get_cached_feature_extractor,
+    load_feature_extractor,
     load_pretrained_ast_model,
     wav_ast_inference,
 )
@@ -154,6 +155,7 @@ __all__ = [
     "ast_predict_batch",
     "extract_features",
     "get_cached_feature_extractor",
+    "load_feature_extractor",
     "load_pretrained_ast_model",
     "wav_ast_inference",
     # AST service-level

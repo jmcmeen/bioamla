@@ -945,6 +945,9 @@ def train_ast(
         eval_dataset=eval_data,
         compute_metrics=compute_metrics,
         callbacks=[progress],
+        # Saved with the model, its checkpoints and a Hub push: the feature settings
+        # and the training set's mean and std, so inference prepares audio the same way.
+        processing_class=feature_extractor,
     )
 
     import multiprocessing
@@ -982,10 +985,7 @@ def train_ast(
             status = "cancelled"
         else:
             Path(best_model_path).mkdir(parents=True, exist_ok=True)
-            trainer.save_model(best_model_path)
-            # With the model, the feature settings and the training set's mean and std
-            # it was trained with, so inference prepares audio the same way.
-            feature_extractor.save_pretrained(best_model_path)
+            trainer.save_model(best_model_path)  # with the feature extractor
 
             # Pull final eval metrics from the trainer's log history (no extra eval pass).
             for entry in reversed(trainer.state.log_history):

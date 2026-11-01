@@ -654,6 +654,17 @@ class TestModelCommandsLibraryParity:
         got = bioamla("models", "ast", "predict", str(clips / "a.wav"), "--model-path", str(best))
         assert got["predictions"][0]["label"] in {"a", "b"}
 
+        # The same with the library alone.
+        from bioamla.ml import classify_file, train_ast
+
+        lib = train_ast(train_dataset=str(data), training_dir=str(tmp_path / "lib"),
+                        base_model=str(tiny_ast), num_train_epochs=1,
+                        per_device_train_batch_size=4, report_to="none")  # fmt: skip
+        lib_best = tmp_path / "lib" / "best_model"
+        assert lib.model_path == str(lib_best)
+        assert json.loads((lib_best / "preprocessor_config.json").read_text())["max_length"] == 128
+        assert classify_file(clips / "a.wav", model_path=str(lib_best)).count == 1
+
     def test_train_operation_reports_progress_and_stops_when_cancelled(
         self, tiny_ast, clips, tmp_path
     ) -> None:

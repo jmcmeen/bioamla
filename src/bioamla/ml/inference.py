@@ -132,7 +132,7 @@ class ASTInference:
             device: Inference device (auto-detected if None).
         """
         torch = _require_torch()
-        ASTFeatureExtractor, AutoModelForAudioClassification = _require_transformers()
+        _, AutoModelForAudioClassification = _require_transformers()
         from bioamla.ml.device import get_device
 
         self.model_path = model_path
@@ -154,10 +154,9 @@ class ASTInference:
         self.model.to(self.device)
 
         # Load feature extractor (fall back to default if config is absent).
-        try:
-            self.feature_extractor = ASTFeatureExtractor.from_pretrained(model_path)
-        except OSError:
-            self.feature_extractor = ASTFeatureExtractor()
+        from bioamla.ml.ast import load_feature_extractor
+
+        self.feature_extractor = load_feature_extractor(model_path)
 
         self.id2label = self.model.config.id2label
         self.label2id = self.model.config.label2id

@@ -17,6 +17,7 @@ from bioamla.exceptions import ModelError
 from bioamla.ml import ast as ast_mod
 from bioamla.ml.ast import (
     InferenceConfig,
+    _saved_feature_extractor,
     ast_predict,
     ast_predict_batch,
     extract_features,
@@ -44,14 +45,14 @@ class TestInferenceConfig:
 
 class TestCachedFeatureExtractor:
     def test_no_path_returns_default(self) -> None:
-        get_cached_feature_extractor.cache_clear()
+        _saved_feature_extractor.cache_clear()
         fake = MagicMock()
         with patch("transformers.ASTFeatureExtractor", return_value=fake):
             fe = get_cached_feature_extractor(None)
         assert fe is fake
 
     def test_path_oserror_falls_back(self) -> None:
-        get_cached_feature_extractor.cache_clear()
+        _saved_feature_extractor.cache_clear()
         default = MagicMock()
         fake_cls = MagicMock(return_value=default)
         fake_cls.from_pretrained.side_effect = OSError("missing")
@@ -60,7 +61,7 @@ class TestCachedFeatureExtractor:
         assert fe is default
 
     def test_path_loads(self) -> None:
-        get_cached_feature_extractor.cache_clear()
+        _saved_feature_extractor.cache_clear()
         loaded = MagicMock()
         with patch("transformers.ASTFeatureExtractor.from_pretrained", return_value=loaded):
             fe = get_cached_feature_extractor("good/path2")
