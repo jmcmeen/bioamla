@@ -52,7 +52,16 @@ FORMAT_VERSION = 1
 HISTORY_RECORD_VERSION = 1
 #: Commands that only read a workspace, so aren't recorded in its history (a client
 #: polling them would otherwise bury the real runs). Operation names use dots.
-UNRECORDED_COMMANDS = frozenset({"workspace history", "workspace status", "workspace list"})
+UNRECORDED_COMMANDS = frozenset({
+    "workspace history",
+    "workspace status",
+    "workspace list",
+    # Reads of another machine's state, not work in this workspace:
+    "remote list",
+    "remote ping",
+    "remote workspaces",
+    "remote jobs",
+})  # fmt: skip
 
 ArtifactKind = Literal["audio_file", "folder", "dataset", "model", "file"]
 ArtifactMode = Literal["linked", "imported"]

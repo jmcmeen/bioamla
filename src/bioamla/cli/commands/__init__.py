@@ -9,6 +9,7 @@ from .dataset import dataset
 from .detect import detect
 from .indices import indices
 from .models import models
+from .remote import remote
 from .serve import serve
 from .system import system
 from .util import util
@@ -24,6 +25,7 @@ __all__ = [
     "detect",
     "indices",
     "models",
+    "remote",
     "serve",
     "system",
     "util",

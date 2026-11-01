@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `bioamla.client`: work on a server from another machine. `Client(url, token)` lists and
+  creates workspaces, reads and changes their settings, lists, uploads and downloads files,
+  runs operations (`run()` waits for a job, following its events and progress; `submit()`
+  doesn't), and lists, follows and cancels jobs. A refusal raises `RemoteError` with the
+  server's message (`RemoteNotFound`, `RemoteInvalidInput`; `JobFailed` for a failed or
+  cancelled job). It needs only `requests`, so the base install can drive a server.
+- Named remotes in the user's settings file (`[remotes.NAME]` with `url` and `token_env`;
+  the token stays in the environment variable): `add_remote()`, `remotes()`,
+  `get_remote()`, `remove_remote()`, `connect()`.
+- `bioamla remote add|list|remove|ping|workspaces|upload|download|jobs|cancel`. Reads of a
+  server (`list`, `ping`, `workspaces`, `jobs`) aren't recorded in a local workspace's
+  history.
+
 - The server's OpenAPI document is committed as `docs/api/openapi.json` (its version is
   the API's, `v1`), with a test that fails while it's out of date. Regenerate it with
   `bioamla serve --openapi docs/api/openapi.json`, which writes it and exits (it needs no
