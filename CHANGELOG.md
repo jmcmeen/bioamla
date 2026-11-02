@@ -203,6 +203,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- **Breaking:** `import bioamla` reads only `EBIRD_API_KEY`, `XC_API_KEY` and `HF_TOKEN`
+  from a `.env` file (an exported variable still wins). Other variables in it, such as
+  another project's secrets, `BIOAMLA_*` settings or a remote's token, are no longer loaded;
+  export those instead.
+
 - The README is rewritten for people using bioamla: install and extras (now with
   `server`), a short CLI and library quickstart, workspaces, working on a server, agent
   skills and API keys. How the library is organized moves to a new docs page, "Using the
@@ -309,9 +314,8 @@ These were deprecated in 0.3.x and are breaking changes:
 
 - The catalog keys in a `.env` file in the working directory (or a parent) are now read
   when bioamla is installed, not only from a source checkout: the search started from the
-  installed package's folder. Only `EBIRD_API_KEY`, `XC_API_KEY` and `HF_TOKEN` are read
-  from the file (an exported variable still wins); other variables in it, such as another
-  project's secrets or `BIOAMLA_*` settings, are no longer loaded.
+  installed package's folder. A `.env` that can't be read (someone else's, not UTF-8, a
+  FIFO) is skipped with a warning instead of breaking `import bioamla`.
 
 - Loading a model could hang forever: transformers loads weights on a thread pool, and a
   worker can deadlock in safetensors' initialisation while holding the GIL. bioamla now

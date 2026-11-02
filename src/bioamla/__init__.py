@@ -22,9 +22,16 @@ Domains:
 - :mod:`bioamla.ml` — AST training, inference, and embeddings.
 - :mod:`bioamla.system` — configuration, dependency, and environment info.
 - :mod:`bioamla.batch` — generic batch engine and config/result types.
+- :mod:`bioamla.workspace` — project workspaces: artifacts, settings, run history.
+- :mod:`bioamla.client` — a client for a bioamla server (``bioamla serve``).
+- :mod:`bioamla.operations` — the index of operations the CLI and the server run.
+
+Each is an attribute of ``bioamla`` too, loaded on first use.
 """
 
 import importlib
+import logging
+import os
 from importlib.metadata import PackageNotFoundError, version
 
 # Exception hierarchy base — catch the whole family with a single except.
@@ -43,18 +50,26 @@ def _load_dotenv_keys() -> None:
     """Set the catalog keys from the nearest ``.env`` in the working directory or a
     parent, unless they're already set. Only these keys: a ``.env`` of another
     project's secrets, or one setting ``BIOAMLA_*`` options, is left alone. A working
-    directory that no longer exists means there's no file to read."""
-    import os
-
+    directory that no longer exists means there's no file to read, and a file that
+    can't be read (someone else's, not UTF-8, not a regular file) is skipped with a
+    warning rather than breaking the import."""
     from dotenv import dotenv_values, find_dotenv
 
     try:
         path = find_dotenv(usecwd=True)  # from the working directory, not the package
-    except OSError:
+    except OSError:  # the working directory is gone: nothing to read
         return
     if not path:
         return
-    values = dotenv_values(path)
+    log = logging.getLogger(__name__)
+    if not os.path.isfile(path):  # a FIFO, say: opening it would block forever
+        log.warning("Skipping %s: not a regular file", path)
+        return
+    try:
+        values = dotenv_values(path)
+    except (OSError, UnicodeDecodeError) as e:
+        log.warning("Couldn't read %s: %s", path, e)
+        return
     for key in _DOTENV_KEYS:
         if values.get(key) and key not in os.environ:
             os.environ[key] = values[key]
@@ -77,6 +92,8 @@ _LAZY_DOMAINS = frozenset(
         "ml",
         "system",
         "workspace",
+        "client",
+        "operations",
     }
 )
 
@@ -115,6 +132,8 @@ __all__ = [
     "ml",
     "system",
     "workspace",
+    "client",
+    "operations",
     # Batch types
     "BatchConfig",
     "BatchResult",
