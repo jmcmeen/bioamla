@@ -4,8 +4,8 @@ name: Docs
 # Enable once: repo Settings → Pages → Build and deployment → Source = "GitHub Actions".
 
 on:
-  push:
-    branches: [main]
+  # Run by release.yml on the new tag, so the site matches the latest release
+  # (a merge to main alone doesn't redeploy it). Also by hand, on any ref.
   workflow_dispatch:
 
 permissions:
