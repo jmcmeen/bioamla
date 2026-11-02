@@ -25,6 +25,8 @@ Domains:
 - :mod:`bioamla.workspace` — project workspaces: artifacts, settings, run history.
 - :mod:`bioamla.client` — a client for a bioamla server (``bioamla serve``).
 - :mod:`bioamla.operations` — the index of operations the CLI and the server run.
+
+Each is an attribute of ``bioamla`` too, loaded on first use.
 """
 
 import importlib
@@ -53,14 +55,20 @@ def _load_dotenv_keys() -> None:
     warning rather than breaking the import."""
     from dotenv import dotenv_values, find_dotenv
 
-    path = ""
     try:
         path = find_dotenv(usecwd=True)  # from the working directory, not the package
-        if not path or not os.path.isfile(path):  # isfile: not a FIFO, which open() blocks on
-            return
+    except OSError:  # the working directory is gone: nothing to read
+        return
+    if not path:
+        return
+    log = logging.getLogger(__name__)
+    if not os.path.isfile(path):  # a FIFO, say: opening it would block forever
+        log.warning("Skipping %s: not a regular file", path)
+        return
+    try:
         values = dotenv_values(path)
     except (OSError, UnicodeDecodeError) as e:
-        logging.getLogger(__name__).warning("Couldn't read %s: %s", path or ".env", e)
+        log.warning("Couldn't read %s: %s", path, e)
         return
     for key in _DOTENV_KEYS:
         if values.get(key) and key not in os.environ:
@@ -84,6 +92,8 @@ _LAZY_DOMAINS = frozenset(
         "ml",
         "system",
         "workspace",
+        "client",
+        "operations",
     }
 )
 
@@ -122,6 +132,8 @@ __all__ = [
     "ml",
     "system",
     "workspace",
+    "client",
+    "operations",
     # Batch types
     "BatchConfig",
     "BatchResult",

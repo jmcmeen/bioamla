@@ -62,6 +62,18 @@ def test_a_deleted_working_directory_doesnt_break_the_import(tmp_path):
     out = _run_import(tmp_path, tmp_path / "run.py", {"GONE": str(gone)},
                       extra_code="\nos.chdir(os.environ['GONE']); os.rmdir(os.environ['GONE'])")  # fmt: skip
     assert out.returncode == 0, out.stderr
+    assert (
+        "Couldn't read" not in out.stderr and "Skipping" not in out.stderr
+    )  # nothing to warn about
+
+
+def _skipped(project, scripts):
+    """Run the import against the project's .env; it must be skipped with a warning and
+    leave the key unset."""
+    out = _run_import(project, scripts / "run.py")
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout.splitlines()[-1])["XC_API_KEY"] is None
+    return out.stderr
 
 
 @pytest.mark.skipif(sys.platform == "win32" or os.geteuid() == 0, reason="needs a denied read")
@@ -69,21 +81,25 @@ def test_an_unreadable_dotenv_is_skipped_with_a_warning(tmp_path):
     project, scripts = _project(tmp_path)
     (project / ".env").chmod(0o000)
     try:
-        out = _run_import(project, scripts / "run.py")
+        stderr = _skipped(project, scripts)
     finally:
         (project / ".env").chmod(0o644)
-    assert out.returncode == 0, out.stderr
-    assert json.loads(out.stdout.splitlines()[-1])["XC_API_KEY"] is None
-    assert "Couldn't read" in out.stderr
+    assert "Couldn't read" in stderr and ".env" in stderr
 
 
-def test_a_dotenv_that_isnt_utf8_or_a_file_is_skipped(tmp_path):
+def test_a_dotenv_that_isnt_utf8_is_skipped_with_a_warning(tmp_path):
     project, scripts = _project(tmp_path)
     (project / ".env").write_bytes(b"XC_API_KEY=\xff\xfe\n")
-    out = _run_import(project, scripts / "run.py")
-    assert out.returncode == 0, out.stderr
-    if hasattr(os, "mkfifo"):
-        (project / ".env").unlink()
-        os.mkfifo(project / ".env")  # open() would block forever; it must be skipped
-        out = _run_import(project, scripts / "run.py")
-        assert out.returncode == 0, out.stderr
+    assert "Couldn't read" in _skipped(project, scripts)
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs FIFOs")
+def test_a_fifo_named_dotenv_is_skipped_not_opened(tmp_path):
+    project, scripts = _project(tmp_path)
+    (project / ".env").unlink()
+    os.mkfifo(project / ".env")  # opening it would block forever
+    try:
+        stderr = _skipped(project, scripts)
+    except subprocess.TimeoutExpired:
+        pytest.fail("import bioamla blocked opening a FIFO named .env")
+    assert "not a regular file" in stderr
