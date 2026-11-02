@@ -309,9 +309,11 @@ These were deprecated in 0.3.x and are breaking changes:
 
 - The catalog keys in a `.env` file in the working directory (or a parent) are now read
   when bioamla is installed, not only from a source checkout: the search started from the
-  installed package's folder. Only `EBIRD_API_KEY`, `XC_API_KEY` and `HF_TOKEN` are read
-  from the file (an exported variable still wins); other variables in it, such as another
-  project's secrets or `BIOAMLA_*` settings, are no longer loaded.
+  installed package's folder. **Breaking:** only `EBIRD_API_KEY`, `XC_API_KEY` and
+  `HF_TOKEN` are read from the file (an exported variable still wins); other variables in
+  it, such as another project's secrets or `BIOAMLA_*` settings and remote tokens, are no
+  longer loaded; export those instead. A `.env` that can't be read (someone else's, not
+  UTF-8, a FIFO) is skipped with a warning instead of breaking `import bioamla`.
 
 - Loading a model could hang forever: transformers loads weights on a thread pool, and a
   worker can deadlock in safetensors' initialisation while holding the GIL. bioamla now
