@@ -104,7 +104,6 @@ dev = [
   "pytest>=7.0",
   "pytest-cov",
   "pytest-mock",
-  "pytest-asyncio",
   "ruff>=0.17,<0.18",  # pinned: minor releases change formatting; upgrade on purpose
   "mkdocs>=1.6",
   "mkdocs-material>=9.5",

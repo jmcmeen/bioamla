@@ -726,6 +726,32 @@ class TestTrainAst:
         extractor = trainer_cls.call_args.kwargs["processing_class"]
         assert extractor.do_normalize and extractor.model_input_names == ["input_values"]
 
+    def test_normalization_statistics_are_computed_in_process(self, tmp_path, monkeypatch) -> None:
+        """compute_stats runs torch, and datasets forks its workers, where torch deadlocks
+        (#318): the statistics pass must not take ``num_proc`` from the dataloader setting."""
+        from bioamla.ml.training import train_ast
+        from datasets import Dataset
+
+        map_procs, original_map, original_filter = {}, Dataset.map, Dataset.filter
+
+        def recording_map(self, function, *args, **kwargs):
+            map_procs[getattr(function, "__name__", None)] = kwargs.get("num_proc")
+            return original_map(self, function, *args, **kwargs)
+
+        def in_process_filter(self, *args, **kwargs):  # the filter isn't what's tested
+            kwargs["num_proc"] = None
+            return original_filter(self, *args, **kwargs)
+
+        monkeypatch.setattr(Dataset, "map", recording_map)
+        monkeypatch.setattr(Dataset, "filter", in_process_filter)
+        fake_trainer = MagicMock()
+        fake_trainer.state = SimpleNamespace(log_history=[])
+        fake_trainer.accelerator = None
+        with self._mocks(fake_trainer, tmp_path):
+            train_ast(train_dataset="owner/ds", training_dir=str(tmp_path),
+                      dataloader_num_workers=4)  # fmt: skip
+        assert "compute_stats" in map_procs and map_procs["compute_stats"] is None
+
     def test_tracker_sees_a_finished_run(self, tmp_path) -> None:
         import json
 
