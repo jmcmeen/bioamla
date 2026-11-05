@@ -312,6 +312,10 @@ These were deprecated in 0.3.x and are breaking changes:
 
 ### Fixed
 
+- `models ast train` (and `train_ast`) no longer hangs on Linux while computing the
+  dataset's normalization statistics: that pass ran the feature extractor in forked
+  worker processes, where torch deadlocks; it now runs in-process (#318)
+
 - The catalog keys in a `.env` file in the working directory (or a parent) are now read
   when bioamla is installed, not only from a source checkout: the search started from the
   installed package's folder. A `.env` that can't be read (someone else's, not UTF-8, a

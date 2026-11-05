@@ -803,12 +803,17 @@ def train_ast(
 
         _check_stop("computing normalization statistics")
         logger.info("Calculating dataset normalization statistics...")
-        norm_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else None
         stats_dataset = train_dataset_for_norm.map(
             compute_stats,
             batched=True,
             batch_size=32,
-            num_proc=norm_num_proc,
+            # In-process: compute_stats runs the feature extractor (torch), and
+            # datasets forks its workers. torch's thread pool isn't fork-safe once
+            # the parent has used it, so forked workers deadlock in their first
+            # torch op (on Linux; macOS spawns). torch's own dataloader workers
+            # avoid that by calling set_num_threads(1) before any op; here the
+            # parent's intra-op threads do the work instead, with no fork.
+            num_proc=None,
             remove_columns=train_dataset_for_norm.column_names,
         )
         all_means = stats_dataset["_mean"]
