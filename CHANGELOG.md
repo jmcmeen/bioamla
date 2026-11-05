@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-05
+
 ### Added
 
 - The labeling skill works on a server workspace: with a remote set (each step's `--remote
@@ -1111,7 +1113,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.3.11...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jmcmeen/bioamla/compare/v0.3.11...v0.4.0
 [0.3.11]: https://github.com/jmcmeen/bioamla/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/jmcmeen/bioamla/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/jmcmeen/bioamla/compare/v0.3.8...v0.3.9
