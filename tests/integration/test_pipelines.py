@@ -636,15 +636,28 @@ class TestModelCommandsLibraryParity:
     def test_a_trained_model_predicts_with_its_training_features(
         self, tiny_ast, clips, tmp_path
     ) -> None:
+        import warnings
+
         data = tmp_path / "by_class"
         for label, name in (("a", "a.wav"), ("b", "b.wav")):
             (data / label).mkdir(parents=True)
             for i in range(4):
                 (data / label / f"{i}{name}").write_bytes((clips / name).read_bytes())
-        bioamla("models", "ast", "train", "--train-dataset", str(data),
-                "--training-dir", str(tmp_path / "run"), "--base-model", str(tiny_ast),
-                "--num-train-epochs", "1", "--per-device-train-batch-size", "4",
-                "--report-to", "none")  # fmt: skip
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            bioamla("models", "ast", "train", "--train-dataset", str(data),
+                    "--training-dir", str(tmp_path / "run"), "--base-model", str(tiny_ast),
+                    "--num-train-epochs", "1", "--per-device-train-batch-size", "4",
+                    "--report-to", "none")  # fmt: skip
+        # Our own forks of this torch-live process are gone (#326): the datasets pools
+        # (the `multiprocess` package) must not fork; torch's dataloader workers still
+        # do, by its design. Python 3.12+ is what warns about a fork, so the check is
+        # live on CI. And a tiny eval set must not make sklearn warn about an
+        # ill-defined precision, recall or F-score.
+        noisy = [f"{w.filename}: {w.message}" for w in caught
+                 if ("use of fork()" in str(w.message) and "/multiprocess/" in w.filename)
+                 or "ill-defined" in str(w.message)]  # fmt: skip
+        assert not noisy, noisy
         best = tmp_path / "run" / "best_model"
         saved = json.loads((best / "preprocessor_config.json").read_text())
         default = json.loads((tiny_ast / "preprocessor_config.json").read_text())

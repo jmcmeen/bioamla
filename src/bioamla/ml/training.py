@@ -15,6 +15,7 @@ import logging
 import time
 import uuid
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -771,22 +772,28 @@ def train_ast(
 
     _check_stop("filtering corrupted audio")
     logger.info("Filtering out corrupted audio files...")
-    original_sizes = {}
-    filter_num_proc = min(dataloader_num_workers, 4) if dataloader_num_workers > 1 else None
+    # Checked on threads, not a datasets pool: that forks this torch-live process,
+    # which a forked child can deadlock in (#318, #326). soundfile releases the
+    # GIL, so threads keep the speed on a large set.
+    threads = min(max(dataloader_num_workers, 1), 8)
+
+    def valid_rows(split: Dataset) -> list[int]:
+        with ThreadPoolExecutor(max_workers=threads) as pool:
+            return [i for i, ok in enumerate(pool.map(is_valid_audio, split)) if ok]
+
     if isinstance(dataset, DatasetDict):
         for split_name in dataset.keys():
-            original_sizes[split_name] = len(dataset[split_name])
-        dataset = dataset.filter(is_valid_audio, num_proc=filter_num_proc)
-        for split_name in dataset.keys():
-            filtered_count = original_sizes[split_name] - len(dataset[split_name])
-            if filtered_count > 0:
-                logger.info(f"  Removed {filtered_count} corrupted files from {split_name} split")
+            rows = valid_rows(dataset[split_name])
+            removed = len(dataset[split_name]) - len(rows)
+            if removed > 0:
+                dataset[split_name] = dataset[split_name].select(rows)
+                logger.info(f"  Removed {removed} corrupted files from {split_name} split")
     else:
-        original_size = len(dataset)
-        dataset = dataset.filter(is_valid_audio, num_proc=filter_num_proc)
-        filtered_count = original_size - len(dataset)
-        if filtered_count > 0:
-            logger.info(f"  Removed {filtered_count} corrupted files")
+        rows = valid_rows(dataset)
+        removed = len(dataset) - len(rows)
+        if removed > 0:
+            dataset = dataset.select(rows)
+            logger.info(f"  Removed {removed} corrupted files")
 
     feature_extractor.do_normalize = False
 
@@ -886,6 +893,12 @@ def train_ast(
         fp16=fp16,
         bf16=bf16,
         gradient_accumulation_steps=gradient_accumulation_steps,
+        # The workers are forked, torch's default. That is safe where our own
+        # forks (datasets pools) were not: torch's worker loop sets one thread
+        # before any op, so a child never enters the inherited pool. Spawning
+        # them instead costs a re-import of torch per worker per epoch (the
+        # loaders are rebuilt each epoch), measured at 7 s -> 45 s for a
+        # one-epoch smoke run. Python 3.12+ still warns about the fork.
         dataloader_num_workers=dataloader_num_workers,
         dataloader_persistent_workers=False,  # Prevent hang on exit
         torch_compile=torch_compile,
@@ -896,7 +909,7 @@ def train_ast(
     accuracy = evaluate.load("accuracy")
     recall = evaluate.load("recall")
     precision = evaluate.load("precision")
-    f1 = evaluate.load("f1")
+    from sklearn.metrics import f1_score  # evaluate's f1 script has no zero_division
 
     average = "macro" if config.num_labels > 2 else "binary"
 
@@ -907,23 +920,25 @@ def train_ast(
         accuracy_result = accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
         metrics: dict[str, float] = accuracy_result if accuracy_result is not None else {}
 
+        # zero_division=0: a class with no predictions scores 0 rather than warning,
+        # which happens on the tiny eval sets of a smoke test.
         precision_result = precision.compute(
-            predictions=predictions, references=eval_pred.label_ids, average=average
-        )
+            predictions=predictions, references=eval_pred.label_ids, average=average,
+            zero_division=0,
+        )  # fmt: skip
         if precision_result is not None:
             metrics.update(precision_result)
 
         recall_result = recall.compute(
-            predictions=predictions, references=eval_pred.label_ids, average=average
-        )
+            predictions=predictions, references=eval_pred.label_ids, average=average,
+            zero_division=0,
+        )  # fmt: skip
         if recall_result is not None:
             metrics.update(recall_result)
 
-        f1_result = f1.compute(
-            predictions=predictions, references=eval_pred.label_ids, average=average
+        metrics["f1"] = float(
+            f1_score(eval_pred.label_ids, predictions, average=average, zero_division=0)
         )
-        if f1_result is not None:
-            metrics.update(f1_result)
 
         return metrics
 
