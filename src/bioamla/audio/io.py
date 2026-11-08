@@ -9,6 +9,8 @@ Raising free functions for audio file I/O, ported from the old
 - :func:`save_audio_data`  — write :class:`AudioData` to disk
 - :func:`save_audio_data_as` — write with optional resampling/format conversion
 - :func:`create_temp_audio_file` — write to a temp file (caller owns cleanup)
+- :func:`audio_to_wav_bytes` / :func:`audio_from_wav_bytes` — float32 WAV in memory
+- :func:`save_audio_window` — write a float32 WAV file whole or not at all
 
 Heavy/optional backends (pydub/ffmpeg) are imported lazily inside the functions.
 """
@@ -342,6 +344,59 @@ def audio_from_wav_bytes(
         source_path=source_path,
         metadata=dict(metadata or {}),
     )
+
+
+def save_audio_window(
+    audio: AudioData, output_path: str | Path, *, overwrite: bool = False
+) -> Path:
+    """
+    Save :class:`AudioData` as a float32 WAV file, whole or not at all.
+
+    The encoding is :func:`audio_to_wav_bytes`'s, so a window fetched from a server
+    lands on disk exactly as it was sent. With ``overwrite`` the bytes are written
+    beside ``output_path`` and moved into place, so a failure leaves the previous
+    file as it was; without it the path is claimed atomically, so two writers can't
+    both believe they created it, and a failed write removes what it started.
+
+    Args:
+        audio: The audio to save.
+        output_path: Destination file; its folder is created.
+        overwrite: Replace an existing file instead of refusing.
+
+    Returns:
+        The output :class:`~pathlib.Path`.
+
+    Raises:
+        AudioSaveError: If the file exists (without ``overwrite``), or encoding or
+            writing fails.
+    """
+    import os
+
+    output = prepare_output_path(output_path)
+    data = audio_to_wav_bytes(audio)
+    if overwrite:
+        fd, tmp = tempfile.mkstemp(dir=output.parent, prefix=f".{output.name}.", suffix=".part")
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+            os.replace(tmp, output)
+        except OSError as e:
+            Path(tmp).unlink(missing_ok=True)
+            raise AudioSaveError(f"Could not write {output}: {e.strerror or e}") from e
+        return output
+    try:
+        fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0))
+    except FileExistsError:
+        raise AudioSaveError(f"{output} exists") from None
+    except OSError as e:
+        raise AudioSaveError(f"Could not write {output}: {e.strerror or e}") from e
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+    except OSError as e:
+        output.unlink(missing_ok=True)
+        raise AudioSaveError(f"Could not write {output}: {e.strerror or e}") from e
+    return output
 
 
 def create_temp_audio_file(audio: AudioData, suffix: str = ".wav") -> Path:

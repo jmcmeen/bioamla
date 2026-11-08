@@ -290,3 +290,37 @@ def test_audio_window_respects_the_path_policy(server):
     assert linked.status_code == 200
     refused = client.get(f"/v1/workspaces/ws/audio/{outside}/away.wav?duration=0.1", headers=AUTH)
     assert refused.status_code == 403
+
+
+def test_the_window_cap_must_be_a_finite_positive_number(tmp_path):
+    from bioamla.exceptions import InvalidInputError
+
+    for bad in (float("inf"), float("nan"), 0.0, -1.0):
+        with pytest.raises(InvalidInputError, match="max_window must be a positive number"):
+            ServerConfig(root=tmp_path, token="t", max_window=bad)
+
+
+def test_a_decoder_the_server_lacks_is_a_logged_500(server, monkeypatch, caplog):
+    """A DependencyError is the server's problem: the client gets the reason, and so does
+    the server log, where the operator can act on it."""
+    import logging
+
+    import bioamla.audio
+    from bioamla.exceptions import DependencyError
+
+    client, root, _, _ = server
+    _write_ramp(root / "ws" / "rec.wav")
+
+    def no_ffmpeg(*args, **kwargs):
+        raise DependencyError("ffmpeg is required to read .mp3 files but was not found on PATH.")
+
+    monkeypatch.setattr(bioamla.audio, "load_audio_data", no_ffmpeg)
+    with caplog.at_level(logging.ERROR, logger="bioamla.server.app"):
+        response = client.get("/v1/workspaces/ws/audio/rec.wav?duration=1", headers=AUTH)
+    assert response.status_code == 500
+    assert response.json()["error"] == {
+        "type": "DependencyError",
+        "message": "ffmpeg is required to read .mp3 files but was not found on PATH.",
+    }
+    assert "DependencyError handling GET /v1/workspaces/ws/audio/rec.wav" in caplog.text
+    assert "ffmpeg is required" in caplog.text

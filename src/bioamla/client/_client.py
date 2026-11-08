@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -249,12 +250,21 @@ class Client:
         kind = response.headers.get("Content-Type", "")
         if not kind.startswith("audio/"):
             raise RemoteError(f"{self.url} answered with {kind or 'no content type'}, not audio")
+        header = response.headers.get("X-Bioamla-Start")
+        try:
+            start_time = start if header is None else float(header)
+            if not math.isfinite(start_time):
+                raise ValueError
+        except ValueError:
+            raise RemoteError(
+                f"{self.url} sent an unreadable X-Bioamla-Start header: {header!r}"
+            ) from None
         try:
             return audio_from_wav_bytes(
                 response.content,
                 source_path=path,
                 metadata={
-                    "start_time": float(response.headers.get("X-Bioamla-Start", start)),
+                    "start_time": start_time,
                     "remote": self.url,
                     "workspace": ws,
                     "path": path,

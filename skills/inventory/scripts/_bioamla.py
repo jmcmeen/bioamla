@@ -6,8 +6,8 @@ standard library: they drive bioamla through its command line (`bioamla --json`)
 never by importing it, so the same script works against a local install or a remote
 server.
 
-Set ``BIOAMLA_BIN`` to the command to run instead of ``bioamla`` (for example a
-virtual environment's ``.../bin/bioamla``).
+Set ``BIOAMLA_BIN`` to the ``bioamla`` executable to run (for example a virtual
+environment's ``.../bin/bioamla``); by default it's the one on the ``PATH``.
 
 When a remote is set (``BIOAMLA_REMOTE=NAME:WORKSPACE``, or ``remote`` and
 ``workspace`` in the local workspace's settings), bioamla commands run on that server
@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import os
-import shlex
 import subprocess
 import tempfile
 from datetime import UTC, datetime
@@ -40,9 +39,9 @@ class BioamlaCommandError(RuntimeError):
         self.kind = kind
 
 
-def command() -> list[str]:
-    """The command that runs bioamla."""
-    return shlex.split(os.environ.get("BIOAMLA_BIN", "bioamla"))
+def executable() -> str | None:
+    """The ``bioamla`` executable to run: ``BIOAMLA_BIN``, or ``None`` for the ``PATH``'s."""
+    return os.environ.get("BIOAMLA_BIN") or None
 
 
 def timeout() -> float:
@@ -59,14 +58,14 @@ def run(*args: str, cwd: str | Path | None = None) -> Any:
     Raises:
         BioamlaCommandError: If the command fails (with bioamla's own message).
     """
-    argv = [*command(), "--json", *map(str, args)]
     try:
-        # An argument list, no shell: the executable is the operator's own BIOAMLA_BIN,
-        # and the arguments are the skill's. Driving the CLI is this helper's purpose.
+        # No shell: the command is always "bioamla" plus the skill's own arguments, and
+        # BIOAMLA_BIN only chooses which executable that name runs, as the PATH would.
         # Callers put any path that came from data or a listing after "--", so a value
         # starting with "-" can't be read as an option.
         proc = subprocess.run(
-            argv,
+            ["bioamla", "--json", *map(str, args)],
+            executable=executable(),
             cwd=cwd,
             capture_output=True,
             text=True,

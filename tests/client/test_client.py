@@ -269,6 +269,13 @@ def test_client_fetches_an_audio_window(live_server, test_audio_path, tmp_path):
     Page.headers = {"Content-Type": "audio/wav"}
     with pytest.raises(RemoteError, match="did not return audio"):
         page.audio_window("ws", "rec.wav", duration=1)
+    # So is a start header that isn't a number: the caller sees a typed error, not a ValueError.
+    from bioamla.audio import audio_to_wav_bytes
+
+    Page.headers = {"Content-Type": "audio/wav", "X-Bioamla-Start": "soon"}
+    Page.content = audio_to_wav_bytes(window)
+    with pytest.raises(RemoteError, match="X-Bioamla-Start header: 'soon'"):
+        page.audio_window("ws", "rec.wav", duration=1)
 
     # The command saves the window as a WAV file, decoded on the server.
     runner = CliRunner()
