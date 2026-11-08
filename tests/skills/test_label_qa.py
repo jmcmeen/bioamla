@@ -328,6 +328,27 @@ def test_a_failing_server_stops_the_check_instead_of_counting_as_findings(plante
     assert not (planted / "runs").exists()  # the failed run left nothing behind
 
 
+def test_a_bioamla_that_cannot_run_is_a_json_error(planted, tmp_path):
+    """A BIOAMLA_BIN that isn't there (a removed virtual environment, say) is reported the
+    way every other failure is: JSON on stdout, exit 1, not a traceback."""
+    import os
+    import subprocess
+    import sys
+
+    from tests.skills.conftest import skill_script
+
+    gone = tmp_path / "old-venv" / "bin" / "bioamla"
+    proc = subprocess.run(
+        [sys.executable, str(skill_script("label-qa", "check")), "annotations.csv"],
+        cwd=planted, env={**os.environ, "BIOAMLA_BIN": str(gone)},
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    error = json.loads(proc.stdout)["error"]
+    assert f"can't run {gone}" in error and "BIOAMLA_BIN" in error
+    assert "Traceback" not in proc.stderr
+
+
 def test_thresholds_outside_zero_to_one_are_usage_errors(planted) -> None:
     import subprocess
     import sys
