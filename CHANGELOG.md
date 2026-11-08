@@ -16,6 +16,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- The agent skills pass every path that came from data or a listing to `bioamla` after `--`,
+  and the shared helper refuses a workspace path that starts with `-`, so a file cell or a
+  recording name that looks like an option can't change what a command does (#331)
 - Training's corrupted-audio check runs on threads instead of a `datasets` worker pool:
   that pool was the last place bioamla itself forked the torch-live process, the hazard
   behind the earlier CI hang (torch's own dataloader workers are still forked, which torch

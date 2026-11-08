@@ -115,6 +115,9 @@ def test_label_qa_finds_every_planted_problem_and_fails_the_set(run_skill, plant
     }  # fmt: skip
     assert scored["f1"] == pytest.approx(2 * 1 / (2 * 1 + 6 + 3))
     assert [m["label"] for m in report["misses"]] == ["frog", "wren"]
+    (disagreement,) = report["disagreements"]
+    assert disagreement["person"]["label"] == "wren" and disagreement["agent"]["label"] == "frog"
+    assert disagreement["file"] == "rec/a.wav" and disagreement["iou"] == 1.0
 
     code, verdict = run_skill("label-qa", "gate", checked["run_dir"], "--min-f1", "0.5", cwd=ws)
     assert code == 2 and verdict["passed"] is False
@@ -199,7 +202,10 @@ def test_label_qa_on_a_server_workspace(
     assert code == 0 and checked["remote"]["remote"] == "lab", checked
     assert findings(server_ws, checked["run_dir"]) == PLANTED
     code, scored = step("agreement", checked["run_dir"], "--reference", "reference.csv")
-    assert code == 0 and scored["matched"] == 2
+    assert code == 0 and scored["matched"] == 2, scored
+    # The server's nine-row file, not the laptop's three clean rows: seven agent rows on
+    # the reference recordings and five false alarms.
+    assert scored["agent_rows"] == 7 and scored["false_alarms"] == 5
     code, verdict = step("gate", checked["run_dir"])
     assert code == 2 and len(verdict["reasons"]) == 2
     for name in ("checks.json", "agreement.json", "gate.json"):
@@ -274,3 +280,82 @@ def test_the_gate_reports_a_metric_it_cannot_score(run_skill, workspace) -> None
 def test_a_failed_check_leaves_no_run_folder(run_skill, workspace) -> None:
     code, out = run_skill("label-qa", "check", "nope.csv", cwd=workspace)
     assert code == 1 and not (workspace / "runs").exists()
+
+
+def test_a_one_sided_band_schema_is_a_columns_finding(run_skill, workspace) -> None:
+    write_recordings(workspace)
+    (workspace / "annotations.csv").write_text(
+        "file,start_time,end_time,low_freq,label,labeled_by\nrec/a.wav,0.5,1.0,2000,wren,agent\n"
+    )
+    code, checked = run_skill("label-qa", "check", "annotations.csv", cwd=workspace)
+    assert code == 0 and checked["by_rule"] == {"columns": 1}, checked
+    (f,) = json.loads((workspace / checked["run_dir"] / "checks.json").read_text())["findings"]
+    assert f["message"] == "low_freq without high_freq: bands come as a pair"
+
+
+def test_agreement_scores_the_file_the_check_step_read(run_skill, planted) -> None:
+    """The annotations file changing between the steps doesn't change what the gate judges."""
+    code, checked = run_skill("label-qa", "check", "annotations.csv", cwd=planted)
+    write_set(planted, CLEAN)  # the live file changes after the check
+    code, scored = run_skill("label-qa", "agreement", checked["run_dir"], "--reference",
+                             "reference.csv", cwd=planted)  # fmt: skip
+    assert code == 0 and scored["agent_rows"] == 7 and scored["false_alarms"] == 5
+
+
+def test_a_failing_server_stops_the_check_instead_of_counting_as_findings(planted, tmp_path):
+    """A bioamla error that isn't about the recording (a server that can't be reached, a
+    refused token) is the step's error, not a file finding the gate could wave through."""
+    import os
+    import subprocess
+    import sys
+
+    from tests.skills.conftest import skill_script
+
+    fake = tmp_path / "bioamla"
+    fake.write_text(
+        "#!/bin/sh\n"
+        'echo \'{"ok": false, "error": {"type": "RemoteError", '
+        '"message": "Cannot reach http://lab:8765"}}\'\n'
+    )
+    fake.chmod(0o755)
+    proc = subprocess.run(
+        [sys.executable, str(skill_script("label-qa", "check")), "annotations.csv"],
+        cwd=planted, env={**os.environ, "BIOAMLA_BIN": str(fake)},
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert json.loads(proc.stdout)["error"].startswith("RemoteError: Cannot reach")
+    assert not list((planted / "runs").rglob("checks.json"))
+
+
+def test_thresholds_outside_zero_to_one_are_usage_errors(planted) -> None:
+    import subprocess
+    import sys
+
+    from tests.skills.conftest import skill_script
+
+    for script, flag, bad in (
+        ("gate", "--min-f1", "1.5"),
+        ("gate", "--min-precision", "nan"),
+        ("gate", "--max-findings", "-1"),
+        ("agreement", "--min-iou", "2"),
+    ):
+        args = [sys.executable, str(skill_script("label-qa", script)), "runs/label-qa/x", flag, bad]
+        if script == "agreement":
+            args += ["--reference", "reference.csv"]
+        proc = subprocess.run(args, cwd=planted, capture_output=True, text=True, check=False)
+        assert proc.returncode == 2 and "error: argument" in proc.stderr, (
+            script,
+            flag,
+            proc.stderr,
+        )
+
+
+def test_a_file_cell_that_looks_like_an_option_is_just_a_missing_file(run_skill, workspace):
+    """Data never reaches the CLI as an option: a file called --help is looked up as a file."""
+    write_recordings(workspace)
+    write_set(workspace, ["--help,0.5,1.0,2000,3000,wren,agent"])
+    code, checked = run_skill("label-qa", "check", "annotations.csv", cwd=workspace)
+    assert code == 0 and checked["by_rule"] == {"file": 1}, checked
+    (f,) = json.loads((workspace / checked["run_dir"] / "checks.json").read_text())["findings"]
+    assert f["file"] == "--help" and "not found" in f["message"]

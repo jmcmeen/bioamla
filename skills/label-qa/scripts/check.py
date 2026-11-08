@@ -5,18 +5,20 @@ Reads an annotations CSV (one row per event, with a ``file`` column) and writes
 each with the row it concerns and the rule it broke. The rules:
 
 - ``columns``: the required columns (``file``, ``start_time``, ``end_time``, ``label``)
-  are present. Without them nothing else can be checked.
-- ``value``: the file cell is filled; times (and frequencies, when the columns exist)
-  are finite numbers, not negative, and start before end (low below high). A row that
-  fails this is left out of the duplicate and overlap rules, which need its numbers.
+  are present, and the band columns (``low_freq``, ``high_freq``) come as a pair or not
+  at all. Without the required ones nothing else can be checked.
+- ``value``: the file cell is filled; times (and frequencies, when a row gives them; a
+  band is optional) are finite numbers, not negative, and start before end (low below
+  high). A row that fails this is left out of the duplicate and overlap rules, which
+  need its numbers.
 - ``file``: the recording exists in the workspace (``bioamla audio info`` can read it).
 - ``bounds``: the row ends within the recording's duration and its band is below the
   Nyquist frequency.
 - ``vocabulary``: the label is one of ``--labels`` (and never empty).
 - ``duplicate``: another row has the same file, times, band and label.
-- ``overlap``: an agent row (``labeled_by=agent``) overlaps another row in time and band.
-  Two rows a person made may overlap (two species calling at once); an agent's should
-  not.
+- ``overlap``: an agent row (``labeled_by=agent``) overlaps another row in time, the
+  same rule the labeling skill applies before it writes a row. Two rows a person made
+  may overlap (two species calling at once); an agent's should not.
 
 Usage (from the workspace root):
     python scripts/check.py annotations.csv --labels frog,bird
@@ -109,6 +111,11 @@ def parse_rows(rows: list[dict], has_band: bool) -> tuple[list[dict], list[dict]
     return parsed, findings
 
 
+#: Errors that are about the recording itself; any other error from ``audio info`` (a
+#: server that can't be reached, a refused token) is the step's problem, not a finding.
+FILE_ERRORS = {"NotFoundError", "AudioLoadError", "InvalidInputError", "AccessDenied"}
+
+
 def recordings(files: list[str], root: str) -> tuple[dict[str, dict | None], list[dict]]:
     """Each distinct file's duration and sample rate, and a ``file`` finding for each
     that bioamla can't read."""
@@ -116,8 +123,10 @@ def recordings(files: list[str], root: str) -> tuple[dict[str, dict | None], lis
     findings = []
     for path in dict.fromkeys(f for f in files if f):
         try:
-            got = run("audio", "info", path, cwd=root)["info"]
+            got = run("audio", "info", "--", path, cwd=root)["info"]
         except BioamlaCommandError as e:
+            if e.kind not in FILE_ERRORS:
+                raise
             info[path] = None
             findings.append(finding(0, "file", f"{path}: {e}", path))
         else:
@@ -126,12 +135,9 @@ def recordings(files: list[str], root: str) -> tuple[dict[str, dict | None], lis
 
 
 def spans_overlap(a: dict, b: dict) -> bool:
-    """Whether two usable rows share time, and band when both have one."""
-    if not (a["start"] < b["end"] and b["start"] < a["end"]):
-        return False
-    if None in (a["low"], a["high"], b["low"], b["high"]):
-        return True
-    return a["low"] < b["high"] and b["low"] < a["high"]
+    """Whether two usable rows share time (the band doesn't matter: the labeling skill
+    skips a candidate that overlaps a person's row in time, whatever the band)."""
+    return a["start"] < b["end"] and b["start"] < a["end"]
 
 
 def same(a: dict, b: dict) -> bool:
@@ -146,8 +152,15 @@ def check_rows(rows: list[dict], columns: list[str], labels: list[str] | None, r
     missing = [c for c in REQUIRED if c not in columns]
     if missing:
         return [finding(0, "columns", f"missing columns: {', '.join(missing)}")], {}
-    has_band = all(c in columns for c in BAND)
+    findings_first: list[dict] = []
+    band_columns = [c for c in BAND if c in columns]
+    has_band = len(band_columns) == 2
+    if len(band_columns) == 1:  # one without the other: the bands can't be checked
+        findings_first.append(finding(0, "columns",
+            f"{band_columns[0]} without {next(c for c in BAND if c not in columns)}: "
+            "bands come as a pair"))  # fmt: skip
     parsed, findings = parse_rows(rows, has_band)
+    findings = findings_first + findings
     info, file_findings = recordings([p["file"] for p in parsed], root)
     findings += file_findings
     vocabulary = set(labels) if labels is not None else None

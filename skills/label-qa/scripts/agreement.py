@@ -2,7 +2,8 @@
 
 Takes a reference CSV: the person's annotations for a held-out subset of the recordings
 (every row in it counts as the truth; rows marked ``labeled_by=agent`` are ignored). On
-the recordings the reference covers, the agent rows of the checked annotations file are
+the recordings the reference covers, the agent rows of the annotations file the check
+step read (its copy in the run folder, so the gate judges one and the same file) are
 matched to the reference rows by time overlap (intersection over union of the spans, at
 least ``--min-iou``), one to one, best overlaps first. Then:
 
@@ -12,7 +13,8 @@ least ``--min-iou``), one to one, best overlaps first. Then:
 
 Writes ``agreement.json`` to the run folder: per-label precision, recall and F1, the
 confusion matrix (the person's label against the agent's, over matched pairs), the
-misses and false alarms, and the micro-averaged scores the gate step reads.
+disagreements, misses and false alarms with their rows, and the micro-averaged scores
+the gate step reads.
 
 Usage (from the workspace root, after check.py):
     python scripts/agreement.py runs/label-qa/<timestamp> --reference reference.csv
@@ -23,6 +25,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -58,11 +61,25 @@ def usable(row: dict) -> bool:
 
 
 def span(row: dict) -> tuple[float, float] | None:
+    """The row's ``(start, end)`` when both are finite numbers in order."""
     try:
         start, end = float(row["start_time"]), float(row["end_time"])
     except (KeyError, TypeError, ValueError):
         return None
+    if not (math.isfinite(start) and math.isfinite(end)):
+        return None
     return (start, end) if end > start else None
+
+
+def unit_interval(value: str) -> float:
+    """An argparse type: a finite number from 0 to 1."""
+    try:
+        number = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a number") from None
+    if not (math.isfinite(number) and 0 <= number <= 1):
+        raise argparse.ArgumentTypeError(f"{value!r} is not between 0 and 1")
+    return number
 
 
 def iou(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -106,13 +123,15 @@ def agreement(args: argparse.Namespace) -> dict:
     root = Path(args.root)
     rel = Path(args.run_dir)
     checks = read_json(root / rel / "checks.json")
-    annotations = args.annotations or checks["annotations"]
-    annotated = fetch(annotations, rel / "workspace", root)
+    annotations = checks["annotations"]
+    # Score the copy the check step read, not the live file: the gate must judge one set.
+    annotated = root / rel / "workspace" / annotations
+    if not annotated.exists():
+        raise FileNotFoundError(f"the check step's copy of {annotations} is missing")
+    (root / rel / "agreement.json").unlink(missing_ok=True)  # never leave a stale report
     reference_path = fetch(args.reference, rel / "workspace", root)
     if not reference_path.exists():
         raise FileNotFoundError(f"{args.reference} is not in the workspace")
-    if not annotated.exists():
-        raise FileNotFoundError(f"{annotations} is not in the workspace")
 
     reference_rows = [r for r in read_csv(reference_path) if cell(r, "labeled_by") != AGENT]
     reference = [r for r in reference_rows if usable(r)]
@@ -134,20 +153,25 @@ def agreement(args: argparse.Namespace) -> dict:
     fp: dict[str, int] = defaultdict(int)
     fn: dict[str, int] = defaultdict(int)
     confusion: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    misses, false_alarms, agreed, disagreed = [], [], 0, 0
+    misses, false_alarms, disagreements = [], [], []
     for path in files:
         refs, ours = by_file[path], ours_by_file[path]
         matched = match(refs, ours, args.min_iou)
-        for i, j, _score in matched:
+        for i, j, score in matched:
             want, got = cell(refs[i], "label"), cell(ours[j], "label")
             confusion[want][got] += 1
             if want == got:
                 tp[want] += 1
-                agreed += 1
             else:
                 fp[got] += 1
                 fn[want] += 1
-                disagreed += 1
+                disagreements.append({
+                    "file": path, "iou": score,
+                    "person": {"start_time": cell(refs[i], "start_time"),
+                               "end_time": cell(refs[i], "end_time"), "label": want},
+                    "agent": {"start_time": cell(ours[j], "start_time"),
+                              "end_time": cell(ours[j], "end_time"), "label": got},
+                })  # fmt: skip
         matched_refs, matched_ours = {m[0] for m in matched}, {m[1] for m in matched}
         for i, r in enumerate(refs):
             if i not in matched_refs:
@@ -163,6 +187,7 @@ def agreement(args: argparse.Namespace) -> dict:
     labels = sorted(set(tp) | set(fp) | set(fn))
     per_label = {label: scores(tp[label], fp[label], fn[label]) for label in labels}
     micro = scores(sum(tp.values()), sum(fp.values()), sum(fn.values()))
+    matched_total = sum(tp.values()) + len(disagreements)
     report = {
         "annotations": annotations,
         "reference": args.reference,
@@ -171,9 +196,10 @@ def agreement(args: argparse.Namespace) -> dict:
         "reference_rows": len(reference),
         "reference_rows_skipped": len(reference_rows) - len(reference),
         "agent_rows": len(agent),
-        "matched": agreed + disagreed,
-        "label_agreements": agreed,
-        "label_disagreements": disagreed,
+        "matched": matched_total,
+        "label_agreements": sum(tp.values()),
+        "label_disagreements": len(disagreements),
+        "disagreements": disagreements,
         "misses": misses,
         "false_alarms": false_alarms,
         "per_label": per_label,
@@ -188,8 +214,8 @@ def agreement(args: argparse.Namespace) -> dict:
         "reference_rows": len(reference),
         "reference_rows_skipped": len(reference_rows) - len(reference),
         "agent_rows": len(agent),
-        "matched": agreed + disagreed,
-        "label_disagreements": disagreed,
+        "matched": matched_total,
+        "label_disagreements": len(disagreements),
         "misses": len(misses),
         "false_alarms": len(false_alarms),
         "precision": micro["precision"],
@@ -205,10 +231,8 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("run_dir", help="The run folder (after check.py)")
     p.add_argument("--reference", required=True,
                    help="A person's annotations for a subset of the recordings, relative to the workspace")  # fmt: skip
-    p.add_argument("--annotations", default=None,
-                   help="The checked annotations CSV (default: the one check.py read)")  # fmt: skip
-    p.add_argument("--min-iou", type=float, default=0.5,
-                   help="Least time overlap (intersection over union) for a match")  # fmt: skip
+    p.add_argument("--min-iou", type=unit_interval, default=0.5,
+                   help="Least time overlap (intersection over union, 0 to 1) for a match")  # fmt: skip
     p.add_argument("--root", default=".", help="Workspace root (default: here)")
     add_remote_option(p)
     return p

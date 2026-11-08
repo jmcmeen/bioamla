@@ -17,6 +17,8 @@ The steps run wherever bioamla commands run. With a remote set (pass
 `workspace` in the local workspace's settings), the annotations file, the reference
 file and the recordings are the server workspace's, and every output is uploaded there.
 The run folder's JSON files are also kept locally, so you can read them without fetching.
+Run all three steps from the same machine: the later steps read the run folder's files
+from where the check step wrote them.
 
 ## Steps
 
@@ -30,12 +32,15 @@ to the next step.
    ```
 
    Writes `checks.json`: one finding per problem, with the row and the rule it broke.
-   Rules: `columns` (the required columns exist), `value` (times and bands are numbers
-   in order), `file` (the recording exists), `bounds` (the row ends inside the
-   recording and its band is below Nyquist), `vocabulary` (the label is in `--labels`,
-   and not empty), `duplicate` (same file, times, band and label as another row),
-   `overlap` (an agent row overlaps another row; two people's rows may overlap, an
-   agent's shouldn't). Without `--labels` the vocabulary isn't checked.
+   Rules: `columns` (the required columns exist, and the band columns come as a pair),
+   `value` (times, and a band when a row gives one, are finite numbers in order),
+   `file` (the recording exists), `bounds` (the row ends inside the recording and its
+   band is below Nyquist), `vocabulary` (the label is in `--labels`, and not empty),
+   `duplicate` (same file, times, band and label as another row), `overlap` (an agent
+   row overlaps another row in time, the labeling skill's own rule; two people's rows
+   may overlap, an agent's shouldn't). Without `--labels` the vocabulary isn't checked.
+   If `bioamla` itself fails (the server can't be reached, the token is refused), the
+   step stops with `{"error": ...}` rather than counting that as a finding.
 
 2. **Agreement**: against a person's labels, where both exist.
 
@@ -44,11 +49,11 @@ to the next step.
    ```
 
    `reference.csv` is the person's annotations for a subset of the recordings (every row
-   in it counts as the truth). On those recordings, agent rows are matched to the
-   person's by time overlap (`--min-iou`, default 0.5) and scored: per-label precision,
-   recall and F1, a confusion matrix, the misses and the false alarms, in
-   `agreement.json`. Skip this step when there is no reference; the gate then judges the
-   checks alone.
+   in it counts as the truth). On those recordings, the agent rows of the file the check
+   step read are matched to the person's by time overlap (`--min-iou`, default 0.5) and
+   scored: per-label precision, recall and F1, a confusion matrix, and the
+   disagreements, misses and false alarms with their rows, in `agreement.json`. Skip
+   this step when there is no reference; the gate then judges the checks alone.
 
 3. **Gate**: the verdict.
 
