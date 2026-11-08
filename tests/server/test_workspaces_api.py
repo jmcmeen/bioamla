@@ -347,14 +347,6 @@ def test_atomic_file_writer_gives_files_the_usual_mode(tmp_path):
         os.umask(before)
 
 
-<<<<<<< HEAD
-def test_a_bad_decode_timeout_stops_the_server_at_start(tmp_path, monkeypatch):
-    from bioamla.exceptions import ConfigError
-
-    monkeypatch.setenv("BIOAMLA_DECODE_TIMEOUT", "soon")
-    with pytest.raises(ConfigError, match="BIOAMLA_DECODE_TIMEOUT"):
-        create_app(ServerConfig(root=tmp_path, token="t"))
-=======
 def test_audio_window_can_keep_a_recordings_channels(server):
     import io
 
@@ -376,4 +368,30 @@ def test_audio_window_can_keep_a_recordings_channels(server):
     mixed = client.get(url, headers=AUTH)  # mono unless asked
     assert mixed.headers["x-bioamla-channels"] == "1"
     assert np.allclose(_decode(mixed)[0], 0.0, atol=1e-6)  # the ramps cancel
->>>>>>> 0474a89 (Let windowed reads keep a recording's channels)
+
+
+def test_a_bad_decode_timeout_stops_the_server_at_start(tmp_path, monkeypatch):
+    from bioamla.exceptions import ConfigError
+
+    monkeypatch.setenv("BIOAMLA_DECODE_TIMEOUT", "soon")
+    with pytest.raises(ConfigError, match="BIOAMLA_DECODE_TIMEOUT"):
+        create_app(ServerConfig(root=tmp_path, token="t"))
+
+
+def test_the_window_cap_counts_kept_channels(tmp_path):
+    import numpy as np
+    import soundfile as sf
+
+    root = tmp_path / "root"
+    create_workspace(root / "ws")
+    sf.write(root / "ws" / "st.wav", np.zeros((48000, 4), dtype="float32"), 16000)
+    client = TestClient(create_app(ServerConfig(root=root, token="t", max_window=2.0)))
+    url = "/v1/workspaces/ws/audio/st.wav?duration="
+    assert client.get(f"{url}0.5&keep_channels=true", headers=AUTH).status_code == 200
+    refused = client.get(f"{url}1&keep_channels=true", headers=AUTH)
+    assert refused.status_code == 400
+    assert refused.json()["error"]["message"] == (
+        "1 s of 4 channels is above this server's limit of 2 channel-seconds; "
+        "ask for at most 0.5 s, or mix to mono"
+    )
+    assert client.get(f"{url}1", headers=AUTH).status_code == 200  # mono: 1 s fits

@@ -218,8 +218,9 @@ def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
                 f"duration {duration:g} s is above this server's limit of {config.max_window:g} s"
             )
         body, headers = await run_in_threadpool(
-            _window_wav, in_workspace, who, ws, path, start, duration, sample_rate, keep_channels
-        )
+            _window_wav, in_workspace, who, ws, path, start, duration, sample_rate,
+            keep_channels, config.max_window,
+        )  # fmt: skip
         return Response(body, media_type="audio/wav", headers=headers)
 
 
@@ -229,7 +230,7 @@ MAX_SAMPLE_RATE = 384_000
 
 def _window_wav(
     in_workspace: Any, who: Any, ws: str, path: str, start: float, duration: float,
-    sample_rate: int | None, keep_channels: bool = False,
+    sample_rate: int | None, keep_channels: bool = False, max_window: float = math.inf,
 ) -> tuple[bytes, dict[str, str]]:  # fmt: skip
     """The window as WAV bytes (float32), with the headers describing it. All the file
     work, for the threadpool."""
@@ -240,7 +241,16 @@ def _window_wav(
     if not target.is_file():
         raise NotFoundError(f"No file {path}")
     try:
-        length = get_audio_info(target).duration
+        info = get_audio_info(target)
+        length = info.duration
+        # The cap is on what the server holds: a window keeping 8 channels is 8 mono
+        # windows' worth of samples.
+        if keep_channels and info.channels > 1 and duration * info.channels > max_window:
+            raise InvalidInputError(
+                f"{duration:g} s of {info.channels} channels is above this server's limit of "
+                f"{max_window:g} channel-seconds; ask for at most "
+                f"{max_window / info.channels:g} s, or mix to mono"
+            )
         if start >= length:
             raise InvalidInputError(
                 f"start {start:g} s is past the end of {path} ({length:g} s long)"
