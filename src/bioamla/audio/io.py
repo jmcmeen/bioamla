@@ -9,6 +9,8 @@ Raising free functions for audio file I/O, ported from the old
 - :func:`save_audio_data`  — write :class:`AudioData` to disk
 - :func:`save_audio_data_as` — write with optional resampling/format conversion
 - :func:`create_temp_audio_file` — write to a temp file (caller owns cleanup)
+- :func:`audio_to_wav_bytes` / :func:`audio_from_wav_bytes` — float32 WAV in memory
+- :func:`save_audio_window` — write a float32 WAV file whole or not at all
 
 Heavy/optional backends (pydub/ffmpeg) are imported lazily inside the functions.
 """
@@ -17,6 +19,7 @@ import logging
 import tempfile
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -277,6 +280,108 @@ def save_audio_data_as(
         )
 
     return save_audio_data(data_to_save, output_path, format=format)
+
+
+def audio_to_wav_bytes(audio: AudioData) -> bytes:
+    """
+    Encode :class:`AudioData` as a float32 WAV, in memory.
+
+    The samples are written as they are (no clipping or quantization), so a
+    window read with :func:`load_audio_data` round-trips exactly through
+    :func:`audio_from_wav_bytes`. This is how the server sends an audio
+    window and how the client reads it.
+
+    Args:
+        audio: The audio to encode.
+
+    Returns:
+        The WAV file's bytes.
+
+    Raises:
+        AudioSaveError: If encoding fails.
+    """
+    import io
+
+    import soundfile as sf
+
+    buffer = io.BytesIO()
+    try:
+        sf.write(buffer, audio.samples, audio.sample_rate, format="WAV", subtype="FLOAT")
+    except Exception as e:
+        raise AudioSaveError(f"Could not encode audio as WAV: {e}") from e
+    return buffer.getvalue()
+
+
+def audio_from_wav_bytes(
+    data: bytes, *, source_path: str | None = None, metadata: dict[str, Any] | None = None
+) -> AudioData:
+    """
+    Decode WAV bytes (as :func:`audio_to_wav_bytes` writes them) into :class:`AudioData`.
+
+    Args:
+        data: The WAV file's bytes.
+        source_path: Recorded as the audio's ``source_path``.
+        metadata: Recorded as the audio's ``metadata``.
+
+    Returns:
+        The decoded audio, float32, with ``channels`` from the data.
+
+    Raises:
+        AudioLoadError: If the bytes aren't a WAV soundfile can read.
+    """
+    import io
+
+    import soundfile as sf
+
+    try:
+        samples, sample_rate = sf.read(io.BytesIO(data), dtype="float32", always_2d=False)
+    except Exception as e:
+        raise AudioLoadError(f"Not WAV audio: {e}") from e
+    return AudioData(
+        samples=samples,
+        sample_rate=int(sample_rate),
+        channels=1 if samples.ndim == 1 else samples.shape[1],
+        source_path=source_path,
+        metadata=dict(metadata or {}),
+    )
+
+
+def save_audio_window(
+    audio: AudioData, output_path: str | Path, *, overwrite: bool = False
+) -> Path:
+    """
+    Save :class:`AudioData` as a float32 WAV file, whole or not at all.
+
+    The encoding is :func:`audio_to_wav_bytes`'s, so a window fetched from a server
+    lands on disk exactly as it was sent. The file is written the way uploads and
+    downloads are (:class:`~bioamla.common.files.AtomicFileWriter`): beside
+    ``output_path`` and then moved into place, so a failure leaves the previous file
+    as it was, and without ``overwrite`` the name is claimed atomically, so two
+    writers can't both believe they created it.
+
+    Args:
+        audio: The audio to save.
+        output_path: Destination file; its folder is created.
+        overwrite: Replace an existing file instead of refusing.
+
+    Returns:
+        The output :class:`~pathlib.Path`.
+
+    Raises:
+        AudioSaveError: If the file exists (without ``overwrite``), or encoding or
+            writing fails.
+    """
+    from bioamla.common.files import AtomicFileWriter
+
+    data = audio_to_wav_bytes(audio)
+    try:
+        with AtomicFileWriter(output_path, overwrite=overwrite) as writer:
+            writer.write(data)
+            return writer.commit()
+    except FileExistsError:
+        raise AudioSaveError(f"{output_path} exists") from None
+    except OSError as e:
+        raise AudioSaveError(f"Could not write {output_path}: {e.strerror or e}") from e
 
 
 def create_temp_audio_file(audio: AudioData, suffix: str = ".wav") -> Path:
@@ -572,6 +677,8 @@ def batch_process(
 
 
 __all__ = [
+    "audio_from_wav_bytes",
+    "audio_to_wav_bytes",
     "load_audio_data",
     "save_audio_data",
     "save_audio_data_as",

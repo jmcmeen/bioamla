@@ -83,15 +83,23 @@ class AtomicFileWriter:
     """
 
     def __init__(self, path: str | Path, overwrite: bool = False) -> None:
-        import tempfile
+        import secrets
 
         self.path = Path(path)
         self.overwrite = overwrite
         self.size = 0
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=f".{self.path.name}.",
-                                   suffix=".part")  # fmt: skip
-        self._tmp = Path(tmp)
+        # Not tempfile.mkstemp, whose files are owner-only (0600): the file gets the mode
+        # a plain open() would give it, 0666 less the umask, new or replaced alike.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+        while True:
+            tmp = self.path.parent / f".{self.path.name}.{secrets.token_hex(4)}.part"
+            try:
+                fd = os.open(tmp, flags, 0o666)
+                break
+            except FileExistsError:
+                continue
+        self._tmp = tmp
         self._file = os.fdopen(fd, "wb")
         self._done = False
 

@@ -5,7 +5,7 @@
 # (SKIP message, exit 0 for that step). The script exits non-zero only when a
 # check whose key IS present fails.
 #
-# Usage:  .claude/skills/catalog-smoke/smoke.sh
+# Usage:  make catalog-smoke   (or scripts/catalog-smoke.sh)
 # Keys:   XC_API_KEY   — Xeno-canto
 #         EBIRD_API_KEY — eBird
 #         HF_TOKEN     — HuggingFace (only needed for push/pull; cache is keyless)

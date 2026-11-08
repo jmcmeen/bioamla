@@ -231,3 +231,71 @@ def test_remote_current_says_where_commands_run(tmp_path, monkeypatch):
     configured = json.loads(run(cli, ["--json", "remote", "current"]).stdout)["result"]
     assert (configured["remote"], configured["workspace"]) == ("lab", "site")
     assert ws.history() == []  # a read, not recorded
+
+
+def test_client_fetches_an_audio_window(live_server, test_audio_path, tmp_path):
+    import shutil
+
+    import numpy as np
+    import soundfile as sf
+
+    url, token, root = live_server
+    shutil.copy(test_audio_path, root / "ws" / "rec.wav")
+    whole, sr = sf.read(test_audio_path, dtype="float32")
+    client = Client(url, token)
+
+    window = client.audio_window("ws", "rec.wav", start=0.25, duration=0.5)
+    assert window.sample_rate == sr == 16000 and window.channels == 1
+    assert len(window.samples) == 8000
+    assert np.allclose(window.samples, whole[4000:12000], atol=1e-4)
+    assert window.metadata["start_time"] == 0.25
+    assert window.metadata["workspace"] == "ws" and window.metadata["path"] == "rec.wav"
+    assert client.audio_window("ws", "rec.wav", duration=1, sample_rate=8000).sample_rate == 8000
+
+    with pytest.raises(InvalidInputError, match="past the end"):
+        client.audio_window("ws", "rec.wav", start=5, duration=1)
+    with pytest.raises(NotFoundError):
+        client.audio_window("ws", "none.wav", duration=1)
+
+    # A 200 that isn't audio (a proxy's page, say) is a RemoteError, not a soundfile error.
+    class Page:
+        headers = {"Content-Type": "text/html"}
+        content = b"<html>captive portal</html>"
+
+    page = Client(url, token)
+    page._request = lambda *a, **k: Page()
+    with pytest.raises(RemoteError, match="text/html, not audio"):
+        page.audio_window("ws", "rec.wav", duration=1)
+    Page.headers = {"Content-Type": "audio/wav"}
+    with pytest.raises(RemoteError, match="did not return audio"):
+        page.audio_window("ws", "rec.wav", duration=1)
+    # So is a start header that isn't a number: the caller sees a typed error, not a ValueError.
+    from bioamla.audio import audio_to_wav_bytes
+
+    Page.headers = {"Content-Type": "audio/wav", "X-Bioamla-Start": "soon"}
+    Page.content = audio_to_wav_bytes(window)
+    with pytest.raises(RemoteError, match="X-Bioamla-Start header: 'soon'"):
+        page.audio_window("ws", "rec.wav", duration=1)
+
+    # The command saves the window as a WAV file, decoded on the server.
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+            mp.setenv("BIOAMLA_LAB_TOKEN", token)
+            assert runner.invoke(cli, ["remote", "add", "lab", url]).exit_code == 0
+            saved = runner.invoke(cli, ["--json", "remote", "audio", "lab", "ws", "rec.wav",
+                                        "--start", "0.25", "--duration", "0.5"])  # fmt: skip
+            assert saved.exit_code == 0, saved.output
+            result = json.loads(saved.stdout)["result"]
+            assert result["saved"] == "rec_0.25s.wav" and result["duration"] == 0.5
+            clip, clip_sr = sf.read("rec_0.25s.wav", dtype="float32")
+            assert clip_sr == 16000 and len(clip) == 8000
+            assert sf.info("rec_0.25s.wav").subtype == "FLOAT"  # as the server sent it
+            assert np.allclose(clip, whole[4000:12000], atol=1e-6)
+            again = runner.invoke(cli, ["remote", "audio", "lab", "ws", "rec.wav",
+                                        "--start", "0.25", "--duration", "0.5"])  # fmt: skip
+            assert again.exit_code == 1 and "exists" in again.output
+            named = runner.invoke(cli, ["remote", "audio", "lab", "ws", "rec.wav", "--duration", "0.1",
+                                        "-o", "clip.wav"])  # fmt: skip
+            assert named.exit_code == 0 and "clip.wav" in named.output

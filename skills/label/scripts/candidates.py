@@ -31,16 +31,18 @@ def overlap(a_start: float, a_end: float, b_start: float, b_end: float) -> float
 def file_candidates(path: str, args: argparse.Namespace, root: str) -> list[dict]:
     """The candidates in one recording."""
     detected = run(
-        "detect", "energy", path,
+        "detect", "energy",
         "--low-freq", args.low_freq, "--high-freq", args.high_freq,
         "--threshold-db", args.threshold_db, "--min-duration", args.min_duration,
+        "--", path,
         cwd=root,
     )["detections"]  # fmt: skip
     if not detected:
         return []
     predicted = run(
-        "models", "ast", "predict", path, "--model-path", args.model,
+        "models", "ast", "predict", "--model-path", args.model,
         "--segment-seconds", args.segment_seconds, "--top-k", "2",
+        "--", path,
         cwd=root,
     )["predictions"]  # fmt: skip
     vocabulary = set(args.labels)
@@ -75,7 +77,7 @@ def file_candidates(path: str, args: argparse.Namespace, root: str) -> list[dict
 
 def find_candidates(args: argparse.Namespace, root: str = ".") -> dict:
     """Run detection and prediction over the folder; returns the summary."""
-    files = run("audio", "list", args.folder, cwd=root)["files"]
+    files = run("audio", "list", "--", args.folder, cwd=root)["files"]
     candidates = []
     for path in files:
         candidates.extend(file_candidates(path, args, root))

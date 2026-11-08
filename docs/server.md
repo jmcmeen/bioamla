@@ -52,6 +52,7 @@ API: http://127.0.0.1:8765/v1/  (spec at /v1/openapi.json)
 | `--port` | `8765` | Port to listen on |
 | `--token-file` | `~/.config/bioamla/server-token` | File holding the bearer token; created if missing |
 | `--allow-link` | (none) | A folder outside `--root` that workspaces may link in place; repeat for several |
+| `--max-window` | `600` | The longest audio window (seconds) a client may ask for |
 
 Check that it's up:
 
@@ -91,11 +92,27 @@ runs.
 instead of localhost, so only devices on your VPN can reach it:
 
 ```console
-$ bioamla serve --root ~/bioamla-workspaces --host 100.64.0.10
+$ bioamla serve --root ~/bioamla-workspaces --host <the machine's Tailscale address>
 ```
 
 The token is still required. Don't use `--host 0.0.0.0` on a machine reachable from the
 internet.
+
+## Run it in a container
+
+[`examples/server/`](https://github.com/jmcmeen/bioamla/tree/main/examples/server) has a
+`Dockerfile` and a `compose.yaml`: the workspace root and the recordings as bind mounts, the
+token as a secret, the port published on the host's loopback only, and a build argument for
+the extras (the default image is slim; `all,cli` for prediction and training). From that
+folder:
+
+```console
+$ python3 -c "import secrets; print(secrets.token_hex(32))" > bioamla-token
+$ chmod 600 bioamla-token
+$ docker compose up -d --build
+```
+
+Its README has the rest, including the GPU setting.
 
 ## Keep it running with systemd
 
@@ -146,3 +163,20 @@ $ bioamla workspace add /srv/recordings/site-a/2024
 
 A linked folder must be under `--root` or one of the `--allow-link` folders; the server
 refuses others.
+
+## Audio windows
+
+A viewer needs a few seconds of a recording, not the file. `GET
+/v1/workspaces/{ws}/audio/{path}?start=S&duration=D` returns that window as a float32 WAV,
+decoded on the server from just that part of the file; `sample_rate=R` resamples it, and
+`--max-window` caps `D`. The `X-Bioamla-Start`, `X-Bioamla-Duration`, `X-Bioamla-Sample-Rate`
+and `X-Bioamla-Channels` headers say what came back (a window is cut short at the end of
+the recording). The server holds a window in memory while it encodes it, 4 bytes per sample
+per channel: 600 s at 48 kHz is 115 MB, at 384 kHz 0.9 GB, so lower `--max-window` on a
+server whose recordings are ultrasonic. From the command line:
+
+```console
+$ bioamla remote audio lab costa-rica raw/site1/rec.wav --start 120 --duration 10 -o clip.wav
+```
+
+In Python, `Client.audio_window()` returns the window as an `AudioData`.

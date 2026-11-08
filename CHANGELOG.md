@@ -6,6 +6,44 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `examples/server/`: a `Dockerfile` and `compose.yaml` that run the server in a container,
+  with the workspace root and recordings as bind mounts, the token as a secret, the port on
+  the host's loopback (or a VPN address, `BIND`), a stop grace period for running jobs, and the
+  extras as a build argument; linked from the Running the server page (#336)
+- `GET /v1/workspaces/{ws}/audio/{path}?start=&duration=` returns a window of a recording as a
+  float32 WAV, decoded on the server from just that part of the file, so a viewer can show a
+  few seconds of a remote recording without downloading it; `--max-window` on `serve` caps
+  the length. `Client.audio_window()` returns it as an `AudioData`, and `bioamla remote audio`
+  saves it as a WAV through `bioamla.audio.save_audio_window`, which writes the file whole or
+  not at all. The encoding is the library's: `bioamla.audio.audio_to_wav_bytes` and
+  `audio_from_wav_bytes` carry float32 samples exactly (#332)
+- The `label-qa` agent skill (`skills/label-qa/`): checks an annotation set (columns, values,
+  recordings, bounds, vocabulary, duplicates, agent overlaps), scores the agent's rows against a
+  held-out subset a person labeled (per-label precision, recall, F1, confusion matrix), and gives
+  a pass/fail verdict from the person's thresholds, as the step before a dataset is built from
+  agent labels (#331)
+
+### Changed
+
+- The server logs every error it answers with a 500 (a decoder it lacks, say), so the reason
+  reaches the operator's log and not only the client (#332)
+- The agent skills' shared helper always runs the command `bioamla`; `BIOAMLA_BIN` now names
+  the executable that command runs (a virtual environment's `bin/bioamla`, say) instead of a
+  command line to split into words (#331)
+
+### Fixed
+
+- Files the server receives, the client downloads and `remote audio` saves get the mode a
+  plain `open()` gives (0666 less the umask) instead of the owner-only 0600 of a temporary
+  file (#332)
+- `serve --max-window` and `ServerConfig.max_window` reject `inf`, `nan` and values that
+  aren't positive, which would have lifted the window cap (#332)
+- The agent skills pass every path that came from data or a listing to `bioamla` after `--`,
+  and the shared helper refuses a workspace path that starts with `-`, so a file cell or a
+  recording name that looks like an option can't change what a command does (#331)
+
 ## [0.4.1] - 2026-11-08
 
 ### Fixed

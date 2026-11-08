@@ -9,6 +9,9 @@
 - ``GET /v1/workspaces/{ws}/files/{path}``: download a file
 - ``PUT /v1/workspaces/{ws}/files/{path}``: upload a file (the request body, as is;
   ``?overwrite=true`` to replace one)
+- ``GET /v1/workspaces/{ws}/audio/{path}?start=&duration=&sample_rate=``: a window of a
+  recording, decoded on the server and returned as a float32 WAV, so a viewer can show
+  a few seconds of a long recording without downloading it
 
 Every path goes through the server's path policy, so it must resolve inside the
 workspace root or a linkable folder, and never to a workspace's metadata. Uploads go
@@ -20,12 +23,13 @@ The server only writes a workspace's own settings, never the server user's file.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
 from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from bioamla.exceptions import ConfigError, InvalidInputError, NotFoundError, WorkspaceError
@@ -41,6 +45,7 @@ def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
 
     identity = app.state.identity
     policy = app.state.policy
+    config = app.state.config
     v = api_version
 
     def workspace(who: Any, ws: str) -> Any:
@@ -180,6 +185,75 @@ def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
                     409, f"{path} exists; add ?overwrite=true to replace it"
                 ) from e
         return envelope({"path": space.relative(target), "size": writer.size})
+
+    @app.get(
+        f"/{v}/workspaces/{{ws}}/audio/{{path:path}}",
+        tags=["files"],
+        response_class=Response,
+        responses={200: {"content": {"audio/wav": {}}}},
+    )
+    async def audio_window(
+        ws: str,
+        path: str,
+        start: float = Query(0.0, ge=0, description="Window start, in seconds"),
+        duration: float = Query(..., gt=0, description="Window length, in seconds"),
+        sample_rate: int | None = Query(
+            None, gt=0, le=MAX_SAMPLE_RATE, description="Resample to this rate"
+        ),
+        who: Any = Depends(identity),
+    ) -> Response:
+        """A window of a recording as a float32 WAV, decoded on the server: only that
+        part of the file is read, so a few seconds of a long recording cost a few
+        seconds' worth of bytes. The window is cut short at the end of the recording;
+        the ``X-Bioamla-Start``, ``X-Bioamla-Duration``, ``X-Bioamla-Sample-Rate`` and
+        ``X-Bioamla-Channels`` headers say what came back."""
+        if not (math.isfinite(start) and math.isfinite(duration)):
+            raise InvalidInputError("start and duration must be finite")
+        if duration > config.max_window:
+            raise InvalidInputError(
+                f"duration {duration:g} s is above this server's limit of {config.max_window:g} s"
+            )
+        body, headers = await run_in_threadpool(
+            _window_wav, in_workspace, who, ws, path, start, duration, sample_rate
+        )
+        return Response(body, media_type="audio/wav", headers=headers)
+
+
+#: The highest rate a client may ask a window to be resampled to.
+MAX_SAMPLE_RATE = 384_000
+
+
+def _window_wav(
+    in_workspace: Any, who: Any, ws: str, path: str, start: float, duration: float,
+    sample_rate: int | None,
+) -> tuple[bytes, dict[str, str]]:  # fmt: skip
+    """The window as WAV bytes (float32), with the headers describing it. All the file
+    work, for the threadpool."""
+    from bioamla.audio import audio_to_wav_bytes, get_audio_info, load_audio_data
+    from bioamla.exceptions import AudioLoadError
+
+    _, target = in_workspace(who, ws, path)
+    if not target.is_file():
+        raise NotFoundError(f"No file {path}")
+    try:
+        length = get_audio_info(target).duration
+        if start >= length:
+            raise InvalidInputError(
+                f"start {start:g} s is past the end of {path} ({length:g} s long)"
+            )
+        audio = load_audio_data(target, start=start, duration=duration, sample_rate=sample_rate)
+    except AudioLoadError as e:
+        # The client's problem, not the server's; the library's message names the
+        # server's absolute path, so it stays out of the response.
+        raise InvalidInputError(f"{path} can't be decoded as audio") from e
+    if len(audio.samples) == 0:
+        raise InvalidInputError(f"a window of {duration:g} s rounds to no samples")
+    return audio_to_wav_bytes(audio), {
+        "X-Bioamla-Start": repr(float(audio.metadata.get("start_time", start))),
+        "X-Bioamla-Duration": repr(float(audio.duration)),
+        "X-Bioamla-Sample-Rate": str(audio.sample_rate),
+        "X-Bioamla-Channels": str(audio.channels),
+    }
 
 
 __all__ = ["add_workspace_routes"]

@@ -6,8 +6,8 @@ standard library: they drive bioamla through its command line (`bioamla --json`)
 never by importing it, so the same script works against a local install or a remote
 server.
 
-Set ``BIOAMLA_BIN`` to the command to run instead of ``bioamla`` (for example a
-virtual environment's ``.../bin/bioamla``).
+Set ``BIOAMLA_BIN`` to the ``bioamla`` executable to run (for example a virtual
+environment's ``.../bin/bioamla``); by default it's the one on the ``PATH``.
 
 When a remote is set (``BIOAMLA_REMOTE=NAME:WORKSPACE``, or ``remote`` and
 ``workspace`` in the local workspace's settings), bioamla commands run on that server
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import json
 import os
-import shlex
 import subprocess
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -39,9 +39,17 @@ class BioamlaCommandError(RuntimeError):
         self.kind = kind
 
 
-def command() -> list[str]:
-    """The command that runs bioamla."""
-    return shlex.split(os.environ.get("BIOAMLA_BIN", "bioamla"))
+def executable() -> str | None:
+    """The ``bioamla`` executable to run: ``BIOAMLA_BIN``, or ``None`` for the ``PATH``'s."""
+    return os.environ.get("BIOAMLA_BIN") or None
+
+
+def timeout() -> float:
+    """Seconds a bioamla command may take: ``BIOAMLA_TIMEOUT`` (default 900)."""
+    try:
+        return float(os.environ.get("BIOAMLA_TIMEOUT", "900"))
+    except ValueError:
+        return 900.0
 
 
 def run(*args: str, cwd: str | Path | None = None) -> Any:
@@ -50,13 +58,31 @@ def run(*args: str, cwd: str | Path | None = None) -> Any:
     Raises:
         BioamlaCommandError: If the command fails (with bioamla's own message).
     """
-    proc = subprocess.run(
-        [*command(), "--json", *map(str, args)],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        # No shell: the command is always "bioamla" plus the skill's own arguments, and
+        # BIOAMLA_BIN only chooses which executable that name runs, as the PATH would.
+        # Callers put any path that came from data or a listing after "--", so a value
+        # starting with "-" can't be read as an option.
+        proc = subprocess.run(
+            ["bioamla", "--json", *map(str, args)],
+            executable=executable(),
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout(),
+        )
+    except subprocess.TimeoutExpired as e:
+        raise BioamlaCommandError(
+            f"bioamla {' '.join(map(str, args))} gave no answer in {e.timeout:g} s "
+            "(BIOAMLA_TIMEOUT sets the limit)",
+            "Timeout",
+        ) from None
+    except OSError as e:
+        raise BioamlaCommandError(
+            f"can't run {executable() or 'bioamla'}: {e.strerror or e} "
+            "(BIOAMLA_BIN names the bioamla executable)"
+        ) from None
     try:
         envelope = json.loads(proc.stdout)
     except ValueError:
@@ -75,20 +101,33 @@ def run_dir(skill: str, root: str | Path = ".") -> Path:
     """A new ``runs/<skill>/<UTC timestamp>/`` folder under ``root`` (the workspace)."""
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     base = Path(root) / "runs" / skill
-    path = base / stamp
-    n = 1
-    while path.exists():
-        n += 1
-        path = base / f"{stamp}-{n}"
-    path.mkdir(parents=True)
-    return path
+    base.mkdir(parents=True, exist_ok=True)
+    path, n = base / stamp, 1
+    while True:  # creating is the check: two runs in the same second get different folders
+        try:
+            path.mkdir()
+        except FileExistsError:
+            n += 1
+            path = base / f"{stamp}-{n}"
+        else:
+            return path
 
 
 def write_json(path: str | Path, data: Any) -> Path:
-    """Write ``data`` as indented JSON."""
+    """Write ``data`` as indented JSON, whole or not at all: through a fresh temporary
+    file in the same folder (exclusively created, so nothing planted there is followed)
+    and an atomic replace, so a reader never sees a half-written file and two writers
+    never share a temporary."""
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    fd, tmp = tempfile.mkstemp(dir=out.parent, prefix=f".{out.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(data, indent=2) + "\n")
+        os.replace(tmp, out)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
     return out
 
 
@@ -179,9 +218,27 @@ def remote(root: str | Path = ".") -> dict | None:
 def _workspace_path(path: str) -> str:
     """``path`` if it's a plain path inside the workspace (relative, no ``..``)."""
     parts = Path(path).parts
-    if not path or Path(path).is_absolute() or ".." in parts or ":" in parts[0]:
-        raise ValueError(f"{path!r} must be a path inside the workspace (relative, no ..)")
+    if (
+        not parts
+        or Path(path).is_absolute()
+        or ".." in parts
+        or ":" in parts[0]
+        or path.startswith("-")
+    ):
+        raise ValueError(
+            f"{path!r} must be a path inside the workspace (relative, no .., not starting with -)"
+        )
     return Path(path).as_posix()
+
+
+def _local_source(root: str | Path, path: str) -> Path:
+    """The workspace file ``path`` on this machine, once it's known to resolve inside the
+    workspace (a symlink that leads out of it is refused)."""
+    home = Path(root).resolve()
+    source = (Path(root) / path).resolve()
+    if not source.is_relative_to(home):
+        raise ValueError(f"{path!r} points outside the workspace")
+    return source
 
 
 def fetch(path: str, into: str | Path, root: str | Path = ".") -> Path:
@@ -200,13 +257,13 @@ def fetch(path: str, into: str | Path, root: str | Path = ".") -> Path:
     local.parent.mkdir(parents=True, exist_ok=True)
     target = remote(root)
     if target is None:
-        source = Path(root) / path
+        source = _local_source(root, path)
         if source.exists():
             local.write_bytes(source.read_bytes())
         return local
     try:
-        run("remote", "download", target["remote"], target["workspace"], path,
-            "-o", str(local.parent), "--overwrite", cwd=root)  # fmt: skip
+        run("remote", "download", "-o", str(local.parent), "--overwrite", "--",
+            target["remote"], target["workspace"], path, cwd=root)  # fmt: skip
     except BioamlaCommandError as e:
         if e.kind not in ("NotFoundError", "RemoteNotFound"):
             raise
@@ -237,8 +294,8 @@ def publish(local: str | Path, path: str, root: str | Path = ".") -> None:
         raise ValueError(f"{source.name} can't be uploaded as {path} (names must match)")
     folder = Path(path).parent.as_posix()
     args = ["--to", folder] if folder not in ("", ".") else []
-    run("remote", "upload", target["remote"], target["workspace"], str(source), *args,
-        "--overwrite", cwd=root)  # fmt: skip
+    run("remote", "upload", *args, "--overwrite", "--",
+        target["remote"], target["workspace"], str(source), cwd=root)  # fmt: skip
 
 
 def save_json(path: str, data: Any, root: str | Path = ".") -> Path:

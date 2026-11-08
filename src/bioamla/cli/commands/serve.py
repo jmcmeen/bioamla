@@ -66,6 +66,14 @@ def _write_openapi(ctx: click.Context, param: click.Parameter, value: str | None
     "(default: no limit)",
 )
 @click.option(
+    "--max-window",
+    type=click.FloatRange(min=1),
+    default=600.0,
+    show_default=True,
+    metavar="SECONDS",
+    help="The longest audio window a client may ask for",
+)
+@click.option(
     "--openapi",
     type=click.Path(dir_okay=False),
     is_eager=True,
@@ -82,6 +90,7 @@ def serve(
     linkable: tuple[str, ...],
     max_jobs: int,
     job_timeout: float | None,
+    max_window: float,
 ) -> None:
     """Run the bioamla HTTP API so other machines can work in this machine's
     workspaces. Needs the [server] extra.
@@ -119,6 +128,7 @@ def serve(
             linkable=[Path(p).expanduser() for p in linkable],
             max_jobs=max_jobs,
             job_timeout=job_timeout,
+            max_window=max_window,
         )
         app = create_app(config)
     except BioamlaError as e:

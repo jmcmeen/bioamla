@@ -18,6 +18,13 @@ ffmpeg, 8 only a folder of recorder WAVs.
 | [`07_spectrogram_video.sh`](07_spectrogram_video.sh) / [`.py`](07_spectrogram_video.py) | render a recording as spectrogram and waveform videos in every style and frame shape (CLI, and the same from Python) | `ffmpeg` on PATH |
 | [`08_raw_deployment_metadata.sh`](08_raw_deployment_metadata.sh) | validate raw recorder WAVs → extract GUANO/AudioMoth/WAMD metadata → dataset manifest with recording span, recorders and sites | local WAVs only |
 
+## The server
+
+[`server/`](server/) is a different kind of example: a `Dockerfile` and `compose.yaml`
+that run `bioamla serve` in a container, with the workspace root and the recordings
+mounted, the token as a secret and the port on the host's loopback only. See its README
+and the Running the server page of the docs.
+
 ## Conventions
 
 - Shell scripts (`.sh`) show the **CLI**; Python scripts (`.py`) show the same

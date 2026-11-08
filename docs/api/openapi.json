@@ -811,6 +811,104 @@
         }
       }
     },
+    "/v1/workspaces/{ws}/audio/{path}": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "summary": "Audio Window",
+        "description": "A window of a recording as a float32 WAV, decoded on the server: only that\npart of the file is read, so a few seconds of a long recording cost a few\nseconds' worth of bytes. The window is cut short at the end of the recording;\nthe ``X-Bioamla-Start``, ``X-Bioamla-Duration``, ``X-Bioamla-Sample-Rate`` and\n``X-Bioamla-Channels`` headers say what came back.",
+        "operationId": "audio_window_v1_workspaces__ws__audio__path__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ws",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ws"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Window start, in seconds",
+              "default": 0.0,
+              "title": "Start"
+            },
+            "description": "Window start, in seconds"
+          },
+          {
+            "name": "duration",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Window length, in seconds",
+              "title": "Duration"
+            },
+            "description": "Window length, in seconds"
+          },
+          {
+            "name": "sample_rate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 384000,
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Resample to this rate",
+              "title": "Sample Rate"
+            },
+            "description": "Resample to this rate"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "audio/wav": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/operations": {
       "get": {
         "tags": [

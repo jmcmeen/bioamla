@@ -95,6 +95,8 @@ from bioamla.audio.info import (
     validate_wav,
 )
 from bioamla.audio.io import (
+    audio_from_wav_bytes,
+    audio_to_wav_bytes,
     batch_process,
     create_temp_audio_file,
     each_channel,
@@ -106,6 +108,7 @@ from bioamla.audio.io import (
     save_audio,
     save_audio_data,
     save_audio_data_as,
+    save_audio_window,
     stream_audio_data,
 )
 from bioamla.audio.metadata import (
@@ -148,6 +151,8 @@ from bioamla.audio.torchaudio import (
 )
 
 __all__ = [
+    "audio_from_wav_bytes",
+    "audio_to_wav_bytes",
     # Data containers
     "AudioData",
     "AudioMetadata",
@@ -157,6 +162,7 @@ __all__ = [
     "stream_audio_data",
     "save_audio_data",
     "save_audio_data_as",
+    "save_audio_window",
     "create_temp_audio_file",
     # File I/O (array-level)
     "load_audio",

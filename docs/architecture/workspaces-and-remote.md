@@ -139,7 +139,7 @@ Version 1 of the API (`/v1`, described by a committed OpenAPI spec) covers:
 | Service | version; the operation catalog (every operation with its request and result schemas) |
 | Operations | one endpoint per operation; quick ones answer directly, long ones start a job |
 | Workspaces | list, create, status, config |
-| Files | list, upload, download; later, streamed audio windows for MagPy |
+| Files | list, upload, download; an audio window (a few seconds of a recording, decoded on the server) |
 | Jobs | status, progress events (server-sent events), cancel, result, logs |
 | History | a workspace's run history |
 

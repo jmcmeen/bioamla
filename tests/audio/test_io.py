@@ -216,3 +216,59 @@ def test_quiet_32_bit_pcm_is_scaled_as_integers():
     segment = AudioSegment(raw, frame_rate=8000, sample_width=4, channels=1)
     audio, _ = _audiosegment_to_numpy(segment)
     assert np.abs(audio).max() < 1e-8  # tiny, not full scale
+
+
+def test_wav_bytes_round_trip_exactly():
+    """audio_to_wav_bytes / audio_from_wav_bytes carry float32 samples unchanged, mono or
+    stereo, with the metadata the caller attaches; bytes that aren't WAV are an
+    AudioLoadError."""
+    import numpy as np
+    import pytest
+
+    from bioamla.audio import AudioData, audio_from_wav_bytes, audio_to_wav_bytes
+    from bioamla.exceptions import AudioLoadError
+
+    mono = AudioData(samples=np.linspace(-1.5, 1.5, 1000, dtype="float32"), sample_rate=16000)
+    back = audio_from_wav_bytes(
+        audio_to_wav_bytes(mono), source_path="a.wav", metadata={"start_time": 2.5}
+    )
+    assert back.sample_rate == 16000 and back.channels == 1 and back.source_path == "a.wav"
+    assert back.metadata == {"start_time": 2.5}
+    assert np.array_equal(back.samples, mono.samples)  # no clipping, no quantization
+
+    stereo = AudioData(samples=np.zeros((500, 2), dtype="float32"), sample_rate=8000, channels=2)
+    assert audio_from_wav_bytes(audio_to_wav_bytes(stereo)).channels == 2
+    with pytest.raises(AudioLoadError, match="Not WAV audio"):
+        audio_from_wav_bytes(b"<html>not audio</html>")
+
+
+def test_save_audio_window_writes_whole_files_or_nothing(tmp_path):
+    """save_audio_window keeps the float32 encoding, creates the folder, refuses to replace a
+    file unless asked, replaces it in one step when asked, and leaves nothing else behind."""
+    import numpy as np
+    import pytest
+    import soundfile as sf
+
+    from bioamla.audio import AudioData, save_audio_window
+    from bioamla.exceptions import AudioSaveError
+
+    audio = AudioData(samples=np.linspace(-1, 1, 800, dtype="float32"), sample_rate=8000)
+    out = save_audio_window(audio, tmp_path / "clips" / "a.wav")
+    assert out == tmp_path / "clips" / "a.wav" and sf.info(out).subtype == "FLOAT"
+    assert np.array_equal(sf.read(out, dtype="float32")[0], audio.samples)
+    with pytest.raises(AudioSaveError, match="a.wav exists"):
+        save_audio_window(audio, out)
+
+    quieter = AudioData(samples=audio.samples * 0.5, sample_rate=8000)
+    assert save_audio_window(quieter, out, overwrite=True) == out
+    assert np.array_equal(sf.read(out, dtype="float32")[0], quieter.samples)
+    assert [p.name for p in out.parent.iterdir()] == ["a.wav"]  # no temporary file left
+
+    # A window that can't be encoded changes nothing: the old file stays, no new one appears.
+    broken = AudioData(samples=audio.samples, sample_rate=0)
+    with pytest.raises(AudioSaveError):
+        save_audio_window(broken, out, overwrite=True)
+    assert np.array_equal(sf.read(out, dtype="float32")[0], quieter.samples)
+    with pytest.raises(AudioSaveError):
+        save_audio_window(broken, tmp_path / "clips" / "b.wav")
+    assert [p.name for p in out.parent.iterdir()] == ["a.wav"]

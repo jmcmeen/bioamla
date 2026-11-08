@@ -62,7 +62,7 @@ def crop(run_folder: str, pad: float = 0.5, kind: str = "stft", root: str = ".")
         end = c["end_time"] + pad
         clip = (folder / "crops" / f"{c['id']}.wav").as_posix()
         image = (folder / "crops" / f"{c['id']}.png").as_posix()
-        run("audio", "trim", c["file"], clip, "--start", start, "--end", end, cwd=root)
+        run("audio", "trim", "--start", start, "--end", end, "--", c["file"], clip, cwd=root)
         box = {
             "start": round(c["start_time"] - start, 4),
             "end": round(c["end_time"] - start, 4),
@@ -72,7 +72,7 @@ def crop(run_folder: str, pad: float = 0.5, kind: str = "stft", root: str = ".")
         # A box with no length or no width can't be outlined; the image goes without it.
         boxed = drawable(box)
         outline = ["--box", box_option(box, c.get("label"))] if boxed else []
-        run("audio", "visualize", clip, "--type", kind, "--output", image, *outline, cwd=root)
+        run("audio", "visualize", "--type", kind, "--output", image, *outline, "--", clip, cwd=root)
         crops.append(
             {
                 "id": c["id"],

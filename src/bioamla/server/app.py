@@ -9,6 +9,7 @@ OpenAPI spec at ``/v1/openapi.json`` (there are no interactive docs pages).
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -45,6 +46,7 @@ class ServerConfig:
         max_jobs: How many jobs may run at once (machine-learning jobs: one at a time).
         job_timeout: Seconds a running job may go without reporting anything before
             it's stopped (``None``: no limit).
+        max_window: The longest audio window a client may ask for, in seconds.
     """
 
     root: Path
@@ -52,6 +54,13 @@ class ServerConfig:
     linkable: list[Path] = field(default_factory=list)
     max_jobs: int = 2
     job_timeout: float | None = None
+    max_window: float = 600.0
+
+    def __post_init__(self) -> None:
+        if not (math.isfinite(self.max_window) and self.max_window > 0):
+            raise InvalidInputError(
+                f"max_window must be a positive number of seconds, got {self.max_window}"
+            )
 
 
 def envelope(result: Any) -> dict[str, Any]:
@@ -155,6 +164,15 @@ def create_app(config: ServerConfig) -> FastAPI:
 
     @app.exception_handler(BioamlaError)
     async def _other(request: Request, exc: BioamlaError) -> JSONResponse:
+        # The server's problem (a decoder it lacks, say), so the operator's log gets it too.
+        logger.error(
+            "%s handling %s %s: %s",
+            type(exc).__name__,
+            request.method,
+            request.url.path,
+            exc,
+            exc_info=True,
+        )
         return _error(500, type(exc).__name__, str(exc))
 
     @app.exception_handler(StarletteHTTPException)

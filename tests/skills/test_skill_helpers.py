@@ -51,6 +51,13 @@ def test_paths_must_stay_in_the_workspace(monkeypatch, tmp_path):
             helpers.fetch(bad, "copy", tmp_path)
 
 
+def test_a_path_that_looks_like_an_option_is_refused(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    for bad in ("-o", "--help", "-x.wav"):
+        with pytest.raises(ValueError, match="not starting with -"):
+            helpers.fetch(bad, "into", tmp_path)
+
+
 def test_local_fetch_never_keeps_a_stale_copy(monkeypatch, tmp_path):
     helpers = load(monkeypatch)
     monkeypatch.delenv("BIOAMLA_REMOTE", raising=False)
@@ -87,3 +94,68 @@ def test_annotate_refuses_a_file_that_changed_meanwhile(monkeypatch, tmp_path):
     code = annotate.main(["runs/r", "--root", str(tmp_path)])
     assert code == 1
     assert "b.wav" in (tmp_path / "annotations.csv").read_text()  # their edit survives
+
+
+def test_a_hung_bioamla_command_is_an_error_not_a_wait(monkeypatch):
+    import subprocess
+
+    helpers = load(monkeypatch)
+    monkeypatch.setenv("BIOAMLA_TIMEOUT", "0.5")
+
+    def hang(argv, **kwargs):
+        assert kwargs["timeout"] == 0.5
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    monkeypatch.setattr(helpers.subprocess, "run", hang)
+    with pytest.raises(helpers.BioamlaCommandError, match="gave no answer in 0.5 s") as caught:
+        helpers.run("audio", "info", "x.wav")
+    assert caught.value.kind == "Timeout"
+
+
+def test_run_folders_are_created_without_a_check_then_create_race(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    first = helpers.run_dir("qa", tmp_path)
+    second = helpers.run_dir("qa", tmp_path)
+    assert first != second and first.is_dir() and second.is_dir()
+    assert second.name.startswith(first.name.split("-")[0])
+
+
+def test_json_is_written_whole_or_not_at_all(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    out = helpers.write_json(tmp_path / "a" / "b.json", {"x": 1})
+    assert out.read_text() == '{\n  "x": 1\n}\n'
+    assert not (tmp_path / "a" / "b.json.tmp").exists()
+
+
+def test_a_dot_path_is_refused_with_the_documented_error(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    for bad in (".", "./"):
+        with pytest.raises(ValueError, match="must be a path inside the workspace"):
+            helpers.fetch(bad, "into", tmp_path)
+
+
+def test_a_symlink_out_of_the_workspace_is_refused(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    root, outside = tmp_path / "ws", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (outside / "secret.csv").write_text("file,label\n")
+    (root / "ref.csv").symlink_to(outside / "secret.csv")
+    with pytest.raises(ValueError, match="points outside the workspace"):
+        helpers.fetch("ref.csv", "into", root)
+    (root / "fine.csv").write_text("file,label\n")
+    assert helpers.fetch("fine.csv", "into", root).read_text() == "file,label\n"
+
+
+def test_write_json_never_follows_a_planted_temporary(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    target = tmp_path / "elsewhere.txt"
+    target.write_text("keep me")
+    (tmp_path / "report.json.tmp").symlink_to(target)  # the old predictable name
+    helpers.write_json(tmp_path / "report.json", {"x": 1})
+    assert target.read_text() == "keep me"
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "elsewhere.txt",
+        "report.json",
+        "report.json.tmp",
+    ]

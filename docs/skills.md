@@ -38,7 +38,8 @@ order, and what to report.
 - **Print a JSON summary** on standard output (and `{"error": ...}` with a non-zero exit
   when a bioamla command fails), so the agent reads results, not prose.
 - **Standard library only.** A script needs Python and `bioamla` on the `PATH`
-  (`BIOAMLA_BIN` overrides the command, e.g. a virtual environment's `bin/bioamla`).
+  (`BIOAMLA_BIN` names another `bioamla` executable to run, e.g. a virtual environment's
+  `bin/bioamla`).
 
 ## Installing a skill
 
@@ -65,3 +66,4 @@ the integration tests (`pytest -m integration tests/skills`).
 |---|---|
 | `inventory` | Lists a folder's recordings and flags files that are too short or unreadable. A minimal example of the convention. |
 | `label` | A first pass of labeling: finds events with an energy detector, classifies them with an AST model, measures each (SNR, scores), cuts a clip and spectrogram, writes the ones that clear the thresholds as `labeled_by=agent` annotations without touching a person's rows, and queues the rest for review. Its eval runs all five steps on recordings with known events. |
+| `label-qa` | Checks an annotation set before anyone trusts it: well-formed rows inside their recordings and below Nyquist, labels in the vocabulary, no duplicates, no agent row overlapping another; then, on a held-out subset a person labeled, per-label precision, recall and F1, a confusion matrix, misses and false alarms; then a pass/fail gate from the person's thresholds (exit 2 on fail). Its eval plants each kind of problem and a known agreement. |

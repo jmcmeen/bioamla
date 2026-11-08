@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from bioamla.exceptions import InvalidInputError, NotFoundError, RemoteError
+
+if TYPE_CHECKING:
+    from bioamla.audio import AudioData
 
 #: Job states after which nothing changes.
 FINISHED = ("succeeded", "failed", "cancelled")
@@ -206,6 +210,70 @@ class Client:
         except requests.RequestException as e:
             raise RemoteError(f"Lost the connection to {self.url}: {e}") from e
         return target
+
+    def audio_window(
+        self,
+        ws: str,
+        path: str,
+        *,
+        start: float = 0.0,
+        duration: float,
+        sample_rate: int | None = None,
+    ) -> AudioData:
+        """A window of the recording ``path`` in the workspace, decoded on the server.
+
+        Only that part of the file is read and sent, so a few seconds of a long recording
+        cost a few seconds' worth of bytes. The window is cut short at the end of the
+        recording.
+
+        Returns:
+            An :class:`~bioamla.audio.AudioData`; ``metadata["start_time"]`` is the
+            window's start, and ``metadata["remote"]``, ``["workspace"]`` and ``["path"]``
+            say where it came from.
+
+        Raises:
+            InvalidInputError: If the window is outside the recording or longer than the
+                server allows, or the file isn't audio.
+            NotFoundError: If the recording isn't in the workspace.
+            RemoteError: If the server refuses, answers with something other than audio,
+                or the transfer breaks.
+        """
+        from bioamla.audio import audio_from_wav_bytes
+        from bioamla.exceptions import AudioLoadError
+
+        params: dict[str, Any] = {"start": start, "duration": duration}
+        if sample_rate is not None:
+            params["sample_rate"] = sample_rate
+        response = self._request(
+            "GET", f"/workspaces/{quote(ws)}/audio/{_quote_path(path)}", params=params
+        )
+        kind = response.headers.get("Content-Type", "")
+        if not kind.startswith("audio/"):
+            raise RemoteError(f"{self.url} answered with {kind or 'no content type'}, not audio")
+        start_time = start
+        header = response.headers.get("X-Bioamla-Start")
+        if header is not None:
+            try:
+                start_time = float(header)
+                if not math.isfinite(start_time):
+                    raise ValueError
+            except ValueError:
+                raise RemoteError(
+                    f"{self.url} sent an unreadable X-Bioamla-Start header: {header!r}"
+                ) from None
+        try:
+            return audio_from_wav_bytes(
+                response.content,
+                source_path=path,
+                metadata={
+                    "start_time": start_time,
+                    "remote": self.url,
+                    "workspace": ws,
+                    "path": path,
+                },
+            )
+        except AudioLoadError as e:
+            raise RemoteError(f"{self.url} did not return audio: {e}") from e
 
     # Operations and jobs ---------------------------------------------------------
 
