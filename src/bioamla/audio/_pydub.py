@@ -7,7 +7,8 @@ and dataclass return types; external callers should use the public
 ``bioamla.audio`` API rather than importing this directly.
 
 Design notes:
-- All audio loading returns mono float32 in [-1.0, 1.0]
+- Loading returns float32 in [-1.0, 1.0], mixed to mono unless the caller keeps the
+  channels (``load_audio_channels``, ``keep_channels=True``)
 - Uses soundfile for WAV/FLAC/OGG (fast native C); everything else, and native files
   soundfile can't read, decode through ffmpeg as float32, with a time limit
   (``BIOAMLA_DECODE_TIMEOUT`` seconds, default 600) so a stalled decoder can't hold
@@ -173,6 +174,14 @@ def _to_mono(audio: np.ndarray) -> np.ndarray:
     return audio.mean(axis=1) if audio.ndim > 1 else audio
 
 
+def _channels_or_mono(audio: np.ndarray, keep_channels: bool) -> np.ndarray:
+    """``audio`` (1-D, or ``(n_samples, n_channels)``) as a loader returns it: with
+    ``keep_channels`` 1-D for one channel and 2-D otherwise; else mixed to mono."""
+    if not keep_channels:
+        return _to_mono(audio).astype(np.float32, copy=False)
+    return audio[:, 0] if audio.ndim == 2 and audio.shape[1] == 1 else audio
+
+
 def load_audio_channels(filepath: str) -> tuple[np.ndarray, int]:
     """Load an audio file keeping its channels: 1-D for mono, ``(n_samples,
     n_channels)`` otherwise, float32 in [-1.0, 1.0]. soundfile (native C, ~10-30x
@@ -196,7 +205,7 @@ def load_audio_channels(filepath: str) -> tuple[np.ndarray, int]:
         except Exception as e:
             logger.debug(f"soundfile failed for {filepath}, using ffmpeg: {e}")
     audio, sample_rate = _ffmpeg_decode(path, 0.0, None)
-    return (audio[:, 0] if audio.shape[1] == 1 else audio), sample_rate
+    return _channels_or_mono(audio, keep_channels=True), sample_rate
 
 
 def load_audio(filepath: str) -> tuple[np.ndarray, int]:
@@ -212,7 +221,7 @@ def load_audio(filepath: str) -> tuple[np.ndarray, int]:
 
 
 def load_audio_window(
-    filepath: str, start: float = 0.0, duration: float | None = None
+    filepath: str, start: float = 0.0, duration: float | None = None, keep_channels: bool = False
 ) -> tuple[np.ndarray, int]:
     """Load part of an audio file without decoding the rest.
 
@@ -225,11 +234,13 @@ def load_audio_window(
         filepath: Path to audio file.
         start: Window start in seconds.
         duration: Window length in seconds; None reads to the end of the file.
+        keep_channels: Keep every channel (``(n_samples, n_channels)``; 1-D for a
+            mono file) instead of mixing down to mono.
 
     Returns:
-        Tuple of (audio_array, sample_rate), mono float32 [-1.0, 1.0]. The array
-        is shorter than ``duration`` when the window runs past the end, and
-        empty when ``start`` is beyond it.
+        Tuple of (audio_array, sample_rate), float32 [-1.0, 1.0], mono unless
+        ``keep_channels``. The array is shorter than ``duration`` when the window
+        runs past the end, and empty when ``start`` is beyond it.
 
     Raises:
         NotFoundError: If file doesn't exist.
@@ -249,22 +260,17 @@ def load_audio_window(
                 f.seek(min(round(start * sample_rate), f.frames))
                 frames = -1 if duration is None else round(duration * sample_rate)
                 audio = f.read(frames, dtype="float32", always_2d=False)
-            return _to_mono(audio), sample_rate
+            return _channels_or_mono(audio, keep_channels), sample_rate
         except Exception as e:
             logger.debug(f"soundfile window read failed for {filepath}, using ffmpeg: {e}")
 
-    return _ffmpeg_window(path, start, duration)
+    audio, sample_rate = _ffmpeg_decode(path, start, duration)
+    return _channels_or_mono(audio, keep_channels), sample_rate
 
 
 # Seconds decoded and discarded before an ffmpeg window, so lossy decoders have
 # settled by the window's first sample (MP3 needs ~2 frames, AAC a little more).
 _FFMPEG_PREROLL = 0.25
-
-
-def _ffmpeg_window(path: Path, start: float, duration: float | None) -> tuple[np.ndarray, int]:
-    """Decode ``[start, start + duration)`` of ``path`` with ffmpeg, mono float32."""
-    audio, sample_rate = _ffmpeg_decode(path, start, duration)
-    return _to_mono(audio).astype(np.float32, copy=False), sample_rate
 
 
 def _ffmpeg_decode(path: Path, start: float, duration: float | None) -> tuple[np.ndarray, int]:
@@ -336,7 +342,7 @@ def _ffmpeg_decode(path: Path, start: float, duration: float | None) -> tuple[np
 
 
 def iter_audio_blocks(
-    filepath: str, block_duration: float, overlap: float = 0.0
+    filepath: str, block_duration: float, overlap: float = 0.0, keep_channels: bool = False
 ) -> Iterator[tuple[np.ndarray, int, float]]:
     """Yield consecutive fixed-length blocks of an audio file.
 
@@ -349,11 +355,12 @@ def iter_audio_blocks(
         filepath: Path to audio file.
         block_duration: Block length in seconds.
         overlap: Seconds each block shares with the previous one.
+        keep_channels: Keep every channel instead of mixing down to mono.
 
     Yields:
-        Tuples of (audio_array, sample_rate, start_time) where audio is mono
-        float32 and ``start_time`` is the block's offset in seconds. The last
-        block may be shorter.
+        Tuples of (audio_array, sample_rate, start_time) where audio is float32,
+        mono unless ``keep_channels``, and ``start_time`` is the block's offset in
+        seconds. The last block may be shorter.
 
     Raises:
         NotFoundError: If file doesn't exist.
@@ -383,7 +390,11 @@ def iter_audio_blocks(
                 while position < f.frames:
                     f.seek(position)
                     audio = f.read(block, dtype="float32", always_2d=False)
-                    yield _to_mono(audio), sample_rate, position / sample_rate
+                    yield (
+                        _channels_or_mono(audio, keep_channels),
+                        sample_rate,
+                        position / sample_rate,
+                    )
                     if position + block >= f.frames:
                         return
                     position += step
@@ -393,7 +404,8 @@ def iter_audio_blocks(
     index = 0
     while True:
         start = index * step  # multiply, don't accumulate: no float drift
-        audio, sample_rate = _ffmpeg_window(path, start, block_duration)
+        audio, sample_rate = _ffmpeg_decode(path, start, block_duration)
+        audio = _channels_or_mono(audio, keep_channels)
         if index == 0:
             _check_block_samples(
                 round(block_duration * sample_rate), round(step * sample_rate), sample_rate

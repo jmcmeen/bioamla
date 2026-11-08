@@ -817,7 +817,7 @@
           "files"
         ],
         "summary": "Audio Window",
-        "description": "A window of a recording as a float32 WAV, decoded on the server: only that\npart of the file is read, so a few seconds of a long recording cost a few\nseconds' worth of bytes. The window is cut short at the end of the recording;\nthe ``X-Bioamla-Start``, ``X-Bioamla-Duration``, ``X-Bioamla-Sample-Rate`` and\n``X-Bioamla-Channels`` headers say what came back.",
+        "description": "A window of a recording as a float32 WAV, decoded on the server: only that\npart of the file is read, so a few seconds of a long recording cost a few\nseconds' worth of bytes. It is mixed to mono unless ``keep_channels``, and cut\nshort at the end of the recording; the ``X-Bioamla-Start``,\n``X-Bioamla-Duration``, ``X-Bioamla-Sample-Rate`` and ``X-Bioamla-Channels``\nheaders say what came back.",
         "operationId": "audio_window_v1_workspaces__ws__audio__path__get",
         "security": [
           {
@@ -887,6 +887,18 @@
               "title": "Sample Rate"
             },
             "description": "Resample to this rate"
+          },
+          {
+            "name": "keep_channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Keep the recording's channels instead of mixing to mono",
+              "default": false,
+              "title": "Keep Channels"
+            },
+            "description": "Keep the recording's channels instead of mixing to mono"
           }
         ],
         "responses": {

@@ -347,9 +347,33 @@ def test_atomic_file_writer_gives_files_the_usual_mode(tmp_path):
         os.umask(before)
 
 
+<<<<<<< HEAD
 def test_a_bad_decode_timeout_stops_the_server_at_start(tmp_path, monkeypatch):
     from bioamla.exceptions import ConfigError
 
     monkeypatch.setenv("BIOAMLA_DECODE_TIMEOUT", "soon")
     with pytest.raises(ConfigError, match="BIOAMLA_DECODE_TIMEOUT"):
         create_app(ServerConfig(root=tmp_path, token="t"))
+=======
+def test_audio_window_can_keep_a_recordings_channels(server):
+    import io
+
+    import numpy as np
+    import soundfile as sf
+
+    client, root, _, _ = server
+    ramp = np.linspace(0, 0.5, 32000, dtype="float32")
+    sf.write(root / "ws" / "st.wav", np.stack([ramp, -ramp], axis=1), 16000, subtype="FLOAT")
+    url = "/v1/workspaces/ws/audio/st.wav?start=1&duration=0.5"
+
+    kept = client.get(f"{url}&keep_channels=true", headers=AUTH)
+    assert kept.status_code == 200 and kept.headers["x-bioamla-channels"] == "2"
+    samples, _ = sf.read(io.BytesIO(kept.content), dtype="float32", always_2d=True)
+    assert samples.shape == (8000, 2)
+    assert np.array_equal(samples[:, 0], ramp[16000:24000])
+    assert np.array_equal(samples[:, 1], -ramp[16000:24000])
+
+    mixed = client.get(url, headers=AUTH)  # mono unless asked
+    assert mixed.headers["x-bioamla-channels"] == "1"
+    assert np.allclose(_decode(mixed)[0], 0.0, atol=1e-6)  # the ramps cancel
+>>>>>>> 0474a89 (Let windowed reads keep a recording's channels)

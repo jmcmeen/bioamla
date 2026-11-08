@@ -243,6 +243,8 @@ def remote_download(
               metavar="SECONDS", help="Window length")  # fmt: skip
 @click.option("--sample-rate", type=click.IntRange(min=1), default=None,
               help="Resample to this rate (Hz)")  # fmt: skip
+@click.option("--keep-channels", is_flag=True,
+              help="Keep the recording's channels instead of mixing to mono")  # fmt: skip
 @click.option("-o", "--output", type=click.Path(dir_okay=False), default=None,
               help="WAV file to write (default: <recording>_<start>s.wav here)")  # fmt: skip
 @click.option("--overwrite", is_flag=True, help="Replace the file if it exists")
@@ -253,6 +255,7 @@ def remote_audio(
     start: float,
     duration: float,
     sample_rate: int | None,
+    keep_channels: bool,
     output: str | None,
     overwrite: bool,
 ) -> None:
@@ -270,7 +273,8 @@ def remote_audio(
 
     target = Path(output) if output else Path(f"{PurePosixPath(path).stem}_{start:g}s.wav")
     audio = _call(_client(name).audio_window, workspace, path, start=start,
-                  duration=duration, sample_rate=sample_rate)  # fmt: skip
+                  duration=duration, sample_rate=sample_rate,
+                  keep_channels=keep_channels)  # fmt: skip
     try:
         save_audio_window(audio, target, overwrite=overwrite)  # float32, as the server sent it
     except AudioSaveError as e:

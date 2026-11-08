@@ -204,6 +204,65 @@ def test_a_bad_decode_timeout_is_a_config_error(noise_mp3, monkeypatch):
     assert load_audio_data(noise_mp3).sample_rate == SR
 
 
+@pytest.fixture
+def three_channels(tmp_path) -> tuple[str, np.ndarray]:
+    """3 s with a different ramp on each of three channels, so a sample's value says
+    which channel and position it came from."""
+    ramp = np.linspace(0.0, 0.3, 3 * SR, dtype=np.float32)
+    samples = np.stack([ramp, -ramp, ramp + 0.5], axis=1)
+    path = tmp_path / "three.wav"
+    sf.write(path, samples, SR, subtype="FLOAT")
+    return str(path), samples
+
+
+class TestKeepChannels:
+    def test_window_keeps_every_channel(self, three_channels) -> None:
+        path, samples = three_channels
+        window = load_audio_data(path, start=1.0, duration=0.5, keep_channels=True)
+        assert window.channels == 3 and window.samples.shape == (SR // 2, 3)
+        np.testing.assert_array_equal(window.samples, samples[SR : SR + SR // 2])
+        mixed = load_audio_data(path, start=1.0, duration=0.5)  # the default stays mono
+        assert mixed.channels == 1 and mixed.samples.ndim == 1
+        np.testing.assert_allclose(mixed.samples, samples[SR : SR + SR // 2].mean(axis=1))
+
+    def test_whole_file_and_resampled_windows_keep_channels(self, three_channels) -> None:
+        path, samples = three_channels
+        whole = load_audio_data(path, keep_channels=True)
+        assert whole.channels == 3 and whole.samples.shape == samples.shape
+        halved = load_audio_data(path, duration=1.0, sample_rate=8000, keep_channels=True)
+        assert halved.channels == 3 and halved.samples.shape == (8000, 3)
+        assert halved.samples[:, 1].max() <= 1e-3 < halved.samples[:, 2].min()  # not mixed
+
+    def test_blocks_keep_channels(self, three_channels) -> None:
+        path, samples = three_channels
+        blocks = list(stream_audio_data(path, block_duration=1.0, keep_channels=True))
+        assert [b.samples.shape for b in blocks] == [(SR, 3)] * 3
+        np.testing.assert_array_equal(np.concatenate([b.samples for b in blocks]), samples)
+
+    def test_a_mono_file_stays_one_dimensional(self, ramp_wav) -> None:
+        window = load_audio_data(ramp_wav, start=0.5, duration=0.5, keep_channels=True)
+        assert window.channels == 1 and window.samples.shape == (SR // 2,)
+
+    @pytest.mark.usefixtures("requires_ffmpeg_cli")
+    def test_an_ffmpeg_decoded_window_keeps_its_channels(self, tmp_path) -> None:
+        """MP3 goes through ffmpeg rather than soundfile; its window keeps both channels
+        and lines up with the whole decode."""
+        import subprocess
+
+        t = np.arange(3 * SR) / SR
+        wav = tmp_path / "st.wav"
+        sf.write(wav, np.stack([0.4 * np.sin(2 * np.pi * 440 * t), np.zeros_like(t)], 1), SR)
+        mp3 = tmp_path / "st.mp3"
+        subprocess.run(["ffmpeg", "-v", "error", "-i", str(wav), str(mp3)], check=True)
+        whole = load_audio_data(mp3, keep_channels=True).samples
+        window = load_audio_data(mp3, start=1.0, duration=0.5, keep_channels=True)
+        assert window.channels == 2 and window.samples.shape == (SR // 2, 2)
+        np.testing.assert_allclose(window.samples, whole[SR : SR + SR // 2], atol=1e-4)
+        assert np.abs(window.samples[:, 0]).max() > 0.1 > np.abs(window.samples[:, 1]).max()
+        blocks = list(stream_audio_data(mp3, block_duration=1.0, keep_channels=True))
+        assert all(b.samples.ndim == 2 and b.samples.shape[1] == 2 for b in blocks)
+
+
 @pytest.mark.usefixtures("requires_ffmpeg_cli")
 def test_ffmpeg_decodes_are_writable_arrays(noise_mp3):
     """Like every other loader's, an ffmpeg-decoded array belongs to the caller."""

@@ -168,8 +168,9 @@ refuses others.
 
 A viewer needs a few seconds of a recording, not the file. `GET
 /v1/workspaces/{ws}/audio/{path}?start=S&duration=D` returns that window as a float32 WAV,
-decoded on the server from just that part of the file; `sample_rate=R` resamples it, and
-`--max-window` caps `D`. The `X-Bioamla-Start`, `X-Bioamla-Duration`, `X-Bioamla-Sample-Rate`
+decoded on the server from just that part of the file; `sample_rate=R` resamples it,
+`keep_channels=true` keeps a multichannel recording's channels instead of mixing them to
+mono, and `--max-window` caps `D`. The `X-Bioamla-Start`, `X-Bioamla-Duration`, `X-Bioamla-Sample-Rate`
 and `X-Bioamla-Channels` headers say what came back (a window is cut short at the end of
 the recording). The server holds a window in memory while it encodes it, 4 bytes per sample
 per channel: 600 s at 48 kHz is 115 MB, at 384 kHz 0.9 GB, so lower `--max-window` on a

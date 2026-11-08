@@ -200,13 +200,17 @@ def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
         sample_rate: int | None = Query(
             None, gt=0, le=MAX_SAMPLE_RATE, description="Resample to this rate"
         ),
+        keep_channels: bool = Query(
+            False, description="Keep the recording's channels instead of mixing to mono"
+        ),
         who: Any = Depends(identity),
     ) -> Response:
         """A window of a recording as a float32 WAV, decoded on the server: only that
         part of the file is read, so a few seconds of a long recording cost a few
-        seconds' worth of bytes. The window is cut short at the end of the recording;
-        the ``X-Bioamla-Start``, ``X-Bioamla-Duration``, ``X-Bioamla-Sample-Rate`` and
-        ``X-Bioamla-Channels`` headers say what came back."""
+        seconds' worth of bytes. It is mixed to mono unless ``keep_channels``, and cut
+        short at the end of the recording; the ``X-Bioamla-Start``,
+        ``X-Bioamla-Duration``, ``X-Bioamla-Sample-Rate`` and ``X-Bioamla-Channels``
+        headers say what came back."""
         if not (math.isfinite(start) and math.isfinite(duration)):
             raise InvalidInputError("start and duration must be finite")
         if duration > config.max_window:
@@ -214,7 +218,7 @@ def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
                 f"duration {duration:g} s is above this server's limit of {config.max_window:g} s"
             )
         body, headers = await run_in_threadpool(
-            _window_wav, in_workspace, who, ws, path, start, duration, sample_rate
+            _window_wav, in_workspace, who, ws, path, start, duration, sample_rate, keep_channels
         )
         return Response(body, media_type="audio/wav", headers=headers)
 
@@ -225,7 +229,7 @@ MAX_SAMPLE_RATE = 384_000
 
 def _window_wav(
     in_workspace: Any, who: Any, ws: str, path: str, start: float, duration: float,
-    sample_rate: int | None,
+    sample_rate: int | None, keep_channels: bool = False,
 ) -> tuple[bytes, dict[str, str]]:  # fmt: skip
     """The window as WAV bytes (float32), with the headers describing it. All the file
     work, for the threadpool."""
@@ -241,7 +245,8 @@ def _window_wav(
             raise InvalidInputError(
                 f"start {start:g} s is past the end of {path} ({length:g} s long)"
             )
-        audio = load_audio_data(target, start=start, duration=duration, sample_rate=sample_rate)
+        audio = load_audio_data(target, start=start, duration=duration,
+                                sample_rate=sample_rate, keep_channels=keep_channels)  # fmt: skip
     except AudioLoadError as e:
         # The client's problem, not the server's; the library's message names the
         # server's absolute path, so it stays out of the response.
