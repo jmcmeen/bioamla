@@ -395,3 +395,11 @@ def test_the_window_cap_counts_kept_channels(tmp_path):
         "ask for at most 0.5 s, or mix to mono"
     )
     assert client.get(f"{url}1", headers=AUTH).status_code == 200  # mono: 1 s fits
+
+
+def test_a_bad_encode_timeout_stops_the_server_at_start(tmp_path, monkeypatch):
+    from bioamla.exceptions import ConfigError
+
+    monkeypatch.setenv("BIOAMLA_ENCODE_TIMEOUT", "0")
+    with pytest.raises(ConfigError, match="BIOAMLA_ENCODE_TIMEOUT"):
+        create_app(ServerConfig(root=tmp_path, token="t"))

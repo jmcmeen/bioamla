@@ -56,4 +56,5 @@ A few variables aren't options and apply to the library as well as the CLI:
 | Variable | Default | What it does |
 |---|---|---|
 | `BIOAMLA_DECODE_TIMEOUT` | `600` | Seconds FFmpeg may take to decode a file (an MP3, a window of one, a block of a stream) before it's stopped with an error, so a stalled decoder can't hold a command, a server request or a job for ever |
+| `BIOAMLA_ENCODE_TIMEOUT` | `600` | Seconds FFmpeg may take to write a file WAV and FLAC can't hold (MP3, M4A, OGG) before it's stopped with an error; nothing half-written is left behind |
 | `BIOAMLA_PROGRESS` | | `jsonl` writes progress as JSON lines on stderr (see the CLI page) |
