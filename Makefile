@@ -4,6 +4,8 @@
 .DEFAULT_GOAL := help
 
 UV ?= uv
+# Each target installs the dev tooling it uses (pytest-xdist, ruff, mkdocs, ...)
+RUN := $(UV) run --extra dev
 PKG := bioamla
 SRC := src
 TESTS := tests
@@ -37,48 +39,48 @@ upgrade: ## Upgrade locked dependencies to latest allowed versions
 	$(UV) lock --upgrade
 
 shell: ## Spawn a subshell with the project venv activated
-	$(UV) run $${SHELL:-bash}
+	$(RUN) $${SHELL:-bash}
 
 ## --- Testing ---
 
 test: ## Run the full test suite, one worker per core
-	$(UV) run pytest -n auto
+	$(RUN) pytest -n auto
 
 test-fast: ## Run tests, skipping slow/integration markers
-	$(UV) run pytest -n auto -m "not slow and not integration"
+	$(RUN) pytest -n auto -m "not slow and not integration"
 
 cov: ## Run tests with coverage report
 	# Use coverage's sys.monitoring core (COVERAGE_CORE=sysmon) instead of the C
 	# tracer: under Python 3.13 the C tracer crashes on numpy's C extensions
 	# ("cannot load module more than once per process"). Run via `coverage run`
 	# with the pytest-cov plugin disabled (-p no:cov) to avoid the same path.
-	COVERAGE_CORE=sysmon $(UV) run coverage run -m pytest -p no:cov
-	$(UV) run coverage report -m
+	COVERAGE_CORE=sysmon $(RUN) coverage run -m pytest -p no:cov
+	$(RUN) coverage report -m
 
 catalog-smoke: ## Smoke-test the catalog integrations against the live APIs (keys optional)
-	$(UV) run scripts/catalog-smoke.sh
+	$(RUN) scripts/catalog-smoke.sh
 
 ## --- Linting & formatting (ruff) ---
 
 lint: ## Lint with ruff
-	$(UV) run ruff check $(SRC) $(TESTS) $(SKILLS)
+	$(RUN) ruff check $(SRC) $(TESTS) $(SKILLS)
 
 fmt: ## Auto-format and apply lint fixes
-	$(UV) run ruff format $(SRC) $(TESTS) $(SKILLS)
-	$(UV) run ruff check --fix $(SRC) $(TESTS) $(SKILLS)
+	$(RUN) ruff format $(SRC) $(TESTS) $(SKILLS)
+	$(RUN) ruff check --fix $(SRC) $(TESTS) $(SKILLS)
 
 fmt-check: ## Check formatting without modifying files
-	$(UV) run ruff format --check $(SRC) $(TESTS) $(SKILLS)
+	$(RUN) ruff format --check $(SRC) $(TESTS) $(SKILLS)
 
 check: lint fmt-check test ## Run lint, format check, and tests
 
 ## --- Documentation (mkdocs) ---
 
 docs: ## Build the documentation site into ./site
-	$(UV) run --extra dev mkdocs build --strict
+	$(RUN) mkdocs build --strict
 
 docs-serve: ## Serve docs locally with live reload at http://127.0.0.1:8000
-	$(UV) run --extra dev mkdocs serve
+	$(RUN) mkdocs serve
 
 ## --- Housekeeping ---
 
