@@ -284,7 +284,10 @@ class TestLoadDirectoryDataset:
         # Class names come from the folders, paths stay plain (decoded by bioamla).
         assert ds["label"] == ["frog", "frog", "toad"]
         assert [Path(p).name for p in ds["audio"]] == ["a.wav", "b.flac", "c.wav"]
-        assert ds.features["audio"].dtype == "string"
+        assert ds.features["audio"].dtype in (
+            "string",
+            "large_string",
+        )  # pandas 3 gives large_string
 
     def test_class_folders_with_only_nested_audio(self, tmp_path) -> None:
         from bioamla.ml.training import _load_directory_dataset
