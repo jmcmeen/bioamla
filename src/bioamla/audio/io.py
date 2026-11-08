@@ -25,7 +25,7 @@ import numpy as np
 
 from bioamla.audio.data import AudioData
 from bioamla.common.files import prepare_output_path, require_exists
-from bioamla.exceptions import AudioLoadError, AudioSaveError, DependencyError
+from bioamla.exceptions import AudioLoadError, AudioSaveError, ConfigError, DependencyError
 from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,10 @@ def load_audio_data(
     Raises:
         NotFoundError: If the file does not exist.
         InvalidInputError: If ``start`` is negative or ``duration`` not positive.
-        AudioLoadError: If decoding fails.
+        DependencyError: If the format needs ffmpeg and it isn't installed.
+        ConfigError: If ``BIOAMLA_DECODE_TIMEOUT`` isn't a positive number.
+        AudioLoadError: If decoding fails, or ffmpeg runs past
+            ``BIOAMLA_DECODE_TIMEOUT`` seconds (default 600).
     """
     from bioamla.audio._pydub import load_audio, load_audio_window
 
@@ -73,7 +76,7 @@ def load_audio_data(
             audio, sr = load_audio_window(str(path), start or 0.0, duration)
         else:
             audio, sr = load_audio(str(path))
-    except DependencyError:
+    except (DependencyError, ConfigError):
         raise
     except Exception as e:
         raise AudioLoadError(f"Failed to open audio file: {e}") from e
@@ -462,8 +465,8 @@ def load_audio_channels(filepath: str | Path) -> tuple[np.ndarray, int]:
 def _loaded(load: Callable[[str], tuple[np.ndarray, int]], filepath: str | Path):
     try:
         audio, sr = load(str(filepath))
-    except AudioLoadError:
-        raise  # already says what failed
+    except (AudioLoadError, ConfigError, DependencyError):
+        raise  # already says what failed, or what to fix that isn't the file
     except Exception as e:  # a missing file too: reported as a load failure
         raise AudioLoadError(f"Failed to load audio file: {e}") from e
     return audio.astype(np.float32, copy=False), sr

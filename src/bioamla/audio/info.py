@@ -23,7 +23,7 @@ from bioamla.audio.analysis import (
     get_amplitude_stats,
     get_frequency_stats,
 )
-from bioamla.exceptions import AudioLoadError, NotFoundError
+from bioamla.exceptions import AudioLoadError, DependencyError, NotFoundError
 from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
@@ -116,6 +116,7 @@ def read_audio_info_dict(filepath: str) -> dict[str, Any]:
 
     Raises:
         NotFoundError: If the file does not exist.
+        DependencyError: If the format needs ffprobe and it isn't installed.
         AudioLoadError: If metadata cannot be extracted.
     """
     from bioamla.audio._pydub import get_audio_info as _pydub_get_audio_info
@@ -133,6 +134,8 @@ def read_audio_info_dict(filepath: str) -> dict[str, Any]:
 
     try:
         return _pydub_get_audio_info(str(path))
+    except DependencyError:
+        raise  # the fix is to install ffmpeg, not anything about the file
     except Exception as e:
         raise AudioLoadError(f"Failed to read audio info: {e}") from e
 
