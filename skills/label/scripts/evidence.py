@@ -52,8 +52,9 @@ def measure(run_folder: str, root: str = ".") -> dict:
     evidence = []
     for path, found in by_file.items():
         frames = run(
-            "audio", "features", path, "--no-denoise",
+            "audio", "features", "--no-denoise",
             "--f-min", band["low_freq"], "--f-max", band["high_freq"],
+            "--", path,
             cwd=root,
         )["frames"]  # fmt: skip
         spans = [(c["start_time"], c["end_time"]) for c in found]

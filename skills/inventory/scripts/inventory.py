@@ -24,11 +24,11 @@ from _bioamla import BioamlaCommandError, run, run_dir, write_json  # noqa: E402
 
 def inventory(folder: str, min_duration: float, root: str = ".") -> dict:
     """List ``folder`` (workspace-relative) and check each file; returns the summary."""
-    listing = run("audio", "list", folder, cwd=root)
+    listing = run("audio", "list", "--", folder, cwd=root)
     files, review = [], []
     for path in listing["files"]:
         try:
-            info = run("audio", "info", path, cwd=root)["info"]
+            info = run("audio", "info", "--", path, cwd=root)["info"]
         except BioamlaCommandError as e:
             review.append({"path": path, "reason": f"unreadable: {e}"})
             continue

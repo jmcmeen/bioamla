@@ -44,19 +44,42 @@ def command() -> list[str]:
     return shlex.split(os.environ.get("BIOAMLA_BIN", "bioamla"))
 
 
+def timeout() -> float:
+    """Seconds a bioamla command may take: ``BIOAMLA_TIMEOUT`` (default 900)."""
+    try:
+        return float(os.environ.get("BIOAMLA_TIMEOUT", "900"))
+    except ValueError:
+        return 900.0
+
+
 def run(*args: str, cwd: str | Path | None = None) -> Any:
     """Run ``bioamla --json ARGS`` and return its result.
 
     Raises:
         BioamlaCommandError: If the command fails (with bioamla's own message).
     """
-    proc = subprocess.run(
-        [*command(), "--json", *map(str, args)],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    argv = [*command(), "--json", *map(str, args)]
+    try:
+        # An argument list, no shell: the executable is the operator's own BIOAMLA_BIN,
+        # and the arguments are the skill's. Driving the CLI is this helper's purpose.
+        # Callers put any path that came from data or a listing after "--", so a value
+        # starting with "-" can't be read as an option.
+        proc = (
+            subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+                argv,
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout(),
+            )
+        )
+    except subprocess.TimeoutExpired as e:
+        raise BioamlaCommandError(
+            f"bioamla {' '.join(map(str, args))} gave no answer in {e.timeout:g} s "
+            "(BIOAMLA_TIMEOUT sets the limit)",
+            "Timeout",
+        ) from None
     try:
         envelope = json.loads(proc.stdout)
     except ValueError:
@@ -75,20 +98,26 @@ def run_dir(skill: str, root: str | Path = ".") -> Path:
     """A new ``runs/<skill>/<UTC timestamp>/`` folder under ``root`` (the workspace)."""
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     base = Path(root) / "runs" / skill
-    path = base / stamp
-    n = 1
-    while path.exists():
-        n += 1
-        path = base / f"{stamp}-{n}"
-    path.mkdir(parents=True)
-    return path
+    base.mkdir(parents=True, exist_ok=True)
+    path, n = base / stamp, 1
+    while True:  # creating is the check: two runs in the same second get different folders
+        try:
+            path.mkdir()
+        except FileExistsError:
+            n += 1
+            path = base / f"{stamp}-{n}"
+        else:
+            return path
 
 
 def write_json(path: str | Path, data: Any) -> Path:
-    """Write ``data`` as indented JSON."""
+    """Write ``data`` as indented JSON, whole or not at all (a reader never sees a
+    half-written file)."""
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    tmp = out.with_name(out.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, out)
     return out
 
 
@@ -179,8 +208,16 @@ def remote(root: str | Path = ".") -> dict | None:
 def _workspace_path(path: str) -> str:
     """``path`` if it's a plain path inside the workspace (relative, no ``..``)."""
     parts = Path(path).parts
-    if not path or Path(path).is_absolute() or ".." in parts or ":" in parts[0]:
-        raise ValueError(f"{path!r} must be a path inside the workspace (relative, no ..)")
+    if (
+        not path
+        or Path(path).is_absolute()
+        or ".." in parts
+        or ":" in parts[0]
+        or path.startswith("-")
+    ):
+        raise ValueError(
+            f"{path!r} must be a path inside the workspace (relative, no .., not starting with -)"
+        )
     return Path(path).as_posix()
 
 
@@ -205,8 +242,8 @@ def fetch(path: str, into: str | Path, root: str | Path = ".") -> Path:
             local.write_bytes(source.read_bytes())
         return local
     try:
-        run("remote", "download", target["remote"], target["workspace"], path,
-            "-o", str(local.parent), "--overwrite", cwd=root)  # fmt: skip
+        run("remote", "download", "-o", str(local.parent), "--overwrite", "--",
+            target["remote"], target["workspace"], path, cwd=root)  # fmt: skip
     except BioamlaCommandError as e:
         if e.kind not in ("NotFoundError", "RemoteNotFound"):
             raise
@@ -237,8 +274,8 @@ def publish(local: str | Path, path: str, root: str | Path = ".") -> None:
         raise ValueError(f"{source.name} can't be uploaded as {path} (names must match)")
     folder = Path(path).parent.as_posix()
     args = ["--to", folder] if folder not in ("", ".") else []
-    run("remote", "upload", target["remote"], target["workspace"], str(source), *args,
-        "--overwrite", cwd=root)  # fmt: skip
+    run("remote", "upload", *args, "--overwrite", "--",
+        target["remote"], target["workspace"], str(source), cwd=root)  # fmt: skip
 
 
 def save_json(path: str, data: Any, root: str | Path = ".") -> Path:

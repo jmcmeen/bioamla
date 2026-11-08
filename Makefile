@@ -56,7 +56,7 @@ cov: ## Run tests with coverage report
 	$(UV) run coverage report -m
 
 catalog-smoke: ## Smoke-test the catalog integrations against the live APIs (keys optional)
-	PATH="$(CURDIR)/.venv/bin:$$PATH" scripts/catalog-smoke.sh
+	$(UV) run scripts/catalog-smoke.sh
 
 ## --- Linting & formatting (ruff) ---
 

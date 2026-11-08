@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -37,6 +38,28 @@ from _bioamla import (
 )  # noqa: E402
 
 PASS, FAIL, ERROR = 0, 2, 1
+
+
+def unit_interval(value: str) -> float:
+    """An argparse type: a finite number from 0 to 1."""
+    try:
+        number = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a number") from None
+    if not (math.isfinite(number) and 0 <= number <= 1):
+        raise argparse.ArgumentTypeError(f"{value!r} is not between 0 and 1")
+    return number
+
+
+def count(value: str) -> int:
+    """An argparse type: a whole number, zero or more."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a whole number") from None
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"{value!r} is negative")
+    return number
 
 
 def gate(args: argparse.Namespace) -> dict:
@@ -100,11 +123,13 @@ def gate(args: argparse.Namespace) -> dict:
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("run_dir", help="The run folder (after check.py, and agreement.py if used)")
-    p.add_argument("--max-findings", type=int, default=0, help="Most check findings allowed")
-    p.add_argument("--min-f1", type=float, default=0.8,
-                   help="Lowest micro-averaged F1 against the reference")  # fmt: skip
-    p.add_argument("--min-precision", type=float, default=None, help="Lowest precision, if set")
-    p.add_argument("--min-recall", type=float, default=None, help="Lowest recall, if set")
+    p.add_argument("--max-findings", type=count, default=0, help="Most check findings allowed")
+    p.add_argument("--min-f1", type=unit_interval, default=0.8,
+                   help="Lowest micro-averaged F1 against the reference (0 to 1)")  # fmt: skip
+    p.add_argument("--min-precision", type=unit_interval, default=None,
+                   help="Lowest precision (0 to 1), if set")  # fmt: skip
+    p.add_argument("--min-recall", type=unit_interval, default=None,
+                   help="Lowest recall (0 to 1), if set")  # fmt: skip
     p.add_argument("--require-agreement", action="store_true",
                    help="Fail when the agreement step didn't run")  # fmt: skip
     p.add_argument("--root", default=".", help="Workspace root (default: here)")

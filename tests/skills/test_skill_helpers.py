@@ -51,6 +51,13 @@ def test_paths_must_stay_in_the_workspace(monkeypatch, tmp_path):
             helpers.fetch(bad, "copy", tmp_path)
 
 
+def test_a_path_that_looks_like_an_option_is_refused(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    for bad in ("-o", "--help", "-x.wav"):
+        with pytest.raises(ValueError, match="not starting with -"):
+            helpers.fetch(bad, "into", tmp_path)
+
+
 def test_local_fetch_never_keeps_a_stale_copy(monkeypatch, tmp_path):
     helpers = load(monkeypatch)
     monkeypatch.delenv("BIOAMLA_REMOTE", raising=False)
@@ -87,3 +94,34 @@ def test_annotate_refuses_a_file_that_changed_meanwhile(monkeypatch, tmp_path):
     code = annotate.main(["runs/r", "--root", str(tmp_path)])
     assert code == 1
     assert "b.wav" in (tmp_path / "annotations.csv").read_text()  # their edit survives
+
+
+def test_a_hung_bioamla_command_is_an_error_not_a_wait(monkeypatch):
+    import subprocess
+
+    helpers = load(monkeypatch)
+    monkeypatch.setenv("BIOAMLA_TIMEOUT", "0.5")
+
+    def hang(argv, **kwargs):
+        assert kwargs["timeout"] == 0.5
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    monkeypatch.setattr(helpers.subprocess, "run", hang)
+    with pytest.raises(helpers.BioamlaCommandError, match="gave no answer in 0.5 s") as caught:
+        helpers.run("audio", "info", "x.wav")
+    assert caught.value.kind == "Timeout"
+
+
+def test_run_folders_are_created_without_a_check_then_create_race(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    first = helpers.run_dir("qa", tmp_path)
+    second = helpers.run_dir("qa", tmp_path)
+    assert first != second and first.is_dir() and second.is_dir()
+    assert second.name.startswith(first.name.split("-")[0])
+
+
+def test_json_is_written_whole_or_not_at_all(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    out = helpers.write_json(tmp_path / "a" / "b.json", {"x": 1})
+    assert out.read_text() == '{\n  "x": 1\n}\n'
+    assert not (tmp_path / "a" / "b.json.tmp").exists()
