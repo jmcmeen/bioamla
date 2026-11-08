@@ -67,8 +67,18 @@ jobs:
       - name: Install (full stack + dev tooling)
         run: uv sync --extra dev
 
+      # One worker per vCPU: -n auto would count physical cores, 2 on these 4-vCPU
+      # runners. worksteal rebalances the few long skill tests at the end. Each worker
+      # gets one math-library thread (torch, BLAS, numba): pools sized to the whole
+      # runner, one per worker, would oversubscribe it. --durations shows where the
+      # time goes.
       - name: Test
-        run: uv run pytest
+        env:
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          NUMBA_NUM_THREADS: "1"
+        run: uv run pytest -n logical --dist worksteal --durations=15
 
   lazy-imports:
     name: lazy-import guard

@@ -41,11 +41,11 @@ shell: ## Spawn a subshell with the project venv activated
 
 ## --- Testing ---
 
-test: ## Run the full test suite
-	$(UV) run pytest
+test: ## Run the full test suite, one worker per core
+	$(UV) run pytest -n auto
 
 test-fast: ## Run tests, skipping slow/integration markers
-	$(UV) run pytest -m "not slow and not integration"
+	$(UV) run pytest -n auto -m "not slow and not integration"
 
 cov: ## Run tests with coverage report
 	# Use coverage's sys.monitoring core (COVERAGE_CORE=sysmon) instead of the C

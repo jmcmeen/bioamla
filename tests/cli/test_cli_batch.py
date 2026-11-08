@@ -128,8 +128,10 @@ def _audio_info_obj():
 
 
 def test_audio_info_dir(runner, test_audio_dir, tmp_path, mocker):
+    # Patch where the batch runner looks it up: patching bioamla.audio.discovery
+    # would hand the fake to any module first imported during this test, for good.
     mocker.patch(
-        "bioamla.audio.discovery.list_audio_files",
+        "bioamla.audio.batch.list_audio_files",
         return_value=[Path(test_audio_dir) / "audio_0.wav"],
     )
     mocker.patch("bioamla.audio.info.get_audio_info", return_value=_audio_info_obj())
@@ -507,8 +509,10 @@ def test_audio_denoise_dir(runner, test_audio_dir, tmp_path, mocker):
 
 
 def test_audio_segment_dir(runner, test_audio_dir, tmp_path, mocker):
+    # Patch where the batch runner looks it up: patching bioamla.audio.discovery
+    # would hand the fake to any module first imported during this test, for good.
     mocker.patch(
-        "bioamla.audio.discovery.list_audio_files",
+        "bioamla.audio.batch.list_audio_files",
         return_value=[Path(test_audio_dir) / "audio_0.wav"],
     )
     seg = mocker.patch("bioamla.audio.batch.segment_audio_file", return_value=[])

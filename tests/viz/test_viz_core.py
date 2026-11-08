@@ -6,6 +6,7 @@ matplotlib.use("Agg")
 
 from unittest.mock import patch  # noqa: E402
 
+import matplotlib.pyplot  # noqa: E402, F401  (before tests patch Figure.savefig; see below)
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
@@ -179,6 +180,8 @@ class TestSpectrogramToImage:
         assert out.exists()
 
     def test_save_failure_raises(self, tmp_path) -> None:
+        # matplotlib.pyplot is imported at the top of this file: its first import reads
+        # Figure.savefig's metadata, which the mock here doesn't have.
         spec = np.random.rand(8, 8)
         with patch("matplotlib.figure.Figure.savefig", side_effect=RuntimeError("boom")):
             with pytest.raises(ProcessingError):
