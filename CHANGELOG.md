@@ -28,7 +28,8 @@ All notable changes to this project are documented here. The format is based on
 ### Changed
 
 - The test suite runs on every core with pytest-xdist, in CI (`-n logical`) and in
-  `make test` and `make test-fast` (`-n auto`); `pytest-xdist` joins the `dev` extra (#340)
+  `make test` and `make test-fast` (`-n auto`); `pytest-xdist` joins the `dev` extra. CI gives
+  each worker one math-library thread so four workers don't oversubscribe four vCPUs (#340)
 
 - The server logs every error it answers with a 500 (a decoder it lacks, say), so the reason
   reaches the operator's log and not only the client (#332)
