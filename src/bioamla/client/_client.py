@@ -250,15 +250,17 @@ class Client:
         kind = response.headers.get("Content-Type", "")
         if not kind.startswith("audio/"):
             raise RemoteError(f"{self.url} answered with {kind or 'no content type'}, not audio")
+        start_time = start
         header = response.headers.get("X-Bioamla-Start")
-        try:
-            start_time = start if header is None else float(header)
-            if not math.isfinite(start_time):
-                raise ValueError
-        except ValueError:
-            raise RemoteError(
-                f"{self.url} sent an unreadable X-Bioamla-Start header: {header!r}"
-            ) from None
+        if header is not None:
+            try:
+                start_time = float(header)
+                if not math.isfinite(start_time):
+                    raise ValueError
+            except ValueError:
+                raise RemoteError(
+                    f"{self.url} sent an unreadable X-Bioamla-Start header: {header!r}"
+                ) from None
         try:
             return audio_from_wav_bytes(
                 response.content,

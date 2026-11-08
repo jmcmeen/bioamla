@@ -166,7 +166,12 @@ def create_app(config: ServerConfig) -> FastAPI:
     async def _other(request: Request, exc: BioamlaError) -> JSONResponse:
         # The server's problem (a decoder it lacks, say), so the operator's log gets it too.
         logger.error(
-            "%s handling %s %s: %s", type(exc).__name__, request.method, request.url.path, exc
+            "%s handling %s %s: %s",
+            type(exc).__name__,
+            request.method,
+            request.url.path,
+            exc,
+            exc_info=True,
         )
         return _error(500, type(exc).__name__, str(exc))
 

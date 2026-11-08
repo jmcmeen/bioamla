@@ -78,6 +78,11 @@ def run(*args: str, cwd: str | Path | None = None) -> Any:
             "(BIOAMLA_TIMEOUT sets the limit)",
             "Timeout",
         ) from None
+    except OSError as e:
+        raise BioamlaCommandError(
+            f"can't run {executable() or 'bioamla'}: {e.strerror or e} "
+            "(BIOAMLA_BIN names the bioamla executable)"
+        ) from None
     try:
         envelope = json.loads(proc.stdout)
     except ValueError:
