@@ -9,7 +9,7 @@ SRC := src
 TESTS := tests
 SKILLS := skills
 
-.PHONY: help install sync lock upgrade dev shell \
+.PHONY: help install sync lock upgrade dev shell catalog-smoke \
         test test-fast cov \
         lint fmt fmt-check check \
         docs docs-serve \
@@ -54,6 +54,9 @@ cov: ## Run tests with coverage report
 	# with the pytest-cov plugin disabled (-p no:cov) to avoid the same path.
 	COVERAGE_CORE=sysmon $(UV) run coverage run -m pytest -p no:cov
 	$(UV) run coverage report -m
+
+catalog-smoke: ## Smoke-test the catalog integrations against the live APIs (keys optional)
+	PATH="$(CURDIR)/.venv/bin:$$PATH" scripts/catalog-smoke.sh
 
 ## --- Linting & formatting (ruff) ---
 
