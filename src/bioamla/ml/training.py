@@ -17,6 +17,7 @@ import uuid
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
+from itertools import islice
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -778,8 +779,14 @@ def train_ast(
     threads = min(max(dataloader_num_workers, 1), 8)
 
     def valid_rows(split: Dataset) -> list[int]:
+        # A chunk at a time: pool.map would submit the whole split up front, and a
+        # Hub dataset's rows carry the audio bytes.
+        rows, chunk = iter(split), 16 * threads
         with ThreadPoolExecutor(max_workers=threads) as pool:
-            return [i for i, ok in enumerate(pool.map(is_valid_audio, split)) if ok]
+            flags: list[bool] = []
+            while batch := list(islice(rows, chunk)):
+                flags.extend(pool.map(is_valid_audio, batch))
+        return [i for i, ok in enumerate(flags) if ok]
 
     if isinstance(dataset, DatasetDict):
         for split_name in dataset.keys():

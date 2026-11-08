@@ -749,12 +749,22 @@ class TestTrainAst:
 
         monkeypatch.setattr(Dataset, "map", recording_map)
         monkeypatch.setattr(Dataset, "filter", recording_filter)
+        # One unreadable file in each split: the threaded check has to drop it.
+        dataset = _real_dataset_dict(tmp_path)
+        (tmp_path / "bad.wav").write_bytes(b"not a wav")
+        for split in dataset:
+            dataset[split] = Dataset.from_dict({
+                "audio": list(dataset[split]["audio"]) + [str(tmp_path / "bad.wav")],
+                "category": list(dataset[split]["category"]) + ["x"],
+            })  # fmt: skip
         fake_trainer = MagicMock()
         fake_trainer.state = SimpleNamespace(log_history=[])
         fake_trainer.accelerator = None
+        trainer_cls = MagicMock(return_value=fake_trainer)
         training_args = MagicMock()
         with (
-            self._mocks(fake_trainer, tmp_path),
+            self._mocks(fake_trainer, tmp_path, trainer_cls=trainer_cls),
+            patch("bioamla.ml.training._load_train_dataset", return_value=(dataset, "category")),
             patch("transformers.TrainingArguments", training_args),
         ):
             train_ast(train_dataset="owner/ds", training_dir=str(tmp_path),
@@ -762,6 +772,8 @@ class TestTrainAst:
         assert "compute_stats" in procs and "filter" not in procs
         assert all(num_proc is None for num_proc in procs.values()), procs
         assert training_args.call_args.kwargs["dataloader_num_workers"] == 4
+        trained_on = trainer_cls.call_args.kwargs
+        assert len(trained_on["train_dataset"]) == 4 and len(trained_on["eval_dataset"]) == 4
 
     def test_tracker_sees_a_finished_run(self, tmp_path) -> None:
         import json
