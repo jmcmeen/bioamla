@@ -325,7 +325,7 @@ def test_a_failing_server_stops_the_check_instead_of_counting_as_findings(plante
     )  # fmt: skip
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert json.loads(proc.stdout)["error"].startswith("RemoteError: Cannot reach")
-    assert not list((planted / "runs").rglob("checks.json"))
+    assert not (planted / "runs").exists()  # the failed run left nothing behind
 
 
 def test_thresholds_outside_zero_to_one_are_usage_errors(planted) -> None:
@@ -359,3 +359,39 @@ def test_a_file_cell_that_looks_like_an_option_is_just_a_missing_file(run_skill,
     assert code == 0 and checked["by_rule"] == {"file": 1}, checked
     (f,) = json.loads((workspace / checked["run_dir"] / "checks.json").read_text())["findings"]
     assert f["file"] == "--help" and "not found" in f["message"]
+
+
+def test_the_reference_cannot_be_the_checked_file_and_a_rerun_drops_the_old_verdict(
+    run_skill, planted
+) -> None:
+    code, checked = run_skill("label-qa", "check", "annotations.csv", cwd=planted)
+    code, out = run_skill("label-qa", "agreement", checked["run_dir"], "--reference",
+                          "annotations.csv", cwd=planted)  # fmt: skip
+    assert code == 1 and "can't be the checked file itself" in out["error"]
+    code, _ = run_skill("label-qa", "agreement", checked["run_dir"], "--reference",
+                        "reference.csv", cwd=planted)  # fmt: skip
+    code, verdict = run_skill("label-qa", "gate", checked["run_dir"], cwd=planted)
+    assert code == 2 and (planted / checked["run_dir"] / "gate.json").exists()
+    # The reference copy lives apart from the checked snapshot, and rerunning the
+    # agreement step removes the verdict that rested on the old report.
+    assert (planted / checked["run_dir"] / "reference" / "reference.csv").exists()
+    assert (planted / checked["run_dir"] / "workspace" / "annotations.csv").exists()
+    code, _ = run_skill("label-qa", "agreement", checked["run_dir"], "--reference",
+                        "reference.csv", cwd=planted)  # fmt: skip
+    assert not (planted / checked["run_dir"] / "gate.json").exists()
+
+
+def test_held_out_recordings_with_no_events_count_their_agent_rows_as_false_alarms(
+    run_skill, workspace
+) -> None:
+    write_recordings(workspace)
+    write_set(workspace, ["rec/a.wav,0.5,1.0,2000,3000,wren,agent",
+                          "rec/b.wav,1.0,1.5,2000,3000,wren,agent"])  # fmt: skip
+    write_set(workspace, ["rec/a.wav,0.5,1.0,2000,3000,wren,jm"], "reference.csv")
+    code, checked = run_skill("label-qa", "check", "annotations.csv", cwd=workspace)
+    code, scored = run_skill("label-qa", "agreement", checked["run_dir"], "--reference",
+                             "reference.csv", cwd=workspace)  # fmt: skip
+    assert scored["files"] == 1 and scored["false_alarms"] == 0  # b.wav isn't covered
+    code, scored = run_skill("label-qa", "agreement", checked["run_dir"], "--reference",
+                             "reference.csv", "--recordings", "rec/b.wav", cwd=workspace)  # fmt: skip
+    assert scored["files"] == 2 and scored["false_alarms"] == 1 and scored["precision"] == 0.5

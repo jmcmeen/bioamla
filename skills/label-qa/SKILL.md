@@ -48,12 +48,15 @@ to the next step.
    python <skill>/scripts/agreement.py <run_dir> --reference reference.csv
    ```
 
-   `reference.csv` is the person's annotations for a subset of the recordings (every row
-   in it counts as the truth). On those recordings, the agent rows of the file the check
-   step read are matched to the person's by time overlap (`--min-iou`, default 0.5) and
-   scored: per-label precision, recall and F1, a confusion matrix, and the
-   disagreements, misses and false alarms with their rows, in `agreement.json`. Skip
-   this step when there is no reference; the gate then judges the checks alone.
+   `reference.csv` is the person's annotations for a subset of the recordings: every row
+   with a file, a label and a time span counts as the truth (others are skipped and
+   counted). Name held-out recordings on which the person found nothing with
+   `--recordings a.wav,b.wav`, so the agent's rows there count as false alarms. On the
+   covered recordings, the agent rows of the file the check step read are matched to the
+   person's by time overlap (`--min-iou`, default 0.5) and scored: per-label precision,
+   recall and F1, a confusion matrix, and the disagreements, misses and false alarms with
+   their rows, in `agreement.json`. Skip this step when there is no reference; the gate
+   then judges the checks alone.
 
 3. **Gate**: the verdict.
 

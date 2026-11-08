@@ -22,6 +22,7 @@ import json
 import os
 import shlex
 import subprocess
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -111,13 +112,20 @@ def run_dir(skill: str, root: str | Path = ".") -> Path:
 
 
 def write_json(path: str | Path, data: Any) -> Path:
-    """Write ``data`` as indented JSON, whole or not at all (a reader never sees a
-    half-written file)."""
+    """Write ``data`` as indented JSON, whole or not at all: through a fresh temporary
+    file in the same folder (exclusively created, so nothing planted there is followed)
+    and an atomic replace, so a reader never sees a half-written file and two writers
+    never share a temporary."""
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_name(out.name + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, out)
+    fd, tmp = tempfile.mkstemp(dir=out.parent, prefix=f".{out.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(data, indent=2) + "\n")
+        os.replace(tmp, out)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
     return out
 
 
@@ -209,7 +217,7 @@ def _workspace_path(path: str) -> str:
     """``path`` if it's a plain path inside the workspace (relative, no ``..``)."""
     parts = Path(path).parts
     if (
-        not path
+        not parts
         or Path(path).is_absolute()
         or ".." in parts
         or ":" in parts[0]
@@ -219,6 +227,16 @@ def _workspace_path(path: str) -> str:
             f"{path!r} must be a path inside the workspace (relative, no .., not starting with -)"
         )
     return Path(path).as_posix()
+
+
+def _local_source(root: str | Path, path: str) -> Path:
+    """The workspace file ``path`` on this machine, once it's known to resolve inside the
+    workspace (a symlink that leads out of it is refused)."""
+    home = Path(root).resolve()
+    source = (Path(root) / path).resolve()
+    if not source.is_relative_to(home):
+        raise ValueError(f"{path!r} points outside the workspace")
+    return source
 
 
 def fetch(path: str, into: str | Path, root: str | Path = ".") -> Path:
@@ -237,7 +255,7 @@ def fetch(path: str, into: str | Path, root: str | Path = ".") -> Path:
     local.parent.mkdir(parents=True, exist_ok=True)
     target = remote(root)
     if target is None:
-        source = Path(root) / path
+        source = _local_source(root, path)
         if source.exists():
             local.write_bytes(source.read_bytes())
         return local
