@@ -65,15 +65,13 @@ def run(*args: str, cwd: str | Path | None = None) -> Any:
         # and the arguments are the skill's. Driving the CLI is this helper's purpose.
         # Callers put any path that came from data or a listing after "--", so a value
         # starting with "-" can't be read as an option.
-        proc = (
-            subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                argv,
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=timeout(),
-            )
+        proc = subprocess.run(
+            argv,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout(),
         )
     except subprocess.TimeoutExpired as e:
         raise BioamlaCommandError(
