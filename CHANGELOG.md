@@ -14,6 +14,13 @@ All notable changes to this project are documented here. The format is based on
   default. Resampling a multichannel load resamples each channel. The server's `--max-window`
   counts kept channels, so a kept window holds no more samples than a mono one could (#339)
 
+### Changed
+
+- `pip install bioamla` no longer installs pydub, or audioop-lts on Python 3.13 and later:
+  nothing in bioamla uses them now that decoding and encoding call ffmpeg directly. Code that
+  imported pydub because bioamla brought it needs to depend on it itself. No bioamla API
+  changes (#346)
+
 ### Fixed
 
 - FFmpeg encoding has a time limit too, `BIOAMLA_ENCODE_TIMEOUT` seconds (default 600): MP3, M4A

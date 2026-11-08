@@ -41,7 +41,7 @@ class TestLoadAudioData:
         assert data.is_modified is True
 
     def test_load_failure_raises_audio_load_error(self, test_audio_path: str) -> None:
-        with patch("bioamla.audio._pydub.load_audio", side_effect=RuntimeError("boom")):
+        with patch("bioamla.audio._codec.load_audio", side_effect=RuntimeError("boom")):
             with pytest.raises(AudioLoadError):
                 load_audio_data(test_audio_path)
 
@@ -52,7 +52,7 @@ class TestLoadAudioData:
 
     def test_stereo_kept(self, test_audio_path: str) -> None:
         fake = np.zeros((100, 2), dtype=np.float32)
-        with patch("bioamla.audio._pydub.load_audio", return_value=(fake, 16000)):
+        with patch("bioamla.audio._codec.load_audio", return_value=(fake, 16000)):
             data = load_audio_data(test_audio_path)
         assert data.channels == 2
 
@@ -65,7 +65,7 @@ class TestSaveAudioData:
         assert out.exists()
 
     def test_failure_raises(self, sample_audio_data: AudioData, tmp_path) -> None:
-        with patch("bioamla.audio._pydub.save_audio", side_effect=RuntimeError("fail")):
+        with patch("bioamla.audio._codec.save_audio", side_effect=RuntimeError("fail")):
             with pytest.raises(AudioSaveError):
                 save_audio_data(sample_audio_data, str(tmp_path / "x.wav"))
 
@@ -98,7 +98,7 @@ class TestCreateTempAudioFile:
             path.unlink(missing_ok=True)
 
     def test_failure_cleans_up_and_raises(self, sample_audio_data: AudioData) -> None:
-        with patch("bioamla.audio._pydub.save_audio", side_effect=RuntimeError("fail")):
+        with patch("bioamla.audio._codec.save_audio", side_effect=RuntimeError("fail")):
             with pytest.raises(AudioSaveError):
                 create_temp_audio_file(sample_audio_data)
 
@@ -112,18 +112,18 @@ class TestArrayLevelIO:
         assert Path(out).exists()
 
     def test_load_failure_raises(self, test_audio_path: str) -> None:
-        with patch("bioamla.audio._pydub.load_audio", side_effect=RuntimeError("boom")):
+        with patch("bioamla.audio._codec.load_audio", side_effect=RuntimeError("boom")):
             with pytest.raises(AudioLoadError):
                 load_audio(test_audio_path)
 
     def test_load_stereo_downmixes(self, test_audio_path: str) -> None:
         stereo = np.column_stack([np.ones(100), np.zeros(100)]).astype(np.float32)
-        with patch("bioamla.audio._pydub.load_audio_channels", return_value=(stereo, 16000)):
+        with patch("bioamla.audio._codec.load_audio_channels", return_value=(stereo, 16000)):
             audio, sr = load_audio(test_audio_path)
         assert audio.shape == (100,) and np.allclose(audio, 0.5)  # channels averaged
 
     def test_save_failure_raises(self, tmp_path) -> None:
-        with patch("bioamla.audio._pydub.save_audio", side_effect=RuntimeError("fail")):
+        with patch("bioamla.audio._codec.save_audio", side_effect=RuntimeError("fail")):
             with pytest.raises(AudioSaveError):
                 save_audio(str(tmp_path / "x.wav"), np.zeros(10, dtype=np.float32), 16000)
 

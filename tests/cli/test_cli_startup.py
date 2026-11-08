@@ -17,7 +17,6 @@ HEAVY_MODULES = (
     "pandas",
     "scipy",
     "soundfile",
-    "pydub",
     "pydantic",  # validated configs load it; startup must not
     "bioamla.audio",
     "bioamla.datasets",

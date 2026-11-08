@@ -12,7 +12,7 @@ Raising free functions for audio file I/O, ported from the old
 - :func:`audio_to_wav_bytes` / :func:`audio_from_wav_bytes` — float32 WAV in memory
 - :func:`save_audio_window` — write a float32 WAV file whole or not at all
 
-Heavy/optional backends (pydub/ffmpeg) are imported lazily inside the functions.
+Heavy/optional backends (ffmpeg) are imported lazily inside the functions.
 """
 
 import logging
@@ -73,7 +73,7 @@ def load_audio_data(
         AudioLoadError: If decoding fails, or ffmpeg runs past
             ``BIOAMLA_DECODE_TIMEOUT`` seconds (default 600).
     """
-    from bioamla.audio._pydub import load_audio, load_audio_channels, load_audio_window
+    from bioamla.audio._codec import load_audio, load_audio_channels, load_audio_window
 
     path = require_exists(filepath)
     windowed = start is not None or duration is not None
@@ -157,7 +157,7 @@ def _stream_blocks(
     sample_rate: int | None,
     keep_channels: bool = False,
 ) -> Iterator[AudioData]:
-    from bioamla.audio._pydub import iter_audio_blocks
+    from bioamla.audio._codec import iter_audio_blocks
     from bioamla.exceptions import BioamlaError
 
     blocks = iter_audio_blocks(str(path), block_duration, overlap, keep_channels)
@@ -243,7 +243,7 @@ def save_audio_data(
         AudioSaveError: If encoding/writing fails, or ffmpeg runs past
             ``BIOAMLA_ENCODE_TIMEOUT`` seconds (default 600).
     """
-    from bioamla.audio._pydub import save_audio
+    from bioamla.audio._codec import save_audio
 
     output = prepare_output_path(output_path)
 
@@ -431,7 +431,7 @@ def create_temp_audio_file(audio: AudioData, suffix: str = ".wav") -> Path:
     Raises:
         AudioSaveError: If encoding/writing fails.
     """
-    from bioamla.audio._pydub import save_audio
+    from bioamla.audio._codec import save_audio
 
     temp_file = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
     temp_path = Path(temp_file.name)
@@ -464,7 +464,7 @@ def load_audio(filepath: str) -> tuple[np.ndarray, int]:
     Raises:
         AudioLoadError: If the file is missing or decoding fails.
     """
-    from bioamla.audio._pydub import load_audio as _load
+    from bioamla.audio._codec import load_audio as _load
 
     return _loaded(_load, filepath)
 
@@ -484,7 +484,7 @@ def load_audio_channels(filepath: str | Path) -> tuple[np.ndarray, int]:
     Raises:
         AudioLoadError: If the file is missing or decoding fails.
     """
-    from bioamla.audio._pydub import load_audio_channels as _load
+    from bioamla.audio._codec import load_audio_channels as _load
 
     return _loaded(_load, filepath)
 
@@ -524,13 +524,13 @@ def save_audio(
         InvalidInputError: If ``bit_depth`` doesn't apply to the format.
         AudioSaveError: If encoding/writing fails.
     """
-    from bioamla.audio._pydub import save_audio as _pydub_save_audio
+    from bioamla.audio._codec import save_audio as _codec_save_audio
     from bioamla.exceptions import InvalidInputError
 
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        _pydub_save_audio(str(path), audio, sample_rate, format=format, bit_depth=bit_depth)
+        _codec_save_audio(str(path), audio, sample_rate, format=format, bit_depth=bit_depth)
     except (InvalidInputError, AudioSaveError, ConfigError, DependencyError):
         raise  # already says what failed, or what to fix that isn't the file
     except Exception as e:

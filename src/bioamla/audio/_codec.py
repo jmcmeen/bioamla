@@ -356,7 +356,7 @@ BIT_DEPTH_SUBTYPES = {
     "flac": {8: "PCM_S8", 16: "PCM_16", 24: "PCM_24"},
 }
 
-# Extension -> the format ``save_audio`` writes (pydub calls M4A/AAC "ipod").
+# Extension -> the format ``save_audio`` writes (ffmpeg calls the M4A/AAC muxer "ipod").
 _EXTENSION_FORMATS = {".wav": "wav", ".flac": "flac", ".ogg": "ogg", ".mp3": "mp3", ".m4a": "ipod"}
 
 

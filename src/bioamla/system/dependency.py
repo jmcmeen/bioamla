@@ -293,7 +293,7 @@ def run_install(os_type: str | None = None) -> tuple[bool, str]:
         return False, (
             "Could not detect your operating system.\n"
             "Please install manually:\n"
-            "  - FFmpeg (for audio format support via pydub)\n"
+            "  - FFmpeg (for MP3, M4A and other compressed formats)\n"
             "  - libsndfile (for audio I/O)\n"
             "  - PortAudio (for real-time recording)"
         )

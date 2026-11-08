@@ -279,7 +279,7 @@ class TestFinishedCallback:
 class TestLoadFile:
     def test_load_file(self, mono_audio) -> None:
         player = AudioPlayer()
-        with patch("bioamla.audio._pydub.load_audio", return_value=(mono_audio, 16000)):
+        with patch("bioamla.audio._codec.load_audio", return_value=(mono_audio, 16000)):
             player.load_file("/fake.wav")
         assert player.position.total_samples == len(mono_audio)
 
@@ -305,7 +305,7 @@ class TestConvenienceFunctions:
 
     def test_play_audio_filepath(self, mock_sd, mono_audio) -> None:
         playback_mod._global_player = None
-        with patch("bioamla.audio._pydub.load_audio", return_value=(mono_audio, 16000)):
+        with patch("bioamla.audio._codec.load_audio", return_value=(mono_audio, 16000)):
             player = play_audio("/fake.wav")
         assert player.is_playing
 

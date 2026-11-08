@@ -59,7 +59,7 @@ class TestGetWavInfo:
         assert info["bit_depth"] == 8
         assert info["subtype"] == "PCM_U8"
 
-    def test_matches_pydub_shape(self, test_audio_path: str) -> None:
+    def test_matches_codec_shape(self, test_audio_path: str) -> None:
         info = get_wav_info(test_audio_path)
         assert set(info) == {
             "duration",

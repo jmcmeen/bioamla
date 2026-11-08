@@ -3,9 +3,10 @@ Audio File Information & Analysis
 ================================
 
 File-level metadata and complete-analysis helpers folded from ``core/audio.py``.
-These functions take a file path, read its header (riffy for WAV, the pydub /
-ffprobe backend for everything else), and return small dataclasses. They raise :class:`NotFoundError` when the path
-does not exist and :class:`AudioLoadError` when decoding fails.
+These functions take a file path, read its header (riffy for WAV, ffprobe for
+everything else, or soundfile when ffprobe can't read it), and return small
+dataclasses. They raise :class:`NotFoundError` when the path does not exist and
+:class:`AudioLoadError` when decoding fails.
 """
 
 import logging
@@ -110,16 +111,16 @@ def read_audio_info_dict(filepath: str) -> dict[str, Any]:
     Read header metadata for an audio file as a plain dictionary.
 
     WAV files are read with riffy (pure Python, no FFmpeg; headers only). Compressed
-    WAVs, which riffy can't measure, and every other format go through the pydub /
-    ffprobe backend. Keys: ``duration``, ``sample_rate``, ``channels``, ``samples``,
-    ``format``, ``codec``, ``bit_depth``, ``subtype``.
+    WAVs, which riffy can't measure, and every other format go through ffprobe,
+    or soundfile when ffprobe can't read them. Keys: ``duration``, ``sample_rate``,
+    ``channels``, ``samples``, ``format``, ``codec``, ``bit_depth``, ``subtype``.
 
     Raises:
         NotFoundError: If the file does not exist.
         DependencyError: If the format needs ffprobe and it isn't installed.
         AudioLoadError: If metadata cannot be extracted.
     """
-    from bioamla.audio._pydub import get_audio_info as _pydub_get_audio_info
+    from bioamla.audio._codec import get_audio_info as _codec_get_audio_info
     from bioamla.audio._riffy import get_wav_info, is_wav_path
 
     path = Path(filepath)
@@ -130,10 +131,12 @@ def read_audio_info_dict(filepath: str) -> dict[str, Any]:
         try:
             return get_wav_info(path)
         except AudioLoadError as e:
-            logger.debug(f"riffy could not read {filepath} ({e}); falling back to pydub")
+            logger.debug(
+                f"riffy could not read {filepath} ({e}); falling back to ffprobe or soundfile"
+            )
 
     try:
-        return _pydub_get_audio_info(str(path))
+        return _codec_get_audio_info(str(path))
     except DependencyError:
         raise  # the fix is to install ffmpeg, not anything about the file
     except Exception as e:
@@ -240,7 +243,7 @@ def analyze_audio(
         NotFoundError: If the file does not exist.
         AudioLoadError: If the audio cannot be loaded.
     """
-    from bioamla.audio._pydub import load_audio
+    from bioamla.audio._codec import load_audio
 
     path = Path(filepath)
     if not path.exists():

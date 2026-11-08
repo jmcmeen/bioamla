@@ -111,7 +111,7 @@ def create_app(config: ServerConfig) -> FastAPI:
     from contextlib import asynccontextmanager
 
     from bioamla import __version__
-    from bioamla.audio._pydub import decode_timeout, encode_timeout
+    from bioamla.audio._codec import decode_timeout, encode_timeout
     from bioamla.server.jobs import JobRunner, add_job_routes
 
     # A bad BIOAMLA_DECODE_TIMEOUT or BIOAMLA_ENCODE_TIMEOUT stops the server here, not

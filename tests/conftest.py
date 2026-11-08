@@ -59,7 +59,7 @@ def _torchcodec_loadable() -> bool:
 
 @functools.cache
 def _ffmpeg_cli_available() -> bool:
-    """Return True if the ``ffmpeg`` CLI is on PATH (pydub uses it to encode)."""
+    """Return True if the ``ffmpeg`` CLI is on PATH (it encodes MP3/M4A/OGG)."""
     return shutil.which("ffmpeg") is not None
 
 
@@ -83,8 +83,9 @@ def requires_torchcodec() -> None:
 def requires_ffmpeg_cli() -> None:
     """Skip unless the ``ffmpeg`` CLI is available for non-WAV *encoding*.
 
-    pydub shells out to ``ffmpeg`` to encode FLAC/MP3/OGG/M4A (WAV is written
-    natively, so WAV-only tests don't need this). Apply with
+    MP3, M4A and OGG are encoded by piping samples to ``ffmpeg`` (WAV and FLAC
+    are written natively, so tests of those don't need this). Tests that build
+    MP3 fixtures call the CLI directly. Apply with
     ``@pytest.mark.usefixtures("requires_ffmpeg_cli")``.
     """
     if not _ffmpeg_cli_available():

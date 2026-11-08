@@ -1,5 +1,7 @@
 """Tests for windowed loading (load_audio_data start/duration) and stream_audio_data."""
 
+import subprocess
+
 import numpy as np
 import pytest
 import soundfile as sf
@@ -22,13 +24,18 @@ def ramp_wav(tmp_path) -> str:
 @pytest.fixture
 def noise_mp3(tmp_path) -> str:
     """3 s of noise as MP3 (noise exposes any misalignment between decodes)."""
-    from pydub import AudioSegment
-
     wav = tmp_path / "noise.wav"
     rng = np.random.default_rng(0)
     sf.write(wav, rng.normal(0, 0.1, 3 * SR).astype(np.float32), SR)
     mp3 = tmp_path / "noise.mp3"
-    AudioSegment.from_wav(wav).export(mp3, format="mp3")
+    # Encoded by the ffmpeg CLI rather than bioamla's own encoder, so the decoder is
+    # tested against a file it didn't write.
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(wav), "-f", "mp3", "-y", str(mp3)],
+        stdin=subprocess.DEVNULL,
+        check=True,
+        timeout=60,
+    )
     return str(mp3)
 
 
@@ -277,12 +284,12 @@ def test_ffmpeg_decodes_are_writable_arrays(noise_mp3):
 def test_a_missing_ffprobe_is_a_dependency_error_from_get_audio_info(tmp_path, monkeypatch):
     import shutil
 
-    from bioamla.audio import _pydub, get_audio_info
+    from bioamla.audio import _codec, get_audio_info
     from bioamla.exceptions import DependencyError
 
     path = tmp_path / "x.mp3"
     path.write_bytes(b"fake")
-    monkeypatch.setattr(_pydub, "_get_metadata_ffprobe", lambda p: None)
+    monkeypatch.setattr(_codec, "_get_metadata_ffprobe", lambda p: None)
     monkeypatch.setattr(shutil, "which", lambda name: None)
     with pytest.raises(DependencyError, match="ffprobe is required"):
         get_audio_info(str(path))
@@ -291,14 +298,14 @@ def test_a_missing_ffprobe_is_a_dependency_error_from_get_audio_info(tmp_path, m
 def test_ffmpeg_without_ffprobe_is_a_dependency_error(tmp_path, monkeypatch):
     import shutil
 
-    from bioamla.audio import _pydub
+    from bioamla.audio import _codec
     from bioamla.exceptions import DependencyError
 
     path = tmp_path / "x.mp3"
     path.write_bytes(b"fake")
     real_which = shutil.which
     monkeypatch.setattr(shutil, "which", lambda n: None if n == "ffprobe" else real_which(n))
-    monkeypatch.setattr(_pydub, "_get_metadata_ffprobe", lambda p: None)
+    monkeypatch.setattr(_codec, "_get_metadata_ffprobe", lambda p: None)
     with pytest.raises(DependencyError, match="ffprobe is required to read .mp3"):
         load_audio_data(path)
 

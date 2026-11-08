@@ -57,8 +57,8 @@ def decode_example_audio(audio: str | dict[str, Any], sampling_rate: int | None)
 
     ``audio`` is a file path (local datasets), or a ``datasets`` audio value left
     undecoded (``{"path", "bytes"}``): the file at ``path``, or the encoded ``bytes``
-    (Hub datasets that embed their audio). Decoding goes through bioamla's own loader (soundfile, or ffmpeg through
-    pydub for other formats), so it doesn't depend on the FFmpeg versions
+    (Hub datasets that embed their audio). Decoding goes through bioamla's own loader (soundfile, or ffmpeg
+    for other formats), so it doesn't depend on the FFmpeg versions
     ``datasets``' decoder supports.
 
     Raises:
