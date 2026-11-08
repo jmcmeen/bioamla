@@ -205,26 +205,34 @@ def check_rows(rows: list[dict], columns: list[str], labels: list[str] | None, r
     return findings, info
 
 
+def _discard(folder: Path) -> None:
+    """Remove a run folder this step created, and ``runs/label-qa`` and ``runs`` when
+    that leaves them empty (they were created for it)."""
+    shutil.rmtree(folder, ignore_errors=True)
+    for parent in (folder.parent, folder.parent.parent):
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+
+
 def check(args: argparse.Namespace) -> dict:
     """Read the file, run every rule, write ``checks.json``; return the summary."""
     root = Path(args.root)
     folder = run_dir("label-qa", root)
     rel = folder.relative_to(root)
-    path = fetch(args.annotations, rel / "workspace", root)
-    if not path.exists():
-        shutil.rmtree(folder, ignore_errors=True)  # nothing to keep from this run
-        for parent in (folder.parent, folder.parent.parent):  # runs/label-qa, runs
-            try:
-                parent.rmdir()  # only when this run created it (it's empty)
-            except OSError:
-                break
-        raise FileNotFoundError(f"{args.annotations} is not in the workspace")
-    with path.open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-        columns = list(reader.fieldnames or [])
-
-    findings, info = check_rows(rows, columns, args.labels, str(root))
+    try:
+        path = fetch(args.annotations, rel / "workspace", root)
+        if not path.exists():
+            raise FileNotFoundError(f"{args.annotations} is not in the workspace")
+        with path.open(newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            columns = list(reader.fieldnames or [])
+        findings, info = check_rows(rows, columns, args.labels, str(root))
+    except BaseException:
+        _discard(folder)  # a failed check leaves no run behind
+        raise
     agent_rows = sum(cell(r, "labeled_by") == AGENT for r in rows)
     report = {
         "annotations": args.annotations,

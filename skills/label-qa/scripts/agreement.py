@@ -1,11 +1,14 @@
 """Measure how well the agent's annotations agree with a person's, where both exist.
 
-Takes a reference CSV: the person's annotations for a held-out subset of the recordings
-(every row in it counts as the truth; rows marked ``labeled_by=agent`` are ignored). On
-the recordings the reference covers, the agent rows of the annotations file the check
-step read (its copy in the run folder, so the gate judges one and the same file) are
-matched to the reference rows by time overlap (intersection over union of the spans, at
-least ``--min-iou``), one to one, best overlaps first. Then:
+Takes a reference CSV: the person's annotations for a held-out subset of the recordings.
+Every row with a file, a label and a time span counts as the truth; rows marked
+``labeled_by=agent`` are ignored, and rows missing one of those are skipped and counted
+in ``reference_rows_skipped``. The recordings the reference covers are the ones its rows
+name, plus any given with ``--recordings`` (held-out recordings on which the person found
+nothing: their agent rows are all false alarms). On those recordings, the agent rows of
+the annotations file the check step read (its copy in the run folder, so the gate judges
+one and the same file) are matched to the reference rows by time overlap (intersection
+over union of the spans, at least ``--min-iou``), one to one, best overlaps first. Then:
 
 - a matched pair with the same label is a hit for that label; with different labels it
   is a false alarm for the agent's label and a miss for the person's;
@@ -124,12 +127,16 @@ def agreement(args: argparse.Namespace) -> dict:
     rel = Path(args.run_dir)
     checks = read_json(root / rel / "checks.json")
     annotations = checks["annotations"]
+    if Path(args.reference).as_posix() == Path(annotations).as_posix():
+        raise ValueError(f"the reference can't be the checked file itself ({annotations})")
     # Score the copy the check step read, not the live file: the gate must judge one set.
     annotated = root / rel / "workspace" / annotations
     if not annotated.exists():
         raise FileNotFoundError(f"the check step's copy of {annotations} is missing")
-    (root / rel / "agreement.json").unlink(missing_ok=True)  # never leave a stale report
-    reference_path = fetch(args.reference, rel / "workspace", root)
+    # Never leave a stale report, nor a verdict that was based on one.
+    (root / rel / "agreement.json").unlink(missing_ok=True)
+    (root / rel / "gate.json").unlink(missing_ok=True)
+    reference_path = fetch(args.reference, rel / "reference", root)  # apart from the snapshot
     if not reference_path.exists():
         raise FileNotFoundError(f"{args.reference} is not in the workspace")
 
@@ -137,7 +144,7 @@ def agreement(args: argparse.Namespace) -> dict:
     reference = [r for r in reference_rows if usable(r)]
     if not reference:
         raise ValueError(f"{args.reference} has no usable rows a person labeled")
-    files = sorted({cell(r, "file") for r in reference})
+    files = sorted({cell(r, "file") for r in reference} | set(args.recordings or []))
     wanted = set(files)
     agent_rows = [r for r in read_csv(annotated) if cell(r, "labeled_by") == AGENT]
     agent = [r for r in agent_rows if cell(r, "file") in wanted]
@@ -231,6 +238,10 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("run_dir", help="The run folder (after check.py)")
     p.add_argument("--reference", required=True,
                    help="A person's annotations for a subset of the recordings, relative to the workspace")  # fmt: skip
+    p.add_argument("--recordings", type=lambda s: [x.strip() for x in s.split(",") if x.strip()],
+                   default=None,
+                   help="Held-out recordings the person labeled nothing on, comma-separated: "
+                        "their agent rows are false alarms")  # fmt: skip
     p.add_argument("--min-iou", type=unit_interval, default=0.5,
                    help="Least time overlap (intersection over union, 0 to 1) for a match")  # fmt: skip
     p.add_argument("--root", default=".", help="Workspace root (default: here)")
