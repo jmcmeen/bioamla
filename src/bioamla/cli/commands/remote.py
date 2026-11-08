@@ -266,13 +266,16 @@ def remote_audio(
     from bioamla.audio import save_audio_window
     from bioamla.cli.console import print_success
     from bioamla.cli.output import emit_result
+    from bioamla.exceptions import AudioSaveError
 
     target = Path(output) if output else Path(f"{PurePosixPath(path).stem}_{start:g}s.wav")
-    if target.exists() and not overwrite:
-        raise click.ClickException(f"{target} exists; pass --overwrite to replace it")
     audio = _call(_client(name).audio_window, workspace, path, start=start,
                   duration=duration, sample_rate=sample_rate)  # fmt: skip
-    _call(save_audio_window, audio, target, overwrite=overwrite)  # float32, as the server sent it
+    try:
+        save_audio_window(audio, target, overwrite=overwrite)  # float32, as the server sent it
+    except AudioSaveError as e:
+        hint = "; pass --overwrite to replace it" if target.exists() and not overwrite else ""
+        raise click.ClickException(f"{e}{hint}") from e
     result = {
         "saved": str(target),
         "start_time": audio.metadata["start_time"],

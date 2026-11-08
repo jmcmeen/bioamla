@@ -31,6 +31,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Files the server receives, the client downloads and `remote audio` saves get the mode a
+  plain `open()` gives (0666 less the umask) instead of the owner-only 0600 of a temporary
+  file (#332)
 - `serve --max-window` and `ServerConfig.max_window` reject `inf`, `nan` and values that
   aren't positive, which would have lifted the window cap (#332)
 - The agent skills pass every path that came from data or a listing to `bioamla` after `--`,

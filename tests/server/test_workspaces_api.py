@@ -324,3 +324,24 @@ def test_a_decoder_the_server_lacks_is_a_logged_500(server, monkeypatch, caplog)
     }
     assert "DependencyError handling GET /v1/workspaces/ws/audio/rec.wav" in caplog.text
     assert "ffmpeg is required" in caplog.text
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file modes")
+def test_atomic_file_writer_gives_files_the_usual_mode(tmp_path):
+    """A file the writer puts in place has the mode a plain open() would give it (0666 less
+    the umask), whether it is new or replaces another; mkstemp's owner-only 0600 would make
+    an overwritten download unreadable to anyone else."""
+    import stat
+
+    from bioamla.common.files import AtomicFileWriter
+
+    target = tmp_path / "a.bin"
+    before = os.umask(0o022)
+    try:
+        for overwrite in (False, True):
+            with AtomicFileWriter(target, overwrite=overwrite) as w:
+                w.write(b"x")
+                w.commit()
+            assert stat.S_IMODE(target.stat().st_mode) == 0o644, overwrite
+    finally:
+        os.umask(before)
