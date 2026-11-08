@@ -92,7 +92,7 @@ runs.
 instead of localhost, so only devices on your VPN can reach it:
 
 ```console
-$ bioamla serve --root ~/bioamla-workspaces --host 100.64.0.10
+$ bioamla serve --root ~/bioamla-workspaces --host <the machine's Tailscale address>
 ```
 
 The token is still required. Don't use `--host 0.0.0.0` on a machine reachable from the

@@ -50,8 +50,8 @@ $ bioamla remote workspaces lab --create costa-rica
 ```
 
 On a VPN (Tailscale, WireGuard), publish the port on the host's VPN address instead and
-laptops on the VPN connect to it directly: `BIND=100.64.0.5 docker compose up -d`, with the
-host's own address. Keep `BIND` an address only your machines reach, never `0.0.0.0`; to
+laptops on the VPN connect to it directly: `BIND=<the host's Tailscale address> docker
+compose up -d`. Keep `BIND` an address only your machines reach, never `0.0.0.0`; to
 expose the server more widely, put a reverse proxy with TLS in front of it.
 
 Docker Engine 28 and newer keep a port published on `127.0.0.1` off the local network.
