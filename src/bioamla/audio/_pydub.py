@@ -457,7 +457,12 @@ def _ffmpeg_encode(path: Path, audio: np.ndarray, sample_rate: int, format: str)
         )
     limit = encode_timeout()
     channels = 1 if audio.ndim == 1 else audio.shape[1]
-    samples = np.clip(audio, -1.0, 1.0).astype("<f4", copy=False)
+    # One float32 copy, cleaned in place: NaN is silence, infinities full scale.
+    samples = np.array(audio, dtype="<f4", order="C")
+    np.nan_to_num(samples, copy=False, nan=0.0, posinf=1.0, neginf=-1.0)
+    np.clip(samples, -1.0, 1.0, out=samples)
+    # Saving over a symlink writes its target, and a replaced file keeps its mode.
+    path = path.resolve() if path.is_symlink() else path
     tmp = path.parent / f".{path.name}.{secrets.token_hex(4)}.part"
     cmd = ["ffmpeg", "-v", "error", "-f", "f32le", "-ar", str(sample_rate),
            "-ac", str(channels), "-i", "pipe:0", "-f", format, "-y", str(tmp)]  # fmt: skip
@@ -465,8 +470,8 @@ def _ffmpeg_encode(path: Path, audio: np.ndarray, sample_rate: int, format: str)
     try:
         try:
             # On a timeout, run() kills ffmpeg before raising.
-            result = subprocess.run(cmd, input=samples.tobytes(), capture_output=True,
-                                    check=False, timeout=limit)  # fmt: skip
+            result = subprocess.run(cmd, input=memoryview(samples).cast("B"),
+                                    capture_output=True, check=False, timeout=limit)  # fmt: skip
         except subprocess.TimeoutExpired:
             raise AudioSaveError(
                 f"Failed to save audio to '{path}': ffmpeg was still encoding after "
@@ -477,6 +482,8 @@ def _ffmpeg_encode(path: Path, audio: np.ndarray, sample_rate: int, format: str)
         if result.returncode != 0:
             detail = result.stderr.decode(errors="replace").strip()
             raise AudioSaveError(f"Failed to save audio to '{path}': {detail[-500:]}")
+        if path.exists():
+            shutil.copymode(path, tmp)
         os.replace(tmp, path)
         done = True
     finally:

@@ -56,6 +56,7 @@ def test_a_stalled_encoder_is_stopped_and_leaves_the_old_file(tmp_path, monkeypa
     assert sorted(p.name for p in tmp_path.iterdir()) == ["bin", "out.mp3", "pids"]
 
 
+@pytest.mark.skipif(os.name == "nt", reason="a shell-script ffmpeg")
 def test_a_failed_encode_leaves_nothing(tmp_path, monkeypatch):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -83,3 +84,34 @@ def test_wav_and_flac_need_no_ffmpeg(tmp_path, monkeypatch):
         assert sf.info(tmp_path / name).frames == SR
     with pytest.raises(DependencyError, match="ffmpeg is required to write MP3"):
         save_audio_data(tone(), tmp_path / "out.mp3")
+
+
+@pytest.mark.usefixtures("requires_ffmpeg_cli")
+@pytest.mark.skipif(os.name == "nt", reason="symlinks and POSIX modes")
+def test_saving_over_a_symlink_writes_its_target_and_keeps_the_mode(tmp_path):
+    target = tmp_path / "library" / "song.mp3"
+    target.parent.mkdir()
+    target.write_bytes(b"old")
+    target.chmod(0o664)
+    link = tmp_path / "song.mp3"
+    link.symlink_to(target)
+    save_audio_data(tone(), link)
+    assert link.is_symlink() and link.resolve() == target
+    assert target.stat().st_size > 3 and (target.stat().st_mode & 0o777) == 0o664
+
+
+@pytest.mark.usefixtures("requires_ffmpeg_cli")
+def test_nan_and_infinite_samples_are_written_as_finite_audio(tmp_path):
+    samples = tone().samples.copy()
+    samples[:100] = np.nan
+    samples[100:200] = np.inf
+    out = save_audio_data(AudioData(samples=samples, sample_rate=SR), tmp_path / "x.mp3")
+    assert np.isfinite(load_audio_data(out).samples).all()
+
+
+def test_input_errors_are_not_save_errors(tmp_path):
+    from bioamla.exceptions import InvalidInputError
+
+    three = AudioData(samples=np.zeros((SR, 3), dtype=np.float32), sample_rate=SR, channels=3)
+    with pytest.raises(InvalidInputError, match="MP3 holds at most 2 channels"):
+        save_audio_data(three, tmp_path / "x.mp3")
