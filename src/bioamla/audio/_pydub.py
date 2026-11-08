@@ -281,6 +281,10 @@ def _ffmpeg_decode(path: Path, start: float, duration: float | None) -> tuple[np
             f"ffmpeg is required to read {path.suffix or 'this'} files but was not found on PATH."
         )
     meta = _get_metadata_ffprobe(str(path))
+    if not meta and shutil.which("ffprobe") is None:
+        raise DependencyError(
+            f"ffprobe is required to read {path.suffix or 'this'} files but was not found on PATH."
+        )
     if not meta or not meta.get("sample_rate") or not meta.get("channels"):
         raise AudioLoadError(f"Error opening '{path}': ffprobe could not read the stream format")
     sample_rate = int(meta["sample_rate"])
@@ -326,8 +330,9 @@ def _ffmpeg_decode(path: Path, start: float, duration: float | None) -> tuple[np
     if duration is not None:
         audio = audio[: round(duration * sample_rate)]
     # frombuffer over bytes is read-only; callers get an array of their own, like
-    # every other loader returns, and ffmpeg's output buffer can be freed.
-    return audio.copy(), sample_rate
+    # every other loader returns, and ffmpeg's output buffer can be freed. Lossy
+    # decoders can overshoot full scale; loaders promise [-1.0, 1.0].
+    return np.clip(audio, -1.0, 1.0), sample_rate
 
 
 def iter_audio_blocks(

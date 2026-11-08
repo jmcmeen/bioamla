@@ -48,7 +48,8 @@ All notable changes to this project are documented here. The format is based on
   instead of through pydub, which also drops pydub's 16-bit rounding. When ffprobe can't read
   a file's header, soundfile reads it (WAV, FLAC, OGG) instead of the whole file being decoded
   to measure it. ffprobe gets 30 s to read a header, not 5, and `get_audio_info` reports a
-  missing ffprobe as a `DependencyError`; the server checks the variable when it starts (#338)
+  missing ffprobe as a `DependencyError`, as do the loaders, which also keep decoded samples in
+  [-1.0, 1.0]; the server checks the variable when it starts (#338)
 - Files the server receives, the client downloads and `remote audio` saves get the mode a
   plain `open()` gives (0666 less the umask) instead of the owner-only 0600 of a temporary
   file (#332)

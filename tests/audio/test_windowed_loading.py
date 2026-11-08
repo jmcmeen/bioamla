@@ -169,7 +169,8 @@ def test_a_stalled_ffmpeg_is_stopped_on_every_decode_path(noise_mp3, tmp_path, m
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    (bin_dir / "ffmpeg").write_text("#!/bin/sh\nexec sleep 60\n")
+    pids = tmp_path / "pids"
+    (bin_dir / "ffmpeg").write_text(f"#!/bin/sh\necho $$ >> {pids}\nexec sleep 60\n")
     (bin_dir / "ffmpeg").chmod(0o755)
     (bin_dir / "ffprobe").symlink_to(shutil.which("ffprobe"))  # the header is read as usual
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
@@ -186,6 +187,9 @@ def test_a_stalled_ffmpeg_is_stopped_on_every_decode_path(noise_mp3, tmp_path, m
         ):
             decode()
         assert time.monotonic() - began < 10
+        pid = int(pids.read_text().split()[-1])
+        with pytest.raises(ProcessLookupError):  # the stalled decoder was killed, not left
+            os.kill(pid, 0)
 
 
 @pytest.mark.usefixtures("requires_ffmpeg_cli")
@@ -223,3 +227,41 @@ def test_a_missing_ffprobe_is_a_dependency_error_from_get_audio_info(tmp_path, m
     monkeypatch.setattr(shutil, "which", lambda name: None)
     with pytest.raises(DependencyError, match="ffprobe is required"):
         get_audio_info(str(path))
+
+
+def test_ffmpeg_without_ffprobe_is_a_dependency_error(tmp_path, monkeypatch):
+    import shutil
+
+    from bioamla.audio import _pydub
+    from bioamla.exceptions import DependencyError
+
+    path = tmp_path / "x.mp3"
+    path.write_bytes(b"fake")
+    real_which = shutil.which
+    monkeypatch.setattr(shutil, "which", lambda n: None if n == "ffprobe" else real_which(n))
+    monkeypatch.setattr(_pydub, "_get_metadata_ffprobe", lambda p: None)
+    with pytest.raises(DependencyError, match="ffprobe is required to read .mp3"):
+        load_audio_data(path)
+
+
+@pytest.mark.usefixtures("requires_ffmpeg_cli")
+def test_overshoots_are_clipped_to_full_scale(tmp_path):
+    """A lossy decode can overshoot full scale; loaders keep to [-1, 1]."""
+    import subprocess
+
+    t = np.arange(2 * SR) / SR
+    wav = tmp_path / "loud.wav"
+    sf.write(wav, np.sign(np.sin(2 * np.pi * 300 * t)).astype(np.float32), SR, subtype="FLOAT")
+    mp3 = tmp_path / "loud.mp3"
+    subprocess.run(["ffmpeg", "-v", "error", "-i", str(wav), str(mp3)], check=True)
+    assert np.abs(load_audio_data(mp3).samples).max() <= 1.0
+
+
+@pytest.mark.usefixtures("requires_ffmpeg_cli")
+def test_load_audio_passes_config_errors_through(noise_mp3, monkeypatch):
+    from bioamla.audio import load_audio
+    from bioamla.exceptions import ConfigError
+
+    monkeypatch.setenv("BIOAMLA_DECODE_TIMEOUT", "soon")
+    with pytest.raises(ConfigError):
+        load_audio(noise_mp3)

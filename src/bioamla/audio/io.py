@@ -465,8 +465,8 @@ def load_audio_channels(filepath: str | Path) -> tuple[np.ndarray, int]:
 def _loaded(load: Callable[[str], tuple[np.ndarray, int]], filepath: str | Path):
     try:
         audio, sr = load(str(filepath))
-    except AudioLoadError:
-        raise  # already says what failed
+    except (AudioLoadError, ConfigError, DependencyError):
+        raise  # already says what failed, or what to fix that isn't the file
     except Exception as e:  # a missing file too: reported as a load failure
         raise AudioLoadError(f"Failed to load audio file: {e}") from e
     return audio.astype(np.float32, copy=False), sr
