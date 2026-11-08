@@ -688,10 +688,12 @@ class TestTrainAst:
         from bioamla.exceptions import DependencyError
         from bioamla.ml.training import train_ast
 
-        missing = DependencyError("ffmpeg is missing")
+        def no_decoder(audio, sampling_rate):  # not a mock: dill can't hash one, and warns
+            raise DependencyError("ffmpeg is missing")
+
         with (
             self._mocks(MagicMock(), tmp_path),
-            patch("bioamla.ml.training.decode_example_audio", side_effect=missing),
+            patch("bioamla.ml.training.decode_example_audio", no_decoder),
             pytest.raises(DependencyError, match="ffmpeg"),
         ):
             train_ast(train_dataset="owner/ds", training_dir=str(tmp_path),
@@ -726,31 +728,52 @@ class TestTrainAst:
         extractor = trainer_cls.call_args.kwargs["processing_class"]
         assert extractor.do_normalize and extractor.model_input_names == ["input_values"]
 
-    def test_normalization_statistics_are_computed_in_process(self, tmp_path, monkeypatch) -> None:
-        """compute_stats runs torch, and datasets forks its workers, where torch deadlocks
-        (#318): the statistics pass must not take ``num_proc`` from the dataloader setting."""
+    def test_training_never_forks_this_torch_live_process(self, tmp_path, monkeypatch) -> None:
+        """datasets forks its workers and torch's thread pool deadlocks in a forked child
+        (#318, #326): no datasets map or filter takes a ``num_proc``, whatever the
+        dataloader setting; the audio check runs on threads. The dataloader workers are
+        torch's own forks (its worker loop sets one thread before any op), and stay so:
+        spawning costs a torch re-import per worker per epoch."""
         from bioamla.ml.training import train_ast
         from datasets import Dataset
 
-        map_procs, original_map, original_filter = {}, Dataset.map, Dataset.filter
+        procs, original_map, original_filter = {}, Dataset.map, Dataset.filter
 
         def recording_map(self, function, *args, **kwargs):
-            map_procs[getattr(function, "__name__", None)] = kwargs.get("num_proc")
+            procs[getattr(function, "__name__", None)] = kwargs.get("num_proc")
             return original_map(self, function, *args, **kwargs)
 
-        def in_process_filter(self, *args, **kwargs):  # the filter isn't what's tested
-            kwargs["num_proc"] = None
-            return original_filter(self, *args, **kwargs)
+        def recording_filter(self, function, *args, **kwargs):
+            procs["filter"] = kwargs.get("num_proc")
+            return original_filter(self, function, *args, **kwargs)
 
         monkeypatch.setattr(Dataset, "map", recording_map)
-        monkeypatch.setattr(Dataset, "filter", in_process_filter)
+        monkeypatch.setattr(Dataset, "filter", recording_filter)
+        # One unreadable file in each split: the threaded check has to drop it.
+        dataset = _real_dataset_dict(tmp_path)
+        (tmp_path / "bad.wav").write_bytes(b"not a wav")
+        for split in dataset:
+            dataset[split] = Dataset.from_dict({
+                "audio": list(dataset[split]["audio"]) + [str(tmp_path / "bad.wav")],
+                "category": list(dataset[split]["category"]) + ["x"],
+            })  # fmt: skip
         fake_trainer = MagicMock()
         fake_trainer.state = SimpleNamespace(log_history=[])
         fake_trainer.accelerator = None
-        with self._mocks(fake_trainer, tmp_path):
+        trainer_cls = MagicMock(return_value=fake_trainer)
+        training_args = MagicMock()
+        with (
+            self._mocks(fake_trainer, tmp_path, trainer_cls=trainer_cls),
+            patch("bioamla.ml.training._load_train_dataset", return_value=(dataset, "category")),
+            patch("transformers.TrainingArguments", training_args),
+        ):
             train_ast(train_dataset="owner/ds", training_dir=str(tmp_path),
                       dataloader_num_workers=4)  # fmt: skip
-        assert "compute_stats" in map_procs and map_procs["compute_stats"] is None
+        assert "compute_stats" in procs and "filter" not in procs
+        assert all(num_proc is None for num_proc in procs.values()), procs
+        assert training_args.call_args.kwargs["dataloader_num_workers"] == 4
+        trained_on = trainer_cls.call_args.kwargs
+        assert len(trained_on["train_dataset"]) == 4 and len(trained_on["eval_dataset"]) == 4
 
     def test_tracker_sees_a_finished_run(self, tmp_path) -> None:
         import json

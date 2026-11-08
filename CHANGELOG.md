@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Training's corrupted-audio check runs on threads instead of a `datasets` worker pool:
+  that pool was the last place bioamla itself forked the torch-live process, the hazard
+  behind the earlier CI hang (torch's own dataloader workers are still forked, which torch
+  makes safe). A tiny eval set no longer makes sklearn warn about an ill-defined precision,
+  recall or F-score: they score 0. The `ml` extra now declares scikit-learn, which the
+  training metrics have always needed (#326)
+
 ## [0.4.0] - 2026-11-05
 
 ### Added

@@ -33,6 +33,7 @@ EXTRAS: dict[str, tuple[str, ...]] = {
     "viz": ("librosa", "matplotlib"),
     "indices": ("librosa", "numba"),
     "detect": ("librosa",),
+    "cluster": ("umap", "hdbscan", "sklearn"),  # before ml: the hint for sklearn
     "ml": (
         "torch",
         "torchaudio",
@@ -40,9 +41,9 @@ EXTRAS: dict[str, tuple[str, ...]] = {
         "datasets",
         "audiomentations",
         "evaluate",
+        "sklearn",
         "mlflow",
     ),
-    "cluster": ("umap", "hdbscan", "sklearn"),
     "server": ("fastapi", "uvicorn"),
 }
 
