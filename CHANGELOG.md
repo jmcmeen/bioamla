@@ -23,6 +23,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- The server reports a job finished only once its record is in the workspace's history, so a
+  client that waits for a job and then reads the history always finds it (#349)
 - FFmpeg encoding has a time limit too, `BIOAMLA_ENCODE_TIMEOUT` seconds (default 600): MP3, M4A
   and OGG output is written by piping float32 samples to ffmpeg instead of through pydub, which
   couldn't take a timeout. A stalled encoder is killed and reported as an `AudioSaveError`, and
