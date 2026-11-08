@@ -16,6 +16,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- FFmpeg encoding has a time limit too, `BIOAMLA_ENCODE_TIMEOUT` seconds (default 600): MP3, M4A
+  and OGG output is written by piping float32 samples to ffmpeg instead of through pydub, which
+  couldn't take a timeout. A stalled encoder is killed and reported as an `AudioSaveError`, and
+  the file is written beside its destination and moved into place, so a failed write leaves any
+  previous file as it was. Encoders get float32 rather than pydub's 16-bit samples (#343)
 - A decoded file with three or more channels is no longer flattened into one interleaved
   channel when it's wrapped as `AudioData` (#339)
 

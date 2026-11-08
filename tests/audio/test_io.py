@@ -207,17 +207,6 @@ class TestBatchProcess:
         assert sum(r.levelname == "WARNING" for r in caplog.records) == 3
 
 
-def test_quiet_32_bit_pcm_is_scaled_as_integers():
-    from pydub import AudioSegment
-
-    from bioamla.audio._pydub import _audiosegment_to_numpy
-
-    raw = np.array([1, -1, 0, 1], dtype=np.int32).tobytes()  # all |x| <= 1
-    segment = AudioSegment(raw, frame_rate=8000, sample_width=4, channels=1)
-    audio, _ = _audiosegment_to_numpy(segment)
-    assert np.abs(audio).max() < 1e-8  # tiny, not full scale
-
-
 def test_wav_bytes_round_trip_exactly():
     """audio_to_wav_bytes / audio_from_wav_bytes carry float32 samples unchanged, mono or
     stereo, with the metadata the caller attaches; bytes that aren't WAV are an

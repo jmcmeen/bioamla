@@ -25,7 +25,13 @@ import numpy as np
 
 from bioamla.audio.data import AudioData
 from bioamla.common.files import prepare_output_path, require_exists
-from bioamla.exceptions import AudioLoadError, AudioSaveError, ConfigError, DependencyError
+from bioamla.exceptions import (
+    AudioLoadError,
+    AudioSaveError,
+    ConfigError,
+    DependencyError,
+    InvalidInputError,
+)
 from bioamla.protocols import OnProgress
 
 logger = logging.getLogger(__name__)
@@ -230,7 +236,12 @@ def save_audio_data(
         The output :class:`~pathlib.Path`.
 
     Raises:
-        AudioSaveError: If encoding/writing fails.
+        InvalidInputError: If the format can't hold the audio (MP3 holds at most 2
+            channels).
+        DependencyError: If the format needs ffmpeg and it isn't installed.
+        ConfigError: If ``BIOAMLA_ENCODE_TIMEOUT`` isn't a positive number.
+        AudioSaveError: If encoding/writing fails, or ffmpeg runs past
+            ``BIOAMLA_ENCODE_TIMEOUT`` seconds (default 600).
     """
     from bioamla.audio._pydub import save_audio
 
@@ -243,6 +254,8 @@ def save_audio_data(
             audio.sample_rate,
             format=format,
         )
+    except (AudioSaveError, ConfigError, DependencyError, InvalidInputError):
+        raise  # already says what failed, or what to fix that isn't the file
     except Exception as e:
         raise AudioSaveError(f"Failed to save audio: {e}") from e
 
@@ -269,6 +282,9 @@ def save_audio_data_as(
         The output :class:`~pathlib.Path`.
 
     Raises:
+        InvalidInputError: If the format can't hold the audio.
+        DependencyError: If the format needs ffmpeg and it isn't installed.
+        ConfigError: If ``BIOAMLA_ENCODE_TIMEOUT`` isn't a positive number.
         AudioSaveError: If resampling or encoding/writing fails.
     """
     data_to_save = audio
@@ -515,8 +531,8 @@ def save_audio(
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         _pydub_save_audio(str(path), audio, sample_rate, format=format, bit_depth=bit_depth)
-    except (InvalidInputError, AudioSaveError):
-        raise  # already says what failed
+    except (InvalidInputError, AudioSaveError, ConfigError, DependencyError):
+        raise  # already says what failed, or what to fix that isn't the file
     except Exception as e:
         raise AudioSaveError(f"Failed to save audio: {e}") from e
     return str(path)

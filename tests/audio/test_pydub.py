@@ -9,76 +9,6 @@ from bioamla.audio import _pydub
 from bioamla.exceptions import AudioLoadError, AudioSaveError, NotFoundError
 
 
-def _make_segment(samples: np.ndarray, sample_width: int, channels: int, frame_rate: int):
-    seg = MagicMock()
-    seg.get_array_of_samples.return_value = samples
-    seg.sample_width = sample_width
-    seg.channels = channels
-    seg.frame_rate = frame_rate
-    return seg
-
-
-class TestAudioSegmentToNumpy:
-    def test_8bit(self) -> None:
-        seg = _make_segment(np.array([128, 192, 64], dtype=np.uint8), 1, 1, 16000)
-        audio, sr = _pydub._audiosegment_to_numpy(seg)
-        assert sr == 16000
-        assert audio.dtype == np.float32
-        assert audio[0] == pytest.approx(0.0)
-
-    def test_16bit(self) -> None:
-        seg = _make_segment(np.array([0, 16384, -16384], dtype=np.int16), 2, 1, 16000)
-        audio, _ = _pydub._audiosegment_to_numpy(seg)
-        assert audio[1] == pytest.approx(0.5, abs=1e-3)
-
-    def test_24bit(self) -> None:
-        seg = _make_segment(np.array([0, 4194304], dtype=np.int32), 3, 1, 16000)
-        audio, _ = _pydub._audiosegment_to_numpy(seg)
-        assert audio[1] == pytest.approx(0.5, abs=1e-3)
-
-    def test_32bit_int(self) -> None:
-        seg = _make_segment(np.array([0, 1073741824], dtype=np.int32), 4, 1, 16000)
-        audio, _ = _pydub._audiosegment_to_numpy(seg)
-        assert audio[1] == pytest.approx(0.5, abs=1e-3)
-
-    def test_32bit_float(self) -> None:
-        seg = _make_segment(np.array([0.0, 0.5], dtype=np.float32), 4, 1, 16000)
-        audio, _ = _pydub._audiosegment_to_numpy(seg)
-        assert audio[1] == pytest.approx(0.5)
-
-    def test_unsupported_width_raises(self) -> None:
-        seg = _make_segment(np.array([1, 2], dtype=np.int16), 5, 1, 16000)
-        with pytest.raises(AudioLoadError):
-            _pydub._audiosegment_to_numpy(seg)
-
-    def test_stereo_downmix(self) -> None:
-        # interleaved L/R: [0, 1, 0, 1] -> mono [0.5, 0.5] after scaling
-        samples = np.array([0, 16384, 0, 16384], dtype=np.int16)
-        seg = _make_segment(samples, 2, 2, 16000)
-        audio, _ = _pydub._audiosegment_to_numpy(seg)
-        assert len(audio) == 2
-
-
-class TestNumpyToAudioSegment:
-    def test_mono(self) -> None:
-        with patch.object(_pydub, "AudioSegment") as seg_cls:
-            _pydub._numpy_to_audiosegment(np.array([0.0, 0.5, -0.5], dtype=np.float32), 16000)
-            seg_cls.assert_called_once()
-            _, kwargs = seg_cls.call_args
-            assert kwargs["channels"] == 1
-            assert kwargs["frame_rate"] == 16000
-
-    def test_2d_single_channel_flattened(self) -> None:
-        with patch.object(_pydub, "AudioSegment") as seg_cls:
-            _pydub._numpy_to_audiosegment(np.zeros((4, 1), dtype=np.float32), 16000, channels=1)
-            seg_cls.assert_called_once()
-
-    def test_clipping(self) -> None:
-        with patch.object(_pydub, "AudioSegment") as seg_cls:
-            _pydub._numpy_to_audiosegment(np.array([2.0, -2.0], dtype=np.float32), 16000)
-            seg_cls.assert_called_once()
-
-
 class TestLoadAudio:
     def test_missing_file(self, tmp_path) -> None:
         with pytest.raises(NotFoundError):
@@ -142,11 +72,9 @@ class TestSaveAudio:
             assert sf.info(tmp_path / name).subtype == "PCM_16"
 
     def test_save_m4a_uses_ipod(self, tmp_path) -> None:
-        seg = MagicMock()
-        with patch.object(_pydub, "_numpy_to_audiosegment", return_value=seg):
+        with patch.object(_pydub, "_ffmpeg_encode") as encode:
             _pydub.save_audio(str(tmp_path / "out.m4a"), np.zeros(10, dtype=np.float32), 16000)
-            _, kwargs = seg.export.call_args
-            assert kwargs["format"] == "ipod"
+        assert encode.call_args.args[3] == "ipod"
 
     def test_save_explicit_format(self, tmp_path) -> None:
         import soundfile as sf
@@ -158,7 +86,7 @@ class TestSaveAudio:
             assert sf.info(path).format == "FLAC" and sf.info(path).subtype == "PCM_24"
 
     def test_save_error_wrapped(self, tmp_path) -> None:
-        with patch.object(_pydub, "_numpy_to_audiosegment", side_effect=RuntimeError("boom")):
+        with patch.object(_pydub, "_ffmpeg_encode", side_effect=RuntimeError("boom")):
             with pytest.raises(AudioSaveError, match="Failed to save"):
                 _pydub.save_audio(str(tmp_path / "out.mp3"), np.zeros(10, dtype=np.float32), 16000)
 

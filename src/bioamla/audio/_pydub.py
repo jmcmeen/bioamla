@@ -1,4 +1,4 @@
-"""Low-level audio I/O backend using soundfile / pydub / ffprobe.
+"""Low-level audio I/O backend using soundfile / ffmpeg / ffprobe.
 
 This private module is the raw decode/encode/metadata backend for
 :mod:`bioamla.audio`. Higher-level modules (:mod:`bioamla.audio.io`,
@@ -15,7 +15,8 @@ Design notes:
   the caller for ever
 - Uses ffprobe for fast metadata extraction without full file decode
 - Saving writes WAV and FLAC through soundfile (16-bit unless a bit depth is given),
-  other formats through pydub at 16 bits
+  other formats by feeding ffmpeg float32, under ``BIOAMLA_ENCODE_TIMEOUT`` seconds
+  (default 600)
 """
 
 import json
@@ -28,7 +29,6 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
-from pydub import AudioSegment
 
 from bioamla.exceptions import (
     AudioLoadError,
@@ -52,6 +52,11 @@ DEFAULT_DECODE_TIMEOUT = 600.0
 _PROBE_TIMEOUT = 30.0
 
 
+#: Seconds an ffmpeg encode (MP3, M4A, OGG) may take before it's stopped, unless
+#: ``BIOAMLA_ENCODE_TIMEOUT`` says otherwise.
+DEFAULT_ENCODE_TIMEOUT = 600.0
+
+
 def decode_timeout() -> float:
     """Seconds an ffmpeg decode may take: ``BIOAMLA_DECODE_TIMEOUT``, or
     :data:`DEFAULT_DECODE_TIMEOUT`.
@@ -59,111 +64,30 @@ def decode_timeout() -> float:
     Raises:
         ConfigError: If ``BIOAMLA_DECODE_TIMEOUT`` isn't a positive number.
     """
-    value = os.environ.get("BIOAMLA_DECODE_TIMEOUT", "").strip()
+    return _seconds_from_env("BIOAMLA_DECODE_TIMEOUT", DEFAULT_DECODE_TIMEOUT)
+
+
+def encode_timeout() -> float:
+    """Seconds an ffmpeg encode may take: ``BIOAMLA_ENCODE_TIMEOUT``, or
+    :data:`DEFAULT_ENCODE_TIMEOUT`.
+
+    Raises:
+        ConfigError: If ``BIOAMLA_ENCODE_TIMEOUT`` isn't a positive number.
+    """
+    return _seconds_from_env("BIOAMLA_ENCODE_TIMEOUT", DEFAULT_ENCODE_TIMEOUT)
+
+
+def _seconds_from_env(name: str, default: float) -> float:
+    value = os.environ.get(name, "").strip()
     if not value:
-        return DEFAULT_DECODE_TIMEOUT
+        return default
     try:
         seconds = float(value)
     except ValueError:
         seconds = math.nan
     if not (math.isfinite(seconds) and seconds > 0):
-        raise ConfigError(
-            f"BIOAMLA_DECODE_TIMEOUT must be a positive number of seconds, got {value!r}"
-        )
+        raise ConfigError(f"{name} must be a positive number of seconds, got {value!r}")
     return seconds
-
-
-def _audiosegment_to_numpy(
-    segment: AudioSegment, keep_channels: bool = False
-) -> tuple[np.ndarray, int]:
-    """Convert pydub AudioSegment to numpy float32 array.
-
-    Stereo/multi-channel audio is downmixed to mono by averaging channels, unless
-    ``keep_channels``: then it is ``(n_samples, n_channels)``.
-
-    Args:
-        segment: AudioSegment to convert.
-        keep_channels: Keep every channel instead of downmixing.
-
-    Returns:
-        Tuple of (audio_array, sample_rate), float32 in [-1.0, 1.0].
-
-    Raises:
-        AudioLoadError: If sample width is not 1, 2, 3, or 4 bytes.
-    """
-    array = np.array(segment.get_array_of_samples())
-    sample_width = segment.sample_width
-
-    if sample_width == 1:
-        # 8-bit unsigned, range [0, 255], center at 128
-        array = array.astype(np.uint8)
-        audio = (array.astype(np.float32) - 128.0) / 128.0
-    elif sample_width == 2:
-        # 16-bit signed, range [-32768, 32767]
-        array = array.astype(np.int16)
-        audio = array.astype(np.float32) / 32768.0
-    elif sample_width == 3:
-        # 24-bit signed, range [-8388608, 8388607]
-        array = array.astype(np.int32)
-        audio = array.astype(np.float32) / 8388608.0
-    elif sample_width == 4:
-        # 32-bit: float samples stay as they are; integer PCM is scaled. Decided by
-        # the array's type, never by the values (a near-silent int file is not float).
-        if np.issubdtype(array.dtype, np.floating):
-            audio = array.astype(np.float32)
-        else:
-            audio = array.astype(np.int32).astype(np.float32) / 2147483648.0
-    else:
-        raise AudioLoadError(
-            f"Unsupported sample width: {sample_width} bytes. "
-            f"Expected 1 (8-bit), 2 (16-bit), 3 (24-bit), or 4 (32-bit)."
-        )
-
-    # Downmix to mono if multi-channel
-    if segment.channels > 1:
-        audio = audio.reshape((-1, segment.channels))
-        if keep_channels:
-            return audio, segment.frame_rate
-        audio = audio.mean(axis=1)
-        logger.debug(
-            f"Downmixed {segment.channels}-channel audio to mono "
-            f"({sample_width * 8}-bit, {segment.frame_rate}Hz)"
-        )
-    else:
-        logger.debug(f"Loaded mono audio ({sample_width * 8}-bit, {segment.frame_rate}Hz)")
-
-    return audio, segment.frame_rate
-
-
-def _numpy_to_audiosegment(
-    audio: np.ndarray, sample_rate: int, channels: int | None = None
-) -> AudioSegment:
-    """Convert numpy float32 array to pydub AudioSegment.
-
-    Args:
-        audio: Audio data as numpy array (float32, range [-1.0, 1.0]).
-        sample_rate: Sample rate in Hz.
-        channels: Number of channels (auto-detected if None).
-
-    Returns:
-        AudioSegment object.
-    """
-    if channels is None:
-        channels = 1 if audio.ndim == 1 else audio.shape[1]
-
-    if audio.ndim == 2 and channels == 1:
-        audio = audio.flatten()
-
-    # Convert float32 [-1.0, 1.0] to int16
-    audio_clipped = np.clip(audio, -1.0, 1.0)
-    audio_int16 = (audio_clipped * 32767.0).astype(np.int16)
-
-    return AudioSegment(
-        audio_int16.tobytes(),
-        frame_rate=sample_rate,
-        sample_width=2,  # 16-bit
-        channels=channels,
-    )
 
 
 # Formats soundfile reads natively (and can seek in without decoding the rest).
@@ -472,7 +396,8 @@ def save_audio(
     """Save numpy audio array to file.
 
     WAV and FLAC are written by soundfile, at ``bit_depth`` bits (default 16); other
-    formats by pydub (ffmpeg), at 16 bits.
+    formats by ffmpeg, fed float32 and stopped after :func:`encode_timeout` seconds;
+    an ffmpeg write appears whole or not at all, leaving any previous file as it was.
 
     Args:
         filepath: Destination file path.
@@ -484,7 +409,9 @@ def save_audio(
     Raises:
         InvalidInputError: If ``bit_depth`` doesn't apply to the format, or MP3 is
             asked to hold more than 2 channels.
-        AudioSaveError: If file cannot be saved.
+        DependencyError: If the format needs ffmpeg and it isn't installed.
+        ConfigError: If ``BIOAMLA_ENCODE_TIMEOUT`` isn't a positive number.
+        AudioSaveError: If file cannot be saved, or ffmpeg runs past the limit.
     """
     path = Path(filepath)
     format_to_use = output_format(path, format)
@@ -504,12 +431,64 @@ def save_audio(
             sf.write(str(path), np.clip(audio, -1.0, 1.0), sample_rate,
                      subtype=subtype, format=format_to_use.upper())  # fmt: skip
             return
-        channels = 1 if audio.ndim == 1 else audio.shape[1]
-        segment = _numpy_to_audiosegment(audio, sample_rate, channels)
-        # export() returns the open output file; close it rather than leak it.
-        segment.export(str(path), format=format_to_use).close()
+        _ffmpeg_encode(path, audio, sample_rate, format_to_use)
+    except (AudioSaveError, ConfigError, DependencyError):
+        raise
     except Exception as e:
         raise AudioSaveError(f"Failed to save audio to '{filepath}': {e}") from e
+
+
+def _ffmpeg_encode(path: Path, audio: np.ndarray, sample_rate: int, format: str) -> None:
+    """Write ``audio`` to ``path`` in ``format`` (an ffmpeg muxer name: ``mp3``,
+    ``ipod``, ``ogg``) by piping float32 samples to ffmpeg. The file is written beside
+    ``path`` and moved into place, so a failure leaves nothing half-written.
+
+    Raises:
+        DependencyError: If ffmpeg isn't installed.
+        ConfigError: If ``BIOAMLA_ENCODE_TIMEOUT`` isn't a positive number.
+        AudioSaveError: If ffmpeg fails, or runs past :func:`encode_timeout` (it's
+            then killed).
+    """
+    import secrets
+
+    if shutil.which("ffmpeg") is None:
+        raise DependencyError(
+            f"ffmpeg is required to write {format.upper()} files but was not found on PATH."
+        )
+    limit = encode_timeout()
+    channels = 1 if audio.ndim == 1 else audio.shape[1]
+    # One float32 copy, cleaned in place: NaN is silence, infinities full scale.
+    samples = np.array(audio, dtype="<f4", order="C")
+    np.nan_to_num(samples, copy=False, nan=0.0, posinf=1.0, neginf=-1.0)
+    np.clip(samples, -1.0, 1.0, out=samples)
+    # Saving over a symlink writes its target, and a replaced file keeps its mode.
+    path = path.resolve() if path.is_symlink() else path
+    tmp = path.parent / f".{path.name}.{secrets.token_hex(4)}.part"
+    cmd = ["ffmpeg", "-v", "error", "-f", "f32le", "-ar", str(sample_rate),
+           "-ac", str(channels), "-i", "pipe:0", "-f", format, "-y", str(tmp)]  # fmt: skip
+    done = False
+    try:
+        try:
+            # On a timeout, run() kills ffmpeg before raising.
+            result = subprocess.run(cmd, input=memoryview(samples).cast("B"),
+                                    capture_output=True, check=False, timeout=limit)  # fmt: skip
+        except subprocess.TimeoutExpired:
+            raise AudioSaveError(
+                f"Failed to save audio to '{path}': ffmpeg was still encoding after "
+                f"{limit:g} s and was stopped (BIOAMLA_ENCODE_TIMEOUT sets the limit)"
+            ) from None
+        except OSError as e:
+            raise AudioSaveError(f"Failed to save audio to '{path}': {e}") from e
+        if result.returncode != 0:
+            detail = result.stderr.decode(errors="replace").strip()
+            raise AudioSaveError(f"Failed to save audio to '{path}': {detail[-500:]}")
+        if path.exists():
+            shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+        done = True
+    finally:
+        if not done:
+            tmp.unlink(missing_ok=True)
 
 
 def _get_metadata_ffprobe(filepath: str) -> dict | None:
