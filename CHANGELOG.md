@@ -41,6 +41,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- FFmpeg decoding has a time limit, `BIOAMLA_DECODE_TIMEOUT` seconds (default 600): a decoder
+  that stalls on a whole file, a window or a streamed block is killed and reported as an
+  `AudioLoadError`, instead of holding a command, a server request or a job for ever. Whole-file
+  loads of MP3, M4A and the like now decode straight to float32 through the same FFmpeg call
+  instead of through pydub, which also drops pydub's 16-bit rounding. When ffprobe can't read
+  a file's header, soundfile reads it (WAV, FLAC, OGG) instead of the whole file being decoded
+  to measure it (#338)
 - Files the server receives, the client downloads and `remote audio` saves get the mode a
   plain `open()` gives (0666 less the umask) instead of the owner-only 0600 of a temporary
   file (#332)

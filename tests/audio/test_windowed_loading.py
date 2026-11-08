@@ -154,3 +154,47 @@ class TestStream:
     def test_missing_file(self, tmp_path) -> None:
         with pytest.raises(NotFoundError):
             next(stream_audio_data(tmp_path / "nope.wav", block_duration=1.0))
+
+
+@pytest.mark.usefixtures("requires_ffmpeg_cli")
+@pytest.mark.skipif(__import__("os").name == "nt", reason="a shell-script ffmpeg")
+def test_a_stalled_ffmpeg_is_stopped_on_every_decode_path(noise_mp3, tmp_path, monkeypatch):
+    """Whole-file loads, windows and streamed blocks all run ffmpeg under
+    BIOAMLA_DECODE_TIMEOUT: a decoder that stalls is killed and reported, not waited on."""
+    import os
+    import shutil
+    import time
+
+    from bioamla.exceptions import AudioLoadError
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "ffmpeg").write_text("#!/bin/sh\nexec sleep 60\n")
+    (bin_dir / "ffmpeg").chmod(0o755)
+    (bin_dir / "ffprobe").symlink_to(shutil.which("ffprobe"))  # the header is read as usual
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("BIOAMLA_DECODE_TIMEOUT", "0.5")
+
+    for decode in (
+        lambda: load_audio_data(noise_mp3),
+        lambda: load_audio_data(noise_mp3, start=1.0, duration=0.5),
+        lambda: list(stream_audio_data(noise_mp3, block_duration=1.0)),
+    ):
+        began = time.monotonic()
+        with pytest.raises(
+            AudioLoadError, match=r"still decoding after 0\.5 s.*BIOAMLA_DECODE_TIMEOUT"
+        ):
+            decode()
+        assert time.monotonic() - began < 10
+
+
+@pytest.mark.usefixtures("requires_ffmpeg_cli")
+def test_a_bad_decode_timeout_is_a_config_error(noise_mp3, monkeypatch):
+    from bioamla.exceptions import ConfigError
+
+    for bad in ("soon", "0", "-1", "inf", "nan"):
+        monkeypatch.setenv("BIOAMLA_DECODE_TIMEOUT", bad)
+        with pytest.raises(ConfigError, match="BIOAMLA_DECODE_TIMEOUT must be a positive"):
+            load_audio_data(noise_mp3)
+    monkeypatch.setenv("BIOAMLA_DECODE_TIMEOUT", " ")  # blank: the default
+    assert load_audio_data(noise_mp3).sample_rate == SR

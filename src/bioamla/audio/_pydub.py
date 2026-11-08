@@ -8,7 +8,10 @@ and dataclass return types; external callers should use the public
 
 Design notes:
 - All audio loading returns mono float32 in [-1.0, 1.0]
-- Uses soundfile for WAV/FLAC/OGG (fast native C) with pydub fallback
+- Uses soundfile for WAV/FLAC/OGG (fast native C); everything else, and native files
+  soundfile can't read, decode through ffmpeg as float32, with a time limit
+  (``BIOAMLA_DECODE_TIMEOUT`` seconds, default 600) so a stalled decoder can't hold
+  the caller for ever
 - Uses ffprobe for fast metadata extraction without full file decode
 - Saving writes WAV and FLAC through soundfile (16-bit unless a bit depth is given),
   other formats through pydub at 16 bits
@@ -16,6 +19,8 @@ Design notes:
 
 import json
 import logging
+import math
+import os
 import shutil
 import subprocess
 from collections.abc import Iterator
@@ -27,12 +32,40 @@ from pydub import AudioSegment
 from bioamla.exceptions import (
     AudioLoadError,
     AudioSaveError,
+    ConfigError,
     DependencyError,
     InvalidInputError,
     NotFoundError,
 )
 
 logger = logging.getLogger(__name__)
+
+#: Seconds an ffmpeg decode may take before it's stopped, unless
+#: ``BIOAMLA_DECODE_TIMEOUT`` says otherwise. Generous: a multi-hour MP3 decodes
+#: in well under a minute; this is for decoders that stall (a truncated file on a
+#: network mount, say), so a server worker or a job isn't held for ever.
+DEFAULT_DECODE_TIMEOUT = 600.0
+
+
+def decode_timeout() -> float:
+    """Seconds an ffmpeg decode may take: ``BIOAMLA_DECODE_TIMEOUT``, or
+    :data:`DEFAULT_DECODE_TIMEOUT`.
+
+    Raises:
+        ConfigError: If ``BIOAMLA_DECODE_TIMEOUT`` isn't a positive number.
+    """
+    value = os.environ.get("BIOAMLA_DECODE_TIMEOUT", "").strip()
+    if not value:
+        return DEFAULT_DECODE_TIMEOUT
+    try:
+        seconds = float(value)
+    except ValueError:
+        seconds = math.nan
+    if not (math.isfinite(seconds) and seconds > 0):
+        raise ConfigError(
+            f"BIOAMLA_DECODE_TIMEOUT must be a positive number of seconds, got {value!r}"
+        )
+    return seconds
 
 
 def _audiosegment_to_numpy(
@@ -128,30 +161,30 @@ def _numpy_to_audiosegment(
     )
 
 
-def _load_via_pydub(filepath: str, keep_channels: bool = False) -> tuple[np.ndarray, int]:
-    """Load audio file via pydub/ffmpeg.
+def _load_via_ffmpeg(filepath: str, keep_channels: bool = False) -> tuple[np.ndarray, int]:
+    """Decode a whole audio file with ffmpeg, as float32.
 
     Args:
         filepath: Path to audio file.
-        keep_channels: Keep every channel (``(n_samples, n_channels)``) instead of
-            downmixing to mono.
+        keep_channels: Keep every channel (``(n_samples, n_channels)``; 1-D for a
+            mono file) instead of downmixing to mono.
 
     Returns:
         Tuple of (audio_array, sample_rate).
 
     Raises:
         NotFoundError: If file doesn't exist.
-        AudioLoadError: If file cannot be loaded.
+        DependencyError: If ffmpeg isn't installed.
+        AudioLoadError: If the file cannot be decoded, or ffmpeg runs past
+            :func:`decode_timeout`.
     """
     path = Path(filepath)
     if not path.exists():
         raise NotFoundError(f"Audio file not found: {filepath}")
-
-    try:
-        segment = AudioSegment.from_file(str(path))
-        return _audiosegment_to_numpy(segment, keep_channels=keep_channels)
-    except Exception as e:
-        raise AudioLoadError(f"Error opening '{filepath}': {e}") from e
+    audio, sample_rate = _ffmpeg_decode(path, 0.0, None)
+    if keep_channels:
+        return (audio[:, 0] if audio.shape[1] == 1 else audio), sample_rate
+    return _to_mono(audio).astype(np.float32, copy=False), sample_rate
 
 
 # Formats soundfile reads natively (and can seek in without decoding the rest).
@@ -165,11 +198,13 @@ def _to_mono(audio: np.ndarray) -> np.ndarray:
 def load_audio_channels(filepath: str) -> tuple[np.ndarray, int]:
     """Load an audio file keeping its channels: 1-D for mono, ``(n_samples,
     n_channels)`` otherwise, float32 in [-1.0, 1.0]. soundfile (native C, ~10-30x
-    faster) for WAV/FLAC/OGG, pydub (ffmpeg) for the rest or when soundfile fails.
+    faster) for WAV/FLAC/OGG, ffmpeg for the rest or when soundfile fails.
 
     Raises:
         NotFoundError: If file doesn't exist.
-        AudioLoadError: If file cannot be loaded.
+        DependencyError: If the format needs ffmpeg and it isn't installed.
+        AudioLoadError: If file cannot be loaded, or ffmpeg runs past
+            :func:`decode_timeout`.
     """
     path = Path(filepath)
     if not path.exists():
@@ -181,8 +216,8 @@ def load_audio_channels(filepath: str) -> tuple[np.ndarray, int]:
             audio, sample_rate = sf.read(str(path), dtype="float32", always_2d=False)
             return audio, sample_rate
         except Exception as e:
-            logger.debug(f"soundfile failed for {filepath}, using pydub fallback: {e}")
-    return _load_via_pydub(str(path), keep_channels=True)
+            logger.debug(f"soundfile failed for {filepath}, using ffmpeg: {e}")
+    return _load_via_ffmpeg(str(path), keep_channels=True)
 
 
 def load_audio(filepath: str) -> tuple[np.ndarray, int]:
@@ -249,6 +284,19 @@ _FFMPEG_PREROLL = 0.25
 
 def _ffmpeg_window(path: Path, start: float, duration: float | None) -> tuple[np.ndarray, int]:
     """Decode ``[start, start + duration)`` of ``path`` with ffmpeg, mono float32."""
+    audio, sample_rate = _ffmpeg_decode(path, start, duration)
+    return _to_mono(audio).astype(np.float32, copy=False), sample_rate
+
+
+def _ffmpeg_decode(path: Path, start: float, duration: float | None) -> tuple[np.ndarray, int]:
+    """Decode ``[start, start + duration)`` of ``path`` with ffmpeg: float32,
+    ``(n_samples, n_channels)``. ``duration=None`` reads to the end.
+
+    Raises:
+        DependencyError: If ffmpeg isn't installed.
+        AudioLoadError: If ffprobe can't read the stream format, ffmpeg fails, or it
+            runs past :func:`decode_timeout` (the process is then killed).
+    """
     if shutil.which("ffmpeg") is None:
         raise DependencyError(
             f"ffmpeg is required to read {path.suffix or 'this'} files but was not found on PATH."
@@ -274,8 +322,15 @@ def _ffmpeg_window(path: Path, start: float, duration: float | None) -> tuple[np
     if duration is not None:
         cmd += ["-t", f"{duration + preroll:.6f}"]
     cmd += ["-map", "0:a:0", "-f", "f32le", "-acodec", "pcm_f32le", "-"]
+    limit = decode_timeout()
     try:
-        result = subprocess.run(cmd, capture_output=True, check=False)
+        # On a timeout, run() kills ffmpeg before raising.
+        result = subprocess.run(cmd, capture_output=True, check=False, timeout=limit)
+    except subprocess.TimeoutExpired:
+        raise AudioLoadError(
+            f"Error opening '{path}': ffmpeg was still decoding after {limit:g} s and was "
+            "stopped (BIOAMLA_DECODE_TIMEOUT sets the limit)"
+        ) from None
     except OSError as e:
         raise AudioLoadError(f"Error opening '{path}': {e}") from e
     if result.returncode != 0:
@@ -287,7 +342,7 @@ def _ffmpeg_window(path: Path, start: float, duration: float | None) -> tuple[np
     audio = audio[round(preroll * sample_rate) :]
     if duration is not None:
         audio = audio[: round(duration * sample_rate)]
-    return _to_mono(audio).astype(np.float32, copy=False), sample_rate
+    return audio, sample_rate
 
 
 def iter_audio_blocks(
@@ -551,8 +606,8 @@ def _get_metadata_ffprobe(filepath: str) -> dict | None:
 def get_audio_info(filepath: str) -> dict:
     """Get audio file metadata without loading full audio data.
 
-    Uses ffprobe for fast header-only extraction. Falls back to
-    full pydub decode if ffprobe fails.
+    Uses ffprobe for fast header-only extraction. If ffprobe can't read the
+    file (or isn't installed), soundfile reads the header of a WAV, FLAC or OGG.
 
     Args:
         filepath: Path to audio file.
@@ -563,6 +618,7 @@ def get_audio_info(filepath: str) -> dict:
 
     Raises:
         NotFoundError: If file doesn't exist.
+        DependencyError: If ffprobe isn't installed and soundfile can't read the file.
         AudioLoadError: If metadata cannot be extracted.
     """
     path = Path(filepath)
@@ -575,30 +631,32 @@ def get_audio_info(filepath: str) -> dict:
         logger.debug(f"Extracted metadata via ffprobe: {filepath}")
         return metadata
 
-    # Fallback: load full file with pydub
-    logger.debug(f"ffprobe failed, using pydub full decode: {filepath}")
-
+    # ffprobe couldn't read it, or isn't installed. soundfile reads WAV, FLAC and OGG
+    # headers itself; anything else has no other reader that doesn't decode it all.
+    logger.debug(f"ffprobe failed, reading the header with soundfile: {filepath}")
     try:
-        segment = AudioSegment.from_file(str(path))
+        import soundfile as sf
 
-        duration_sec = len(segment) / 1000.0
-        sample_rate = segment.frame_rate
-        channels = segment.channels
-        samples = int(duration_sec * sample_rate)
-        bit_depth = segment.sample_width * 8 if segment.sample_width else None
-
-        subtype_map = {1: "PCM_U8", 2: "PCM_16", 3: "PCM_24", 4: "PCM_32"}
-        subtype = subtype_map.get(segment.sample_width)
-
-        return {
-            "duration": duration_sec,
-            "sample_rate": sample_rate,
-            "channels": channels,
-            "samples": samples,
-            "format": path.suffix.upper().lstrip("."),
-            "codec": None,
-            "bit_depth": bit_depth,
-            "subtype": subtype,
-        }
+        info = sf.info(str(path))
     except Exception as e:
-        raise AudioLoadError(f"Failed to get audio info from '{filepath}': {e}") from e
+        if shutil.which("ffprobe") is None:
+            raise DependencyError(
+                f"ffprobe is required to read {path.suffix or 'this'} files but was not "
+                "found on PATH."
+            ) from e
+        raise AudioLoadError(
+            f"Failed to get audio info from '{filepath}': neither ffprobe nor soundfile "
+            "could read its header"
+        ) from e
+    bit_depths = {"PCM_U8": 8, "PCM_S8": 8, "PCM_16": 16, "PCM_24": 24, "PCM_32": 32,
+                  "FLOAT": 32, "DOUBLE": 64}  # fmt: skip
+    return {
+        "duration": info.duration,
+        "sample_rate": info.samplerate,
+        "channels": info.channels,
+        "samples": info.frames,
+        "format": path.suffix.upper().lstrip("."),
+        "codec": None,
+        "bit_depth": bit_depths.get(info.subtype),
+        "subtype": info.subtype,
+    }

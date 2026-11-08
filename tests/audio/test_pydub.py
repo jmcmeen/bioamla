@@ -89,29 +89,32 @@ class TestLoadAudio:
         assert sr == 16000
         assert audio.ndim == 1
 
-    def test_soundfile_failure_falls_back_to_pydub(self, test_audio_path: str) -> None:
-        seg = _make_segment(np.array([0, 16384], dtype=np.int16), 2, 1, 16000)
+    def test_soundfile_failure_falls_back_to_ffmpeg(self, test_audio_path: str) -> None:
+        decoded = (np.array([[0.0], [0.5]], dtype=np.float32), 16000)
         with (
             patch("soundfile.read", side_effect=RuntimeError("sf bad")),
-            patch.object(_pydub.AudioSegment, "from_file", return_value=seg),
+            patch.object(_pydub, "_ffmpeg_decode", return_value=decoded) as decode,
         ):
             audio, sr = _pydub.load_audio(test_audio_path)
-        assert sr == 16000
+        assert sr == 16000 and audio.tolist() == [0.0, 0.5]
+        assert decode.call_args.args[1:] == (0.0, None)  # the whole file
 
-    def test_non_native_format_uses_pydub(self, tmp_path) -> None:
+    def test_non_native_format_uses_ffmpeg(self, tmp_path) -> None:
         path = tmp_path / "x.mp3"
         path.write_bytes(b"fake")
-        seg = _make_segment(np.array([0, 16384], dtype=np.int16), 2, 1, 16000)
-        with patch.object(_pydub.AudioSegment, "from_file", return_value=seg):
+        stereo = np.array([[0.2, 0.4], [0.0, 1.0]], dtype=np.float32)
+        with patch.object(_pydub, "_ffmpeg_decode", return_value=(stereo, 16000)):
             audio, sr = _pydub.load_audio(str(path))
-        assert sr == 16000
+            kept, _ = _pydub.load_audio_channels(str(path))
+        assert sr == 16000 and np.allclose(audio, [0.3, 0.5])  # downmixed
+        assert kept.shape == (2, 2)  # load_audio_channels keeps them
 
-    def test_pydub_load_error_wrapped(self, tmp_path) -> None:
+    @pytest.mark.usefixtures("requires_ffmpeg_cli")
+    def test_undecodable_file_is_an_audio_load_error(self, tmp_path) -> None:
         path = tmp_path / "x.mp3"
         path.write_bytes(b"fake")
-        with patch.object(_pydub.AudioSegment, "from_file", side_effect=RuntimeError("boom")):
-            with pytest.raises(AudioLoadError, match="Error opening"):
-                _pydub.load_audio(str(path))
+        with pytest.raises(AudioLoadError, match="Error opening"):
+            _pydub.load_audio(str(path))
 
     def test_soundfile_stereo_downmix(self, test_audio_path: str) -> None:
         stereo = np.zeros((100, 2), dtype=np.float32)
@@ -246,25 +249,23 @@ class TestGetAudioInfo:
         with patch.object(_pydub, "_get_metadata_ffprobe", return_value=meta):
             assert _pydub.get_audio_info(test_audio_path) is meta
 
-    def test_pydub_fallback(self, test_audio_path: str) -> None:
-        seg = MagicMock()
-        seg.__len__ = lambda self: 1000  # 1000 ms
-        seg.frame_rate = 16000
-        seg.channels = 1
-        seg.sample_width = 2
-        with (
-            patch.object(_pydub, "_get_metadata_ffprobe", return_value=None),
-            patch.object(_pydub.AudioSegment, "from_file", return_value=seg),
-        ):
+    def test_soundfile_reads_the_header_when_ffprobe_cannot(self, test_audio_path: str) -> None:
+        with patch.object(_pydub, "_get_metadata_ffprobe", return_value=None):
             meta = _pydub.get_audio_info(test_audio_path)
-        assert meta["sample_rate"] == 16000
-        assert meta["subtype"] == "PCM_16"
-        assert meta["bit_depth"] == 16
+        assert meta["sample_rate"] == 16000 and meta["channels"] == 1
+        assert meta["subtype"] == "PCM_16" and meta["bit_depth"] == 16
+        assert meta["samples"] > 0 and meta["duration"] == meta["samples"] / 16000
 
-    def test_pydub_fallback_error(self, test_audio_path: str) -> None:
-        with (
-            patch.object(_pydub, "_get_metadata_ffprobe", return_value=None),
-            patch.object(_pydub.AudioSegment, "from_file", side_effect=RuntimeError("boom")),
-        ):
-            with pytest.raises(AudioLoadError, match="Failed to get audio info"):
-                _pydub.get_audio_info(test_audio_path)
+    def test_no_header_reader_is_an_error(self, tmp_path, monkeypatch) -> None:
+        import shutil
+
+        from bioamla.exceptions import DependencyError
+
+        path = tmp_path / "x.mp3"
+        path.write_bytes(b"fake")
+        with patch.object(_pydub, "_get_metadata_ffprobe", return_value=None):
+            with pytest.raises(AudioLoadError, match="neither ffprobe nor soundfile"):
+                _pydub.get_audio_info(str(path))
+            monkeypatch.setattr(shutil, "which", lambda name: None)
+            with pytest.raises(DependencyError, match="ffprobe is required to read .mp3"):
+                _pydub.get_audio_info(str(path))
