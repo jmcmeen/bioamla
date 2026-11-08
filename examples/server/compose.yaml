@@ -4,8 +4,8 @@
 #   docker compose up -d
 #   curl http://127.0.0.1:8765/v1/health
 #
-# Then from a laptop that can reach this host (an SSH tunnel or a VPN; the port is
-# published on the host's loopback only):
+# Then from a laptop that can reach this host (an SSH tunnel to it; the port is published
+# on the host's loopback only unless BIND says otherwise):
 #
 #   bioamla remote add lab http://localhost:8765
 #   export BIOAMLA_LAB_TOKEN=$(cat bioamla-token)
@@ -14,7 +14,8 @@
 # WORKSPACES and RECORDINGS (environment variables, or a .env file here) choose the host
 # folders; the defaults are ./workspaces and ./recordings. Recordings are mounted
 # read-only and linked into workspaces in place (bioamla workspace add /recordings/...),
-# never copied.
+# never copied. BIND is the host address the port is published on: 127.0.0.1 by default,
+# or the host's VPN address so laptops on the VPN connect without a tunnel.
 services:
   bioamla:
     build:
@@ -23,14 +24,22 @@ services:
       #   BIOAMLA_EXTRAS: all,cli   # every domain, for prediction and training
     image: bioamla-server
     restart: unless-stopped
+    # Jobs get a grace period to stop and record their cancellation when the container
+    # stops; Docker's default of 10 s could cut that short.
+    stop_grace_period: 30s
     ports:
-      - "127.0.0.1:8765:8765"
+      # Docker Engine 28 keeps a loopback-published port off the LAN; older engines let
+      # hosts on the same network segment reach it, so there add a firewall rule.
+      - "${BIND:-127.0.0.1}:8765:8765"
     volumes:
       - ${WORKSPACES:-./workspaces}:/workspaces
       - ${RECORDINGS:-./recordings}:/recordings:ro
     secrets:
       - bioamla_token
-    # user: "${UID:-1000}:${GID:-1000}"   # match the owner of the mounted folders
+    # Run as the owner of the token and the mounted folders when that isn't uid 1000:
+    # uncomment, then `UID=$(id -u) GID=$(id -g) docker compose up -d` (or put UID= and
+    # GID= lines in .env; a shell's UID isn't exported to compose on its own).
+    # user: "${UID:-1000}:${GID:-1000}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/v1/health', timeout=3)"]
       interval: 30s

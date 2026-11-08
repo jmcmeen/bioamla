@@ -1,0 +1,6 @@
+# Nothing in this folder is copied into the image, so the build context carries none of
+# the private files that appear here once the server has run.
+bioamla-token
+workspaces/
+recordings/
+.env
