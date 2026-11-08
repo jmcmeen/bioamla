@@ -345,3 +345,11 @@ def test_atomic_file_writer_gives_files_the_usual_mode(tmp_path):
             assert stat.S_IMODE(target.stat().st_mode) == 0o644, overwrite
     finally:
         os.umask(before)
+
+
+def test_a_bad_decode_timeout_stops_the_server_at_start(tmp_path, monkeypatch):
+    from bioamla.exceptions import ConfigError
+
+    monkeypatch.setenv("BIOAMLA_DECODE_TIMEOUT", "soon")
+    with pytest.raises(ConfigError, match="BIOAMLA_DECODE_TIMEOUT"):
+        create_app(ServerConfig(root=tmp_path, token="t"))

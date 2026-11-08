@@ -46,6 +46,10 @@ logger = logging.getLogger(__name__)
 #: network mount, say), so a server worker or a job isn't held for ever.
 DEFAULT_DECODE_TIMEOUT = 600.0
 
+#: Seconds ffprobe may take to read a header. Whole-file loads of compressed formats
+#: need it too, so it allows for a slow network mount rather than only a local disk.
+_PROBE_TIMEOUT = 30.0
+
 
 def decode_timeout() -> float:
     """Seconds an ffmpeg decode may take: ``BIOAMLA_DECODE_TIMEOUT``, or
@@ -161,32 +165,6 @@ def _numpy_to_audiosegment(
     )
 
 
-def _load_via_ffmpeg(filepath: str, keep_channels: bool = False) -> tuple[np.ndarray, int]:
-    """Decode a whole audio file with ffmpeg, as float32.
-
-    Args:
-        filepath: Path to audio file.
-        keep_channels: Keep every channel (``(n_samples, n_channels)``; 1-D for a
-            mono file) instead of downmixing to mono.
-
-    Returns:
-        Tuple of (audio_array, sample_rate).
-
-    Raises:
-        NotFoundError: If file doesn't exist.
-        DependencyError: If ffmpeg isn't installed.
-        AudioLoadError: If the file cannot be decoded, or ffmpeg runs past
-            :func:`decode_timeout`.
-    """
-    path = Path(filepath)
-    if not path.exists():
-        raise NotFoundError(f"Audio file not found: {filepath}")
-    audio, sample_rate = _ffmpeg_decode(path, 0.0, None)
-    if keep_channels:
-        return (audio[:, 0] if audio.shape[1] == 1 else audio), sample_rate
-    return _to_mono(audio).astype(np.float32, copy=False), sample_rate
-
-
 # Formats soundfile reads natively (and can seek in without decoding the rest).
 _NATIVE_EXTENSIONS = {".wav", ".flac", ".ogg"}
 
@@ -217,7 +195,8 @@ def load_audio_channels(filepath: str) -> tuple[np.ndarray, int]:
             return audio, sample_rate
         except Exception as e:
             logger.debug(f"soundfile failed for {filepath}, using ffmpeg: {e}")
-    return _load_via_ffmpeg(str(path), keep_channels=True)
+    audio, sample_rate = _ffmpeg_decode(path, 0.0, None)
+    return (audio[:, 0] if audio.shape[1] == 1 else audio), sample_rate
 
 
 def load_audio(filepath: str) -> tuple[np.ndarray, int]:
@@ -321,7 +300,11 @@ def _ffmpeg_decode(path: Path, start: float, duration: float | None) -> tuple[np
     cmd += ["-i", str(path)]
     if duration is not None:
         cmd += ["-t", f"{duration + preroll:.6f}"]
-    cmd += ["-map", "0:a:0", "-f", "f32le", "-acodec", "pcm_f32le", "-"]
+    # Ask for the rate and channel count the samples are reshaped by, so a stream whose
+    # decoder output differs from its header (HE-AAC's SBR, parametric stereo) is
+    # converted to it rather than misread.
+    cmd += ["-map", "0:a:0", "-ac", str(channels), "-ar", str(sample_rate),
+            "-f", "f32le", "-acodec", "pcm_f32le", "-"]  # fmt: skip
     limit = decode_timeout()
     try:
         # On a timeout, run() kills ffmpeg before raising.
@@ -342,7 +325,9 @@ def _ffmpeg_decode(path: Path, start: float, duration: float | None) -> tuple[np
     audio = audio[round(preroll * sample_rate) :]
     if duration is not None:
         audio = audio[: round(duration * sample_rate)]
-    return audio, sample_rate
+    # frombuffer over bytes is read-only; callers get an array of their own, like
+    # every other loader returns, and ffmpeg's output buffer can be freed.
+    return audio.copy(), sample_rate
 
 
 def iter_audio_blocks(
@@ -533,7 +518,7 @@ def _get_metadata_ffprobe(filepath: str) -> dict | None:
             ],
             capture_output=True,
             text=True,
-            timeout=5.0,
+            timeout=_PROBE_TIMEOUT,
         )
 
         if result.returncode != 0:

@@ -103,11 +103,19 @@ def create_app(config: ServerConfig) -> FastAPI:
         A FastAPI application. ``app.state.policy`` is its :class:`PathPolicy`,
         ``app.state.identity`` the dependency that checks the token and
         ``app.state.jobs`` its :class:`~bioamla.server.jobs.JobRunner`.
+
+    Raises:
+        ConfigError: If ``BIOAMLA_DECODE_TIMEOUT`` isn't a positive number.
     """
     from contextlib import asynccontextmanager
 
     from bioamla import __version__
+    from bioamla.audio._pydub import decode_timeout
     from bioamla.server.jobs import JobRunner, add_job_routes
+
+    # A bad BIOAMLA_DECODE_TIMEOUT stops the server here, not on the first request
+    # for a recording that needs ffmpeg.
+    decode_timeout()
 
     runner = JobRunner(
         config.root, config.linkable, max_jobs=config.max_jobs, timeout=config.job_timeout

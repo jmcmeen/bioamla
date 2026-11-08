@@ -198,3 +198,28 @@ def test_a_bad_decode_timeout_is_a_config_error(noise_mp3, monkeypatch):
             load_audio_data(noise_mp3)
     monkeypatch.setenv("BIOAMLA_DECODE_TIMEOUT", " ")  # blank: the default
     assert load_audio_data(noise_mp3).sample_rate == SR
+
+
+@pytest.mark.usefixtures("requires_ffmpeg_cli")
+def test_ffmpeg_decodes_are_writable_arrays(noise_mp3):
+    """Like every other loader's, an ffmpeg-decoded array belongs to the caller."""
+    whole = load_audio_data(noise_mp3).samples
+    window = load_audio_data(noise_mp3, start=1.0, duration=0.5).samples
+    block = next(iter(stream_audio_data(noise_mp3, block_duration=1.0))).samples
+    for samples in (whole, window, block):
+        assert samples.flags.writeable
+        samples[:10] *= 0.5  # an in-place step works
+
+
+def test_a_missing_ffprobe_is_a_dependency_error_from_get_audio_info(tmp_path, monkeypatch):
+    import shutil
+
+    from bioamla.audio import _pydub, get_audio_info
+    from bioamla.exceptions import DependencyError
+
+    path = tmp_path / "x.mp3"
+    path.write_bytes(b"fake")
+    monkeypatch.setattr(_pydub, "_get_metadata_ffprobe", lambda p: None)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    with pytest.raises(DependencyError, match="ffprobe is required"):
+        get_audio_info(str(path))
