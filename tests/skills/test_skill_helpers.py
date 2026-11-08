@@ -125,3 +125,37 @@ def test_json_is_written_whole_or_not_at_all(monkeypatch, tmp_path):
     out = helpers.write_json(tmp_path / "a" / "b.json", {"x": 1})
     assert out.read_text() == '{\n  "x": 1\n}\n'
     assert not (tmp_path / "a" / "b.json.tmp").exists()
+
+
+def test_a_dot_path_is_refused_with_the_documented_error(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    for bad in (".", "./"):
+        with pytest.raises(ValueError, match="must be a path inside the workspace"):
+            helpers.fetch(bad, "into", tmp_path)
+
+
+def test_a_symlink_out_of_the_workspace_is_refused(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    root, outside = tmp_path / "ws", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (outside / "secret.csv").write_text("file,label\n")
+    (root / "ref.csv").symlink_to(outside / "secret.csv")
+    with pytest.raises(ValueError, match="points outside the workspace"):
+        helpers.fetch("ref.csv", "into", root)
+    (root / "fine.csv").write_text("file,label\n")
+    assert helpers.fetch("fine.csv", "into", root).read_text() == "file,label\n"
+
+
+def test_write_json_never_follows_a_planted_temporary(monkeypatch, tmp_path):
+    helpers = load(monkeypatch)
+    target = tmp_path / "elsewhere.txt"
+    target.write_text("keep me")
+    (tmp_path / "report.json.tmp").symlink_to(target)  # the old predictable name
+    helpers.write_json(tmp_path / "report.json", {"x": 1})
+    assert target.read_text() == "keep me"
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "elsewhere.txt",
+        "report.json",
+        "report.json.tmp",
+    ]
