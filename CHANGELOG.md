@@ -14,6 +14,12 @@ All notable changes to this project are documented here. The format is based on
   a pass/fail verdict from the person's thresholds, as the step before a dataset is built from
   agent labels (#331)
 
+### Changed
+
+- The agent skills' shared helper always runs the command `bioamla`; `BIOAMLA_BIN` now names
+  the executable that command runs (a virtual environment's `bin/bioamla`, say) instead of a
+  command line to split into words (#331)
+
 ### Fixed
 
 - The agent skills pass every path that came from data or a listing to `bioamla` after `--`,

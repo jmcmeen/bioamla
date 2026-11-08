@@ -38,7 +38,8 @@ order, and what to report.
 - **Print a JSON summary** on standard output (and `{"error": ...}` with a non-zero exit
   when a bioamla command fails), so the agent reads results, not prose.
 - **Standard library only.** A script needs Python and `bioamla` on the `PATH`
-  (`BIOAMLA_BIN` overrides the command, e.g. a virtual environment's `bin/bioamla`).
+  (`BIOAMLA_BIN` names another `bioamla` executable to run, e.g. a virtual environment's
+  `bin/bioamla`).
 
 ## Installing a skill
 
