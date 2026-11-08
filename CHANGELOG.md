@@ -25,6 +25,11 @@ All notable changes to this project are documented here. The format is based on
 - The agent skills pass every path that came from data or a listing to `bioamla` after `--`,
   and the shared helper refuses a workspace path that starts with `-`, so a file cell or a
   recording name that looks like an option can't change what a command does (#331)
+
+## [0.4.1] - 2026-11-08
+
+### Fixed
+
 - Training's corrupted-audio check runs on threads instead of a `datasets` worker pool:
   that pool was the last place bioamla itself forked the torch-live process, the hazard
   behind the earlier CI hang (torch's own dataloader workers are still forked, which torch
@@ -1139,7 +1144,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/jmcmeen/bioamla/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/jmcmeen/bioamla/compare/v0.3.11...v0.4.0
 [0.3.11]: https://github.com/jmcmeen/bioamla/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/jmcmeen/bioamla/compare/v0.3.9...v0.3.10
