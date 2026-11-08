@@ -263,7 +263,7 @@ def remote_audio(
     """
     from pathlib import Path, PurePosixPath
 
-    from bioamla.audio import audio_to_wav_bytes
+    from bioamla.audio import save_audio_window
     from bioamla.cli.console import print_success
     from bioamla.cli.output import emit_result
 
@@ -272,10 +272,7 @@ def remote_audio(
         raise click.ClickException(f"{target} exists; pass --overwrite to replace it")
     audio = _call(_client(name).audio_window, workspace, path, start=start,
                   duration=duration, sample_rate=sample_rate)  # fmt: skip
-    try:
-        target.write_bytes(_call(audio_to_wav_bytes, audio))  # float32, as the server sent it
-    except OSError as e:
-        raise click.ClickException(f"Can't write {target}: {e.strerror or e}") from e
+    _call(save_audio_window, audio, target, overwrite=overwrite)  # float32, as the server sent it
     result = {
         "saved": str(target),
         "start_time": audio.metadata["start_time"],

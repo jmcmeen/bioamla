@@ -12,7 +12,8 @@ All notable changes to this project are documented here. The format is based on
   float32 WAV, decoded on the server from just that part of the file, so a viewer can show a
   few seconds of a remote recording without downloading it; `--max-window` on `serve` caps
   the length. `Client.audio_window()` returns it as an `AudioData`, and `bioamla remote audio`
-  saves it as a WAV. The encoding is the library's: `bioamla.audio.audio_to_wav_bytes` and
+  saves it as a WAV through `bioamla.audio.save_audio_window`, which writes the file whole or
+  not at all. The encoding is the library's: `bioamla.audio.audio_to_wav_bytes` and
   `audio_from_wav_bytes` carry float32 samples exactly (#332)
 - The `label-qa` agent skill (`skills/label-qa/`): checks an annotation set (columns, values,
   recordings, bounds, vocabulary, duplicates, agent overlaps), scores the agent's rows against a
@@ -22,12 +23,16 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- The server logs every error it answers with a 500 (a decoder it lacks, say), so the reason
+  reaches the operator's log and not only the client (#332)
 - The agent skills' shared helper always runs the command `bioamla`; `BIOAMLA_BIN` now names
   the executable that command runs (a virtual environment's `bin/bioamla`, say) instead of a
   command line to split into words (#331)
 
 ### Fixed
 
+- `serve --max-window` and `ServerConfig.max_window` reject `inf`, `nan` and values that
+  aren't positive, which would have lifted the window cap (#332)
 - The agent skills pass every path that came from data or a listing to `bioamla` after `--`,
   and the shared helper refuses a workspace path that starts with `-`, so a file cell or a
   recording name that looks like an option can't change what a command does (#331)

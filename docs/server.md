@@ -155,7 +155,9 @@ A viewer needs a few seconds of a recording, not the file. `GET
 decoded on the server from just that part of the file; `sample_rate=R` resamples it, and
 `--max-window` caps `D`. The `X-Bioamla-Start`, `X-Bioamla-Duration`, `X-Bioamla-Sample-Rate`
 and `X-Bioamla-Channels` headers say what came back (a window is cut short at the end of
-the recording). From the command line:
+the recording). The server holds a window in memory while it encodes it, 4 bytes per sample
+per channel: 600 s at 48 kHz is 115 MB, at 384 kHz 0.9 GB, so lower `--max-window` on a
+server whose recordings are ultrasonic. From the command line:
 
 ```console
 $ bioamla remote audio lab costa-rica raw/site1/rec.wav --start 120 --duration 10 -o clip.wav

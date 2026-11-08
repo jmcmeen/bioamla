@@ -108,6 +108,7 @@ from bioamla.audio.io import (
     save_audio,
     save_audio_data,
     save_audio_data_as,
+    save_audio_window,
     stream_audio_data,
 )
 from bioamla.audio.metadata import (
@@ -161,6 +162,7 @@ __all__ = [
     "stream_audio_data",
     "save_audio_data",
     "save_audio_data_as",
+    "save_audio_window",
     "create_temp_audio_file",
     # File I/O (array-level)
     "load_audio",
