@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `examples/server/`: a `Dockerfile` and `compose.yaml` that run the server in a container,
+  with the workspace root and recordings as bind mounts, the token as a secret, the port on
+  the host's loopback only, and the extras as a build argument; linked from the Running the
+  server page (#336)
 - `GET /v1/workspaces/{ws}/audio/{path}?start=&duration=` returns a window of a recording as a
   float32 WAV, decoded on the server from just that part of the file, so a viewer can show a
   few seconds of a remote recording without downloading it; `--max-window` on `serve` caps

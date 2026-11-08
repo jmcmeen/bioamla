@@ -98,6 +98,22 @@ $ bioamla serve --root ~/bioamla-workspaces --host 100.64.0.10
 The token is still required. Don't use `--host 0.0.0.0` on a machine reachable from the
 internet.
 
+## Run it in a container
+
+[`examples/server/`](https://github.com/jmcmeen/bioamla/tree/main/examples/server) has a
+`Dockerfile` and a `compose.yaml`: the workspace root and the recordings as bind mounts, the
+token as a secret, the port published on the host's loopback only, and a build argument for
+the extras (the default image is slim; `all,cli` for prediction and training). From that
+folder:
+
+```console
+$ python3 -c "import secrets; print(secrets.token_hex(32))" > bioamla-token
+$ chmod 600 bioamla-token
+$ docker compose up -d --build
+```
+
+Its README has the rest, including the GPU setting.
+
 ## Keep it running with systemd
 
 A **user** service runs as you, with your files and token; enable lingering so it starts at

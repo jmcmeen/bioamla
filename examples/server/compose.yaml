@@ -1,0 +1,50 @@
+# A bioamla server with docker compose. From this folder:
+#
+#   python3 -c "import secrets; print(secrets.token_hex(32))" > bioamla-token
+#   docker compose up -d
+#   curl http://127.0.0.1:8765/v1/health
+#
+# Then from a laptop that can reach this host (an SSH tunnel or a VPN; the port is
+# published on the host's loopback only):
+#
+#   bioamla remote add lab http://localhost:8765
+#   export BIOAMLA_LAB_TOKEN=$(cat bioamla-token)
+#   bioamla remote ping lab
+#
+# WORKSPACES and RECORDINGS (environment variables, or a .env file here) choose the host
+# folders; the defaults are ./workspaces and ./recordings. Recordings are mounted
+# read-only and linked into workspaces in place (bioamla workspace add /recordings/...),
+# never copied.
+services:
+  bioamla:
+    build:
+      context: .
+      # args:
+      #   BIOAMLA_EXTRAS: all,cli   # every domain, for prediction and training
+    image: bioamla-server
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - ${WORKSPACES:-./workspaces}:/workspaces
+      - ${RECORDINGS:-./recordings}:/recordings:ro
+    secrets:
+      - bioamla_token
+    # user: "${UID:-1000}:${GID:-1000}"   # match the owner of the mounted folders
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/v1/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+    # For a GPU (with the NVIDIA container toolkit installed), build with BIOAMLA_EXTRAS=all,cli and add:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+secrets:
+  bioamla_token:
+    file: ./bioamla-token
