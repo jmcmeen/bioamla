@@ -105,6 +105,7 @@ dev = [
   "pytest>=7.0",
   "pytest-cov",
   "pytest-mock",
+  "pytest-xdist",  # tests run on every core: make test, CI
   "ruff>=0.17,<0.18",  # pinned: minor releases change formatting; upgrade on purpose
   "mkdocs>=1.6",
   "mkdocs-material>=9.5",

@@ -67,8 +67,10 @@ jobs:
       - name: Install (full stack + dev tooling)
         run: uv sync --extra dev
 
+      # One worker per vCPU: -n auto would count physical cores, 2 on these 4-vCPU
+      # runners. worksteal rebalances the few long skill tests at the end.
       - name: Test
-        run: uv run pytest
+        run: uv run pytest -n logical --dist worksteal
 
   lazy-imports:
     name: lazy-import guard
