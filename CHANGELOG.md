@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- The `label-qa` agent skill (`skills/label-qa/`): checks an annotation set (columns, values,
+  recordings, bounds, vocabulary, duplicates, agent overlaps), scores the agent's rows against a
+  held-out subset a person labeled (per-label precision, recall, F1, confusion matrix), and gives
+  a pass/fail verdict from the person's thresholds, as the step before a dataset is built from
+  agent labels (#331)
+
 ### Fixed
 
 - Training's corrupted-audio check runs on threads instead of a `datasets` worker pool:
