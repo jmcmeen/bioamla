@@ -216,3 +216,27 @@ def test_quiet_32_bit_pcm_is_scaled_as_integers():
     segment = AudioSegment(raw, frame_rate=8000, sample_width=4, channels=1)
     audio, _ = _audiosegment_to_numpy(segment)
     assert np.abs(audio).max() < 1e-8  # tiny, not full scale
+
+
+def test_wav_bytes_round_trip_exactly():
+    """audio_to_wav_bytes / audio_from_wav_bytes carry float32 samples unchanged, mono or
+    stereo, with the metadata the caller attaches; bytes that aren't WAV are an
+    AudioLoadError."""
+    import numpy as np
+    import pytest
+
+    from bioamla.audio import AudioData, audio_from_wav_bytes, audio_to_wav_bytes
+    from bioamla.exceptions import AudioLoadError
+
+    mono = AudioData(samples=np.linspace(-1.5, 1.5, 1000, dtype="float32"), sample_rate=16000)
+    back = audio_from_wav_bytes(
+        audio_to_wav_bytes(mono), source_path="a.wav", metadata={"start_time": 2.5}
+    )
+    assert back.sample_rate == 16000 and back.channels == 1 and back.source_path == "a.wav"
+    assert back.metadata == {"start_time": 2.5}
+    assert np.array_equal(back.samples, mono.samples)  # no clipping, no quantization
+
+    stereo = AudioData(samples=np.zeros((500, 2), dtype="float32"), sample_rate=8000, channels=2)
+    assert audio_from_wav_bytes(audio_to_wav_bytes(stereo)).channels == 2
+    with pytest.raises(AudioLoadError, match="Not WAV audio"):
+        audio_from_wav_bytes(b"<html>not audio</html>")

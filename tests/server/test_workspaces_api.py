@@ -193,3 +193,100 @@ def test_atomic_file_writer(tmp_path):
         w.write(b"new")  # not committed: nothing changes
     assert target.read_bytes() == b"abc"
     assert sorted(p.name for p in target.parent.iterdir()) == ["a.bin"]
+
+
+def _write_ramp(path, seconds=3.0, sr=16000):
+    import numpy as np
+    import soundfile as sf
+
+    samples = (np.arange(int(seconds * sr)) / (seconds * sr)).astype("float32")  # 0 -> 1
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(path, samples, sr, subtype="FLOAT")
+    return samples
+
+
+def _decode(response):
+    import io
+
+    import soundfile as sf
+
+    assert response.headers["content-type"].startswith("audio/wav"), response.text
+    samples, sr = sf.read(io.BytesIO(response.content), dtype="float32")
+    return samples, sr
+
+
+def test_audio_window_streams_part_of_a_recording(server):
+    import numpy as np
+
+    client, root, _, _ = server
+    samples = _write_ramp(root / "ws" / "raw" / "rec.wav")
+    url = "/v1/workspaces/ws/audio/raw/rec.wav"
+
+    got = client.get(f"{url}?start=1&duration=0.5", headers=AUTH)
+    assert got.status_code == 200, got.text
+    window, sr = _decode(got)
+    assert sr == 16000 and len(window) == 8000
+    assert np.allclose(window, samples[16000:24000])
+    assert got.headers["x-bioamla-start"] == "1.0"
+    assert got.headers["x-bioamla-duration"] == "0.5"
+    assert got.headers["x-bioamla-sample-rate"] == "16000"
+    assert got.headers["x-bioamla-channels"] == "1"
+
+    # Cut short at the end of the recording, and resampled on request.
+    short = client.get(f"{url}?start=2.9&duration=0.5", headers=AUTH)
+    assert short.status_code == 200 and len(_decode(short)[0]) == 1600
+    assert short.headers["x-bioamla-duration"] == "0.1"
+    resampled = client.get(f"{url}?start=0&duration=1&sample_rate=8000", headers=AUTH)
+    assert resampled.status_code == 200 and _decode(resampled)[1] == 8000
+    assert len(_decode(resampled)[0]) == 8000
+
+    # Deep into a long recording the start comes back exactly, not rounded.
+    deep = client.get(f"{url}?start=2.123456789&duration=0.1", headers=AUTH)
+    assert deep.headers["x-bioamla-start"] == "2.123456789"
+
+    # Bad windows are 400s with the reason; a missing file is a 404.
+    past = client.get(f"{url}?start=5&duration=1", headers=AUTH)
+    assert past.status_code == 400
+    assert past.json()["error"]["message"] == "start 5 s is past the end of raw/rec.wav (3 s long)"
+    tiny = client.get(f"{url}?start=1&duration=0.00001", headers=AUTH)
+    assert tiny.status_code == 400 and "rounds to no samples" in tiny.json()["error"]["message"]
+    assert client.get(f"{url}?start=inf&duration=1", headers=AUTH).status_code in (400, 422)
+    assert client.get(f"{url}?duration=1&sample_rate=2000000000", headers=AUTH).status_code in (
+        400,
+        422,
+    )
+    (root / "ws" / "raw" / "notes.csv").write_text("file,label\n")
+    not_audio = client.get("/v1/workspaces/ws/audio/raw/notes.csv?duration=1", headers=AUTH)
+    assert not_audio.status_code == 400, not_audio.text
+    message = not_audio.json()["error"]["message"]
+    assert (
+        message.startswith("raw/notes.csv can't be decoded as audio") and str(root) not in message
+    )
+    assert client.get(f"{url}?start=0", headers=AUTH).status_code in (400, 422)  # no duration
+    assert client.get(f"{url}?start=0&duration=0", headers=AUTH).status_code in (400, 422)
+    assert (
+        client.get("/v1/workspaces/ws/audio/raw/none.wav?duration=1", headers=AUTH).status_code
+        == 404
+    )
+    assert client.get(f"{url}?duration=1").status_code == 401
+
+
+def test_audio_window_length_is_capped_by_the_server(tmp_path):
+    root = tmp_path / "root"
+    create_workspace(root / "ws")
+    _write_ramp(root / "ws" / "rec.wav")
+    client = TestClient(create_app(ServerConfig(root=root, token="t", max_window=1.0)))
+    ok = client.get("/v1/workspaces/ws/audio/rec.wav?duration=1", headers=AUTH)
+    assert ok.status_code == 200
+    too_long = client.get("/v1/workspaces/ws/audio/rec.wav?duration=1.5", headers=AUTH)
+    assert too_long.status_code == 400 and "limit of 1 s" in too_long.json()["error"]["message"]
+
+
+def test_audio_window_respects_the_path_policy(server):
+    client, root, archive, outside = server
+    _write_ramp(archive / "far.wav")
+    _write_ramp(outside / "away.wav")
+    linked = client.get(f"/v1/workspaces/ws/audio/{archive}/far.wav?duration=0.1", headers=AUTH)
+    assert linked.status_code == 200
+    refused = client.get(f"/v1/workspaces/ws/audio/{outside}/away.wav?duration=0.1", headers=AUTH)
+    assert refused.status_code == 403

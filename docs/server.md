@@ -52,6 +52,7 @@ API: http://127.0.0.1:8765/v1/  (spec at /v1/openapi.json)
 | `--port` | `8765` | Port to listen on |
 | `--token-file` | `~/.config/bioamla/server-token` | File holding the bearer token; created if missing |
 | `--allow-link` | (none) | A folder outside `--root` that workspaces may link in place; repeat for several |
+| `--max-window` | `600` | The longest audio window (seconds) a client may ask for |
 
 Check that it's up:
 
@@ -146,3 +147,18 @@ $ bioamla workspace add /srv/recordings/site-a/2024
 
 A linked folder must be under `--root` or one of the `--allow-link` folders; the server
 refuses others.
+
+## Audio windows
+
+A viewer needs a few seconds of a recording, not the file. `GET
+/v1/workspaces/{ws}/audio/{path}?start=S&duration=D` returns that window as a float32 WAV,
+decoded on the server from just that part of the file; `sample_rate=R` resamples it, and
+`--max-window` caps `D`. The `X-Bioamla-Start`, `X-Bioamla-Duration`, `X-Bioamla-Sample-Rate`
+and `X-Bioamla-Channels` headers say what came back (a window is cut short at the end of
+the recording). From the command line:
+
+```console
+$ bioamla remote audio lab costa-rica raw/site1/rec.wav --start 120 --duration 10 -o clip.wav
+```
+
+In Python, `Client.audio_window()` returns the window as an `AudioData`.

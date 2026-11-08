@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- `GET /v1/workspaces/{ws}/audio/{path}?start=&duration=` returns a window of a recording as a
+  float32 WAV, decoded on the server from just that part of the file, so a viewer can show a
+  few seconds of a remote recording without downloading it; `--max-window` on `serve` caps
+  the length. `Client.audio_window()` returns it as an `AudioData`, and `bioamla remote audio`
+  saves it as a WAV. The encoding is the library's: `bioamla.audio.audio_to_wav_bytes` and
+  `audio_from_wav_bytes` carry float32 samples exactly (#332)
 - The `label-qa` agent skill (`skills/label-qa/`): checks an annotation set (columns, values,
   recordings, bounds, vocabulary, duplicates, agent overlaps), scores the agent's rows against a
   held-out subset a person labeled (per-label precision, recall, F1, confusion matrix), and gives

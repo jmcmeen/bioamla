@@ -45,6 +45,7 @@ class ServerConfig:
         max_jobs: How many jobs may run at once (machine-learning jobs: one at a time).
         job_timeout: Seconds a running job may go without reporting anything before
             it's stopped (``None``: no limit).
+        max_window: The longest audio window a client may ask for, in seconds.
     """
 
     root: Path
@@ -52,6 +53,7 @@ class ServerConfig:
     linkable: list[Path] = field(default_factory=list)
     max_jobs: int = 2
     job_timeout: float | None = None
+    max_window: float = 600.0
 
 
 def envelope(result: Any) -> dict[str, Any]:

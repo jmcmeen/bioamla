@@ -233,6 +233,61 @@ def remote_download(
         print_success(path)
 
 
+@remote.command("audio")
+@click.argument("name")
+@click.argument("workspace")
+@click.argument("path")
+@click.option("--start", type=click.FloatRange(min=0), default=0.0, show_default=True,
+              metavar="SECONDS", help="Window start")  # fmt: skip
+@click.option("--duration", type=click.FloatRange(min=0, min_open=True), required=True,
+              metavar="SECONDS", help="Window length")  # fmt: skip
+@click.option("--sample-rate", type=click.IntRange(min=1), default=None,
+              help="Resample to this rate (Hz)")  # fmt: skip
+@click.option("-o", "--output", type=click.Path(dir_okay=False), default=None,
+              help="WAV file to write (default: <recording>_<start>s.wav here)")  # fmt: skip
+@click.option("--overwrite", is_flag=True, help="Replace the file if it exists")
+def remote_audio(
+    name: str,
+    workspace: str,
+    path: str,
+    start: float,
+    duration: float,
+    sample_rate: int | None,
+    output: str | None,
+    overwrite: bool,
+) -> None:
+    """Save a window of PATH (a recording in WORKSPACE on NAME) as a WAV file.
+
+    The server decodes only that part of the recording, so a few seconds of a long
+    file arrive without downloading it.
+    """
+    from pathlib import Path, PurePosixPath
+
+    from bioamla.audio import audio_to_wav_bytes
+    from bioamla.cli.console import print_success
+    from bioamla.cli.output import emit_result
+
+    target = Path(output) if output else Path(f"{PurePosixPath(path).stem}_{start:g}s.wav")
+    if target.exists() and not overwrite:
+        raise click.ClickException(f"{target} exists; pass --overwrite to replace it")
+    audio = _call(_client(name).audio_window, workspace, path, start=start,
+                  duration=duration, sample_rate=sample_rate)  # fmt: skip
+    try:
+        target.write_bytes(_call(audio_to_wav_bytes, audio))  # float32, as the server sent it
+    except OSError as e:
+        raise click.ClickException(f"Can't write {target}: {e.strerror or e}") from e
+    result = {
+        "saved": str(target),
+        "start_time": audio.metadata["start_time"],
+        "duration": audio.duration,
+        "sample_rate": audio.sample_rate,
+        "channels": audio.channels,
+    }
+    if emit_result(result):
+        return
+    print_success(f"{target}: {result['duration']:g} s from {result['start_time']:g} s")
+
+
 @remote.command("jobs")
 @click.argument("name")
 @click.option("--workspace", default=None, help="Only this workspace's jobs")
