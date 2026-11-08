@@ -16,7 +16,7 @@ $ chmod 600 bioamla-token
 $ mkdir -p workspaces recordings
 $ docker compose up -d --build
 $ curl http://127.0.0.1:8765/v1/health
-{"bioamla":"0.4.1","ok":true,"result":{"status":"ok"}}
+{"bioamla":"<version>","ok":true,"result":{"status":"ok"}}
 ```
 
 `WORKSPACES` and `RECORDINGS` (environment variables, or a `.env` file here) choose other
@@ -69,5 +69,6 @@ firewall rule for port 8765 or upgrade Docker.
 
 The container runs as uid 1000. If the token or the mounted folders belong to another
 user, uncomment the `user:` line in `compose.yaml` and start the service with your ids,
-`UID=$(id -u) GID=$(id -g) docker compose up -d` (or write `UID=` and `GID=` lines in
-`.env`): the server can then read the token, and files it writes come out owned by you.
+`BIOAMLA_UID=$(id -u) BIOAMLA_GID=$(id -g) docker compose up -d` (or write `BIOAMLA_UID=`
+and `BIOAMLA_GID=` lines in `.env`): the server can then read the token, and files it
+writes come out owned by you.

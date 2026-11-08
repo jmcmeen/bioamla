@@ -37,9 +37,9 @@ services:
     secrets:
       - bioamla_token
     # Run as the owner of the token and the mounted folders when that isn't uid 1000:
-    # uncomment, then `UID=$(id -u) GID=$(id -g) docker compose up -d` (or put UID= and
-    # GID= lines in .env; a shell's UID isn't exported to compose on its own).
-    # user: "${UID:-1000}:${GID:-1000}"
+    # uncomment, then `BIOAMLA_UID=$(id -u) BIOAMLA_GID=$(id -g) docker compose up -d`, or
+    # put those two values in .env.
+    # user: "${BIOAMLA_UID:-1000}:${BIOAMLA_GID:-1000}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/v1/health', timeout=3)"]
       interval: 30s
