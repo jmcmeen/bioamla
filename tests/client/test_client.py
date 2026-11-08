@@ -299,3 +299,16 @@ def test_client_fetches_an_audio_window(live_server, test_audio_path, tmp_path):
             named = runner.invoke(cli, ["remote", "audio", "lab", "ws", "rec.wav", "--duration", "0.1",
                                         "-o", "clip.wav"])  # fmt: skip
             assert named.exit_code == 0 and "clip.wav" in named.output
+
+            # A stereo recording keeps both channels when asked, through the client and the
+            # command alike.
+            ramp = np.linspace(0, 0.5, 16000, dtype="float32")
+            sf.write(root / "ws" / "st.wav", np.stack([ramp, -ramp], axis=1), 16000)
+            kept = client.audio_window("ws", "st.wav", duration=0.5, keep_channels=True)
+            assert kept.channels == 2 and kept.samples.shape == (8000, 2)
+            assert client.audio_window("ws", "st.wav", duration=0.5).channels == 1
+            both = runner.invoke(cli, ["--json", "remote", "audio", "lab", "ws", "st.wav",
+                                       "--duration", "0.5", "--keep-channels"])  # fmt: skip
+            assert both.exit_code == 0, both.output
+            assert json.loads(both.stdout)["result"]["channels"] == 2
+            assert sf.info("st_0s.wav").channels == 2

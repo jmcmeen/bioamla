@@ -37,6 +37,7 @@ def load_audio_data(
     sample_rate: int | None = None,
     start: float | None = None,
     duration: float | None = None,
+    keep_channels: bool = False,
 ) -> AudioData:
     """
     Load an audio file, or a window of it, into an :class:`AudioData`.
@@ -50,6 +51,8 @@ def load_audio_data(
         sample_rate: If given, resample the loaded audio to this rate.
         start: Window start in seconds (default: the beginning).
         duration: Window length in seconds (default: to the end).
+        keep_channels: Keep the file's channels (``samples`` is ``(n_samples,
+            n_channels)`` for more than one) instead of mixing down to mono.
 
     Returns:
         The loaded :class:`AudioData`. A window records its offset in
@@ -64,7 +67,7 @@ def load_audio_data(
         AudioLoadError: If decoding fails, or ffmpeg runs past
             ``BIOAMLA_DECODE_TIMEOUT`` seconds (default 600).
     """
-    from bioamla.audio._pydub import load_audio, load_audio_window
+    from bioamla.audio._pydub import load_audio, load_audio_channels, load_audio_window
 
     path = require_exists(filepath)
     windowed = start is not None or duration is not None
@@ -73,7 +76,9 @@ def load_audio_data(
 
     try:
         if windowed:
-            audio, sr = load_audio_window(str(path), start or 0.0, duration)
+            audio, sr = load_audio_window(str(path), start or 0.0, duration, keep_channels)
+        elif keep_channels:
+            audio, sr = load_audio_channels(str(path))
         else:
             audio, sr = load_audio(str(path))
     except (DependencyError, ConfigError):
@@ -91,6 +96,7 @@ def stream_audio_data(
     block_duration: float,
     overlap: float = 0.0,
     sample_rate: int | None = None,
+    keep_channels: bool = False,
 ) -> Iterator[AudioData]:
     """
     Stream an audio file as consecutive fixed-length blocks.
@@ -110,6 +116,8 @@ def stream_audio_data(
         sample_rate: If given, resample each block to this rate. Blocks are
             resampled independently, so use some ``overlap`` if edge effects
             matter.
+        keep_channels: Keep the file's channels in each block instead of mixing
+            down to mono.
 
     Returns:
         An iterator of :class:`AudioData` blocks, each with its offset into the
@@ -133,16 +141,20 @@ def stream_audio_data(
             f"overlap must be at least 0 and less than block_duration, got {overlap}"
         )
     path = require_exists(filepath)
-    return _stream_blocks(path, block_duration, overlap, sample_rate)
+    return _stream_blocks(path, block_duration, overlap, sample_rate, keep_channels)
 
 
 def _stream_blocks(
-    path: Path, block_duration: float, overlap: float, sample_rate: int | None
+    path: Path,
+    block_duration: float,
+    overlap: float,
+    sample_rate: int | None,
+    keep_channels: bool = False,
 ) -> Iterator[AudioData]:
     from bioamla.audio._pydub import iter_audio_blocks
     from bioamla.exceptions import BioamlaError
 
-    blocks = iter_audio_blocks(str(path), block_duration, overlap)
+    blocks = iter_audio_blocks(str(path), block_duration, overlap, keep_channels)
     while True:
         try:
             audio, sr, block_start = next(blocks)
@@ -167,14 +179,11 @@ def _check_window(start: float, duration: float | None) -> None:
 def _to_audio_data(
     audio: np.ndarray, sr: int, path: Path, sample_rate: int | None, metadata: dict
 ) -> AudioData:
-    """Wrap decoded samples in an :class:`AudioData`, resampling if asked."""
-    # Ensure 1D for mono
-    if audio.ndim == 1:
-        channels = 1
-    else:
-        channels = audio.shape[1] if audio.shape[1] <= 2 else 1
-        if channels == 1:
-            audio = audio.flatten()
+    """Wrap decoded samples (1-D, or ``(n_samples, n_channels)``) in an
+    :class:`AudioData`, resampling if asked."""
+    if audio.ndim == 2 and audio.shape[1] == 1:
+        audio = audio[:, 0]
+    channels = 1 if audio.ndim == 1 else audio.shape[1]
 
     audio_data = AudioData(
         samples=audio,
@@ -189,7 +198,9 @@ def _to_audio_data(
         try:
             from bioamla.audio.processing import resample_audio
 
-            resampled = resample_audio(audio_data.samples, audio_data.sample_rate, sample_rate)
+            resampled = each_channel(
+                audio_data.samples, lambda c: resample_audio(c, audio_data.sample_rate, sample_rate)
+            )
         except Exception as e:
             raise AudioLoadError(f"Resampling failed: {e}") from e
         audio_data = AudioData(

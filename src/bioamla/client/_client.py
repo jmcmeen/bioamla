@@ -219,12 +219,13 @@ class Client:
         start: float = 0.0,
         duration: float,
         sample_rate: int | None = None,
+        keep_channels: bool = False,
     ) -> AudioData:
         """A window of the recording ``path`` in the workspace, decoded on the server.
 
         Only that part of the file is read and sent, so a few seconds of a long recording
-        cost a few seconds' worth of bytes. The window is cut short at the end of the
-        recording.
+        cost a few seconds' worth of bytes. The window is mixed to mono unless
+        ``keep_channels``, and cut short at the end of the recording.
 
         Returns:
             An :class:`~bioamla.audio.AudioData`; ``metadata["start_time"]`` is the
@@ -244,6 +245,8 @@ class Client:
         params: dict[str, Any] = {"start": start, "duration": duration}
         if sample_rate is not None:
             params["sample_rate"] = sample_rate
+        if keep_channels:
+            params["keep_channels"] = "true"
         response = self._request(
             "GET", f"/workspaces/{quote(ws)}/audio/{_quote_path(path)}", params=params
         )

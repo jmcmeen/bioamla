@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Windowed and streamed reads can keep a recording's channels: `keep_channels` on
+  `load_audio_data` and `stream_audio_data`, the audio-window route (`keep_channels=true`),
+  `Client.audio_window()` and `bioamla remote audio --keep-channels`. They still mix to mono by
+  default. Resampling a multichannel load resamples each channel. The server's `--max-window`
+  counts kept channels, so a kept window holds no more samples than a mono one could (#339)
+
+### Fixed
+
+- A decoded file with three or more channels is no longer flattened into one interleaved
+  channel when it's wrapped as `AudioData` (#339)
+
 ## [0.4.2] - 2026-11-08
 
 ### Added
