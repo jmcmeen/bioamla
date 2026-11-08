@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-08
+
 ### Fixed
 
 - Training's corrupted-audio check runs on threads instead of a `datasets` worker pool:
@@ -1122,7 +1124,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/jmcmeen/bioamla/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/jmcmeen/bioamla/compare/v0.3.11...v0.4.0
 [0.3.11]: https://github.com/jmcmeen/bioamla/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/jmcmeen/bioamla/compare/v0.3.9...v0.3.10
