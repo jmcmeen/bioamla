@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-08
+
 ### Added
 
 - Windowed and streamed reads can keep a recording's channels: `keep_channels` on
@@ -1195,7 +1197,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/jmcmeen/bioamla/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/jmcmeen/bioamla/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/jmcmeen/bioamla/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/jmcmeen/bioamla/compare/v0.3.11...v0.4.0
