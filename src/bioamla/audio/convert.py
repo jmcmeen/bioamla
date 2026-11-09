@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from bioamla.audio._pydub import BIT_DEPTH_SUBTYPES, check_bit_depth, output_format
+from bioamla.audio._codec import BIT_DEPTH_SUBTYPES, check_bit_depth, output_format
 from bioamla.audio.io import load_audio_channels, save_audio
 from bioamla.audio.processing import resample_audio
 from bioamla.exceptions import InvalidInputError

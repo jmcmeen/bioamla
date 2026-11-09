@@ -120,6 +120,43 @@ def test_a_failing_job_reports_its_error(server):
     assert open_workspace(ws).history()[-1]["ok"] is False
 
 
+@pytest.mark.slow
+def test_a_job_is_reported_finished_only_once_its_history_is_written(server, monkeypatch):
+    from bioamla.server import operations_api
+
+    client, ws = server
+    real = operations_api.record_server_run
+    seen = []
+
+    def check_before_record(*args, **kwargs):  # the job has finished; its history isn't written yet
+        runner_job = client.app.state.jobs.get(job["id"])
+        seen.append((runner_job.to_dict(), runner_job.events[-1]))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(operations_api, "record_server_run", check_before_record)
+    job = submit(client, "detect.energy", {"file": "rec.wav"})
+    done = wait(client, job["id"])
+    reported, last_event = seen[0]
+    assert reported["status"] == "running" and reported["result"] is None
+    assert last_event.get("status") != "succeeded"  # the stream hasn't announced it yet
+    assert done["status"] == "succeeded" and done["result"] is not None
+    assert open_workspace(ws).history()[-1]["job"] == job["id"]
+
+
+@pytest.mark.slow
+def test_a_job_finishes_when_its_history_cant_be_written(server, monkeypatch):
+    from bioamla.server import operations_api
+
+    client, _ = server
+
+    def broken(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(operations_api, "record_server_run", broken)
+    job = submit(client, "detect.energy", {"file": "rec.wav"})
+    assert wait(client, job["id"])["status"] == "succeeded"
+
+
 def test_bad_requests_are_refused_before_queueing(server, tmp_path):
     client, _ = server
     outside = tmp_path / "outside.wav"
@@ -197,7 +234,7 @@ def test_a_bad_message_fails_that_job_and_the_runner_goes_on(tmp_path):
 
     job._conn, job._process = Conn(), Proc()
     runner.jobs[job.id] = job
-    assert runner._tick() == [job]
+    runner._tick()
     assert job.status == "failed" and job.error["type"] == "WorkerError"
     assert job.events[-1]["status"] == "failed"
 

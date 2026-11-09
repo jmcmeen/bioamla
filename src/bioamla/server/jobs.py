@@ -260,7 +260,6 @@ class JobRunner:
         """Stop the runner: queued jobs are dropped and running workers ended."""
         self._stop.set()
         with self._lock:
-            finished = []
             for job in self.jobs.values():
                 if job.status == RUNNING and job._process is not None:
                     _signal(job._process, kill=False)
@@ -269,8 +268,6 @@ class JobRunner:
                         _signal(job._process, kill=True)
                 if job.status in (QUEUED, RUNNING):
                     self._finish(job, CANCELLED, error=_cancelled("The server stopped"))
-                    finished.append(job)
-        self._record(finished)
         if self._thread is not None:
             self._thread.join(timeout=5)
 
@@ -278,19 +275,16 @@ class JobRunner:
 
     def _pump(self) -> None:
         while not self._stop.is_set():
-            finished: list[Job] = []
             try:
                 with self._lock:
-                    finished = self._tick()
+                    self._tick()
                     self._prune()
             except Exception:  # noqa: BLE001 - keep the runner alive
                 logger.exception("Job runner error")
-            self._record(finished)  # history I/O outside the lock
             self._stop.wait(self.poll)
 
-    def _tick(self) -> list[Job]:
-        """Check every running job, start queued ones; the jobs that finished."""
-        finished = []
+    def _tick(self) -> None:
+        """Check every running job and start queued ones."""
         for job in [j for j in self.jobs.values() if j.status == RUNNING]:
             try:
                 self._check(job)
@@ -298,10 +292,7 @@ class JobRunner:
                 logger.exception("Job %s broke the runner's protocol", job.id)
                 _signal(job._process, kill=True)
                 self._finish(job, FAILED, error={"type": "WorkerError", "message": str(e)})
-            if job.status != RUNNING:
-                finished.append(job)
         self._start_queued()
-        return finished
 
     def _check(self, job: Job) -> None:
         self._drain(job)
@@ -426,32 +417,29 @@ class JobRunner:
     def _finish(
         self, job: Job, status: str, *, result: Any = None, error: dict | None = None
     ) -> None:
-        # Result and final event first, status last: a reader that sees the job
-        # finished also sees its result and its last event.
-        job.result, job.error, job.finished = result, error, time.time()
+        # History, result and final event first, status last: a reader that sees the
+        # job finished also sees its result, its last event and its history record.
         if job._conn is not None:
             job._conn.close()
+        if job.started is not None:  # a job that never ran has nothing to record
+            self._record(job, ok=status == SUCCEEDED, result=result, error=error)
+        job.result, job.error, job.finished = result, error, time.time()
         self._event(job, "status", status=status, result=result, error=error)
         job.status = status
 
-    def _record(self, jobs: list[Job]) -> None:
-        """Add the finished ``jobs`` that ran to their workspaces' history."""
+    def _record(self, job: Job, *, ok: bool, result: Any, error: dict | None) -> None:
+        """Add ``job`` to its workspace's history (never raises: history can't fail a job)."""
         from bioamla.server.operations_api import record_server_run
         from bioamla.workspace import open_workspace
 
-        for job in jobs:
-            if job.started is None:
-                continue  # never ran: nothing to record
-            try:
-                ws = open_workspace(job.ws_dir)
-            except Exception:  # noqa: BLE001 - history must never fail a job
-                logger.warning("Couldn't open %s to record job %s", job.ws_dir, job.id,
-                               exc_info=True)  # fmt: skip
-                continue
+        try:
+            ws = open_workspace(job.ws_dir)
             record_server_run(
                 ws, job.operation, job.request_obj, user=job.user, started=job.started,
-                ok=job.status == SUCCEEDED, error=job.error, result=job.result, job_id=job.id,
+                ok=ok, error=error, result=result, job_id=job.id,
             )  # fmt: skip
+        except Exception:  # noqa: BLE001 - history must never fail a job
+            logger.warning("Couldn't record job %s in %s", job.id, job.ws_dir, exc_info=True)
 
     def _event(self, job: Job, kind: str, **data: Any) -> None:
         job.events.append({"id": len(job.events) + 1, "event": kind, "time": time.time(), **data})

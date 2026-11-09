@@ -3,7 +3,7 @@ Audio File Discovery
 ====================
 
 Helpers for discovering audio files on disk and reading lightweight audio
-metadata. Stdlib-only at import time; pydub is imported lazily where needed
+metadata. Stdlib-only at import time; the audio backend is imported lazily where needed
 for metadata extraction.
 """
 
@@ -74,7 +74,7 @@ def get_wav_metadata(filepath: str) -> dict[str, Any]:
     return {
         "sample_rate": info["sample_rate"],
         "channels": info["channels"],
-        "frames": info["samples"],  # pydub calls this "samples"
+        "frames": info["samples"],  # the backend calls this "samples"
         "duration": info["duration"],
         "format": info["format"],
         "subtype": info.get("subtype"),  # Now available via ffprobe

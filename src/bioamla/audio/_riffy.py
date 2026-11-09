@@ -7,8 +7,8 @@ a pure-Python RIFF parser. It needs no FFmpeg, libsndfile, or torch, so it is th
 thing :func:`bioamla.audio.get_audio_info` tries for WAV input. Files are parsed without
 reading their audio (``read_audio=False``), so a multi-GB recording costs only its
 headers. :func:`get_wav_info` handles integer PCM and IEEE float (plain or extensible);
-compressed WAVs raise :class:`AudioLoadError` and callers fall back to the pydub /
-ffprobe path, which can measure them.
+compressed WAVs raise :class:`AudioLoadError` and callers fall back to the ffprobe
+path, which can measure them.
 
 This is the only module that imports riffy. Its exceptions are mapped to bioamla's
 hierarchy here and nowhere else.
@@ -52,7 +52,7 @@ def is_wav_path(filepath: str | Path) -> bool:
 def get_wav_info(filepath: str | Path) -> dict:
     """Read a WAV header with riffy.
 
-    Returns the same dictionary shape as :func:`bioamla.audio._pydub.get_audio_info`
+    Returns the same dictionary shape as :func:`bioamla.audio._codec.get_audio_info`
     (``duration``, ``sample_rate``, ``channels``, ``samples``, ``format``, ``codec``,
     ``bit_depth``, ``subtype``) so the two backends are interchangeable.
 

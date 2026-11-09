@@ -74,7 +74,7 @@ def _load_audio_for_viz(audio_path: str, sample_rate: int) -> np.ndarray:
     """
     Load and resample an audio file to a mono numpy array for plotting.
 
-    Uses the slim-core numpy loader (soundfile/pydub) — no torch required.
+    Uses the slim-core numpy loader (soundfile/ffmpeg) — no torch required.
 
     Raises:
         AudioLoadError: If the audio cannot be loaded.
