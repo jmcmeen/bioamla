@@ -196,21 +196,36 @@ def save_dataset_manifest(manifest: DatasetManifest, filepath: str) -> str:
     return str(path)
 
 
-_HUB_LICENSE = re.compile(r"[a-z0-9][a-z0-9.+-]*")
-_CARD_LICENSE = re.compile(r"^license:[ \t]*(\S+)[ \t]*$", re.MULTILINE)
+#: The license ids the Hugging Face Hub accepts in a card's ``license:``
+#: (https://huggingface.co/docs/hub/repositories-licenses).
+HUB_LICENSES = frozenset(
+    """apache-2.0 mit openrail bigscience-openrail-m creativeml-openrail-m
+    bigscience-bloom-rail-1.0 bigcode-openrail-m afl-3.0 artistic-2.0 bsl-1.0 bsd
+    bsd-2-clause bsd-3-clause bsd-3-clause-clear c-uda cc cc0-1.0 cc-by-2.0 cc-by-2.5
+    cc-by-3.0 cc-by-4.0 cc-by-sa-3.0 cc-by-sa-4.0 cc-by-nc-2.0 cc-by-nc-3.0 cc-by-nc-4.0
+    cc-by-nd-4.0 cc-by-nc-nd-3.0 cc-by-nc-nd-4.0 cc-by-nc-sa-2.0 cc-by-nc-sa-3.0
+    cc-by-nc-sa-4.0 cdla-sharing-1.0 cdla-permissive-1.0 cdla-permissive-2.0 wtfpl ecl-2.0
+    epl-1.0 epl-2.0 etalab-2.0 eupl-1.1 eupl-1.2 agpl-3.0 gfdl gpl gpl-2.0 gpl-3.0 lgpl
+    lgpl-2.1 lgpl-3.0 isc h-research intel-research lppl-1.3c ms-pl apple-ascl apple-amlr
+    mpl-2.0 odc-by odbl openrail++ osl-3.0 postgresql ofl-1.1 ncsa unlicense zlib pddl
+    lgpl-lr unknown other""".split()
+)
+_CARD_LICENSE = re.compile(r"^license:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
 
 
 def hub_license_id(value: str) -> str:
     """``value`` as a Hugging Face Hub license id (``cc-by-nc-4.0``, ``cc0-1.0``, ``mit``,
-    ...), lowercased.
+    ...), lowercased: one in :data:`HUB_LICENSES`.
 
     Raises:
-        InvalidInputError: If it can't be one (spaces, punctuation other than ``.+-``).
+        InvalidInputError: If the Hub doesn't list it (``cc-by-nc`` without a version,
+            for example).
     """
     lowered = value.strip().lower()
-    if not _HUB_LICENSE.fullmatch(lowered):
+    if lowered not in HUB_LICENSES:
         raise InvalidInputError(
-            f"{value!r} is not a Hub license id (e.g. cc-by-4.0, cc-by-nc-sa-4.0, cc0-1.0)"
+            f"{value!r} is not a Hub license id (e.g. cc-by-4.0, cc-by-nc-sa-4.0, cc0-1.0; "
+            "Creative Commons ids include the version)"
         )
     return lowered
 
@@ -221,7 +236,10 @@ def card_license(card: str) -> str | None:
         return None
     end = card.find("\n---", 3)
     match = _CARD_LICENSE.search(card[: end if end != -1 else len(card)])
-    return match.group(1) if match else None
+    if not match:
+        return None
+    value = match.group(1).strip().strip("'\"").strip()  # YAML may quote it
+    return value or None
 
 
 def build_dataset_card(

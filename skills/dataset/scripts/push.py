@@ -28,7 +28,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _args import Parser  # noqa: E402
 from _bioamla import (  # noqa: E402
     BioamlaCommandError,
     add_remote_option,
@@ -39,6 +38,7 @@ from _bioamla import (  # noqa: E402
     save_json,
     use_remote,
 )
+from _dataset import Parser, unredactable_files  # noqa: E402
 
 PUSHED, REFUSED, ERROR = 0, 2, 1
 
@@ -53,6 +53,19 @@ def push(args: argparse.Namespace) -> tuple[int, dict]:
     if not verdict["passed"]:
         return REFUSED, {"pushed": False, "reason": "the gate didn't pass",
                          "gate_reasons": verdict["reasons"]}  # fmt: skip
+
+    if "license_id" not in verdict:  # a gate.json from before the push set a license
+        return REFUSED, {"pushed": False, "reason": "the run is from an older version of "
+                         "this skill; check and gate it again"}  # fmt: skip
+    signed_off = "location" in verdict["thresholds"]["accepted_rules"]
+    if signed_off:
+        # The sign-off covers the files the check listed, not ones added since.
+        now = unredactable_files(verdict["dataset"], root)
+        new = sorted(set(now or []) - set(verdict.get("unredactable_files") or []))
+        if new:
+            return REFUSED, {"pushed": False, "reason": f"{len(new)} file(s) the push can't "
+                             f"redact appeared since the check ({new[0]}); check and gate it "
+                             "again"}  # fmt: skip
 
     current = fetch(verdict["metadata"], rel / "workspace-now", root)
     if not current.exists():
@@ -71,8 +84,7 @@ def push(args: argparse.Namespace) -> tuple[int, dict]:
         "--license", verdict["license_id"],  # the license the check held the files to
         # The push refuses files it can't redact (JSON/text with coordinates, Parquet)
         # unless the person signed off the location finding the check made for them.
-        "--unredacted", "publish" if "location" in verdict["thresholds"]["accepted_rules"]
-        else "refuse",
+        "--unredacted", "publish" if signed_off else "refuse",
     ]  # fmt: skip
     if args.commit_message:
         options += ["--commit-message", args.commit_message]

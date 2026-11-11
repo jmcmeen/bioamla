@@ -164,8 +164,22 @@ class TestDatasetLicense:
 
         from bioamla.exceptions import InvalidInputError
 
-        with pytest.raises(InvalidInputError, match="Hub license id"):
-            build_dataset_card(_manifest(), license="CC BY NC")
+        for bad in ("CC BY NC", "cc-by-nc", "cc-by-sa-2.0"):
+            with pytest.raises(InvalidInputError, match="Hub license id"):
+                build_dataset_card(_manifest(), license=bad)
+
+    def test_a_quoted_card_license_is_read_whole(self):
+        from bioamla.datasets.manifest import card_license
+
+        assert card_license('---\nlicense: "cc-by-4.0"\ntags:\n- audio\n---\n') == "cc-by-4.0"
+        assert card_license("---\ntags:\n- audio\n---\nlicense: mit\n") is None
+
+    def test_a_license_without_anything_to_build_a_card_from_stops_the_push(self, tmp_path):
+        res = CliRunner().invoke(
+            catalogs, ["hf", "push-dataset", str(tmp_path), "me/frogs", "--license", "cc0-1.0"]
+        )
+        assert res.exit_code != 0
+        assert "no metadata.csv" in res.output
 
     def test_a_redacted_push_keeps_the_cards_license(self, tmp_path):
         from bioamla.datasets import redacted_dataset_files

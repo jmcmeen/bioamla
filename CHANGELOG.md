@@ -13,7 +13,9 @@ All notable changes to this project are documented here. The format is based on
   unlicensed. The card also has a License section listing the licenses its files carry, which
   the manifest now counts (`licenses`, from `attr_lic` or `license`), and a redacted push keeps
   the card's license. `push_dataset_folder()`, `write_dataset_card()`, `build_dataset_card()`
-  and the operation take `license=`; `hub_license_id()` checks one (#355)
+  and the operation take `license=`; `hub_license_id()` accepts only ids the Hub lists
+  (`HUB_LICENSES`; Creative Commons ids include the version). A push given `--license` stops
+  if the card can't be written, rather than publishing without it (#355)
 
 ### Changed
 

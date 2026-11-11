@@ -31,7 +31,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _args import Parser, count  # noqa: E402
 from _bioamla import (  # noqa: E402
     BioamlaCommandError,
     add_remote_option,
@@ -40,6 +39,7 @@ from _bioamla import (  # noqa: E402
     save_json,
     use_remote,
 )
+from _dataset import Parser, count  # noqa: E402
 
 PASS, FAIL, ERROR = 0, 2, 1
 RULES = ("columns", "split", "license", "attribution", "file", "location", "leakage")
@@ -118,6 +118,7 @@ def gate(args: argparse.Namespace) -> dict:
         "metadata_sha256": checks["metadata_sha256"],
         "license": checks["license"],
         "license_id": checks["license_id"],
+        "unredactable_files": checks["locations"].get("unredactable_files"),
         "coordinates": checks["coordinates"],
         "coordinate_decimals": checks["coordinate_decimals"],
         "rows": checks["rows"],

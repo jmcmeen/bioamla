@@ -52,7 +52,6 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _args import Parser, count  # noqa: E402
 from _bioamla import (  # noqa: E402
     BioamlaCommandError,
     add_remote_option,
@@ -63,6 +62,7 @@ from _bioamla import (  # noqa: E402
     save_json,
     use_remote,
 )
+from _dataset import Parser, count, unredactable_files  # noqa: E402
 
 SKILL = "dataset"
 REQUIRED = ("file_name", "label", "split")
@@ -119,8 +119,17 @@ def parse_license(text: str) -> License | None:
                    version=version)  # fmt: skip
 
 
+#: The Creative Commons ids the Hugging Face Hub lists.
+HUB_IDS = frozenset(
+    "cc0-1.0 cc-by-2.0 cc-by-2.5 cc-by-3.0 cc-by-4.0 cc-by-sa-3.0 cc-by-sa-4.0 cc-by-nc-2.0 "
+    "cc-by-nc-3.0 cc-by-nc-4.0 cc-by-nd-4.0 cc-by-nc-nd-3.0 cc-by-nc-nd-4.0 cc-by-nc-sa-2.0 "
+    "cc-by-nc-sa-3.0 cc-by-nc-sa-4.0".split()
+)
+
+
 def hub_id(license: License) -> str:
-    """The Hugging Face Hub license id for ``license`` (version 4.0 when it gives none)."""
+    """The Hugging Face Hub license id for ``license`` (version 4.0 when it gives none;
+    the dataset's own ``--license`` must give one)."""
     if not license.by:
         return "cc0-1.0"
     conditions = "".join(f"-{c}" for c, on in (("nc", license.nc), ("nd", license.nd),
@@ -223,29 +232,6 @@ def wav_locations(dataset: str, rows: list[dict], sample: int, root: Path) -> di
                     "unreadable": unreadable}  # fmt: skip
     return {"wav_files": len(wavs), "sampled": len(checked), "with_position": None,
             "unreadable": unreadable}  # fmt: skip
-
-
-def unredactable_files(dataset: str, root: Path) -> list[str] | None:
-    """Files in the dataset a redacting push can't change but that may hold a location
-    (JSON, JSONL or text mentioning a latitude or longitude, and Parquet), which the push
-    refuses unless the person signs off; None with a remote, whose files this step can't
-    list."""
-    if remote(root) is not None:
-        return None
-    base = (root / dataset).resolve()
-    found = []
-    for path in sorted(base.rglob("*")):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(base).as_posix()
-        suffix = path.suffix.lower()
-        if suffix in (".json", ".jsonl", ".txt") and rel != "dataset.json":
-            text = path.read_text(encoding="utf-8", errors="replace").lower()
-            if "latitude" in text or "longitude" in text:
-                found.append(rel)
-        elif suffix == ".parquet":
-            found.append(rel)
-    return found
 
 
 def check_rows(rows, columns, args, root: Path) -> tuple[list[dict], dict]:
@@ -373,6 +359,14 @@ def check(args: argparse.Namespace) -> dict:
 def target_license(value: str) -> License:
     """An argparse type: a license this check can read, other than NoDerivatives."""
     parsed = parse_license(value)
+    if parsed is not None and parsed.by and not parsed.version:
+        raise argparse.ArgumentTypeError(
+            f"{value!r} gives no version; name the one the dataset will use (e.g. CC-BY-NC-4.0)"
+        )
+    if parsed is not None and not parsed.nd and hub_id(parsed) not in HUB_IDS:
+        raise argparse.ArgumentTypeError(
+            f"{value!r} is not a license the Hugging Face Hub lists ({hub_id(parsed)})"
+        )
     if parsed is not None and parsed.nd:
         raise argparse.ArgumentTypeError(
             f"{value!r} is NoDerivatives, which a dataset of clips can't be published under"

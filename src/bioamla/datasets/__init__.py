@@ -84,6 +84,7 @@ from bioamla.datasets.licenses import (
 )
 from bioamla.datasets.manifest import (
     BIOAMLA_DATASET_FORMAT,
+    HUB_LICENSES,
     DatasetManifest,
     build_dataset_card,
     build_manifest_from_metadata,
@@ -209,6 +210,7 @@ __all__ = [
     # Recorder metadata
     "add_recording_metadata",
     "build_dataset_card",
+    "HUB_LICENSES",
     "hub_license_id",
     "write_dataset_card",
     "COORDINATE_MODES",

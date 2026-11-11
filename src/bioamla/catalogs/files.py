@@ -17,7 +17,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from bioamla.exceptions import BioamlaError, CatalogError, OptionConflictError
+from bioamla.exceptions import (
+    BioamlaError,
+    CatalogError,
+    InvalidInputError,
+    OptionConflictError,
+)
 
 
 def _write(path: str | Path, write: Any) -> None:
@@ -281,8 +286,15 @@ def push_dataset_folder(
             if card_path:
                 notice("info", f"Wrote dataset card: {card_path}")
         except BioamlaError as e:
+            if license is not None:
+                raise  # the license would be lost: don't publish without it
             card_error = str(e)
             notice("warning", f"Warning: could not generate dataset card ({e})")
+        if license is not None and not card_path:
+            raise InvalidInputError(
+                f"--license is written to the dataset card, and {path} has no metadata.csv "
+                "or dataset.json to build one from"
+            )
     warnings = _warnings(path, coordinates, unredacted, found)
     for warning in warnings:
         notice("warning", warning)
