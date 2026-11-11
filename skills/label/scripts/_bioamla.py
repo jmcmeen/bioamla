@@ -180,7 +180,7 @@ def _workspace_settings(root: str | Path) -> tuple[dict, str] | None:
                 return None
             try:
                 import tomllib
-            except ImportError:  # Python 3.10: ask bioamla
+            except ImportError:  # Python 3.9 and 3.10 have no tomllib: ask bioamla
                 found = run("remote", "current", cwd=root)
                 return ({"remote": found["remote"], "workspace": found["workspace"]}
                         if found.get("remote") else {}), str(config)  # fmt: skip

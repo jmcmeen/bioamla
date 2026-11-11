@@ -42,10 +42,13 @@ def test_skills_share_one_helper():
 def test_every_skill_has_a_skill_md_with_name_and_description():
     for skill in [p for p in SKILLS.iterdir() if p.is_dir()]:
         text = (skill / "SKILL.md").read_text()
-        assert text.startswith("---\nname: ")
+        # A plugin skill's command is /bioamla:<name>; the name is the folder's.
+        assert text.startswith(f"---\nname: {skill.name}\n"), skill.name
         assert "\ndescription: " in text.split("---")[1]
         assert "<this skill>" not in text and "<skill>/" not in text, skill.name
-        assert "${CLAUDE_SKILL_DIR}/scripts/" in text, skill.name
+        assert 'python3 "${CLAUDE_SKILL_DIR}/scripts/' in text, (
+            skill.name
+        )  # quoted: paths may have spaces
 
 
 def test_the_marketplace_installs_every_skill_as_one_plugin():

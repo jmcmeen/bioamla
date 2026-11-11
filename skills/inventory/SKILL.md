@@ -1,7 +1,7 @@
 ---
-name: bioamla-inventory
+name: inventory
 description: Inventory the recordings in a bioamla workspace folder and flag files that are too short or unreadable. Use when asked what recordings a workspace holds or which ones need a look before analysis.
-allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
+allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/*)
 ---
 
 # Recording inventory
@@ -14,7 +14,7 @@ docs).
 From the workspace root:
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/inventory.py <folder> [--min-duration SECONDS]
+python3 "${CLAUDE_SKILL_DIR}/scripts/inventory.py" <folder> [--min-duration SECONDS]
 ```
 
 `${CLAUDE_SKILL_DIR}` is this skill's folder (the one holding this file); in an

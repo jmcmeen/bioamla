@@ -1,7 +1,7 @@
 ---
-name: bioamla-label-qa
+name: label-qa
 description: Check an annotation set in a bioamla workspace before anyone trusts it - well-formed rows inside their recordings, labels in the vocabulary, no duplicates or agent overlaps, and how well the agent's labels agree with a person's on a held-out subset - and give a pass/fail verdict. Use when asked to QA, validate, audit or sign off annotations, especially ones a first-pass labeling run wrote.
-allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
+allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/*)
 ---
 
 # Label QA
@@ -32,7 +32,7 @@ agent that doesn't fill it in, use that folder's path.
 1. **Check**: the rows themselves.
 
    ```
-   python3 ${CLAUDE_SKILL_DIR}/scripts/check.py annotations.csv --labels frog,bird
+   python3 "${CLAUDE_SKILL_DIR}/scripts/check.py" annotations.csv --labels frog,bird
    ```
 
    Writes `checks.json`: one finding per problem, with the row and the rule it broke.
@@ -49,7 +49,7 @@ agent that doesn't fill it in, use that folder's path.
 2. **Agreement**: against a person's labels, where both exist.
 
    ```
-   python3 ${CLAUDE_SKILL_DIR}/scripts/agreement.py <run_dir> --reference reference.csv
+   python3 "${CLAUDE_SKILL_DIR}/scripts/agreement.py" <run_dir> --reference reference.csv
    ```
 
    `reference.csv` is the person's annotations for a subset of the recordings: every row
@@ -65,7 +65,7 @@ agent that doesn't fill it in, use that folder's path.
 3. **Gate**: the verdict.
 
    ```
-   python3 ${CLAUDE_SKILL_DIR}/scripts/gate.py <run_dir> --max-findings 0 --min-f1 0.8
+   python3 "${CLAUDE_SKILL_DIR}/scripts/gate.py" <run_dir> --max-findings 0 --min-f1 0.8
    ```
 
    Passes when the check step found no more than `--max-findings` problems and, if the

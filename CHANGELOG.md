@@ -11,9 +11,16 @@ All notable changes to this project are documented here. The format is based on
 - The agent skills install as a Claude Code plugin:
   `/plugin install bioamla --marketplace jmcmeen/bioamla`, then `/bioamla:inventory`,
   `/bioamla:label` and `/bioamla:label-qa`. The install copies only `skills/`. Each
-  `SKILL.md` runs its scripts as `${CLAUDE_SKILL_DIR}/scripts/...` (filled in for plugin and
-  linked installs alike) and allows them in `allowed-tools`; copying or linking a skill's
-  folder still works for other agents (#351)
+  `SKILL.md` runs its scripts as `python3 "${CLAUDE_SKILL_DIR}/scripts/..."` (filled in for
+  plugin and linked installs alike) and allows them in `allowed-tools`; copying or linking a
+  skill's folder still works for other agents (#351)
+
+### Changed
+
+- Each skill's `name` is now its folder's (`inventory`, `label`, `label-qa`; were
+  `bioamla-inventory`, `bioamla-first-pass-labeling`, `bioamla-label-qa`), so the plugin's
+  commands are `/bioamla:<folder>`. A linked skill runs as `/<name>`, or by its link's folder
+  name as before (#351)
 
 ### Fixed
 

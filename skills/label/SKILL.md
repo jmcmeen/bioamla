@@ -1,7 +1,7 @@
 ---
-name: bioamla-first-pass-labeling
+name: label
 description: Do a first pass of labeling a folder of recordings in a bioamla workspace - detect sound events, classify them with an AST model, and write confident ones as annotations while sending the rest to a person for review. Use when asked to pre-label, auto-label or triage recordings.
-allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)
+allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/*)
 ---
 
 # First-pass labeling
@@ -32,7 +32,7 @@ agent that doesn't fill it in, use that folder's path.
 1. **Candidates**: detect events and classify them.
 
    ```
-   python3 ${CLAUDE_SKILL_DIR}/scripts/candidates.py <folder> --model <model> --labels <a,b,...>
+   python3 "${CLAUDE_SKILL_DIR}/scripts/candidates.py" <folder> --model <model> --labels <a,b,...>
    ```
 
    Options: `--low-freq`/`--high-freq` (the detector's band, Hz), `--threshold-db`,
@@ -41,7 +41,7 @@ agent that doesn't fill it in, use that folder's path.
 2. **Evidence**: measure each candidate.
 
    ```
-   python3 ${CLAUDE_SKILL_DIR}/scripts/evidence.py <run_dir>
+   python3 "${CLAUDE_SKILL_DIR}/scripts/evidence.py" <run_dir>
    ```
 
    Writes `evidence.json`: signal-to-noise ratio in the detector's band (dB), detector
@@ -53,7 +53,7 @@ agent that doesn't fill it in, use that folder's path.
 3. **Crops**: a clip and a spectrogram image around each candidate, for review.
 
    ```
-   python3 ${CLAUDE_SKILL_DIR}/scripts/crops.py <run_dir> --pad 0.5
+   python3 "${CLAUDE_SKILL_DIR}/scripts/crops.py" <run_dir> --pad 0.5
    ```
 
    Writes `<run_dir>/crops/<id>.wav` and `.png` (the event's box outlined on the
@@ -64,7 +64,7 @@ agent that doesn't fill it in, use that folder's path.
    the annotations CSV.
 
    ```
-   python3 ${CLAUDE_SKILL_DIR}/scripts/annotate.py <run_dir> --annotations annotations.csv \
+   python3 "${CLAUDE_SKILL_DIR}/scripts/annotate.py" <run_dir> --annotations annotations.csv \
        --min-confidence 0.8 --min-snr 10
    ```
 
@@ -80,7 +80,7 @@ agent that doesn't fill it in, use that folder's path.
 5. **Review queue**: everything held back, for a person.
 
    ```
-   python3 ${CLAUDE_SKILL_DIR}/scripts/review.py <run_dir>
+   python3 "${CLAUDE_SKILL_DIR}/scripts/review.py" <run_dir>
    ```
 
    Writes `review_queue.json`: each held-back candidate with its reasons, evidence,

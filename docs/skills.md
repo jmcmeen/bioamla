@@ -14,8 +14,9 @@ skills/<name>/
     └── <step>.py     # one script per step
 ```
 
-`SKILL.md` starts with front matter giving the skill's `name`, a `description` that
-says when an agent should use it, and `allowed-tools` for its scripts. The body tells the agent which scripts to run, in what
+`SKILL.md` starts with front matter giving the skill's `name` (its folder's name; the
+plugin adds the `bioamla:` prefix), a `description` that says when an agent should use
+it, and `allowed-tools` for its scripts. The body tells the agent which scripts to run, in what
 order, and what to report.
 
 ## Rules for skill scripts
@@ -63,8 +64,10 @@ $ ln -s /path/to/bioamla/skills/inventory ~/.claude/skills/bioamla-inventory
 ```
 
 Each skill folder is self-contained (it carries its own copy of `_bioamla.py`), so it can
-be installed on its own. `SKILL.md` runs its scripts as `${CLAUDE_SKILL_DIR}/scripts/...`,
-which Claude Code fills in either way, and allows them in `allowed-tools`.
+be installed on its own. A linked skill runs as `/<name>` (`/inventory`), or by the
+link's folder name (`/bioamla-inventory`). `SKILL.md` runs its scripts as
+`python3 "${CLAUDE_SKILL_DIR}/scripts/..."`, which Claude Code fills in either way, and
+allows them in `allowed-tools`.
 
 ## Evaluating a skill
 
