@@ -139,6 +139,13 @@ def _push_folder(
     _require_dir(path)
     staged = _staged_files(staged_dir) if staged_dir else []
     patterns = _literal_patterns([*staged, *(exclude or [])])
+    # Counted before the upload, so a file that changes meanwhile can't fail a push that
+    # succeeded.
+    left_out = {rel: (Path(path) / rel) for rel in exclude or []}
+    files_uploaded = _count_files(path) - len(left_out)
+    total_size = _get_folder_size(path) - sum(
+        p.stat().st_size for p in left_out.values() if p.is_file()
+    )
 
     api = _get_hf_api()
     message = commit_message or f"Upload {repo_type}"
@@ -146,12 +153,13 @@ def _push_folder(
         api.create_repo(repo_id=repo_id, repo_type=repo_type, private=private, exist_ok=True)
         if exclude:
             existing = set(api.list_repo_files(repo_id=repo_id, repo_type=repo_type))
-            for rel in sorted(set(exclude) & existing):
-                api.delete_file(
-                    path_in_repo=rel,
+            stale = sorted(set(exclude) & existing)
+            if stale:  # one commit for all of them
+                api.delete_files(
                     repo_id=repo_id,
+                    delete_patterns=_literal_patterns(stale),
                     repo_type=repo_type,
-                    commit_message=f"{message} (remove {rel}, left out of this push)",
+                    commit_message=f"{message} (remove {len(stale)} file(s) left out of it)",
                 )
         if staged:
             _upload_folder(api, staged_dir, repo_id, repo_type, f"{message} (redacted metadata)")
@@ -164,9 +172,8 @@ def _push_folder(
         repo_id=repo_id,
         repo_type=repo_type,
         url=url,
-        files_uploaded=_count_files(path) - len(exclude or []),
-        total_size_bytes=_get_folder_size(path)
-        - sum((Path(path) / rel).stat().st_size for rel in exclude or []),
+        files_uploaded=files_uploaded,
+        total_size_bytes=total_size,
     )
 
 

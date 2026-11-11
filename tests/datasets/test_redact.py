@@ -53,8 +53,8 @@ class _RecordingApi:
     def list_repo_files(self, **kwargs):
         return list(self.repo_files)
 
-    def delete_file(self, *, path_in_repo, **kwargs):
-        self.deleted.append(path_in_repo)
+    def delete_files(self, *, delete_patterns, **kwargs):
+        self.deleted.append(list(delete_patterns))  # one commit per call
 
     def upload_folder(self, *, folder_path, **kwargs):
         base = Path(folder_path)
@@ -237,7 +237,7 @@ class TestPushDatasetUnredactedFiles:
         result = hf.push_dataset(
             str(self._folder(tmp_path)), "me/frogs", coordinates="strip", unredacted="skip"
         )
-        assert api.deleted == ["detections.jsonl"]
+        assert api.deleted == [["detections.jsonl"]]
         assert result.files_uploaded == 1  # metadata.csv; the skipped file isn't counted
 
     def test_a_bad_coordinate_mode_is_named_first(self, tmp_path) -> None:
@@ -256,6 +256,14 @@ class TestPushDatasetUnredactedFiles:
                       if p.name == "unredacted")  # fmt: skip
         assert tuple(typing.get_args(hint)) == hf.UNREDACTED_MODES
         assert tuple(option.type.choices) == hf.UNREDACTED_MODES
+
+    def test_warnings_say_what_each_mode_does(self, tmp_path) -> None:
+        from bioamla.catalogs import dataset_push_warnings
+
+        folder = self._folder(tmp_path)
+        assert "refuses" in dataset_push_warnings(folder, "round")[0]
+        assert "Leaving out" in dataset_push_warnings(folder, "round", "skip")[0]
+        assert "may still carry" in dataset_push_warnings(folder, "round", "publish")[0]
 
     def test_unknown_mode_rejected(self, tmp_path) -> None:
         with pytest.raises(InvalidInputError, match="unredacted"):

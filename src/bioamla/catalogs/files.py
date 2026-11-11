@@ -146,20 +146,26 @@ def inat_project_stats(project_id: str, *, output: str | Path | None = None) -> 
 
 
 def dataset_push_warnings(
-    path: str | Path,
-    coordinates: str = "keep",
-    unredacted: str = "refuse",
-    _unredacted_files: list[str] | None = None,
+    path: str | Path, coordinates: str = "keep", unredacted: str = "refuse"
 ) -> list[str]:
     """What a dataset push would publish, or leave out, that the uploader may not expect.
 
     With ``coordinates="keep"``: per-file locations in the metadata or the WAV files'
     recorder metadata. Otherwise: files that may still carry a location
-    ``coordinates`` doesn't change (JSON or text, Parquet), left out with
-    ``unredacted="skip"``, else published as they are (with ``refuse`` the push itself
-    stops; see :func:`bioamla.catalogs.huggingface.unredacted_files`).
+    ``coordinates`` doesn't change (JSON or text, Parquet): left out with
+    ``unredacted="skip"``, published as they are with ``"publish"``, and with
+    ``"refuse"`` a reason the push would stop (see
+    :func:`bioamla.catalogs.huggingface.unredacted_files`).
     """
-    from bioamla.datasets import has_location_columns, unredacted_location_files, wavs_with_location
+    from bioamla.datasets import unredacted_location_files
+
+    files = unredacted_location_files(path) if coordinates != "keep" else []
+    return _warnings(path, coordinates, unredacted, files)
+
+
+def _warnings(path: str | Path, coordinates: str, unredacted: str, files: list[str]) -> list[str]:
+    """:func:`dataset_push_warnings`, with the unredactable ``files`` already listed."""
+    from bioamla.datasets import has_location_columns, wavs_with_location
 
     if coordinates == "keep":
         where = []
@@ -173,13 +179,18 @@ def dataset_push_warnings(
             f"Per-file locations in {' and '.join(where)} will be published as they are. "
             "Use --coordinates round or --coordinates strip to redact them."
         ]
-    files = unredacted_location_files(path) if _unredacted_files is None else _unredacted_files
     if not files:
         return []
     if unredacted == "skip":
         return [
             f"Leaving out {len(files)} file(s) that may carry a location --coordinates "
             f"doesn't change (JSON/text, Parquet), e.g. {files[0]}."
+        ]
+    if unredacted == "refuse":
+        return [
+            f"{len(files)} file(s) may carry a location --coordinates doesn't change "
+            f"(JSON/text, Parquet), e.g. {files[0]}; the push refuses them unless "
+            "--unredacted skip or publish is given."
         ]
     return [
         f"{len(files)} file(s) may still carry a location that --coordinates "
@@ -262,7 +273,7 @@ def push_dataset_folder(
         except BioamlaError as e:
             card_error = str(e)
             notice("warning", f"Warning: could not generate dataset card ({e})")
-    warnings = dataset_push_warnings(path, coordinates, unredacted, _unredacted_files=found)
+    warnings = _warnings(path, coordinates, unredacted, found)
     for warning in warnings:
         notice("warning", warning)
     result = hf.push_dataset(
