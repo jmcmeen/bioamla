@@ -44,3 +44,13 @@ def test_every_skill_has_a_skill_md_with_name_and_description():
         text = (skill / "SKILL.md").read_text()
         assert text.startswith("---\nname: ")
         assert "\ndescription: " in text.split("---")[1]
+        assert "<this skill>" not in text and "<skill>/" not in text, skill.name
+        assert "${CLAUDE_SKILL_DIR}/scripts/" in text, skill.name
+
+
+def test_the_marketplace_installs_every_skill_as_one_plugin():
+    """`/plugin install bioamla --marketplace jmcmeen/bioamla`: the plugin is the skills/
+    folder, so Claude Code finds every skill there and an install copies only skills/."""
+    market = json.loads((SKILLS.parent / ".claude-plugin" / "marketplace.json").read_text())
+    [plugin] = market["plugins"]
+    assert (plugin["name"], plugin["source"], plugin["skills"]) == ("bioamla", "./skills", ["./"])

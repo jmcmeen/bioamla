@@ -14,8 +14,8 @@ skills/<name>/
     └── <step>.py     # one script per step
 ```
 
-`SKILL.md` starts with front matter giving the skill's `name` and a `description` that
-says when an agent should use it. The body tells the agent which scripts to run, in what
+`SKILL.md` starts with front matter giving the skill's `name`, a `description` that
+says when an agent should use it, and `allowed-tools` for its scripts. The body tells the agent which scripts to run, in what
 order, and what to report.
 
 ## Rules for skill scripts
@@ -43,15 +43,27 @@ order, and what to report.
 
 ## Installing a skill
 
-Copy or link the skill's folder into your agent's skills directory. For Claude Code,
-that is `.claude/skills/` in a project, or `~/.claude/skills/` for every project:
+In Claude Code, install them all as the `bioamla` plugin from the repository's
+marketplace; a skill then runs as `/bioamla:<folder>`, for example `/bioamla:label`:
+
+```
+/plugin install bioamla --marketplace jmcmeen/bioamla
+```
+
+On Claude Code older than 2.1.275, add the marketplace first
+(`/plugin marketplace add jmcmeen/bioamla`), then `/plugin install bioamla@bioamla`.
+The install copies only `skills/`.
+
+For any agent, copy or link a skill's folder into its skills directory (for Claude
+Code, `.claude/skills/` in a project or `~/.claude/skills/` for every project):
 
 ```console
 $ ln -s /path/to/bioamla/skills/inventory ~/.claude/skills/bioamla-inventory
 ```
 
 Each skill folder is self-contained (it carries its own copy of `_bioamla.py`), so it can
-be installed on its own.
+be installed on its own. `SKILL.md` runs its scripts as `${CLAUDE_SKILL_DIR}/scripts/...`,
+which Claude Code fills in either way, and allows them in `allowed-tools`.
 
 ## Evaluating a skill
 

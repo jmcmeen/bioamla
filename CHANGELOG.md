@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- The agent skills install as a Claude Code plugin:
+  `/plugin install bioamla --marketplace jmcmeen/bioamla`, then `/bioamla:inventory`,
+  `/bioamla:label` and `/bioamla:label-qa`. The install copies only `skills/`. Each
+  `SKILL.md` runs its scripts as `${CLAUDE_SKILL_DIR}/scripts/...` (filled in for plugin and
+  linked installs alike) and allows them in `allowed-tools`; copying or linking a skill's
+  folder still works for other agents (#351)
+
 ## [0.4.3] - 2026-11-08
 
 ### Added

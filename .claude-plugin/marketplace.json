@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "bioamla",
+  "description": "Agent skills that drive bioamla, the bioacoustics and machine learning toolkit",
+  "owner": { "name": "John McMeen", "url": "https://github.com/jmcmeen" },
+  "plugins": [
+    {
+      "name": "bioamla",
+      "source": "./skills",
+      "skills": ["./"],
+      "description": "Skills for inventorying recordings, first-pass labeling and label QA with bioamla (needs bioamla installed)",
+      "category": "data",
+      "tags": ["bioacoustics", "audio", "labeling", "machine-learning"]
+    }
+  ]
+}
