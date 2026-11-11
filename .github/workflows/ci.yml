@@ -38,10 +38,10 @@ jobs:
           echo "RUFF_VERSION=$version" >> "$GITHUB_ENV"
 
       - name: Lint
-        run: uvx "ruff@$RUFF_VERSION" check src tests
+        run: uvx "ruff@$RUFF_VERSION" check src tests skills
 
       - name: Format check
-        run: uvx "ruff@$RUFF_VERSION" format --check src tests
+        run: uvx "ruff@$RUFF_VERSION" format --check src tests skills
 
   test:
     name: test (py${{ matrix.python-version }})
@@ -79,6 +79,19 @@ jobs:
           MKL_NUM_THREADS: "1"
           NUMBA_NUM_THREADS: "1"
         run: uv run pytest -n logical --dist worksteal --durations=15
+
+      # Skill scripts run on whatever python3 an agent finds, not bioamla's own Python,
+      # so run their evals once more with the scripts on 3.9, the oldest they support.
+      - name: Skill evals with the scripts on Python 3.9
+        if: matrix.python-version == '3.11'
+        env:
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          NUMBA_NUM_THREADS: "1"
+        run: |
+          uv python install 3.9
+          SKILL_PYTHON="$(uv python find --no-project 3.9)" uv run pytest -n logical --dist worksteal tests/skills
 
   lazy-imports:
     name: lazy-import guard

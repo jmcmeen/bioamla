@@ -307,9 +307,8 @@ def test_a_failing_server_stops_the_check_instead_of_counting_as_findings(plante
     refused token) is the step's error, not a file finding the gate could wave through."""
     import os
     import subprocess
-    import sys
 
-    from tests.skills.conftest import skill_script
+    from tests.skills.conftest import skill_python, skill_script
 
     fake = tmp_path / "bioamla"
     fake.write_text(
@@ -319,7 +318,7 @@ def test_a_failing_server_stops_the_check_instead_of_counting_as_findings(plante
     )
     fake.chmod(0o755)
     proc = subprocess.run(
-        [sys.executable, str(skill_script("label-qa", "check")), "annotations.csv"],
+        [skill_python(), str(skill_script("label-qa", "check")), "annotations.csv"],
         cwd=planted, env={**os.environ, "BIOAMLA_BIN": str(fake)},
         capture_output=True, text=True, check=False,
     )  # fmt: skip
@@ -333,13 +332,12 @@ def test_a_bioamla_that_cannot_run_is_a_json_error(planted, tmp_path):
     way every other failure is: JSON on stdout, exit 1, not a traceback."""
     import os
     import subprocess
-    import sys
 
-    from tests.skills.conftest import skill_script
+    from tests.skills.conftest import skill_python, skill_script
 
     gone = tmp_path / "old-venv" / "bin" / "bioamla"
     proc = subprocess.run(
-        [sys.executable, str(skill_script("label-qa", "check")), "annotations.csv"],
+        [skill_python(), str(skill_script("label-qa", "check")), "annotations.csv"],
         cwd=planted, env={**os.environ, "BIOAMLA_BIN": str(gone)},
         capture_output=True, text=True, check=False,
     )  # fmt: skip
@@ -351,9 +349,8 @@ def test_a_bioamla_that_cannot_run_is_a_json_error(planted, tmp_path):
 
 def test_thresholds_outside_zero_to_one_are_usage_errors(planted) -> None:
     import subprocess
-    import sys
 
-    from tests.skills.conftest import skill_script
+    from tests.skills.conftest import skill_python, skill_script
 
     for script, flag, bad in (
         ("gate", "--min-f1", "1.5"),
@@ -361,7 +358,7 @@ def test_thresholds_outside_zero_to_one_are_usage_errors(planted) -> None:
         ("gate", "--max-findings", "-1"),
         ("agreement", "--min-iou", "2"),
     ):
-        args = [sys.executable, str(skill_script("label-qa", script)), "runs/label-qa/x", flag, bad]
+        args = [skill_python(), str(skill_script("label-qa", script)), "runs/label-qa/x", flag, bad]
         if script == "agreement":
             args += ["--reference", "reference.csv"]
         proc = subprocess.run(args, cwd=planted, capture_output=True, text=True, check=False)

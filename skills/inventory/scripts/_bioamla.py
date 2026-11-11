@@ -22,7 +22,7 @@ import json
 import os
 import subprocess
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -99,7 +99,7 @@ def run(*args: str, cwd: str | Path | None = None) -> Any:
 
 def run_dir(skill: str, root: str | Path = ".") -> Path:
     """A new ``runs/<skill>/<UTC timestamp>/`` folder under ``root`` (the workspace)."""
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     base = Path(root) / "runs" / skill
     base.mkdir(parents=True, exist_ok=True)
     path, n = base / stamp, 1
@@ -180,7 +180,7 @@ def _workspace_settings(root: str | Path) -> tuple[dict, str] | None:
                 return None
             try:
                 import tomllib
-            except ImportError:  # Python 3.10: ask bioamla
+            except ImportError:  # Python 3.9 and 3.10 have no tomllib: ask bioamla
                 found = run("remote", "current", cwd=root)
                 return ({"remote": found["remote"], "workspace": found["workspace"]}
                         if found.get("remote") else {}), str(config)  # fmt: skip

@@ -165,6 +165,8 @@ exclude_lines = [
 target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
+# Skill scripts run on whatever python3 an agent finds, so they keep to 3.9.
+per-file-target-version = { "skills/**/*.py" = "py39" }
 
 [tool.ruff.lint]
 select = [

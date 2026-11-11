@@ -43,6 +43,27 @@ def test_remote_comes_from_the_environment_then_the_workspace(monkeypatch, tmp_p
         helpers.remote(ws)
 
 
+@pytest.mark.integration
+def test_without_tomllib_the_workspace_remote_comes_from_bioamla(monkeypatch, tmp_path):
+    """Python 3.9 and 3.10 have no tomllib, so the helper asks `bioamla remote current`."""
+    import sys
+
+    from tests.skills.conftest import bioamla_bin
+
+    helpers = load(monkeypatch)
+    monkeypatch.delenv("BIOAMLA_REMOTE", raising=False)
+    monkeypatch.setenv("BIOAMLA_BIN", bioamla_bin())
+    monkeypatch.setitem(sys.modules, "tomllib", None)  # `import tomllib` raises ImportError
+    for name, config in (("remote", 'remote = "lab"\nworkspace = "site"\n'), ("local", "")):
+        ws = tmp_path / name  # remote() remembers each workspace's answer
+        (ws / ".bioamla").mkdir(parents=True)
+        (ws / ".bioamla" / "workspace.toml").write_text('format_version = 1\nid = "x"\n')
+        (ws / ".bioamla" / "config.toml").write_text(config)
+    found = helpers.remote(tmp_path / "remote")
+    assert (found["remote"], found["workspace"]) == ("lab", "site")
+    assert helpers.remote(tmp_path / "local") is None
+
+
 def test_paths_must_stay_in_the_workspace(monkeypatch, tmp_path):
     helpers = load(monkeypatch)
     monkeypatch.delenv("BIOAMLA_REMOTE", raising=False)
