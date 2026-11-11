@@ -385,8 +385,21 @@ def test_push_uses_the_checked_coordinate_mode_and_is_private(run_skill, workspa
     args = json.loads(log.read_text())
     assert args[args.index("--coordinates") + 1] == "strip"
     assert "--private" in args and "--public" not in args
+    assert args[args.index("--unredacted") + 1] == "refuse"  # no location sign-off
     assert args[-3:] == ["--", "datasets/frogs", "me/frogs"]
     assert (workspace / run / "push.json").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the stand-in bioamla is a shell script")
+def test_a_signed_off_location_finding_publishes_unredactable_files(run_skill, workspace):
+    folder = write_dataset(workspace, clean_rows())
+    (folder / "detections.jsonl").write_text('{"latitude": 36.523456}\n')
+    _, summary = check(run_skill, workspace, "--license", "CC-BY-4.0")
+    run_skill("dataset", "gate", summary["run_dir"], "--accept", "location", cwd=workspace)
+    code, report, log = run_push(workspace, summary["run_dir"], "me/frogs")
+    assert code == 0, report
+    args = json.loads(log.read_text())
+    assert args[args.index("--unredacted") + 1] == "publish"
 
 
 @pytest.mark.skipif(os.name == "nt", reason="the stand-in bioamla is a shell script")

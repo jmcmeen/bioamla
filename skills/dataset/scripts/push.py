@@ -66,6 +66,10 @@ def push(args: argparse.Namespace) -> tuple[int, dict]:
         "--coordinates", verdict["coordinates"],
         "--coordinate-decimals", str(verdict["coordinate_decimals"]),
         "--public" if args.public else "--private",
+        # The push refuses files it can't redact (JSON/text with coordinates, Parquet)
+        # unless the person signed off the location finding the check made for them.
+        "--unredacted", "publish" if "location" in verdict["thresholds"]["accepted_rules"]
+        else "refuse",
     ]  # fmt: skip
     if args.commit_message:
         options += ["--commit-message", args.commit_message]

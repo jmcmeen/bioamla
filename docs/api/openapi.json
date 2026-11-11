@@ -13399,6 +13399,16 @@
             "type": "integer",
             "title": "Coordinate Decimals",
             "default": 2
+          },
+          "unredacted": {
+            "type": "string",
+            "enum": [
+              "refuse",
+              "skip",
+              "publish"
+            ],
+            "title": "Unredacted",
+            "default": "refuse"
           }
         },
         "additionalProperties": false,
@@ -13408,7 +13418,7 @@
           "repo_id"
         ],
         "title": "PushDatasetRequest",
-        "description": "Push a dataset folder to the Hugging Face Hub, writing its card first.\n\nAttributes:\n    path: The dataset folder.\n    repo_id: The Hub repository.\n    private: Create it private.\n    commit_message: The commit message.\n    card: Write a README.md dataset card first.\n    coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,\n        ``strip``.\n    coordinate_decimals: Decimal places ``round`` keeps (0-6)."
+        "description": "Push a dataset folder to the Hugging Face Hub, writing its card first.\n\nAttributes:\n    path: The dataset folder.\n    repo_id: The Hub repository.\n    private: Create it private.\n    commit_message: The commit message.\n    card: Write a README.md dataset card first.\n    coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,\n        ``strip``.\n    coordinate_decimals: Decimal places ``round`` keeps (0-6).\n    unredacted: With ``round`` or ``strip``, files that may hold a location the\n        redaction can't change (JSON/text, Parquet): ``refuse`` the push,\n        ``skip`` them, or ``publish`` them as they are."
       },
       "PushModelRequest": {
         "properties": {

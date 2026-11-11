@@ -218,8 +218,9 @@ def wav_locations(dataset: str, rows: list[dict], sample: int, root: Path) -> di
 
 def unredactable_files(dataset: str, root: Path) -> list[str] | None:
     """Files in the dataset a redacting push can't change but that may hold a location
-    (JSON, JSONL or text mentioning a latitude or longitude, and Parquet), as bioamla
-    warns about them; None with a remote, whose files this step can't list."""
+    (JSON, JSONL or text mentioning a latitude or longitude, and Parquet), which the push
+    refuses unless the person signs off; None with a remote, whose files this step can't
+    list."""
     if remote(root) is not None:
         return None
     base = (root / dataset).resolve()

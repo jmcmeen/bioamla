@@ -126,22 +126,33 @@ def _push_folder(
     commit_message: str | None,
     url: str,
     staged_dir: str | None = None,
+    exclude: list[str] | None = None,
 ) -> PushResult:
     """Shared implementation for pushing a model or dataset folder.
 
     ``staged_dir`` holds files, at their folder-relative paths, uploaded in place
     of the local ones; the local versions are never uploaded. The staged files
     go up first, so if the folder upload then fails the repository still never
-    holds the local versions.
+    holds the local versions. ``exclude`` lists folder-relative files never uploaded;
+    a copy of one already in the repository (from an earlier push) is deleted first.
     """
     _require_dir(path)
     staged = _staged_files(staged_dir) if staged_dir else []
-    patterns = _literal_patterns(staged)
+    patterns = _literal_patterns([*staged, *(exclude or [])])
 
     api = _get_hf_api()
     message = commit_message or f"Upload {repo_type}"
     try:
         api.create_repo(repo_id=repo_id, repo_type=repo_type, private=private, exist_ok=True)
+        if exclude:
+            existing = set(api.list_repo_files(repo_id=repo_id, repo_type=repo_type))
+            for rel in sorted(set(exclude) & existing):
+                api.delete_file(
+                    path_in_repo=rel,
+                    repo_id=repo_id,
+                    repo_type=repo_type,
+                    commit_message=f"{message} (remove {rel}, left out of this push)",
+                )
         if staged:
             _upload_folder(api, staged_dir, repo_id, repo_type, f"{message} (redacted metadata)")
         extra = {"ignore_patterns": patterns} if patterns else {}
@@ -153,8 +164,9 @@ def _push_folder(
         repo_id=repo_id,
         repo_type=repo_type,
         url=url,
-        files_uploaded=_count_files(path),
-        total_size_bytes=_get_folder_size(path),
+        files_uploaded=_count_files(path) - len(exclude or []),
+        total_size_bytes=_get_folder_size(path)
+        - sum((Path(path) / rel).stat().st_size for rel in exclude or []),
     )
 
 
@@ -188,6 +200,8 @@ def push_dataset(
     *,
     coordinates: str = "keep",
     coordinate_decimals: int = 2,
+    unredacted: str = "refuse",
+    _unredacted_files: list[str] | None = None,
 ) -> PushResult:
     """Push a dataset folder to the HuggingFace Hub.
 
@@ -204,28 +218,37 @@ def push_dataset(
             position embedded in WAV recorder metadata (GUANO, WAMD); the local
             folder is not changed (see
             :func:`bioamla.datasets.redacted_dataset_files` and
-            :func:`bioamla.datasets.redacted_audio_files`). Locations in other
-            formats (see :func:`bioamla.datasets.unredacted_location_files`),
-            and earlier commits in the repository's history, are not affected.
+            :func:`bioamla.datasets.redacted_audio_files`). Earlier commits in the
+            repository's history are not affected.
         coordinate_decimals: Decimal places kept by ``round`` (2 is about 1 km).
+        unredacted: With ``round`` or ``strip``, what to do with files that may hold
+            a location the redaction can't change (JSON/JSONL/TXT that mention a
+            latitude or longitude, and Parquet; see
+            :func:`bioamla.datasets.unredacted_location_files`): ``refuse`` (the
+            default) raises before anything is uploaded, ``skip`` leaves them out of
+            the upload (deleting any copy an earlier push left in the repository),
+            ``publish`` uploads them as they are.
 
     Raises:
-        InvalidInputError: if ``path`` is not a directory, or for an unknown
-            ``coordinates`` mode or bad ``coordinate_decimals``.
+        InvalidInputError: if ``path`` is not a directory, for an unknown
+            ``coordinates`` or ``unredacted`` mode or bad ``coordinate_decimals``, or
+            when ``unredacted="refuse"`` and such files exist.
         DatasetError: if a file that may carry locations can't be read or
             rewritten to redact it.
         CatalogError: on upload failure.
     """
     import tempfile
 
-    from bioamla.datasets.redact import (
-        check_coordinate_mode,
-        redacted_audio_files,
-        redacted_dataset_files,
-    )
+    from bioamla.datasets.redact import redacted_audio_files, redacted_dataset_files
 
-    check_coordinate_mode(coordinates, coordinate_decimals)
     _require_dir(path)
+    # A caller that already listed them (push_dataset_folder) passes the list along.
+    found = (
+        unredacted_files(path, coordinates, unredacted, coordinate_decimals)
+        if _unredacted_files is None
+        else _unredacted_files
+    )
+    excluded = found if unredacted == "skip" else []
     with tempfile.TemporaryDirectory(prefix="bioamla-redacted-") as workdir:
         for rel, content in redacted_dataset_files(path, coordinates, coordinate_decimals).items():
             target = Path(workdir) / rel
@@ -240,7 +263,45 @@ def push_dataset(
             commit_message=commit_message,
             url=f"https://huggingface.co/datasets/{repo_id}",
             staged_dir=workdir,
+            exclude=excluded,
         )
+
+
+UNREDACTED_MODES = ("refuse", "skip", "publish")
+
+
+def unredacted_files(
+    path: str | Path, coordinates: str, unredacted: str = "refuse", coordinate_decimals: int = 2
+) -> list[str]:
+    """The files in a dataset folder that a ``round`` or ``strip`` push can't redact
+    (JSON/JSONL/TXT that mention a latitude or longitude, and Parquet; see
+    :func:`bioamla.datasets.unredacted_location_files`), after checking the modes; none
+    for ``keep``, which publishes every location as it is.
+
+    Raises:
+        InvalidInputError: For an unknown ``coordinates`` or ``unredacted`` mode or bad
+            ``coordinate_decimals``, or when ``unredacted`` is ``refuse`` and such files
+            exist (naming them).
+    """
+    from bioamla import datasets
+    from bioamla.datasets.redact import check_coordinate_mode
+
+    check_coordinate_mode(coordinates, coordinate_decimals)
+    if unredacted not in UNREDACTED_MODES:
+        raise InvalidInputError(
+            f"unredacted must be one of {', '.join(UNREDACTED_MODES)}, not {unredacted!r}"
+        )
+    if coordinates == "keep":
+        return []
+    files = datasets.unredacted_location_files(path)
+    if files and unredacted == "refuse":
+        shown = ", ".join(files[:5]) + (f" and {len(files) - 5} more" if len(files) > 5 else "")
+        raise InvalidInputError(
+            f"{len(files)} file(s) may hold a location --coordinates {coordinates} can't "
+            f"redact (JSON/text, Parquet): {shown}. Remove or redact them, or choose "
+            "--unredacted skip (leave them out) or --unredacted publish (upload them as they are)."
+        )
+    return files
 
 
 def _detect_audio_column(features: Any, audio_column: str | None) -> str:

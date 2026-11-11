@@ -280,6 +280,14 @@ def _login_hint(error: click.ClickException) -> None:
     show_default=True,
     help="Decimal places kept by --coordinates round (2 ~ 1 km, 1 ~ 11 km)",
 )
+@click.option(
+    "--unredacted",
+    type=click.Choice(["refuse", "skip", "publish"]),  # huggingface.UNREDACTED_MODES
+    default="refuse",
+    show_default=True,
+    help="With --coordinates round/strip, files that may hold a location it can't redact "
+    "(JSON/text mentioning coordinates, Parquet): refuse the push, skip them, or publish them",
+)
 def hf_push_dataset(
     path: str,
     repo_id: str,
@@ -288,6 +296,7 @@ def hf_push_dataset(
     card: bool,
     coordinates: str,
     coordinate_decimals: int,
+    unredacted: str,
 ) -> None:
     """Push a dataset folder to the HuggingFace Hub.
 
@@ -297,7 +306,9 @@ def hf_push_dataset(
 
     ``--coordinates round`` or ``strip`` redacts recorder locations in what is
     uploaded (metadata CSVs, manifest sites, generated card, and the position in
-    WAV recorder metadata); the local folder keeps full precision.
+    WAV recorder metadata); the local folder keeps full precision. Files it can't
+    redact (JSON or text that mention coordinates, Parquet) stop the push unless
+    ``--unredacted skip`` leaves them out or ``--unredacted publish`` uploads them.
     """
     from bioamla.cli.console import echo, print_success
     from bioamla.cli.operations import run_operation
@@ -315,6 +326,7 @@ def hf_push_dataset(
             card=card,
             coordinates=coordinates,
             coordinate_decimals=coordinate_decimals,
+            unredacted=unredacted,
         )
     except click.ClickException as e:
         _login_hint(e)

@@ -28,11 +28,20 @@ All notable changes to this project are documented here. The format is based on
   `--require-splits`). `push.py` runs `catalogs hf push-dataset` with the checked
   coordinate mode, privately by default, and refuses a dataset that failed or changed since
   the check. With `round` or `strip`, the check also flags files the push can't redact
-  (JSON or text mentioning coordinates, Parquet) on a local dataset, since the push only
-  warns about them (#356); the push doesn't set the Hub repository's license yet (#355) (#354)
+  (JSON or text mentioning coordinates, Parquet) on a local dataset, before the push would
+  refuse them (#356); the push doesn't set the Hub repository's license yet (#355) (#354)
 
 ### Changed
 
+- `catalogs hf push-dataset --coordinates round` or `strip` refuses to push, before anything
+  is uploaded or the card is written, when the folder has files the redaction can't change:
+  JSON, JSONL or text that mention a latitude or longitude, and Parquet. It named them in a
+  warning and uploaded them with their exact locations. `--unredacted skip` leaves them out
+  of the upload (and deletes a copy an earlier push left in the repository), and
+  `--unredacted publish` uploads them as before; `push_dataset()`, `push_dataset_folder()` and
+  the operation take `unredacted=` the same way, and `bioamla.catalogs.unredacted_files()`
+  lists them. The `dataset` skill's push passes `--unredacted publish` only when the person
+  signed off its `location` finding (#356)
 - Each skill's `name` is now its folder's (`inventory`, `label`, `label-qa`; were
   `bioamla-inventory`, `bioamla-first-pass-labeling`, `bioamla-label-qa`), so the plugin's
   commands are `/bioamla:<folder>`. A linked skill runs as `/<name>`, or by its link's folder

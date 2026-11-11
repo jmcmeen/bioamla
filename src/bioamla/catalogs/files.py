@@ -145,12 +145,19 @@ def inat_project_stats(project_id: str, *, output: str | Path | None = None) -> 
     return ProjectStatsReport(stats=stats, output=str(output) if output else None)
 
 
-def dataset_push_warnings(path: str | Path, coordinates: str = "keep") -> list[str]:
-    """What a dataset push would publish that the uploader may not want to.
+def dataset_push_warnings(
+    path: str | Path,
+    coordinates: str = "keep",
+    unredacted: str = "refuse",
+    _unredacted_files: list[str] | None = None,
+) -> list[str]:
+    """What a dataset push would publish, or leave out, that the uploader may not expect.
 
     With ``coordinates="keep"``: per-file locations in the metadata or the WAV files'
     recorder metadata. Otherwise: files that may still carry a location
-    ``coordinates`` doesn't change (JSON or text, Parquet).
+    ``coordinates`` doesn't change (JSON or text, Parquet), left out with
+    ``unredacted="skip"``, else published as they are (with ``refuse`` the push itself
+    stops; see :func:`bioamla.catalogs.huggingface.unredacted_files`).
     """
     from bioamla.datasets import has_location_columns, unredacted_location_files, wavs_with_location
 
@@ -166,12 +173,17 @@ def dataset_push_warnings(path: str | Path, coordinates: str = "keep") -> list[s
             f"Per-file locations in {' and '.join(where)} will be published as they are. "
             "Use --coordinates round or --coordinates strip to redact them."
         ]
-    unredacted = unredacted_location_files(path)
-    if not unredacted:
+    files = unredacted_location_files(path) if _unredacted_files is None else _unredacted_files
+    if not files:
         return []
+    if unredacted == "skip":
+        return [
+            f"Leaving out {len(files)} file(s) that may carry a location --coordinates "
+            f"doesn't change (JSON/text, Parquet), e.g. {files[0]}."
+        ]
     return [
-        f"{len(unredacted)} file(s) may still carry a location that --coordinates "
-        f"does not change (JSON/text, Parquet), e.g. {unredacted[0]}."
+        f"{len(files)} file(s) may still carry a location that --coordinates "
+        f"does not change (JSON/text, Parquet), e.g. {files[0]}."
     ]
 
 
@@ -213,6 +225,7 @@ def push_dataset_folder(
     card: bool = True,
     coordinates: str = "keep",
     coordinate_decimals: int = 2,
+    unredacted: str = "refuse",
     on_notice: Any = None,
 ) -> DatasetPush:
     """Push a dataset folder to the Hugging Face Hub, writing its card first.
@@ -220,10 +233,14 @@ def push_dataset_folder(
     With ``card``, a ``README.md`` dataset card is generated from the folder's
     ``dataset.json`` or ``metadata.csv`` (a failure is reported, not raised).
     ``coordinates`` (``keep``, ``round``, ``strip``) controls the per-file locations in
-    what is uploaded; the local folder keeps full precision. ``on_notice(level,
-    message)`` hears about the card and each warning before the upload starts.
+    what is uploaded; the local folder keeps full precision. With ``round`` or
+    ``strip``, ``unredacted`` says what to do with files that redaction can't change
+    (see :func:`bioamla.catalogs.huggingface.push_dataset`); ``refuse`` raises before
+    the card is written. ``on_notice(level, message)`` hears about the card and each
+    warning before the upload starts.
 
     Raises:
+        InvalidInputError: If ``unredacted="refuse"`` and such files exist.
         CatalogError: If the push fails.
     """
     from bioamla.catalogs import huggingface as hf
@@ -233,6 +250,9 @@ def push_dataset_folder(
         if on_notice is not None:
             on_notice(level, message)
 
+    # Listed once, and refused before the card is written, so a refused push changes
+    # nothing.
+    found = hf.unredacted_files(path, coordinates, unredacted, coordinate_decimals)
     card_path = card_error = None
     if card:
         try:
@@ -242,7 +262,7 @@ def push_dataset_folder(
         except BioamlaError as e:
             card_error = str(e)
             notice("warning", f"Warning: could not generate dataset card ({e})")
-    warnings = dataset_push_warnings(path, coordinates)
+    warnings = dataset_push_warnings(path, coordinates, unredacted, _unredacted_files=found)
     for warning in warnings:
         notice("warning", warning)
     result = hf.push_dataset(
@@ -252,6 +272,8 @@ def push_dataset_folder(
         commit_message=commit_message,
         coordinates=coordinates,
         coordinate_decimals=coordinate_decimals,
+        unredacted=unredacted,
+        _unredacted_files=found,
     )
     return DatasetPush(result=result, card=card_path, card_error=card_error, warnings=warnings)
 
