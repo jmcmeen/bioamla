@@ -117,6 +117,7 @@ def gate(args: argparse.Namespace) -> dict:
         "metadata": checks["metadata"],
         "metadata_sha256": checks["metadata_sha256"],
         "license": checks["license"],
+        "license_id": checks["license_id"],
         "coordinates": checks["coordinates"],
         "coordinate_decimals": checks["coordinate_decimals"],
         "rows": checks["rows"],

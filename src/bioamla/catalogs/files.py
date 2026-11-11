@@ -237,6 +237,7 @@ def push_dataset_folder(
     coordinates: str = "keep",
     coordinate_decimals: int = 2,
     unredacted: str = "refuse",
+    license: str | None = None,
     on_notice: Any = None,
 ) -> DatasetPush:
     """Push a dataset folder to the Hugging Face Hub, writing its card first.
@@ -247,15 +248,18 @@ def push_dataset_folder(
     what is uploaded; the local folder keeps full precision. With ``round`` or
     ``strip``, ``unredacted`` says what to do with files that redaction can't change
     (see :func:`bioamla.catalogs.huggingface.push_dataset`); ``refuse`` raises before
-    the card is written. ``on_notice(level, message)`` hears about the card and each
-    warning before the upload starts.
+    the card is written. ``license`` (a Hub license id such as ``cc-by-nc-4.0``) is the
+    dataset's, written to the card so the Hub shows it; it needs ``card``.
+    ``on_notice(level, message)`` hears about the card and each warning before the
+    upload starts.
 
     Raises:
-        InvalidInputError: If ``unredacted="refuse"`` and such files exist.
+        InvalidInputError: If ``unredacted="refuse"`` and such files exist, or for a
+            ``license`` that isn't a Hub license id or comes without ``card``.
         CatalogError: If the push fails.
     """
     from bioamla.catalogs import huggingface as hf
-    from bioamla.datasets import write_dataset_card
+    from bioamla.datasets import hub_license_id, write_dataset_card
 
     def notice(level: str, message: str) -> None:
         if on_notice is not None:
@@ -264,10 +268,16 @@ def push_dataset_folder(
     # Listed once, and refused before the card is written, so a refused push changes
     # nothing.
     found = hf.unredacted_files(path, coordinates, unredacted, coordinate_decimals)
+    if license is not None:
+        if not card:
+            raise OptionConflictError(
+                "--license is written to the dataset card, so it can't go with --no-card"
+            )
+        license = hub_license_id(license)
     card_path = card_error = None
     if card:
         try:
-            card_path = write_dataset_card(str(path))
+            card_path = write_dataset_card(str(path), license=license)
             if card_path:
                 notice("info", f"Wrote dataset card: {card_path}")
         except BioamlaError as e:

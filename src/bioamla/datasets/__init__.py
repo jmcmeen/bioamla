@@ -87,6 +87,7 @@ from bioamla.datasets.manifest import (
     DatasetManifest,
     build_dataset_card,
     build_manifest_from_metadata,
+    hub_license_id,
     load_dataset_manifest,
     save_dataset_manifest,
     summarize_recordings,
@@ -208,6 +209,7 @@ __all__ = [
     # Recorder metadata
     "add_recording_metadata",
     "build_dataset_card",
+    "hub_license_id",
     "write_dataset_card",
     "COORDINATE_MODES",
     "check_coordinate_mode",

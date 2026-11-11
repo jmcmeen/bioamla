@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `catalogs hf push-dataset --license <id>` (a Hub license id such as `cc-by-nc-4.0`) puts the
+  dataset's license in the card's YAML front matter, so the Hub shows it; it was published
+  unlicensed. The card also has a License section listing the licenses its files carry, which
+  the manifest now counts (`licenses`, from `attr_lic` or `license`), and a redacted push keeps
+  the card's license. `push_dataset_folder()`, `write_dataset_card()`, `build_dataset_card()`
+  and the operation take `license=`; `hub_license_id()` checks one (#355)
+
 ### Changed
 
 - `catalogs hf push-dataset --coordinates round` or `strip` refuses to push, before anything

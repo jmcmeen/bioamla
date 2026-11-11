@@ -386,6 +386,7 @@ def test_push_uses_the_checked_coordinate_mode_and_is_private(run_skill, workspa
     assert args[args.index("--coordinates") + 1] == "strip"
     assert "--private" in args and "--public" not in args
     assert args[args.index("--unredacted") + 1] == "refuse"  # no location sign-off
+    assert args[args.index("--license") + 1] == "cc-by-4.0"
     assert args[-3:] == ["--", "datasets/frogs", "me/frogs"]
     assert (workspace / run / "push.json").exists()
 
@@ -445,6 +446,13 @@ def _load(script: str):
     finally:
         sys.path[:] = saved
     return module
+
+
+def test_license_hub_ids():
+    check_module = _load("check")
+    for text, hub in [("CC BY-NC-SA 3.0", "cc-by-nc-sa-3.0"), ("cc-by", "cc-by-4.0"),
+                      ("CC0", "cc0-1.0")]:  # fmt: skip
+        assert check_module.hub_id(check_module.parse_license(text)) == hub
 
 
 @pytest.mark.parametrize(

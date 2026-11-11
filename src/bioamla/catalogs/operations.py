@@ -177,6 +177,8 @@ class PushDatasetRequest:
         unredacted: With ``round`` or ``strip``, files that may hold a location the
             redaction can't change (JSON/text, Parquet): ``refuse`` the push,
             ``skip`` them, or ``publish`` them as they are.
+        license: The dataset's license, a Hub license id (e.g. ``cc-by-nc-4.0``),
+            written to the card.
     """
 
     path: PathStr
@@ -187,6 +189,7 @@ class PushDatasetRequest:
     coordinates: Literal["keep", "round", "strip"] = "keep"
     coordinate_decimals: int = 2
     unredacted: Literal["refuse", "skip", "publish"] = "refuse"
+    license: str | None = None
 
 
 @operation("catalogs.hf.push-dataset", request=PushDatasetRequest, kind="job")
@@ -203,6 +206,7 @@ def hf_push_dataset_op(request: PushDatasetRequest, context: OperationContext) -
         coordinates=request.coordinates,
         coordinate_decimals=request.coordinate_decimals,
         unredacted=request.unredacted,
+        license=request.license,
         on_notice=context.notice,
     )
 

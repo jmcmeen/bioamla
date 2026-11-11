@@ -119,6 +119,15 @@ def parse_license(text: str) -> License | None:
                    version=version)  # fmt: skip
 
 
+def hub_id(license: License) -> str:
+    """The Hugging Face Hub license id for ``license`` (version 4.0 when it gives none)."""
+    if not license.by:
+        return "cc0-1.0"
+    conditions = "".join(f"-{c}" for c, on in (("nc", license.nc), ("nd", license.nd),
+                                                ("sa", license.sa)) if on)  # fmt: skip
+    return f"cc-by{conditions}-{license.version or '4.0'}"
+
+
 def license_problem(source: License, target: License) -> str | None:
     """Why a file under ``source`` can't be published in a dataset under ``target``."""
     if source.nd:
@@ -339,6 +348,7 @@ def check(args: argparse.Namespace) -> dict:
         "metadata": metadata,
         "metadata_sha256": hashlib.sha256(data).hexdigest(),
         "license": args.license.name,
+        "license_id": hub_id(args.license),
         "coordinates": args.coordinates,
         "coordinate_decimals": args.coordinate_decimals,
         "rows": len(rows),

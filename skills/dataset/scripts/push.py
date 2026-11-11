@@ -2,7 +2,9 @@
 
 Reads a run's ``gate.json`` and pushes its dataset with ``bioamla catalogs hf
 push-dataset``, using the coordinate mode the check assumed (``round``, ``strip`` or
-``keep``), so the locations are redacted as checked. Refuses, without pushing, when:
+``keep``), so the locations are redacted as checked, and the license the check held the
+files to, which the dataset card gives so the Hub shows it. Refuses, without pushing,
+when:
 
 - the gate didn't pass, or hasn't run;
 - the dataset's ``metadata.csv`` changed since the check (its SHA-256 differs), so
@@ -66,6 +68,7 @@ def push(args: argparse.Namespace) -> tuple[int, dict]:
         "--coordinates", verdict["coordinates"],
         "--coordinate-decimals", str(verdict["coordinate_decimals"]),
         "--public" if args.public else "--private",
+        "--license", verdict["license_id"],  # the license the check held the files to
         # The push refuses files it can't redact (JSON/text with coordinates, Parquet)
         # unless the person signed off the location finding the check made for them.
         "--unredacted", "publish" if "location" in verdict["thresholds"]["accepted_rules"]
