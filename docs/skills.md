@@ -37,7 +37,8 @@ order, and what to report.
   file down to merge into (`bioamla remote current` says which remote is in effect).
 - **Print a JSON summary** on standard output (and `{"error": ...}` with a non-zero exit
   when a bioamla command fails), so the agent reads results, not prose.
-- **Standard library only.** A script needs Python and `bioamla` on the `PATH`
+- **Standard library only**, Python 3.9 or newer (an agent's `python3` is often not the
+  one bioamla runs on). A script needs Python and `bioamla` on the `PATH`
   (`BIOAMLA_BIN` names another `bioamla` executable to run, e.g. a virtual environment's
   `bin/bioamla`).
 

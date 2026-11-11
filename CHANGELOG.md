@@ -15,6 +15,14 @@ All notable changes to this project are documented here. The format is based on
   linked installs alike) and allows them in `allowed-tools`; copying or linking a skill's
   folder still works for other agents (#351)
 
+### Fixed
+
+- The skill scripts run on Python 3.9 and 3.10; they failed at import on anything
+  older than 3.11 (`datetime.UTC`). They run on whatever `python3` an agent finds, which
+  is often not bioamla's own (macOS's is 3.9, and `uv tool` or `pipx` installs keep
+  bioamla's off the `PATH`). CI now also runs the skill evals with the scripts on 3.9,
+  and lints `skills/` (#352)
+
 ## [0.4.3] - 2026-11-08
 
 ### Added

@@ -22,6 +22,12 @@ SKILLS = Path(__file__).resolve().parents[2] / "skills"
 SR = 16000
 
 
+def skill_python() -> str:
+    """The Python that runs skill scripts: ``SKILL_PYTHON`` (e.g. a 3.9 interpreter, the
+    oldest the scripts support), or this test environment's."""
+    return os.environ.get("SKILL_PYTHON") or sys.executable
+
+
 def bioamla_bin() -> str:
     """This environment's ``bioamla`` command."""
     return str(Path(sys.executable).parent / "bioamla")
@@ -39,7 +45,7 @@ def run_skill():
     def run(skill: str, script: str, *args: str, cwd: Path) -> tuple[int, dict]:
         env = {**os.environ, "BIOAMLA_BIN": bioamla_bin()}
         proc = subprocess.run(
-            [sys.executable, str(skill_script(skill, script)), *map(str, args)],
+            [skill_python(), str(skill_script(skill, script)), *map(str, args)],
             cwd=cwd,
             env=env,
             capture_output=True,
