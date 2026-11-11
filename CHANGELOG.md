@@ -15,6 +15,20 @@ All notable changes to this project are documented here. The format is based on
   plugin and linked installs alike) and allows them in `allowed-tools`; copying or linking a
   skill's folder still works for other agents (#351)
 
+- The `dataset` agent skill (`skills/dataset/`, `/bioamla:dataset`): an agent builds a
+  dataset with bioamla's commands and publishes it to the Hugging Face Hub only after three
+  steps. `check.py` finds rows whose license can't be read, is NoDerivatives or isn't kept by
+  the dataset's license (`--license`; Attribution, NonCommercial, ShareAlike), rows under an
+  Attribution license with no one to credit, per-file locations in the metadata or WAV
+  recorder metadata that the push would publish as they are, and `--group-by` values
+  (recording, site, device) in more than one split. `gate.py` passes or fails it on the
+  findings and on rows per class and split (`--min-per-class`, `--max-imbalance`,
+  `--require-splits`). `push.py` runs `catalogs hf push-dataset` with the checked
+  coordinate mode, privately by default, and refuses a dataset that failed or changed since
+  the check. With `round` or `strip`, the check also flags files the push can't redact
+  (JSON or text mentioning coordinates, Parquet) on a local dataset, since the push only
+  warns about them (#356); the push doesn't set the Hub repository's license yet (#355) (#354)
+
 ### Changed
 
 - Each skill's `name` is now its folder's (`inventory`, `label`, `label-qa`; were
