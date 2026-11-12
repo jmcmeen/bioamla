@@ -52,6 +52,12 @@ All notable changes to this project are documented here. The format is based on
   lists them. The `dataset` skill's push passes `--unredacted publish` only when the person
   signed off its `location` finding (#356)
 
+### Fixed
+
+- The stalled-ffmpeg tests (encode and decode time limits) no longer fail on macOS when the
+  fake `ffmpeg` takes longer than the 0.5 s limit to start: the script is run once before the
+  test, so the first exec of the new file is over before the limit applies (#360)
+
 ## [0.4.5] - 2026-11-11
 
 ### Added

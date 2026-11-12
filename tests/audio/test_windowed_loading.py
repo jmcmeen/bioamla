@@ -164,23 +164,18 @@ class TestStream:
 
 
 @pytest.mark.usefixtures("requires_ffmpeg_cli")
-@pytest.mark.skipif(__import__("os").name == "nt", reason="a shell-script ffmpeg")
-def test_a_stalled_ffmpeg_is_stopped_on_every_decode_path(noise_mp3, tmp_path, monkeypatch):
+def test_a_stalled_ffmpeg_is_stopped_on_every_decode_path(noise_mp3, monkeypatch, stalled_ffmpeg):
     """Whole-file loads, windows and streamed blocks all run ffmpeg under
     BIOAMLA_DECODE_TIMEOUT: a decoder that stalls is killed and reported, not waited on."""
-    import os
     import shutil
     import time
 
     from bioamla.exceptions import AudioLoadError
 
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    pids = tmp_path / "pids"
-    (bin_dir / "ffmpeg").write_text(f"#!/bin/sh\necho $$ >> {pids}\nexec sleep 60\n")
-    (bin_dir / "ffmpeg").chmod(0o755)
-    (bin_dir / "ffprobe").symlink_to(shutil.which("ffprobe"))  # the header is read as usual
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    ffprobe = shutil.which("ffprobe")  # before the fake ffmpeg's folder is searched
+    if ffprobe is None:
+        pytest.skip("needs ffprobe to read the header")
+    (stalled_ffmpeg.bin_dir / "ffprobe").symlink_to(ffprobe)  # the header is read as usual
     monkeypatch.setenv("BIOAMLA_DECODE_TIMEOUT", "0.5")
 
     for decode in (
@@ -189,14 +184,14 @@ def test_a_stalled_ffmpeg_is_stopped_on_every_decode_path(noise_mp3, tmp_path, m
         lambda: list(stream_audio_data(noise_mp3, block_duration=1.0)),
     ):
         began = time.monotonic()
-        with pytest.raises(
-            AudioLoadError, match=r"still decoding after 0\.5 s.*BIOAMLA_DECODE_TIMEOUT"
+        with (
+            stalled_ffmpeg.expect_killed(),  # killed, not left sleeping
+            pytest.raises(
+                AudioLoadError, match=r"still decoding after 0\.5 s.*BIOAMLA_DECODE_TIMEOUT"
+            ),
         ):
             decode()
         assert time.monotonic() - began < 10
-        pid = int(pids.read_text().split()[-1])
-        with pytest.raises(ProcessLookupError):  # the stalled decoder was killed, not left
-            os.kill(pid, 0)
 
 
 @pytest.mark.usefixtures("requires_ffmpeg_cli")
