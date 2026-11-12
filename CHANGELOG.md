@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-12
+
 ### Added
 
 - `catalogs hf push-dataset --license <id>` (a Hub license id such as `cc-by-nc-4.0`) puts the
@@ -1292,7 +1294,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.4.5...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/jmcmeen/bioamla/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/jmcmeen/bioamla/compare/v0.4.4...v0.4.5
 [0.4.3]: https://github.com/jmcmeen/bioamla/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/jmcmeen/bioamla/compare/v0.4.1...v0.4.2
