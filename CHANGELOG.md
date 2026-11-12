@@ -41,6 +41,30 @@ All notable changes to this project are documented here. The format is based on
   records the set's identity; `compare.py` keeps the run (exit 0) only when it finished, beats
   the baseline on the chosen metric by `--min-delta` and no class loses more than
   `--max-class-drop` F1, and refuses to compare runs evaluated on different sets (#364)
+- `catalogs hf push-dataset --dry-run` checks a push without writing the card or contacting
+  the Hub, and reports what it would do: the files whose upload would be redacted, the files
+  it can't vouch for and what `--unredacted` does with them (refused, left out or published),
+  whether a card would be written (or why it can't be built), the license, the warnings,
+  and, when it would stop, why (`"refused": true` with `--json`; it exits 0 either way, being
+  a report). `REPO_ID` is optional with it. It's `bioamla.catalogs.check_dataset_push()`,
+  returning a `DatasetPushPlan`, and the quick operation `catalogs.hf.check-push-dataset`;
+  `push_dataset_folder()` now runs from that plan, so the dry run and the push can't
+  disagree. `bioamla.datasets.dataset_card_text()` builds a card without writing it, and
+  `files_to_redact()` lists what a redacted push rewrites. The `dataset` skill's check and push ask
+  it for the files the push can't vouch for instead of keeping their own copy of the rule,
+  so they now list them in a remote workspace too (#372)
+- `bioamla remote files NAME WORKSPACE [PATH] [-r] [--sha256]` lists a folder (or one file) in
+  a server workspace with each file's size and modification time and, with `--sha256`, its
+  SHA-256 computed on the server (`null` for a file it can't read), so a script can
+  fingerprint server files without downloading them. It's `sha256=true` on
+  `GET /v1/workspaces/{ws}/files` (which now also takes a file's path, and hides only
+  `*.part` files, not folders so named), `Client.files(..., sha256=True)` (not held to the
+  client's timeout once connected) and `Workspace.list_files(..., sha256=True)`. The `train`
+  skill uses it with a remote to fingerprint the evaluation audio, which it knew only by
+  folder name (a folder too big for one listing is still known by its path), and to hash
+  the config and ground-truth CSV without downloading them. The fingerprint is now each
+  file's path and SHA-256, the same locally and from a server, so runs evaluated before this
+  change compare as different sets (#365)
 
 ### Changed
 
@@ -53,6 +77,26 @@ All notable changes to this project are documented here. The format is based on
   the operation take `unredacted=` the same way, and `bioamla.catalogs.unredacted_files()`
   lists them. The `dataset` skill's push passes `--unredacted publish` only when the person
   signed off its `location` finding (#356)
+- With `--coordinates round` or `strip`, `catalogs hf push-dataset` now uploads a file as it
+  is only when it vouches for it: the `dataset.json` manifest and the metadata tables
+  (redacted, when no other column is named for a location or holds a value that looks like
+  coordinates); WAV, FLAC and MP3 audio whose metadata, apart from the WAV recorder position
+  it redacts, can all be read and holds nothing that looks like a location (WAV `LIST`,
+  `bext`, `iXML` and `id3` chunks, FLAC Vorbis comments, ID3 tags); a `README.md` bioamla
+  generated (or any `README.md` the card is about to replace); and `LICENSE`,
+  `ATTRIBUTIONS.md`, `.gitattributes` and `.gitignore` at the top. Every other file (a
+  hand-written README, JSON or text whatever it mentions, GeoJSON, GPX, KML, shapefiles,
+  YAML, XML, Parquet, images, OGG/M4A and other audio, a WAV with chunks it can't read)
+  falls under `--unredacted` (refused by default). It listed only JSON/JSONL/TXT that
+  mentioned a latitude or longitude, and Parquet, and uploaded everything else as it was.
+  `bioamla.datasets.unredacted_location_files()`, `bioamla.catalogs.unredacted_files()` and
+  `dataset_push_warnings()` take `card=` (#358)
+
+### Fixed
+
+- The stalled-ffmpeg tests (encode and decode time limits) no longer fail on macOS when the
+  fake `ffmpeg` takes longer than the 0.5 s limit to start: the script is run once before the
+  test, so the first exec of the new file is over before the limit applies (#360)
 
 ## [0.4.5] - 2026-11-11
 

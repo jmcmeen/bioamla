@@ -7,11 +7,12 @@ import argparse
 import hashlib
 import json
 import math
+import posixpath
 import shutil
 import sys
 from pathlib import Path
 
-from _bioamla import fetch, remote, run_dir
+from _bioamla import BioamlaCommandError, remote, run, run_dir
 
 #: The overall metrics ``bioamla models ast evaluate`` reports, any of which compare.py
 #: can decide on.
@@ -49,16 +50,26 @@ def positive(value: str) -> int:
     return number
 
 
-def sha256(path: str, run_dir: Path, root: Path) -> str:
-    """The SHA-256 of the workspace file ``path`` (downloaded with a remote).
+def sha256(path: str, root: Path) -> str:
+    """The SHA-256 of the workspace file ``path`` (computed on the server with a remote,
+    so nothing is downloaded).
 
     Raises:
         FileNotFoundError: If the workspace has no such file.
     """
-    local = fetch(path, run_dir / "workspace-now", root)
-    if not local.exists():
+    path = _plain(path)
+    if remote(root) is not None:
+        listing = _server_files(path, root, recursive=False)
+        entry = next((f for f in listing["files"] if f["path"] == path), None)
+        if entry is None or entry["type"] != "file":
+            raise FileNotFoundError(f"{path} is not a file in the workspace")
+        if entry.get("sha256") is None:
+            raise OSError(f"The server can't read {path}")
+        return entry["sha256"]
+    local = root / path
+    if not local.is_file():
         raise FileNotFoundError(f"{path} is not in the workspace")
-    return hashlib.sha256(local.read_bytes()).hexdigest()
+    return _file_sha256(local)
 
 
 def new_run(root: Path) -> Path:
@@ -72,22 +83,85 @@ def abandon(rel: Path, root: Path) -> None:
     shutil.rmtree(root / rel, ignore_errors=True)
 
 
+def _file_sha256(file: Path) -> str:
+    digest = hashlib.sha256()
+    with file.open("rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _fingerprint(files: dict) -> str:
+    """The SHA-256 of ``path<TAB>sha256`` lines, one per file in path order."""
+    lines = "".join(f"{rel}\t{files[rel]}\n" for rel in sorted(files))
+    return hashlib.sha256(lines.encode()).hexdigest()
+
+
+def _plain(path: str) -> str:
+    """``path`` as the server writes it: relative to the workspace, normalized."""
+    normal = posixpath.normpath(path.replace("\\", "/"))
+    if posixpath.isabs(normal) or normal == ".." or normal.startswith("../"):
+        raise ValueError(f"{path} is not a path inside the workspace")
+    return normal
+
+
+def _server_files(path: str, root: Path, recursive: bool) -> dict:
+    """``bioamla remote files --sha256`` for ``path`` on the remote workspace.
+
+    Raises:
+        FileNotFoundError: If the server has no such file or folder.
+    """
+    target = remote(root)
+    args = ["remote", "files", target["remote"], target["workspace"], "--sha256"]
+    try:
+        return run(*args, *(["--recursive"] if recursive else []), "--", path)
+    except BioamlaCommandError as e:
+        if e.kind in ("NotFoundError", "RemoteNotFound"):
+            raise FileNotFoundError(f"{path} is not in the workspace") from e
+        raise
+
+
 def folder_sha256(path: str, root: Path) -> str | None:
-    """A fingerprint of the workspace folder ``path``: the SHA-256 of every file's path
-    and contents, in order. None with a remote, whose files this step can't read."""
+    """A fingerprint of the workspace folder ``path``: the SHA-256 of each file's path
+    (relative to the folder) and SHA-256, in path order. With a remote, the server hashes
+    its files (``bioamla remote files --sha256``), so nothing is downloaded; the result
+    is the same for the same files either way. Unfinished uploads (``*.part`` files) and
+    workspace metadata (``.bioamla``) are left out, as the server's listing does. None
+    with a remote folder too big for one listing (over 10,000 entries): the set is then
+    known by its path alone.
+
+    Raises:
+        FileNotFoundError: If the workspace has no such folder.
+        OSError: If a file in it can't be read.
+    """
+    path = _plain(path)
     if remote(root) is not None:
-        return None
+        listing = _server_files(path, root, recursive=True)
+        if listing.get("truncated"):
+            return None
+        files = listing["files"]
+        if len(files) == 1 and files[0]["path"] == path and files[0]["type"] == "file":
+            raise FileNotFoundError(f"{path} is not a folder in the workspace")
+        prefix = path + "/"
+        found = {}
+        for f in files:
+            if f["type"] != "file":
+                continue
+            if f.get("sha256") is None:
+                raise OSError(f"The server can't read {f['path']}")
+            found[f["path"][len(prefix) :] if f["path"].startswith(prefix) else f["path"]] = f[
+                "sha256"
+            ]
+        return _fingerprint(found)
     base = root / path
     if not base.is_dir():
         raise FileNotFoundError(f"{path} is not a folder in the workspace")
-    digest = hashlib.sha256()
-    for file in sorted(p for p in base.rglob("*") if p.is_file()):
-        digest.update(file.relative_to(base).as_posix().encode() + b"\0")
-        with file.open("rb") as f:
-            for block in iter(lambda: f.read(1 << 20), b""):
-                digest.update(block)
-        digest.update(b"\0")
-    return digest.hexdigest()
+    return _fingerprint({
+        file.relative_to(base).as_posix(): _file_sha256(file)
+        for file in base.rglob("*")
+        if file.is_file() and not file.name.endswith(".part")
+        and ".bioamla" not in file.relative_to(base).parts
+    })  # fmt: skip
 
 
 def read_metrics(path: Path) -> list[dict]:

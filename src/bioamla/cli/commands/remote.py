@@ -158,6 +158,36 @@ def remote_workspaces(name: str, create: str | None) -> None:
                  for w in found])  # fmt: skip
 
 
+@remote.command("files")
+@click.argument("name")
+@click.argument("workspace")
+@click.argument("path", default=".")
+@click.option("-r", "--recursive", is_flag=True, help="Include subfolders")
+@click.option("--sha256", is_flag=True, help="Add each file's SHA-256, computed on the server")
+def remote_files(name: str, workspace: str, path: str, recursive: bool, sha256: bool) -> None:
+    """List PATH (a folder, default the top, or a file) in WORKSPACE on NAME.
+
+    Gives each file's size and modification time, and with --sha256 its SHA-256, read on
+    the server, so files can be compared without downloading them.
+
+    \b
+    Example:
+        bioamla remote files lab costa-rica eval/audio -r --sha256
+    """
+    from bioamla.cli.console import print_table, print_warning
+    from bioamla.cli.output import emit_result
+
+    listing = _call(_client(name).files, workspace, path, recursive, sha256)
+    if emit_result(listing):
+        return
+    columns = ["path", "type", "size"] + (["sha256"] if sha256 else [])
+    print_table(f"{listing['path']} in {workspace} on {name}", columns,
+                [[f.get(c) if f.get(c) is not None else "" for c in columns]
+                 for f in listing["files"]])  # fmt: skip
+    if listing.get("truncated"):
+        print_warning("More entries than one listing returns; list a subfolder")
+
+
 @remote.command("upload")
 @click.argument("name")
 @click.argument("workspace")

@@ -129,6 +129,53 @@ def test_compare_needs_both_evaluations_and_sane_thresholds(run_skill, workspace
 # --- the metrics summary ------------------------------------------------------------
 
 
+def test_a_folder_fingerprint_is_the_same_locally_and_from_the_server(tmp_path) -> None:
+    import hashlib
+
+    train = load("_train")
+    folder = tmp_path / "eval" / "audio"
+    (folder / "frog").mkdir(parents=True)
+    (folder / "frog" / "a.wav").write_bytes(b"aaa")
+    (folder / "b.wav").write_bytes(b"bb")
+    (folder / "c.wav.part").write_bytes(b"unfinished upload")
+    local = train.folder_sha256("eval/audio", tmp_path)
+
+    calls = []
+
+    def server_listing(*args, **kwargs):  # what `bioamla remote files --sha256` returns
+        calls.append(args)
+        return {"path": "eval/audio", "truncated": False, "files": [
+            {"path": "eval/audio/b.wav", "type": "file", "sha256": hashlib.sha256(b"bb").hexdigest()},
+            {"path": "eval/audio/frog", "type": "dir"},
+            {"path": "eval/audio/frog/a.wav", "type": "file",
+             "sha256": hashlib.sha256(b"aaa").hexdigest()},
+        ]}  # fmt: skip
+
+    train.remote = lambda root: {"remote": "lab", "workspace": "field"}
+    train.run = server_listing
+    assert train.folder_sha256("./eval/audio/", tmp_path) == local  # any spelling of it
+    assert calls == [("remote", "files", "lab", "field", "--sha256", "--recursive", "--",
+                      "eval/audio")]  # fmt: skip
+
+    def listing(files, truncated=False):
+        train.run = lambda *a, **k: {"path": "eval/audio", "truncated": truncated, "files": files}
+
+    listing([{"path": "eval/audio/b.wav", "type": "file", "sha256": None}])
+    with pytest.raises(OSError, match="can't read eval/audio/b.wav"):
+        train.folder_sha256("eval/audio", tmp_path)
+    listing([], truncated=True)  # too big for one listing: known by its path alone
+    assert train.folder_sha256("eval/audio", tmp_path) is None
+    listing([{"path": "eval/audio", "type": "file", "sha256": "x"}])
+    with pytest.raises(FileNotFoundError, match="not a folder"):
+        train.folder_sha256("eval/audio", tmp_path)
+    with pytest.raises(ValueError):
+        train.folder_sha256("../elsewhere", tmp_path)
+
+    (folder / "b.wav").write_bytes(b"changed")
+    train.remote = lambda root: None
+    assert train.folder_sha256("eval/audio", tmp_path) != local
+
+
 def test_summarise_reads_the_metrics_not_the_logs(tmp_path) -> None:
     train = load("_train")
     lines = [

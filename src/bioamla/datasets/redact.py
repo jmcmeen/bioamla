@@ -16,8 +16,10 @@ Either way, free-text location columns are dropped, since text can't be rounded.
 The same modes apply to the position recorders embed in WAV files (GUANO and
 Wildlife Acoustics WAMD), via :func:`redacted_audio_files`.
 
-Not covered (:func:`unredacted_location_files` reports these so callers can
-warn): JSON/JSONL and text files that mention coordinates, and Parquet files.
+Any other file can't be vouched for: :func:`unredacted_location_files` lists every
+file that is neither redacted nor a kind known to carry no location (audio and
+tables are vouched for when what they hold besides the redacted fields looks like no
+location), so a push can refuse, skip or publish them.
 """
 
 from __future__ import annotations
@@ -269,38 +271,100 @@ def redacted_dataset_files(
     return out
 
 
-def unredacted_location_files(dataset_dir: str | Path) -> list[str]:
+# Top-level files a redacted push can publish as they are: bioamla writes the license
+# files from the attribution columns, and git attributes hold only path patterns.
+_VOUCHED_NAMES = frozenset({"LICENSE", "ATTRIBUTIONS.md", ".gitattributes", ".gitignore"})
+
+
+def _not_uploaded(rel: str) -> bool:
+    """Files the Hub client never uploads (git internals and its own caches)."""
+    parts = rel.split("/")
+    return ".git" in parts or any(
+        a == ".cache" and b == "huggingface" for a, b in zip(parts, parts[1:], strict=False)
+    )
+
+
+def _table_may_hold_location(path: Path) -> bool:
+    """Whether a CSV/TSV may hold a location its redaction leaves in it: a column whose
+    name mentions one but isn't a recognized location column, or a value elsewhere
+    that looks like coordinates."""
+    from bioamla.audio._tags import looks_like_coordinates, mentions_location
+
+    try:
+        fieldnames, rows = _read_table(path)
+    except DatasetError:
+        return True
+    redacted = set(location_columns(fieldnames))
+    others = [name for name in fieldnames if name not in redacted]
+    if any(mentions_location(name) for name in others):
+        return True
+    return any(looks_like_coordinates(row.get(name) or "") for row in rows for name in others)
+
+
+def unredacted_location_files(dataset_dir: str | Path, *, card: bool = False) -> list[str]:
     """
-    List files that may carry locations a redacted push doesn't change.
+    List the files a redacted push can't vouch for: any that may carry a location
+    the redaction doesn't change.
 
-    - JSON/JSONL/TXT files (other than ``dataset.json``) that mention a
-      latitude or longitude.
-    - Parquet files, which aren't inspected.
+    A file is vouched for only when the push redacts it or it is a kind known to
+    carry no location:
 
-    (Metadata tables, the manifest, a generated card and WAV recorder metadata
-    are all redacted; see :func:`redacted_dataset_files` and
-    :func:`redacted_audio_files`.)
+    - CSV/TSV tables, whose location columns are redacted, when no other column
+      is named for a location or holds a value that looks like coordinates; and
+      the ``dataset.json`` manifest (its sites are redacted);
+    - WAV, FLAC and MP3 audio whose metadata, apart from the WAV recorder position
+      the push redacts, can all be read and holds nothing that looks like a
+      location (a word such as ``latitude``, ``GPS`` or ``location``, or a value
+      that looks like coordinates);
+    - a ``README.md`` that bioamla generated, when there is a manifest or
+      ``metadata.csv`` to rebuild it from, or any ``README.md`` when ``card`` is
+      set, because the push writes a generated card over it first;
+    - ``LICENSE``, ``ATTRIBUTIONS.md``, ``.gitattributes`` and ``.gitignore`` at
+      the top of the folder.
+
+    Everything else is listed: a hand-written README, JSON or text, GeoJSON, GPX,
+    KML, shapefiles, YAML, XML, Parquet, images, other audio formats, and so on.
+    The checks of tables and audio metadata look for what can be recognized; they
+    can't catch a place named in free text without a location word.
+    Files the Hub client never uploads (``.git``, ``.cache/huggingface``) are not.
+
+    Args:
+        dataset_dir: Dataset directory.
+        card: The push writes a generated dataset card to ``README.md`` first.
 
     Returns:
         Paths relative to ``dataset_dir``.
     """
+    from bioamla.audio._riffy import is_wav_path
+    from bioamla.audio._tags import TAGGED_SUFFIXES, tags_may_hold_location
+
     base = Path(dataset_dir)
+    rebuilt = (base / "dataset.json").exists() or (base / "metadata.csv").exists()
     found: list[str] = []
     for path in sorted(base.rglob("*")):
         if not path.is_file():
             continue
         rel = path.relative_to(base).as_posix()
         suffix = path.suffix.lower()
-        if suffix in (".json", ".jsonl", ".txt") and rel != "dataset.json":
-            try:
-                text = path.read_text(encoding="utf-8", errors="replace").lower()
-            except OSError:
+        if _not_uploaded(rel) or rel in _VOUCHED_NAMES or rel == "dataset.json":
+            continue
+        if suffix in _TABLE_DELIMITERS:
+            if not _table_may_hold_location(path):
                 continue
-            if "latitude" in text or "longitude" in text:
-                found.append(rel)
-        elif suffix == ".parquet":
-            found.append(rel)
+        elif is_wav_path(path) or suffix in TAGGED_SUFFIXES:
+            if not tags_may_hold_location(path):
+                continue
+        elif rel == "README.md" and (card or (rebuilt and _is_generated_card(path))):
+            continue
+        found.append(rel)
     return found
+
+
+def _is_generated_card(path: Path) -> bool:
+    try:
+        return _CARD_MARKER in path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
 
 
 def redact_wav_location(src: str | Path, dest: str | Path, mode: str, decimals: int = 2) -> bool:
@@ -411,6 +475,39 @@ def redacted_audio_files(
     return out
 
 
+def files_to_redact(dataset_dir: str | Path, *, card: bool = False) -> list[str]:
+    """
+    The files whose uploaded copy a ``round`` or ``strip`` push would redact: tables
+    with a location column, the ``dataset.json`` manifest, ``README.md`` when it is a
+    generated card (or ``card`` says one will be written), and WAVs whose recorder
+    metadata carries a position. Only headers and tables are read; nothing is written.
+
+    Raises:
+        DatasetError: If a table or WAV can't be read to check it (the push would
+            fail the same way).
+    """
+    from bioamla.audio._riffy import wav_has_location
+    from bioamla.exceptions import BioamlaError
+
+    base = Path(dataset_dir)
+    found = [
+        p.relative_to(base).as_posix() for p in _tables(base) if location_columns(_read_table(p)[0])
+    ]
+    if (base / "dataset.json").exists():
+        found.append("dataset.json")
+    readme = base / "README.md"
+    if card or (readme.is_file() and _is_generated_card(readme)):
+        found.append("README.md")
+    for path in _wav_paths(base):
+        rel = path.relative_to(base).as_posix()
+        try:
+            if wav_has_location(path):
+                found.append(rel)
+        except BioamlaError as e:
+            raise DatasetError(f"Can't check {rel} for an embedded location: {e}") from e
+    return sorted(found)
+
+
 def wavs_with_location(dataset_dir: str | Path, limit: int = 200) -> list[str]:
     """
     Find WAVs whose recorder metadata carries a location (headers only).
@@ -438,6 +535,7 @@ def wavs_with_location(dataset_dir: str | Path, limit: int = 200) -> list[str]:
 __all__ = [
     "COORDINATE_MODES",
     "check_coordinate_mode",
+    "files_to_redact",
     "has_location_columns",
     "location_columns",
     "redact_rows",

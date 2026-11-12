@@ -21,8 +21,9 @@ row it concerns (0 for the dataset as a whole) and the rule it broke. The rules:
   columns in the metadata, or a position in the recorder metadata of a sample of the
   WAV files) that the push would publish as they are. With ``round`` (the default) or
   ``strip`` the push redacts those, so the rule looks instead for files it can't
-  redact: JSON, JSONL or text mentioning a latitude or longitude, and Parquet (on a
-  local dataset; a remote workspace's files can't be listed from here).
+  vouch for, as ``push-dataset --dry-run`` lists them: anything but the metadata
+  tables, the manifest, a generated card, audio with no location in its metadata, and
+  the license files (a hand-written README, JSON, GeoJSON, Parquet, images, ...).
 - ``file``: a sampled WAV file's recorder metadata can't be read (``keep`` only).
 - ``leakage``: a value of a grouping column (``--group-by``; by default
   ``source_file`` when the dataset has it) appears in more than one split, so the
@@ -281,15 +282,15 @@ def check_rows(rows, columns, args, root: Path) -> tuple[list[dict], dict]:
                 )
             )
     else:
-        others = unredactable_files(args.dataset, root)
+        others = unredactable_files(args.dataset, root, args.coordinates, args.coordinate_decimals)
         locations["unredactable_files"] = others
         if others:
             found.append(
                 finding(
                     0,
                     "location",
-                    f"{len(others)} file(s) the push can't redact may hold locations "
-                    f"(JSON, text or Parquet), e.g. {others[0]}",
+                    f"{len(others)} file(s) the push can't vouch for may hold locations "
+                    f"(anything it doesn't redact or know to be clean), e.g. {others[0]}",
                     files=others,
                 )
             )

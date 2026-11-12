@@ -343,20 +343,33 @@ def write_dataset_card(
     Raises:
         InvalidInputError: If ``license`` isn't a Hub license id.
     """
+    card = dataset_card_text(dataset_dir, metadata_filename, license=license)
+    if card is None:
+        return None
+    card_path = Path(dataset_dir) / output_filename
+    card_path.write_text(card, encoding="utf-8")
+    return str(card_path)
+
+
+def dataset_card_text(
+    dataset_dir: str, metadata_filename: str = "metadata.csv", license: str | None = None
+) -> str | None:
+    """The dataset card :func:`write_dataset_card` would write, without writing it, or
+    ``None`` when the directory has neither a ``dataset.json`` nor a metadata CSV.
+
+    Raises:
+        InvalidInputError: If ``license`` isn't a Hub license id.
+        DatasetError: If the manifest or metadata can't be read.
+    """
     ds_path = Path(dataset_dir)
     manifest_path = ds_path / "dataset.json"
-    metadata_path = ds_path / metadata_filename
-
     if manifest_path.exists():
         manifest = load_dataset_manifest(str(manifest_path))
-    elif metadata_path.exists():
+    elif (ds_path / metadata_filename).exists():
         manifest = build_manifest_from_metadata(dataset_dir, metadata_filename=metadata_filename)
     else:
         return None
-
-    card_path = ds_path / output_filename
-    card_path.write_text(build_dataset_card(manifest, license=license), encoding="utf-8")
-    return str(card_path)
+    return build_dataset_card(manifest, license=license)
 
 
 def load_dataset_manifest(filepath: str) -> DatasetManifest:

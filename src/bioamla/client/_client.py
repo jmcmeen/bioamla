@@ -153,10 +153,16 @@ class Client:
 
     # Files -----------------------------------------------------------------------
 
-    def files(self, ws: str, path: str = ".", recursive: bool = False) -> dict[str, Any]:
-        """``{"path", "files", "truncated"}`` for a folder in the workspace."""
-        return self._call("GET", f"/workspaces/{quote(ws)}/files",
-                          params={"path": path, "recursive": recursive})  # fmt: skip
+    def files(
+        self, ws: str, path: str = ".", recursive: bool = False, sha256: bool = False
+    ) -> dict[str, Any]:
+        """``{"path", "files", "truncated"}`` for a folder (or one file) in the workspace;
+        with ``sha256``, each file's SHA-256, computed on the server (``None`` for one it
+        can't read). Hashing reads every file listed, so the response, once connected,
+        isn't held to the client's timeout."""
+        params = {"path": path, "recursive": recursive, "sha256": sha256}
+        extra = {"timeout": (self.timeout, None)} if sha256 else {}
+        return self._call("GET", f"/workspaces/{quote(ws)}/files", params=params, **extra)
 
     def upload(
         self, ws: str, local: str | Path, remote: str | None = None, overwrite: bool = False

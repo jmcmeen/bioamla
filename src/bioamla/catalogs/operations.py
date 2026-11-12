@@ -174,8 +174,8 @@ class PushDatasetRequest:
         coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,
             ``strip``.
         coordinate_decimals: Decimal places ``round`` keeps (0-6).
-        unredacted: With ``round`` or ``strip``, files that may hold a location the
-            redaction can't change (JSON/text, Parquet): ``refuse`` the push,
+        unredacted: With ``round`` or ``strip``, files the push can't vouch for
+            (neither redacted nor known to carry no location): ``refuse`` the push,
             ``skip`` them, or ``publish`` them as they are.
         license: The dataset's license, a Hub license id (e.g. ``cc-by-nc-4.0``),
             written to the card.
@@ -208,6 +208,51 @@ def hf_push_dataset_op(request: PushDatasetRequest, context: OperationContext) -
         unredacted=request.unredacted,
         license=request.license,
         on_notice=context.notice,
+    )
+
+
+@config_dataclass
+class CheckPushDatasetRequest:
+    """Check a dataset push without pushing: what would be redacted, refused or left out.
+
+    Attributes:
+        path: The dataset folder.
+        repo_id: The Hub repository (optional; nothing is sent to it).
+        card: A README.md dataset card would be written first.
+        coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,
+            ``strip``.
+        coordinate_decimals: Decimal places ``round`` keeps (0-6).
+        unredacted: With ``round`` or ``strip``, files the push can't vouch for:
+            ``refuse`` the push, ``skip`` them, or ``publish`` them as they are.
+        license: The dataset's license, a Hub license id (e.g. ``cc-by-nc-4.0``).
+    """
+
+    path: PathStr
+    repo_id: str | None = None
+    card: bool = True
+    coordinates: Literal["keep", "round", "strip"] = "keep"
+    coordinate_decimals: int = 2
+    unredacted: Literal["refuse", "skip", "publish"] = "refuse"
+    license: str | None = None
+
+
+@operation("catalogs.hf.check-push-dataset", request=CheckPushDatasetRequest)
+def hf_check_push_dataset_op(request: CheckPushDatasetRequest, context: OperationContext) -> Any:
+    """Check a dataset push as ``catalogs.hf.push-dataset`` would, without pushing.
+
+    Returns the :class:`~bioamla.catalogs.files.DatasetPushPlan`. Nothing is written or
+    sent.
+    """
+    from bioamla.catalogs.files import check_dataset_push
+
+    return check_dataset_push(
+        request.path,
+        request.repo_id,
+        card=request.card,
+        coordinates=request.coordinates,
+        coordinate_decimals=request.coordinate_decimals,
+        unredacted=request.unredacted,
+        license=request.license,
     )
 
 

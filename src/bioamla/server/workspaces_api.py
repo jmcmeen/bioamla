@@ -5,7 +5,8 @@
 - ``GET /v1/workspaces/{ws}``: its status (metadata, artifact counts, last runs)
 - ``GET /v1/workspaces/{ws}/config``: its settings (``.bioamla/config.toml``)
 - ``PUT|DELETE /v1/workspaces/{ws}/config/{key}``: set (``{"value"}``) or remove one
-- ``GET /v1/workspaces/{ws}/files?path=&recursive=``: list a folder
+- ``GET /v1/workspaces/{ws}/files?path=&recursive=&sha256=``: list a folder (or one
+  file), with each file's SHA-256 when asked
 - ``GET /v1/workspaces/{ws}/files/{path}``: download a file
 - ``PUT /v1/workspaces/{ws}/files/{path}``: upload a file (the request body, as is;
   ``?overwrite=true`` to replace one)
@@ -126,14 +127,17 @@ def add_workspace_routes(app: FastAPI, api_version: str, envelope: Any) -> None:
     @app.get(f"/{v}/workspaces/{{ws}}/files", tags=["files"])
     def list_files(
         ws: str,
-        path: str = Query(".", description="A folder, relative to the workspace"),
+        path: str = Query(".", description="A folder (or a file), relative to the workspace"),
         recursive: bool = Query(False, description="Include subfolders"),
+        sha256: bool = Query(False, description="Add each file's SHA-256, read on the server"),
         who: Any = Depends(identity),
     ) -> dict[str, Any]:
-        """A folder's files and subfolders (``path``, ``type``, ``size``, ``modified``),
-        at most 10,000 (``truncated`` says when there were more: list a subfolder)."""
+        """A folder's files and subfolders (``path``, ``type``, ``size``, ``modified``, and
+        ``sha256`` when asked), at most 10,000 (``truncated`` says when there were more:
+        list a subfolder). A file's ``path`` lists just it. With ``sha256`` every file
+        listed is read, so a client can fingerprint files without downloading them."""
         space, folder = in_workspace(who, ws, path)
-        files = space.list_files(folder, recursive=recursive, limit=LIST_LIMIT + 1)
+        files = space.list_files(folder, recursive=recursive, limit=LIST_LIMIT + 1, sha256=sha256)
         return envelope(
             {"path": path, "files": files[:LIST_LIMIT], "truncated": len(files) > LIST_LIMIT}
         )

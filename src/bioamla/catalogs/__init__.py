@@ -51,9 +51,11 @@ from bioamla.catalogs.ebird import EBirdService, match_detections_to_ebird
 from bioamla.catalogs.files import (
     NEARBY_COLUMNS,
     DatasetPush,
+    DatasetPushPlan,
     InatSearch,
     NearbyObservations,
     ProjectStatsReport,
+    check_dataset_push,
     dataset_push_warnings,
     ebird_nearby,
     inat_observation_rows,
@@ -68,9 +70,11 @@ __all__ = [
     # Calls that save their results (bioamla.catalogs.files)
     "NEARBY_COLUMNS",
     "DatasetPush",
+    "DatasetPushPlan",
     "InatSearch",
     "NearbyObservations",
     "ProjectStatsReport",
+    "check_dataset_push",
     "dataset_push_warnings",
     "ebird_nearby",
     "inat_observation_rows",

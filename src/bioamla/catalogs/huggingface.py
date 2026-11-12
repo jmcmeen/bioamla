@@ -228,9 +228,10 @@ def push_dataset(
             :func:`bioamla.datasets.redacted_audio_files`). Earlier commits in the
             repository's history are not affected.
         coordinate_decimals: Decimal places kept by ``round`` (2 is about 1 km).
-        unredacted: With ``round`` or ``strip``, what to do with files that may hold
-            a location the redaction can't change (JSON/JSONL/TXT that mention a
-            latitude or longitude, and Parquet; see
+        unredacted: With ``round`` or ``strip``, what to do with the files the push
+            can't vouch for, being neither redacted nor a kind known to carry no
+            location (a hand-written README, JSON or text, GeoJSON, Parquet, images,
+            audio other than WAV unless its FLAC or MP3 tags are clean, ...; see
             :func:`bioamla.datasets.unredacted_location_files`): ``refuse`` (the
             default) raises before anything is uploaded, ``skip`` leaves them out of
             the upload (deleting any copy an earlier push left in the repository),
@@ -278,19 +279,50 @@ UNREDACTED_MODES = ("refuse", "skip", "publish")
 
 
 def unredacted_files(
-    path: str | Path, coordinates: str, unredacted: str = "refuse", coordinate_decimals: int = 2
+    path: str | Path,
+    coordinates: str,
+    unredacted: str = "refuse",
+    coordinate_decimals: int = 2,
+    *,
+    card: bool = False,
 ) -> list[str]:
-    """The files in a dataset folder that a ``round`` or ``strip`` push can't redact
-    (JSON/JSONL/TXT that mention a latitude or longitude, and Parquet; see
+    """The files in a dataset folder that a ``round`` or ``strip`` push can't vouch for
+    (neither redacted nor a kind known to carry no location; see
     :func:`bioamla.datasets.unredacted_location_files`), after checking the modes; none
-    for ``keep``, which publishes every location as it is.
+    for ``keep``, which publishes every location as it is. ``card`` says the push writes
+    a generated card over ``README.md`` first.
 
     Raises:
         InvalidInputError: For an unknown ``coordinates`` or ``unredacted`` mode or bad
             ``coordinate_decimals``, or when ``unredacted`` is ``refuse`` and such files
             exist (naming them).
     """
+    files = _unvouched_files(path, coordinates, unredacted, coordinate_decimals, card=card)
+    if files and unredacted == "refuse":
+        raise InvalidInputError(_unvouched_refusal(files, coordinates))
+    return files
+
+
+def _unvouched_files(
+    path: str | Path,
+    coordinates: str,
+    unredacted: str = "refuse",
+    coordinate_decimals: int = 2,
+    *,
+    card: bool = False,
+) -> list[str]:
+    """:func:`unredacted_files` without the refusal: the modes are checked, and the files
+    listed whatever ``unredacted`` says."""
     from bioamla import datasets
+
+    _check_modes(coordinates, unredacted, coordinate_decimals)
+    if coordinates == "keep":
+        return []
+    return datasets.unredacted_location_files(path, card=card)
+
+
+def _check_modes(coordinates: str, unredacted: str, coordinate_decimals: int) -> None:
+    """Raise InvalidInputError for an unknown coordinate or unredacted mode."""
     from bioamla.datasets.redact import check_coordinate_mode
 
     check_coordinate_mode(coordinates, coordinate_decimals)
@@ -298,17 +330,18 @@ def unredacted_files(
         raise InvalidInputError(
             f"unredacted must be one of {', '.join(UNREDACTED_MODES)}, not {unredacted!r}"
         )
-    if coordinates == "keep":
-        return []
-    files = datasets.unredacted_location_files(path)
-    if files and unredacted == "refuse":
-        shown = ", ".join(files[:5]) + (f" and {len(files) - 5} more" if len(files) > 5 else "")
-        raise InvalidInputError(
-            f"{len(files)} file(s) may hold a location --coordinates {coordinates} can't "
-            f"redact (JSON/text, Parquet): {shown}. Remove or redact them, or choose "
-            "--unredacted skip (leave them out) or --unredacted publish (upload them as they are)."
-        )
-    return files
+
+
+def _unvouched_refusal(files: list[str], coordinates: str) -> str:
+    """Why a push with ``unredacted="refuse"`` stops, naming the first few ``files``."""
+    shown = ", ".join(files[:5]) + (f" and {len(files) - 5} more" if len(files) > 5 else "")
+    return (
+        f"{len(files)} file(s) may hold a location --coordinates {coordinates} doesn't "
+        f"redact (only the manifest, a generated card, the license files, and tables and "
+        f"WAV/FLAC/MP3 audio holding no location it can see are vouched for): {shown}. "
+        "Remove or redact them, or choose --unredacted skip (leave them out) or "
+        "--unredacted publish (upload them as they are)."
+    )
 
 
 def _detect_audio_column(features: Any, audio_column: str | None) -> str:

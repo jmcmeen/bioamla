@@ -31,29 +31,23 @@ def test_lossy_formats_round_trip(tmp_path, name):
     assert [p.name for p in tmp_path.iterdir()] == [name]  # no temporary file left
 
 
-@pytest.mark.usefixtures("requires_ffmpeg_cli")
-@pytest.mark.skipif(os.name == "nt", reason="a shell-script ffmpeg")
-def test_a_stalled_encoder_is_stopped_and_leaves_the_old_file(tmp_path, monkeypatch):
+def test_a_stalled_encoder_is_stopped_and_leaves_the_old_file(
+    tmp_path, monkeypatch, stalled_ffmpeg
+):
     out = tmp_path / "out.mp3"
     out.write_bytes(b"the previous file")
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    pids = tmp_path / "pids"
-    (bin_dir / "ffmpeg").write_text(f"#!/bin/sh\necho $$ >> {pids}\nexec sleep 60\n")
-    (bin_dir / "ffmpeg").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("BIOAMLA_ENCODE_TIMEOUT", "0.5")
 
     began = time.monotonic()
-    with pytest.raises(
-        AudioSaveError, match=r"still encoding after 0\.5 s.*BIOAMLA_ENCODE_TIMEOUT"
+    with (
+        stalled_ffmpeg.expect_killed(),
+        pytest.raises(AudioSaveError, match=r"still encoding after 0\.5 s.*BIOAMLA_ENCODE_TIMEOUT"),
     ):
         save_audio_data(tone(), out)
     assert time.monotonic() - began < 10
-    with pytest.raises(ProcessLookupError):  # the stalled encoder was killed
-        os.kill(int(pids.read_text().split()[-1]), 0)
     assert out.read_bytes() == b"the previous file"
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["bin", "out.mp3", "pids"]
+    left = {p.name for p in tmp_path.iterdir()} - {"pids"}  # no temporary file
+    assert left == {"bin", "out.mp3"}
 
 
 @pytest.mark.skipif(os.name == "nt", reason="a shell-script ffmpeg")

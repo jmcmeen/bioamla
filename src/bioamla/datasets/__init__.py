@@ -88,6 +88,7 @@ from bioamla.datasets.manifest import (
     DatasetManifest,
     build_dataset_card,
     build_manifest_from_metadata,
+    dataset_card_text,
     hub_license_id,
     load_dataset_manifest,
     save_dataset_manifest,
@@ -105,6 +106,7 @@ from bioamla.datasets.recording import add_recording_metadata
 from bioamla.datasets.redact import (
     COORDINATE_MODES,
     check_coordinate_mode,
+    files_to_redact,
     has_location_columns,
     location_columns,
     redact_rows,
@@ -210,6 +212,7 @@ __all__ = [
     # Recorder metadata
     "add_recording_metadata",
     "build_dataset_card",
+    "dataset_card_text",
     "HUB_LICENSES",
     "hub_license_id",
     "write_dataset_card",
@@ -220,6 +223,7 @@ __all__ = [
     "redact_rows",
     "redact_sites",
     "redacted_dataset_files",
+    "files_to_redact",
     "unredacted_location_files",
     "redact_wav_location",
     "redacted_audio_files",

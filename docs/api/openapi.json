@@ -621,7 +621,7 @@
           "files"
         ],
         "summary": "List Files",
-        "description": "A folder's files and subfolders (``path``, ``type``, ``size``, ``modified``),\nat most 10,000 (``truncated`` says when there were more: list a subfolder).",
+        "description": "A folder's files and subfolders (``path``, ``type``, ``size``, ``modified``, and\n``sha256`` when asked), at most 10,000 (``truncated`` says when there were more:\nlist a subfolder). A file's ``path`` lists just it. With ``sha256`` every file\nlisted is read, so a client can fingerprint files without downloading them.",
         "operationId": "list_files_v1_workspaces__ws__files_get",
         "security": [
           {
@@ -644,11 +644,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "A folder, relative to the workspace",
+              "description": "A folder (or a file), relative to the workspace",
               "default": ".",
               "title": "Path"
             },
-            "description": "A folder, relative to the workspace"
+            "description": "A folder (or a file), relative to the workspace"
           },
           {
             "name": "recursive",
@@ -661,6 +661,18 @@
               "title": "Recursive"
             },
             "description": "Include subfolders"
+          },
+          {
+            "name": "sha256",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Add each file's SHA-256, read on the server",
+              "default": false,
+              "title": "Sha256"
+            },
+            "description": "Add each file's SHA-256, read on the server"
           }
         ],
         "responses": {
@@ -4461,6 +4473,78 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Op Catalogs Hf Cache"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{ws}/operations/catalogs.hf.check-push-dataset": {
+      "post": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Check a dataset push as ``catalogs.hf.push-dataset`` would, without pushing.",
+        "description": "Check a dataset push as ``catalogs.hf.push-dataset`` would, without pushing.",
+        "operationId": "op_catalogs_hf_check_push_dataset",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ws",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ws"
+            }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckPushDatasetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Op Catalogs Hf Check Push Dataset"
                 }
               }
             }
@@ -11371,6 +11455,74 @@
         "title": "CacheRequest",
         "description": "The local Hugging Face cache.\n\nAttributes:\n    models: Include cached models.\n    datasets: Include cached datasets."
       },
+      "CheckPushDatasetRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "format": "path",
+            "title": "Path"
+          },
+          "repo_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Id"
+          },
+          "card": {
+            "type": "boolean",
+            "title": "Card",
+            "default": true
+          },
+          "coordinates": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "round",
+              "strip"
+            ],
+            "title": "Coordinates",
+            "default": "keep"
+          },
+          "coordinate_decimals": {
+            "type": "integer",
+            "title": "Coordinate Decimals",
+            "default": 2
+          },
+          "unredacted": {
+            "type": "string",
+            "enum": [
+              "refuse",
+              "skip",
+              "publish"
+            ],
+            "title": "Unredacted",
+            "default": "refuse"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "CheckPushDatasetRequest",
+        "description": "Check a dataset push without pushing: what would be redacted, refused or left out.\n\nAttributes:\n    path: The dataset folder.\n    repo_id: The Hub repository (optional; nothing is sent to it).\n    card: A README.md dataset card would be written first.\n    coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,\n        ``strip``.\n    coordinate_decimals: Decimal places ``round`` keeps (0-6).\n    unredacted: With ``round`` or ``strip``, files the push can't vouch for:\n        ``refuse`` the push, ``skip`` them, or ``publish`` them as they are.\n    license: The dataset's license, a Hub license id (e.g. ``cc-by-nc-4.0``)."
+      },
       "ClipLabelsRequest": {
         "properties": {
           "annotation_file": {
@@ -13501,7 +13653,7 @@
           "repo_id"
         ],
         "title": "PushDatasetRequest",
-        "description": "Push a dataset folder to the Hugging Face Hub, writing its card first.\n\nAttributes:\n    path: The dataset folder.\n    repo_id: The Hub repository.\n    private: Create it private.\n    commit_message: The commit message.\n    card: Write a README.md dataset card first.\n    coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,\n        ``strip``.\n    coordinate_decimals: Decimal places ``round`` keeps (0-6).\n    unredacted: With ``round`` or ``strip``, files that may hold a location the\n        redaction can't change (JSON/text, Parquet): ``refuse`` the push,\n        ``skip`` them, or ``publish`` them as they are.\n    license: The dataset's license, a Hub license id (e.g. ``cc-by-nc-4.0``),\n        written to the card."
+        "description": "Push a dataset folder to the Hugging Face Hub, writing its card first.\n\nAttributes:\n    path: The dataset folder.\n    repo_id: The Hub repository.\n    private: Create it private.\n    commit_message: The commit message.\n    card: Write a README.md dataset card first.\n    coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,\n        ``strip``.\n    coordinate_decimals: Decimal places ``round`` keeps (0-6).\n    unredacted: With ``round`` or ``strip``, files the push can't vouch for\n        (neither redacted nor known to carry no location): ``refuse`` the push,\n        ``skip`` them, or ``publish`` them as they are.\n    license: The dataset's license, a Hub license id (e.g. ``cc-by-nc-4.0``),\n        written to the card."
       },
       "PushModelRequest": {
         "properties": {

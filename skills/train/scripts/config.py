@@ -68,7 +68,7 @@ def checked(args: argparse.Namespace, root: Path, rel: Path) -> tuple[int, dict]
         "training_dir": (rel / "model").as_posix(),
         "metrics_file": (rel / "metrics.jsonl").as_posix(),
     }
-    record["config_sha256"] = sha256(record["config"], rel, root)
+    record["config_sha256"] = sha256(record["config"], root)
     try:
         plan = run(*train_args(record), "--dry-run", cwd=root)
     except BioamlaCommandError as e:

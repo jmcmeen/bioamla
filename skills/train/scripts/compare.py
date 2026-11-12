@@ -10,8 +10,8 @@ applies the thresholds the person set:
 
 Refuses to compare runs evaluated on different sets (another ground-truth CSV or a
 changed one, another folder or columns, or other files skipped): their numbers don't
-measure the same thing (with a remote, the audio folder is known by its path, not its
-files). Writes ``compare.json`` into the candidate's run folder with the verdict, every
+measure the same thing (the audio folder is fingerprinted by its files' contents,
+hashed on the server with a remote). Writes ``compare.json`` into the candidate's run folder with the verdict, every
 reason, both values and each class's change, and earlier verdicts under ``earlier``;
 prints it.
 

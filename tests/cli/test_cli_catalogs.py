@@ -171,6 +171,7 @@ def test_hf_push_dataset_no_card(runner: CliRunner, tmp_path) -> None:
 
 
 def test_hf_push_dataset_with_card(runner: CliRunner, tmp_path) -> None:
+    (tmp_path / "metadata.csv").write_text("file_name,label\na.wav,frog\n")  # a card source
     with (
         patch(
             "bioamla.catalogs.huggingface.push_dataset",

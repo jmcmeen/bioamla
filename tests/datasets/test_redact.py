@@ -194,7 +194,7 @@ class TestPushDatasetRedaction:
 
 
 class TestPushDatasetUnredactedFiles:
-    """Files a round or strip push can't redact (JSON/text with coordinates, Parquet)."""
+    """Files a round or strip push can't vouch for (here, JSONL)."""
 
     def _folder(self, tmp_path):
         _write_csv(tmp_path / "metadata.csv")
@@ -323,7 +323,9 @@ class TestPushDatasetCliCoordinates:
         _write_csv(tmp_path / "metadata.csv")
         calls: dict = {}
         monkeypatch.setattr(hf, "push_dataset", self._fake_push(calls))
-        monkeypatch.setattr(datasets, "unredacted_location_files", lambda path: ["a.wav"])
+        monkeypatch.setattr(
+            datasets, "unredacted_location_files", lambda path, card=False: ["notes.txt"]
+        )
         res = CliRunner().invoke(
             catalogs,
             [
@@ -341,18 +343,135 @@ class TestPushDatasetCliCoordinates:
         )
         assert res.exit_code == 0, res.output
         assert (calls["coordinates"], calls["coordinate_decimals"]) == ("round", 1)
-        assert "JSON/text, Parquet" in res.output
+        assert "can't vouch for" in res.output and "notes.txt" in res.output
         assert "per-file locations" not in res.output.lower()
 
 
 class TestUnredactedLocationFiles:
-    def test_lists_json_and_parquet_not_wavs(self, tmp_path) -> None:
+    """A redacted push vouches only for what it redacts or knows carries no location."""
+
+    def test_lists_everything_it_cant_vouch_for(self, tmp_path) -> None:
         from bioamla.datasets import unredacted_location_files
 
         _guano_wav(tmp_path / "sub" / "located.wav", position=(36.52, -82.21))
-        (tmp_path / "notes.json").write_text('{"Latitude": 35.1}')
-        (tmp_path / "table.parquet").write_bytes(b"PAR1")
-        assert unredacted_location_files(tmp_path) == ["notes.json", "table.parquet"]
+        _write_csv(tmp_path / "metadata.csv")
+        (tmp_path / "sites.tsv").write_text("site\tlatitude\nA\t35.1\n")
+        (tmp_path / "dataset.json").write_text("{}")
+        for name in ("LICENSE", "ATTRIBUTIONS.md", ".gitattributes"):
+            (tmp_path / name).write_text("x")
+        (tmp_path / ".git").mkdir()
+        (tmp_path / ".git" / "config").write_text("x")
+        (tmp_path / ".cache" / "huggingface").mkdir(parents=True)
+        (tmp_path / ".cache" / "huggingface" / "upload.lock").write_text("x")
+        unvouched = [
+            "README.md",  # hand-written
+            "notes.json",  # mentions no location, but isn't redacted either
+            "sites.geojson",
+            "sub/LICENSE",  # only the top-level license files are bioamla's
+            "table.parquet",
+            "track.gpx",
+            "clip.ogg",
+            "plot.png",
+        ]
+        for name in unvouched:
+            (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / name).write_text("x")
+        assert unredacted_location_files(tmp_path) == sorted(unvouched)
+
+    def test_a_readme_is_vouched_for_when_bioamla_wrote_it(self, tmp_path) -> None:
+        from bioamla.datasets import unredacted_location_files
+        from bioamla.datasets.redact import _CARD_MARKER
+
+        (tmp_path / "README.md").write_text(f"# Frogs\n\n{_CARD_MARKER}\n")
+        assert unredacted_location_files(tmp_path) == ["README.md"]  # nothing to rebuild it
+        _write_csv(tmp_path / "metadata.csv")
+        assert unredacted_location_files(tmp_path) == []
+        (tmp_path / "README.md").write_text("# Frogs\n\nRecorded at 35.1234, -82.5678\n")
+        assert unredacted_location_files(tmp_path) == ["README.md"]
+        assert unredacted_location_files(tmp_path, card=True) == []  # the card replaces it
+
+    def test_flac_and_mp3_are_vouched_for_by_their_tags(self, tmp_path) -> None:
+        from tests.audio.test_tags import flac, id3v2_mp3
+
+        from bioamla.datasets import unredacted_location_files
+
+        (tmp_path / "clean.flac").write_bytes(flac(["ARTIST=Frog survey"]))
+        (tmp_path / "placed.flac").write_bytes(flac(["LOCATION=Roan Mountain"]))
+        (tmp_path / "clean.mp3").write_bytes(id3v2_mp3([("TIT2", "Spring peepers")]))
+        (tmp_path / "placed.mp3").write_bytes(id3v2_mp3([("COMM", "eng\x0036.1234, -82.1234")]))
+        assert unredacted_location_files(tmp_path) == ["placed.flac", "placed.mp3"]
+
+    def test_tables_are_vouched_for_when_redaction_covers_every_location(self, tmp_path) -> None:
+        from bioamla.datasets import unredacted_location_files
+
+        (tmp_path / "ok.csv").write_text("file_name,label,latitude\na.wav,Geothlypis,35.12\n")
+        (tmp_path / "notes.csv").write_text("file_name,notes\na.wav,GPS 36.1234 -82.5678\n")
+        (tmp_path / "utm.tsv").write_text("plot\teasting\tnorthing\nA\t412345\t3998765\n")
+        assert unredacted_location_files(tmp_path) == ["notes.csv", "utm.tsv"]
+
+    def test_wav_chunks_the_push_doesnt_redact_are_read(self, tmp_path) -> None:
+        from tests.audio.test_tags import wav
+
+        from bioamla.datasets import unredacted_location_files
+
+        (tmp_path / "moth.wav").write_bytes(wav([(b"LIST", b"INFOICMT" + b"Recorded at 01:00")]))
+        (tmp_path / "noted.wav").write_bytes(wav([(b"LIST", b"INFOICMT" + b"Site 36.12, -82.57")]))
+        (tmp_path / "odd.wav").write_bytes(wav([(b"zzzz", b"anything")]))
+        assert unredacted_location_files(tmp_path) == ["noted.wav", "odd.wav"]
+
+    def test_hub_caches_at_any_depth_arent_uploaded(self, tmp_path) -> None:
+        from bioamla.datasets import unredacted_location_files
+
+        lock = tmp_path / "sub" / ".cache" / "huggingface" / "download" / "x.lock"
+        lock.parent.mkdir(parents=True)
+        lock.write_text("x")
+        assert unredacted_location_files(tmp_path) == []
+
+
+class TestPushVouchesForTheCard:
+    """push_dataset_folder: a hand-written README.md the card replaces is vouched for."""
+
+    def test_the_card_replaces_a_hand_written_readme(self, tmp_path, monkeypatch) -> None:
+        from bioamla.catalogs import push_dataset_folder
+
+        api = _RecordingApi()
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: api)
+        _write_csv(tmp_path / "metadata.csv")
+        (tmp_path / "README.md").write_text("Site at 35.1234, -82.5678\n")
+        with pytest.raises(InvalidInputError, match="README.md"):
+            push_dataset_folder(tmp_path, "me/frogs", card=False, coordinates="round")
+        assert api.uploads == []
+        push_dataset_folder(tmp_path, "me/frogs", coordinates="round")
+        assert "35.1234" not in (tmp_path / "README.md").read_text()
+
+    def test_the_preview_vouches_for_the_readme_only_if_a_card_can_be_written(
+        self, tmp_path
+    ) -> None:
+        from bioamla.catalogs import dataset_push_warnings
+
+        (tmp_path / "README.md").write_text("Site at 35.1234, -82.5678\n")
+        assert "README.md" in dataset_push_warnings(tmp_path, "round", card=True)[0]
+        _write_csv(tmp_path / "metadata.csv")
+        assert dataset_push_warnings(tmp_path, "round", card=True) == []
+
+    def test_a_card_that_fails_leaves_the_readme_to_pass_on_its_own(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        import bioamla.datasets as datasets
+        from bioamla.catalogs import push_dataset_folder
+        from bioamla.exceptions import DatasetError
+
+        def broken(*args, **kwargs):
+            raise DatasetError("no card today")
+
+        api = _RecordingApi()
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: api)
+        monkeypatch.setattr(datasets, "write_dataset_card", broken)
+        _write_csv(tmp_path / "metadata.csv")
+        (tmp_path / "README.md").write_text("Site at 35.1234, -82.5678\n")
+        with pytest.raises(InvalidInputError, match="README.md"):
+            push_dataset_folder(tmp_path, "me/frogs", coordinates="round")
+        assert api.uploads == []
 
 
 class TestRedactionEdgeCases:
@@ -733,3 +852,86 @@ class TestMalformedRecorderMetadata:
         assert redact_wav_location(tmp_path / "a.wav", tmp_path / "o.wav", mode)
         wamd = WamdMetadata.from_bytes(_chunks(tmp_path / "o.wav")["wamd"])
         assert wamd.get_raw(GPSFIRST_ID) is None
+
+
+class TestCheckDatasetPush:
+    """check_dataset_push / push-dataset --dry-run: the push's checks, without pushing."""
+
+    def _folder(self, tmp_path):
+        _write_csv(tmp_path / "metadata.csv")
+        (tmp_path / "notes.json").write_text("{}")
+        _guano_wav(tmp_path / "a.wav", position=(36.52, -82.21))
+        return tmp_path
+
+    def test_reports_what_the_push_would_do_without_doing_it(self, tmp_path, monkeypatch) -> None:
+        from bioamla.catalogs import check_dataset_push
+
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: pytest.fail("no Hub access"))
+        folder = self._folder(tmp_path)
+        plan = check_dataset_push(folder, coordinates="round", license="CC-BY-4.0")
+        assert plan.refused and "notes.json" in plan.reason
+        assert plan.unvouched == ["notes.json"] and plan.left_out == []
+        assert plan.redacted == ["README.md", "a.wav", "metadata.csv"]
+        assert (plan.card, plan.license) == (True, "cc-by-4.0")
+        assert plan.to_dict()["dry_run"] is True
+        assert not (folder / "README.md").exists()  # no card written
+        skipped = check_dataset_push(folder, coordinates="round", unredacted="skip")
+        assert not skipped.refused and skipped.left_out == ["notes.json"]
+        assert check_dataset_push(folder).unvouched == []  # keep publishes as is
+
+    def test_bad_options_are_errors_as_in_the_push(self, tmp_path) -> None:
+        from bioamla.catalogs import check_dataset_push
+        from bioamla.exceptions import OptionConflictError
+
+        folder = self._folder(tmp_path)
+        with pytest.raises(InvalidInputError, match="Unknown coordinate mode"):
+            check_dataset_push(folder, coordinates="fuzz")
+        with pytest.raises(OptionConflictError):
+            check_dataset_push(folder, card=False, license="cc0-1.0")
+        with pytest.raises(InvalidInputError, match="not a directory"):
+            check_dataset_push(folder / "nope")
+
+    def test_cli_dry_run(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: pytest.fail("no Hub access"))
+        folder = self._folder(tmp_path)
+        res = CliRunner().invoke(
+            catalogs, ["hf", "push-dataset", "--dry-run", "--coordinates", "strip", str(folder)]
+        )
+        assert res.exit_code == 0, res.output  # a report: exit 0, as with --json
+        assert "notes.json" in res.output and "would stop" in res.output
+        res = CliRunner().invoke(
+            catalogs,
+            ["hf", "push-dataset", "--dry-run", "--coordinates", "strip",
+             "--unredacted", "skip", str(folder), "me/frogs"],
+        )  # fmt: skip
+        assert res.exit_code == 0, res.output
+        assert "would go ahead" in res.output
+        assert not (folder / "README.md").exists()
+
+    def test_cli_needs_a_repository_to_push(self, tmp_path) -> None:
+        res = CliRunner().invoke(catalogs, ["hf", "push-dataset", str(self._folder(tmp_path))])
+        assert res.exit_code == 2 and "REPO_ID" in res.output
+
+    def test_files_listed_once_and_errors_as_in_the_push(self, tmp_path) -> None:
+        from bioamla.catalogs import check_dataset_push
+        from bioamla.exceptions import DatasetError
+
+        folder = self._folder(tmp_path)
+        (folder / "sites.csv").write_text("site,latitude,notes\nA,35.1,GPS 36.12 -82.57\n")
+        plan = check_dataset_push(folder, coordinates="round", unredacted="skip")
+        assert "sites.csv" in plan.unvouched and "sites.csv" not in plan.redacted
+        (folder / "broken.wav").write_bytes(b"RIFF")
+        with pytest.raises(DatasetError, match="broken.wav"):
+            check_dataset_push(folder, coordinates="round", unredacted="skip")
+
+    def test_a_card_that_cant_be_built_is_reported(self, tmp_path) -> None:
+        from bioamla.catalogs import check_dataset_push
+        from bioamla.exceptions import DatasetError
+
+        (tmp_path / "dataset.json").write_text("{not json")
+        (tmp_path / "README.md").write_text("Site at 35.1234, -82.5678\n")
+        plan = check_dataset_push(tmp_path, coordinates="round", unredacted="skip")
+        assert not plan.card and "dataset.json" in plan.card_error
+        assert "README.md" in plan.unvouched  # no card replaces it
+        with pytest.raises(DatasetError):
+            check_dataset_push(tmp_path, coordinates="round", license="cc0-1.0")
