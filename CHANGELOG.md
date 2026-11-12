@@ -6,6 +6,52 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `catalogs hf push-dataset --license <id>` (a Hub license id such as `cc-by-nc-4.0`) puts the
+  dataset's license in the card's YAML front matter, so the Hub shows it; it was published
+  unlicensed. The card also has a License section listing the licenses its files carry, which
+  the manifest now counts (`licenses`, from `attr_lic` or `license`), and a redacted push keeps
+  the card's license. `push_dataset_folder()`, `write_dataset_card()`, `build_dataset_card()`
+  and the operation take `license=`; `hub_license_id()` accepts only ids the Hub lists
+  (`HUB_LICENSES`; Creative Commons ids include the version). A push given `--license` stops
+  if the card can't be written, rather than publishing without it (#355)
+- `models ast train --metrics-file PATH` records the run in a JSON Lines file: its params,
+  every metric the trainer logs, the files it writes and how it ended (finished, cancelled or
+  failed), one object per line and flushed as written, so a script can judge a run from what
+  it measured without an MLflow or TensorBoard client. Values are strict JSON (NaN is `null`).
+  The file is created before training, so an existing or unwritable path is refused up front,
+  and a run that fails or is cancelled during preprocessing still ends with its status. It's
+  `bioamla.ml.JsonlTracker`, an `ExperimentTracker` (and context manager) that also works with
+  `train_ast(tracker=...)`; `train_ast_from_options()` takes `tracker=` and the operation
+  `metrics_file` (#362)
+- `models ast train --dry-run` checks a training run without training: it resolves the
+  options as a run would (flags over the config file over the defaults, with the same path
+  checks), checks augmentation ranges, a local dataset (a CSV that must exist, or a folder) and
+  the metrics file, and prints the options the run would use and any it would ignore, loading
+  and writing nothing. It's `bioamla.ml.check_train_options()`, which returns a `TrainPlan`
+  (`{"dry_run": true, "train_dataset", "training_dir", "options", "metrics_file", "warnings"}`
+  with `--json`), and the quick operation `models.ast.check-train` (#363)
+- A `train` agent skill (`skills/train`): `config.py` checks a training config for a dataset
+  with `ast train --dry-run` and starts a run folder; `train.py` trains with it (refusing a
+  config that changed since) and summarises the run from its `--metrics-file`, not its logs;
+  `evaluate.py` evaluates the run, or any model as a baseline, on a fixed evaluation set and
+  records the set's identity; `compare.py` keeps the run (exit 0) only when it finished, beats
+  the baseline on the chosen metric by `--min-delta` and no class loses more than
+  `--max-class-drop` F1, and refuses to compare runs evaluated on different sets (#364)
+
+### Changed
+
+- `catalogs hf push-dataset --coordinates round` or `strip` refuses to push, before anything
+  is uploaded or the card is written, when the folder has files the redaction can't change:
+  JSON, JSONL or text that mention a latitude or longitude, and Parquet. It named them in a
+  warning and uploaded them with their exact locations. `--unredacted skip` leaves them out
+  of the upload (and deletes a copy an earlier push left in the repository), and
+  `--unredacted publish` uploads them as before; `push_dataset()`, `push_dataset_folder()` and
+  the operation take `unredacted=` the same way, and `bioamla.catalogs.unredacted_files()`
+  lists them. The `dataset` skill's push passes `--unredacted publish` only when the person
+  signed off its `location` finding (#356)
+
 ## [0.4.5] - 2026-11-11
 
 ### Added

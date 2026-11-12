@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 from bioamla.datasets._metadata import read_metadata_csv
 from bioamla.datasets.annotation_utils import create_label_map
-from bioamla.exceptions import DatasetError, NotFoundError
+from bioamla.exceptions import DatasetError, InvalidInputError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ class DatasetManifest:
     recorded_to: str | None = None
     devices: list[dict[str, Any]] = field(default_factory=list)
     sites: list[dict[str, Any]] = field(default_factory=list)
+    #: Files per license, as ``metadata.csv`` gives it (``attr_lic``, else ``license``).
+    licenses: dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -91,7 +94,12 @@ def build_manifest_from_metadata(
     class_counts: dict[str, int] = {}
     splits: dict[str, int] = {}
     sources_counter: dict[str, int] = {}
+    licenses: dict[str, int] = {}
     for row in rows:
+        # The order `dataset license` reads them in.
+        license_value = (row.get("attr_lic") or row.get("license") or "").strip()
+        if license_value:
+            licenses[license_value] = licenses.get(license_value, 0) + 1
         label_value = row.get("label") or row.get("category")
         if label_value:
             class_counts[label_value] = class_counts.get(label_value, 0) + 1
@@ -116,6 +124,7 @@ def build_manifest_from_metadata(
         sources=sources,
         sample_rate=sample_rate,
         metadata_file=metadata_filename,
+        licenses=dict(sorted(licenses.items())),
         **recording,
     )
 
@@ -187,16 +196,72 @@ def save_dataset_manifest(manifest: DatasetManifest, filepath: str) -> str:
     return str(path)
 
 
-def build_dataset_card(manifest: DatasetManifest, published_decimals: int | None = None) -> str:
+#: The license ids the Hugging Face Hub accepts in a card's ``license:``
+#: (https://huggingface.co/docs/hub/repositories-licenses).
+HUB_LICENSES = frozenset(
+    """apache-2.0 mit openrail bigscience-openrail-m creativeml-openrail-m
+    bigscience-bloom-rail-1.0 bigcode-openrail-m afl-3.0 artistic-2.0 bsl-1.0 bsd
+    bsd-2-clause bsd-3-clause bsd-3-clause-clear c-uda cc cc0-1.0 cc-by-2.0 cc-by-2.5
+    cc-by-3.0 cc-by-4.0 cc-by-sa-3.0 cc-by-sa-4.0 cc-by-nc-2.0 cc-by-nc-3.0 cc-by-nc-4.0
+    cc-by-nd-4.0 cc-by-nc-nd-3.0 cc-by-nc-nd-4.0 cc-by-nc-sa-2.0 cc-by-nc-sa-3.0
+    cc-by-nc-sa-4.0 cdla-sharing-1.0 cdla-permissive-1.0 cdla-permissive-2.0 wtfpl ecl-2.0
+    epl-1.0 epl-2.0 etalab-2.0 eupl-1.1 eupl-1.2 agpl-3.0 gfdl gpl gpl-2.0 gpl-3.0 lgpl
+    lgpl-2.1 lgpl-3.0 isc h-research intel-research lppl-1.3c ms-pl apple-ascl apple-amlr
+    mpl-2.0 odc-by odbl openrail++ osl-3.0 postgresql ofl-1.1 ncsa unlicense zlib pddl
+    lgpl-lr unknown other""".split()
+)
+_CARD_LICENSE = re.compile(r"^license:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
+
+
+def hub_license_id(value: str) -> str:
+    """``value`` as a Hugging Face Hub license id (``cc-by-nc-4.0``, ``cc0-1.0``, ``mit``,
+    ...), lowercased: one in :data:`HUB_LICENSES`.
+
+    Raises:
+        InvalidInputError: If the Hub doesn't list it (``cc-by-nc`` without a version,
+            for example).
+    """
+    lowered = value.strip().lower()
+    if lowered not in HUB_LICENSES:
+        raise InvalidInputError(
+            f"{value!r} is not a Hub license id (e.g. cc-by-4.0, cc-by-nc-sa-4.0, cc0-1.0; "
+            "Creative Commons ids include the version)"
+        )
+    return lowered
+
+
+def card_license(card: str) -> str | None:
+    """The ``license:`` a dataset card's YAML front matter gives, if any."""
+    if not card.startswith("---"):
+        return None
+    end = card.find("\n---", 3)
+    match = _CARD_LICENSE.search(card[: end if end != -1 else len(card)])
+    if not match:
+        return None
+    value = match.group(1).strip().strip("'\"").strip()  # YAML may quote it
+    return value or None
+
+
+def build_dataset_card(
+    manifest: DatasetManifest,
+    published_decimals: int | None = None,
+    license: str | None = None,
+) -> str:
     """Render a HuggingFace dataset card (README.md) from a manifest.
 
-    Produces YAML front-matter (tags + task category) followed by a human-readable
-    summary of classes, counts, splits, and source provenance.
-    ``published_decimals``, when the per-file coordinates were rounded for
-    publishing, is the precision the card reports for them.
+    Produces YAML front-matter (the dataset's ``license``, when given as a Hub license
+    id, plus tags and task category) followed by a human-readable summary of classes,
+    counts, splits, licenses and source provenance. ``published_decimals``, when the
+    per-file coordinates were rounded for publishing, is the precision the card
+    reports for them.
+
+    Raises:
+        InvalidInputError: If ``license`` isn't a Hub license id.
     """
-    frontmatter = [
-        "---",
+    frontmatter = ["---"]
+    if license:
+        frontmatter.append(f"license: {hub_license_id(license)}")
+    frontmatter += [
         "tags:",
         "- bioacoustics",
         "- audio",
@@ -222,6 +287,15 @@ def build_dataset_card(manifest: DatasetManifest, published_decimals: int | None
         body += ["## Classes", "", "| label | id | count |", "|---|---|---|"]
         for label, idx in sorted(manifest.label2id.items(), key=lambda kv: kv[1]):
             body.append(f"| {label} | {idx} | {manifest.class_counts.get(label, 0)} |")
+        body.append("")
+
+    if license or manifest.licenses:
+        body += ["## License", ""]
+        if license:
+            body.append(f"- **Dataset:** `{hub_license_id(license)}`")
+        if manifest.licenses:
+            files = ", ".join(f"{name} ({n})" for name, n in manifest.licenses.items())
+            body.append(f"- **Files:** {files}")
         body.append("")
 
     if manifest.sources:
@@ -256,13 +330,18 @@ def write_dataset_card(
     dataset_dir: str,
     metadata_filename: str = "metadata.csv",
     output_filename: str = "README.md",
+    license: str | None = None,
 ) -> str | None:
     """Write a HuggingFace dataset card (README.md) for a dataset directory.
 
     Uses an existing ``dataset.json`` manifest if present, otherwise derives one
-    from the metadata CSV. Returns the card path, or ``None`` when the directory
-    has neither a manifest nor a metadata CSV to build from (so the caller can
-    treat a non-dataset folder as a no-op).
+    from the metadata CSV. ``license`` (a Hub license id such as ``cc-by-nc-4.0``) is
+    the dataset's, written to the card's front matter so the Hub shows it. Returns the
+    card path, or ``None`` when the directory has neither a manifest nor a metadata
+    CSV to build from (so the caller can treat a non-dataset folder as a no-op).
+
+    Raises:
+        InvalidInputError: If ``license`` isn't a Hub license id.
     """
     ds_path = Path(dataset_dir)
     manifest_path = ds_path / "dataset.json"
@@ -276,7 +355,7 @@ def write_dataset_card(
         return None
 
     card_path = ds_path / output_filename
-    card_path.write_text(build_dataset_card(manifest), encoding="utf-8")
+    card_path.write_text(build_dataset_card(manifest, license=license), encoding="utf-8")
     return str(card_path)
 
 

@@ -127,3 +127,89 @@ class TestPushDatasetCli:
         res = CliRunner().invoke(catalogs, ["hf", "push-dataset", str(d), "me/frogs"])
         assert res.exit_code != 0
         assert "huggingface-cli login" in res.output
+
+
+class TestDatasetLicense:
+    """The dataset's license in its card, and the licenses its files carry."""
+
+    def _dataset(self, tmp_path):
+        rows = [
+            {"file_name": "a.wav", "label": "call", "license": "CC BY 4.0"},
+            {"file_name": "b.wav", "label": "call", "license": "CC BY 4.0", "attr_lic": "CC0"},
+            {"file_name": "c.wav", "label": "chorus", "license": "CC BY-NC 4.0"},
+        ]
+        write_metadata_csv(tmp_path / "metadata.csv", rows, merge_existing=False)
+        return tmp_path
+
+    def test_manifest_counts_file_licenses_attr_lic_first(self, tmp_path):
+        from bioamla.datasets import build_manifest_from_metadata
+
+        manifest = build_manifest_from_metadata(str(self._dataset(tmp_path)))
+        assert manifest.licenses == {"CC BY 4.0": 1, "CC BY-NC 4.0": 1, "CC0": 1}
+
+    def test_card_front_matter_and_section(self):
+        manifest = _manifest()
+        manifest.licenses = {"CC BY-NC 4.0": 12}
+        card = build_dataset_card(manifest, license="CC-BY-NC-4.0")
+        front = card.split("---")[1]
+        assert "license: cc-by-nc-4.0" in front
+        assert "- **Dataset:** `cc-by-nc-4.0`" in card
+        assert "- **Files:** CC BY-NC 4.0 (12)" in card
+
+    def test_no_license_no_front_matter_line(self):
+        assert "license:" not in build_dataset_card(_manifest())
+
+    def test_a_bad_license_id_is_refused(self):
+        import pytest
+
+        from bioamla.exceptions import InvalidInputError
+
+        for bad in ("CC BY NC", "cc-by-nc", "cc-by-sa-2.0"):
+            with pytest.raises(InvalidInputError, match="Hub license id"):
+                build_dataset_card(_manifest(), license=bad)
+
+    def test_a_quoted_card_license_is_read_whole(self):
+        from bioamla.datasets.manifest import card_license
+
+        assert card_license('---\nlicense: "cc-by-4.0"\ntags:\n- audio\n---\n') == "cc-by-4.0"
+        assert card_license("---\ntags:\n- audio\n---\nlicense: mit\n") is None
+
+    def test_a_license_without_anything_to_build_a_card_from_stops_the_push(self, tmp_path):
+        res = CliRunner().invoke(
+            catalogs, ["hf", "push-dataset", str(tmp_path), "me/frogs", "--license", "cc0-1.0"]
+        )
+        assert res.exit_code != 0
+        assert "no metadata.csv" in res.output
+
+    def test_a_redacted_push_keeps_the_cards_license(self, tmp_path):
+        from bioamla.datasets import redacted_dataset_files
+
+        d = self._dataset(tmp_path)
+        write_dataset_card(str(d), license="cc-by-nc-4.0")
+        card = redacted_dataset_files(d, "strip")["README.md"].decode()
+        assert "license: cc-by-nc-4.0" in card.split("---")[1]
+
+    def test_cli_writes_the_license_to_the_card(self, tmp_path, monkeypatch):
+        d = self._dataset(tmp_path)
+        monkeypatch.setattr(
+            hf,
+            "push_dataset",
+            lambda path, repo_id, **kw: PushResult(
+                repo_id=repo_id, repo_type="dataset", url="u", files_uploaded=1,
+                total_size_bytes=1,
+            ),
+        )  # fmt: skip
+        res = CliRunner().invoke(
+            catalogs, ["hf", "push-dataset", str(d), "me/frogs", "--license", "CC-BY-NC-4.0"]
+        )
+        assert res.exit_code == 0, res.output
+        assert "license: cc-by-nc-4.0" in (d / "README.md").read_text()
+
+    def test_license_needs_the_card(self, tmp_path):
+        res = CliRunner().invoke(
+            catalogs,
+            ["hf", "push-dataset", str(self._dataset(tmp_path)), "me/frogs", "--no-card",
+             "--license", "cc0-1.0"],
+        )  # fmt: skip
+        assert res.exit_code != 0
+        assert "--no-card" in res.output

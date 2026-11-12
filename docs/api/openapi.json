@@ -6998,6 +6998,78 @@
         }
       }
     },
+    "/v1/workspaces/{ws}/operations/models.ast.check-train": {
+      "post": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Check a training request as ``models.ast.train`` would, without training.",
+        "description": "Check a training request as ``models.ast.train`` would, without training.",
+        "operationId": "op_models_ast_check_train",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ws",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ws"
+            }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Op Models Ast Check Train"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{ws}/operations/models.ast.embed": {
       "post": {
         "tags": [
@@ -13399,6 +13471,27 @@
             "type": "integer",
             "title": "Coordinate Decimals",
             "default": 2
+          },
+          "unredacted": {
+            "type": "string",
+            "enum": [
+              "refuse",
+              "skip",
+              "publish"
+            ],
+            "title": "Unredacted",
+            "default": "refuse"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
           }
         },
         "additionalProperties": false,
@@ -13408,7 +13501,7 @@
           "repo_id"
         ],
         "title": "PushDatasetRequest",
-        "description": "Push a dataset folder to the Hugging Face Hub, writing its card first.\n\nAttributes:\n    path: The dataset folder.\n    repo_id: The Hub repository.\n    private: Create it private.\n    commit_message: The commit message.\n    card: Write a README.md dataset card first.\n    coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,\n        ``strip``.\n    coordinate_decimals: Decimal places ``round`` keeps (0-6)."
+        "description": "Push a dataset folder to the Hugging Face Hub, writing its card first.\n\nAttributes:\n    path: The dataset folder.\n    repo_id: The Hub repository.\n    private: Create it private.\n    commit_message: The commit message.\n    card: Write a README.md dataset card first.\n    coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,\n        ``strip``.\n    coordinate_decimals: Decimal places ``round`` keeps (0-6).\n    unredacted: With ``round`` or ``strip``, files that may hold a location the\n        redaction can't change (JSON/text, Parquet): ``refuse`` the push,\n        ``skip`` them, or ``publish`` them as they are.\n    license: The dataset's license, a Hub license id (e.g. ``cc-by-nc-4.0``),\n        written to the card."
       },
       "PushModelRequest": {
         "properties": {
@@ -13917,6 +14010,18 @@
               }
             ],
             "title": "Options"
+          },
+          "metrics_file": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "path"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics File"
           }
         },
         "additionalProperties": false,
@@ -13925,7 +14030,7 @@
           "train_dataset"
         ],
         "title": "TrainRequest",
-        "description": "Fine-tune an AST model.\n\nAttributes:\n    train_dataset: A Hugging Face dataset ID, a metadata CSV, or a folder with one\n        subfolder per class.\n    config_path: A training config file (``models.ast.init-config``).\n    training_dir: Where training writes its outputs and the model.\n    options: Training options set explicitly; anything else comes from the config\n        file, then the defaults (see :data:`bioamla.ml.AST_TRAIN_DEFAULTS`)."
+        "description": "Fine-tune an AST model.\n\nAttributes:\n    train_dataset: A Hugging Face dataset ID, a metadata CSV, or a folder with one\n        subfolder per class.\n    config_path: A training config file (``models.ast.init-config``).\n    training_dir: Where training writes its outputs and the model.\n    options: Training options set explicitly; anything else comes from the config\n        file, then the defaults (see :data:`bioamla.ml.AST_TRAIN_DEFAULTS`).\n    metrics_file: A JSON Lines file to record the run in (params, every logged\n        metric, the outcome), through a :class:`~bioamla.ml.JsonlTracker`. It must\n        not exist yet."
       },
       "UnzipRequest": {
         "properties": {

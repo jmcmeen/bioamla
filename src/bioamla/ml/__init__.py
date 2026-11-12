@@ -8,8 +8,8 @@ of the device / base-model foundations.
 PyTorch / torchaudio / transformers come with the ``ml`` extra
 (``pip install bioamla[ml]``) and are imported lazily inside functions/methods so
 this package imports fast. Training runs can report to any
-:class:`~bioamla.protocols.ExperimentTracker`; :class:`MLflowTracker` and
-:class:`TensorBoardTracker` are included. Load / inference
+:class:`~bioamla.protocols.ExperimentTracker`; :class:`MLflowTracker`,
+:class:`TensorBoardTracker` and :class:`JsonlTracker` are included. Load / inference
 failures raise :class:`~bioamla.exceptions.ModelError`.
 
 Importing it sets ``HF_DEACTIVATE_ASYNC_LOAD=1`` in the process environment unless
@@ -127,11 +127,13 @@ from bioamla.ml.inference import (
 
 # --- Preprocessing / augmentation --------------------------------------------
 from bioamla.ml.preprocessing import BioamlaPreprocessor, SpectrogramAugmentationConfig
-from bioamla.ml.trackers import MLflowTracker, TensorBoardTracker
+from bioamla.ml.trackers import JsonlTracker, MLflowTracker, TensorBoardTracker
 
 # --- Training -----------------------------------------------------------------
 from bioamla.ml.train_config import (
     AST_TRAIN_DEFAULTS,
+    TrainPlan,
+    check_train_options,
     resolve_train_options,
     train_ast_from_options,
     write_train_config,
@@ -179,6 +181,7 @@ __all__ = [
     "TrainProgress",
     "TrainResult",
     "train_ast",
+    "JsonlTracker",
     "MLflowTracker",
     "TensorBoardTracker",
     "write_train_config",
@@ -193,6 +196,8 @@ __all__ = [
     "AST_TRAIN_DEFAULTS",
     "resolve_train_options",
     "train_ast_from_options",
+    "check_train_options",
+    "TrainPlan",
     # Inference
     "ASTInference",
     "ASTPredictionResult",

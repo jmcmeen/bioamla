@@ -2,14 +2,18 @@
 
 Pass one (or a list) as ``train_ast(tracker=...)``. Each satisfies
 :class:`bioamla.protocols.ExperimentTracker`; write your own to report to any other
-system. MLflow and TensorBoard ship with the ``ml`` extra.
+system. MLflow and TensorBoard ship with the ``ml`` extra; :class:`JsonlTracker`
+needs nothing.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+import math
+import os
+from pathlib import Path
+from typing import IO, Any
 
 from bioamla.protocols import RunStatus
 
@@ -133,4 +137,123 @@ class TensorBoardTracker:
             self._writer = None
 
 
-__all__ = ["MLflowTracker", "TensorBoardTracker", "flatten_params"]
+def _jsonable(value: Any) -> Any:
+    """``value`` as JSON-native data: numpy scalars as numbers, NaN and infinities as
+    None (strict JSON has no token for them), anything else unknown as text."""
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if hasattr(value, "item") and callable(value.item) and not isinstance(value, (str, bytes)):
+        try:
+            value = value.item()  # a numpy or torch scalar
+        except (TypeError, ValueError):
+            return str(value)
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    return str(value)
+
+
+class JsonlTracker:
+    """Append a training run to a JSON Lines file, one object per call.
+
+    The lines are ``{"event": "start", "name", "params"}``, then
+    ``{"event": "metrics", "step", "metrics"}`` each time the trainer logs,
+    ``{"event": "artifact", "path"}`` for each file the run writes, and
+    ``{"event": "end", "status"}`` last. Each line is flushed as it's written, so a
+    cancelled or failed run still leaves what it measured. Values are strict JSON
+    (numpy scalars become numbers, NaN and infinities ``null``), so a script can read
+    the file with nothing but a JSON parser.
+
+    The file is created when the tracker is made, so a path that exists or can't be
+    written is refused before training. :func:`~bioamla.ml.train_ast` reports to its
+    trackers only once preprocessing is done; use the tracker as a context manager
+    and a run that fails or is cancelled before that still ends with its status::
+
+        with JsonlTracker("runs/metrics.jsonl") as tracker:
+            train_ast(..., tracker=tracker)
+
+    A tracker reused for several runs (a sweep) appends each, starting with its own
+    ``start`` line.
+
+    Args:
+        path: The file to write. It must not exist yet, so two runs can't interleave
+            their lines in one file; its folder is created if needed.
+
+    Raises:
+        InvalidInputError: If ``path`` exists or can't be created.
+    """
+
+    def __init__(self, path: str | Path) -> None:
+        from bioamla.exceptions import InvalidInputError
+
+        self.path = Path(path)
+        self.check_path(self.path)
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._file: IO[str] | None = self.path.open("x", encoding="utf-8")  # atomic
+        except OSError as e:  # including a run that created it a moment ago
+            raise InvalidInputError(f"Can't create metrics file {self.path}: {e}") from e
+
+    @staticmethod
+    def check_path(path: str | Path) -> None:
+        """Refuse ``path`` as a metrics file without creating anything: it exists, or
+        its nearest existing folder isn't a folder this process can write to.
+
+        Raises:
+            InvalidInputError: If the file couldn't be created.
+        """
+        from bioamla.exceptions import InvalidInputError
+
+        path = Path(path)
+        if path.exists():
+            raise InvalidInputError(f"Metrics file {path} already exists")
+        folder = path.absolute().parent
+        while not folder.exists() and folder != folder.parent:
+            folder = folder.parent
+        if not folder.is_dir() or not os.access(folder, os.W_OK | os.X_OK):
+            raise InvalidInputError(f"Can't create metrics file {path}: {folder} isn't writable")
+
+    def _write(self, record: dict[str, Any]) -> None:
+        if self._file is None:  # a later run of a reused tracker
+            self._file = self.path.open("a", encoding="utf-8")
+        self._file.write(json.dumps(_jsonable(record), allow_nan=False) + "\n")
+        self._file.flush()
+
+    def start_run(self, name: str | None, params: dict[str, Any]) -> None:
+        self._write({"event": "start", "name": name, "params": params})
+
+    def log_metrics(self, step: int, metrics: dict[str, float]) -> None:
+        self._write({"event": "metrics", "step": step, "metrics": metrics})
+
+    def log_artifact(self, path: str) -> None:
+        self._write({"event": "artifact", "path": path})
+
+    def end_run(self, status: RunStatus) -> None:
+        if self._file is not None:
+            self._write({"event": "end", "status": status})
+            self.close()
+
+    def close(self) -> None:
+        """Close the file (without an ``end`` line)."""
+        if self._file is not None:
+            self._file.close()
+            self._file = None
+
+    def __enter__(self) -> JsonlTracker:
+        return self
+
+    def __exit__(self, exc_type: type[BaseException] | None, *_: object) -> None:
+        """End a run the trainer didn't (one that failed or was cancelled before
+        training started), then close."""
+        from bioamla.exceptions import TrainingCancelled
+
+        if exc_type is not None:
+            cancelled = issubclass(exc_type, TrainingCancelled)
+            self.end_run("cancelled" if cancelled else "failed")
+        self.close()
+
+
+__all__ = ["JsonlTracker", "MLflowTracker", "TensorBoardTracker", "flatten_params"]

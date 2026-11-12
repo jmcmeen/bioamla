@@ -14,9 +14,9 @@ the ``ast train`` CLI options and the ``WaveformAugmentationConfig`` defaults.
 
 from __future__ import annotations
 
-from dataclasses import field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import Field
 
@@ -24,8 +24,11 @@ from bioamla.common.config import config_dataclass
 from bioamla.exceptions import InvalidInputError
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from bioamla.datasets.augmentation import WaveformAugmentationConfig
     from bioamla.ml.ast_service import TrainResult
-    from bioamla.protocols import OnTrainProgress, ShouldStop
+    from bioamla.protocols import ExperimentTracker, OnTrainProgress, ShouldStop
 
 Probability = Annotated[float, Field(ge=0.0, le=1.0)]
 # transformers' IntervalStrategy and SaveStrategy values.
@@ -357,46 +360,12 @@ def resolve_train_options(options: dict, config_path: str | Path | None = None) 
     return resolved
 
 
-def train_ast_from_options(
-    train_dataset: str,
-    options: dict | None = None,
-    *,
-    config_path: str | Path | None = None,
-    on_progress: OnTrainProgress | None = None,
-    should_stop: ShouldStop | None = None,
-) -> TrainResult:
-    """Fine-tune an AST model from flat options, as ``bioamla models ast train`` does.
-
-    Explicit ``options`` win over a training config file (``config_path``, see
-    :func:`write_train_config`), which wins over :data:`AST_TRAIN_DEFAULTS`. The
-    augmentation layers (``add_noise``, ``time_stretch``, ...) are off unless turned
-    on; with none on, ``augment_multiplier`` is ignored (with a warning), since the
-    copies would be identical.
-
-    Args:
-        train_dataset: A Hugging Face dataset ID, a metadata CSV, or a folder with one
-            subfolder per class.
-        options: Training options set explicitly (names as in
-            :data:`AST_TRAIN_DEFAULTS`).
-        config_path: A training config file.
-        on_progress: Called with a :class:`~bioamla.ml.TrainProgress` as training
-            advances.
-        should_stop: Polled during training; returning True stops it.
-
-    Returns:
-        The :class:`~bioamla.ml.TrainResult`.
-
-    Raises:
-        InvalidInputError: If an option is unknown.
-        ConfigValidationError: If the config file is invalid.
-        TrainingError: If training fails.
-    """
-    import logging
-
+def _augmentation(o: dict) -> tuple[WaveformAugmentationConfig | None, int, list[str]]:
+    """The run's augmentation (None with no layer on), its multiplier, and warnings
+    about options that won't be used."""
     from bioamla.datasets.augmentation import WaveformAugmentationConfig
-    from bioamla.ml.training import train_ast
 
-    o = resolve_train_options(options or {}, config_path)
+    notes = []
     augmentation = None
     if any(o[layer] for layer in _AUGMENTATION_LAYERS):
         augmentation = WaveformAugmentationConfig(
@@ -427,12 +396,124 @@ def train_ast_from_options(
         )
     multiplier = o["augment_multiplier"]
     if augmentation is None and multiplier > 1:
-        logging.getLogger(__name__).warning(
-            "augment_multiplier %s ignored: no augmentation layers enabled "
-            "(the copies would be identical).",
-            multiplier,
+        notes.append(
+            f"augment_multiplier {multiplier} ignored: no augmentation layers enabled "
+            "(the copies would be identical)."
         )
         multiplier = 1
+    return augmentation, multiplier, notes
+
+
+@dataclass
+class TrainPlan:
+    """What a training run would use, from :func:`check_train_options`.
+
+    Attributes:
+        train_dataset: The dataset.
+        training_dir: Where the run would write its outputs.
+        options: Every other training option's value.
+        metrics_file: The metrics file the run would write, if any.
+        warnings: Options the run would ignore, and why.
+    """
+
+    train_dataset: str
+    training_dir: str
+    options: dict[str, Any]
+    metrics_file: str | None = None
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """``{"dry_run": True, ...}`` and every field."""
+        return {"dry_run": True, **asdict(self)}
+
+
+def check_train_options(
+    train_dataset: str,
+    options: dict | None = None,
+    *,
+    config_path: str | Path | None = None,
+    metrics_file: str | Path | None = None,
+) -> TrainPlan:
+    """Check a training run's options as :func:`train_ast_from_options` would, without
+    training: nothing is loaded or written.
+
+    Resolves the options (explicit ``options`` over the config file over the defaults)
+    and checks them as a run does before it loads anything: the config file, option
+    types, augmentation ranges for the layers turned on, a local dataset that must
+    exist (a CSV file or a folder), and a metrics file that must not exist and whose
+    folder can be created.
+
+    Raises:
+        InvalidInputError: If an option is unknown or of the wrong type, the dataset
+            or metrics file won't do.
+        ConfigValidationError: If the config file is invalid.
+        TrainingError: If an augmentation range is inverted.
+    """
+    from bioamla.ml.trackers import JsonlTracker
+    from bioamla.ml.training import _check_dataset_path, _validate_augmentation
+
+    o = resolve_train_options(options or {}, config_path)
+    augmentation, _, notes = _augmentation(o)
+    if augmentation is not None:
+        _validate_augmentation(augmentation)
+    _check_dataset_path(train_dataset)
+    if metrics_file is not None:
+        JsonlTracker.check_path(metrics_file)
+    return TrainPlan(
+        train_dataset=train_dataset,
+        training_dir=str(o["training_dir"]),
+        options={k: v for k, v in o.items() if k != "training_dir"},
+        metrics_file=str(metrics_file) if metrics_file is not None else None,
+        warnings=notes,
+    )
+
+
+def train_ast_from_options(
+    train_dataset: str,
+    options: dict | None = None,
+    *,
+    config_path: str | Path | None = None,
+    on_progress: OnTrainProgress | None = None,
+    should_stop: ShouldStop | None = None,
+    tracker: ExperimentTracker | Sequence[ExperimentTracker] | None = None,
+) -> TrainResult:
+    """Fine-tune an AST model from flat options, as ``bioamla models ast train`` does.
+
+    Explicit ``options`` win over a training config file (``config_path``, see
+    :func:`write_train_config`), which wins over :data:`AST_TRAIN_DEFAULTS`. The
+    augmentation layers (``add_noise``, ``time_stretch``, ...) are off unless turned
+    on; with none on, ``augment_multiplier`` is ignored (with a warning), since the
+    copies would be identical.
+
+    Args:
+        train_dataset: A Hugging Face dataset ID, a metadata CSV, or a folder with one
+            subfolder per class.
+        options: Training options set explicitly (names as in
+            :data:`AST_TRAIN_DEFAULTS`).
+        config_path: A training config file.
+        on_progress: Called with a :class:`~bioamla.ml.TrainProgress` as training
+            advances.
+        should_stop: Polled during training; returning True stops it.
+        tracker: One or more experiment trackers for the run (e.g. a
+            :class:`~bioamla.ml.trackers.JsonlTracker`), as for
+            :func:`~bioamla.ml.train_ast`.
+
+    Returns:
+        The :class:`~bioamla.ml.TrainResult`.
+
+    Raises:
+        InvalidInputError: If an option is unknown.
+        ConfigValidationError: If the config file is invalid.
+        TrainingError: If training fails.
+    """
+    import logging
+
+    from bioamla.ml.training import train_ast
+
+    o = resolve_train_options(options or {}, config_path)
+    augmentation, multiplier, notes = _augmentation(o)
+    for note in notes:
+        logging.getLogger(__name__).warning(note)
     return train_ast(
         train_dataset=train_dataset,
         training_dir=o["training_dir"],
@@ -465,4 +546,5 @@ def train_ast_from_options(
         augment_multiplier=multiplier,
         on_progress=on_progress,
         should_stop=should_stop,
+        tracker=tracker,
     )

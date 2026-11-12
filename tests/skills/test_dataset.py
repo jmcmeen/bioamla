@@ -317,6 +317,8 @@ def test_the_gate_fails_on_findings_unless_a_rule_is_accepted(run_skill, workspa
         ["datasets/frogs"],  # no --license
         ["datasets/frogs", "--license", "GPL-3.0"],
         ["datasets/frogs", "--license", "CC-BY-ND-4.0"],  # a dataset of clips can't be ND
+        ["datasets/frogs", "--license", "CC-BY-NC"],  # no version: which one?
+        ["datasets/frogs", "--license", "CC BY-SA 2.0"],  # not a license the Hub lists
         ["datasets/frogs", "--license", "CC-BY-4.0", "--coordinate-decimals", "9"],
     ],
 )
@@ -385,8 +387,47 @@ def test_push_uses_the_checked_coordinate_mode_and_is_private(run_skill, workspa
     args = json.loads(log.read_text())
     assert args[args.index("--coordinates") + 1] == "strip"
     assert "--private" in args and "--public" not in args
+    assert args[args.index("--unredacted") + 1] == "refuse"  # no location sign-off
+    assert args[args.index("--license") + 1] == "cc-by-4.0"
     assert args[-3:] == ["--", "datasets/frogs", "me/frogs"]
     assert (workspace / run / "push.json").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the stand-in bioamla is a shell script")
+def test_a_signed_off_location_finding_publishes_unredactable_files(run_skill, workspace):
+    folder = write_dataset(workspace, clean_rows())
+    (folder / "detections.jsonl").write_text('{"latitude": 36.523456}\n')
+    _, summary = check(run_skill, workspace, "--license", "CC-BY-4.0")
+    run_skill("dataset", "gate", summary["run_dir"], "--accept", "location", cwd=workspace)
+    code, report, log = run_push(workspace, summary["run_dir"], "me/frogs")
+    assert code == 0, report
+    args = json.loads(log.read_text())
+    assert args[args.index("--unredacted") + 1] == "publish"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the stand-in bioamla is a shell script")
+def test_a_sign_off_doesnt_cover_files_added_since(run_skill, workspace):
+    folder = write_dataset(workspace, clean_rows())
+    (folder / "detections.jsonl").write_text('{"latitude": 36.523456}\n')
+    _, summary = check(run_skill, workspace, "--license", "CC-BY-4.0")
+    run_skill("dataset", "gate", summary["run_dir"], "--accept", "location", cwd=workspace)
+    (folder / "tracks.parquet").write_bytes(b"PAR1")
+    code, report, log = run_push(workspace, summary["run_dir"], "me/frogs")
+    assert code == 2, report
+    assert "tracks.parquet" in report["reason"]
+    assert not log.exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the stand-in bioamla is a shell script")
+def test_a_run_from_an_older_skill_must_be_checked_again(run_skill, workspace):
+    run = gated(run_skill, workspace)
+    gate_file = workspace / run / "gate.json"
+    verdict = json.loads(gate_file.read_text())
+    del verdict["license_id"]
+    gate_file.write_text(json.dumps(verdict))
+    code, report, log = run_push(workspace, run, "me/frogs")
+    assert code == 2
+    assert "check and gate it again" in report["reason"]
 
 
 @pytest.mark.skipif(os.name == "nt", reason="the stand-in bioamla is a shell script")
@@ -432,6 +473,13 @@ def _load(script: str):
     finally:
         sys.path[:] = saved
     return module
+
+
+def test_license_hub_ids():
+    check_module = _load("check")
+    for text, hub in [("CC BY-NC-SA 3.0", "cc-by-nc-sa-3.0"), ("cc-by", "cc-by-4.0"),
+                      ("CC0", "cc0-1.0")]:  # fmt: skip
+        assert check_module.hub_id(check_module.parse_license(text)) == hub
 
 
 @pytest.mark.parametrize(

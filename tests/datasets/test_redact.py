@@ -42,11 +42,19 @@ ROWS = [
 class _RecordingApi:
     """Fake HfApi that snapshots each uploaded folder (staging dirs are temporary)."""
 
-    def __init__(self) -> None:
+    def __init__(self, repo_files=()) -> None:
         self.uploads: list[dict] = []
+        self.repo_files = list(repo_files)
+        self.deleted: list[str] = []
 
     def create_repo(self, **kwargs):
         pass
+
+    def list_repo_files(self, **kwargs):
+        return list(self.repo_files)
+
+    def delete_files(self, *, delete_patterns, **kwargs):
+        self.deleted.append(list(delete_patterns))  # one commit per call
 
     def upload_folder(self, *, folder_path, **kwargs):
         base = Path(folder_path)
@@ -185,6 +193,107 @@ class TestPushDatasetRedaction:
             hf.push_dataset(str(tmp_path), "me/frogs", coordinates="fuzz")
 
 
+class TestPushDatasetUnredactedFiles:
+    """Files a round or strip push can't redact (JSON/text with coordinates, Parquet)."""
+
+    def _folder(self, tmp_path):
+        _write_csv(tmp_path / "metadata.csv")
+        (tmp_path / "detections.jsonl").write_text('{"latitude": 35.123456}\n')
+        return tmp_path
+
+    def test_refused_before_anything_is_uploaded(self, tmp_path, monkeypatch) -> None:
+        api = _RecordingApi()
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: api)
+        with pytest.raises(InvalidInputError, match="detections.jsonl"):
+            hf.push_dataset(str(self._folder(tmp_path)), "me/frogs", coordinates="strip")
+        assert api.uploads == []
+
+    def test_skip_leaves_them_out(self, tmp_path, monkeypatch) -> None:
+        api = _RecordingApi()
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: api)
+        hf.push_dataset(
+            str(self._folder(tmp_path)), "me/frogs", coordinates="round", unredacted="skip"
+        )
+        assert sorted(api.uploads[1]["ignore_patterns"]) == ["detections.jsonl", "metadata.csv"]
+
+    def test_publish_uploads_them_as_they_are(self, tmp_path, monkeypatch) -> None:
+        api = _RecordingApi()
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: api)
+        hf.push_dataset(
+            str(self._folder(tmp_path)), "me/frogs", coordinates="round", unredacted="publish"
+        )
+        assert api.uploads[1]["ignore_patterns"] == ["metadata.csv"]
+
+    def test_keep_publishes_everything_anyway(self, tmp_path, monkeypatch) -> None:
+        api = _RecordingApi()
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: api)
+        hf.push_dataset(str(self._folder(tmp_path)), "me/frogs")
+        (dataset,) = api.uploads
+        assert "ignore_patterns" not in dataset
+
+    def test_skip_deletes_a_copy_an_earlier_push_left(self, tmp_path, monkeypatch) -> None:
+        api = _RecordingApi(repo_files=["detections.jsonl", "a.wav"])
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: api)
+        result = hf.push_dataset(
+            str(self._folder(tmp_path)), "me/frogs", coordinates="strip", unredacted="skip"
+        )
+        assert api.deleted == [["detections.jsonl"]]
+        assert result.files_uploaded == 1  # metadata.csv; the skipped file isn't counted
+
+    def test_a_bad_coordinate_mode_is_named_first(self, tmp_path) -> None:
+        from bioamla.catalogs import push_dataset_folder
+
+        with pytest.raises(InvalidInputError, match="Unknown coordinate mode"):
+            push_dataset_folder(str(self._folder(tmp_path)), "me/frogs", coordinates="fuzz")
+
+    def test_the_modes_are_listed_once_everywhere(self) -> None:
+        import typing
+
+        from bioamla.catalogs.operations import PushDatasetRequest
+
+        hint = typing.get_type_hints(PushDatasetRequest)["unredacted"]
+        option = next(p for p in catalogs.commands["hf"].commands["push-dataset"].params
+                      if p.name == "unredacted")  # fmt: skip
+        assert tuple(typing.get_args(hint)) == hf.UNREDACTED_MODES
+        assert tuple(option.type.choices) == hf.UNREDACTED_MODES
+
+    def test_warnings_say_what_each_mode_does(self, tmp_path) -> None:
+        from bioamla.catalogs import dataset_push_warnings
+
+        folder = self._folder(tmp_path)
+        assert "refuses" in dataset_push_warnings(folder, "round")[0]
+        assert "Leaving out" in dataset_push_warnings(folder, "round", "skip")[0]
+        assert "may still carry" in dataset_push_warnings(folder, "round", "publish")[0]
+
+    def test_unknown_mode_rejected(self, tmp_path) -> None:
+        with pytest.raises(InvalidInputError, match="unredacted"):
+            hf.push_dataset(str(tmp_path), "me/frogs", coordinates="round", unredacted="maybe")
+
+    def test_cli_refuses_without_writing_the_card(self, tmp_path, monkeypatch) -> None:
+        api = _RecordingApi()
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: api)
+        folder = self._folder(tmp_path)
+        res = CliRunner().invoke(
+            catalogs, ["hf", "push-dataset", str(folder), "me/frogs", "--coordinates", "strip"]
+        )
+        assert res.exit_code != 0
+        assert "--unredacted skip" in res.output
+        assert not (folder / "README.md").exists()
+        assert api.uploads == []
+
+    def test_cli_skip_warns_and_leaves_them_out(self, tmp_path, monkeypatch) -> None:
+        api = _RecordingApi()
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: api)
+        res = CliRunner().invoke(
+            catalogs,
+            ["hf", "push-dataset", str(self._folder(tmp_path)), "me/frogs",
+             "--coordinates", "strip", "--unredacted", "skip"],
+        )  # fmt: skip
+        assert res.exit_code == 0, res.output
+        assert "Leaving out 1 file(s)" in res.output
+        assert "detections.jsonl" in api.uploads[1]["ignore_patterns"]
+
+
 class TestPushDatasetCliCoordinates:
     def _fake_push(self, calls):
         def fake_push(path, repo_id, private=False, commit_message=None, **kwargs):
@@ -226,6 +335,8 @@ class TestPushDatasetCliCoordinates:
                 "round",
                 "--coordinate-decimals",
                 "1",
+                "--unredacted",
+                "publish",
             ],
         )
         assert res.exit_code == 0, res.output

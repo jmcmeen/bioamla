@@ -207,6 +207,7 @@ def redacted_dataset_files(
         DatasetManifest,
         build_dataset_card,
         build_manifest_from_metadata,
+        card_license,
     )
 
     check_coordinate_mode(mode, decimals)
@@ -253,7 +254,9 @@ def redacted_dataset_files(
         if _CARD_MARKER in text:
             if manifest is not None:
                 card = build_dataset_card(
-                    manifest, published_decimals=decimals if mode == "round" else None
+                    manifest,
+                    published_decimals=decimals if mode == "round" else None,
+                    license=card_license(text),
                 )
             else:
                 card = "".join(

@@ -92,12 +92,16 @@ class TrainRequest:
         training_dir: Where training writes its outputs and the model.
         options: Training options set explicitly; anything else comes from the config
             file, then the defaults (see :data:`bioamla.ml.AST_TRAIN_DEFAULTS`).
+        metrics_file: A JSON Lines file to record the run in (params, every logged
+            metric, the outcome), through a :class:`~bioamla.ml.JsonlTracker`. It must
+            not exist yet.
     """
 
     train_dataset: str
     config_path: PathStr | None = None
     training_dir: PathStr = "."
     options: dict[str, Any] | None = None
+    metrics_file: PathStr | None = None
 
 
 @operation("models.ast.train", request=TrainRequest, kind="job")
@@ -109,7 +113,35 @@ def train_op(request: TrainRequest, context: OperationContext) -> Any:
     file. ``push_to_hub`` and a remote ``mlflow_tracking_uri`` are honoured with the
     credentials of the machine that runs the training.
     """
-    from bioamla.ml.train_config import resolve_train_options, train_ast_from_options
+    from bioamla.ml.trackers import JsonlTracker
+    from bioamla.ml.train_config import train_ast_from_options
+
+    dataset, resolved = _train_options(request, context)
+
+    def progress(p: Any) -> None:
+        if context.on_progress is not None:
+            context.on_progress(p.step, p.total_steps)
+
+    def train(tracker: JsonlTracker | None) -> Any:
+        return train_ast_from_options(
+            dataset,
+            resolved,
+            on_progress=progress,
+            should_stop=context.cancelled,
+            tracker=tracker,
+        )
+
+    if not request.metrics_file:
+        return train(None)
+    # Created after the other checks, so a refused request leaves no file; the run
+    # ends with its status even if it fails before training starts.
+    with JsonlTracker(request.metrics_file) as tracker:
+        return train(tracker)
+
+
+def _train_options(request: TrainRequest, context: OperationContext) -> tuple[str, dict]:
+    """The request's dataset and resolved options, with every path in them checked."""
+    from bioamla.ml.train_config import resolve_train_options
 
     options = dict(request.options or {})
     if "training_dir" in options:
@@ -118,17 +150,20 @@ def train_op(request: TrainRequest, context: OperationContext) -> Any:
     resolved = resolve_train_options(options, request.config_path)
     resolved["base_model"] = _model(str(resolved["base_model"]), context)
     resolved["mlflow_tracking_uri"] = _tracking_uri(resolved["mlflow_tracking_uri"], context)
+    return _model(request.train_dataset, context), resolved
 
-    def progress(p: Any) -> None:
-        if context.on_progress is not None:
-            context.on_progress(p.step, p.total_steps)
 
-    return train_ast_from_options(
-        _model(request.train_dataset, context),
-        resolved,
-        on_progress=progress,
-        should_stop=context.cancelled,
-    )
+@operation("models.ast.check-train", request=TrainRequest)
+def check_train_op(request: TrainRequest, context: OperationContext) -> Any:
+    """Check a training request as ``models.ast.train`` would, without training.
+
+    Returns the :class:`~bioamla.ml.train_config.TrainPlan`: the options the run would
+    use, after the same path checks. Nothing is loaded or written.
+    """
+    from bioamla.ml.train_config import check_train_options
+
+    dataset, resolved = _train_options(request, context)
+    return check_train_options(dataset, resolved, metrics_file=request.metrics_file)
 
 
 def _tracking_uri(uri: str | None, context: OperationContext) -> str | None:

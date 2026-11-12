@@ -61,6 +61,7 @@ from bioamla.catalogs.files import (
     inat_search,
     push_dataset_folder,
 )
+from bioamla.catalogs.huggingface import UNREDACTED_MODES, unredacted_files
 from bioamla.exceptions import CatalogError, DependencyError, InvalidInputError, SpeciesError
 
 __all__ = [
@@ -76,6 +77,9 @@ __all__ = [
     "inat_project_stats",
     "inat_search",
     "push_dataset_folder",
+    # What a redacting dataset push can't redact (bioamla.catalogs.huggingface)
+    "UNREDACTED_MODES",
+    "unredacted_files",
     # Submodules
     "ebird",
     "inat",

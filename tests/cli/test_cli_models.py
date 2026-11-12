@@ -283,6 +283,50 @@ def test_ast_train_with_config(runner: CliRunner, tmp_path) -> None:
     assert m.call_args.kwargs["base_model"] == "foo/bar"
 
 
+def test_ast_train_metrics_file(runner: CliRunner, tmp_path) -> None:
+    metrics = tmp_path / "metrics.jsonl"
+    result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
+    args = ["models", "ast", "train", "--train-dataset", "me/ds", "--metrics-file", str(metrics)]
+    with (
+        patch("bioamla.ml.training.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(cli, args)
+        assert result.exit_code == 0, result.output
+        assert m.call_args.kwargs["tracker"].path == metrics
+        metrics.write_text("")
+        m.reset_mock()
+        result = runner.invoke(cli, args)
+    assert result.exit_code == 1
+    assert "already exists" in result.output
+    m.assert_not_called()
+
+
+def test_ast_train_dry_run(runner: CliRunner, tmp_path) -> None:
+    import json
+
+    cfg = tmp_path / "train.toml"
+    cfg.write_text("[training]\nepochs = 7\n")
+    args = ["models", "ast", "train", "--train-dataset", "me/ds", "--config", str(cfg), "--dry-run"]
+    with (
+        patch("bioamla.ml.training.train_ast") as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(cli, args)
+        assert result.exit_code == 0, result.output
+        assert "num_train_epochs: 7" in result.output
+        uri = ["--mlflow-tracking-uri", "https://me:s3cret@mlflow.example:5000/x"]
+        result = runner.invoke(cli, [*args, *uri])
+        assert result.exit_code == 0, result.output
+        assert "s3cret" not in result.output and "me:***@mlflow.example:5000" in result.output
+        result = runner.invoke(cli, ["--json", *args])
+    m.assert_not_called()
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["result"]["dry_run"] is True
+    assert envelope["result"]["options"]["num_train_epochs"] == 7
+
+
 def test_ast_train_error(runner: CliRunner) -> None:
     with (
         patch("bioamla.ml.training.train_ast", side_effect=TrainingError("empty dataset")),

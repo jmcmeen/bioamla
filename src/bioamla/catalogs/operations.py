@@ -174,6 +174,11 @@ class PushDatasetRequest:
         coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,
             ``strip``.
         coordinate_decimals: Decimal places ``round`` keeps (0-6).
+        unredacted: With ``round`` or ``strip``, files that may hold a location the
+            redaction can't change (JSON/text, Parquet): ``refuse`` the push,
+            ``skip`` them, or ``publish`` them as they are.
+        license: The dataset's license, a Hub license id (e.g. ``cc-by-nc-4.0``),
+            written to the card.
     """
 
     path: PathStr
@@ -183,6 +188,8 @@ class PushDatasetRequest:
     card: bool = True
     coordinates: Literal["keep", "round", "strip"] = "keep"
     coordinate_decimals: int = 2
+    unredacted: Literal["refuse", "skip", "publish"] = "refuse"
+    license: str | None = None
 
 
 @operation("catalogs.hf.push-dataset", request=PushDatasetRequest, kind="job")
@@ -198,6 +205,8 @@ def hf_push_dataset_op(request: PushDatasetRequest, context: OperationContext) -
         card=request.card,
         coordinates=request.coordinates,
         coordinate_decimals=request.coordinate_decimals,
+        unredacted=request.unredacted,
+        license=request.license,
         on_notice=context.notice,
     )
 

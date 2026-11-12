@@ -280,6 +280,21 @@ def _login_hint(error: click.ClickException) -> None:
     show_default=True,
     help="Decimal places kept by --coordinates round (2 ~ 1 km, 1 ~ 11 km)",
 )
+@click.option(
+    "--unredacted",
+    type=click.Choice(["refuse", "skip", "publish"]),  # huggingface.UNREDACTED_MODES
+    default="refuse",
+    show_default=True,
+    help="With --coordinates round/strip, files that may hold a location it can't redact "
+    "(JSON/text mentioning coordinates, Parquet): refuse the push, skip them, or publish them",
+)
+@click.option(
+    "--license",
+    "license_id",
+    default=None,
+    help="The dataset's license, a Hub license id (e.g. cc-by-nc-4.0, cc0-1.0), written to "
+    "the dataset card so the Hub shows it",
+)
 def hf_push_dataset(
     path: str,
     repo_id: str,
@@ -288,16 +303,21 @@ def hf_push_dataset(
     card: bool,
     coordinates: str,
     coordinate_decimals: int,
+    unredacted: str,
+    license_id: str | None,
 ) -> None:
     """Push a dataset folder to the HuggingFace Hub.
 
     When ``--card`` is set (default) and the folder has a ``dataset.json`` manifest
     or a ``metadata.csv``, a ``README.md`` dataset card is generated first; folders
-    without either are pushed as-is.
+    without either are pushed as-is. ``--license`` puts the dataset's license in the
+    card's front matter, and the card lists the licenses its files carry.
 
     ``--coordinates round`` or ``strip`` redacts recorder locations in what is
     uploaded (metadata CSVs, manifest sites, generated card, and the position in
-    WAV recorder metadata); the local folder keeps full precision.
+    WAV recorder metadata); the local folder keeps full precision. Files it can't
+    redact (JSON or text that mention coordinates, Parquet) stop the push unless
+    ``--unredacted skip`` leaves them out or ``--unredacted publish`` uploads them.
     """
     from bioamla.cli.console import echo, print_success
     from bioamla.cli.operations import run_operation
@@ -315,6 +335,8 @@ def hf_push_dataset(
             card=card,
             coordinates=coordinates,
             coordinate_decimals=coordinate_decimals,
+            unredacted=unredacted,
+            license=license_id,
         )
     except click.ClickException as e:
         _login_hint(e)

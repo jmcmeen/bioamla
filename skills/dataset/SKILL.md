@@ -83,9 +83,8 @@ its `run_dir` to the next one.
    python3 "${CLAUDE_SKILL_DIR}/scripts/push.py" <run_dir> my-org/frog-calls
    ```
 
-   Pushes with the coordinate mode the check assumed, privately unless `--public`.
-   The push doesn't set the repository's license yet: tell the person to set it on the
-   Hub to the `--license` the check used.
+   Pushes with the coordinate mode the check assumed and the `--license` it used (written
+   to the dataset card, so the Hub shows it), privately unless `--public`.
    Refuses (exit 2) when the gate didn't pass or the dataset's `metadata.csv` changed
    since the check; then check and gate it again. Publishing can't be undone, so never
    push without the person's go-ahead, and never use another way to upload a dataset
