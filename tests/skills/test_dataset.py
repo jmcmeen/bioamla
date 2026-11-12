@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.skills.conftest import SKILLS, skill_python, skill_script
+from tests.skills.conftest import SKILLS, bioamla_bin, skill_python, skill_script
 
 FIELDS = ["file_name", "label", "split", "license", "attribution", "site", "source_file"]
 BY = "CC BY 4.0"
@@ -261,10 +261,10 @@ def test_a_position_in_a_wav_file_needs_redaction(run_skill, workspace):
 def test_files_the_push_cant_redact(run_skill, workspace):
     folder = write_dataset(workspace, clean_rows())
     (folder / "detections.jsonl").write_text('{"latitude": 36.523456, "longitude": -82.2}\n')
-    (folder / "notes.txt").write_text("recorded by the creek\n")  # no coordinates
+    (folder / "notes.txt").write_text("recorded by the creek\n")  # not redacted: unvouched
     _, rounded = check(run_skill, workspace, "--license", "CC-BY-4.0")
     [found] = checks_json(workspace, rounded)["findings"]
-    assert (found["rule"], found["files"]) == ("location", ["detections.jsonl"])
+    assert (found["rule"], found["files"]) == ("location", ["detections.jsonl", "notes.txt"])
     _, kept = check(run_skill, workspace, "--license", "CC-BY-4.0", "--coordinates", "keep")
     assert rules(kept) == {}  # keep publishes as is anyway; nothing in the metadata or WAVs
 
@@ -341,8 +341,10 @@ def test_a_missing_dataset_is_an_error(run_skill, workspace):
 # --- push: a stand-in bioamla records the push instead of reaching the Hub ---
 
 FAKE_BIOAMLA = """\
-import json, sys
+import json, os, sys
 args = sys.argv[1:]
+if "--dry-run" in args:  # checking, not pushing: the real bioamla answers
+    os.execv({real!r}, [{real!r}, *args])
 if args[:4] == ["--json", "catalogs", "hf", "push-dataset"]:
     with open({log!r}, "w") as f:
         json.dump(args, f)
@@ -357,7 +359,7 @@ else:
 def run_push(workspace: Path, *args: str) -> tuple[int, dict, Path]:
     log = workspace.parent / "push-args.json"
     fake = workspace.parent / "fake_bioamla.py"
-    fake.write_text(FAKE_BIOAMLA.format(log=str(log)))
+    fake.write_text(FAKE_BIOAMLA.format(log=str(log), real=bioamla_bin()))
     fake.chmod(0o755)
     wrapper = workspace.parent / "bioamla"
     wrapper.write_text(f'#!/bin/sh\nexec {sys.executable} {fake} "$@"\n')

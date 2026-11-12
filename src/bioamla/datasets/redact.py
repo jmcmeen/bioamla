@@ -475,6 +475,39 @@ def redacted_audio_files(
     return out
 
 
+def files_to_redact(dataset_dir: str | Path, *, card: bool = False) -> list[str]:
+    """
+    The files whose uploaded copy a ``round`` or ``strip`` push would redact: tables
+    with a location column, the ``dataset.json`` manifest, ``README.md`` when it is a
+    generated card (or ``card`` says one will be written), and WAVs whose recorder
+    metadata carries a position. Only headers and tables are read; nothing is written.
+
+    Raises:
+        DatasetError: If a table or WAV can't be read to check it (the push would
+            fail the same way).
+    """
+    from bioamla.audio._riffy import wav_has_location
+    from bioamla.exceptions import BioamlaError
+
+    base = Path(dataset_dir)
+    found = [
+        p.relative_to(base).as_posix() for p in _tables(base) if location_columns(_read_table(p)[0])
+    ]
+    if (base / "dataset.json").exists():
+        found.append("dataset.json")
+    readme = base / "README.md"
+    if card or (readme.is_file() and _is_generated_card(readme)):
+        found.append("README.md")
+    for path in _wav_paths(base):
+        rel = path.relative_to(base).as_posix()
+        try:
+            if wav_has_location(path):
+                found.append(rel)
+        except BioamlaError as e:
+            raise DatasetError(f"Can't check {rel} for an embedded location: {e}") from e
+    return sorted(found)
+
+
 def wavs_with_location(dataset_dir: str | Path, limit: int = 200) -> list[str]:
     """
     Find WAVs whose recorder metadata carries a location (headers only).
@@ -502,6 +535,7 @@ def wavs_with_location(dataset_dir: str | Path, limit: int = 200) -> list[str]:
 __all__ = [
     "COORDINATE_MODES",
     "check_coordinate_mode",
+    "files_to_redact",
     "has_location_columns",
     "location_columns",
     "redact_rows",

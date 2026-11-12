@@ -60,12 +60,15 @@ def push(args: argparse.Namespace) -> tuple[int, dict]:
     signed_off = "location" in verdict["thresholds"]["accepted_rules"]
     if signed_off:
         # The sign-off covers the files the check listed, not ones added since.
-        now = unredactable_files(verdict["dataset"], root)
-        new = sorted(set(now or []) - set(verdict.get("unredactable_files") or []))
+        now = unredactable_files(
+            verdict["dataset"], root, verdict["coordinates"], verdict["coordinate_decimals"]
+        )
+        # A run checked by an older version on a remote recorded None: nothing signed off.
+        new = sorted(set(now) - set(verdict.get("unredactable_files") or []))
         if new:
             return REFUSED, {"pushed": False, "reason": f"{len(new)} file(s) the push can't "
-                             f"redact appeared since the check ({new[0]}); check and gate it "
-                             "again"}  # fmt: skip
+                             f"vouch for appeared since the check ({new[0]}); check and gate "
+                             "it again"}  # fmt: skip
 
     current = fetch(verdict["metadata"], rel / "workspace-now", root)
     if not current.exists():
@@ -82,8 +85,8 @@ def push(args: argparse.Namespace) -> tuple[int, dict]:
         "--coordinate-decimals", str(verdict["coordinate_decimals"]),
         "--public" if args.public else "--private",
         "--license", verdict["license_id"],  # the license the check held the files to
-        # The push refuses files it can't redact (JSON/text with coordinates, Parquet)
-        # unless the person signed off the location finding the check made for them.
+        # The push refuses files it can't vouch for unless the person signed off the
+        # location finding the check made for them.
         "--unredacted", "publish" if signed_off else "refuse",
     ]  # fmt: skip
     if args.commit_message:

@@ -852,3 +852,86 @@ class TestMalformedRecorderMetadata:
         assert redact_wav_location(tmp_path / "a.wav", tmp_path / "o.wav", mode)
         wamd = WamdMetadata.from_bytes(_chunks(tmp_path / "o.wav")["wamd"])
         assert wamd.get_raw(GPSFIRST_ID) is None
+
+
+class TestCheckDatasetPush:
+    """check_dataset_push / push-dataset --dry-run: the push's checks, without pushing."""
+
+    def _folder(self, tmp_path):
+        _write_csv(tmp_path / "metadata.csv")
+        (tmp_path / "notes.json").write_text("{}")
+        _guano_wav(tmp_path / "a.wav", position=(36.52, -82.21))
+        return tmp_path
+
+    def test_reports_what_the_push_would_do_without_doing_it(self, tmp_path, monkeypatch) -> None:
+        from bioamla.catalogs import check_dataset_push
+
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: pytest.fail("no Hub access"))
+        folder = self._folder(tmp_path)
+        plan = check_dataset_push(folder, coordinates="round", license="CC-BY-4.0")
+        assert plan.refused and "notes.json" in plan.reason
+        assert plan.unvouched == ["notes.json"] and plan.left_out == []
+        assert plan.redacted == ["README.md", "a.wav", "metadata.csv"]
+        assert (plan.card, plan.license) == (True, "cc-by-4.0")
+        assert plan.to_dict()["dry_run"] is True
+        assert not (folder / "README.md").exists()  # no card written
+        skipped = check_dataset_push(folder, coordinates="round", unredacted="skip")
+        assert not skipped.refused and skipped.left_out == ["notes.json"]
+        assert check_dataset_push(folder).unvouched == []  # keep publishes as is
+
+    def test_bad_options_are_errors_as_in_the_push(self, tmp_path) -> None:
+        from bioamla.catalogs import check_dataset_push
+        from bioamla.exceptions import OptionConflictError
+
+        folder = self._folder(tmp_path)
+        with pytest.raises(InvalidInputError, match="Unknown coordinate mode"):
+            check_dataset_push(folder, coordinates="fuzz")
+        with pytest.raises(OptionConflictError):
+            check_dataset_push(folder, card=False, license="cc0-1.0")
+        with pytest.raises(InvalidInputError, match="not a directory"):
+            check_dataset_push(folder / "nope")
+
+    def test_cli_dry_run(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: pytest.fail("no Hub access"))
+        folder = self._folder(tmp_path)
+        res = CliRunner().invoke(
+            catalogs, ["hf", "push-dataset", "--dry-run", "--coordinates", "strip", str(folder)]
+        )
+        assert res.exit_code == 0, res.output  # a report: exit 0, as with --json
+        assert "notes.json" in res.output and "would stop" in res.output
+        res = CliRunner().invoke(
+            catalogs,
+            ["hf", "push-dataset", "--dry-run", "--coordinates", "strip",
+             "--unredacted", "skip", str(folder), "me/frogs"],
+        )  # fmt: skip
+        assert res.exit_code == 0, res.output
+        assert "would go ahead" in res.output
+        assert not (folder / "README.md").exists()
+
+    def test_cli_needs_a_repository_to_push(self, tmp_path) -> None:
+        res = CliRunner().invoke(catalogs, ["hf", "push-dataset", str(self._folder(tmp_path))])
+        assert res.exit_code == 2 and "REPO_ID" in res.output
+
+    def test_files_listed_once_and_errors_as_in_the_push(self, tmp_path) -> None:
+        from bioamla.catalogs import check_dataset_push
+        from bioamla.exceptions import DatasetError
+
+        folder = self._folder(tmp_path)
+        (folder / "sites.csv").write_text("site,latitude,notes\nA,35.1,GPS 36.12 -82.57\n")
+        plan = check_dataset_push(folder, coordinates="round", unredacted="skip")
+        assert "sites.csv" in plan.unvouched and "sites.csv" not in plan.redacted
+        (folder / "broken.wav").write_bytes(b"RIFF")
+        with pytest.raises(DatasetError, match="broken.wav"):
+            check_dataset_push(folder, coordinates="round", unredacted="skip")
+
+    def test_a_card_that_cant_be_built_is_reported(self, tmp_path) -> None:
+        from bioamla.catalogs import check_dataset_push
+        from bioamla.exceptions import DatasetError
+
+        (tmp_path / "dataset.json").write_text("{not json")
+        (tmp_path / "README.md").write_text("Site at 35.1234, -82.5678\n")
+        plan = check_dataset_push(tmp_path, coordinates="round", unredacted="skip")
+        assert not plan.card and "dataset.json" in plan.card_error
+        assert "README.md" in plan.unvouched  # no card replaces it
+        with pytest.raises(DatasetError):
+            check_dataset_push(tmp_path, coordinates="round", license="cc0-1.0")

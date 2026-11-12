@@ -39,6 +39,18 @@ All notable changes to this project are documented here. The format is based on
   records the set's identity; `compare.py` keeps the run (exit 0) only when it finished, beats
   the baseline on the chosen metric by `--min-delta` and no class loses more than
   `--max-class-drop` F1, and refuses to compare runs evaluated on different sets (#364)
+- `catalogs hf push-dataset --dry-run` checks a push without writing the card or contacting
+  the Hub, and reports what it would do: the files whose upload would be redacted, the files
+  it can't vouch for and what `--unredacted` does with them (refused, left out or published),
+  whether a card would be written (or why it can't be built), the license, the warnings,
+  and, when it would stop, why (`"refused": true` with `--json`; it exits 0 either way, being
+  a report). `REPO_ID` is optional with it. It's `bioamla.catalogs.check_dataset_push()`,
+  returning a `DatasetPushPlan`, and the quick operation `catalogs.hf.check-push-dataset`;
+  `push_dataset_folder()` now runs from that plan, so the dry run and the push can't
+  disagree. `bioamla.datasets.dataset_card_text()` builds a card without writing it, and
+  `files_to_redact()` lists what a redacted push rewrites. The `dataset` skill's check and push ask
+  it for the files the push can't vouch for instead of keeping their own copy of the rule,
+  so they now list them in a remote workspace too (#372)
 
 ### Changed
 

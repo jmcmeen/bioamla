@@ -57,8 +57,9 @@ its `run_dir` to the next one.
    by default `source_file`, is in more than one split), and `location`. `--coordinates`
    is how the push will treat per-file locations: `round` (the default, to
    `--coordinate-decimals`, 2 is about 1 km) or `strip` redact them in the metadata and
-   the WAV files, and then `location` flags files the push can't redact (JSON or text
-   that mention coordinates, Parquet); `keep` publishes them exactly, so `location` flags
+   the WAV files, and then `location` flags files the push can't vouch for (anything
+   but the metadata tables, the manifest, a generated card, audio with no location in
+   its metadata, and the license files, as `push-dataset --dry-run` lists them); `keep` publishes them exactly, so `location` flags
    any in the metadata or a sample of the WAV files (and `file` a WAV it can't read).
    It also records the rows per split and label.
 

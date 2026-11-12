@@ -51,6 +51,7 @@ def test_push_dataset_writes_card_and_reports_warnings(mocker, tmp_path):
     push = mocker.patch(
         "bioamla.catalogs.huggingface.push_dataset", return_value=SimpleNamespace(url="u")
     )
+    (tmp_path / "metadata.csv").write_text("file_name,label\na.wav,frog\n")  # a card source
     mocker.patch("bioamla.datasets.write_dataset_card", return_value=str(tmp_path / "README.md"))
     mocker.patch("bioamla.datasets.has_location_columns", return_value=True)
     mocker.patch("bioamla.datasets.wavs_with_location", return_value=[])
@@ -130,6 +131,7 @@ def test_push_dataset_notices_come_before_the_upload(mocker, tmp_path):
         "bioamla.catalogs.huggingface.push_dataset",
         side_effect=lambda *a, **k: order.append("push") or SimpleNamespace(url="u"),
     )
+    (tmp_path / "metadata.csv").write_text("file_name,label\na.wav,frog\n")  # a card source
     mocker.patch("bioamla.datasets.write_dataset_card", return_value="README.md")
     mocker.patch("bioamla.datasets.has_location_columns", return_value=True)
     mocker.patch("bioamla.datasets.wavs_with_location", return_value=[])

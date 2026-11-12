@@ -256,7 +256,7 @@ def _login_hint(error: click.ClickException) -> None:
 
 @catalogs_hf.command("push-dataset")
 @click.argument("path")
-@click.argument("repo_id")
+@click.argument("repo_id", required=False)
 @click.option(
     "--private/--public", default=False, help="Make the repository private (default: public)"
 )
@@ -295,9 +295,15 @@ def _login_hint(error: click.ClickException) -> None:
     help="The dataset's license, a Hub license id (e.g. cc-by-nc-4.0, cc0-1.0), written to "
     "the dataset card so the Hub shows it",
 )
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Report what the push would redact, refuse or leave out, without writing the card "
+    "or pushing (REPO_ID optional)",
+)
 def hf_push_dataset(
     path: str,
-    repo_id: str,
+    repo_id: str | None,
     private: bool,
     commit_message: str,
     card: bool,
@@ -305,6 +311,7 @@ def hf_push_dataset(
     coordinate_decimals: int,
     unredacted: str,
     license_id: str | None,
+    dry_run: bool,
 ) -> None:
     """Push a dataset folder to the HuggingFace Hub.
 
@@ -320,11 +327,34 @@ def hf_push_dataset(
     generated card, LICENSE, ATTRIBUTIONS.md), go up as they are. Any other file (a
     hand-written README, JSON, text, GeoJSON, Parquet, images, ...) stops the push
     unless ``--unredacted skip`` leaves it out or ``--unredacted publish`` uploads it.
+
+    ``--dry-run`` reports all of this without writing the card or pushing: the files
+    whose upload would be redacted, those it can't vouch for and what happens to them,
+    and whether the push would stop (a report, so it exits 0 either way; ``refused``
+    in the ``--json`` result). REPO_ID is needed for a push, not for a dry run.
     """
     from bioamla.cli.console import echo, print_success
     from bioamla.cli.operations import run_operation
     from bioamla.cli.output import emit_result, json_mode
 
+    options = {
+        "card": card,
+        "coordinates": coordinates,
+        "coordinate_decimals": coordinate_decimals,
+        "unredacted": unredacted,
+        "license": license_id,
+    }
+    if dry_run:
+        plan = run_operation(
+            "catalogs.hf.check-push-dataset", path=path, repo_id=repo_id, **options
+        )
+        if json_mode():
+            emit_result(plan.to_dict())
+        else:
+            _print_push_plan(plan)
+        return
+    if repo_id is None:
+        raise click.UsageError("Missing argument 'REPO_ID'.")
     echo(f"Pushing dataset folder {path} to HuggingFace Hub: {repo_id}...")
     # The card and any location warnings print as notices before the upload starts.
     try:
@@ -334,11 +364,7 @@ def hf_push_dataset(
             repo_id=repo_id,
             private=private,
             commit_message=commit_message,
-            card=card,
-            coordinates=coordinates,
-            coordinate_decimals=coordinate_decimals,
-            unredacted=unredacted,
-            license=license_id,
+            **options,
         )
     except click.ClickException as e:
         _login_hint(e)
@@ -347,6 +373,36 @@ def hf_push_dataset(
         emit_result(pushed.to_dict())
         return
     print_success(f"Successfully pushed dataset to: {pushed.result.url}")
+
+
+def _print_push_plan(plan) -> None:
+    """The human report of ``push-dataset --dry-run``."""
+    from bioamla.cli.console import echo, print_warning
+
+    def listing(label: str, files: list[str]) -> None:
+        echo(f"{label}: {len(files)}")
+        for name in files[:20]:
+            echo(f"  {name}")
+        if len(files) > 20:
+            echo(f"  ... and {len(files) - 20} more")
+
+    echo(f"Dry run: push {plan.path}" + (f" to {plan.repo_id}" if plan.repo_id else ""))
+    echo(f"Coordinates: {plan.coordinates}" + (
+        f" ({plan.coordinate_decimals} decimals)" if plan.coordinates == "round" else ""
+    ))  # fmt: skip
+    echo(f"Card: {'written first' if plan.card else 'not written'}")
+    echo(f"License: {plan.license or 'none'}")
+    if plan.coordinates != "keep":
+        listing("Redacted in the upload", plan.redacted)
+        listing(f"Can't vouch for ({plan.unredacted})", plan.unvouched)
+    for warning in plan.warnings:
+        print_warning(warning)
+    if plan.card_error:
+        print_warning(f"No dataset card can be built: {plan.card_error}")
+    if plan.refused:  # a report, not a failure: exit 0, as with --json
+        print_warning(f"The push would stop: {plan.reason}")
+        return
+    echo("The push would go ahead.")
 
 
 @catalogs_hf.command("pull-dataset")

@@ -4478,6 +4478,78 @@
         }
       }
     },
+    "/v1/workspaces/{ws}/operations/catalogs.hf.check-push-dataset": {
+      "post": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Check a dataset push as ``catalogs.hf.push-dataset`` would, without pushing.",
+        "description": "Check a dataset push as ``catalogs.hf.push-dataset`` would, without pushing.",
+        "operationId": "op_catalogs_hf_check_push_dataset",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ws",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ws"
+            }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckPushDatasetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Op Catalogs Hf Check Push Dataset"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{ws}/operations/catalogs.hf.pull-dataset": {
       "post": {
         "tags": [
@@ -11370,6 +11442,74 @@
         "type": "object",
         "title": "CacheRequest",
         "description": "The local Hugging Face cache.\n\nAttributes:\n    models: Include cached models.\n    datasets: Include cached datasets."
+      },
+      "CheckPushDatasetRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "format": "path",
+            "title": "Path"
+          },
+          "repo_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Id"
+          },
+          "card": {
+            "type": "boolean",
+            "title": "Card",
+            "default": true
+          },
+          "coordinates": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "round",
+              "strip"
+            ],
+            "title": "Coordinates",
+            "default": "keep"
+          },
+          "coordinate_decimals": {
+            "type": "integer",
+            "title": "Coordinate Decimals",
+            "default": 2
+          },
+          "unredacted": {
+            "type": "string",
+            "enum": [
+              "refuse",
+              "skip",
+              "publish"
+            ],
+            "title": "Unredacted",
+            "default": "refuse"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "CheckPushDatasetRequest",
+        "description": "Check a dataset push without pushing: what would be redacted, refused or left out.\n\nAttributes:\n    path: The dataset folder.\n    repo_id: The Hub repository (optional; nothing is sent to it).\n    card: A README.md dataset card would be written first.\n    coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,\n        ``strip``.\n    coordinate_decimals: Decimal places ``round`` keeps (0-6).\n    unredacted: With ``round`` or ``strip``, files the push can't vouch for:\n        ``refuse`` the push, ``skip`` them, or ``publish`` them as they are.\n    license: The dataset's license, a Hub license id (e.g. ``cc-by-nc-4.0``)."
       },
       "ClipLabelsRequest": {
         "properties": {
