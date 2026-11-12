@@ -51,6 +51,18 @@ All notable changes to this project are documented here. The format is based on
   `files_to_redact()` lists what a redacted push rewrites. The `dataset` skill's check and push ask
   it for the files the push can't vouch for instead of keeping their own copy of the rule,
   so they now list them in a remote workspace too (#372)
+- `bioamla remote files NAME WORKSPACE [PATH] [-r] [--sha256]` lists a folder (or one file) in
+  a server workspace with each file's size and modification time and, with `--sha256`, its
+  SHA-256 computed on the server (`null` for a file it can't read), so a script can
+  fingerprint server files without downloading them. It's `sha256=true` on
+  `GET /v1/workspaces/{ws}/files` (which now also takes a file's path, and hides only
+  `*.part` files, not folders so named), `Client.files(..., sha256=True)` (not held to the
+  client's timeout once connected) and `Workspace.list_files(..., sha256=True)`. The `train`
+  skill uses it with a remote to fingerprint the evaluation audio, which it knew only by
+  folder name (a folder too big for one listing is still known by its path), and to hash
+  the config and ground-truth CSV without downloading them. The fingerprint is now each
+  file's path and SHA-256, the same locally and from a server, so runs evaluated before this
+  change compare as different sets (#365)
 
 ### Changed
 

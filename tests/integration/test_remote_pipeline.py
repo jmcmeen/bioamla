@@ -2,6 +2,9 @@
 download, each step reading the previous step's result, through the client and through
 ``bioamla --remote``."""
 
+import hashlib
+import json
+
 import pytest
 from click.testing import CliRunner
 
@@ -83,6 +86,15 @@ def test_pipeline_through_the_cli(lab, recording, tmp_path, monkeypatch):
                                clips["metadata_file"], "-o", "got"])  # fmt: skip
     assert down.exit_code == 0, down.output
     rows = read_csv(here / "got" / "metadata.csv")
+    # The server fingerprints its files: the same SHA-256 as the downloaded copy.
+    listed = runner.invoke(cli, ["--json", "remote", "files", "lab", "field",
+                                 clips["metadata_file"], "--sha256"])  # fmt: skip
+    assert listed.exit_code == 0, listed.output
+    [entry] = json.loads(listed.output)["result"]["files"]
+    local = (here / "got" / "metadata.csv").read_bytes()
+    assert entry["sha256"] == hashlib.sha256(local).hexdigest()
+    shown = runner.invoke(cli, ["remote", "files", "lab", "field", "clips", "-r", "--sha256"])
+    assert shown.exit_code == 0 and "metadata.csv" in shown.output
     assert {r["low_freq"] for r in rows} == {"500.0"}  # the detector's band survives
     assert len(rows) == 7
 

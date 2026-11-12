@@ -621,7 +621,7 @@
           "files"
         ],
         "summary": "List Files",
-        "description": "A folder's files and subfolders (``path``, ``type``, ``size``, ``modified``),\nat most 10,000 (``truncated`` says when there were more: list a subfolder).",
+        "description": "A folder's files and subfolders (``path``, ``type``, ``size``, ``modified``, and\n``sha256`` when asked), at most 10,000 (``truncated`` says when there were more:\nlist a subfolder). A file's ``path`` lists just it. With ``sha256`` every file\nlisted is read, so a client can fingerprint files without downloading them.",
         "operationId": "list_files_v1_workspaces__ws__files_get",
         "security": [
           {
@@ -644,11 +644,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "A folder, relative to the workspace",
+              "description": "A folder (or a file), relative to the workspace",
               "default": ".",
               "title": "Path"
             },
-            "description": "A folder, relative to the workspace"
+            "description": "A folder (or a file), relative to the workspace"
           },
           {
             "name": "recursive",
@@ -661,6 +661,18 @@
               "title": "Recursive"
             },
             "description": "Include subfolders"
+          },
+          {
+            "name": "sha256",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Add each file's SHA-256, read on the server",
+              "default": false,
+              "title": "Sha256"
+            },
+            "description": "Add each file's SHA-256, read on the server"
           }
         ],
         "responses": {

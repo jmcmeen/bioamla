@@ -110,11 +110,44 @@ def test_upload_list_and_download(server):
     assert client.get(f"{url}?path=missing", headers=AUTH).status_code == 404
 
 
+def test_files_are_listed_with_their_sha256_on_request(server):
+    import hashlib
+
+    client, root, _, _ = server
+    url = "/v1/workspaces/ws/files"
+    assert client.put(f"{url}/eval/a.wav", content=b"aaa", headers=AUTH).status_code == 201
+    assert client.put(f"{url}/eval/sub/b.wav", content=b"bb", headers=AUTH).status_code == 201
+    (root / "ws" / "eval" / "c.wav.part").write_bytes(b"unfinished")
+    plain = client.get(f"{url}?path=eval&recursive=true", headers=AUTH).json()["result"]["files"]
+    assert all("sha256" not in f for f in plain)
+    hashed = client.get(f"{url}?path=eval&recursive=true&sha256=true", headers=AUTH)
+    files = {f["path"]: f for f in hashed.json()["result"]["files"]}
+    assert files["eval/a.wav"]["sha256"] == hashlib.sha256(b"aaa").hexdigest()
+    assert files["eval/sub/b.wav"]["sha256"] == hashlib.sha256(b"bb").hexdigest()
+    assert "sha256" not in files["eval/sub"]  # folders have none
+    assert "eval/c.wav.part" not in files
+    one = client.get(f"{url}?path=eval/a.wav&sha256=true", headers=AUTH).json()["result"]
+    assert [(f["path"], f["size"]) for f in one["files"]] == [("eval/a.wav", 3)]
+    assert one["files"][0]["sha256"] == hashlib.sha256(b"aaa").hexdigest()
+    (root / "ws" / "eval" / "take.part").mkdir()  # only unfinished upload files are hidden
+    (root / "ws" / "eval" / "take.part" / "d.wav").write_bytes(b"d")
+    if os.name != "nt" and os.geteuid() != 0:
+        (root / "ws" / "eval" / "sub" / "b.wav").chmod(0)  # listed, without a hash
+    again = client.get(f"{url}?path=eval&recursive=true&sha256=true", headers=AUTH)
+    files = {f["path"]: f for f in again.json()["result"]["files"]}
+    assert "eval/take.part/d.wav" in files
+    if os.name != "nt" and os.geteuid() != 0:
+        assert files["eval/sub/b.wav"]["sha256"] is None
+        (root / "ws" / "eval" / "sub" / "b.wav").chmod(0o644)
+
+
 def test_paths_outside_the_roots_are_refused(server):
     client, root, archive, outside = server
     url = "/v1/workspaces/ws/files"
     assert client.get(f"{url}?path={outside}", headers=AUTH).status_code == 403
     assert client.get(f"{url}?path=../../outside", headers=AUTH).status_code == 403
+    secret = f"{url}?path={outside}/secret.txt&sha256=true"  # no hashing outside either
+    assert client.get(secret, headers=AUTH).status_code == 403
     assert client.get(f"{url}/{outside}/secret.txt", headers=AUTH).status_code in (403, 404)
     assert client.get(f"{url}/..%2F..%2Foutside%2Fsecret.txt", headers=AUTH).status_code == 403
     got = client.put(f"{url}/..%2F..%2Foutside%2Fx.txt", content=b"x", headers=AUTH)

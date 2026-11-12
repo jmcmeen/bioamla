@@ -105,7 +105,7 @@ def train(args: argparse.Namespace) -> tuple[int, dict]:
         if summarise(read_metrics(metrics))["status"] is None:
             return still_running(config, None)
         return finish(config, rel, root, metrics, None)
-    if sha256(config["config"], rel, root) != config["config_sha256"]:
+    if sha256(config["config"], root) != config["config_sha256"]:
         return REFUSED, {"trained": False, "reason": f"{config['config']} changed since the "
                          "check; check it again with config.py"}  # fmt: skip
 

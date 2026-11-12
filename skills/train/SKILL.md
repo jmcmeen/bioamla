@@ -67,9 +67,9 @@ its `run_dir` to the next one. Run from the workspace root.
 
    The baseline is an earlier run (evaluated the same way) or any model (`--model`, which
    makes its own run folder). Writes `eval.json`: overall and per-class metrics, the
-   confusion matrix, and the set's identity (a fingerprint of the audio files, its CSV's
-   SHA-256, the files skipped). With a remote the audio is known by its folder alone, so
-   don't change the evaluation files between runs.
+   confusion matrix, and the set's identity (a fingerprint of the audio files' paths and
+   contents, its CSV's SHA-256, the files skipped). With a remote the server hashes the
+   audio, so nothing is downloaded.
 
 4. **Compare**: the verdict.
 

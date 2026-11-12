@@ -28,6 +28,7 @@ workspaces. This module uses only the standard library.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -602,32 +603,48 @@ class Workspace:
         return removed
 
     def list_files(
-        self, path: str | Path = ".", recursive: bool = False, limit: int | None = None
+        self,
+        path: str | Path = ".",
+        recursive: bool = False,
+        limit: int | None = None,
+        sha256: bool = False,
     ) -> list[dict[str, Any]]:
         """The files and folders in ``path`` (relative to the workspace, or absolute),
         sorted by folder. Workspace metadata folders (``.bioamla``) and unfinished
-        uploads (``*.part``) are left out; links to folders are listed but not followed,
-        and folders that can't be read are skipped.
+        uploads (``*.part`` files) are left out; links to folders are listed but not followed,
+        and folders that can't be read are skipped. A file's ``path`` lists just it.
 
         Args:
-            path: The folder.
+            path: The folder (or a file).
             recursive: Include subfolders.
             limit: Stop after this many entries.
+            sha256: Add each file's SHA-256 (``sha256``, hex, or ``None`` for a file
+                that can't be read), which reads every file listed.
 
         Returns:
-            One ``{"path", "type", "size", "modified"}`` per entry: ``path`` relative
-            to the workspace where it's inside it, ``type`` ``"file"``, ``"dir"`` or
-            ``"link"`` (a link to a folder), ``size`` in bytes for files and
-            ``modified`` as epoch seconds.
+            One ``{"path", "type", "size", "modified"}`` per entry (and ``sha256`` for
+            files, when asked): ``path`` relative to the workspace where it's inside
+            it, ``type`` ``"file"``, ``"dir"`` or ``"link"`` (a link to a folder),
+            ``size`` in bytes for files and ``modified`` as epoch seconds.
 
         Raises:
-            NotFoundError: If ``path`` isn't a folder.
+            NotFoundError: If ``path`` is neither a folder nor a file.
         """
         start = Path(path)
         if not start.is_absolute():
             start = self.root / start
+        if start.is_file() and not start.name.endswith(".part"):
+            try:
+                stat = start.stat()
+            except OSError as e:
+                raise NotFoundError(f"Can't read {path}: {e.strerror or e}") from e
+            entry = {"path": self.relative(start), "type": "file", "size": stat.st_size,
+                     "modified": stat.st_mtime}  # fmt: skip
+            if sha256:
+                entry["sha256"] = _file_sha256(start)
+            return [entry]
         if not start.is_dir():
-            raise NotFoundError(f"No folder {path}")
+            raise NotFoundError(f"No folder or file {path}")
         entries: list[dict[str, Any]] = []
         folders = [start]
         while folders and (limit is None or len(entries) < limit):
@@ -639,7 +656,7 @@ class Workspace:
                 continue
             subfolders = []
             for entry in children:
-                if entry.name == WORKSPACE_DIR or entry.name.endswith(".part"):
+                if entry.name == WORKSPACE_DIR:
                     continue
                 try:
                     is_dir = entry.is_dir()  # follows links
@@ -647,13 +664,18 @@ class Workspace:
                     stat = entry.stat()
                 except OSError:
                     continue  # a broken link
+                if not is_dir and entry.name.endswith(".part"):
+                    continue  # an unfinished upload
                 kind = "link" if link and is_dir else "dir" if is_dir else "file"
-                entries.append({
+                item = {
                     "path": self.relative(entry.path),
                     "type": kind,
                     "size": stat.st_size if kind == "file" else None,
                     "modified": stat.st_mtime,
-                })  # fmt: skip
+                }
+                if sha256 and kind == "file":
+                    item["sha256"] = _file_sha256(Path(entry.path))
+                entries.append(item)
                 if limit is not None and len(entries) >= limit:
                     break
                 if recursive and kind == "dir":
@@ -674,6 +696,15 @@ class Workspace:
             "format_version": self.format_version,
             "artifacts": counts,
         }
+
+
+def _file_sha256(path: Path) -> str | None:
+    """A file's SHA-256 (hex), or ``None`` when it can't be read."""
+    try:
+        with path.open("rb") as f:
+            return hashlib.file_digest(f, "sha256").hexdigest()
+    except OSError:
+        return None
 
 
 def _same_setting(a: str, b: str) -> bool:

@@ -72,7 +72,7 @@ def evaluate(args: argparse.Namespace) -> tuple[int, dict]:
 
 def measure(args: argparse.Namespace, root: Path, rel: Path, model: str) -> tuple[int, dict]:
     ground_truth = Path(args.ground_truth).as_posix()
-    digest = sha256(ground_truth, rel, root)
+    digest = sha256(ground_truth, root)
     audio = folder_sha256(args.audio, root)
     result = run("models", "ast", "evaluate", "--model-path", model, "-g", ground_truth,
                  "--file-column", args.file_column, "--label-column", args.label_column,
