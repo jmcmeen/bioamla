@@ -8,7 +8,7 @@
       "name": "bioamla",
       "source": "./skills",
       "skills": ["./"],
-      "description": "Skills for inventorying recordings, first-pass labeling and label QA with bioamla (needs bioamla installed)",
+      "description": "Skills for inventorying recordings, first-pass labeling, label QA, building datasets and training models with bioamla (needs bioamla installed)",
       "category": "data",
       "tags": ["bioacoustics", "audio", "labeling", "machine-learning"]
     }

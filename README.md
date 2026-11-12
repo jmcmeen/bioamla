@@ -116,8 +116,10 @@ instead of a tunnel, and systemd.
 [`skills/`](https://github.com/jmcmeen/bioamla/tree/main/skills) has skills that let an
 AI agent drive bioamla, locally or on a server: `inventory` describes a folder of
 recordings, `label` does a first pass of labeling, sending anything uncertain to a
-person, `label-qa` checks an annotation set and gives a pass/fail verdict, and `dataset`
-builds a dataset and publishes it only once its licenses, locations and splits pass. In
+person, `label-qa` checks an annotation set and gives a pass/fail verdict, `dataset`
+builds a dataset and publishes it only once its licenses, locations and splits pass, and
+`train` fine-tunes a model and keeps it only if it beats a baseline on a fixed evaluation
+set. In
 Claude Code, install them with `/plugin install bioamla --marketplace jmcmeen/bioamla`.
 See [Agent skills](https://jmcmeen.github.io/bioamla/skills/).
 

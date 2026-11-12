@@ -32,6 +32,13 @@ All notable changes to this project are documented here. The format is based on
   and writing nothing. It's `bioamla.ml.check_train_options()`, which returns a `TrainPlan`
   (`{"dry_run": true, "train_dataset", "training_dir", "options", "metrics_file", "warnings"}`
   with `--json`), and the quick operation `models.ast.check-train` (#363)
+- A `train` agent skill (`skills/train`): `config.py` checks a training config for a dataset
+  with `ast train --dry-run` and starts a run folder; `train.py` trains with it (refusing a
+  config that changed since) and summarises the run from its `--metrics-file`, not its logs;
+  `evaluate.py` evaluates the run, or any model as a baseline, on a fixed evaluation set and
+  records the set's identity; `compare.py` keeps the run (exit 0) only when it finished, beats
+  the baseline on the chosen metric by `--min-delta` and no class loses more than
+  `--max-class-drop` F1, and refuses to compare runs evaluated on different sets (#364)
 
 ### Changed
 
