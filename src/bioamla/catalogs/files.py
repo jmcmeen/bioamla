@@ -151,20 +151,21 @@ def inat_project_stats(project_id: str, *, output: str | Path | None = None) -> 
 
 
 def dataset_push_warnings(
-    path: str | Path, coordinates: str = "keep", unredacted: str = "refuse"
+    path: str | Path, coordinates: str = "keep", unredacted: str = "refuse", *, card: bool = False
 ) -> list[str]:
     """What a dataset push would publish, or leave out, that the uploader may not expect.
 
     With ``coordinates="keep"``: per-file locations in the metadata or the WAV files'
-    recorder metadata. Otherwise: files that may still carry a location
-    ``coordinates`` doesn't change (JSON or text, Parquet): left out with
-    ``unredacted="skip"``, published as they are with ``"publish"``, and with
-    ``"refuse"`` a reason the push would stop (see
-    :func:`bioamla.catalogs.huggingface.unredacted_files`).
+    recorder metadata. Otherwise: files the push can't vouch for, which may still carry
+    a location ``coordinates`` doesn't change: left out with ``unredacted="skip"``,
+    published as they are with ``"publish"``, and with ``"refuse"`` a reason the push
+    would stop (see :func:`bioamla.catalogs.huggingface.unredacted_files`). ``card``
+    says the push writes a generated card over ``README.md`` first.
     """
     from bioamla.datasets import unredacted_location_files
 
-    files = unredacted_location_files(path) if coordinates != "keep" else []
+    card = card and _has_card_source(path)  # no card replaces README.md otherwise
+    files = unredacted_location_files(path, card=card) if coordinates != "keep" else []
     return _warnings(path, coordinates, unredacted, files)
 
 
@@ -188,19 +189,24 @@ def _warnings(path: str | Path, coordinates: str, unredacted: str, files: list[s
         return []
     if unredacted == "skip":
         return [
-            f"Leaving out {len(files)} file(s) that may carry a location --coordinates "
-            f"doesn't change (JSON/text, Parquet), e.g. {files[0]}."
+            f"Leaving out {len(files)} file(s) the redaction can't vouch for, which may "
+            f"carry a location --coordinates doesn't change, e.g. {files[0]}."
         ]
     if unredacted == "refuse":
         return [
-            f"{len(files)} file(s) may carry a location --coordinates doesn't change "
-            f"(JSON/text, Parquet), e.g. {files[0]}; the push refuses them unless "
+            f"{len(files)} file(s) the redaction can't vouch for may carry a location "
+            f"--coordinates doesn't change, e.g. {files[0]}; the push refuses them unless "
             "--unredacted skip or publish is given."
         ]
     return [
-        f"{len(files)} file(s) may still carry a location that --coordinates "
-        f"does not change (JSON/text, Parquet), e.g. {files[0]}."
+        f"{len(files)} file(s) the redaction can't vouch for may still carry a location "
+        f"that --coordinates does not change, e.g. {files[0]}."
     ]
+
+
+def _has_card_source(path: str | Path) -> bool:
+    """Whether :func:`bioamla.datasets.write_dataset_card` can build a card here."""
+    return (Path(path) / "dataset.json").exists() or (Path(path) / "metadata.csv").exists()
 
 
 @dataclass
@@ -272,7 +278,9 @@ def push_dataset_folder(
 
     # Listed once, and refused before the card is written, so a refused push changes
     # nothing.
-    found = hf.unredacted_files(path, coordinates, unredacted, coordinate_decimals)
+    # The card, when one will be written, replaces README.md, so that file is vouched for.
+    card_due = card and _has_card_source(path)
+    found = hf.unredacted_files(path, coordinates, unredacted, coordinate_decimals, card=card_due)
     if license is not None:
         if not card:
             raise OptionConflictError(
@@ -295,6 +303,9 @@ def push_dataset_folder(
                 f"--license is written to the dataset card, and {path} has no metadata.csv "
                 "or dataset.json to build one from"
             )
+    if card_due and not card_path:
+        # No card replaced README.md after all, so it must pass on its own.
+        found = hf.unredacted_files(path, coordinates, unredacted, coordinate_decimals)
     warnings = _warnings(path, coordinates, unredacted, found)
     for warning in warnings:
         notice("warning", warning)

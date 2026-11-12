@@ -174,8 +174,8 @@ class PushDatasetRequest:
         coordinates: Per-file locations in what is uploaded: ``keep``, ``round``,
             ``strip``.
         coordinate_decimals: Decimal places ``round`` keeps (0-6).
-        unredacted: With ``round`` or ``strip``, files that may hold a location the
-            redaction can't change (JSON/text, Parquet): ``refuse`` the push,
+        unredacted: With ``round`` or ``strip``, files the push can't vouch for
+            (neither redacted nor known to carry no location): ``refuse`` the push,
             ``skip`` them, or ``publish`` them as they are.
         license: The dataset's license, a Hub license id (e.g. ``cc-by-nc-4.0``),
             written to the card.

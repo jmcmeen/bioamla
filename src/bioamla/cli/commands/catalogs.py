@@ -285,8 +285,8 @@ def _login_hint(error: click.ClickException) -> None:
     type=click.Choice(["refuse", "skip", "publish"]),  # huggingface.UNREDACTED_MODES
     default="refuse",
     show_default=True,
-    help="With --coordinates round/strip, files that may hold a location it can't redact "
-    "(JSON/text mentioning coordinates, Parquet): refuse the push, skip them, or publish them",
+    help="With --coordinates round/strip, files it can't vouch for (not redacted, nor known "
+    "to carry no location): refuse the push, skip them, or publish them",
 )
 @click.option(
     "--license",
@@ -315,9 +315,11 @@ def hf_push_dataset(
 
     ``--coordinates round`` or ``strip`` redacts recorder locations in what is
     uploaded (metadata CSVs, manifest sites, generated card, and the position in
-    WAV recorder metadata); the local folder keeps full precision. Files it can't
-    redact (JSON or text that mention coordinates, Parquet) stop the push unless
-    ``--unredacted skip`` leaves them out or ``--unredacted publish`` uploads them.
+    WAV recorder metadata); the local folder keeps full precision. Only files it
+    redacts, or knows carry no location (FLAC and MP3 whose tags hold none, the
+    generated card, LICENSE, ATTRIBUTIONS.md), go up as they are. Any other file (a
+    hand-written README, JSON, text, GeoJSON, Parquet, images, ...) stops the push
+    unless ``--unredacted skip`` leaves it out or ``--unredacted publish`` uploads it.
     """
     from bioamla.cli.console import echo, print_success
     from bioamla.cli.operations import run_operation

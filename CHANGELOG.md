@@ -51,6 +51,20 @@ All notable changes to this project are documented here. The format is based on
   the operation take `unredacted=` the same way, and `bioamla.catalogs.unredacted_files()`
   lists them. The `dataset` skill's push passes `--unredacted publish` only when the person
   signed off its `location` finding (#356)
+- With `--coordinates round` or `strip`, `catalogs hf push-dataset` now uploads a file as it
+  is only when it vouches for it: the `dataset.json` manifest and the metadata tables
+  (redacted, when no other column is named for a location or holds a value that looks like
+  coordinates); WAV, FLAC and MP3 audio whose metadata, apart from the WAV recorder position
+  it redacts, can all be read and holds nothing that looks like a location (WAV `LIST`,
+  `bext`, `iXML` and `id3` chunks, FLAC Vorbis comments, ID3 tags); a `README.md` bioamla
+  generated (or any `README.md` the card is about to replace); and `LICENSE`,
+  `ATTRIBUTIONS.md`, `.gitattributes` and `.gitignore` at the top. Every other file (a
+  hand-written README, JSON or text whatever it mentions, GeoJSON, GPX, KML, shapefiles,
+  YAML, XML, Parquet, images, OGG/M4A and other audio, a WAV with chunks it can't read)
+  falls under `--unredacted` (refused by default). It listed only JSON/JSONL/TXT that
+  mentioned a latitude or longitude, and Parquet, and uploaded everything else as it was.
+  `bioamla.datasets.unredacted_location_files()`, `bioamla.catalogs.unredacted_files()` and
+  `dataset_push_warnings()` take `card=` (#358)
 
 ### Fixed
 
