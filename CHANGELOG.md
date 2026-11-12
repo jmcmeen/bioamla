@@ -25,6 +25,13 @@ All notable changes to this project are documented here. The format is based on
   `bioamla.ml.JsonlTracker`, an `ExperimentTracker` (and context manager) that also works with
   `train_ast(tracker=...)`; `train_ast_from_options()` takes `tracker=` and the operation
   `metrics_file` (#362)
+- `models ast train --dry-run` checks a training run without training: it resolves the
+  options as a run would (flags over the config file over the defaults, with the same path
+  checks), checks augmentation ranges, a local dataset (a CSV that must exist, or a folder) and
+  the metrics file, and prints the options the run would use and any it would ignore, loading
+  and writing nothing. It's `bioamla.ml.check_train_options()`, which returns a `TrainPlan`
+  (`{"dry_run": true, "train_dataset", "training_dir", "options", "metrics_file", "warnings"}`
+  with `--json`), and the quick operation `models.ast.check-train` (#363)
 
 ### Changed
 

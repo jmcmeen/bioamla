@@ -130,3 +130,65 @@ def test_train_failing_before_training_ends_the_metrics_file(tmp_path, mocker):
         operations.run("models.ast.train", request, ctx)
     lines = (tmp_path / "m.jsonl").read_text().splitlines()
     assert [json.loads(x) for x in lines] == [{"event": "end", "status": "failed"}]
+
+
+def test_check_train_resolves_and_checks_without_training(tmp_path, mocker):
+    from bioamla.exceptions import ConfigValidationError
+
+    train = mocker.patch("bioamla.ml.training.train_ast")
+    ctx = _refusing(tmp_path)
+    config = tmp_path / "train.toml"
+    config.write_text("[training]\nepochs = 7\nlearning_rate = 0.001\n")
+    request = {
+        "train_dataset": "org/data",
+        "training_dir": "run",
+        "config_path": str(config),
+        "options": {"learning_rate": 0.01},  # a flag wins over the file
+        "metrics_file": "run/metrics.jsonl",
+    }
+    plan = operations.run("models.ast.check-train", request, ctx)
+    assert plan.to_dict()["dry_run"] is True
+    assert plan.train_dataset == "org/data"
+    assert plan.training_dir == str(tmp_path / "run")
+    assert plan.metrics_file == str(tmp_path / "run" / "metrics.jsonl")
+    assert plan.options["num_train_epochs"] == 7
+    assert plan.options["learning_rate"] == 0.01
+    assert "training_dir" not in plan.options
+    assert plan.warnings == []
+    train.assert_not_called()
+    assert list(tmp_path.iterdir()) == [config]  # nothing written
+
+    config.write_text("[training]\nepochs = 'many'\n")
+    with pytest.raises(ConfigValidationError):
+        operations.run("models.ast.check-train", request, ctx)
+    config.write_text("[training]\nepochs = 2\n")
+    with pytest.raises(PermissionError):  # the same path checks as a run
+        operations.run("models.ast.check-train", {**request, "train_dataset": "/etc/data"}, ctx)
+    (tmp_path / "run").write_text("")  # the metrics file's folder is a file
+    with pytest.raises(InvalidInputError, match="Can't create"):
+        operations.run("models.ast.check-train", request, ctx)
+    train.assert_not_called()
+    assert operations.get("models.ast.check-train").kind == "quick"
+
+
+def test_check_train_options_makes_the_runs_own_checks(tmp_path):
+    from bioamla.exceptions import TrainingError
+    from bioamla.ml import check_train_options
+
+    # An inverted range for a layer that's on fails as the run would...
+    with pytest.raises(TrainingError, match="SNR"):
+        check_train_options("org/data", {"add_noise": True, "min_snr_db": 30.0, "max_snr_db": 10.0})
+    # ...but not for one that's off.
+    check_train_options("org/data", {"min_snr_db": 30.0, "max_snr_db": 10.0})
+    plan = check_train_options("org/data", {"augment_multiplier": 3})
+    assert "augment_multiplier 3 ignored" in plan.warnings[0]
+    with pytest.raises(TrainingError, match="does not exist"):
+        check_train_options(str(tmp_path / "typo.csv"))
+    (tmp_path / "notes.txt").write_text("")
+    with pytest.raises(TrainingError, match="neither a CSV"):
+        check_train_options(str(tmp_path / "notes.txt"))
+    (tmp_path / "m.jsonl").write_text("")
+    with pytest.raises(InvalidInputError, match="already exists"):
+        check_train_options("org/data", metrics_file=tmp_path / "m.jsonl")
+    plan = check_train_options(str(tmp_path), metrics_file=tmp_path / "new" / "m.jsonl")
+    assert plan.train_dataset == str(tmp_path) and not (tmp_path / "new").exists()

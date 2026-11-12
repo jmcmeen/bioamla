@@ -6998,6 +6998,78 @@
         }
       }
     },
+    "/v1/workspaces/{ws}/operations/models.ast.check-train": {
+      "post": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Check a training request as ``models.ast.train`` would, without training.",
+        "description": "Check a training request as ``models.ast.train`` would, without training.",
+        "operationId": "op_models_ast_check_train",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ws",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ws"
+            }
+          },
+          {
+            "name": "wire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also answer with the typed result (`wire`)",
+              "default": false,
+              "title": "Wire"
+            },
+            "description": "Also answer with the typed result (`wire`)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Op Models Ast Check Train"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{ws}/operations/models.ast.embed": {
       "post": {
         "tags": [

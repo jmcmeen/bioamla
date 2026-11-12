@@ -152,6 +152,12 @@ def ast_predict(
     "every logged metric and its outcome, one object per line. Alongside any --report-to.",
 )
 @click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Check the config and options as a run would, print the options it would use, "
+    "and stop without training.",
+)
+@click.option(
     "--base-model",
     default="MIT/ast-finetuned-audioset-10-10-0.4593",
     help="Base model to fine-tune",
@@ -321,6 +327,7 @@ def ast_train(
     config_path: str | None,
     training_dir: str,
     metrics_file: str | None,
+    dry_run: bool,
     base_model: str,
     train_dataset: str,
     split: str,
@@ -388,7 +395,7 @@ def ast_train(
     """
     from click.core import ParameterSource
 
-    from bioamla.cli.console import print_kv, print_success
+    from bioamla.cli.console import print_kv, print_success, print_warning
     from bioamla.cli.logging_setup import configure_cli_logging
     from bioamla.cli.operations import run_operation
 
@@ -397,14 +404,14 @@ def ast_train(
 
     # Only the flags given on the command line are passed: they win over the config
     # file, which wins over the library's defaults.
-    not_options = {"config_path", "train_dataset", "training_dir", "metrics_file"}
+    not_options = {"config_path", "train_dataset", "training_dir", "metrics_file", "dry_run"}
     options = {
         name: value
         for name, value in ctx.params.items()
         if name not in not_options and ctx.get_parameter_source(name) != ParameterSource.DEFAULT
     }
     result = run_operation(
-        "models.ast.train",
+        "models.ast.check-train" if dry_run else "models.ast.train",
         train_dataset=train_dataset,
         config_path=config_path,
         training_dir=training_dir,
@@ -416,11 +423,34 @@ def ast_train(
 
     if emit_result(result):
         return
+    if dry_run:
+        print_success(f"Config is valid; training {result.train_dataset} would use:")
+        print_kv("training_dir", result.training_dir)
+        if result.metrics_file:
+            print_kv("metrics_file", result.metrics_file)
+        for name, value in sorted(result.options.items()):
+            print_kv(name, _hide_password(value) if name == "mlflow_tracking_uri" else value)
+        for warning in result.warnings:
+            print_warning(warning)
+        return
     print_success(f"Training complete. Best model saved to: {result.model_path}")
     if result.final_accuracy is not None:
         print_kv("Final eval accuracy", f"{result.final_accuracy:.4f}")
     if result.final_loss is not None:
         print_kv("Final eval loss", f"{result.final_loss:.4f}")
+
+
+def _hide_password(uri: object) -> object:
+    """A URI with any password in it replaced by ``***``, for printing."""
+    from urllib.parse import urlsplit, urlunsplit
+
+    if not isinstance(uri, str):
+        return uri
+    parts = urlsplit(uri)
+    if parts.password is None:
+        return uri
+    netloc = f"{parts.username}:***@{parts.hostname}" + (f":{parts.port}" if parts.port else "")
+    return urlunsplit(parts._replace(netloc=netloc))
 
 
 @ast.command("evaluate")

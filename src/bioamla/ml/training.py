@@ -183,6 +183,20 @@ def _validate_augmentation(aug: WaveformAugmentationConfig) -> None:
             raise TrainingError(f"Augmentation {name} min ({lo}) must be <= max ({hi})")
 
 
+def _check_dataset_path(train_dataset: str) -> None:
+    """Refuse a local dataset that can't be loaded: a path that exists but is neither a
+    CSV file nor a folder, or a ``.csv`` that doesn't exist. Anything else that doesn't
+    exist is taken as a Hugging Face dataset ID."""
+    train_path = Path(train_dataset)
+    if train_path.exists():
+        if not (train_path.is_dir() or train_path.suffix.lower() == ".csv"):
+            raise TrainingError(
+                f"Local path {train_dataset} exists but is neither a CSV file nor a directory."
+            )
+    elif train_path.suffix.lower() == ".csv":
+        raise TrainingError(f"Training CSV {train_dataset} does not exist")
+
+
 def _load_train_dataset(train_dataset: str, split: str, category_label_column: str):
     """Resolve ``train_dataset`` (CSV / folder of class folders / HF id) into a dataset.
 
@@ -191,6 +205,7 @@ def _load_train_dataset(train_dataset: str, split: str, category_label_column: s
     """
     from datasets import load_dataset
 
+    _check_dataset_path(train_dataset)
     train_path = Path(train_dataset)
 
     if train_path.exists():

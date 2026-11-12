@@ -302,6 +302,31 @@ def test_ast_train_metrics_file(runner: CliRunner, tmp_path) -> None:
     m.assert_not_called()
 
 
+def test_ast_train_dry_run(runner: CliRunner, tmp_path) -> None:
+    import json
+
+    cfg = tmp_path / "train.toml"
+    cfg.write_text("[training]\nepochs = 7\n")
+    args = ["models", "ast", "train", "--train-dataset", "me/ds", "--config", str(cfg), "--dry-run"]
+    with (
+        patch("bioamla.ml.training.train_ast") as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(cli, args)
+        assert result.exit_code == 0, result.output
+        assert "num_train_epochs: 7" in result.output
+        uri = ["--mlflow-tracking-uri", "https://me:s3cret@mlflow.example:5000/x"]
+        result = runner.invoke(cli, [*args, *uri])
+        assert result.exit_code == 0, result.output
+        assert "s3cret" not in result.output and "me:***@mlflow.example:5000" in result.output
+        result = runner.invoke(cli, ["--json", *args])
+    m.assert_not_called()
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["result"]["dry_run"] is True
+    assert envelope["result"]["options"]["num_train_epochs"] == 7
+
+
 def test_ast_train_error(runner: CliRunner) -> None:
     with (
         patch("bioamla.ml.training.train_ast", side_effect=TrainingError("empty dataset")),

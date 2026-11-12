@@ -114,16 +114,9 @@ def train_op(request: TrainRequest, context: OperationContext) -> Any:
     credentials of the machine that runs the training.
     """
     from bioamla.ml.trackers import JsonlTracker
-    from bioamla.ml.train_config import resolve_train_options, train_ast_from_options
+    from bioamla.ml.train_config import train_ast_from_options
 
-    options = dict(request.options or {})
-    if "training_dir" in options:
-        raise InvalidInputError("Give training_dir as its own field, not in options")
-    options["training_dir"] = request.training_dir
-    resolved = resolve_train_options(options, request.config_path)
-    resolved["base_model"] = _model(str(resolved["base_model"]), context)
-    resolved["mlflow_tracking_uri"] = _tracking_uri(resolved["mlflow_tracking_uri"], context)
-    dataset = _model(request.train_dataset, context)
+    dataset, resolved = _train_options(request, context)
 
     def progress(p: Any) -> None:
         if context.on_progress is not None:
@@ -144,6 +137,33 @@ def train_op(request: TrainRequest, context: OperationContext) -> Any:
     # ends with its status even if it fails before training starts.
     with JsonlTracker(request.metrics_file) as tracker:
         return train(tracker)
+
+
+def _train_options(request: TrainRequest, context: OperationContext) -> tuple[str, dict]:
+    """The request's dataset and resolved options, with every path in them checked."""
+    from bioamla.ml.train_config import resolve_train_options
+
+    options = dict(request.options or {})
+    if "training_dir" in options:
+        raise InvalidInputError("Give training_dir as its own field, not in options")
+    options["training_dir"] = request.training_dir
+    resolved = resolve_train_options(options, request.config_path)
+    resolved["base_model"] = _model(str(resolved["base_model"]), context)
+    resolved["mlflow_tracking_uri"] = _tracking_uri(resolved["mlflow_tracking_uri"], context)
+    return _model(request.train_dataset, context), resolved
+
+
+@operation("models.ast.check-train", request=TrainRequest)
+def check_train_op(request: TrainRequest, context: OperationContext) -> Any:
+    """Check a training request as ``models.ast.train`` would, without training.
+
+    Returns the :class:`~bioamla.ml.train_config.TrainPlan`: the options the run would
+    use, after the same path checks. Nothing is loaded or written.
+    """
+    from bioamla.ml.train_config import check_train_options
+
+    dataset, resolved = _train_options(request, context)
+    return check_train_options(dataset, resolved, metrics_file=request.metrics_file)
 
 
 def _tracking_uri(uri: str | None, context: OperationContext) -> str | None:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 from pathlib import Path
 from typing import IO, Any
 
@@ -189,13 +190,31 @@ class JsonlTracker:
         from bioamla.exceptions import InvalidInputError
 
         self.path = Path(path)
-        if self.path.exists():
-            raise InvalidInputError(f"Metrics file {self.path} already exists")
+        self.check_path(self.path)
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self._file: IO[str] | None = self.path.open("x", encoding="utf-8")  # atomic
         except OSError as e:  # including a run that created it a moment ago
             raise InvalidInputError(f"Can't create metrics file {self.path}: {e}") from e
+
+    @staticmethod
+    def check_path(path: str | Path) -> None:
+        """Refuse ``path`` as a metrics file without creating anything: it exists, or
+        its nearest existing folder isn't a folder this process can write to.
+
+        Raises:
+            InvalidInputError: If the file couldn't be created.
+        """
+        from bioamla.exceptions import InvalidInputError
+
+        path = Path(path)
+        if path.exists():
+            raise InvalidInputError(f"Metrics file {path} already exists")
+        folder = path.absolute().parent
+        while not folder.exists() and folder != folder.parent:
+            folder = folder.parent
+        if not folder.is_dir() or not os.access(folder, os.W_OK | os.X_OK):
+            raise InvalidInputError(f"Can't create metrics file {path}: {folder} isn't writable")
 
     def _write(self, record: dict[str, Any]) -> None:
         if self._file is None:  # a later run of a reused tracker

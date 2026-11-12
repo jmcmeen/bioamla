@@ -132,6 +132,8 @@ from bioamla.ml.trackers import JsonlTracker, MLflowTracker, TensorBoardTracker
 # --- Training -----------------------------------------------------------------
 from bioamla.ml.train_config import (
     AST_TRAIN_DEFAULTS,
+    TrainPlan,
+    check_train_options,
     resolve_train_options,
     train_ast_from_options,
     write_train_config,
@@ -194,6 +196,8 @@ __all__ = [
     "AST_TRAIN_DEFAULTS",
     "resolve_train_options",
     "train_ast_from_options",
+    "check_train_options",
+    "TrainPlan",
     # Inference
     "ASTInference",
     "ASTPredictionResult",
