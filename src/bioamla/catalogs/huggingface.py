@@ -312,8 +312,9 @@ def unredacted_files(
         shown = ", ".join(files[:5]) + (f" and {len(files) - 5} more" if len(files) > 5 else "")
         raise InvalidInputError(
             f"{len(files)} file(s) may hold a location --coordinates {coordinates} doesn't "
-            f"redact (only metadata tables, the manifest, a generated card, WAV audio, and "
-            f"FLAC or MP3 with clean tags are vouched for): {shown}. Remove or redact them, "
+            f"redact (only the manifest, a generated card, the license files, and tables and "
+            f"WAV/FLAC/MP3 audio holding no location it can see are vouched for): {shown}. "
+            "Remove or redact them, "
             "or choose --unredacted skip (leave them out) or --unredacted publish (upload "
             "them as they are)."
         )
