@@ -13938,6 +13938,18 @@
               }
             ],
             "title": "Options"
+          },
+          "metrics_file": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "path"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics File"
           }
         },
         "additionalProperties": false,
@@ -13946,7 +13958,7 @@
           "train_dataset"
         ],
         "title": "TrainRequest",
-        "description": "Fine-tune an AST model.\n\nAttributes:\n    train_dataset: A Hugging Face dataset ID, a metadata CSV, or a folder with one\n        subfolder per class.\n    config_path: A training config file (``models.ast.init-config``).\n    training_dir: Where training writes its outputs and the model.\n    options: Training options set explicitly; anything else comes from the config\n        file, then the defaults (see :data:`bioamla.ml.AST_TRAIN_DEFAULTS`)."
+        "description": "Fine-tune an AST model.\n\nAttributes:\n    train_dataset: A Hugging Face dataset ID, a metadata CSV, or a folder with one\n        subfolder per class.\n    config_path: A training config file (``models.ast.init-config``).\n    training_dir: Where training writes its outputs and the model.\n    options: Training options set explicitly; anything else comes from the config\n        file, then the defaults (see :data:`bioamla.ml.AST_TRAIN_DEFAULTS`).\n    metrics_file: A JSON Lines file to record the run in (params, every logged\n        metric, the outcome), through a :class:`~bioamla.ml.JsonlTracker`. It must\n        not exist yet."
       },
       "UnzipRequest": {
         "properties": {

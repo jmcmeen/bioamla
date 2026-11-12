@@ -283,6 +283,25 @@ def test_ast_train_with_config(runner: CliRunner, tmp_path) -> None:
     assert m.call_args.kwargs["base_model"] == "foo/bar"
 
 
+def test_ast_train_metrics_file(runner: CliRunner, tmp_path) -> None:
+    metrics = tmp_path / "metrics.jsonl"
+    result_obj = SimpleNamespace(model_path="m", final_accuracy=None, final_loss=None)
+    args = ["models", "ast", "train", "--train-dataset", "me/ds", "--metrics-file", str(metrics)]
+    with (
+        patch("bioamla.ml.training.train_ast", return_value=result_obj) as m,
+        patch("bioamla.cli.logging_setup.configure_cli_logging"),
+    ):
+        result = runner.invoke(cli, args)
+        assert result.exit_code == 0, result.output
+        assert m.call_args.kwargs["tracker"].path == metrics
+        metrics.write_text("")
+        m.reset_mock()
+        result = runner.invoke(cli, args)
+    assert result.exit_code == 1
+    assert "already exists" in result.output
+    m.assert_not_called()
+
+
 def test_ast_train_error(runner: CliRunner) -> None:
     with (
         patch("bioamla.ml.training.train_ast", side_effect=TrainingError("empty dataset")),

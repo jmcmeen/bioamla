@@ -24,8 +24,10 @@ from bioamla.common.config import config_dataclass
 from bioamla.exceptions import InvalidInputError
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from bioamla.ml.ast_service import TrainResult
-    from bioamla.protocols import OnTrainProgress, ShouldStop
+    from bioamla.protocols import ExperimentTracker, OnTrainProgress, ShouldStop
 
 Probability = Annotated[float, Field(ge=0.0, le=1.0)]
 # transformers' IntervalStrategy and SaveStrategy values.
@@ -364,6 +366,7 @@ def train_ast_from_options(
     config_path: str | Path | None = None,
     on_progress: OnTrainProgress | None = None,
     should_stop: ShouldStop | None = None,
+    tracker: ExperimentTracker | Sequence[ExperimentTracker] | None = None,
 ) -> TrainResult:
     """Fine-tune an AST model from flat options, as ``bioamla models ast train`` does.
 
@@ -382,6 +385,9 @@ def train_ast_from_options(
         on_progress: Called with a :class:`~bioamla.ml.TrainProgress` as training
             advances.
         should_stop: Polled during training; returning True stops it.
+        tracker: One or more experiment trackers for the run (e.g. a
+            :class:`~bioamla.ml.trackers.JsonlTracker`), as for
+            :func:`~bioamla.ml.train_ast`.
 
     Returns:
         The :class:`~bioamla.ml.TrainResult`.
@@ -465,4 +471,5 @@ def train_ast_from_options(
         augment_multiplier=multiplier,
         on_progress=on_progress,
         should_stop=should_stop,
+        tracker=tracker,
     )

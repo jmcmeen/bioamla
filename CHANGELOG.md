@@ -16,6 +16,15 @@ All notable changes to this project are documented here. The format is based on
   and the operation take `license=`; `hub_license_id()` accepts only ids the Hub lists
   (`HUB_LICENSES`; Creative Commons ids include the version). A push given `--license` stops
   if the card can't be written, rather than publishing without it (#355)
+- `models ast train --metrics-file PATH` records the run in a JSON Lines file: its params,
+  every metric the trainer logs, the files it writes and how it ended (finished, cancelled or
+  failed), one object per line and flushed as written, so a script can judge a run from what
+  it measured without an MLflow or TensorBoard client. Values are strict JSON (NaN is `null`).
+  The file is created before training, so an existing or unwritable path is refused up front,
+  and a run that fails or is cancelled during preprocessing still ends with its status. It's
+  `bioamla.ml.JsonlTracker`, an `ExperimentTracker` (and context manager) that also works with
+  `train_ast(tracker=...)`; `train_ast_from_options()` takes `tracker=` and the operation
+  `metrics_file` (#362)
 
 ### Changed
 

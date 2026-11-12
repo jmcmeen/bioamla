@@ -700,6 +700,7 @@ class TestModelCommandsLibraryParity:
                 {
                     "train_dataset": str(data),
                     "training_dir": str(tmp_path / "run"),
+                    "metrics_file": str(tmp_path / "run" / "metrics.jsonl"),
                     "options": {
                         "base_model": str(tiny_ast), "num_train_epochs": 3,
                         "per_device_train_batch_size": 2, "report_to": "none",
@@ -709,3 +710,9 @@ class TestModelCommandsLibraryParity:
                 ctx,
             )  # fmt: skip
         assert steps, "training reported no progress before it stopped"
+        # The metrics file records the run up to the cancel, ending with its status.
+        lines = [
+            json.loads(x) for x in (tmp_path / "run" / "metrics.jsonl").read_text().splitlines()
+        ]
+        assert lines[0]["event"] == "start" and lines[0]["params"]
+        assert lines[-1] == {"event": "end", "status": "cancelled"}

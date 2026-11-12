@@ -84,3 +84,49 @@ def test_train_checks_base_model_and_option_types(tmp_path, mocker):
 def test_kinds():
     assert operations.get("models.ast.train").kind == "job"
     assert operations.get("models.ast.init-config").kind == "quick"
+
+
+def test_train_records_to_a_metrics_file(tmp_path, mocker):
+    from bioamla.ml.trackers import JsonlTracker
+
+    train = mocker.patch("bioamla.ml.training.train_ast")
+    ctx = _refusing(tmp_path)
+    base = {"train_dataset": "org/data", "training_dir": str(tmp_path / "run")}
+    with pytest.raises(PermissionError):  # a refused request leaves no file
+        operations.run(
+            "models.ast.train",
+            {**base, "metrics_file": "m.jsonl", "options": {"base_model": "/etc/x"}},
+            ctx,
+        )
+    assert not (tmp_path / "m.jsonl").exists()
+    operations.run("models.ast.train", {**base, "metrics_file": "run/metrics.jsonl"}, ctx)
+    tracker = train.call_args.kwargs["tracker"]
+    assert isinstance(tracker, JsonlTracker)
+    assert tracker.path == tmp_path / "run" / "metrics.jsonl"  # through the path check
+    operations.run("models.ast.train", base, ctx)
+    assert train.call_args.kwargs["tracker"] is None
+    with pytest.raises(PermissionError):
+        operations.run("models.ast.train", {**base, "metrics_file": "/etc/m.jsonl"}, ctx)
+    (tmp_path / "old.jsonl").write_text("")
+    train.reset_mock()
+    with pytest.raises(InvalidInputError, match="already exists"):
+        operations.run("models.ast.train", {**base, "metrics_file": "old.jsonl"}, ctx)
+    train.assert_not_called()
+
+
+def test_train_failing_before_training_ends_the_metrics_file(tmp_path, mocker):
+    import json
+
+    from bioamla.exceptions import TrainingError
+
+    mocker.patch("bioamla.ml.training.train_ast", side_effect=TrainingError("no rows"))
+    ctx = _refusing(tmp_path)
+    request = {
+        "train_dataset": "org/data",
+        "training_dir": str(tmp_path),
+        "metrics_file": "m.jsonl",
+    }
+    with pytest.raises(TrainingError):
+        operations.run("models.ast.train", request, ctx)
+    lines = (tmp_path / "m.jsonl").read_text().splitlines()
+    assert [json.loads(x) for x in lines] == [{"event": "end", "status": "failed"}]

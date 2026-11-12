@@ -145,6 +145,13 @@ def ast_predict(
 )
 @click.option("--training-dir", default=".", help="Directory to save training outputs")
 @click.option(
+    "--metrics-file",
+    type=click.Path(dir_okay=False),
+    default=None,
+    help="Record the run in this JSON Lines file (it must not exist yet): its params, "
+    "every logged metric and its outcome, one object per line. Alongside any --report-to.",
+)
+@click.option(
     "--base-model",
     default="MIT/ast-finetuned-audioset-10-10-0.4593",
     help="Base model to fine-tune",
@@ -313,6 +320,7 @@ def ast_train(
     ctx: click.Context,
     config_path: str | None,
     training_dir: str,
+    metrics_file: str | None,
     base_model: str,
     train_dataset: str,
     split: str,
@@ -389,7 +397,7 @@ def ast_train(
 
     # Only the flags given on the command line are passed: they win over the config
     # file, which wins over the library's defaults.
-    not_options = {"config_path", "train_dataset", "training_dir"}
+    not_options = {"config_path", "train_dataset", "training_dir", "metrics_file"}
     options = {
         name: value
         for name, value in ctx.params.items()
@@ -401,6 +409,7 @@ def ast_train(
         config_path=config_path,
         training_dir=training_dir,
         options=options,
+        metrics_file=metrics_file,
     )
 
     from bioamla.cli.output import emit_result
