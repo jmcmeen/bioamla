@@ -1,5 +1,6 @@
 """Tests for HuggingFace catalog (path validation, helpers, errors; no network)."""
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -374,6 +375,17 @@ class TestLoadHubDataset:
         with pytest.raises(ValueError, match="bad split"):
             hf.load_hub_dataset("user/ds", "HSN", split="train")
 
+    def test_script_based_repo_is_a_catalog_error_with_advice(self, monkeypatch) -> None:
+        pytest.importorskip("datasets")
+        import datasets as hfds
+
+        failure = RuntimeError("Dataset scripts are no longer supported, but found loader.py")
+        monkeypatch.setattr(hfds, "load_dataset", MagicMock(side_effect=failure))
+
+        with pytest.raises(CatalogError, match="user/ds loads through a dataset script") as raised:
+            hf.load_hub_dataset("user/ds", split="train")
+        assert "BirdSet" not in str(raised.value)
+
     def test_pull_dataset_loads_through_it(self, tmp_path, monkeypatch) -> None:
         pytest.importorskip("datasets")
         seen = MagicMock(side_effect=RuntimeError("stop here"))
@@ -394,6 +406,15 @@ class TestLoadHubDataset:
     )
     def test_parquet_split_name(self, name, split) -> None:
         assert hf.parquet_split_name(name) == split
+
+
+def test_example_dataset_ids_in_docstrings_are_the_ones_the_examples_use() -> None:
+    """``ashraq/esc-50`` (with a hyphen) is not a repository; the examples pull ``ashraq/esc50``."""
+    repo = Path(__file__).parents[2]
+    sources = [*(repo / "src" / "bioamla").rglob("*.py"), *(repo / "examples").glob("*.sh")]
+    assert sources
+    wrong = [str(f) for f in sources if "ashraq/esc-50" in f.read_text(encoding="utf-8")]
+    assert wrong == []
 
 
 class TestPullDatasetFailures:

@@ -41,6 +41,12 @@ All notable changes to this project are documented here. The format is based on
   says the name is not a local path either. A dataset that can only be a path (`./x`, `/x`,
   `~/x`, `a/b/c`) and doesn't exist is refused as a missing path instead of being tried as a
   Hub ID; `--dry-run` catches it too (#381).
+- Dataset IDs in help text load. `catalogs hf pull-dataset --help` and the `pull_dataset()`
+  docstring gave `ashraq/esc-50`, which is not a repository (it is `ashraq/esc50`). A BirdSet ID
+  with no subset no longer defaults to `HSN` without saying so (and with a message listing four
+  of the ten subsets): it is an error that lists them. A repository that loads through a dataset
+  script, such as the official `DBD-research-group/BirdSet`, gets an error that says the
+  `datasets` library no longer runs scripts and to use a Parquet copy (#384).
 
 ## [0.5.0] - 2026-11-12
 

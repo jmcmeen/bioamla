@@ -344,13 +344,13 @@ def _load_train_dataset(train_dataset: str, split: str, category_label_column: s
         logger.info(f"Loading from HuggingFace Hub: {dataset_name} (config: {config_name})")
         dataset = _load_hub_dataset(train_dataset, dataset_name, config_name, split)
         return dataset, category_label_column
-    if "BirdSet" in train_dataset:
-        logger.info(
-            "BirdSet detected. Use format 'samuelstevens/BirdSet:HSN' to specify subset "
-            "(available: HSN, NBP, NES, PER); defaulting to HSN."
+    if train_dataset.rsplit("/", 1)[-1].lower() == "birdset":
+        from bioamla.catalogs.huggingface import BIRDSET_PARQUET_REPO, BIRDSET_SUBSETS
+
+        raise TrainingError(
+            f"BirdSet has several subsets; name one after a colon, e.g. "
+            f"'{BIRDSET_PARQUET_REPO}:HSN'. Its subsets: {', '.join(BIRDSET_SUBSETS)}"
         )
-        dataset = _load_hub_dataset(train_dataset, train_dataset, "HSN", split)
-        return dataset, category_label_column
 
     logger.info(f"Loading from HuggingFace Hub: {train_dataset}")
     return _load_hub_dataset(train_dataset, train_dataset, None, split), category_label_column

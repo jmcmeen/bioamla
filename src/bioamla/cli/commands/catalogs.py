@@ -439,7 +439,7 @@ def hf_pull_dataset(
 ) -> None:
     """Pull a HuggingFace audio dataset into the local labeled-folder layout.
 
-    Materializes REPO_ID (e.g. ``ashraq/esc-50``) under DEST as label subdirs and
+    Materializes REPO_ID (e.g. ``ashraq/esc50``) under DEST as label subdirs and
     a ``metadata.csv``, ready for ``dataset partition`` / ``models ast train``.
     """
     from bioamla.cli.console import echo, print_kv, print_success

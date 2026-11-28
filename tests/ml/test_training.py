@@ -479,12 +479,35 @@ class TestLoadTrainDatasetRouting:
         assert out == "DS"
         ld.assert_called_once_with("owner/name", "HSN", split="train")
 
-    def test_birdset_default(self) -> None:
+    def test_birdset_without_a_subset_lists_the_subsets(self) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        with (
+            patch("datasets.load_dataset") as ld,
+            pytest.raises(TrainingError, match=r"samuelstevens/BirdSet:HSN.*HSN, NBP.*XCM"),
+        ):
+            _load_train_dataset("owner/BirdSet", "train", "category")
+        ld.assert_not_called()
+
+    def test_only_a_repo_named_birdset_needs_a_subset(self) -> None:
         from bioamla.ml.training import _load_train_dataset
 
         with patch("datasets.load_dataset", return_value="DS") as ld:
-            _load_train_dataset("owner/BirdSet", "train", "category")
-        ld.assert_called_once_with("owner/BirdSet", "HSN", split="train")
+            _load_train_dataset("owner/BirdSet-HSN", "train", "category")
+        ld.assert_called_once_with("owner/BirdSet-HSN", None, split="train")
+
+        with pytest.raises(TrainingError, match="several subsets"):
+            _load_train_dataset("owner/birdset", "train", "category")
+
+    def test_script_based_repo_points_to_a_parquet_copy(self) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        failure = RuntimeError("Dataset scripts are no longer supported, but found BirdSet.py")
+        with (
+            patch("datasets.load_dataset", side_effect=failure),
+            pytest.raises(TrainingError, match=r"dataset script.*samuelstevens/BirdSet:HSN"),
+        ):
+            _load_train_dataset("DBD-research-group/BirdSet:HSN", "train", "category")
 
     def test_plain_hub_id(self) -> None:
         from bioamla.ml.training import _load_train_dataset
@@ -496,7 +519,7 @@ class TestLoadTrainDatasetRouting:
     def test_hub_failure_is_a_one_line_training_error(self) -> None:
         from bioamla.ml.training import _load_train_dataset
 
-        failure = RuntimeError("Dataset scripts are no longer supported,\nbut found BirdSet.py")
+        failure = RuntimeError("Couldn't reach the Hub:\nconnection refused")
         with (
             patch("datasets.load_dataset", side_effect=failure),
             pytest.raises(TrainingError) as raised,
@@ -507,7 +530,7 @@ class TestLoadTrainDatasetRouting:
         assert "\n" not in message
         assert "Could not load 'owner/name:HSN' from the Hugging Face Hub" in message
         assert "not a local path either" in message
-        assert "Dataset scripts are no longer supported, but found BirdSet.py" in message
+        assert "Couldn't reach the Hub: connection refused" in message
         assert raised.value.__cause__ is failure
 
     @pytest.mark.parametrize(

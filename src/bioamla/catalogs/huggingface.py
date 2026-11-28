@@ -32,6 +32,12 @@ _LABEL_COLUMN_CANDIDATES = ("label", "category", "class", "species", "common_nam
 _PARQUET_SHARD = re.compile(r"^(?P<split>.+)-\d+-of-\d+(-[0-9a-f]+)?$")
 
 
+#: A Parquet copy of BirdSet (the official ``DBD-research-group/BirdSet`` loads through
+#: a dataset script), one folder per subset.
+BIRDSET_PARQUET_REPO = "samuelstevens/BirdSet"
+BIRDSET_SUBSETS = ("HSN", "NBP", "NES", "PER", "POW", "SNE", "SSW", "UHH", "XCL", "XCM")
+
+
 def parquet_split_name(filename: str) -> str:
     """The split a Parquet file of a Hub dataset belongs to, from its name.
 
@@ -89,12 +95,26 @@ def load_hub_dataset(repo_id: str, config: str | None = None, *, split: str | No
         A ``datasets.Dataset`` (one split) or ``DatasetDict`` (every split).
 
     Raises:
-        CatalogError: If ``config`` is a folder that has no such split.
-        Exception: Whatever ``datasets`` raises for a dataset it can't load.
+        CatalogError: If ``config`` is a folder that has no such split, or the
+            repository loads through a dataset script, which ``datasets`` no longer runs.
+        Exception: Whatever else ``datasets`` raises for a dataset it can't load.
     """
     load_dataset = import_extra("datasets", "ml").load_dataset
     try:
         return load_dataset(repo_id, config, split=split)
+    except RuntimeError as e:
+        # "Dataset scripts are no longer supported, but found BirdSet.py"
+        if "scripts are no longer supported" not in str(e):
+            raise
+        mirror = (
+            f" ({BIRDSET_PARQUET_REPO} has BirdSet's subsets, e.g. {BIRDSET_PARQUET_REPO}:HSN)"
+            if "birdset" in repo_id.lower()
+            else ""
+        )
+        raise CatalogError(
+            f"{repo_id} loads through a dataset script, which the datasets library no longer "
+            f"runs. Use a Parquet copy of the dataset{mirror}"
+        ) from e
     except ValueError as e:
         # "BuilderConfig 'HSN' not found. Available: ['default']"
         if config is None or "BuilderConfig" not in str(e):
@@ -506,7 +526,7 @@ def pull_dataset(
     ``models ast train`` consumes directly.
 
     Args:
-        repo_id: HuggingFace dataset id (e.g. ``"ashraq/esc-50"``).
+        repo_id: HuggingFace dataset id (e.g. ``"ashraq/esc50"``).
         dest: Destination dataset directory (created if missing).
         split: A single split to pull (e.g. ``"train"``); all splits when omitted.
         config: Dataset config/subset name, or a folder of the repository that holds
