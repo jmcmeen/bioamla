@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format is based on
   and the label ids are plain integers), so each run fell back to a plain shuffled split with a
   warning, which can leave a rare class with no evaluation examples. A dataset that can't be
   stratified (a class with one example) still gets the shuffled split and the warning (#379).
+- A model trained on a dataset whose label column is a `ClassLabel` (integers, with the names in
+  the dataset's features, as most Hub datasets have) keeps the class names. Its `id2label` held
+  the integers (`0`, `1`, ...), so predictions came out as numbers. The model's ids are now the
+  feature's, and label names are always strings, also for a plain integer column. A row with no
+  label, or a label column the dataset doesn't have, is a `TrainingError` that says so (#380).
 
 ## [0.5.0] - 2026-11-12
 

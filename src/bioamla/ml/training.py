@@ -183,6 +183,55 @@ def _validate_augmentation(aug: WaveformAugmentationConfig) -> None:
             raise TrainingError(f"Augmentation {name} min ({lo}) must be <= max ({hi})")
 
 
+def _label_ids(dataset, label_column: str) -> tuple[list[str], dict[Any, int]]:
+    """The class names of ``dataset`` and the id of each value in its label column.
+
+    A ``ClassLabel`` column (integers, with the names in the dataset's features, as
+    most Hub datasets have) gives the feature's names in the feature's order, so the
+    model's ids are the dataset's. Any other column gives its distinct values, sorted;
+    a name is the value as a string.
+
+    Returns:
+        ``(class_names, label_to_id)``: ``label_to_id`` maps a value of the column to
+        its index in ``class_names``.
+
+    Raises:
+        TrainingError: If the column is missing, or a row has no label.
+    """
+    from datasets import ClassLabel, Dataset
+
+    splits = [dataset] if isinstance(dataset, Dataset) else list(dataset.values())
+    if not splits or not isinstance(splits[0], Dataset):
+        raise TrainingError("Dataset must be a Dataset or DatasetDict instance")
+    if label_column not in splits[0].column_names:
+        raise TrainingError(
+            f"The dataset has no label column {label_column!r}. "
+            f"Its columns: {splits[0].column_names}"
+        )
+
+    values = [value for split in splits for value in split[label_column]]
+    unlabeled = sum(value is None for value in values)
+    if unlabeled:
+        raise TrainingError(
+            f"{unlabeled} of {len(values)} rows have no label in column {label_column!r}; "
+            "training needs one label per row"
+        )
+
+    feature = splits[0].features[label_column]
+    if isinstance(feature, ClassLabel):
+        # datasets hands back -1 (its "no label") and any other stray id as they are.
+        unlabeled = sum(not 0 <= value < len(feature.names) for value in values)
+        if unlabeled:
+            raise TrainingError(
+                f"{unlabeled} of {len(values)} rows have no label in column {label_column!r} "
+                f"(an id outside its {len(feature.names)} classes); "
+                "training needs one label per row"
+            )
+        return list(feature.names), {idx: idx for idx in range(len(feature.names))}
+    distinct = sorted(set(values))
+    return [str(value) for value in distinct], {value: idx for idx, value in enumerate(distinct)}
+
+
 def _split_off_eval(dataset, num_labels: int, test_size: float = 0.2):
     """Split ``dataset`` into ``train`` and ``test``, stratified by its ``labels`` column.
 
@@ -703,15 +752,7 @@ def train_ast(
         train_dataset, split, category_label_column
     )
 
-    if isinstance(dataset, Dataset):
-        class_names = sorted(set(dataset[category_label_column]))
-    elif isinstance(dataset, DatasetDict):
-        first_split_name = list(dataset.keys())[0]
-        class_names = sorted(set(dataset[first_split_name][category_label_column]))
-    else:
-        raise TrainingError("Dataset must be a Dataset or DatasetDict instance")
-
-    label_to_id = {name: idx for idx, name in enumerate(class_names)}
+    class_names, label_to_id = _label_ids(dataset, category_label_column)
     num_labels = len(class_names)
 
     _check_stop("mapping labels")

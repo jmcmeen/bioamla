@@ -381,6 +381,77 @@ class TestDataframeToAstDataset:
         assert "test" in ds.keys()  # validation -> test (no test present)
 
 
+class TestLabelIds:
+    """Class names and label ids for a dataset's label column (#380)."""
+
+    def test_classlabel_column_gives_the_feature_names(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import ClassLabel, Dataset, Features, Value
+
+        # Only two of the three classes occur; the ids stay the dataset's.
+        features = Features({"audio": Value("string"),
+                             "code": ClassLabel(names=["amecro", "bkcchi", "norfli"])})  # fmt: skip
+        ds = Dataset.from_dict({"audio": ["a", "b", "c"], "code": [2, 0, 2]}, features=features)
+
+        names, to_id = _label_ids(ds, "code")
+
+        assert names == ["amecro", "bkcchi", "norfli"]
+        assert [to_id[v] for v in ds["code"]] == [2, 0, 2]
+
+    def test_string_column_gives_sorted_values(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import Dataset
+
+        ds = Dataset.from_dict({"audio": ["a", "b", "c"], "label": ["frog", "bird", "frog"]})
+        names, to_id = _label_ids(ds, "label")
+        assert names == ["bird", "frog"]
+        assert to_id == {"bird": 0, "frog": 1}
+
+    def test_integer_column_names_are_strings(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import Dataset
+
+        ds = Dataset.from_dict({"audio": ["a", "b", "c"], "target": [18, 7, 18]})
+        names, to_id = _label_ids(ds, "target")
+        assert names == ["7", "18"]
+        assert to_id == {7: 0, 18: 1}
+
+    def test_labels_come_from_every_split(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import Dataset, DatasetDict
+
+        dd = DatasetDict(
+            train=Dataset.from_dict({"audio": ["a"], "label": ["frog"]}),
+            test=Dataset.from_dict({"audio": ["b"], "label": ["bird"]}),
+        )
+        assert _label_ids(dd, "label")[0] == ["bird", "frog"]
+
+    def test_row_without_a_label_is_an_error(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import Dataset
+
+        ds = Dataset.from_dict({"audio": ["a", "b"], "label": ["frog", None]})
+        with pytest.raises(TrainingError, match="1 of 2 rows have no label"):
+            _label_ids(ds, "label")
+
+    def test_classlabel_id_outside_its_classes_is_an_error(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import ClassLabel, Dataset, Features, Value
+
+        features = Features({"audio": Value("string"), "code": ClassLabel(names=["a", "b"])})
+        ds = Dataset.from_dict({"audio": ["x", "y", "z"], "code": [0, -1, 1]}, features=features)
+        with pytest.raises(TrainingError, match="1 of 3 rows have no label"):
+            _label_ids(ds, "code")
+
+    def test_missing_column_is_an_error_naming_the_columns(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import Dataset
+
+        ds = Dataset.from_dict({"audio": ["a"], "species": ["frog"]})
+        with pytest.raises(TrainingError, match=r"no label column 'category'.*species"):
+            _label_ids(ds, "category")
+
+
 class TestLoadTrainDatasetRouting:
     def test_existing_file_non_csv_raises(self, tmp_path) -> None:
         from bioamla.ml.training import _load_train_dataset
