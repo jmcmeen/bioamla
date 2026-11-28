@@ -18,6 +18,11 @@ All notable changes to this project are documented here. The format is based on
   the integers (`0`, `1`, ...), so predictions came out as numbers. The model's ids are now the
   feature's, and label names are always strings, also for a plain integer column. A row with no
   label, or a label column the dataset doesn't have, is a `TrainingError` that says so (#380).
+- `models ast train` reports a dataset it can't load from the Hugging Face Hub in one line
+  (`TrainingError`, with the reason `datasets` gave) instead of a traceback, and the message
+  says the name is not a local path either. A dataset that can only be a path (`./x`, `/x`,
+  `~/x`, `a/b/c`) and doesn't exist is refused as a missing path instead of being tried as a
+  Hub ID; `--dry-run` catches it too (#381).
 
 ## [0.5.0] - 2026-11-12
 

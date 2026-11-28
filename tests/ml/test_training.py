@@ -483,6 +483,62 @@ class TestLoadTrainDatasetRouting:
             _load_train_dataset("owner/dataset", "train", "category")
         ld.assert_called_once_with("owner/dataset", split="train")
 
+    def test_hub_failure_is_a_one_line_training_error(self) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        failure = ValueError("BuilderConfig 'HSN' not found.\nAvailable: ['default']")
+        with (
+            patch("datasets.load_dataset", side_effect=failure),
+            pytest.raises(TrainingError) as raised,
+        ):
+            _load_train_dataset("owner/name:HSN", "train", "category")
+
+        message = str(raised.value)
+        assert "\n" not in message
+        assert "Could not load 'owner/name:HSN' from the Hugging Face Hub" in message
+        assert "not a local path either" in message
+        assert "BuilderConfig 'HSN' not found. Available: ['default']" in message
+        assert raised.value.__cause__ is failure
+
+    @pytest.mark.parametrize(
+        "missing", ["./data/frogs", "../frogs", "/no/such/frogs", "~/frogs", "a/b/c", "data/"]
+    )
+    def test_missing_path_is_not_tried_as_a_hub_id(self, missing, tmp_path, monkeypatch) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        monkeypatch.chdir(tmp_path)
+        with (
+            patch("datasets.load_dataset") as ld,
+            pytest.raises(TrainingError, match="does not exist"),
+        ):
+            _load_train_dataset(missing, "train", "category")
+        ld.assert_not_called()
+
+    def test_home_relative_path_is_expanded(self, tmp_path, monkeypatch) -> None:
+        from bioamla.ml.training import _check_dataset_path, _load_train_dataset
+
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+        (tmp_path / "frogs").mkdir()
+        (tmp_path / "frogs" / "metadata.csv").write_text("file_name,label\na.wav,x\n")
+
+        _check_dataset_path("~/frogs")
+        with patch("bioamla.ml.training._load_csv_dataset", return_value=("DS", "label")) as lc:
+            _load_train_dataset("~/frogs", "train", "category")
+        assert lc.call_args.args[0] == tmp_path / "frogs" / "metadata.csv"
+
+    def test_missing_windows_drive_path_is_a_path(self) -> None:
+        from bioamla.ml.training import _is_local_path
+
+        assert _is_local_path("C:/data/frogs")
+        assert _is_local_path("C:\\data\\frogs")
+
+    @pytest.mark.parametrize("hub_id", ["esc50", "owner/name", "owner/name:HSN"])
+    def test_hub_ids_are_not_taken_for_paths(self, hub_id) -> None:
+        from bioamla.ml.training import _is_local_path
+
+        assert not _is_local_path(hub_id)
+
     def test_dir_with_metadata_routes_to_csv(self, tmp_path) -> None:
         from bioamla.ml.training import _load_train_dataset
 

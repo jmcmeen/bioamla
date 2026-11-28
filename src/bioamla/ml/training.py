@@ -258,11 +258,25 @@ def _split_off_eval(dataset, num_labels: int, test_size: float = 0.2):
     )
 
 
+def _is_local_path(train_dataset: str) -> bool:
+    """Whether ``train_dataset`` can only be a local path, not a Hugging Face dataset ID
+    (``name`` or ``owner/name``, with an optional ``:config``)."""
+    dataset_id = train_dataset.rsplit(":", 1)[0] if ":" in train_dataset else train_dataset
+    return (
+        train_dataset.startswith((".", "/", "~"))
+        or "\\" in train_dataset
+        or train_dataset[1:3] == ":/"  # a Windows drive: C:/data
+        or train_dataset.endswith("/")
+        or dataset_id.count("/") > 1
+    )
+
+
 def _check_dataset_path(train_dataset: str) -> None:
     """Refuse a local dataset that can't be loaded: a path that exists but is neither a
-    CSV file nor a folder, or a ``.csv`` that doesn't exist. Anything else that doesn't
+    CSV file nor a folder, or a path that doesn't exist (a ``.csv``, or anything that
+    can only be a path: ``./x``, ``/x``, ``~/x``, ``a/b/c``). Anything else that doesn't
     exist is taken as a Hugging Face dataset ID."""
-    train_path = Path(train_dataset)
+    train_path = Path(train_dataset).expanduser()
     if train_path.exists():
         if not (train_path.is_dir() or train_path.suffix.lower() == ".csv"):
             raise TrainingError(
@@ -270,6 +284,24 @@ def _check_dataset_path(train_dataset: str) -> None:
             )
     elif train_path.suffix.lower() == ".csv":
         raise TrainingError(f"Training CSV {train_dataset} does not exist")
+    elif _is_local_path(train_dataset):
+        raise TrainingError(f"Training dataset path {train_dataset} does not exist")
+
+
+def _load_hub_dataset(train_dataset: str, *args: Any, **kwargs: Any):
+    """``datasets.load_dataset`` for the Hub dataset ``train_dataset`` names, with a
+    failure (no such dataset or config, a gated or script-based repo, no network)
+    raised as a one-line :class:`TrainingError`."""
+    from datasets import load_dataset
+
+    try:
+        return load_dataset(*args, **kwargs)
+    except Exception as e:  # noqa: BLE001 - datasets raises many types; all mean "not loaded"
+        reason = " ".join(str(e).split()) or type(e).__name__
+        raise TrainingError(
+            f"Could not load {train_dataset!r} from the Hugging Face Hub "
+            f"(it is not a local path either): {reason}"
+        ) from e
 
 
 def _load_train_dataset(train_dataset: str, split: str, category_label_column: str):
@@ -278,10 +310,8 @@ def _load_train_dataset(train_dataset: str, split: str, category_label_column: s
     Returns ``(dataset, category_label_column)`` — the label column may be
     rewritten (``"label"`` for a folder of class folders, or the detected CSV column).
     """
-    from datasets import load_dataset
-
     _check_dataset_path(train_dataset)
-    train_path = Path(train_dataset)
+    train_path = Path(train_dataset).expanduser()
 
     if train_path.exists():
         if train_path.is_file() and train_path.suffix.lower() == ".csv":
@@ -304,16 +334,18 @@ def _load_train_dataset(train_dataset: str, split: str, category_label_column: s
         # HuggingFace dataset with config (e.g., 'samuelstevens/BirdSet:HSN')
         dataset_name, config_name = train_dataset.rsplit(":", 1)
         logger.info(f"Loading from HuggingFace Hub: {dataset_name} (config: {config_name})")
-        return load_dataset(dataset_name, config_name, split=split), category_label_column
+        dataset = _load_hub_dataset(train_dataset, dataset_name, config_name, split=split)
+        return dataset, category_label_column
     if "BirdSet" in train_dataset:
         logger.info(
             "BirdSet detected. Use format 'samuelstevens/BirdSet:HSN' to specify subset "
             "(available: HSN, NBP, NES, PER); defaulting to HSN."
         )
-        return load_dataset(train_dataset, "HSN", split=split), category_label_column
+        dataset = _load_hub_dataset(train_dataset, train_dataset, "HSN", split=split)
+        return dataset, category_label_column
 
     logger.info(f"Loading from HuggingFace Hub: {train_dataset}")
-    return load_dataset(train_dataset, split=split), category_label_column
+    return _load_hub_dataset(train_dataset, train_dataset, split=split), category_label_column
 
 
 def _load_csv_dataset(train_path: Path, category_label_column: str):
