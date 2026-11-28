@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 import uuid
 from collections.abc import Sequence
@@ -50,10 +49,6 @@ _SPLIT_ALIAS = {
     "validation": "validation",
     "dev": "validation",
 }
-
-# A Hub Parquet shard: ``train-00000-of-00008.parquet`` belongs to the split ``train``.
-# (older uploads add a hash: ``train-00000-of-00001-a1b2c3d4.parquet``).
-_PARQUET_SHARD = re.compile(r"^(?P<split>.+)-\d+-of-\d+(-[0-9a-f]+)?$")
 
 
 def decode_example_audio(audio: str | dict[str, Any], sampling_rate: int | None) -> Any:
@@ -298,14 +293,15 @@ def _check_dataset_path(train_dataset: str) -> None:
         raise TrainingError(f"Training dataset path {train_dataset} does not exist")
 
 
-def _load_hub_dataset(train_dataset: str, *args: Any, **kwargs: Any):
-    """``datasets.load_dataset`` for the Hub dataset ``train_dataset`` names, with a
-    failure (no such dataset or config, a gated or script-based repo, no network)
-    raised as a one-line :class:`TrainingError`."""
-    from datasets import load_dataset
+def _load_hub_dataset(train_dataset: str, repo_id: str, config: str | None, split: str):
+    """One split of the Hub dataset ``train_dataset`` names
+    (:func:`bioamla.catalogs.huggingface.load_hub_dataset`: ``config`` is a config, or a
+    folder of the repository), with a failure (no such dataset, config or split, a gated
+    or script-based repo, no network) raised as a one-line :class:`TrainingError`."""
+    from bioamla.catalogs.huggingface import load_hub_dataset
 
     try:
-        return load_dataset(*args, **kwargs)
+        return load_hub_dataset(repo_id, config, split=split)
     except Exception as e:  # noqa: BLE001 - datasets raises many types; all mean "not loaded"
         reason = " ".join(str(e).split()) or type(e).__name__
         raise TrainingError(
@@ -346,18 +342,18 @@ def _load_train_dataset(train_dataset: str, split: str, category_label_column: s
         # HuggingFace dataset with config (e.g., 'samuelstevens/BirdSet:HSN')
         dataset_name, config_name = train_dataset.rsplit(":", 1)
         logger.info(f"Loading from HuggingFace Hub: {dataset_name} (config: {config_name})")
-        dataset = _load_hub_dataset(train_dataset, dataset_name, config_name, split=split)
+        dataset = _load_hub_dataset(train_dataset, dataset_name, config_name, split)
         return dataset, category_label_column
     if "BirdSet" in train_dataset:
         logger.info(
             "BirdSet detected. Use format 'samuelstevens/BirdSet:HSN' to specify subset "
             "(available: HSN, NBP, NES, PER); defaulting to HSN."
         )
-        dataset = _load_hub_dataset(train_dataset, train_dataset, "HSN", split=split)
+        dataset = _load_hub_dataset(train_dataset, train_dataset, "HSN", split)
         return dataset, category_label_column
 
     logger.info(f"Loading from HuggingFace Hub: {train_dataset}")
-    return _load_hub_dataset(train_dataset, train_dataset, split=split), category_label_column
+    return _load_hub_dataset(train_dataset, train_dataset, None, split), category_label_column
 
 
 def _parquet_in(folder: Path) -> list[Path]:
@@ -371,18 +367,18 @@ def _parquet_files(path: Path) -> dict[str, list[str]]:
     """The Parquet files of ``path`` (a file, or a folder holding them directly or in
     ``data/``, as a Hub repository does), by split.
 
-    A Hub shard name gives its split (``train-00000-of-00008.parquet`` → ``train``,
-    ``test_5s-00001-of-00004.parquet`` → ``test_5s``); any other file is its own split,
-    named by its stem (``train.parquet`` → ``train``).
+    Splits are named as :func:`bioamla.catalogs.huggingface.parquet_split_name` names
+    them: by shard name (``train-00000-of-00008.parquet`` → ``train``), else by stem.
     """
+    from bioamla.catalogs.huggingface import parquet_split_name
+
     if path.is_file():
         files = [path]
     else:
         files = _parquet_in(path) or _parquet_in(path / "data")
     splits: dict[str, list[str]] = {}
     for file in files:
-        shard = _PARQUET_SHARD.match(file.stem)
-        splits.setdefault(shard["split"] if shard else file.stem, []).append(str(file))
+        splits.setdefault(parquet_split_name(file.name), []).append(str(file))
     return splits
 
 

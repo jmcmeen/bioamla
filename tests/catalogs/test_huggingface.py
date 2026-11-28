@@ -1,5 +1,7 @@
 """Tests for HuggingFace catalog (path validation, helpers, errors; no network)."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from bioamla.catalogs import huggingface as hf
@@ -271,6 +273,127 @@ class TestExtractAudio:
     def test_unrecognized_raises(self) -> None:
         with pytest.raises(InvalidInputError):
             hf._extract_audio(12345)
+
+
+class TestLoadHubDataset:
+    """A ``config`` that is a folder of the repository, not a config (#383)."""
+
+    REPO_FILES = [
+        "README.md",
+        "HSN/train-00000-of-00002.parquet",
+        "HSN/train-00001-of-00002.parquet",
+        "HSN/test-00000-of-00001.parquet",
+        "HSN/test_5s-00000-of-00001.parquet",
+        "HSN/notes/extra.parquet",
+        "NBP/train-00000-of-00001.parquet",
+    ]
+
+    @pytest.fixture
+    def hub(self, monkeypatch):
+        """A repo with subset folders and no configs; records the load_dataset calls."""
+        pytest.importorskip("datasets")
+        import datasets as hfds
+
+        calls = []
+
+        def load_dataset(repo_id, name=None, **kwargs):
+            calls.append((repo_id, name, kwargs))
+            if name is not None:
+                raise ValueError(f"BuilderConfig {name!r} not found. Available: ['default']")
+            return "DS"
+
+        api = MagicMock()
+        api.list_repo_files.return_value = self.REPO_FILES
+        monkeypatch.setattr(hfds, "load_dataset", load_dataset)
+        monkeypatch.setattr(hf, "_get_hf_api", lambda: api)
+        return calls
+
+    def test_real_config_is_passed_through(self, monkeypatch) -> None:
+        pytest.importorskip("datasets")
+        import datasets as hfds
+
+        ld = MagicMock(return_value="DS")
+        monkeypatch.setattr(hfds, "load_dataset", ld)
+        monkeypatch.setattr(hf, "_get_hf_api", MagicMock(side_effect=AssertionError("no listing")))
+
+        assert hf.load_hub_dataset("user/ds", "clean", split="train") == "DS"
+        ld.assert_called_once_with("user/ds", "clean", split="train")
+
+    def test_folder_loads_only_the_asked_split(self, hub) -> None:
+        assert hf.load_hub_dataset("user/ds", "HSN", split="train") == "DS"
+
+        assert hub[-1] == (
+            "user/ds",
+            None,
+            {
+                "data_files": {
+                    "train": [
+                        "HSN/train-00000-of-00002.parquet",
+                        "HSN/train-00001-of-00002.parquet",
+                    ]
+                },
+                "split": "train",
+            },
+        )
+
+    @pytest.mark.parametrize(
+        ("expression", "splits"),
+        [("train[:100]", ["train"]), ("train+test_5s", ["test_5s", "train"])],
+    )
+    def test_split_expressions_pick_their_splits_files(self, hub, expression, splits) -> None:
+        hf.load_hub_dataset("user/ds", "HSN", split=expression)
+
+        assert sorted(hub[-1][2]["data_files"]) == splits
+        assert hub[-1][2]["split"] == expression
+
+    def test_folder_without_a_split_loads_every_split(self, hub) -> None:
+        hf.load_hub_dataset("user/ds", "HSN")
+
+        data_files = hub[-1][2]["data_files"]
+        assert sorted(data_files) == ["test", "test_5s", "train"]
+        assert data_files["test_5s"] == ["HSN/test_5s-00000-of-00001.parquet"]
+        assert hub[-1][2]["split"] is None
+
+    def test_folder_without_the_split_lists_its_splits(self, hub) -> None:
+        with pytest.raises(
+            CatalogError, match=r"no split 'validation'.*'test', 'test_5s', 'train'"
+        ):
+            hf.load_hub_dataset("user/ds", "HSN", split="validation")
+
+    def test_neither_config_nor_folder_keeps_the_datasets_error(self, hub) -> None:
+        with pytest.raises(ValueError, match="BuilderConfig 'XYZ' not found"):
+            hf.load_hub_dataset("user/ds", "XYZ", split="train")
+        assert len(hub) == 1
+
+    def test_other_errors_are_not_retried(self, monkeypatch) -> None:
+        pytest.importorskip("datasets")
+        import datasets as hfds
+
+        monkeypatch.setattr(hfds, "load_dataset", MagicMock(side_effect=ValueError("bad split")))
+        monkeypatch.setattr(hf, "_get_hf_api", MagicMock(side_effect=AssertionError("no listing")))
+        with pytest.raises(ValueError, match="bad split"):
+            hf.load_hub_dataset("user/ds", "HSN", split="train")
+
+    def test_pull_dataset_loads_through_it(self, tmp_path, monkeypatch) -> None:
+        pytest.importorskip("datasets")
+        seen = MagicMock(side_effect=RuntimeError("stop here"))
+        monkeypatch.setattr(hf, "load_hub_dataset", seen)
+
+        with pytest.raises(CatalogError, match="stop here"):
+            hf.pull_dataset("user/ds", str(tmp_path), config="HSN", split="train")
+        seen.assert_called_once_with("user/ds", "HSN", split="train")
+
+    @pytest.mark.parametrize(
+        ("name", "split"),
+        [
+            ("train-00000-of-00008.parquet", "train"),
+            ("HSN/test_5s-00001-of-00004.parquet", "test_5s"),
+            ("data/validation.parquet", "validation"),
+            ("anything.parquet", "anything"),
+        ],
+    )
+    def test_parquet_split_name(self, name, split) -> None:
+        assert hf.parquet_split_name(name) == split
 
 
 class TestPullDatasetFailures:

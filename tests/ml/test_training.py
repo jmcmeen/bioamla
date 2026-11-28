@@ -491,12 +491,12 @@ class TestLoadTrainDatasetRouting:
 
         with patch("datasets.load_dataset", return_value="DS") as ld:
             _load_train_dataset("owner/dataset", "train", "category")
-        ld.assert_called_once_with("owner/dataset", split="train")
+        ld.assert_called_once_with("owner/dataset", None, split="train")
 
     def test_hub_failure_is_a_one_line_training_error(self) -> None:
         from bioamla.ml.training import _load_train_dataset
 
-        failure = ValueError("BuilderConfig 'HSN' not found.\nAvailable: ['default']")
+        failure = RuntimeError("Dataset scripts are no longer supported,\nbut found BirdSet.py")
         with (
             patch("datasets.load_dataset", side_effect=failure),
             pytest.raises(TrainingError) as raised,
@@ -507,7 +507,7 @@ class TestLoadTrainDatasetRouting:
         assert "\n" not in message
         assert "Could not load 'owner/name:HSN' from the Hugging Face Hub" in message
         assert "not a local path either" in message
-        assert "BuilderConfig 'HSN' not found. Available: ['default']" in message
+        assert "Dataset scripts are no longer supported, but found BirdSet.py" in message
         assert raised.value.__cause__ is failure
 
     @pytest.mark.parametrize(

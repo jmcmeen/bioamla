@@ -15,6 +15,14 @@ All notable changes to this project are documented here. The format is based on
   `train`, `validation.parquet` is `validation`) and `--split` picks one; a folder without that
   split lists the ones it has. A dataset already on disk no longer has to be loaded through its
   Hub ID or unpacked into loose files (#382).
+- A Hugging Face dataset subset that is a folder of the repository, not a config, can be
+  picked: `models ast train --train-dataset samuelstevens/BirdSet:HSN` and
+  `catalogs hf pull-dataset samuelstevens/BirdSet out --config HSN` failed with
+  `BuilderConfig 'HSN' not found`, because that repository keeps each subset's Parquet files in
+  a folder and declares no configs. When a repo has no config of the name given, its folder of
+  that name is loaded, and with a split only that split's files are downloaded (BirdSet HSN's
+  `test` split is 46 GB, `train` 6 GB); a folder without the split lists the ones it has.
+  `bioamla.catalogs.huggingface.load_hub_dataset()` does it (#383).
 
 ### Fixed
 

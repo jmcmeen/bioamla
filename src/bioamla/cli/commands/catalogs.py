@@ -409,7 +409,11 @@ def _print_push_plan(plan) -> None:
 @click.argument("repo_id")
 @click.argument("dest")
 @click.option("--split", default=None, help="Single split to pull (default: all splits)")
-@click.option("--config", default=None, help="Dataset config/subset name (e.g. HSN for BirdSet)")
+@click.option(
+    "--config",
+    default=None,
+    help="Dataset config/subset name, or a folder of the repo holding a subset (e.g. HSN for BirdSet)",
+)
 @click.option("--audio-column", default=None, help="Override the auto-detected audio column")
 @click.option("--label-column", default=None, help="Override the auto-detected label column")
 @click.option(
