@@ -183,6 +183,32 @@ def _validate_augmentation(aug: WaveformAugmentationConfig) -> None:
             raise TrainingError(f"Augmentation {name} min ({lo}) must be <= max ({hi})")
 
 
+def _split_off_eval(dataset, num_labels: int, test_size: float = 0.2):
+    """Split ``dataset`` into ``train`` and ``test``, stratified by its ``labels`` column.
+
+    ``datasets`` stratifies only on a ``ClassLabel`` column, and ``labels`` holds plain
+    integer ids. The split is drawn on the labels alone and the rows are then selected
+    from ``dataset``: casting its column would rewrite every row, and a Hub dataset's
+    rows carry the audio bytes. A dataset that can't be stratified (a class with a
+    single example) gets a plain shuffled split, with a warning.
+    """
+    from datasets import ClassLabel, Dataset, DatasetDict
+
+    try:
+        labels = Dataset.from_dict(
+            {"row": list(range(len(dataset))), "labels": list(dataset["labels"])}
+        ).cast_column("labels", ClassLabel(num_classes=num_labels))
+        parts = labels.train_test_split(
+            test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels"
+        )
+    except ValueError as e:
+        logger.warning(f"Stratified split failed ({e}). Using regular split.")
+        return dataset.train_test_split(test_size=test_size, shuffle=True, seed=0)
+    return DatasetDict(
+        train=dataset.select(parts["train"]["row"]), test=dataset.select(parts["test"]["row"])
+    )
+
+
 def _check_dataset_path(train_dataset: str) -> None:
     """Refuse a local dataset that can't be loaded: a path that exists but is neither a
     CSV file nor a folder, or a ``.csv`` that doesn't exist. Anything else that doesn't
@@ -718,24 +744,10 @@ def train_ast(
 
     label2id = {name: idx for idx, name in enumerate(class_names)}
 
-    test_size = 0.2
     if isinstance(dataset, Dataset):
-        try:
-            dataset = dataset.train_test_split(
-                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels"
-            )
-        except ValueError as e:
-            logger.warning(f"Stratified split failed ({e}). Using regular split.")
-            dataset = dataset.train_test_split(test_size=test_size, shuffle=True, seed=0)
+        dataset = _split_off_eval(dataset, num_labels)
     elif isinstance(dataset, DatasetDict) and "test" not in dataset:
-        train_data = dataset["train"]
-        try:
-            dataset = train_data.train_test_split(
-                test_size=test_size, shuffle=True, seed=0, stratify_by_column="labels"
-            )
-        except ValueError as e:
-            logger.warning(f"Stratified split failed ({e}). Using regular split.")
-            dataset = train_data.train_test_split(test_size=test_size, shuffle=True, seed=0)
+        dataset = _split_off_eval(dataset["train"], num_labels)
 
     augment = augmentation is not None
 

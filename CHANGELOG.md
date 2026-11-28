@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Training stratifies the 20% evaluation split it makes for a dataset with no split of its own.
+  The stratified split failed on every run (`datasets` stratifies only on a `ClassLabel` column,
+  and the label ids are plain integers), so each run fell back to a plain shuffled split with a
+  warning, which can leave a rare class with no evaluation examples. A dataset that can't be
+  stratified (a class with one example) still gets the shuffled split and the warning (#379).
+
 ## [0.5.0] - 2026-11-12
 
 ### Added
