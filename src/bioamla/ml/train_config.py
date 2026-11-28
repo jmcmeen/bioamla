@@ -440,7 +440,7 @@ def check_train_options(
     Resolves the options (explicit ``options`` over the config file over the defaults)
     and checks them as a run does before it loads anything: the config file, option
     types, augmentation ranges for the layers turned on, a local dataset that must
-    exist (a CSV file or a folder), and a metrics file that must not exist and whose
+    exist (a CSV or Parquet file, or a folder), and a metrics file that must not exist and whose
     folder can be created.
 
     Raises:
@@ -486,8 +486,8 @@ def train_ast_from_options(
     copies would be identical.
 
     Args:
-        train_dataset: A Hugging Face dataset ID, a metadata CSV, or a folder with one
-            subfolder per class.
+        train_dataset: A Hugging Face dataset ID, a metadata CSV, a folder with one
+            subfolder per class, or Parquet files (a file or a folder of them).
         options: Training options set explicitly (names as in
             :data:`AST_TRAIN_DEFAULTS`).
         config_path: A training config file.

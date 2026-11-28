@@ -167,9 +167,14 @@ def ast_predict(
     required=True,
     help="Training data source: HuggingFace dataset (e.g. 'bioamla/scp-frogs'), "
     "local metadata CSV (with 'file' and 'label' columns), "
-    "or directory with class subdirectories (e.g. ./data/bird/, ./data/frog/)",
+    "directory with class subdirectories (e.g. ./data/bird/, ./data/frog/), "
+    "or a Parquet file or a folder of them (a downloaded HuggingFace dataset)",
 )
-@click.option("--split", default="train", help="Dataset split to use (for HuggingFace datasets)")
+@click.option(
+    "--split",
+    default="train",
+    help="Dataset split to use (for HuggingFace datasets and Parquet folders)",
+)
 @click.option(
     "--label-column", "category_label_column", default="category", help="Column name for labels"
 )
@@ -381,12 +386,14 @@ def ast_train(
 ) -> None:
     """Fine-tune an AST model on a custom dataset.
 
-    The --train-dataset option accepts three formats:
+    The --train-dataset option accepts four formats:
 
     \b
     1. HuggingFace dataset: bioamla/scp-frogs or samuelstevens/BirdSet:HSN
     2. Metadata CSV: ./data/metadata.csv (must have file and label columns)
     3. Directory with class subdirs: ./data/ containing bird/, frog/, etc.
+    4. Parquet files: ./train.parquet, or a folder of them (a downloaded
+       HuggingFace dataset); --split picks train-*.parquet, test-*.parquet, ...
 
     Examples:
         bioamla models ast train --train-dataset bioamla/scp-frogs

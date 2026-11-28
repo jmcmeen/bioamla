@@ -6,6 +6,48 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `models ast train --train-dataset` (and `train_ast()`) reads local Parquet files: a `.parquet`
+  file, or a folder of them, such as a downloaded Hugging Face dataset (the files in the folder
+  or in its `data/`). The rows need an `audio` column (the encoded bytes, or an absolute path),
+  as a Hub audio dataset has. In a folder, shard names give the split (`train-00000-of-00008.parquet` is
+  `train`, `validation.parquet` is `validation`) and `--split` picks one; a folder without that
+  split lists the ones it has. A dataset already on disk no longer has to be loaded through its
+  Hub ID or unpacked into loose files (#382).
+- A Hugging Face dataset subset that is a folder of the repository, not a config, can be
+  picked: `models ast train --train-dataset samuelstevens/BirdSet:HSN` and
+  `catalogs hf pull-dataset samuelstevens/BirdSet out --config HSN` failed with
+  `BuilderConfig 'HSN' not found`, because that repository keeps each subset's Parquet files in
+  a folder and declares no configs. When a repo has no config of the name given, its folder of
+  that name is loaded, and with a split only that split's files are downloaded (BirdSet HSN's
+  `test` split is 46 GB, `train` 6 GB); a folder without the split lists the ones it has.
+  `bioamla.catalogs.huggingface.load_hub_dataset()` does it (#383).
+
+### Fixed
+
+- Training stratifies the 20% evaluation split it makes for a dataset with no split of its own.
+  The stratified split failed on every run (`datasets` stratifies only on a `ClassLabel` column,
+  and the label ids are plain integers), so each run fell back to a plain shuffled split with a
+  warning, which can leave a rare class with no evaluation examples. A dataset that can't be
+  stratified (a class with one example) still gets the shuffled split and the warning (#379).
+- A model trained on a dataset whose label column is a `ClassLabel` (integers, with the names in
+  the dataset's features, as most Hub datasets have) keeps the class names. Its `id2label` held
+  the integers (`0`, `1`, ...), so predictions came out as numbers. The model's ids are now the
+  feature's, and label names are always strings, also for a plain integer column. A row with no
+  label, or a label column the dataset doesn't have, is a `TrainingError` that says so (#380).
+- `models ast train` reports a dataset it can't load from the Hugging Face Hub in one line
+  (`TrainingError`, with the reason `datasets` gave) instead of a traceback, and the message
+  says the name is not a local path either. A dataset that can only be a path (`./x`, `/x`,
+  `~/x`, `a/b/c`) and doesn't exist is refused as a missing path instead of being tried as a
+  Hub ID; `--dry-run` catches it too (#381).
+- Dataset IDs in help text load. `catalogs hf pull-dataset --help` and the `pull_dataset()`
+  docstring gave `ashraq/esc-50`, which is not a repository (it is `ashraq/esc50`). A BirdSet ID
+  with no subset no longer defaults to `HSN` without saying so (and with a message listing four
+  of the ten subsets): it is an error that lists them. A repository that loads through a dataset
+  script, such as the official `DBD-research-group/BirdSet`, gets an error that says the
+  `datasets` library no longer runs scripts and to use a Parquet copy (#384).
+
 ## [0.5.0] - 2026-11-12
 
 ### Added

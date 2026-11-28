@@ -381,13 +381,94 @@ class TestDataframeToAstDataset:
         assert "test" in ds.keys()  # validation -> test (no test present)
 
 
+class TestLabelIds:
+    """Class names and label ids for a dataset's label column (#380)."""
+
+    def test_classlabel_column_gives_the_feature_names(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import ClassLabel, Dataset, Features, Value
+
+        # Only two of the three classes occur; the ids stay the dataset's.
+        features = Features({"audio": Value("string"),
+                             "code": ClassLabel(names=["amecro", "bkcchi", "norfli"])})  # fmt: skip
+        ds = Dataset.from_dict({"audio": ["a", "b", "c"], "code": [2, 0, 2]}, features=features)
+
+        names, to_id = _label_ids(ds, "code")
+
+        assert names == ["amecro", "bkcchi", "norfli"]
+        assert [to_id[v] for v in ds["code"]] == [2, 0, 2]
+
+    def test_string_column_gives_sorted_values(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import Dataset
+
+        ds = Dataset.from_dict({"audio": ["a", "b", "c"], "label": ["frog", "bird", "frog"]})
+        names, to_id = _label_ids(ds, "label")
+        assert names == ["bird", "frog"]
+        assert to_id == {"bird": 0, "frog": 1}
+
+    def test_integer_column_names_are_strings(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import Dataset
+
+        ds = Dataset.from_dict({"audio": ["a", "b", "c"], "target": [18, 7, 18]})
+        names, to_id = _label_ids(ds, "target")
+        assert names == ["7", "18"]
+        assert to_id == {7: 0, 18: 1}
+
+    def test_labels_come_from_every_split(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import Dataset, DatasetDict
+
+        dd = DatasetDict(
+            train=Dataset.from_dict({"audio": ["a"], "label": ["frog"]}),
+            test=Dataset.from_dict({"audio": ["b"], "label": ["bird"]}),
+        )
+        assert _label_ids(dd, "label")[0] == ["bird", "frog"]
+
+    def test_row_without_a_label_is_an_error(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import Dataset
+
+        ds = Dataset.from_dict({"audio": ["a", "b"], "label": ["frog", None]})
+        with pytest.raises(TrainingError, match="1 of 2 rows have no label"):
+            _label_ids(ds, "label")
+
+    def test_classlabel_id_outside_its_classes_is_an_error(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import ClassLabel, Dataset, Features, Value
+
+        features = Features({"audio": Value("string"), "code": ClassLabel(names=["a", "b"])})
+        ds = Dataset.from_dict({"audio": ["x", "y", "z"], "code": [0, -1, 1]}, features=features)
+        with pytest.raises(TrainingError, match="1 of 3 rows have no label"):
+            _label_ids(ds, "code")
+
+    def test_missing_column_is_an_error_naming_the_columns(self) -> None:
+        from bioamla.ml.training import _label_ids
+        from datasets import Dataset
+
+        ds = Dataset.from_dict({"audio": ["a"], "species": ["frog"]})
+        with pytest.raises(TrainingError, match=r"no label column 'category'.*species"):
+            _label_ids(ds, "category")
+
+
+def _write_parquet(path, labels):
+    """A Parquet file shaped like a Hub audio dataset's: ``audio`` (bytes, path), ``label``."""
+    import pandas as pd
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    audio = [{"bytes": str(i).encode(), "path": f"{i}.wav"} for i in range(len(labels))]
+    pd.DataFrame({"audio": audio, "label": labels}).to_parquet(path)
+    return path
+
+
 class TestLoadTrainDatasetRouting:
     def test_existing_file_non_csv_raises(self, tmp_path) -> None:
         from bioamla.ml.training import _load_train_dataset
 
         f = tmp_path / "data.txt"
         f.write_text("x")
-        with pytest.raises(TrainingError, match="neither a CSV file nor a directory"):
+        with pytest.raises(TrainingError, match="neither a CSV or Parquet file nor a directory"):
             _load_train_dataset(str(f), "train", "category")
 
     def test_hub_with_config(self) -> None:
@@ -398,19 +479,201 @@ class TestLoadTrainDatasetRouting:
         assert out == "DS"
         ld.assert_called_once_with("owner/name", "HSN", split="train")
 
-    def test_birdset_default(self) -> None:
+    def test_birdset_without_a_subset_lists_the_subsets(self) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        with (
+            patch("datasets.load_dataset") as ld,
+            pytest.raises(TrainingError, match=r"samuelstevens/BirdSet:HSN.*HSN, NBP.*XCM"),
+        ):
+            _load_train_dataset("owner/BirdSet", "train", "category")
+        ld.assert_not_called()
+
+    def test_only_a_repo_named_birdset_needs_a_subset(self) -> None:
         from bioamla.ml.training import _load_train_dataset
 
         with patch("datasets.load_dataset", return_value="DS") as ld:
-            _load_train_dataset("owner/BirdSet", "train", "category")
-        ld.assert_called_once_with("owner/BirdSet", "HSN", split="train")
+            _load_train_dataset("owner/BirdSet-HSN", "train", "category")
+        ld.assert_called_once_with("owner/BirdSet-HSN", None, split="train")
+
+        with pytest.raises(TrainingError, match="several subsets"):
+            _load_train_dataset("owner/birdset", "train", "category")
+
+    def test_script_based_repo_points_to_a_parquet_copy(self) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        failure = RuntimeError("Dataset scripts are no longer supported, but found BirdSet.py")
+        with (
+            patch("datasets.load_dataset", side_effect=failure),
+            pytest.raises(TrainingError, match=r"dataset script.*samuelstevens/BirdSet:HSN"),
+        ):
+            _load_train_dataset("DBD-research-group/BirdSet:HSN", "train", "category")
 
     def test_plain_hub_id(self) -> None:
         from bioamla.ml.training import _load_train_dataset
 
         with patch("datasets.load_dataset", return_value="DS") as ld:
             _load_train_dataset("owner/dataset", "train", "category")
-        ld.assert_called_once_with("owner/dataset", split="train")
+        ld.assert_called_once_with("owner/dataset", None, split="train")
+
+    def test_hub_failure_is_a_one_line_training_error(self) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        failure = RuntimeError("Couldn't reach the Hub:\nconnection refused")
+        with (
+            patch("datasets.load_dataset", side_effect=failure),
+            pytest.raises(TrainingError) as raised,
+        ):
+            _load_train_dataset("owner/name:HSN", "train", "category")
+
+        message = str(raised.value)
+        assert "\n" not in message
+        assert "Could not load 'owner/name:HSN' from the Hugging Face Hub" in message
+        assert "not a local path either" in message
+        assert "Couldn't reach the Hub: connection refused" in message
+        assert raised.value.__cause__ is failure
+
+    @pytest.mark.parametrize(
+        "missing", ["./data/frogs", "../frogs", "/no/such/frogs", "~/frogs", "a/b/c", "data/"]
+    )
+    def test_missing_path_is_not_tried_as_a_hub_id(self, missing, tmp_path, monkeypatch) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        monkeypatch.chdir(tmp_path)
+        with (
+            patch("datasets.load_dataset") as ld,
+            pytest.raises(TrainingError, match="does not exist"),
+        ):
+            _load_train_dataset(missing, "train", "category")
+        ld.assert_not_called()
+
+    def test_home_relative_path_is_expanded(self, tmp_path, monkeypatch) -> None:
+        from bioamla.ml.training import _check_dataset_path, _load_train_dataset
+
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+        (tmp_path / "frogs").mkdir()
+        (tmp_path / "frogs" / "metadata.csv").write_text("file_name,label\na.wav,x\n")
+
+        _check_dataset_path("~/frogs")
+        with patch("bioamla.ml.training._load_csv_dataset", return_value=("DS", "label")) as lc:
+            _load_train_dataset("~/frogs", "train", "category")
+        assert lc.call_args.args[0] == tmp_path / "frogs" / "metadata.csv"
+
+    def test_missing_windows_drive_path_is_a_path(self) -> None:
+        from bioamla.ml.training import _is_local_path
+
+        assert _is_local_path("C:/data/frogs")
+        assert _is_local_path("C:\\data\\frogs")
+
+    @pytest.mark.parametrize("hub_id", ["esc50", "owner/name", "owner/name:HSN"])
+    def test_hub_ids_are_not_taken_for_paths(self, hub_id) -> None:
+        from bioamla.ml.training import _is_local_path
+
+        assert not _is_local_path(hub_id)
+
+    def test_parquet_file_is_loaded(self, tmp_path) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        file = _write_parquet(tmp_path / "anything.parquet", ["frog", "bird", "frog"])
+        ds, col = _load_train_dataset(str(file), "train", "label")
+
+        assert col == "label"
+        assert ds["label"] == ["frog", "bird", "frog"]
+        assert ds[0]["audio"] == {"bytes": b"0", "path": "0.wav"}
+
+    def test_parquet_folder_loads_the_asked_split(self, tmp_path) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        _write_parquet(tmp_path / "train-00000-of-00002.parquet", ["frog", "bird"])
+        _write_parquet(tmp_path / "train-00001-of-00002.parquet", ["frog"])
+        _write_parquet(tmp_path / "test_5s-00000-of-00001.parquet", ["owl"])
+
+        train, _ = _load_train_dataset(str(tmp_path), "train", "label")
+        test, _ = _load_train_dataset(str(tmp_path), "test_5s", "label")
+
+        assert train["label"] == ["frog", "bird", "frog"]
+        assert test["label"] == ["owl"]
+
+    def test_parquet_path_with_glob_characters(self, tmp_path) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        folder = tmp_path / "set[1] *"
+        _write_parquet(folder / "train-00000-of-00001.parquet", ["frog", "bird"])
+        ds, _ = _load_train_dataset(str(folder), "train", "label")
+        assert ds["label"] == ["frog", "bird"]
+
+    def test_parquet_shard_names(self, tmp_path) -> None:
+        from bioamla.ml.training import _parquet_files
+
+        for name in ("train-00000-of-00001-a1b2c3d4.parquet", "dev-set-00000-of-00002.parquet",
+                     "dev-set-00001-of-00002.PARQUET", "test.parquet"):  # fmt: skip
+            _write_parquet(tmp_path / name, ["frog"])
+        splits = _parquet_files(tmp_path)
+        assert {k: len(v) for k, v in splits.items()} == {"train": 1, "dev-set": 2, "test": 1}
+
+    def test_parquet_keeps_the_hub_features(self, tmp_path) -> None:
+        from bioamla.ml.training import _label_ids, _load_train_dataset
+        from datasets import Audio, ClassLabel, Dataset, Features
+
+        features = Features({"audio": Audio(decode=False), "code": ClassLabel(names=["a", "b"])})
+        Dataset.from_dict(
+            {"audio": [{"bytes": b"0", "path": "0.wav"}] * 2, "code": [1, 0]}, features=features
+        ).to_parquet(tmp_path / "train-00000-of-00001.parquet")
+
+        ds, _ = _load_train_dataset(str(tmp_path), "train", "code")
+        assert isinstance(ds.features["audio"], Audio)
+        assert _label_ids(ds, "code")[0] == ["a", "b"]
+
+    def test_parquet_folder_in_data_subfolder(self, tmp_path) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        _write_parquet(tmp_path / "data" / "train.parquet", ["frog"])
+        ds, _ = _load_train_dataset(str(tmp_path), "train", "label")
+        assert ds["label"] == ["frog"]
+
+    def test_parquet_folder_without_the_split_lists_its_splits(self, tmp_path) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        _write_parquet(tmp_path / "test-00000-of-00001.parquet", ["owl"])
+        _write_parquet(tmp_path / "validation.parquet", ["owl"])
+        with pytest.raises(TrainingError, match=r"split 'train'.*\['test', 'validation'\]"):
+            _load_train_dataset(str(tmp_path), "train", "label")
+
+    def test_parquet_without_audio_column_is_an_error(self, tmp_path) -> None:
+        import pandas as pd
+
+        from bioamla.ml.training import _load_train_dataset
+
+        pd.DataFrame({"file": ["a.wav"], "label": ["frog"]}).to_parquet(tmp_path / "train.parquet")
+        with pytest.raises(TrainingError, match=r"no 'audio' column.*file"):
+            _load_train_dataset(str(tmp_path), "train", "label")
+
+    def test_unreadable_parquet_is_a_training_error(self, tmp_path) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        (tmp_path / "train.parquet").write_text("not parquet")
+        with pytest.raises(TrainingError, match="Could not read the Parquet files"):
+            _load_train_dataset(str(tmp_path), "train", "label")
+
+    def test_missing_parquet_file_is_an_error(self, tmp_path) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        with (
+            patch("datasets.load_dataset") as ld,
+            pytest.raises(TrainingError, match="Parquet file .* does not exist"),
+        ):
+            _load_train_dataset(str(tmp_path / "train.parquet"), "train", "label")
+        ld.assert_not_called()
+
+    def test_metadata_csv_wins_over_parquet_files(self, tmp_path) -> None:
+        from bioamla.ml.training import _load_train_dataset
+
+        (tmp_path / "metadata.csv").write_text("file_name,label\na.wav,x\n")
+        _write_parquet(tmp_path / "train.parquet", ["frog"])
+        with patch("bioamla.ml.training._load_csv_dataset", return_value=("DS", "label")) as lc:
+            _load_train_dataset(str(tmp_path), "train", "category")
+        lc.assert_called_once()
 
     def test_dir_with_metadata_routes_to_csv(self, tmp_path) -> None:
         from bioamla.ml.training import _load_train_dataset

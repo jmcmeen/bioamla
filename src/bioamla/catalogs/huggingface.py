@@ -4,7 +4,7 @@ Push local model/dataset folders to the HuggingFace Hub, pull a Hub audio
 dataset down into the local labeled-folder + ``metadata.csv`` layout the rest of
 the pipeline (partition/stats/``ast train``) consumes, and inspect/purge the
 local HF cache that repeat pulls/loads populate. ``huggingface_hub`` and
-``datasets`` are base dependencies, imported lazily so importing this module
+``datasets`` (the ``ml`` extra) are imported lazily, so importing this module
 stays light.
 
 Upload/download failures raise :class:`~bioamla.exceptions.CatalogError`; a
@@ -12,6 +12,7 @@ missing path or unusable dataset raises :class:`~bioamla.exceptions.InvalidInput
 """
 
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,105 @@ logger = logging.getLogger(__name__)
 # Column names to probe for a label when the dataset has no ClassLabel feature,
 # in descending preference.
 _LABEL_COLUMN_CANDIDATES = ("label", "category", "class", "species", "common_name", "target")
+
+
+# A Hub Parquet shard: ``train-00000-of-00008.parquet`` belongs to the split ``train``
+# (older uploads add a hash: ``train-00000-of-00001-a1b2c3d4.parquet``).
+_PARQUET_SHARD = re.compile(r"^(?P<split>.+)-\d+-of-\d+(-[0-9a-f]+)?$")
+
+
+#: A Parquet copy of BirdSet (the official ``DBD-research-group/BirdSet`` loads through
+#: a dataset script), one folder per subset.
+BIRDSET_PARQUET_REPO = "samuelstevens/BirdSet"
+BIRDSET_SUBSETS = ("HSN", "NBP", "NES", "PER", "POW", "SNE", "SSW", "UHH", "XCL", "XCM")
+
+
+def parquet_split_name(filename: str) -> str:
+    """The split a Parquet file of a Hub dataset belongs to, from its name.
+
+    A shard name gives its split (``train-00000-of-00008.parquet`` → ``train``,
+    ``HSN/test_5s-00001-of-00004.parquet`` → ``test_5s``); any other file is its own
+    split, named by its stem (``train.parquet`` → ``train``).
+    """
+    stem = Path(filename).stem
+    shard = _PARQUET_SHARD.match(stem)
+    return shard["split"] if shard else stem
+
+
+def _subset_folder_files(repo_id: str, folder: str, split: str | None) -> dict[str, list[str]]:
+    """The Parquet files in ``folder`` of the dataset repo ``repo_id``, by split: all its
+    splits, or only those ``split`` names (a split, or a ``datasets`` split expression
+    such as ``train[:100]`` or ``train+test``). Empty when the repo has no such folder
+    of Parquet files.
+
+    Raises:
+        CatalogError: If the folder has Parquet files, but none for a split asked for.
+    """
+    prefix = folder.strip("/") + "/"
+    splits: dict[str, list[str]] = {}
+    for name in sorted(_get_hf_api().list_repo_files(repo_id, repo_type="dataset")):
+        if name.startswith(prefix) and "/" not in name[len(prefix) :] and name.endswith(".parquet"):
+            splits.setdefault(parquet_split_name(name), []).append(name)
+    if split is None or not splits:
+        return splits
+    wanted = [part.split("[")[0].strip() for part in split.split("+")]
+    missing = [name for name in wanted if name not in splits]
+    if missing:
+        raise CatalogError(
+            f"{repo_id} has no split {missing[0]!r} in its folder {folder!r}. "
+            f"Its splits: {sorted(splits)}"
+        )
+    return {name: splits[name] for name in wanted}
+
+
+def load_hub_dataset(repo_id: str, config: str | None = None, *, split: str | None = None) -> Any:
+    """``datasets.load_dataset`` for a Hub dataset, where ``config`` may also name a
+    folder of the repository.
+
+    Many Parquet repositories keep their subsets as folders and declare no configs
+    (``samuelstevens/BirdSet`` has ``HSN/train-*.parquet``, ``HSN/test-*.parquet``, ...).
+    When the repo has no config named ``config``, the Parquet files in its folder of
+    that name are loaded instead: only those of ``split`` when one is given, so the
+    other splits are not downloaded.
+
+    Args:
+        repo_id: The dataset's Hub ID.
+        config: A config (subset) of the dataset, or a folder of the repository.
+        split: The split to load; every split when omitted.
+
+    Returns:
+        A ``datasets.Dataset`` (one split) or ``DatasetDict`` (every split).
+
+    Raises:
+        CatalogError: If ``config`` is a folder that has no such split, or the
+            repository loads through a dataset script, which ``datasets`` no longer runs.
+        Exception: Whatever else ``datasets`` raises for a dataset it can't load.
+    """
+    load_dataset = import_extra("datasets", "ml").load_dataset
+    try:
+        return load_dataset(repo_id, config, split=split)
+    except RuntimeError as e:
+        # "Dataset scripts are no longer supported, but found BirdSet.py"
+        if "scripts are no longer supported" not in str(e):
+            raise
+        mirror = (
+            f" ({BIRDSET_PARQUET_REPO} has BirdSet's subsets, e.g. {BIRDSET_PARQUET_REPO}:HSN)"
+            if "birdset" in repo_id.lower()
+            else ""
+        )
+        raise CatalogError(
+            f"{repo_id} loads through a dataset script, which the datasets library no longer "
+            f"runs. Use a Parquet copy of the dataset{mirror}"
+        ) from e
+    except ValueError as e:
+        # "BuilderConfig 'HSN' not found. Available: ['default']"
+        if config is None or "BuilderConfig" not in str(e):
+            raise
+        data_files = _subset_folder_files(repo_id, config, split)
+        if not data_files:
+            raise
+        logger.info(f"{repo_id} has no config {config!r}; loading its folder {config}/")
+        return load_dataset(repo_id, data_files=data_files, split=split)
 
 
 def _get_folder_size(path: str, limit: int | None = None) -> int:
@@ -426,10 +526,12 @@ def pull_dataset(
     ``models ast train`` consumes directly.
 
     Args:
-        repo_id: HuggingFace dataset id (e.g. ``"ashraq/esc-50"``).
+        repo_id: HuggingFace dataset id (e.g. ``"ashraq/esc50"``).
         dest: Destination dataset directory (created if missing).
         split: A single split to pull (e.g. ``"train"``); all splits when omitted.
-        config: Dataset config/subset name (e.g. ``"HSN"`` for ``BirdSet``).
+        config: Dataset config/subset name, or a folder of the repository that holds
+            a subset's Parquet files (e.g. ``"HSN"`` for ``samuelstevens/BirdSet``);
+            see :func:`load_hub_dataset`.
         audio_column: Override the auto-detected audio column.
         label_column: Override the auto-detected label column.
         sample_rate: Resample clips to this rate (16000 for AST); ``None`` keeps
@@ -454,10 +556,10 @@ def pull_dataset(
     from bioamla.datasets.annotation_utils import create_label_map
 
     hf_datasets = import_extra("datasets", "ml")
-    Audio, Dataset, load_dataset = hf_datasets.Audio, hf_datasets.Dataset, hf_datasets.load_dataset
+    Audio, Dataset = hf_datasets.Audio, hf_datasets.Dataset
 
     try:
-        loaded = load_dataset(repo_id, config, split=split)
+        loaded = load_hub_dataset(repo_id, config, split=split)
     except Exception as e:
         raise CatalogError(f"Failed to load dataset {repo_id!r}: {e}") from e
 
