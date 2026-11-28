@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from collections.abc import Sequence
@@ -49,6 +50,10 @@ _SPLIT_ALIAS = {
     "validation": "validation",
     "dev": "validation",
 }
+
+# A Hub Parquet shard: ``train-00000-of-00008.parquet`` belongs to the split ``train``.
+# (older uploads add a hash: ``train-00000-of-00001-a1b2c3d4.parquet``).
+_PARQUET_SHARD = re.compile(r"^(?P<split>.+)-\d+-of-\d+(-[0-9a-f]+)?$")
 
 
 def decode_example_audio(audio: str | dict[str, Any], sampling_rate: int | None) -> Any:
@@ -273,17 +278,22 @@ def _is_local_path(train_dataset: str) -> bool:
 
 def _check_dataset_path(train_dataset: str) -> None:
     """Refuse a local dataset that can't be loaded: a path that exists but is neither a
-    CSV file nor a folder, or a path that doesn't exist (a ``.csv``, or anything that
+    CSV or Parquet file nor a folder, or a path that doesn't exist (a ``.csv``, a
+    ``.parquet``, or anything that
     can only be a path: ``./x``, ``/x``, ``~/x``, ``a/b/c``). Anything else that doesn't
     exist is taken as a Hugging Face dataset ID."""
     train_path = Path(train_dataset).expanduser()
+    suffix = train_path.suffix.lower()
     if train_path.exists():
-        if not (train_path.is_dir() or train_path.suffix.lower() == ".csv"):
+        if not (train_path.is_dir() or suffix in {".csv", ".parquet"}):
             raise TrainingError(
-                f"Local path {train_dataset} exists but is neither a CSV file nor a directory."
+                f"Local path {train_dataset} exists but is neither a CSV or Parquet file "
+                "nor a directory."
             )
-    elif train_path.suffix.lower() == ".csv":
+    elif suffix == ".csv":
         raise TrainingError(f"Training CSV {train_dataset} does not exist")
+    elif suffix == ".parquet":
+        raise TrainingError(f"Training Parquet file {train_dataset} does not exist")
     elif _is_local_path(train_dataset):
         raise TrainingError(f"Training dataset path {train_dataset} does not exist")
 
@@ -305,7 +315,8 @@ def _load_hub_dataset(train_dataset: str, *args: Any, **kwargs: Any):
 
 
 def _load_train_dataset(train_dataset: str, split: str, category_label_column: str):
-    """Resolve ``train_dataset`` (CSV / folder of class folders / HF id) into a dataset.
+    """Resolve ``train_dataset`` (CSV / Parquet / folder of class folders / HF id) into a
+    dataset.
 
     Returns ``(dataset, category_label_column)`` — the label column may be
     rewritten (``"label"`` for a folder of class folders, or the detected CSV column).
@@ -316,19 +327,20 @@ def _load_train_dataset(train_dataset: str, split: str, category_label_column: s
     if train_path.exists():
         if train_path.is_file() and train_path.suffix.lower() == ".csv":
             return _load_csv_dataset(train_path, category_label_column)
-        if train_path.is_dir():
-            # A dataset directory carrying a metadata.csv (from `dataset
-            # extract-clips`/`partition` or `catalogs hf pull-dataset`) is loaded
-            # via that CSV, so a populated `split` column and the reorganized
-            # `train/val/test/<label>/` layout from `partition --mode subdirs` are
-            # both honored. Otherwise the folder's class subfolders are the labels.
-            metadata_csv = train_path / "metadata.csv"
-            if metadata_csv.exists():
-                return _load_csv_dataset(metadata_csv, category_label_column)
-            return _load_directory_dataset(train_path, train_dataset, split, category_label_column)
-        raise TrainingError(
-            f"Local path {train_dataset} exists but is neither a CSV file nor a directory."
-        )
+        if train_path.is_file():  # _check_dataset_path let only a .parquet through
+            return _load_parquet_dataset(train_path, split), category_label_column
+        # A dataset directory carrying a metadata.csv (from `dataset
+        # extract-clips`/`partition` or `catalogs hf pull-dataset`) is loaded
+        # via that CSV, so a populated `split` column and the reorganized
+        # `train/val/test/<label>/` layout from `partition --mode subdirs` are
+        # both honored. A folder of Parquet files is a downloaded Hub dataset.
+        # Otherwise the folder's class subfolders are the labels.
+        metadata_csv = train_path / "metadata.csv"
+        if metadata_csv.exists():
+            return _load_csv_dataset(metadata_csv, category_label_column)
+        if _parquet_files(train_path):
+            return _load_parquet_dataset(train_path, split), category_label_column
+        return _load_directory_dataset(train_path, train_dataset, split, category_label_column)
 
     if ":" in train_dataset:
         # HuggingFace dataset with config (e.g., 'samuelstevens/BirdSet:HSN')
@@ -346,6 +358,74 @@ def _load_train_dataset(train_dataset: str, split: str, category_label_column: s
 
     logger.info(f"Loading from HuggingFace Hub: {train_dataset}")
     return _load_hub_dataset(train_dataset, train_dataset, split=split), category_label_column
+
+
+def _parquet_in(folder: Path) -> list[Path]:
+    """The ``.parquet`` files directly in ``folder`` (none if it isn't a folder), sorted."""
+    if not folder.is_dir():
+        return []
+    return sorted(f for f in folder.iterdir() if f.is_file() and f.suffix.lower() == ".parquet")
+
+
+def _parquet_files(path: Path) -> dict[str, list[str]]:
+    """The Parquet files of ``path`` (a file, or a folder holding them directly or in
+    ``data/``, as a Hub repository does), by split.
+
+    A Hub shard name gives its split (``train-00000-of-00008.parquet`` → ``train``,
+    ``test_5s-00001-of-00004.parquet`` → ``test_5s``); any other file is its own split,
+    named by its stem (``train.parquet`` → ``train``).
+    """
+    if path.is_file():
+        files = [path]
+    else:
+        files = _parquet_in(path) or _parquet_in(path / "data")
+    splits: dict[str, list[str]] = {}
+    for file in files:
+        shard = _PARQUET_SHARD.match(file.stem)
+        splits.setdefault(shard["split"] if shard else file.stem, []).append(str(file))
+    return splits
+
+
+def _load_parquet_dataset(path: Path, split: str):
+    """Load one split of a local Parquet dataset: a file, or a folder of them.
+
+    The rows need an ``audio`` column, as a Hub audio dataset has (the encoded bytes,
+    or an absolute path: a relative one is not resolved against the Parquet file),
+    decoded by :func:`decode_example_audio`. A single file is loaded whatever
+    its name; a folder gives the files of ``split``.
+
+    Raises:
+        TrainingError: If the folder has no such split, the files can't be read, or the
+            rows have no ``audio`` column.
+    """
+    import glob
+
+    from datasets import load_dataset
+
+    splits = _parquet_files(path)
+    if path.is_file():
+        files = [str(path)]
+    elif split in splits:
+        files = splits[split]
+    else:
+        raise TrainingError(
+            f"{path} has no Parquet files for the split {split!r}. Its splits: {sorted(splits)}"
+        )
+    logger.info(f"Loading from {len(files)} Parquet file(s): {path}")
+    try:
+        # data_files are glob patterns: a folder named "set[1]" must be taken literally.
+        patterns = [glob.escape(file) for file in files]
+        dataset = load_dataset("parquet", data_files={"train": patterns}, split="train")
+    except Exception as e:  # noqa: BLE001 - a file that isn't Parquet, shards that disagree
+        reason = " ".join(str(e).split()) or type(e).__name__
+        raise TrainingError(f"Could not read the Parquet files of {path}: {reason}") from e
+    if "audio" not in dataset.column_names:
+        raise TrainingError(
+            f"The Parquet files of {path} have no 'audio' column. "
+            f"Their columns: {dataset.column_names}"
+        )
+    logger.info(f"Loaded {len(dataset)} samples from Parquet")
+    return dataset
 
 
 def _load_csv_dataset(train_path: Path, category_label_column: str):
@@ -450,7 +530,7 @@ def _load_directory_dataset(
         )
     raise TrainingError(
         f"Directory {train_dataset} must either have class subdirectories (e.g., bird/, frog/) "
-        f"or contain a metadata CSV file."
+        f"or contain a metadata CSV file or Parquet files."
     )
 
 
@@ -683,7 +763,10 @@ def train_ast(
     Args:
         train_dataset: A HuggingFace dataset id (``"bioamla/scp-frogs"`` or
             ``"samuelstevens/BirdSet:HSN"``), a local metadata CSV (with file and
-            label columns), or a directory of class-named subdirectories.
+            label columns), a directory of class-named subdirectories, or a Parquet file
+            or a folder of them (a downloaded Hub dataset: rows with an ``audio``
+            column, the split taken from shard names like
+            ``train-00000-of-00008.parquet``).
         training_dir: Output root; the best model is written to
             ``{training_dir}/best_model``, runs to ``/runs``, logs to ``/logs``.
         base_model: Pretrained AST checkpoint to fine-tune.

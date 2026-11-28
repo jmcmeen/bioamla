@@ -86,8 +86,8 @@ class TrainRequest:
     """Fine-tune an AST model.
 
     Attributes:
-        train_dataset: A Hugging Face dataset ID, a metadata CSV, or a folder with one
-            subfolder per class.
+        train_dataset: A Hugging Face dataset ID, a metadata CSV, a folder with one
+            subfolder per class, or Parquet files (a file or a folder of them).
         config_path: A training config file (``models.ast.init-config``).
         training_dir: Where training writes its outputs and the model.
         options: Training options set explicitly; anything else comes from the config

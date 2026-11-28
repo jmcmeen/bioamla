@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `models ast train --train-dataset` (and `train_ast()`) reads local Parquet files: a `.parquet`
+  file, or a folder of them, such as a downloaded Hugging Face dataset (the files in the folder
+  or in its `data/`). The rows need an `audio` column (the encoded bytes, or an absolute path),
+  as a Hub audio dataset has. In a folder, shard names give the split (`train-00000-of-00008.parquet` is
+  `train`, `validation.parquet` is `validation`) and `--split` picks one; a folder without that
+  split lists the ones it has. A dataset already on disk no longer has to be loaded through its
+  Hub ID or unpacked into loose files (#382).
+
 ### Fixed
 
 - Training stratifies the 20% evaluation split it makes for a dataset with no split of its own.
