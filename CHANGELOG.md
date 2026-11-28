@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-28
+
 ### Added
 
 - `models ast train --train-dataset` (and `train_ast()`) reads local Parquet files: a `.parquet`
@@ -1380,7 +1382,8 @@ release. The project is sole-authored, so the relicense applies to all current a
   (`batch models predict`, `batch cluster`).
 - Output commands now create parent directories before writing.
 
-[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/bioamla/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/jmcmeen/bioamla/compare/v0.5.2...v0.5.3
 [0.5.0]: https://github.com/jmcmeen/bioamla/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/jmcmeen/bioamla/compare/v0.4.4...v0.4.5
 [0.4.3]: https://github.com/jmcmeen/bioamla/compare/v0.4.2...v0.4.3
